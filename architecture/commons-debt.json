@@ -7,7 +7,7 @@
     "registeredFindings": 79
   },
   "canonicalProjection": {
-    "sourceDigest": "sha256:8c4e11676288a371c1ecd1421076d08ab70f8fe3a417863cf9b9a3df8ff80140",
+    "sourceDigest": "sha256:a6d33f68fe842a206b5bea46c558d90c42fb18d3594e95cb0e6a82b1bd4caec2",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
@@ -40,9 +40,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:aed720ff68f92a38a72c"
-      ],
+      "canonicalImportEdgeIds": ["import:aed720ff68f92a38a72c"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
       ],
@@ -137,9 +135,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/migrationReport.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:93726bb86e6b5442f8f1"
-      ],
+      "canonicalImportEdgeIds": ["import:93726bb86e6b5442f8f1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/development-automation/infrastructure/migrationAssets.ts#collectLegacyAssets"
       ],
@@ -158,9 +154,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f50e3cac89ac1750b47d"
-      ],
+      "canonicalImportEdgeIds": ["import:f50e3cac89ac1750b47d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#createWebhookRepositoryResolver"
       ],
@@ -179,9 +173,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d2cc5e0b32db85fd3a32"
-      ],
+      "canonicalImportEdgeIds": ["import:d2cc5e0b32db85fd3a32"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/dispatcher.ts#IntentDispatchDeps"
       ],
@@ -200,9 +192,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d5f75acdab2d502c6c07"
-      ],
+      "canonicalImportEdgeIds": ["import:d5f75acdab2d502c6c07"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/dispatcher.ts#resumeQueuedIntentWorkingSets"
       ],
@@ -221,9 +211,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f8643f53fbf7f2d8d1aa"
-      ],
+      "canonicalImportEdgeIds": ["import:f8643f53fbf7f2d8d1aa"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#composeIntentResourceCatalogFor"
       ],
@@ -265,9 +253,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:93a4518474413f584a59"
-      ],
+      "canonicalImportEdgeIds": ["import:93a4518474413f584a59"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#ValidatorContext"
       ],
@@ -286,9 +272,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3f508d0cb47540693543"
-      ],
+      "canonicalImportEdgeIds": ["import:3f508d0cb47540693543"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#validateWorkflowDef"
       ],
@@ -307,9 +291,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:32408413ba90539f0e85"
-      ],
+      "canonicalImportEdgeIds": ["import:32408413ba90539f0e85"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/application/overview.ts#composeSystemOverviewQuery"
       ],
@@ -328,9 +310,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:8633e26bbc158169f280"
-      ],
+      "canonicalImportEdgeIds": ["import:8633e26bbc158169f280"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts#composeTaskExecutionCatalogSources"
       ],
@@ -349,9 +329,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1e4ad5ffd110e8e049d5"
-      ],
+      "canonicalImportEdgeIds": ["import:1e4ad5ffd110e8e049d5"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinator.ts#DefaultTaskDriveCoordinator"
       ],
@@ -370,9 +348,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:14e97919e80964cc34f4"
-      ],
+      "canonicalImportEdgeIds": ["import:14e97919e80964cc34f4"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/drive/taskDriveTypes.ts#TaskDriveCoordinator"
       ],
@@ -391,9 +367,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d2fa1fb813ed587cd8a6"
-      ],
+      "canonicalImportEdgeIds": ["import:d2fa1fb813ed587cd8a6"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/drive/taskDriveTypes.ts#resolveTaskDriveConfig"
       ],
@@ -412,9 +386,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:13b339c0a916b051f997"
-      ],
+      "canonicalImportEdgeIds": ["import:13b339c0a916b051f997"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes"
       ],
@@ -433,9 +405,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fbb17a47de79a2c7d31d"
-      ],
+      "canonicalImportEdgeIds": ["import:fbb17a47de79a2c7d31d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createTaskDriverLifecyclePort"
       ],
@@ -454,9 +424,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f3f8ffa83d569fa6f19e"
-      ],
+      "canonicalImportEdgeIds": ["import:f3f8ffa83d569fa6f19e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding"
       ],
@@ -475,9 +443,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:e35db63c6bb530d0a83b"
-      ],
+      "canonicalImportEdgeIds": ["import:e35db63c6bb530d0a83b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts#createCollaborationRuntimeMechanics"
       ],
@@ -496,9 +462,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:6203555faf61144f7616"
-      ],
+      "canonicalImportEdgeIds": ["import:6203555faf61144f7616"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/dispatcher.ts#IntentDispatchDeps"
       ],
@@ -517,9 +481,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fc3460d8c486ba420e2f"
-      ],
+      "canonicalImportEdgeIds": ["import:fc3460d8c486ba420e2f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/dispatcher.ts#resumeQueuedIntentWorkingSets"
       ],
@@ -538,9 +500,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:45b4a2eeaa31a2ad47f1"
-      ],
+      "canonicalImportEdgeIds": ["import:45b4a2eeaa31a2ad47f1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#composeIntentResourceCatalogFor"
       ],
@@ -559,9 +519,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9f6badd26c09b251949a"
-      ],
+      "canonicalImportEdgeIds": ["import:9f6badd26c09b251949a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding"
       ],
@@ -580,9 +538,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:0feaaa5f0dff924512ce"
-      ],
+      "canonicalImportEdgeIds": ["import:0feaaa5f0dff924512ce"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts#TaskArchiveMaintenanceCommand"
       ],
@@ -601,9 +557,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:bb76fa9bef9885aaaf50"
-      ],
+      "canonicalImportEdgeIds": ["import:bb76fa9bef9885aaaf50"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -622,9 +576,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:69c7775487206fe7b178"
-      ],
+      "canonicalImportEdgeIds": ["import:69c7775487206fe7b178"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/turnEngine.ts#INTENT_SCRATCH_DIRNAME"
       ],
@@ -643,9 +595,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:db3e1f5689eaddb1cde3"
-      ],
+      "canonicalImportEdgeIds": ["import:db3e1f5689eaddb1cde3"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts#TaskArchiveMaintenanceCommand"
       ],
@@ -664,9 +614,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b70a85ab0b930f0fb28a"
-      ],
+      "canonicalImportEdgeIds": ["import:b70a85ab0b930f0fb28a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -685,9 +633,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:21642dc5770c8bedc2d8"
-      ],
+      "canonicalImportEdgeIds": ["import:21642dc5770c8bedc2d8"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#PostgresqlResourcePackageProviderComposition"
       ],
@@ -706,9 +652,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:4421230ae8bd273d2a05"
-      ],
+      "canonicalImportEdgeIds": ["import:4421230ae8bd273d2a05"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#ResourcePackageExecutionAdapter"
       ],
@@ -771,9 +715,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:0befdb32e75273bb438d"
-      ],
+      "canonicalImportEdgeIds": ["import:0befdb32e75273bb438d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#taskLifecycleWriteSequence"
       ],
@@ -791,9 +733,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:075d916cb90735536eee"
-      ],
+      "canonicalImportEdgeIds": ["import:075d916cb90735536eee"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/application/capabilityTemplateOperations.ts#CapabilityTemplateOperations"
       ],
@@ -812,9 +752,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3935c2fe47e0f8f427db"
-      ],
+      "canonicalImportEdgeIds": ["import:3935c2fe47e0f8f427db"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#TemplateUpstreamOperations"
       ],
@@ -833,9 +771,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:98e26084cc72d2c40685"
-      ],
+      "canonicalImportEdgeIds": ["import:98e26084cc72d2c40685"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#TemplateUpstreamOperations"
       ],
@@ -854,9 +790,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:dd8229e9a40f6b18968d"
-      ],
+      "canonicalImportEdgeIds": ["import:dd8229e9a40f6b18968d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/domain/capabilityRegistry.ts#lookupStageContract"
       ],
@@ -898,9 +832,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/code.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:a9c4957b4cd2f27223cc"
-      ],
+      "canonicalImportEdgeIds": ["import:a9c4957b4cd2f27223cc"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/domain/stageGraph.ts#projectStageGraph"
       ],
@@ -919,9 +851,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b96635ebcc3c67991b81"
-      ],
+      "canonicalImportEdgeIds": ["import:b96635ebcc3c67991b81"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/digital-employee/composition.ts#DigitalEmployeeModule"
       ],
@@ -940,9 +870,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:828e7789c12fab213f81"
-      ],
+      "canonicalImportEdgeIds": ["import:828e7789c12fab213f81"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/event-center/composition.ts#EventCenterModule"
       ],
@@ -986,9 +914,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/missionInputUploads.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d8307e853678a224aeb1"
-      ],
+      "canonicalImportEdgeIds": ["import:d8307e853678a224aeb1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/development-automation/application/missionInputUploadOperations.ts#MissionInputUploadOperations"
       ],
@@ -1007,9 +933,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/scheduledTasks.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:cd05c40389d8b3974943"
-      ],
+      "canonicalImportEdgeIds": ["import:cd05c40389d8b3974943"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/composition/scheduledTasks.ts#ScheduledTaskRuntime"
       ],
@@ -1028,9 +952,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/taskArchive.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:46e36e636d255f440376"
-      ],
+      "canonicalImportEdgeIds": ["import:46e36e636d255f440376"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/taskArchiveMaintenance.ts#$file"
       ],
@@ -1049,9 +971,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/taskCatalog.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:e89cb7b100a8627faf79"
-      ],
+      "canonicalImportEdgeIds": ["import:e89cb7b100a8627faf79"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-catalog/composition.ts#TaskCatalogModule"
       ],
@@ -1070,9 +990,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d84280dcb45421bf2261"
-      ],
+      "canonicalImportEdgeIds": ["import:d84280dcb45421bf2261"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -1114,9 +1032,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/webhookDeliveries.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:4f2d937ea308e577639d"
-      ],
+      "canonicalImportEdgeIds": ["import:4f2d937ea308e577639d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/event-center/composition.ts#EventCenterModule"
       ],
@@ -1135,9 +1051,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/webhookDeliveries.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:2716faec78043cbd8f02"
-      ],
+      "canonicalImportEdgeIds": ["import:2716faec78043cbd8f02"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#WebhookDeliveryRuntime"
       ],
@@ -1156,9 +1070,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/webhookDeliveries.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b7736b3d55845a59ab4e"
-      ],
+      "canonicalImportEdgeIds": ["import:b7736b3d55845a59ab4e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/public/mrTerminalControl.ts#MrTerminalControl"
       ],
@@ -1177,9 +1089,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c430cf4f725452c34623"
-      ],
+      "canonicalImportEdgeIds": ["import:c430cf4f725452c34623"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#WebhookIngressPersistence"
       ],
@@ -1198,9 +1108,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:221195a2392d08f0aff2"
-      ],
+      "canonicalImportEdgeIds": ["import:221195a2392d08f0aff2"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts#createCollaborationRuntimeMechanics"
       ],
@@ -1219,9 +1127,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d5ed350a8f7621b90252"
-      ],
+      "canonicalImportEdgeIds": ["import:d5ed350a8f7621b90252"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/public/mrTerminalControl.ts#MrTerminalControl"
       ],
@@ -1240,9 +1146,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:bd41729c3bd11cd01dad"
-      ],
+      "canonicalImportEdgeIds": ["import:bd41729c3bd11cd01dad"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#composeIntentResourceCatalogFor"
       ],
@@ -1261,9 +1165,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b3874b653e696c2e00e0"
-      ],
+      "canonicalImportEdgeIds": ["import:b3874b653e696c2e00e0"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts#IntentSessionRouteDependencies"
       ],
@@ -1282,9 +1184,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d8ffd3a7fcb3190abb3d"
-      ],
+      "canonicalImportEdgeIds": ["import:d8ffd3a7fcb3190abb3d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts#mountIntentSessionRoutes"
       ],
@@ -1303,9 +1203,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:dba8fca3abd82a44e3b1"
-      ],
+      "canonicalImportEdgeIds": ["import:dba8fca3abd82a44e3b1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes"
       ],
@@ -1324,9 +1222,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:474be99ec8509ad0b8a2"
-      ],
+      "canonicalImportEdgeIds": ["import:474be99ec8509ad0b8a2"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts#mountSkillProvenanceRoutes"
       ],
@@ -1345,9 +1241,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d50393a60436f032019a"
-      ],
+      "canonicalImportEdgeIds": ["import:d50393a60436f032019a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/application/resourceAccess.ts#assertNameUnchangedForEditor"
       ],
@@ -1366,9 +1260,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:23d823131b85b338121c"
-      ],
+      "canonicalImportEdgeIds": ["import:23d823131b85b338121c"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#resourceAclAudienceAuthority"
       ],
@@ -1387,9 +1279,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f99c53a251e4f255ed31"
-      ],
+      "canonicalImportEdgeIds": ["import:f99c53a251e4f255ed31"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#createChildTaskLifecycleParticipant"
       ],
@@ -1408,9 +1298,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:23fc0a4678d322eb7b89"
-      ],
+      "canonicalImportEdgeIds": ["import:23fc0a4678d322eb7b89"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#createSqliteFusionEngineTaskOperations"
       ],
@@ -1429,9 +1317,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b06b92edcd6f5dd08e47"
-      ],
+      "canonicalImportEdgeIds": ["import:b06b92edcd6f5dd08e47"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort"
       ],
@@ -1450,9 +1336,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:46915c919758e872be1f"
-      ],
+      "canonicalImportEdgeIds": ["import:46915c919758e872be1f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding"
       ],
@@ -1496,9 +1380,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:a83faad9cd5731b30c31"
-      ],
+      "canonicalImportEdgeIds": ["import:a83faad9cd5731b30c31"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#createTaskRouteOperations"
       ],
@@ -1515,13 +1397,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/agent.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/agent.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/agent.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1c67086598d7bdb3102d"
-      ],
+      "canonicalImportEdgeIds": ["import:1c67086598d7bdb3102d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#$file"
       ],
@@ -1542,9 +1420,7 @@
         "facade:packages/backend/src/services/autoKill.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/autoKill.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:ccf3daa5913b048030a6"
-      ],
+      "canonicalImportEdgeIds": ["import:ccf3daa5913b048030a6"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -1590,9 +1466,7 @@
         "facade:packages/backend/src/services/autoRepair.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/autoRepair.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9e3cbde8da8e17611093"
-      ],
+      "canonicalImportEdgeIds": ["import:9e3cbde8da8e17611093"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -1613,9 +1487,7 @@
         "facade:packages/backend/src/services/autoResume.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/autoResume.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1a3c4eaf757fcdbc5a79"
-      ],
+      "canonicalImportEdgeIds": ["import:1a3c4eaf757fcdbc5a79"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -1665,9 +1537,7 @@
         "facade:packages/backend/src/services/capabilityTemplates.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:56550580f373f7d5c350"
-      ],
+      "canonicalImportEdgeIds": ["import:56550580f373f7d5c350"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/domain/templateLayers.ts#canWriteFramework"
       ],
@@ -1688,9 +1558,7 @@
         "facade:packages/backend/src/services/changeNarrative.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/changeNarrative.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3d5071a4df1c8e3cb7e5"
-      ],
+      "canonicalImportEdgeIds": ["import:3d5071a4df1c8e3cb7e5"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/application/ports/codeWorkspaceRead.ts#CodeWorkspaceRead"
       ],
@@ -1711,9 +1579,7 @@
         "facade:packages/backend/src/services/clarify/autoDispatch.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/autoDispatch.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:131784d3ea32ff70d97e"
-      ],
+      "canonicalImportEdgeIds": ["import:131784d3ea32ff70d97e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#$file"
       ],
@@ -1734,9 +1600,7 @@
         "facade:packages/backend/src/services/clarify/queue.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/queue.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:e3d02e672e65a31d5503"
-      ],
+      "canonicalImportEdgeIds": ["import:e3d02e672e65a31d5503"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/queue.ts#$file"
       ],
@@ -1757,9 +1621,7 @@
         "facade:packages/backend/src/services/clarify/rerunLedger.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rerunLedger.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:946ddb4e215e0a81a5ff"
-      ],
+      "canonicalImportEdgeIds": ["import:946ddb4e215e0a81a5ff"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/rerunLedger.ts#$file"
       ],
@@ -1780,9 +1642,7 @@
         "facade:packages/backend/src/services/clarify/rounds.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/rounds.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:84e9f2fb6dba3ae8f27a"
-      ],
+      "canonicalImportEdgeIds": ["import:84e9f2fb6dba3ae8f27a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file"
       ],
@@ -1803,9 +1663,7 @@
         "facade:packages/backend/src/services/clarify/seal.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/seal.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:0b76042bc52dcd93814b"
-      ],
+      "canonicalImportEdgeIds": ["import:0b76042bc52dcd93814b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#$file"
       ],
@@ -1826,9 +1684,7 @@
         "facade:packages/backend/src/services/clarify/service.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarify/service.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9c230dafc9c857f6eba1"
-      ],
+      "canonicalImportEdgeIds": ["import:9c230dafc9c857f6eba1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#$file"
       ],
@@ -1849,9 +1705,7 @@
         "facade:packages/backend/src/services/clarifyDecision.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:463af4002cb04feb0842"
-      ],
+      "canonicalImportEdgeIds": ["import:463af4002cb04feb0842"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecision.ts#$file"
       ],
@@ -1872,9 +1726,7 @@
         "facade:packages/backend/src/services/clarifyDecisionComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecisionComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1d34fd9405d994fe5f91"
-      ],
+      "canonicalImportEdgeIds": ["import:1d34fd9405d994fe5f91"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts#$file"
       ],
@@ -1895,9 +1747,7 @@
         "facade:packages/backend/src/services/codeCapabilityParams.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/codeCapabilityParams.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:a7180b056f9e84f3ae6f"
-      ],
+      "canonicalImportEdgeIds": ["import:a7180b056f9e84f3ae6f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/application/ports/capabilityParamRead.ts#CapabilityParamRead"
       ],
@@ -1918,9 +1768,7 @@
         "facade:packages/backend/src/services/codeIntel/codeIntel.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/codeIntel/codeIntel.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f50f12f425c3596bab31"
-      ],
+      "canonicalImportEdgeIds": ["import:f50f12f425c3596bab31"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/application/ports/codeWorkspaceRead.ts#CodeWorkspaceRead"
       ],
@@ -1966,9 +1814,7 @@
         "facade:packages/backend/src/services/codeReviewAgentCaller.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/codeReviewAgentCaller.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3448c34f84168943c5b1"
-      ],
+      "canonicalImportEdgeIds": ["import:3448c34f84168943c5b1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/application/ports/reviewerResolutionRead.ts#ReviewerResolutionRead"
       ],
@@ -2039,9 +1885,7 @@
         "facade:packages/backend/src/services/commitPushRunner.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:aae5da671dd877f9add4"
-      ],
+      "canonicalImportEdgeIds": ["import:aae5da671dd877f9add4"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/nodeExecutionPersistence.ts#NodeExecutionPersistence"
       ],
@@ -2062,9 +1906,7 @@
         "facade:packages/backend/src/services/commitPushRunner.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:ffa89aa5d8726be2abad"
-      ],
+      "canonicalImportEdgeIds": ["import:ffa89aa5d8726be2abad"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunLifecyclePersistence.ts#NodeRunLifecyclePersistence"
       ],
@@ -2085,9 +1927,7 @@
         "facade:packages/backend/src/services/commitPushRunner.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:86ea9d519113094c7222"
-      ],
+      "canonicalImportEdgeIds": ["import:86ea9d519113094c7222"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionEffectStore.ts#TaskExecutionEffectPersistence"
       ],
@@ -2108,9 +1948,7 @@
         "facade:packages/backend/src/services/demoSeed.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/demoSeed.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f6090ce508ae8c0ecac5"
-      ],
+      "canonicalImportEdgeIds": ["import:f6090ce508ae8c0ecac5"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/code-capability/composition/demoSeed.ts#$file"
       ],
@@ -2131,9 +1969,7 @@
         "facade:packages/backend/src/services/demoSeed.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/demoSeed.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:cc67a4e3852cc57ec1f7"
-      ],
+      "canonicalImportEdgeIds": ["import:cc67a4e3852cc57ec1f7"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/installationSeedCompletion.ts#composeInstallationSeedCompletion"
       ],
@@ -2181,9 +2017,7 @@
         "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:5ca0115215c7a518be82"
-      ],
+      "canonicalImportEdgeIds": ["import:5ca0115215c7a518be82"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/development-automation/domain/canonicalJson.ts#canonicalDigest"
       ],
@@ -2204,9 +2038,7 @@
         "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:112d5c2af5ed098a1919"
-      ],
+      "canonicalImportEdgeIds": ["import:112d5c2af5ed098a1919"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/development-automation/domain/mrFacts.ts#projectMrCells"
       ],
@@ -2227,9 +2059,7 @@
         "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b59f570468000dc6f3a5"
-      ],
+      "canonicalImportEdgeIds": ["import:b59f570468000dc6f3a5"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#MrEnsureConnectionDeps"
       ],
@@ -2300,9 +2130,7 @@
         "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:63d523c54d1a697476d0"
-      ],
+      "canonicalImportEdgeIds": ["import:63d523c54d1a697476d0"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/composition/codeHostEffects.ts#DevelopmentMrEffects"
       ],
@@ -2323,9 +2151,7 @@
         "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:854e0dc0e8da3df66b8d"
-      ],
+      "canonicalImportEdgeIds": ["import:854e0dc0e8da3df66b8d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/infrastructure/developmentPipelineAdapter.ts#PipelineEvidenceExecution"
       ],
@@ -2346,9 +2172,7 @@
         "facade:packages/backend/src/services/dynamicWorkflowRunner.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:4bdae1248d8ee5dee760"
-      ],
+      "canonicalImportEdgeIds": ["import:4bdae1248d8ee5dee760"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/dynamicWorkflowPersistence.ts#DynamicWorkflowPersistence"
       ],
@@ -2369,9 +2193,7 @@
         "facade:packages/backend/src/services/dynamicWorkflowRunner.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c04e0195f4fb62ad8013"
-      ],
+      "canonicalImportEdgeIds": ["import:c04e0195f4fb62ad8013"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunLifecyclePersistence.ts#NodeRunLifecyclePersistence"
       ],
@@ -2392,9 +2214,7 @@
         "facade:packages/backend/src/services/dynamicWorkflowRunner.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:df6f154a3530f425d688"
-      ],
+      "canonicalImportEdgeIds": ["import:df6f154a3530f425d688"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/workgroupTurnsOperations.ts#$file"
       ],
@@ -2415,9 +2235,7 @@
         "facade:packages/backend/src/services/dynamicWorkflowRunner.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d22b6b96154346d71489"
-      ],
+      "canonicalImportEdgeIds": ["import:d22b6b96154346d71489"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/domain/taskEngine.ts#TaskScopeOutcome"
       ],
@@ -2438,9 +2256,7 @@
         "facade:packages/backend/src/services/employeeCaseMembers.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/employeeCaseMembers.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:a8e3318de0f51e155c6f"
-      ],
+      "canonicalImportEdgeIds": ["import:a8e3318de0f51e155c6f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#hasResourceAclBypass"
       ],
@@ -2461,9 +2277,7 @@
         "facade:packages/backend/src/services/execution/childBudget.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/childBudget.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:2084446f88f2d3ade411"
-      ],
+      "canonicalImportEdgeIds": ["import:2084446f88f2d3ade411"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/childTaskBudgetQueries.ts#ChildTaskBudgetQueries"
       ],
@@ -2484,9 +2298,7 @@
         "facade:packages/backend/src/services/execution/childBudget.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/childBudget.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:a4cc48c75297713bc44f"
-      ],
+      "canonicalImportEdgeIds": ["import:a4cc48c75297713bc44f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskBudgetQueries.ts#DrizzleChildTaskBudgetQueries"
       ],
@@ -2507,9 +2319,7 @@
         "facade:packages/backend/src/services/execution/closure.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/closure.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b56c0705448ee3df9b68"
-      ],
+      "canonicalImportEdgeIds": ["import:b56c0705448ee3df9b68"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#$file"
       ],
@@ -2530,9 +2340,7 @@
         "facade:packages/backend/src/services/execution/executionWatch.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/executionWatch.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:20f3493197f6d49d4dbd"
-      ],
+      "canonicalImportEdgeIds": ["import:20f3493197f6d49d4dbd"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
       ],
@@ -2553,9 +2361,7 @@
         "facade:packages/backend/src/services/execution/outcome.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/outcome.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:eca01bcba382fb2d12cf"
-      ],
+      "canonicalImportEdgeIds": ["import:eca01bcba382fb2d12cf"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
       ],
@@ -2576,9 +2382,7 @@
         "facade:packages/backend/src/services/execution/resolveInjection.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/resolveInjection.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:87397de0483cf482b0b4"
-      ],
+      "canonicalImportEdgeIds": ["import:87397de0483cf482b0b4"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts#$file"
       ],
@@ -2599,9 +2403,7 @@
         "facade:packages/backend/src/services/execution/runtimeConfigFreeze.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/runtimeConfigFreeze.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fd41e100119f2591fee8"
-      ],
+      "canonicalImportEdgeIds": ["import:fd41e100119f2591fee8"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition.ts#$file"
       ],
@@ -2622,9 +2424,7 @@
         "facade:packages/backend/src/services/execution/startupVerificationRead.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/startupVerificationRead.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c13f6bacd84df40b7e06"
-      ],
+      "canonicalImportEdgeIds": ["import:c13f6bacd84df40b7e06"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
       ],
@@ -2645,9 +2445,7 @@
         "facade:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:7536d4b3d01f017a6c94"
-      ],
+      "canonicalImportEdgeIds": ["import:7536d4b3d01f017a6c94"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file"
       ],
@@ -2668,9 +2466,7 @@
         "facade:packages/backend/src/services/execution/taskExecutionCallClosure.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionCallClosure.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:38dc49726fdf7923f74e"
-      ],
+      "canonicalImportEdgeIds": ["import:38dc49726fdf7923f74e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts#TaskExecutionResourceAuthority"
       ],
@@ -2691,9 +2487,7 @@
         "facade:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:e82adae961f4a5cc5bef"
-      ],
+      "canonicalImportEdgeIds": ["import:e82adae961f4a5cc5bef"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#rowToAgent"
       ],
@@ -2714,9 +2508,7 @@
         "facade:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:5a880a431f1f1b8f4da5"
-      ],
+      "canonicalImportEdgeIds": ["import:5a880a431f1f1b8f4da5"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts#isSkillInjectableThisBoot"
       ],
@@ -2737,9 +2529,7 @@
         "facade:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:0016225535d82ec291e1"
-      ],
+      "canonicalImportEdgeIds": ["import:0016225535d82ec291e1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths.ts#skillFilesRel"
       ],
@@ -2760,9 +2550,7 @@
         "facade:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:8f27e359eaf6b00ddae7"
-      ],
+      "canonicalImportEdgeIds": ["import:8f27e359eaf6b00ddae7"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#mcpFromPersistenceRow"
       ],
@@ -2783,9 +2571,7 @@
         "facade:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:2ca09ec4280029fa3692"
-      ],
+      "canonicalImportEdgeIds": ["import:2ca09ec4280029fa3692"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#pluginFromPersistenceRow"
       ],
@@ -2860,9 +2646,7 @@
         "facade:packages/backend/src/services/execution/taskExecutionResources.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:78dff9bee9c7a1a9b7e2"
-      ],
+      "canonicalImportEdgeIds": ["import:78dff9bee9c7a1a9b7e2"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding"
       ],
@@ -2883,9 +2667,7 @@
         "facade:packages/backend/src/services/humanGateComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:0597b8f799a048db847b"
-      ],
+      "canonicalImportEdgeIds": ["import:0597b8f799a048db847b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/application/prepareWorkspaceRollbackPlan.ts#prepareWorkspaceRollbackPlan"
       ],
@@ -2905,9 +2687,7 @@
         "facade:packages/backend/src/services/humanGateComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:a6fb29466922acb140fb"
-      ],
+      "canonicalImportEdgeIds": ["import:a6fb29466922acb140fb"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/composition/commandContext.ts#createCollaborationCommandContext"
       ],
@@ -2981,9 +2761,7 @@
         "facade:packages/backend/src/services/humanGateComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:2b5527139e693cc02602"
-      ],
+      "canonicalImportEdgeIds": ["import:2b5527139e693cc02602"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/domain/collaborationCommittedEvent.ts#decodeCollaborationCommittedEvent"
       ],
@@ -3003,9 +2781,7 @@
         "facade:packages/backend/src/services/humanGateComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:72267875e5c685fddc56"
-      ],
+      "canonicalImportEdgeIds": ["import:72267875e5c685fddc56"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/domain/gateReceipt.ts#gateDecisionReceipt"
       ],
@@ -3081,9 +2857,7 @@
         "facade:packages/backend/src/services/humanGateComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:acc3961448df8b2eabe6"
-      ],
+      "canonicalImportEdgeIds": ["import:acc3961448df8b2eabe6"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/gitWorkspaceRollbackSnapshotInspector.ts#GitWorkspaceRollbackSnapshotInspector"
       ],
@@ -3103,9 +2877,7 @@
         "facade:packages/backend/src/services/humanGateContinuationEffects.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:28370861ed36bc6ac52d"
-      ],
+      "canonicalImportEdgeIds": ["import:28370861ed36bc6ac52d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/application/ports/clarifyContinuationConvergence.ts#ClarifyContinuationConvergence"
       ],
@@ -3126,9 +2898,7 @@
         "facade:packages/backend/src/services/humanGateContinuationEffects.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fcd80b542907e556513f"
-      ],
+      "canonicalImportEdgeIds": ["import:fcd80b542907e556513f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/application/ports/humanGateOperationStore.ts#HumanGateOperationStore"
       ],
@@ -3149,9 +2919,7 @@
         "facade:packages/backend/src/services/humanGateContinuationEffects.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c0ed65786c048851873b"
-      ],
+      "canonicalImportEdgeIds": ["import:c0ed65786c048851873b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/drive/gateContinuationEffectStep.ts#GateContinuationEffectStep"
       ],
@@ -3172,9 +2940,7 @@
         "facade:packages/backend/src/services/humanGateContinuationEffects.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/humanGateContinuationEffects.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f20d6497ed422364c082"
-      ],
+      "canonicalImportEdgeIds": ["import:f20d6497ed422364c082"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts#TaskExecutionPersistence"
       ],
@@ -3220,9 +2986,7 @@
         "facade:packages/backend/src/services/launchMultipart.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/launchMultipart.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1fe468092a6c557cf526"
-      ],
+      "canonicalImportEdgeIds": ["import:1fe468092a6c557cf526"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/launchConfiguration.ts#$file"
       ],
@@ -3243,9 +3007,7 @@
         "facade:packages/backend/src/services/launchRuntimeConfig.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/launchRuntimeConfig.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d86e0f6ec9f9bf1f497f"
-      ],
+      "canonicalImportEdgeIds": ["import:d86e0f6ec9f9bf1f497f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/launchConfiguration.ts#$file"
       ],
@@ -3289,13 +3051,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/limits.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/limits.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/limits.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:0b6ca79a4a3b1824d7dc"
-      ],
+      "canonicalImportEdgeIds": ["import:0b6ca79a4a3b1824d7dc"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#composeLegacySqliteResourceLimitOperations"
       ],
@@ -3316,9 +3074,7 @@
         "facade:packages/backend/src/services/nodeRollback.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:2ee8db50244e2d468365"
-      ],
+      "canonicalImportEdgeIds": ["import:2ee8db50244e2d468365"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRollbackQueries.ts#TaskRollbackQueries"
       ],
@@ -3339,9 +3095,7 @@
         "facade:packages/backend/src/services/nodeRollback.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d28779cca316098b7600"
-      ],
+      "canonicalImportEdgeIds": ["import:d28779cca316098b7600"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts#NodeRollbackDatabase"
       ],
@@ -3412,9 +3166,7 @@
         "facade:packages/backend/src/services/nodeRunMint.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1ecaa28b9d63c5049aea"
-      ],
+      "canonicalImportEdgeIds": ["import:1ecaa28b9d63c5049aea"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/nextRetryIndex.ts#nextRetryIndex"
       ],
@@ -3462,9 +3214,7 @@
         "facade:packages/backend/src/services/nodeRunMint.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:5995ae783ed3b0b9e455"
-      ],
+      "canonicalImportEdgeIds": ["import:5995ae783ed3b0b9e455"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts#NodeRunRuntimePersistence"
       ],
@@ -3485,9 +3235,7 @@
         "facade:packages/backend/src/services/nodeRunMint.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:5ae6a1fbb370cc256f7e"
-      ],
+      "canonicalImportEdgeIds": ["import:5ae6a1fbb370cc256f7e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts#SchedulerRunRowCandidate"
       ],
@@ -3508,9 +3256,7 @@
         "facade:packages/backend/src/services/nodeRunMint.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9e22458e484593ea92db"
-      ],
+      "canonicalImportEdgeIds": ["import:9e22458e484593ea92db"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts#resolveSchedulerRunRow"
       ],
@@ -3531,9 +3277,7 @@
         "facade:packages/backend/src/services/nodeRunMint.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d20a79fb6d290a383a6a"
-      ],
+      "canonicalImportEdgeIds": ["import:d20a79fb6d290a383a6a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunDatabase"
       ],
@@ -3554,9 +3298,7 @@
         "facade:packages/backend/src/services/nodeRunMint.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:347be0261a5ef45eba81"
-      ],
+      "canonicalImportEdgeIds": ["import:347be0261a5ef45eba81"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations"
       ],
@@ -3577,9 +3319,7 @@
         "facade:packages/backend/src/services/orphanReconcile.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/orphanReconcile.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c445a51ac945ccdc26c8"
-      ],
+      "canonicalImportEdgeIds": ["import:c445a51ac945ccdc26c8"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -3596,13 +3336,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/orphans.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/orphans.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/orphans.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:36c62571455ade9f3df4"
-      ],
+      "canonicalImportEdgeIds": ["import:36c62571455ade9f3df4"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -3623,9 +3359,7 @@
         "facade:packages/backend/src/services/ownerIdentity.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/ownerIdentity.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:eb382d01386877f9cd93"
-      ],
+      "canonicalImportEdgeIds": ["import:eb382d01386877f9cd93"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/identity-access/composition/providerOperations.ts#$file"
       ],
@@ -3646,9 +3380,7 @@
         "facade:packages/backend/src/services/ownerScopedName.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/ownerScopedName.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3c0250cc924f10907396"
-      ],
+      "canonicalImportEdgeIds": ["import:3c0250cc924f10907396"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/identity-access/composition/providerOperations.ts#$file"
       ],
@@ -3755,9 +3487,7 @@
         "facade:packages/backend/src/services/pluginGenerationGc.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:8e8c9a988d5f0d3d4d08"
-      ],
+      "canonicalImportEdgeIds": ["import:8e8c9a988d5f0d3d4d08"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file"
       ],
@@ -3778,9 +3508,7 @@
         "facade:packages/backend/src/services/pluginGenerationGc.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:88fabd16ee334805427b"
-      ],
+      "canonicalImportEdgeIds": ["import:88fabd16ee334805427b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file"
       ],
@@ -3801,9 +3529,7 @@
         "facade:packages/backend/src/services/pluginGenerationGc.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d2327486e327e612e4e0"
-      ],
+      "canonicalImportEdgeIds": ["import:d2327486e327e612e4e0"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file"
       ],
@@ -3904,9 +3630,7 @@
         "facade:packages/backend/src/services/questionDispatchComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/questionDispatchComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:754a1c00e0512e2efcb4"
-      ],
+      "canonicalImportEdgeIds": ["import:754a1c00e0512e2efcb4"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#$file"
       ],
@@ -3954,9 +3678,7 @@
         "facade:packages/backend/src/services/recoveryBreaker.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/recoveryBreaker.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:dd3dd7851c062e87715f"
-      ],
+      "canonicalImportEdgeIds": ["import:dd3dd7851c062e87715f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -3977,9 +3699,7 @@
         "facade:packages/backend/src/services/resourceAcl.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f9631de376eaa015b4a2"
-      ],
+      "canonicalImportEdgeIds": ["import:f9631de376eaa015b4a2"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/application/resourceAccess.ts#assertNameUnchangedForEditor"
       ],
@@ -4072,9 +3792,7 @@
         "facade:packages/backend/src/services/resourceAcl.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:06c007333d72b7c1b8e6"
-      ],
+      "canonicalImportEdgeIds": ["import:06c007333d72b7c1b8e6"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#updateResourceAcl"
       ],
@@ -4095,9 +3813,7 @@
         "facade:packages/backend/src/services/resourceAcl.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d3068c88753231fb992a"
-      ],
+      "canonicalImportEdgeIds": ["import:d3068c88753231fb992a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#AclRow"
       ],
@@ -4197,9 +3913,7 @@
         "facade:packages/backend/src/services/resourceAcl.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:2d09b8b47cc2de192282"
-      ],
+      "canonicalImportEdgeIds": ["import:2d09b8b47cc2de192282"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#$file"
       ],
@@ -4254,9 +3968,7 @@
         "facade:packages/backend/src/services/resourcePackage/parse.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourcePackage/parse.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:0e42f9b92d331b4b0e36"
-      ],
+      "canonicalImportEdgeIds": ["import:0e42f9b92d331b4b0e36"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#decodeZip"
       ],
@@ -4277,9 +3989,7 @@
         "facade:packages/backend/src/services/resourceRefs.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceRefs.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:22fd3e0930e37da53e61"
-      ],
+      "canonicalImportEdgeIds": ["import:22fd3e0930e37da53e61"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs.ts#$file"
       ],
@@ -4296,13 +4006,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/review.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/review.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/review.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fb030ff3342ef90b9ddc"
-      ],
+      "canonicalImportEdgeIds": ["import:fb030ff3342ef90b9ddc"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file"
       ],
@@ -4323,9 +4029,7 @@
         "facade:packages/backend/src/services/reviewDecisionComposition.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/reviewDecisionComposition.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3e8deb11c405dc183858"
-      ],
+      "canonicalImportEdgeIds": ["import:3e8deb11c405dc183858"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts#$file"
       ],
@@ -4346,9 +4050,7 @@
         "facade:packages/backend/src/services/reviewMutationCoordinator.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3558bcec570b7c83b887"
-      ],
+      "canonicalImportEdgeIds": ["import:3558bcec570b7c83b887"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/application/ports/reviewMutationScope.ts#ReviewMutationScopeResolver"
       ],
@@ -4369,9 +4071,7 @@
         "facade:packages/backend/src/services/reviewMutationCoordinator.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c1a0be9d0441ca517d40"
-      ],
+      "canonicalImportEdgeIds": ["import:c1a0be9d0441ca517d40"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts#DatabaseReviewMutationScopeResolver"
       ],
@@ -4417,9 +4117,7 @@
         "facade:packages/backend/src/services/runtime/opencode/sessionCapture.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/opencode/sessionCapture.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:faba32b7d03f057290e1"
-      ],
+      "canonicalImportEdgeIds": ["import:faba32b7d03f057290e1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionCapturePersistence.ts#RuntimeSessionCapturePersistence"
       ],
@@ -4440,9 +4138,7 @@
         "facade:packages/backend/src/services/runtime/types.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fff3516f6ab19099a34d"
-      ],
+      "canonicalImportEdgeIds": ["import:fff3516f6ab19099a34d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionCapturePersistence.ts#RuntimeSessionCapturePersistence"
       ],
@@ -4494,9 +4190,7 @@
         "facade:packages/backend/src/services/runtimeSessionLease.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:4e5cf034a0fcabdd998f"
-      ],
+      "canonicalImportEdgeIds": ["import:4e5cf034a0fcabdd998f"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations.ts#RuntimeSessionLeaseError"
       ],
@@ -4548,9 +4242,7 @@
         "facade:packages/backend/src/services/scheduler.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f46918010b65ada7e149"
-      ],
+      "canonicalImportEdgeIds": ["import:f46918010b65ada7e149"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition.ts#$file"
       ],
@@ -4596,9 +4288,7 @@
         "facade:packages/backend/src/services/shutdown.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/shutdown.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:69e5e83b0820ad5c0583"
-      ],
+      "canonicalImportEdgeIds": ["import:69e5e83b0820ad5c0583"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -4619,9 +4309,7 @@
         "facade:packages/backend/src/services/skillBootVerify.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/skillBootVerify.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:863f13800b2b41c38e94"
-      ],
+      "canonicalImportEdgeIds": ["import:863f13800b2b41c38e94"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts#$file"
       ],
@@ -4642,9 +4330,7 @@
         "facade:packages/backend/src/services/skillIdentityMigration.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/skillIdentityMigration.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:7bc32f5c868fd01ba19c"
-      ],
+      "canonicalImportEdgeIds": ["import:7bc32f5c868fd01ba19c"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts#$file"
       ],
@@ -4665,9 +4351,7 @@
         "facade:packages/backend/src/services/skillIdentityPaths.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/skillIdentityPaths.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:7f9958734aa3446caff5"
-      ],
+      "canonicalImportEdgeIds": ["import:7f9958734aa3446caff5"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths.ts#$file"
       ],
@@ -4688,9 +4372,7 @@
         "facade:packages/backend/src/services/startTaskDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:4552fcdda05beaa87876"
-      ],
+      "canonicalImportEdgeIds": ["import:4552fcdda05beaa87876"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/source-control/composition.ts#$file"
       ],
@@ -4711,9 +4393,7 @@
         "facade:packages/backend/src/services/startTaskDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f7f5b9080faa870ccbaf"
-      ],
+      "canonicalImportEdgeIds": ["import:f7f5b9080faa870ccbaf"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/launchConfiguration.ts#$file"
       ],
@@ -4734,9 +4414,7 @@
         "facade:packages/backend/src/services/startTaskDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c91264f1cd01c4f3207e"
-      ],
+      "canonicalImportEdgeIds": ["import:c91264f1cd01c4f3207e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file"
       ],
@@ -4757,9 +4435,7 @@
         "facade:packages/backend/src/services/startTaskDeps.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:cfdf6c48434973f5e0f4"
-      ],
+      "canonicalImportEdgeIds": ["import:cfdf6c48434973f5e0f4"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
       ],
@@ -4826,9 +4502,7 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalImportEdgeIds": [
         "import:156df4518f3284d8c318",
@@ -4856,9 +4530,7 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalImportEdgeIds": [
         "import:08c29608fcb9a37f1821",
@@ -4887,13 +4559,9 @@
       "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9fabe1c5d40f0886cfef"
-      ],
+      "canonicalImportEdgeIds": ["import:9fabe1c5d40f0886cfef"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/branchTrace.ts#branchTraceForTask"
       ],
@@ -4910,13 +4578,9 @@
       "why": "该 context 尚未在 public/{commands,queries} 暴露对应用例，调用方直接调了 application 内部实现。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fb38b7958d8b4c8551ba"
-      ],
+      "canonicalImportEdgeIds": ["import:fb38b7958d8b4c8551ba"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations.ts#RuntimeSessionLeaseOperations"
       ],
@@ -4933,13 +4597,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:8b24b24e5abf279646e4"
-      ],
+      "canonicalImportEdgeIds": ["import:8b24b24e5abf279646e4"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -4956,13 +4616,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:2a593cdeafd6558a398a"
-      ],
+      "canonicalImportEdgeIds": ["import:2a593cdeafd6558a398a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/resumeRollbackTargets.ts#selectResumeRollbackTargets"
       ],
@@ -4979,13 +4635,9 @@
       "why": "RFC-359 AC-1（第 10 刀）：resume 的回滚目标选择器原本有两份逐字相同的副本（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在 `application/`（它是纯函数、零 provider 依赖，那里是它在目标架构里的家），于是 legacy 的 `resumeKick` 从那里 import。**这条边随 `resumeKick` / `syncTaskWorkflow` 离开 legacy 层一起消失**——把实现留在 legacy 只会把重复留着。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:affddb28c51615635360"
-      ],
+      "canonicalImportEdgeIds": ["import:affddb28c51615635360"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts#composeAgentRunDistillObserver"
       ],
@@ -5002,13 +4654,9 @@
       "why": "RFC-366 的 agent 运行结束观察者由 task-execution 自己的 composition 装配（与同目录 gateContinuationPreDrive 同形：都只认 memory 的 exact public participant，引擎本体一无所知）。消费它的是 legacy 的 `runtimeConfigOpts`——start / resume / retry 三个 kick 点共用的那一个运行期配置漏斗，本身就住在 services/ 横向层。观察者放进 owner 的 composition 是为了不让 services/ 直接 import memory，代价是这条 inbound 边；随该漏斗迁入 owner public/commands 一并销账。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:00900c316b35de4079e1"
-      ],
+      "canonicalImportEdgeIds": ["import:00900c316b35de4079e1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts#composeGateContinuationPreDrive"
       ],
@@ -5025,13 +4673,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:97c531fe52763d6b60f8"
-      ],
+      "canonicalImportEdgeIds": ["import:97c531fe52763d6b60f8"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts#$file"
       ],
@@ -5048,13 +4692,9 @@
       "why": "RFC-332 W2-B keeps one namespace-import compatibility seam for command-specific preparation/rollback composition while public/commands remains the exact three-field durable submission contract; W4 command-handler cutover deletes it."
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b20c5073febb0f2fcfbe"
-      ],
+      "canonicalImportEdgeIds": ["import:b20c5073febb0f2fcfbe"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#TaskLaunchProvenance"
       ],
@@ -5071,9 +4711,7 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalImportEdgeIds": [
         "import:3bf779c696831f7e9dde",
@@ -5096,13 +4734,9 @@
       "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:ffa4a1eec74d8b9f1819"
-      ],
+      "canonicalImportEdgeIds": ["import:ffa4a1eec74d8b9f1819"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/branchTraceSnapshotReader.ts#DrizzleBranchTraceSnapshotReader"
       ],
@@ -5119,13 +4753,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。 RFC-359 W4-B1 起改指一份中立实现（branchTraceSnapshotReader）。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:436b89729bbdc645fa0d"
-      ],
+      "canonicalImportEdgeIds": ["import:436b89729bbdc645fa0d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts#assertFrozenTaskTriggerPreflight"
       ],
@@ -5142,9 +4772,7 @@
       "why": "RFC-359 W8 合掉 `assertFrozenTaskTriggerPreflight` 的两份逐字副本时新增的 inbound 边。合一前 SQLite 路径（本文件）与 PG 路径（postgresqlTaskRouteOperations.ts）各有一份文件私有的同名函数，只有 `db` 的类型标注不同；它读的是 provider 中立的单行 tasks select，没有任何方言面，两份并存的唯一后果就是「改一份、漂另一份」且两条路径的用例都还绿着。更省边的落位（`services/execution/triggerPreflight.ts`，只 +1 条边）被 rfc349-provider-cutover 的 `databaseMechanismDependencies` 判据按住——`services/` 面禁止直接拥有 @/db/* / drizzle，那条守卫是对的，不迁就它。这条边与同文件既有的 branchTraceSnapshotReader 同形同命。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalImportEdgeIds": [
         "import:0a9581d0aef59eb57717",
@@ -5166,9 +4794,7 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/task.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalImportEdgeIds": [
         "import:0b34cb2312a6b6708fe7",
@@ -5214,9 +4840,7 @@
         "facade:packages/backend/src/services/taskAlerts.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskAlerts.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:ce2e8db36b4a2a9402c0"
-      ],
+      "canonicalImportEdgeIds": ["import:ce2e8db36b4a2a9402c0"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -5237,9 +4861,7 @@
         "facade:packages/backend/src/services/taskArchive.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskArchive.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:21350b7d2df5d1aad07c"
-      ],
+      "canonicalImportEdgeIds": ["import:21350b7d2df5d1aad07c"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts#TaskArchiveMaintenanceCommand"
       ],
@@ -5260,9 +4882,7 @@
         "facade:packages/backend/src/services/taskArchive.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskArchive.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:32eb394fb5381e161449"
-      ],
+      "canonicalImportEdgeIds": ["import:32eb394fb5381e161449"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
       ],
@@ -5344,9 +4964,7 @@
         "facade:packages/backend/src/services/taskAuthorization.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskAuthorization.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d40a2cbdd2d7477baa20"
-      ],
+      "canonicalImportEdgeIds": ["import:d40a2cbdd2d7477baa20"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskAuthorization.ts#TaskAuthorizationQueries"
       ],
@@ -5454,9 +5072,7 @@
         "facade:packages/backend/src/services/taskCollab.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskCollab.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:5b3e497b08867a624a12"
-      ],
+      "canonicalImportEdgeIds": ["import:5b3e497b08867a624a12"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file"
       ],
@@ -5477,9 +5093,7 @@
         "facade:packages/backend/src/services/taskDelete.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:823661a710cb9971b280"
-      ],
+      "canonicalImportEdgeIds": ["import:823661a710cb9971b280"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
       ],
@@ -5583,9 +5197,7 @@
         "facade:packages/backend/src/services/taskLaunchGate.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b1e61d311b223d7764b9"
-      ],
+      "canonicalImportEdgeIds": ["import:b1e61d311b223d7764b9"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
       ],
@@ -5606,9 +5218,7 @@
         "facade:packages/backend/src/services/taskQuestionDispatch.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestionDispatch.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9774f9eba1f617b0b6d6"
-      ],
+      "canonicalImportEdgeIds": ["import:9774f9eba1f617b0b6d6"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file"
       ],
@@ -5629,9 +5239,7 @@
         "facade:packages/backend/src/services/taskQuestions.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9e4961d0157ccb6e2a1c"
-      ],
+      "canonicalImportEdgeIds": ["import:9e4961d0157ccb6e2a1c"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#$file"
       ],
@@ -5652,9 +5260,7 @@
         "facade:packages/backend/src/services/taskWorkspacePhase.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskWorkspacePhase.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:9db65f20f79eaad4c04c"
-      ],
+      "canonicalImportEdgeIds": ["import:9db65f20f79eaad4c04c"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
       ],
@@ -5700,9 +5306,7 @@
         "facade:packages/backend/src/services/userIdentities.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/userIdentities.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:4726c6967558d355a6ad"
-      ],
+      "canonicalImportEdgeIds": ["import:4726c6967558d355a6ad"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/identity-access/composition/providerOperations.ts#$file"
       ],
@@ -5719,13 +5323,9 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/users.ts"
-      ],
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/users.ts"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/users.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:507e67635d962917f4c9"
-      ],
+      "canonicalImportEdgeIds": ["import:507e67635d962917f4c9"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/identity-access/composition/legacyUserService.ts#legacyUserService"
       ],
@@ -5810,9 +5410,7 @@
         "facade:packages/backend/src/services/webhook/dispatcherTypes.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/dispatcherTypes.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:83afdb2b680df343a6a8"
-      ],
+      "canonicalImportEdgeIds": ["import:83afdb2b680df343a6a8"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/application/ports/webhookDispatchPersistence.ts#WebhookEndpointRecord"
       ],
@@ -5833,9 +5431,7 @@
         "facade:packages/backend/src/services/webhook/matching.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/matching.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:aae4e8210f4dfc0b5baa"
-      ],
+      "canonicalImportEdgeIds": ["import:aae4e8210f4dfc0b5baa"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#webhookStreamKeyOf"
       ],
@@ -5856,9 +5452,7 @@
         "facade:packages/backend/src/services/webhook/terminalWorkspaceCleanup.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/terminalWorkspaceCleanup.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:7b9975c90746795bd4fe"
-      ],
+      "canonicalImportEdgeIds": ["import:7b9975c90746795bd4fe"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/application/ports/terminalWorkspaceAttribution.ts#WebhookTerminalWorkspaceAttributionQueries"
       ],
@@ -5879,9 +5473,7 @@
         "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:6dae4ef186f180f8994d"
-      ],
+      "canonicalImportEdgeIds": ["import:6dae4ef186f180f8994d"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts#WebhookDeliveryPersistencePort"
       ],
@@ -5927,9 +5519,7 @@
         "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:d24dafb7ab9ed6195eda"
-      ],
+      "canonicalImportEdgeIds": ["import:d24dafb7ab9ed6195eda"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#MrStreamState"
       ],
@@ -5950,9 +5540,7 @@
         "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:139778ff64f70937014b"
-      ],
+      "canonicalImportEdgeIds": ["import:139778ff64f70937014b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#decideProtectedLaunch"
       ],
@@ -5998,9 +5586,7 @@
         "facade:packages/backend/src/services/webhook/webhookGc.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookGc.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c1c4eccb72514209d7a1"
-      ],
+      "canonicalImportEdgeIds": ["import:c1c4eccb72514209d7a1"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts#WebhookDeliveryPersistencePort"
       ],
@@ -6096,9 +5682,7 @@
         "facade:packages/backend/src/services/workflow.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workflow.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:cf2542962d358dfae239"
-      ],
+      "canonicalImportEdgeIds": ["import:cf2542962d358dfae239"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#$file"
       ],
@@ -6119,9 +5703,7 @@
         "facade:packages/backend/src/services/workflow.validator.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workflow.validator.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:03378519acf4916a6154"
-      ],
+      "canonicalImportEdgeIds": ["import:03378519acf4916a6154"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#$file"
       ],
@@ -6142,9 +5724,7 @@
         "facade:packages/backend/src/services/workflow.yaml.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workflow.yaml.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:24daf032db6701b11259"
-      ],
+      "canonicalImportEdgeIds": ["import:24daf032db6701b11259"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts#$file"
       ],
@@ -6165,9 +5745,7 @@
         "facade:packages/backend/src/services/workflowLaunchInputs.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workflowLaunchInputs.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:29248d530cf8093767ef"
-      ],
+      "canonicalImportEdgeIds": ["import:29248d530cf8093767ef"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflowLaunchInputs.ts#$file"
       ],
@@ -6188,9 +5766,7 @@
         "facade:packages/backend/src/services/workgroup/askerKey.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workgroup/askerKey.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:f081aee9b72d893622e2"
-      ],
+      "canonicalImportEdgeIds": ["import:f081aee9b72d893622e2"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/askerKey.ts#wgClarifyAskerKeyForRound"
       ],
@@ -6211,9 +5787,7 @@
         "facade:packages/backend/src/services/workgroup/constants.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workgroup/constants.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:7955b349117dc96f652b"
-      ],
+      "canonicalImportEdgeIds": ["import:7955b349117dc96f652b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/constants.ts#$file"
       ],
@@ -6234,9 +5808,7 @@
         "facade:packages/backend/src/services/workgroup/state.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workgroup/state.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c4d2548fbbb20a04aee5"
-      ],
+      "canonicalImportEdgeIds": ["import:c4d2548fbbb20a04aee5"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/state.ts#$file"
       ],
@@ -6257,9 +5829,7 @@
         "facade:packages/backend/src/services/workgroups.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/workgroups.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:a0e1337dd72a13031aa0"
-      ],
+      "canonicalImportEdgeIds": ["import:a0e1337dd72a13031aa0"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file"
       ],
@@ -6278,9 +5848,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1f4820f4d51ace59375c"
-      ],
+      "canonicalImportEdgeIds": ["import:1f4820f4d51ace59375c"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/codeHost/call.ts#CodeHostCallDeps"
       ],
@@ -6299,9 +5867,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:3d9af2993c79ab5def7e"
-      ],
+      "canonicalImportEdgeIds": ["import:3d9af2993c79ab5def7e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/codeHost/call.ts#executeCodeHostCall"
       ],
@@ -6320,9 +5886,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrFacts.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:1647cef249d621cadc77"
-      ],
+      "canonicalImportEdgeIds": ["import:1647cef249d621cadc77"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/codeHost/call.ts#executeCodeHostCall"
       ],
@@ -6341,9 +5905,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrFacts.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b07701ac84de0088b782"
-      ],
+      "canonicalImportEdgeIds": ["import:b07701ac84de0088b782"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/codeHost/connections.ts#probeCodeHostConnection"
       ],
@@ -6362,9 +5924,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dumpBuilder.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:da5a7f604a205898a20e"
-      ],
+      "canonicalImportEdgeIds": ["import:da5a7f604a205898a20e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/execution/callRefTarget.ts#pickCallTarget"
       ],
@@ -6383,9 +5943,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dumpBuilder.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:fd1db08f367d8cb19485"
-      ],
+      "canonicalImportEdgeIds": ["import:fd1db08f367d8cb19485"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/resourceRefs.ts#$file"
       ],
@@ -6404,9 +5962,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dumpBuilder.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:249d06f167e02a472939"
-      ],
+      "canonicalImportEdgeIds": ["import:249d06f167e02a472939"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/systemAgentRun.ts#SystemAgentSeedFile"
       ],
@@ -6425,9 +5981,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/manifest.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:db754ee018f051e986cd"
-      ],
+      "canonicalImportEdgeIds": ["import:db754ee018f051e986cd"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/mcpOperationRevision.ts#mcpOperationConfigHashOf"
       ],
@@ -6446,9 +6000,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/manifest.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:234a648b73c309b0d32e"
-      ],
+      "canonicalImportEdgeIds": ["import:234a648b73c309b0d32e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/pluginOperationRevision.ts#pluginOperationConfigHashOf"
       ],
@@ -6467,9 +6019,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/session.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:ca6046281bee8fcde23a"
-      ],
+      "canonicalImportEdgeIds": ["import:ca6046281bee8fcde23a"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/nodeRunMint.ts#generateEnvelopeNonce"
       ],
@@ -6511,9 +6061,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:5bbfb6e4251b677e3b4e"
-      ],
+      "canonicalImportEdgeIds": ["import:5bbfb6e4251b677e3b4e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/nodeRunMint.ts#generateEnvelopeNonce"
       ],
@@ -6555,9 +6103,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:73c33bc45c002b533bf8"
-      ],
+      "canonicalImportEdgeIds": ["import:73c33bc45c002b533bf8"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/daemonCadence.ts#DAEMON_CADENCE"
       ],
@@ -6651,9 +6197,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:59e4b5241b08b45205d9"
-      ],
+      "canonicalImportEdgeIds": ["import:59e4b5241b08b45205d9"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/nodeRunMint.ts#generateEnvelopeNonce"
       ],
@@ -6718,9 +6262,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:4b4421b45d99d5bec864"
-      ],
+      "canonicalImportEdgeIds": ["import:4b4421b45d99d5bec864"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/ref/runtimeRef.ts#agentRefOfNode"
       ],
@@ -6762,9 +6304,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:7c317ccd0062d9910fdb"
-      ],
+      "canonicalImportEdgeIds": ["import:7c317ccd0062d9910fdb"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/sessionEventSink.ts#$file"
       ],
@@ -6783,9 +6323,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/childExecutionLaunchOperations.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:b5fa2bcd19b85f269d30"
-      ],
+      "canonicalImportEdgeIds": ["import:b5fa2bcd19b85f269d30"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/execution/closure.ts#$file"
       ],
@@ -6804,9 +6342,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:cabe6f7a7a5e3921737e"
-      ],
+      "canonicalImportEdgeIds": ["import:cabe6f7a7a5e3921737e"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun"
       ],
@@ -6825,9 +6361,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/migrate.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:31068fa93cdad71360a8"
-      ],
+      "canonicalImportEdgeIds": ["import:31068fa93cdad71360a8"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/manualDatabaseMigration.ts#ManualDatabaseMigrationOptions"
       ],
@@ -6846,9 +6380,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/migrate.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c4ab35d5dd85ff02b6d7"
-      ],
+      "canonicalImportEdgeIds": ["import:c4ab35d5dd85ff02b6d7"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/manualDatabaseMigration.ts#prepareManualDatabaseMigration"
       ],
@@ -6867,9 +6399,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/config-cli.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:bd0a59bd663f650049be"
-      ],
+      "canonicalImportEdgeIds": ["import:bd0a59bd663f650049be"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/cliConfiguration.ts#$file"
       ],
@@ -6888,9 +6418,7 @@
     {
       "canonicalFacadeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/config-cli.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:e3c7f5f2fd281051133b"
-      ],
+      "canonicalImportEdgeIds": ["import:e3c7f5f2fd281051133b"],
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/cliConfiguration.ts#$file"
       ],
@@ -6937,9 +6465,7 @@
       "syntax": "static-import",
       "why": "RFC-370 H4/H5: the compatibility runtime driver forwards its original native material/evidence object and three original assembly helper exports to the actual runtime-management local owner. This exact temporary edge preserves registry identity and the existing API; selected neutral material/execution/evidence consumers retire it in A-T7.",
       "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:0e48a1141b5cad4b22a7"
-      ],
+      "canonicalImportEdgeIds": ["import:0e48a1141b5cad4b22a7"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/driver.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts#claudeLocalAgentMaterial"
@@ -6979,9 +6505,7 @@
       "syntax": "static-import",
       "why": "RFC-370 H4/H5: the compatibility runtime driver forwards its original native material/evidence object and three original assembly helper exports to the actual runtime-management local owner. This exact temporary edge preserves registry identity and the existing API; selected neutral material/execution/evidence consumers retire it in A-T7.",
       "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:0c137920d927991cde8d"
-      ],
+      "canonicalImportEdgeIds": ["import:0c137920d927991cde8d"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/opencode/driver.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts#opencodeLocalAgentMaterial"
@@ -6998,9 +6522,7 @@
       "why": "RFC-370 H4/H5: the existing native runtime gateway binds the original evidence hooks and explicitly selected physical scope to the runtime-management local evidence participant. The exact value import preserves the registry and current native API while Task and System consumers use the neutral evidence port; full selected material/execution/evidence composition and true roots retire this compatibility edge in A-T7.",
       "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
       "from": "packages/backend/src/services/runtime/index.ts",
-      "canonicalImportEdgeIds": [
-        "import:26fe0c0ce3c7def7d032"
-      ],
+      "canonicalImportEdgeIds": ["import:26fe0c0ce3c7def7d032"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts#createLocalAgentMaterialEvidence"
@@ -7061,9 +6583,7 @@
       "syntax": "static-import",
       "why": "RFC-370 H4/H5: the actual neutral evidence port still names the original native span-capture result type. This exact type-only application bridge preserves the existing capture contract during incremental extraction and is retired by the selected material/evidence roots in A-T7.",
       "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:15453fccce1fc656d583"
-      ],
+      "canonicalImportEdgeIds": ["import:15453fccce1fc656d583"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/agentMaterialEvidence.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/runtime/spanCapture.ts#PreparedRuntimeSpanCapture"
@@ -7120,9 +6640,7 @@
       "syntax": "static-import",
       "why": "RFC-370 H4: this exact native compatibility consumer selects the actual neutral execution port, selected process observer/projection or same compiled material reference. The single original native mechanism, receipt facts and logical resource resolver remain active. Full selected material/evidence/execution bundle and true composition roots retire this named compatibility edge in A-T7.",
       "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:08e63587084385a1429a"
-      ],
+      "canonicalImportEdgeIds": ["import:08e63587084385a1429a"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#bindNativeAgentMaterialReference"
@@ -7167,9 +6685,7 @@
       "introducedByRFC": "RFC-370 A-T5 invocation ownership SOURCE17-DOC1-R2",
       "why": "RFC-370 preserves the complete native pairing in TE composition and the pure protocol in RM infrastructure for the actual Task/System/Smoke callers. The original algorithms, exact compiled plan, owner receipt, native timing and all tests remain unchanged. Normal selected factory and true roots remain open; retire this actual compatibility group in A-T7 without changing any boundary/public classifier.",
       "removeAfterWave": "RFC-370 A-T7 selected material protocol and true roots",
-      "canonicalImportEdgeIds": [
-        "import:dc10ad3fda96705dd0f3"
-      ],
+      "canonicalImportEdgeIds": ["import:dc10ad3fda96705dd0f3"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtimeSmoke.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts#bindNativeAgentProtocol"
@@ -7189,9 +6705,7 @@
       "introducedByRFC": "RFC-370 A-T5 invocation ownership SOURCE17-DOC1-R2",
       "why": "RFC-370 preserves the complete native pairing in TE composition and the pure protocol in RM infrastructure for the actual Task/System/Smoke callers. The original algorithms, exact compiled plan, owner receipt, native timing and all tests remain unchanged. Normal selected factory and true roots remain open; retire this actual compatibility group in A-T7 without changing any boundary/public classifier.",
       "removeAfterWave": "RFC-370 A-T7 selected material protocol and true roots",
-      "canonicalImportEdgeIds": [
-        "import:1766f25e27720473ea98"
-      ],
+      "canonicalImportEdgeIds": ["import:1766f25e27720473ea98"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtimeSmoke.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/agentInvocation.ts#bindNativeAgentInvocation"
@@ -7211,9 +6725,7 @@
       "introducedByRFC": "RFC-370 A-T5 invocation ownership SOURCE17-DOC1-R2",
       "why": "RFC-370 preserves the complete native pairing in TE composition and the pure protocol in RM infrastructure for the actual Task/System/Smoke callers. The original algorithms, exact compiled plan, owner receipt, native timing and all tests remain unchanged. Normal selected factory and true roots remain open; retire this actual compatibility group in A-T7 without changing any boundary/public classifier.",
       "removeAfterWave": "RFC-370 A-T7 selected material protocol and true roots",
-      "canonicalImportEdgeIds": [
-        "import:57da0f6bd2cd1ce77e1c"
-      ],
+      "canonicalImportEdgeIds": ["import:57da0f6bd2cd1ce77e1c"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts#bindNativeAgentProtocol"
@@ -7233,9 +6745,7 @@
       "introducedByRFC": "RFC-370 A-T5 invocation ownership SOURCE17-DOC1-R2",
       "why": "RFC-370 preserves the complete native pairing in TE composition and the pure protocol in RM infrastructure for the actual Task/System/Smoke callers. The original algorithms, exact compiled plan, owner receipt, native timing and all tests remain unchanged. Normal selected factory and true roots remain open; retire this actual compatibility group in A-T7 without changing any boundary/public classifier.",
       "removeAfterWave": "RFC-370 A-T7 selected material protocol and true roots",
-      "canonicalImportEdgeIds": [
-        "import:c13c8d8f055c8f38b277"
-      ],
+      "canonicalImportEdgeIds": ["import:c13c8d8f055c8f38b277"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/agentInvocation.ts#bindNativeAgentInvocation"
@@ -7353,9 +6863,7 @@
       "introducedByRFC": "RFC-370 A-T5 System common core SOURCE19-DOC1-R2",
       "why": "RFC-370 explicit native compatibility and the shared System core keep the original complete native/public API and original consumer timing. These exact existing facade-to-owner addresses replace the original System execution body; normal selected composition has no native fallback. Full true roots and retention consumers remain open.",
       "removeAfterWave": "RFC-370 A-T7 selected invocation and true roots",
-      "canonicalImportEdgeIds": [
-        "import:b02bc1c18361900ae408"
-      ],
+      "canonicalImportEdgeIds": ["import:b02bc1c18361900ae408"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#$file"
@@ -7401,9 +6909,7 @@
       "introducedByRFC": "RFC-370 A-T5 System common core SOURCE19-DOC1-R2",
       "why": "RFC-370 places the original complete System algorithm and neutral session event contract at their execution/material owners. These exact type/helper/logger dependencies retain the original complete behavior while native location and plan remain in explicit composition. A-T7 completes existing legacy DTO/type ownership; no original boundary classifier or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T7 selected invocation and true roots",
-      "canonicalImportEdgeIds": [
-        "import:865179f7fc585ca586f8"
-      ],
+      "canonicalImportEdgeIds": ["import:865179f7fc585ca586f8"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/agentSessionEvents.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/runtime/types.ts#$file"
@@ -7445,9 +6951,7 @@
       "introducedByRFC": "RFC-370 A-T5 smoke common core SOURCE9-DOC1-R2",
       "why": "RFC-370 smoke native compatibility delegates the whole original smoke behavior to the same TE application core. These exact actual facade-to-owner imports retain the full original contracts and native builder; the selected composition has no local fallback. Full true roots remain open.",
       "removeAfterWave": "RFC-370 A-T7 selected invocation and true roots",
-      "canonicalImportEdgeIds": [
-        "import:31c2d00e6c4bdd334770"
-      ],
+      "canonicalImportEdgeIds": ["import:31c2d00e6c4bdd334770"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtimeSmoke.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/runtimeSmoke.ts#MODEL_FAIL_SIGNATURES"
@@ -7467,16 +6971,12 @@
       "introducedByRFC": "RFC-370 port output validation SOURCE16-DOC1-R1",
       "why": "The unchanged original classifier records this exact port output validation address. Preserve the complete original path/list/resolver/native IO policies, synchronous legacy API and selected receiver behavior, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task output validation roots",
-      "canonicalImportEdgeIds": [
-        "import:f58e18bf6fc0ed8c4efe"
-      ],
+      "canonicalImportEdgeIds": ["import:f58e18bf6fc0ed8c4efe"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/portOutputValidation.ts#PortValidationFailure"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/envelope.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/envelope.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7489,16 +6989,12 @@
       "introducedByRFC": "RFC-370 port output validation SOURCE16-DOC1-R1",
       "why": "The unchanged original classifier records this exact port output validation address. Preserve the complete original path/list/resolver/native IO policies, synchronous legacy API and selected receiver behavior, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task output validation roots",
-      "canonicalImportEdgeIds": [
-        "import:e4a6d01939efe9f5f405"
-      ],
+      "canonicalImportEdgeIds": ["import:e4a6d01939efe9f5f405"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/portOutputValidation.ts#PortValidationError"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/envelope.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/envelope.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7511,16 +7007,12 @@
       "introducedByRFC": "RFC-370 port output validation SOURCE16-DOC1-R1",
       "why": "The unchanged original classifier records this exact port output validation address. Preserve the complete original path/list/resolver/native IO policies, synchronous legacy API and selected receiver behavior, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task output validation roots",
-      "canonicalImportEdgeIds": [
-        "import:418c2731619192fbd49d"
-      ],
+      "canonicalImportEdgeIds": ["import:418c2731619192fbd49d"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/portOutputValidation.ts#PortValidationFailure"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/envelope.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/envelope.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7533,16 +7025,12 @@
       "introducedByRFC": "RFC-370 port output validation SOURCE16-DOC1-R1",
       "why": "The unchanged original classifier records this exact port output validation address. Preserve the complete original path/list/resolver/native IO policies, synchronous legacy API and selected receiver behavior, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task output validation roots",
-      "canonicalImportEdgeIds": [
-        "import:adfee2c9182d3bcca25a"
-      ],
+      "canonicalImportEdgeIds": ["import:adfee2c9182d3bcca25a"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/portOutputValidation.ts#ResolvePortContentOptions"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/envelope.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/envelope.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7555,16 +7043,12 @@
       "introducedByRFC": "RFC-370 port output validation SOURCE16-DOC1-R1",
       "why": "The unchanged original classifier records this exact port output validation address. Preserve the complete original path/list/resolver/native IO policies, synchronous legacy API and selected receiver behavior, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task output validation roots",
-      "canonicalImportEdgeIds": [
-        "import:81b36bcfd937dc8102e8"
-      ],
+      "canonicalImportEdgeIds": ["import:81b36bcfd937dc8102e8"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/portOutputValidation.ts#ResolvePortContentOptions"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/envelope.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/envelope.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7577,16 +7061,12 @@
       "introducedByRFC": "RFC-370 port output validation SOURCE16-DOC1-R1",
       "why": "The unchanged original classifier records this exact port output validation address. Preserve the complete original path/list/resolver/native IO policies, synchronous legacy API and selected receiver behavior, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task output validation roots",
-      "canonicalImportEdgeIds": [
-        "import:857744f91ea3df8c150b"
-      ],
+      "canonicalImportEdgeIds": ["import:857744f91ea3df8c150b"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/portOutputValidation.ts#resolveNativePortContentDetailed"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/envelope.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/envelope.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7599,16 +7079,12 @@
       "introducedByRFC": "RFC-370 port output validation SOURCE16-DOC1-R1",
       "why": "The unchanged original classifier records this exact port output validation address. Preserve the complete original path/list/resolver/native IO policies, synchronous legacy API and selected receiver behavior, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task output validation roots",
-      "canonicalImportEdgeIds": [
-        "import:f580e75fb7569dcfb61a"
-      ],
+      "canonicalImportEdgeIds": ["import:f580e75fb7569dcfb61a"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/envelope.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/composition/portOutputValidation.ts#$file"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/envelope.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/envelope.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7630,9 +7106,7 @@
         "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#RunFinalStatus",
         "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#RunResult"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/runner.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7662,9 +7136,7 @@
         "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#appendBoundedTail",
         "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#clampTailLine"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/runner.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7677,16 +7149,12 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:87c673262e895a463947"
-      ],
+      "canonicalImportEdgeIds": ["import:87c673262e895a463947"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentPluginLoadDiagnostics.ts#detectPluginLoadFailure"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/runner.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7699,16 +7167,12 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:6a895204248d6507f361"
-      ],
+      "canonicalImportEdgeIds": ["import:6a895204248d6507f361"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts#runNativeTaskAgent"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/runner.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -7721,16 +7185,12 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:fe03b21954ad00a6a922"
-      ],
+      "canonicalImportEdgeIds": ["import:fe03b21954ad00a6a922"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts#RunNodeOptions"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/runner.ts"]
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -7743,9 +7203,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:175b6de4632f599b8097"
-      ],
+      "canonicalImportEdgeIds": ["import:175b6de4632f599b8097"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/runtimeSessionLease.ts#$file"
@@ -7803,9 +7261,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:06ba260990f97983328c"
-      ],
+      "canonicalImportEdgeIds": ["import:06ba260990f97983328c"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/envelope.ts#$file"
@@ -7823,9 +7279,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:537871ccfb897af979ec"
-      ],
+      "canonicalImportEdgeIds": ["import:537871ccfb897af979ec"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/execution/agentInjection.ts#EMPTY_RUNTIME_PROFILE"
@@ -7843,9 +7297,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:979ea08fb6f5ffabfffd"
-      ],
+      "canonicalImportEdgeIds": ["import:979ea08fb6f5ffabfffd"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/execution/inventoryObservation.ts#buildRuntimeInventoryObservation"
@@ -7908,9 +7360,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:d3e040569d1b1fd55777"
-      ],
+      "canonicalImportEdgeIds": ["import:d3e040569d1b1fd55777"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/execution/startupVerification.ts#$file"
@@ -7928,9 +7378,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:f6fff929e1b6d2f9d30b"
-      ],
+      "canonicalImportEdgeIds": ["import:f6fff929e1b6d2f9d30b"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/protocol.ts#$file"
@@ -7948,9 +7396,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:d98eada297d0a956485e"
-      ],
+      "canonicalImportEdgeIds": ["import:d98eada297d0a956485e"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/runtime/index.ts#$file"
@@ -7968,9 +7414,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:e476ae62c20624ad3827"
-      ],
+      "canonicalImportEdgeIds": ["import:e476ae62c20624ad3827"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/runtime/index.ts#$file"
@@ -8012,9 +7456,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:73e38b90cec8dc8a7732"
-      ],
+      "canonicalImportEdgeIds": ["import:73e38b90cec8dc8a7732"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/runtime/usage.ts#createInvocationUsageCapture"
@@ -8066,9 +7508,7 @@
       "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
       "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
       "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:f4476433c1b17ea26dce"
-      ],
+      "canonicalImportEdgeIds": ["import:f4476433c1b17ea26dce"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/runtimeSessionLease.ts#$file"
@@ -8235,9 +7675,7 @@
       "introducedByRFC": "RFC-370 Doctor Diagnostic SOURCE16-R1",
       "why": "The unchanged original classifier records this actual complete Doctor family or migrated native helper address. Ordinary Doctor composition requires the selected complete diagnostics factory and forwards an opaque runtime configuration reference; only the selected native infrastructure interprets file paths, native probes, database/configuration helpers and inventory. Preserve all original complete helper and diagnostic-policy AST, public value identities, every surviving authored debt row and concurrent committed output. No classifier, rule, assertion or generic exemption changes. Any actual legacy or composition address retains its actual classification and final A-T7 cleanup.",
       "removeAfterWave": "RFC-370 A-T5 Doctor diagnostics and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:bf227064b62c37ef7007"
-      ],
+      "canonicalImportEdgeIds": ["import:bf227064b62c37ef7007"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts#composeDoctorApplication"
@@ -8255,9 +7693,7 @@
       "introducedByRFC": "RFC-370 Doctor Diagnostic SOURCE16-R1",
       "why": "The unchanged original classifier records this actual complete Doctor family or migrated native helper address. Ordinary Doctor composition requires the selected complete diagnostics factory and forwards an opaque runtime configuration reference; only the selected native infrastructure interprets file paths, native probes, database/configuration helpers and inventory. Preserve all original complete helper and diagnostic-policy AST, public value identities, every surviving authored debt row and concurrent committed output. No classifier, rule, assertion or generic exemption changes. Any actual legacy or composition address retains its actual classification and final A-T7 cleanup.",
       "removeAfterWave": "RFC-370 A-T5 Doctor diagnostics and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:a6f7e07de60aa8e2c8b0"
-      ],
+      "canonicalImportEdgeIds": ["import:a6f7e07de60aa8e2c8b0"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts#$file"
@@ -8275,9 +7711,7 @@
       "introducedByRFC": "RFC-370 Doctor Diagnostic SOURCE16-R1",
       "why": "The unchanged original classifier records this actual complete Doctor family or migrated native helper address. Ordinary Doctor composition requires the selected complete diagnostics factory and forwards an opaque runtime configuration reference; only the selected native infrastructure interprets file paths, native probes, database/configuration helpers and inventory. Preserve all original complete helper and diagnostic-policy AST, public value identities, every surviving authored debt row and concurrent committed output. No classifier, rule, assertion or generic exemption changes. Any actual legacy or composition address retains its actual classification and final A-T7 cleanup.",
       "removeAfterWave": "RFC-370 A-T5 Doctor diagnostics and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:991f4a4f285eaffdfb20"
-      ],
+      "canonicalImportEdgeIds": ["import:991f4a4f285eaffdfb20"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#DoctorResult"
@@ -8379,16 +7813,12 @@
       "introducedByRFC": "RFC-370 Boot Execution Recovery SOURCE12-R1",
       "why": "The unchanged original classifier records this actual complete boot recovery family or migrated native pairing address. Ordinary recovery selects one complete four-member family at the original prepare point, with opaque recovery/finalization references interpreted only by the selected implementation. One common prepare/reap/repair/finalize sequence preserves every original argument, ordering, error and log/report rule. All four original mechanism bodies, two complete CLI root SourceFile ASTs, three original readers, every old assertion and budget and concurrent committed output remain intact. No classifier, rule, assertion or generic exemption changes. Actual legacy or composition addresses retain their original classification and final A-T7 cleanup.",
       "removeAfterWave": "RFC-370 A-T6 boot execution recovery and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:bdb6556cf3c9a5070d81"
-      ],
+      "canonicalImportEdgeIds": ["import:bdb6556cf3c9a5070d81"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/orphans.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#ReapResult"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/orphans.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/orphans.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -8401,16 +7831,12 @@
       "introducedByRFC": "RFC-370 Boot Execution Recovery SOURCE12-R1",
       "why": "The unchanged original classifier records this actual complete boot recovery family or migrated native pairing address. Ordinary recovery selects one complete four-member family at the original prepare point, with opaque recovery/finalization references interpreted only by the selected implementation. One common prepare/reap/repair/finalize sequence preserves every original argument, ordering, error and log/report rule. All four original mechanism bodies, two complete CLI root SourceFile ASTs, three original readers, every old assertion and budget and concurrent committed output remain intact. No classifier, rule, assertion or generic exemption changes. Actual legacy or composition addresses retain their original classification and final A-T7 cleanup.",
       "removeAfterWave": "RFC-370 A-T6 boot execution recovery and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:91d79ead429230472385"
-      ],
+      "canonicalImportEdgeIds": ["import:91d79ead429230472385"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/orphans.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#ReapResult"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/orphans.ts"
-      ]
+      "canonicalFacadeIds": ["facade:packages/backend/src/services/orphans.ts"]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -8423,9 +7849,7 @@
       "introducedByRFC": "RFC-370 Execution Runtime Lifecycle SOURCE6-R1",
       "why": "The unchanged original classifier records this exact type-only dependency for the independent execution-background lifecycle. Bootstrap consumes the owner-owned exact composition contract; the port reuses the one canonical pure database-provider type. There is no new native effect, process, path or CS wire DTO in this contract. The original queue, start loop, stop/drain ACK progress, provider lifecycle, every old root and regression remain. Preserve the actual classification and close the complete authority/root integration separately; do not broaden any classifier, rule or generic exemption.",
       "removeAfterWave": "RFC-370 A-T6 execution authority and A-T7 real roots",
-      "canonicalImportEdgeIds": [
-        "import:526fb993e4d4cbbe0e86"
-      ],
+      "canonicalImportEdgeIds": ["import:526fb993e4d4cbbe0e86"],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition/daemonExecutionRuntime.ts#$file"
@@ -9615,8 +9039,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "3645f05a50e25ca248ebba71abd1205b93c1a1b6",
-    "contentDigest": "sha256:6a744bc4f01e200f71518798de5d50c05e677c8b14a05bf8d7eb0ec2dc436303",
+    "currentSnapshotSha": "717b8610e0b3c2d0920b34cd7b4bdb8d75718918",
+    "contentDigest": "sha256:77da1bf831fd7ebbc806133e2389ca8213d2ae945f62aee3655142d34450d112",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

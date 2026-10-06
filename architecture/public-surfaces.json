@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1247,
+    "consumers": 1256,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1557,
+    "methods": 1565,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 27323,
-    "symbols": 1187
+    "recursiveFields": 27349,
+    "symbols": 1190
   },
   "entries": [
     {
@@ -8615,7 +8615,6 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
-            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:e5f00e57c366d14491b0"
           ],
@@ -8716,7 +8715,6 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
-            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:e5f00e57c366d14491b0"
           ],
@@ -136202,6 +136200,7 @@
         "import:203bfee525aeadabe3f6",
         "import:408db528f9771d26aa95",
         "import:4c5eb96e7bb086b60701",
+        "import:53eb04623e416e8839a8",
         "import:a98760213c9c85577b89"
       ],
       "context": "runtime-management",
@@ -136730,6 +136729,12 @@
           "edgeId": "import:4c5eb96e7bb086b60701",
           "file": "packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:53eb04623e416e8839a8",
+          "file": "packages/backend/src/modules/task-execution/application/ports/taskRunSelection.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskRunSelection.ts#$file"
         },
         {
           "context": "task-execution",
@@ -141981,6 +141986,110 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": ["import:b17852719907204f8efd"],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$parameter:input.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:ensure.$parameter:input.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:ensure.$return.digest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:ensure.$return.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:ensure.$return.version",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$parameter:input.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$return.$method:ensure.$parameter:input.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$return.$method:ensure.$return.digest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$return.$method:ensure.$return.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "fieldPath": "$call.$return.$method:ensure.$return.version",
+          "type": "1"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:bindWorkspaceExcludeProfile",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:031e893d585505295d74150adf0da89417293d241da57608073bedf9d7db4f3f"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "bind",
+          "signatureDigest": "sha256:2f708b4fd552a18b2e0af9aeeafab36b249d98fd8b222a36a5543dd51f2faa7a"
+        },
+        {
+          "consumerEdgeIds": ["import:b17852719907204f8efd"],
+          "name": "ensure",
+          "signatureDigest": "sha256:cd62c1426b3b2547ca3f935795d3ea6ec0dbd71fd588d1e54a17627d6cf6f271"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:b17852719907204f8efd",
+          "file": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:1f19d8414f8e61364b6530f08577b824abe2dc3b23e9ebacbeffa91b8a13c215",
+      "status": "target-context-current-surface",
+      "symbol": "bindWorkspaceExcludeProfile",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": ["import:f4556aa76507539512d6"],
       "context": "source-control",
       "dataClass": "confidential",
@@ -143743,6 +143852,7 @@
         {
           "consumerEdgeIds": [
             "import:077793f455fd12b53d80",
+            "import:6201e402bfd91675fef7",
             "import:d03cdda2bdca6544c3e1",
             "import:daecd60630dbd4c5126d",
             "import:f8579c6d90fd82342140"
@@ -144364,6 +144474,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:198d7d1249aa59cd063b",
             "import:300224cb7bd5b2cfb4d7",
             "import:3409d49c4e848958f114",
             "import:3ad85f922f3d6444d5a8"
@@ -144451,6 +144562,115 @@
       "symbol": "selectRepositoryGitWorkspaceFactory",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": ["AbortSignal", "Record"],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": ["import:985b41ca7acbe7a7afa3"],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:readLocalAppHome.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:input.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:ensure.$parameter:input.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:ensure.$return.digest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:ensure.$return.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:ensure.$return.version",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$parameter:input.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:ensure.$parameter:input.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:ensure.$return.digest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:ensure.$return.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:ensure.$return.version",
+          "type": "1"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:selectWorkspaceExcludeProfileFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:c15676f0c09e21bf3f27f1e21a9891dac386b10268256e74579a5740e6e4875a"
+        },
+        {
+          "consumerEdgeIds": ["import:985b41ca7acbe7a7afa3"],
+          "name": "bind",
+          "signatureDigest": "sha256:2f708b4fd552a18b2e0af9aeeafab36b249d98fd8b222a36a5543dd51f2faa7a"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "ensure",
+          "signatureDigest": "sha256:cd62c1426b3b2547ca3f935795d3ea6ec0dbd71fd588d1e54a17627d6cf6f271"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:985b41ca7acbe7a7afa3",
+          "file": "packages/backend/src/modules/task-execution/composition/localTaskRunSelection.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/localTaskRunSelection.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:47e85c8ef043ab6f43e0ea6a25c9e0102b09d7e4f0ca9bef09e0bca152a53259",
+      "status": "target-context-current-surface",
+      "symbol": "selectWorkspaceExcludeProfileFactory",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -144887,12 +145107,146 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#WorkspaceExcludeParticipant",
       "productionConsumers": [],
-      "publicTypeConsumerIds": [],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:WorkspaceExcludeProfileFactory",
+        "public:source-control:participants:bindWorkspaceExcludeProfile",
+        "public:source-control:participants:selectWorkspaceExcludeProfileFactory"
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:ccb9dc127704dd3b30d73eba036121f56ea41d00928f9db1e1bb62f9fd4bfa6c",
       "status": "target-context-current-surface",
       "symbol": "WorkspaceExcludeParticipant",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:6e2e5b0f199912986f37",
+        "import:9c4092d3ac18e4a05666",
+        "import:aa817c20c30bf9ceee80",
+        "import:b16172cf97173afacadf",
+        "import:e22bda10a767d41941af",
+        "import:e8a7a4578e3df2c252f1"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:9c4092d3ac18e4a05666",
+            "import:e8a7a4578e3df2c252f1"
+          ],
+          "fieldPath": "$method:bind.$parameter:input.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:ensure.$parameter:input.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:ensure.$return.digest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:ensure.$return.directChildMounts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9c4092d3ac18e4a05666",
+            "import:e22bda10a767d41941af",
+            "import:e8a7a4578e3df2c252f1"
+          ],
+          "fieldPath": "$method:bind.$return.$method:ensure.$return.version",
+          "type": "1"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:WorkspaceExcludeProfileFactory",
+      "members": ["bind"],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:6e2e5b0f199912986f37",
+            "import:9c4092d3ac18e4a05666",
+            "import:b16172cf97173afacadf",
+            "import:e22bda10a767d41941af",
+            "import:e8a7a4578e3df2c252f1"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:2f708b4fd552a18b2e0af9aeeafab36b249d98fd8b222a36a5543dd51f2faa7a"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e22bda10a767d41941af",
+            "import:e8a7a4578e3df2c252f1"
+          ],
+          "name": "ensure",
+          "signatureDigest": "sha256:cd62c1426b3b2547ca3f935795d3ea6ec0dbd71fd588d1e54a17627d6cf6f271"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#WorkspaceExcludeProfileFactory",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:6e2e5b0f199912986f37",
+          "file": "packages/backend/src/modules/task-execution/composition/localTaskRunSelection.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/localTaskRunSelection.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:9c4092d3ac18e4a05666",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:aa817c20c30bf9ceee80",
+          "file": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:b16172cf97173afacadf",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e22bda10a767d41941af",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e8a7a4578e3df2c252f1",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:bindWorkspaceExcludeProfile",
+        "public:source-control:participants:selectWorkspaceExcludeProfileFactory"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b88edefc2c2b065cf0674d213a5b8abd95f9a809f7fde3109a5d88a527e555f8",
+      "status": "target-context-current-surface",
+      "symbol": "WorkspaceExcludeProfileFactory",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -146746,6 +147100,7 @@
           "consumerEdgeIds": [
             "import:224314ba2fff008f58f2",
             "import:27224a577cedc6d39a8b",
+            "import:4bf78a4ed8b7bb0f70b6",
             "import:58c18bfdc79b46a556d2",
             "import:5c56dd777b49d4a51c18"
           ],
@@ -149822,6 +150177,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
+            "import:0c9643f703d45d89fb85",
             "import:58bb93550b353a6a6830",
             "import:c5eded8973c81ed8c8ee",
             "import:fa5468eabd0357ee196e"
@@ -151620,7 +151976,10 @@
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#WorkspaceExcludeProfileReceipt",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:source-control:participants:WorkspaceExcludeParticipant"
+        "public:source-control:participants:WorkspaceExcludeParticipant",
+        "public:source-control:participants:WorkspaceExcludeProfileFactory",
+        "public:source-control:participants:bindWorkspaceExcludeProfile",
+        "public:source-control:participants:selectWorkspaceExcludeProfileFactory"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -200245,7 +200604,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8c4e11676288a371c1ecd1421076d08ab70f8fe3a417863cf9b9a3df8ff80140",
+  "sourceDigest": "sha256:a6d33f68fe842a206b5bea46c558d90c42fb18d3594e95cb0e6a82b1bd4caec2",
   "targetContexts": [
     "collaboration",
     "development-automation",
