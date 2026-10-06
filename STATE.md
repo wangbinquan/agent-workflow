@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-371 保留逐提交 CI 终态
+
+原9fa主CI37465298886与类型补正a1主CI37468182178均被后继普通main push取消，原终态保持。a1的Format/Lint/Typecheck作业112284607088全部成功，但不计为完整CI通过。本片仅把主CI调度分组加上原github.sha并关闭同源运行中取消，保留原14jobs、32Ubuntu/12macOS native分片、双provider、所有命令／断言／环境／预算以及原规模工作流逐字内容。不同原提交不再经同一ref分组相互替换或取消；不重复调度旧整仓或规模检查，也不改变测试范围。
+
+独立设计及实现有限功能门分别有效PASS，原内容完整逆向恢复与不同SHA分组证明通过。本机仅自有格式与纯源码/YAML核对，没有AW tests/typecheck/build/services/census。Windows与其他并行在制品不在本片。新确切SHA CI仍需验收，原9fa规模37465488198继续，CS检查／原生数字接线／正式部署和两个RFC仍开放。
+
+整个共享STATE的原字节和并行输出完整保留。详见[逐提交检查记录](design/RFC-371-run-observability/exact-source-ci-qualification.md)。
+
 ## 2026-10-06 RFC-370 启动恢复完整四步效果家族
 
 DESIGN-D1、SOURCE12-R1 有效有限 PASS，源码 27 项首末稳定，指纹 285089d51f9247295bbc979b524dd4e323e3e92c7203a5b5ab4ac73d8022d7be。共同 application 保持原 prepare／reap／repair／finalize 唯一顺序；完整所选家族与 opaque 配对由 adapter 解释。原四机制、两个 CLI 完整 SourceFile AST 逆向、兼容签名、全部 receiver／ACK／错误、getter 时点与结果 identity 保持，HTTP 不新增恢复。23 新功能场景、三原 reader 全部 163 expect／预算和原真实双 provider 回归交 hosted CI。Doctor 发布后独立 Windows1-R1 7 项有效 PASS：10 对称触发路径、4 suite，移除新增内容与 47041 bytes 前像完全一致，不重审未变 SOURCE12。
