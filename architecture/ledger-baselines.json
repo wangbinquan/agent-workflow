@@ -97,11 +97,11 @@
       "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。 RFC-359 W4-D24：租约那条能力兼容债随实现合一销账，22→21。 RFC-359：`sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx` 随同步铸行链退役（`nodeRunMintProgram` 的同步解释器，src 侧唯一到达路径是零调用方的 `mintNodeRunTx`），20 → 19。"
     },
     {
-      "baseline": 2,
+      "baseline": 1,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-cross-context-pilot-debt",
       "symbol": "CROSS_CONTEXT_PILOT_DEBT",
-      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0 RFC-359 AC-1（plan §5fy）3 → 2：`webhookTerminalControl.ts -> task-execution/composition/sourceTermination.ts` 这条**已消除**——MR 终端控制的两个品牌装配合一时 `taskTermination` 改由调用方提供，那行 import 于是真的不存在了（不是把债挪走）。合一顺带还掉一笔架构债。"
+      "why": "RFC-294 试点期允许的跨 context 内部 import。目标架构下终值为 0 RFC-359 AC-1（plan §5fy）3 → 2：`webhookTerminalControl.ts -> task-execution/composition/sourceTermination.ts` 这条**已消除**——MR 终端控制的两个品牌装配合一时 `taskTermination` 改由调用方提供，那行 import 于是真的不存在了（不是把债挪走）。合一顺带还掉一笔架构债。 RFC-370 Task Run：taskEngineApplication 通过 exact source-control/public/participants 绑定所选 WorkspaceExcludeProfile，原 composition 跨模块导入已消失，2 → 1；剩余条目和原判断规则保持。"
     },
     {
       "baseline": 8,
@@ -139,11 +139,11 @@
       "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。"
     },
     {
-      "baseline": 136,
+      "baseline": 135,
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "id": "rfc294-review-unconsumed-public-symbols",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。** RFC-362：四个 SC offered seam 显式作为 W4-E1/W5 合同前置入账，136 → 140，生产接入后逐项删除。 RFC-363 consumes WorkspaceContentParticipant: 140 -> 139. RFC-363 deferred production binding consumes snapshot and preparation participants: 139 -> 137. RFC-363 public URL launch consumes the source seal port: 137 -> 136."
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。** RFC-362：四个 SC offered seam 显式作为 W4-E1/W5 合同前置入账，136 → 140，生产接入后逐项删除。 RFC-363 consumes WorkspaceContentParticipant: 140 -> 139. RFC-363 deferred production binding consumes snapshot and preparation participants: 139 -> 137. RFC-363 public URL launch consumes the source seal port: 137 -> 136. RFC-370 Task Run：WorkspaceExcludeParticipant 已由三个完整 publicTypeConsumerIds 消费，按原 unconsumedPublicSymbols 规则销账，136 → 135；其余 public 和 required-port 条目保持。"
     },
     {
       "baseline": 7,
@@ -922,7 +922,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "717b8610e0b3c2d0920b34cd7b4bdb8d75718918",
-    "contentDigest": "sha256:b29432c5c0923212169880bea370daf419fb8d9da7d64cca2980296007e204c9",
+    "contentDigest": "sha256:d4f66725e7496935e0ff40db75cb653a67256ed17ae4ed46c167b30dfe6e8b67",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -247,7 +247,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
     id: 'public:source-control:participants:RepositoryTransportCredentialSelectionParticipant',
     removeAfterWave: 'W5',
   },
-  { id: 'public:source-control:participants:WorkspaceExcludeParticipant', removeAfterWave: 'W5' },
   {
     id: 'public:source-control:queries:OwnRepositoryTransportCredentialQueries',
     removeAfterWave: 'W5',

@@ -529,7 +529,11 @@ test('第 12 刀 · 参与者已合一：仓里只剩一份实现，两个组合
   }
 
   // 两个组合根调的是**同一个**工厂。
-  expect(provider.match(/createTaskExecutionRuntimeParticipants\(\{/g)?.length).toBe(2)
+  expect(
+    provider.match(
+      /createTaskExecutionRuntimeParticipants\(\s*bindProviderTaskRunParticipantsInput\(/g,
+    )?.length,
+  ).toBe(2)
 
   // resume / cancel 都转给共用实现，且不再经过退役的 legacy 入口。
   expect(participants).toContain('createChildTaskLifecycleParticipant({')

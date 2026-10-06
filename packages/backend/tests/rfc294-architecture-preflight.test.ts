@@ -1572,7 +1572,6 @@ const CROSS_CONTEXT_PILOT_DEBT: string[] = [
   // `taskTermination` 改由调用方提供，`webhookTerminalControl.ts` 于是不再 import
   // `task-execution/composition/sourceTermination`——这条跨 context 内部 import 随之消失。
   // 合一顺带还掉一笔架构债，不是「把债挪走」：那行 import 现在真的不存在了。
-  'modules/task-execution/composition/taskEngineApplication.ts -> modules/source-control/composition.ts [value:static-import] cross-context internal import',
 ]
 
 // RFC-353 T5：原来那 5 条 `modules/memory/public/fusion.ts#…` 换成了下面 3 条
