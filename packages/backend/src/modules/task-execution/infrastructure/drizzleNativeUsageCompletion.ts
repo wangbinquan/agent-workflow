@@ -21,6 +21,7 @@ import { sha256Hex } from '@/util/hash'
 import type {
   NativeUsageOwnerBinding,
   NativeUsagePersistence,
+  NativeUsageReadBinding,
 } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import { withNativeUsageOwner, type NativeUsageOwnerFacts } from './nativeUsageOwnerTransaction'
@@ -35,7 +36,7 @@ type Pass = typeof nativeUsagePasses.$inferSelect
 
 async function head(
   tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
+  binding: NativeUsageReadBinding,
   phase: 'baseline' | 'final',
 ): Promise<Pass | undefined> {
   let after: string | undefined
@@ -70,11 +71,17 @@ async function head(
 }
 
 /** Derive small completion references from the actual original relations, never caller totals. */
-async function describe(
+export async function describeNativeUsageSingleRoot(
   tx: TaskExecutionTransaction,
   facts: NativeUsageOwnerFacts,
-  binding: NativeUsageOwnerBinding,
+  binding: NativeUsageReadBinding,
   observedAt: number,
+  context?: {
+    readonly rootSessionId: string
+    readonly beforeSpawn: ReturnType<typeof ObservationNativeBeforeSpawnAckSchema.parse>
+    readonly sourceGeneration: string | null
+    readonly emitted: Awaited<ReturnType<typeof verifyNativeUsageEmissions>>
+  },
 ): Promise<ObservationNativeCompletion> {
   const prepared = (
     await tx
@@ -89,11 +96,42 @@ async function describe(
     prepared.fence !== facts.fence
   )
     throw new Error('Native completion has no actual original preparation')
-  const beforeSpawn = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document))
-  const sourceGeneration = await originalNativeUsageStoreGeneration(tx, beforeSpawn)
+  const beforeSpawn =
+    context?.beforeSpawn ??
+    ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document))
+  const sourceGeneration = context
+    ? context.sourceGeneration
+    : await originalNativeUsageStoreGeneration(tx, beforeSpawn)
   const issues = new Set<string>()
-  const finalRow = await head(tx, binding, 'final')
-  const beforeRow = beforeSpawn.mode === 'resume' ? await head(tx, binding, 'baseline') : undefined
+  const effectiveResume =
+    beforeSpawn.mode === 'resume' &&
+    (!context || context.rootSessionId === beforeSpawn.rootSessionId)
+  const current = async (phase: 'baseline' | 'final') => {
+    if (!context) return head(tx, binding, phase)
+    if (sourceGeneration === null) return undefined
+    const key = JSON.stringify([
+      binding.invocationId,
+      beforeSpawn.nativeSource,
+      sourceGeneration,
+      context.rootSessionId,
+      beforeSpawn.lineage,
+      beforeSpawn.epoch,
+      phase,
+    ])
+    const row = (
+      await tx
+        .select({ key: nativeUsagePassHeads.key, pass: nativeUsagePasses })
+        .from(nativeUsagePassHeads)
+        .innerJoin(nativeUsagePasses, eq(nativeUsagePasses.passId, nativeUsagePassHeads.passId))
+        .where(eq(nativeUsagePassHeads.key, key))
+        .limit(1)
+    )[0]
+    if (row && (row.key !== row.pass.headKey || row.pass.invocationId !== binding.invocationId))
+      throw new Error('Native root changed its original pass head')
+    return row?.pass
+  }
+  const finalRow = await current('final')
+  const beforeRow = effectiveResume ? await current('baseline') : undefined
   const checkBinding = (row: Pass) => {
     const identity = ObservationNativePassIdentitySchema.parse(JSON.parse(row.identity))
     if (
@@ -103,7 +141,9 @@ async function describe(
       identity.sourceGeneration !== sourceGeneration ||
       identity.lineage !== facts.lineage ||
       identity.epoch !== facts.epoch ||
-      (beforeSpawn.mode === 'resume' && identity.rootSessionId !== beforeSpawn.rootSessionId)
+      (context
+        ? identity.rootSessionId !== context.rootSessionId
+        : beforeSpawn.mode === 'resume' && identity.rootSessionId !== beforeSpawn.rootSessionId)
     )
       throw new Error('Native completion changed its original source or execution binding')
     return identity
@@ -121,10 +161,10 @@ async function describe(
       else issues.add('native-baseline-population-incomplete')
     }
   }
-  if (beforeSpawn.mode === 'resume' && !baselinePass) issues.add('native-baseline-unavailable')
+  if (effectiveResume && !baselinePass) issues.add('native-baseline-unavailable')
   let final: ObservationNativePassCompletion | null = null
   let finalProgress: ObservationNativeCompletion['finalProgress']
-  let rootSessionId = beforeSpawn.rootSessionId
+  let rootSessionId = context?.rootSessionId ?? beforeSpawn.rootSessionId
   let rootCreatedAt: number | null = null
   if (finalRow) {
     rootSessionId = checkBinding(finalRow).rootSessionId
@@ -140,26 +180,24 @@ async function describe(
     }
   }
   if (!final) issues.add('native-final-unavailable')
-  const emitted = await verifyNativeUsageEmissions(tx, binding)
+  const emitted = context?.emitted ?? (await verifyNativeUsageEmissions(tx, binding))
   if (observedAt < emitted.observedAtFloor || observedAt < beforeSpawn.preparedAt)
     throw new Error('Native completion observation precedes its actual original evidence')
   if (emitted.hasProcessIssues) issues.add('native-process-incomplete')
-  if (beforeSpawn.mode === 'fresh' && rootCreatedAt === null)
-    issues.add('native-root-birth-unavailable')
+  if (!effectiveResume && rootCreatedAt === null) issues.add('native-root-birth-unavailable')
   const partial: ObservationNativeCompletion = {
     contract: 'opencode-child-pages-v2',
     nativeSource: facts.nativeSource,
     rootSessionId,
     state: 'partial',
-    baseline:
-      beforeSpawn.mode === 'fresh'
-        ? {
-            kind: 'fresh',
-            beforeSpawnReceiptId: beforeSpawn.ownerReceiptId,
-            preparedAt: beforeSpawn.preparedAt,
-            rootCreatedAt,
-          }
-        : { kind: 'resume', pass: baselinePass },
+    baseline: !effectiveResume
+      ? {
+          kind: 'fresh',
+          beforeSpawnReceiptId: beforeSpawn.ownerReceiptId,
+          preparedAt: beforeSpawn.preparedAt,
+          rootCreatedAt,
+        }
+      : { kind: 'resume', pass: baselinePass },
     final,
     ...(finalProgress === undefined ? {} : { finalProgress }),
     observedAt,
@@ -179,11 +217,28 @@ async function describe(
   if (numeric.missing) issues.add('native-numeric-source-incomplete')
   if (numeric.unknownTokens) issues.add('native-token-bucket-unknown')
   if (numeric.incompleteCoverage) issues.add('native-numeric-coverage-incomplete')
-  return ObservationNativeCompletionSchema.parse({
+  if (
+    context &&
+    !effectiveResume &&
+    rootCreatedAt !== null &&
+    (emitted.process.spawnedAt === null ||
+      rootCreatedAt < emitted.process.spawnedAt ||
+      rootCreatedAt > observedAt)
+  )
+    issues.add('native-root-birth-outside-original-process')
+  if (
+    context &&
+    (emitted.process.spawnedAt === null || beforeSpawn.preparedAt > emitted.process.spawnedAt)
+  )
+    issues.add('native-before-spawn-unavailable')
+  const described: ObservationNativeCompletion = {
     ...partial,
     state: issues.size === 0 ? 'complete' : 'partial',
     issues: [...issues],
-  })
+  }
+  // v3 retains the actual per-root failure facts in its original result digest. The old strict
+  // single-root wire schema and every already accepted v2 event remain unchanged.
+  return context ? described : ObservationNativeCompletionSchema.parse(described)
 }
 
 /** Original completion source and frozen ACK commit together. Producer composition is separate. */
@@ -195,7 +250,7 @@ export class DrizzleNativeUsageCompletion implements SealPort {
     readonly observedAt: number
   }): Promise<ObservationNativeCompletion> {
     return withNativeUsageOwner(this.db, input.binding, (tx, facts) =>
-      describe(tx, facts, input.binding, input.observedAt),
+      describeNativeUsageSingleRoot(tx, facts, input.binding, input.observedAt),
     )
   }
 
@@ -248,7 +303,12 @@ export class DrizzleNativeUsageCompletion implements SealPort {
           throw new Error('Native completion replay changed its original source or ACK')
         return ack
       }
-      const actual = await describe(tx, facts, input.binding, completion.observedAt)
+      const actual = await describeNativeUsageSingleRoot(
+        tx,
+        facts,
+        input.binding,
+        completion.observedAt,
+      )
       if (!isDeepStrictEqual(actual, completion))
         throw new Error('Native completion differs from its complete original evidence')
       const prepared = (

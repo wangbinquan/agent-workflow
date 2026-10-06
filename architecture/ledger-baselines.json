@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b",
+    "sourceDigest": "sha256:449074e504b219c7bc49eac0391e72a4ce9f6ce47e98c031d58feaeb37bf2794",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -821,10 +821,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1902,
+      "baseline": 1903,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 1897 -> 1902 for rfc294-mutation-entrypoints. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-371 finite SOURCE53 native root set v3: one actual new createNativeUsageRootCollection invocation root freeze entrypoint; original nine archive tables and all original numeric writes remain unchanged. Actual original counter 1902 -> 1903. Every invocation root is retained through original accepted leases, page/root EOF, frozen process watermark and archive restoration; one original numerical ledger with known partial four buckets/CNY. All original classifiers,129 ordered inventory ids/why,351 authored debts,214 guards,SPI/targets/SCC and assertions/budgets remain. Default production producer OFF; exact-SHA hosted CI, full-scale acceptance and both RFC completion remain open. Retire this actual one-commit matching receipt in the next ordinary successor."
       }
     },
     {
@@ -859,10 +859,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6567,
+      "baseline": 6603,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 6547 -> 6567 for rfc294-cross-context-observed-imports. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-371 finite SOURCE53 native root set v3: 36 actual native root source, completion and qualification imports, including explicit version 2/version 3 contracts. Actual original counter 6567 -> 6603. Every invocation root is retained through original accepted leases, page/root EOF, frozen process watermark and archive restoration; one original numerical ledger with known partial four buckets/CNY. All original classifiers,129 ordered inventory ids/why,351 authored debts,214 guards,SPI/targets/SCC and assertions/budgets remain. Default production producer OFF; exact-SHA hosted CI, full-scale acceptance and both RFC completion remain open. Retire this actual one-commit matching receipt in the next ordinary successor."
       }
     },
     {
@@ -883,10 +883,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5791,
+      "baseline": 5821,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 5777 -> 5791 for rfc294-architecture-exceptions. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-371 finite SOURCE53 native root set v3: 30 actual internal persistence/provider compatibility edges for the four nonnumeric root metadata tables and original qualification. Actual original counter 5791 -> 5821. Every invocation root is retained through original accepted leases, page/root EOF, frozen process watermark and archive restoration; one original numerical ledger with known partial four buckets/CNY. All original classifiers,129 ordered inventory ids/why,351 authored debts,214 guards,SPI/targets/SCC and assertions/budgets remain. Default production producer OFF; exact-SHA hosted CI, full-scale acceptance and both RFC completion remain open. Retire this actual one-commit matching receipt in the next ordinary successor."
       }
     },
     {
@@ -901,10 +901,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1173,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 1169 -> 1173 for rfc294-public-surfaces. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -924,10 +921,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26983,
+      "baseline": 27020,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 26945 -> 26983 for rfc294-module-symbol-owners. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-371 finite SOURCE53 native root set v3: 37 actual native root collection/source/completion/qualification and metadata archive declarations. Actual original counter 26983 -> 27020. Every invocation root is retained through original accepted leases, page/root EOF, frozen process watermark and archive restoration; one original numerical ledger with known partial four buckets/CNY. All original classifiers,129 ordered inventory ids/why,351 authored debts,214 guards,SPI/targets/SCC and assertions/budgets remain. Default production producer OFF; exact-SHA hosted CI, full-scale acceptance and both RFC completion remain open. Retire this actual one-commit matching receipt in the next ordinary successor."
       }
     }
   ],
@@ -935,8 +932,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e24de73a3ab0b12c99998b70bd5e3904e5be003a",
-    "contentDigest": "sha256:86f666d38295373ce0c91f1bcd353c58ed30dc72d85d3950d98d48d4b32de3a2",
+    "currentSnapshotSha": "1538a56d9664b5658388c662db6a340d24dbaab6",
+    "contentDigest": "sha256:d1e84ddb7aa51518a212becd800b120ae120f1393c11bef5820890200f5013ea",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

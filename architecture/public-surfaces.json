@@ -3,9 +3,9 @@
     "consumers": 1221,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1507,
+    "methods": 1513,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 26809,
+    "recursiveFields": 26824,
     "symbols": 1173
   },
   "entries": [
@@ -132756,10 +132756,10 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 42,
+        "maxMethods": 44,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 333,
-        "maxUnionVariants": 96
+        "maxTransitiveLeafFields": 338,
+        "maxUnionVariants": 99
       },
       "consumerEdgeIds": [
         "import:26adc1d83d57369c678b"
@@ -133686,6 +133686,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:freeze.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:page.$parameter:after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:page.$parameter:after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:page.$return",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.invocationId",
           "type": "string"
         },
@@ -133793,6 +133813,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:prepareNativeUsageCapture.$return.contract.$variant:1",
           "type": "'opencode-child-pages-v2'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.contract.$variant:2",
+          "type": "'opencode-child-root-pages-v3'"
         },
         {
           "consumerEdgeIds": [],
@@ -134521,6 +134546,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "freeze",
+          "signatureDigest": "sha256:4b96a4d9325466ac9b2210468d1313096bcadac08c58188e41d34b7353591535"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "includesRecord",
           "signatureDigest": "sha256:d0aca65d70ba0ecfe11f06380d95a00c25548a3fc610230187f57167dcef03f3"
         },
@@ -134558,6 +134588,11 @@
           "consumerEdgeIds": [],
           "name": "observe",
           "signatureDigest": "sha256:b2f22bfb91199d393698a12e0a1ad9ff2d47b024af5d0198fb4f923775b28e30"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "page",
+          "signatureDigest": "sha256:697b6459032ee030a690e4ea77309bc14156336613faf2a51eedbfed53473844"
         },
         {
           "consumerEdgeIds": [],
@@ -136524,6 +136559,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "contract.$variant:2",
+          "type": "'opencode-child-root-pages-v3'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "nativeSource",
           "type": "string"
         }
@@ -136605,10 +136645,10 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 8,
+        "maxMethods": 10,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 132,
-        "maxUnionVariants": 30
+        "maxTransitiveLeafFields": 136,
+        "maxUnionVariants": 32
       },
       "consumerEdgeIds": [
         "import:38a2389d52c40734c406",
@@ -137321,6 +137361,26 @@
           "type": "z.infer<typeof ObservationNativePassAckSchema>"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.rootCollection.$method:freeze.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.rootCollection.$method:page.$parameter:after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.rootCollection.$method:page.$parameter:after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.rootCollection.$method:page.$return",
+          "type": "readonly string[]"
+        },
+        {
           "consumerEdgeIds": [
             "import:38a2389d52c40734c406",
             "import:d70a8f2b0aab923f89f4"
@@ -137367,9 +137427,21 @@
           "signatureDigest": "sha256:6f2d6465cf27b90e23e36faaf76c14a9ec23ed252124e294ad3ae0f78b590b65"
         },
         {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "name": "freeze",
+          "signatureDigest": "sha256:4b96a4d9325466ac9b2210468d1313096bcadac08c58188e41d34b7353591535"
+        },
+        {
           "consumerEdgeIds": [],
           "name": "interrupt",
           "signatureDigest": "sha256:015a124a403225a08ae0e23f02fa198da8d93a7cfbd7fa3a52fd149b0f9e84f9"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "page",
+          "signatureDigest": "sha256:697b6459032ee030a690e4ea77309bc14156336613faf2a51eedbfed53473844"
         },
         {
           "consumerEdgeIds": [],
@@ -179541,10 +179613,10 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 56,
+        "maxMethods": 58,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 564,
-        "maxUnionVariants": 193
+        "maxTransitiveLeafFields": 569,
+        "maxUnionVariants": 196
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
@@ -181171,6 +181243,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:freeze.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:page.$parameter:after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:page.$parameter:after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.rootCollection.$method:page.$return",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.invocationId",
           "type": "string"
         },
@@ -181278,6 +181370,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.contract.$variant:1",
           "type": "'opencode-child-pages-v2'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.contract.$variant:2",
+          "type": "'opencode-child-root-pages-v3'"
         },
         {
           "consumerEdgeIds": [],
@@ -182481,6 +182578,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "freeze",
+          "signatureDigest": "sha256:4b96a4d9325466ac9b2210468d1313096bcadac08c58188e41d34b7353591535"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "includesRecord",
           "signatureDigest": "sha256:d0aca65d70ba0ecfe11f06380d95a00c25548a3fc610230187f57167dcef03f3"
         },
@@ -182528,6 +182630,11 @@
           "consumerEdgeIds": [],
           "name": "observeSystemEvent",
           "signatureDigest": "sha256:ceceb552aa22a19877b9351be229c1ae8d8e83a9ab3eaff98104d378369eaa60"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "page",
+          "signatureDigest": "sha256:697b6459032ee030a690e4ea77309bc14156336613faf2a51eedbfed53473844"
         },
         {
           "consumerEdgeIds": [],
@@ -207655,7 +207762,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b",
+  "sourceDigest": "sha256:449074e504b219c7bc49eac0391e72a4ce9f6ce47e98c031d58feaeb37bf2794",
   "targetContexts": [
     "collaboration",
     "development-automation",

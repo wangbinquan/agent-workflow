@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1902,
+    "entries": 1903,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -28516,7 +28516,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -28527,7 +28527,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "fenceOrOcc",
         "transaction"
       ],
@@ -31278,6 +31277,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts#createLocalProcessEffectProjection",
       "symbol": "createLocalProcessEffectProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageRootCollection.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRootCollection.ts#createNativeUsageRootCollection",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRootCollection.ts#createNativeUsageRootCollection",
+      "symbol": "createNativeUsageRootCollection",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -45506,7 +45528,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b",
+  "sourceDigest": "sha256:449074e504b219c7bc49eac0391e72a4ce9f6ce47e98c031d58feaeb37bf2794",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46736,24 +46758,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#192:nodeRuns",
-        "line": 192,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createRuntimeSessionLeaseOperations"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "rotate",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#282:nodeRuns",
-        "line": 282,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#203:nodeRuns",
+        "line": 203,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -46777,15 +46783,15 @@
       },
       {
         "allowedTables": [
-          "nodeRunEvents"
+          "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
         "consumer": "rotate",
         "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
+        "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#309:nodeRunEvents",
-        "line": 309,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#320:nodeRuns",
+        "line": 320,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -46800,8 +46806,24 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#320:nodeRunEvents",
-        "line": 320,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#328:nodeRunEvents",
+        "line": 328,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "createRuntimeSessionLeaseOperations"
+      },
+      {
+        "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "rotate",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#339:nodeRunEvents",
+        "line": 339,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -46816,8 +46838,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#375:nodeRuns",
-        "line": 375,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#402:nodeRuns",
+        "line": 402,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -46832,8 +46854,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#403:nodeRuns",
-        "line": 403,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#430:nodeRuns",
+        "line": 430,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -46848,8 +46870,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#95:nodeRuns",
-        "line": 95,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#96:nodeRuns",
+        "line": 96,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts#createRuntimeSessionLeaseOperations",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

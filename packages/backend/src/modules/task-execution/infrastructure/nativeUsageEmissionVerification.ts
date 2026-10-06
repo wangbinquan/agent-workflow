@@ -1,15 +1,16 @@
-import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
   ObservationNativeEmissionSchema,
-  ObservationNativeCompletionSchema,
+  ObservationAnyNativeCompletionSchema,
   ObservationNativeSourceAckSchema,
   type ObservationNativeCompletion,
+  type ObservationAnyNativeCompletion,
   type ObservationNativeProcessFact,
 } from '@agent-workflow/shared'
 import { nativeUsageEmissions, taskExecutionObservationSources } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import { nativeUsageSourceWatermark } from './nativeUsageOwnerTransaction'
 import { verifyNativeUsageMeasurementEvidence } from './nativeUsageMeasurementEvidence'
@@ -18,13 +19,22 @@ import { ObservationNativeMeasurementSchema } from '@agent-workflow/shared'
 /** Read every frozen emission and its actual original source; packet sizes never bound EOF. */
 export async function verifyNativeUsageEmissions(
   tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
+  binding: NativeUsageReadBinding,
+  originalWatermark?: string,
 ): Promise<{
   readonly emissions: ObservationNativeCompletion['emissions']
   readonly process: ObservationNativeCompletion['process']
   readonly hasProcessIssues: boolean
   readonly observedAtFloor: number
 }> {
+  const watermark = originalWatermark === undefined ? undefined : Number(originalWatermark)
+  if (
+    watermark !== undefined &&
+    (!Number.isSafeInteger(watermark) || watermark < 0 || String(watermark) !== originalWatermark)
+  )
+    throw new Error('Native emission verification requires its actual original source watermark')
+  const through =
+    watermark === undefined ? undefined : lte(nativeUsageEmissions.sourceRowId, watermark)
   let after: string | undefined
   let records = 0n,
     frames = 0n,
@@ -40,6 +50,7 @@ export async function verifyNativeUsageEmissions(
       .where(
         and(
           eq(nativeUsageEmissions.invocationId, binding.invocationId),
+          through,
           after === undefined ? undefined : gt(nativeUsageEmissions.eventId, after),
         ),
       )
@@ -70,7 +81,7 @@ export async function verifyNativeUsageEmissions(
             invocationId: string
             measurements: readonly []
             diagnostics: string[]
-            nativeCompletion: ObservationNativeCompletion
+            nativeCompletion: ObservationAnyNativeCompletion
           })
         : ObservationNativeEmissionSchema.parse(originalRequest)
       if (isSeal) {
@@ -78,9 +89,9 @@ export async function verifyNativeUsageEmissions(
           invocationId: string
           measurements: readonly []
           diagnostics: string[]
-          nativeCompletion: ObservationNativeCompletion
+          nativeCompletion: ObservationAnyNativeCompletion
         }
-        const completion = ObservationNativeCompletionSchema.parse(seal.nativeCompletion)
+        const completion = ObservationAnyNativeCompletionSchema.parse(seal.nativeCompletion)
         if (
           !isDeepStrictEqual(seal, {
             invocationId: binding.invocationId,
@@ -124,7 +135,7 @@ export async function verifyNativeUsageEmissions(
           throw new Error('Native completion source contains numeric measurements')
         observedAtFloor = Math.max(
           observedAtFloor,
-          (request as { nativeCompletion: ObservationNativeCompletion }).nativeCompletion
+          (request as { nativeCompletion: ObservationAnyNativeCompletion }).nativeCompletion
             .observedAt,
         )
         continue
@@ -178,7 +189,7 @@ export async function verifyNativeUsageEmissions(
         sources: sql<string>`CAST(count(DISTINCT ${nativeUsageEmissions.sourceRowId}) AS TEXT)`,
       })
       .from(nativeUsageEmissions)
-      .where(eq(nativeUsageEmissions.invocationId, binding.invocationId))
+      .where(and(eq(nativeUsageEmissions.invocationId, binding.invocationId), through))
   )[0]
   if (!population || BigInt(population.rows) !== sources || BigInt(population.sources) !== sources)
     throw new Error('Native emissions changed or duplicated their original source population')
@@ -195,7 +206,8 @@ export async function verifyNativeUsageEmissions(
       records: String(records),
       frames: String(frames),
       digest,
-      sourceWatermark: await nativeUsageSourceWatermark(tx, binding.nodeRunId),
+      sourceWatermark:
+        originalWatermark ?? (await nativeUsageSourceWatermark(tx, binding.nodeRunId)),
     },
     process: {
       spawnedAt: spawned?.spawnedAt ?? settled?.spawnedAt ?? null,

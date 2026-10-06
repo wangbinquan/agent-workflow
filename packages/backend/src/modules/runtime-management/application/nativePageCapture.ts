@@ -22,6 +22,7 @@ export function createNativePageCapture(
   let begin: Promise<void> | undefined
   let final: Promise<void> | undefined
   let baselineReady = false
+  const roots = input.durableOwner.rootCollection
   const read = async (phase: 'baseline' | 'final', rootSessionId: string) => {
     if (!before) throw new Error('Original native before-spawn receipt is unavailable')
     const sourceGeneration = await input.generation()
@@ -50,7 +51,7 @@ export function createNativePageCapture(
     else await persist(input.durableOwner.passOwner(receipt))
   }
   return {
-    contract: 'opencode-child-pages-v2',
+    contract: roots ? 'opencode-child-root-pages-v3' : 'opencode-child-pages-v2',
     nativeSource: input.nativeSource,
     // Once before is durable the native pages are the sole owner of step numbers.
     // Failed before capture leaves already observed stdout numbers available.
@@ -84,6 +85,31 @@ export function createNativePageCapture(
       return (final ??= (async () => {
         if (!before) throw new Error('Original native before-spawn receipt is unavailable')
         try {
+          if (roots) {
+            await roots.freeze()
+            let after: string | null = null,
+              firstFailure: unknown
+            let examined = 0n
+            for (;;) {
+              const packet = await roots.page(after)
+              if (packet.length === 0) break
+              for (const root of packet) {
+                try {
+                  await read('final', root)
+                } catch (error) {
+                  firstFailure ??= error
+                }
+                examined++
+              }
+              const next = packet.at(-1)!
+              if (next === after)
+                throw new Error('Original native root source did not advance to EOF')
+              after = next
+            }
+            if (examined === 0n) throw new Error('Original native root collection is unavailable')
+            if (firstFailure !== undefined) throw firstFailure
+            return
+          }
           if (rootSessionId === null) throw new Error('Original native root is unavailable')
           if (before.mode === 'resume' && rootSessionId !== before.rootSessionId)
             throw new Error('Original native resume root changed')

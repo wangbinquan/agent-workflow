@@ -3272,7 +3272,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b",
+  "sourceDigest": "sha256:449074e504b219c7bc49eac0391e72a4ce9f6ce47e98c031d58feaeb37bf2794",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4241,9 +4241,9 @@
         "effectKind": "process",
         "file": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#1429:process",
+        "id": "task-effect:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#1435:process",
         "journaledBy": "createProcessEffectAttemptObserver",
-        "line": 1429,
+        "line": 1435,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#runNode",
         "recoveryClass": "managed-process-preactivation",

@@ -17,6 +17,8 @@ export interface RuntimeSessionLeaseToken {
   readonly sessionId: string
   readonly nodeRunId: string
   readonly leaseNonceDigest: string
+  /** Issued by the actual Task invocation; only the new root collector supplies it. */
+  readonly nativeInvocationId?: string
 }
 
 export interface RuntimeSessionLeaseClaimInput {
@@ -27,6 +29,7 @@ export interface RuntimeSessionLeaseClaimInput {
   readonly currentNodeRunId: string
   readonly leaseNonceDigest: string
   readonly leasedAt?: number
+  readonly nativeInvocationId?: string
 }
 
 export interface NormalizedRuntimeSessionLeaseClaimInput extends Omit<

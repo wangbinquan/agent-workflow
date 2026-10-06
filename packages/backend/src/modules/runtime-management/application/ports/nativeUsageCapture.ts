@@ -24,7 +24,10 @@ export interface NativeUsageSnapshot {
   readonly issues: readonly string[]
 }
 export interface NativeUsageCapture {
-  readonly contract: 'opencode-child-steps-v1' | 'opencode-child-pages-v2'
+  readonly contract:
+    | 'opencode-child-steps-v1'
+    | 'opencode-child-pages-v2'
+    | 'opencode-child-root-pages-v3'
   readonly nativeSource: string
   includesRecord(recordId: string): boolean
   /** Called only after local acceptance, before spawning the runtime. */
@@ -44,6 +47,11 @@ export interface NativeUsageCapture {
 /** The actual Task claim issues this invocation-bound participant. It contains no database,
  * environment, file location, PID supplier or reconstructed execution token. */
 export interface NativeUsageDurableOwner {
+  /** Actual lease source population, frozen after reap/drain; packet size never caps roots. */
+  readonly rootCollection?: {
+    freeze(): Promise<void>
+    page(after: string | null): Promise<readonly string[]>
+  }
   prepare(input: {
     readonly nativeSource: string
     readonly sourceGeneration: string | null

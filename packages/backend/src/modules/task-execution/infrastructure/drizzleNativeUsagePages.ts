@@ -19,6 +19,8 @@ import {
   nativeUsagePassPages,
   nativeUsageSessionParents,
   nativeUsageStepMembers,
+  nativeUsageRootSets,
+  nativeUsageRootTransitions,
 } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
@@ -36,6 +38,7 @@ import {
 import { emitNativeUsagePage } from './nativeUsagePageEmission'
 import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
 import { bindOriginalNativeUsageStore } from './nativeUsageStoreBinding'
+import { originalNativeRootHead } from './nativeUsageRootSource'
 
 type Pass = typeof nativeUsagePasses.$inferSelect
 type Preparation = typeof nativeUsagePreparations.$inferSelect
@@ -184,11 +187,43 @@ export class DrizzleNativeUsagePages implements PagesPort {
           identity.sourceGeneration !== before.sourceGeneration) ||
         identity.lineage !== facts.lineage ||
         identity.epoch !== facts.epoch ||
-        (before.mode === 'resume' && identity.rootSessionId !== before.rootSessionId) ||
+        (before.mode === 'resume' &&
+          identity.rootSessionId !== before.rootSessionId &&
+          (facts.contract !== 'opencode-child-root-pages-v3' || identity.phase === 'baseline')) ||
         (before.mode === 'fresh' && identity.phase !== 'final') ||
         input.initialCursor !== JSON.stringify([identity.passId, '0', seed])
       )
         throw new Error('Original native admission changed the before-spawn binding')
+      if (facts.contract === 'opencode-child-root-pages-v3' && identity.phase === 'final') {
+        const frozen = (
+          await tx
+            .select()
+            .from(nativeUsageRootSets)
+            .where(eq(nativeUsageRootSets.invocationId, input.binding.invocationId))
+            .limit(1)
+        )[0]
+        const source = await originalNativeRootHead(tx, input.binding, facts)
+        const member = (
+          await tx
+            .select({ key: nativeUsageRootTransitions.ordinalKey })
+            .from(nativeUsageRootTransitions)
+            .where(
+              and(
+                eq(nativeUsageRootTransitions.invocationId, input.binding.invocationId),
+                eq(nativeUsageRootTransitions.rootSessionId, identity.rootSessionId),
+              ),
+            )
+            .limit(1)
+        )[0]
+        if (
+          !frozen ||
+          !source ||
+          !member ||
+          frozen.nextOrdinal !== source.nextOrdinal ||
+          frozen.rootDigest !== source.digest
+        )
+          throw new Error('Native final root is absent from its original frozen lease population')
+      }
       await bindOriginalNativeUsageStore(tx, before, identity.sourceGeneration)
       const existing = (
         await tx

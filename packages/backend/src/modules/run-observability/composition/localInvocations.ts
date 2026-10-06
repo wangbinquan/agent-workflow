@@ -46,7 +46,10 @@ export function composeLocalInvocationObservations(
               capture.sourceId !== 'local-node:' + accepted.nodeRunId
             )
               throw new Error('Original native history capture changed its accepted owner')
-            if (capture.capture.contract !== 'opencode-child-pages-v2')
+            if (
+              capture.capture.contract !== 'opencode-child-pages-v2' &&
+              capture.capture.contract !== 'opencode-child-root-pages-v3'
+            )
               throw new Error('Original invocation did not select native page history')
             const progress = await ingestion.repairCapture(capture)
             return progress || undefined

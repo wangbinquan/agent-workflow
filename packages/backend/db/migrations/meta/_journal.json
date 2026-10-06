@@ -1674,6 +1674,13 @@
       "when": 1791232099052,
       "tag": "0239_rfc371_native_first_store",
       "breakpoints": true
+    },
+    {
+      "idx": 239,
+      "version": "6",
+      "when": 1791246232969,
+      "tag": "0240_rfc371_native_root_set",
+      "breakpoints": true
     }
   ]
 }

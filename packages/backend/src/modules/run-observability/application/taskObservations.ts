@@ -254,7 +254,8 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
           : capture.priorRevisionGap || currentIssues.length
             ? 'partial'
             : (
-                  capture.capture.contract === 'opencode-child-pages-v2'
+                  capture.capture.contract === 'opencode-child-pages-v2' ||
+                  capture.capture.contract === 'opencode-child-root-pages-v3'
                     ? capture.capture.state === 'complete'
                     : capture.capture.snapshotFingerprint !== null
                 )

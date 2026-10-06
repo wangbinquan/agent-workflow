@@ -12,6 +12,7 @@ import {
   nativeUsagePasses,
   nativeUsageStepMembers,
   observationInvocations,
+  nativeUsageRootSets,
 } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
@@ -21,6 +22,7 @@ import type { NativeUsageOwnerFacts } from './nativeUsageOwnerTransaction'
 import { emitNativeUsageEvidence } from './drizzleNativeUsageEmission'
 import { verifyNativeUsagePass } from './nativeUsagePassVerification'
 import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
+import { verifyNativeUsageEmissions } from './nativeUsageEmissionVerification'
 
 /** Emit only this invocation's new original steps, in the page owner's same transaction. */
 export async function emitNativeUsagePage(
@@ -33,8 +35,36 @@ export async function emitNativeUsagePage(
   originalBeforeIndex?: NativeUsageBaselineReadView | null,
 ): Promise<void> {
   if (page.identity.phase !== 'final' || page.steps.length === 0) return
+  if (
+    facts.contract === 'opencode-child-root-pages-v3' &&
+    !(before.mode === 'resume' && page.identity.rootSessionId === before.rootSessionId)
+  ) {
+    const frozen = (
+      await tx
+        .select()
+        .from(nativeUsageRootSets)
+        .where(eq(nativeUsageRootSets.invocationId, binding.invocationId))
+        .limit(1)
+    )[0]
+    const pass = (
+      await tx
+        .select({ birth: nativeUsagePasses.rootCreatedAt })
+        .from(nativeUsagePasses)
+        .where(eq(nativeUsagePasses.passId, page.identity.passId))
+        .limit(1)
+    )[0]
+    if (!frozen || !pass) throw new Error('Native numeric root lost its original final admission')
+    const process = (await verifyNativeUsageEmissions(tx, binding, frozen.processWatermark)).process
+    // Without an actual birth after spawn, these may be another invocation's old steps.
+    // Retain the original pages, but never assign those old numbers to this invocation.
+    if (process.spawnedAt === null || pass.birth === null || pass.birth < process.spawnedAt) return
+  }
   let prior = new Set<string>()
-  if (before.mode === 'resume') {
+  if (
+    before.mode === 'resume' &&
+    (facts.contract !== 'opencode-child-root-pages-v3' ||
+      page.identity.rootSessionId === before.rootSessionId)
+  ) {
     if (originalBeforeIndex === null) return
     if (originalBeforeIndex) {
       const original = originalBeforeIndex.original.ack.identity

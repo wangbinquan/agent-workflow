@@ -117,7 +117,10 @@ export function retainCompleteObservationCaptures(context: CompleteObservationEv
         invocation.nativeCaptureSource !== proof.nativeSource
       )
         throw new Error('Original native capture admission mismatch')
-      if (proof.contract === 'opencode-child-pages-v2') {
+      if (
+        proof.contract === 'opencode-child-pages-v2' ||
+        proof.contract === 'opencode-child-root-pages-v3'
+      ) {
         if (!input.sources.nativeScopes)
           throw new Error('Original native completion source is not installed')
         const qualified = await input.sources.nativeScopes.qualify(capture)

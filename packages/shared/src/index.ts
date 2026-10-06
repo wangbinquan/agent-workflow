@@ -189,4 +189,5 @@ export * from './schemas/observationComplete'
 // RFC-371 original durable native owner contracts.
 export * from './schemas/observationNativePages'
 export * from './schemas/observationNativeCompletion'
+export * from './schemas/observationNativeRootCompletion'
 export * from './schemas/observationNativeEmission'

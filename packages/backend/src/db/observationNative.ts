@@ -13,6 +13,36 @@ import type { tasks } from './schema'
 const table = providerAwareSqliteTable(physicalTable)
 /** The original schema root supplies its actual Task table; this leaf has no runtime back edge. */
 export function createNativeUsageTables(taskTable: typeof tasks) {
+  /** Original lease claim/rotation identity; these relations contain no numeric totals. */
+  const nativeUsageRootHeads = table('task_execution_native_usage_root_heads', {
+    invocationId: text('invocation_id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => taskTable.id, { onDelete: 'cascade' }),
+    nodeRunId: text('node_run_id').notNull(),
+    claimFence: text('claim_fence'),
+    protocol: text('protocol').notNull(),
+    nextOrdinal: text('next_ordinal').notNull(),
+    firstRootSessionId: text('first_root_session_id').notNull(),
+    lastRootSessionId: text('last_root_session_id').notNull(),
+    digest: text('digest').notNull(),
+  })
+  const nativeUsageRootTransitions = table(
+    'task_execution_native_usage_root_transitions',
+    {
+      invocationId: text('invocation_id')
+        .notNull()
+        .references(() => nativeUsageRootHeads.invocationId, { onDelete: 'cascade' }),
+      ordinalKey: text('ordinal_key').notNull(),
+      rootSessionId: text('root_session_id').notNull(),
+      document: text('document').notNull(),
+      digest: text('digest').notNull(),
+    },
+    (t) => [
+      primaryKey({ columns: [t.invocationId, t.ordinalKey] }),
+      index('native_usage_root_identity_idx').on(t.invocationId, t.rootSessionId),
+    ],
+  )
   /** Original Task owner receipts and native evidence. Numeric authority remains the usage ledger. */
   const nativeUsagePreparations = table(
     'task_execution_native_usage_preparations',
@@ -40,6 +70,29 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     beforeOwnerReceiptId: text('before_owner_receipt_id').notNull(),
     sourceGeneration: text('source_generation').notNull(),
   })
+  /** The original root source watermark is frozen only after the actual process finishes. */
+  const nativeUsageRootSets = table('task_execution_native_usage_root_sets', {
+    invocationId: text('invocation_id')
+      .primaryKey()
+      .references(() => nativeUsagePreparations.invocationId, { onDelete: 'cascade' }),
+    nextOrdinal: text('next_ordinal').notNull(),
+    rootDigest: text('root_digest').notNull(),
+    processWatermark: text('process_watermark').notNull(),
+    observedAt: integer('observed_at').notNull(),
+  })
+  /** Original per-root qualification references; numbers remain exclusively in the usage ledger. */
+  const nativeUsageRootResults = table(
+    'task_execution_native_usage_root_results',
+    {
+      invocationId: text('invocation_id')
+        .notNull()
+        .references(() => nativeUsagePreparations.invocationId, { onDelete: 'cascade' }),
+      resultId: text('result_id').notNull(),
+      rootSessionId: text('root_session_id').notNull(),
+      document: text('document').notNull(),
+    },
+    (t) => [primaryKey({ columns: [t.invocationId, t.resultId, t.rootSessionId] })],
+  )
   const nativeUsagePasses = table(
     'task_execution_native_usage_passes',
     {
@@ -148,6 +201,10 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     (t) => [primaryKey({ columns: [t.invocationId, t.recordId] })],
   )
   return {
+    nativeUsageRootHeads,
+    nativeUsageRootTransitions,
+    nativeUsageRootSets,
+    nativeUsageRootResults,
     nativeUsagePreparations,
     nativeUsageStoreBindings,
     nativeUsagePasses,

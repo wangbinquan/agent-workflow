@@ -189,6 +189,11 @@ export async function runNode(
   const log = opts.log ?? createLogger('runner')
   // A resumed/follow-up process is a new invocation even when nodeRunId is reused.
   const invocationId = ulid()
+  const durableNativeUsageOwner = opts.persistence.nativeUsage?.forInvocation({
+    invocationId,
+    taskId: opts.taskId,
+    nodeRunId: opts.nodeRunId,
+  })
   const materialWorkspace = purpose.workspace
   const gitControlObservation: AgentWorkspaceGitControlObservation = purpose.gitControlObservation
   // RFC-200: this persisted value is the single source for BOTH prompt emit
@@ -649,6 +654,9 @@ export async function runNode(
             nodeId: opts.nodeId,
             currentNodeRunId: opts.nodeRunId,
             leaseNonceDigest: runtimeLeaseNonceDigest,
+            ...(runtime === 'opencode' && durableNativeUsageOwner?.rootCollection
+              ? { nativeInvocationId: invocationId }
+              : {}),
           }),
         )
         runtimeLeaseToken = claimedToken
@@ -981,11 +989,6 @@ export async function runNode(
       resumeSessionId: effectiveResumeSessionId,
       includeMeasurement: (row) => nativeUsageCapture?.includesRecord(row.recordId) ?? true,
     })
-    const durableNativeUsageOwner = opts.persistence.nativeUsage?.forInvocation({
-      invocationId,
-      taskId: opts.taskId,
-      nodeRunId: opts.nodeRunId,
-    })
     const nativeUsageCapture = materialEvidence.prepareNativeUsageCapture?.({
       invocationId,
       taskId: opts.taskId,
@@ -1177,6 +1180,9 @@ export async function runNode(
                     nodeId: opts.nodeId,
                     currentNodeRunId: opts.nodeRunId,
                     leaseNonceDigest: runtimeLeaseNonceDigest,
+                    ...(runtime === 'opencode' && durableNativeUsageOwner?.rootCollection
+                      ? { nativeInvocationId: invocationId }
+                      : {}),
                   }),
                 )
               } else if (runtimeLeaseToken.sessionId !== sessionId) {

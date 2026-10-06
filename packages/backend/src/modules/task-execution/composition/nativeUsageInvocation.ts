@@ -6,12 +6,17 @@ import { DrizzleNativeUsagePages } from '../infrastructure/drizzleNativeUsagePag
 import { DrizzleNativeUsageEmission } from '../infrastructure/drizzleNativeUsageEmission'
 import { DrizzleNativeUsageCompletion } from '../infrastructure/drizzleNativeUsageCompletion'
 import {
+  DrizzleNativeUsageRootCompletion,
+  NativeRootCompletionCandidateChanged,
+} from '../infrastructure/drizzleNativeUsageRootCompletion'
+import { createNativeUsageRootCollection } from '../infrastructure/nativeUsageRootCollection'
+import {
   originalNativeUsageBaseline,
   withNativeUsageBaselineSnapshot,
 } from '../infrastructure/nativeUsageBaselineSnapshot'
 import type { ReportSnapshotSession } from '@/platform/persistence/reportSnapshotTypes'
 import type {
-  ObservationNativeCompletion,
+  ObservationAnyNativeCompletion,
   ObservationNativeSourceAck,
   ObservationNativeBeforeSpawnAck,
 } from '@agent-workflow/shared'
@@ -19,7 +24,7 @@ import type {
 /** No caller-created claim or alternate usage ledger: all callbacks retain this exact owner. */
 export function createNativeUsageInvocationPersistence(
   db: ProviderNeutralDatabase,
-  options: { readonly baselineSnapshots?: ReportSnapshotSession } = {},
+  options: { readonly baselineSnapshots?: ReportSnapshotSession; readonly rootSets?: boolean } = {},
 ): NativeUsageInvocationPersistence {
   return {
     forInvocation(input) {
@@ -28,8 +33,10 @@ export function createNativeUsageInvocationPersistence(
       const binding = { ...input, executionContext }
       const pages = new DrizzleNativeUsagePages(db, true)
       const emissions = new DrizzleNativeUsageEmission(db)
-      const completion = new DrizzleNativeUsageCompletion(db)
-      let retryProof: ObservationNativeCompletion | undefined
+      const completion = options.rootSets
+        ? new DrizzleNativeUsageRootCompletion(db)
+        : new DrizzleNativeUsageCompletion(db)
+      let retryProof: ObservationAnyNativeCompletion | undefined
       let completeAck: ObservationNativeSourceAck | undefined
       const passOwner = (
         before: ObservationNativeBeforeSpawnAck,
@@ -58,6 +65,9 @@ export function createNativeUsageInvocationPersistence(
         interrupt: (identity, reason) => writer.interrupt({ binding, identity, reason }),
       })
       return {
+        ...(options.rootSets
+          ? { rootCollection: createNativeUsageRootCollection(db, binding) }
+          : {}),
         prepare: (request) => pages.prepare({ binding, ...request }),
         passOwner,
         async withFinalOwner(before, read) {
@@ -89,7 +99,13 @@ export function createNativeUsageInvocationPersistence(
           if (completeAck) return completeAck
           const proof = retryProof ?? (await completion.describeCompletion({ binding, observedAt }))
           retryProof = proof
-          const ack = await completion.seal({ binding, completion: proof })
+          let ack: ObservationNativeSourceAck
+          try {
+            ack = await completion.seal({ binding, completion: proof })
+          } catch (error) {
+            if (error instanceof NativeRootCompletionCandidateChanged) retryProof = undefined
+            throw error
+          }
           retryProof = undefined
           if (proof.state === 'complete') completeAck = ack
           return ack

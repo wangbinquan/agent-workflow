@@ -11,12 +11,16 @@ import {
   nativeUsageStepMembers,
   nativeUsageEmissions,
   nativeUsageRevisionHeads,
+  nativeUsageRootHeads,
+  nativeUsageRootTransitions,
+  nativeUsageRootSets,
+  nativeUsageRootResults,
 } from '@/db/schema'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { SQL_IN_CHUNK } from '@/util/sqlChunk'
 
 type Reader = ProviderNeutralDatabase | DatabaseTransaction
-type Cursor = readonly [string, string]
+type Cursor = readonly [string, string] | readonly [string, string, string]
 const PAGE_ROWS = 500
 
 interface NativeArchiveTable {
@@ -59,6 +63,23 @@ function afterPair(first: AnySQLiteColumn, second: AnySQLiteColumn, cursor: Curs
     ? undefined
     : or(gt(first, cursor[0]), and(eq(first, cursor[0]), gt(second, cursor[1])))
 }
+function afterTriple(
+  first: AnySQLiteColumn,
+  second: AnySQLiteColumn,
+  third: AnySQLiteColumn,
+  cursor: Cursor | null,
+) {
+  if (cursor === null) return undefined
+  if (cursor.length !== 3)
+    throw new Error('Original native root result requires its full primary key')
+  return or(
+    gt(first, cursor[0]),
+    and(
+      eq(first, cursor[0]),
+      or(gt(second, cursor[1]), and(eq(second, cursor[1]), gt(third, cursor[2]))),
+    ),
+  )
+}
 const invocations = (db: Reader, ids: readonly string[]) =>
   db
     .select({ id: nativeUsagePreparations.invocationId })
@@ -69,6 +90,11 @@ const passes = (db: Reader, ids: readonly string[]) =>
     .select({ id: nativeUsagePasses.passId })
     .from(nativeUsagePasses)
     .where(inArray(nativeUsagePasses.invocationId, invocations(db, ids)))
+const rootInvocations = (db: Reader, ids: readonly string[]) =>
+  db
+    .select({ id: nativeUsageRootHeads.invocationId })
+    .from(nativeUsageRootHeads)
+    .where(inArray(nativeUsageRootHeads.taskId, [...ids]))
 
 /** All original evidence relations, streamed through their real primary keys to EOF. */
 export const NATIVE_USAGE_ARCHIVE: readonly NativeArchiveTable[] = [
@@ -228,5 +254,89 @@ export const NATIVE_USAGE_ARCHIVE: readonly NativeArchiveTable[] = [
         .limit(PAGE_ROWS)
         .all(),
     (row) => [row.invocationId, row.recordId],
+  ),
+  spec(
+    'task_execution_native_usage_root_heads',
+    (db, ids, after) =>
+      db
+        .select()
+        .from(nativeUsageRootHeads)
+        .where(
+          and(
+            inArray(nativeUsageRootHeads.taskId, [...ids]),
+            afterKey(nativeUsageRootHeads.invocationId, after),
+          ),
+        )
+        .orderBy(asc(nativeUsageRootHeads.invocationId))
+        .limit(PAGE_ROWS)
+        .all(),
+    (row) => [row.invocationId, ''],
+  ),
+  spec(
+    'task_execution_native_usage_root_transitions',
+    (db, ids, after) =>
+      db
+        .select()
+        .from(nativeUsageRootTransitions)
+        .where(
+          and(
+            inArray(nativeUsageRootTransitions.invocationId, rootInvocations(db, ids)),
+            afterPair(
+              nativeUsageRootTransitions.invocationId,
+              nativeUsageRootTransitions.ordinalKey,
+              after,
+            ),
+          ),
+        )
+        .orderBy(
+          asc(nativeUsageRootTransitions.invocationId),
+          asc(nativeUsageRootTransitions.ordinalKey),
+        )
+        .limit(PAGE_ROWS)
+        .all(),
+    (row) => [row.invocationId, row.ordinalKey],
+  ),
+  spec(
+    'task_execution_native_usage_root_sets',
+    (db, ids, after) =>
+      db
+        .select()
+        .from(nativeUsageRootSets)
+        .where(
+          and(
+            inArray(nativeUsageRootSets.invocationId, invocations(db, ids)),
+            afterKey(nativeUsageRootSets.invocationId, after),
+          ),
+        )
+        .orderBy(asc(nativeUsageRootSets.invocationId))
+        .limit(PAGE_ROWS)
+        .all(),
+    (row) => [row.invocationId, ''],
+  ),
+  spec(
+    'task_execution_native_usage_root_results',
+    (db, ids, after) =>
+      db
+        .select()
+        .from(nativeUsageRootResults)
+        .where(
+          and(
+            inArray(nativeUsageRootResults.invocationId, invocations(db, ids)),
+            afterTriple(
+              nativeUsageRootResults.invocationId,
+              nativeUsageRootResults.resultId,
+              nativeUsageRootResults.rootSessionId,
+              after,
+            ),
+          ),
+        )
+        .orderBy(
+          asc(nativeUsageRootResults.invocationId),
+          asc(nativeUsageRootResults.resultId),
+          asc(nativeUsageRootResults.rootSessionId),
+        )
+        .limit(PAGE_ROWS)
+        .all(),
+    (row) => [row.invocationId, row.resultId, row.rootSessionId],
   ),
 ]

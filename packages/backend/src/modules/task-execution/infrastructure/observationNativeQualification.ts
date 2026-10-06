@@ -16,14 +16,21 @@ import type { ObservationNativeScopeSource } from '@/modules/run-observability/p
 import { verifyNativeUsagePass } from './nativeUsagePassVerification'
 import { verifyNativeUsageNumericCoverage } from './nativeUsageNumericCoverage'
 import { originalNativeUsageStoreGeneration } from './nativeUsageStoreBinding'
+import {
+  qualifyOriginalNativeRoots,
+  readRetainedNativeRootResult,
+} from './observationNativeRootQualification'
 
 /** Original source/preparation/ACK binding, shared by qualification and bounded history reads. */
-export async function readOriginalNativeCaptureBinding(
+export async function readOriginalNativeCaptureSource(
   db: ProviderNeutralDatabase,
   value: Parameters<ObservationNativeScopeSource['qualify']>[0],
 ) {
   const proof = value.capture
-  if (proof.contract !== 'opencode-child-pages-v2')
+  if (
+    proof.contract !== 'opencode-child-pages-v2' &&
+    proof.contract !== 'opencode-child-root-pages-v3'
+  )
     throw new Error('Original page qualification received a different native contract')
   const match = /^node-event:([1-9]\d*)$/.exec(value.sourceCursor)
   const watermark = match ? Number(match[1]) : NaN
@@ -91,7 +98,9 @@ export async function readOriginalNativeCaptureBinding(
   if (
     before.invocationId !== value.invocationId ||
     before.nativeSource !== proof.nativeSource ||
-    before.mode !== proof.baseline.kind ||
+    (proof.contract === 'opencode-child-pages-v2'
+      ? before.mode !== proof.baseline.kind
+      : !isDeepStrictEqual(before, proof.beforeSpawn)) ||
     (before.mode === 'resume' && before.rootSessionId !== proof.rootSessionId)
   )
     throw new Error('Native completion changed its actual before-spawn admission')
@@ -106,7 +115,27 @@ export async function readOriginalNativeCaptureBinding(
     before,
     sourceFingerprint: emission.fingerprint,
     beforeSpawnFingerprint: sha256Hex(prepared.document),
+    fence: prepared.fence,
   }
+}
+
+/** History only needs the original initial root; all roots are qualified separately to EOF. */
+export async function readOriginalNativeCaptureBinding(
+  db: ProviderNeutralDatabase,
+  value: Parameters<ObservationNativeScopeSource['qualify']>[0],
+) {
+  const facts = await readOriginalNativeCaptureSource(db, value)
+  if (facts.proof.contract === 'opencode-child-pages-v2') return { ...facts, proof: facts.proof }
+  if (facts.proof.rootSessionId === null)
+    throw new Error('Original native root history has no initial root')
+  const original = await readRetainedNativeRootResult(
+    db,
+    facts.binding.invocationId,
+    facts.proof.roots.resultId,
+    facts.proof.rootSessionId,
+  )
+  if (!original) throw new Error('Original native root history lost its retained initial result')
+  return { ...facts, proof: original.value.proof }
 }
 
 /** Same original report snapshot; never a new claim, mutable supplier scan or caller count. */
@@ -114,6 +143,12 @@ export async function qualifyOriginalNativeUsage(
   db: ProviderNeutralDatabase,
   value: Parameters<ObservationNativeScopeSource['qualify']>[0],
 ): Promise<Awaited<ReturnType<ObservationNativeScopeSource['qualify']>>> {
+  if (value.capture.contract === 'opencode-child-root-pages-v3') {
+    const facts = await readOriginalNativeCaptureSource(db, value)
+    if (facts.proof.contract !== 'opencode-child-root-pages-v3')
+      throw new Error('Original native root contract changed')
+    return qualifyOriginalNativeRoots(db, { ...facts, proof: facts.proof })
+  }
   const { proof, binding, before } = await readOriginalNativeCaptureBinding(db, value)
   const final = proof.final
   if (!final) return { records: null, complete: false }

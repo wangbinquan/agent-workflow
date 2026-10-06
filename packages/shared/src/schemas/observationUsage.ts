@@ -11,6 +11,10 @@ import {
   ObservationNativeCompletionSchema,
   ObservationNativeMeasurementSchema,
 } from './observationNativeCompletion'
+import {
+  ObservationAnyNativeCompletionSchema,
+  ObservationNativeRootCompletionSchema,
+} from './observationNativeRootCompletion'
 import { ObservationNativeProcessFactSchema } from './observationNativeEmission'
 
 const identity = z.string().min(1).max(512)
@@ -110,12 +114,21 @@ export type ObservationUsageMeasurement = z.infer<typeof ObservationUsageMeasure
 export const ObservationUsageCaptureSchema = z.union([
   ObservationNativeCaptureSchema,
   ObservationNativeCompletionSchema,
+  ObservationNativeRootCompletionSchema,
 ])
 export type ObservationUsageCapture = z.infer<typeof ObservationUsageCaptureSchema>
 export const ObservationUsageCaptureCommitSchema = ObservationCaptureCommitSchema.extend({
   capture: ObservationUsageCaptureSchema,
 }).superRefine((value, ctx) => {
   const proof = value.capture
+  if (proof.contract === 'opencode-child-root-pages-v3') {
+    if (proof.beforeSpawn.invocationId !== value.invocationId)
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Native root collection changed its original invocation',
+      })
+    return
+  }
   if (proof.contract !== 'opencode-child-pages-v2') return
   const identities = [
     proof.final?.ack.identity,
@@ -165,7 +178,7 @@ const capturedNumericUsage = z
     measurements: z.array(ObservationUsageMeasurementSchema).max(500),
     diagnostics: z.array(z.string().min(1).max(200)).max(100),
     capture: ObservationNativeCaptureSchema.optional(),
-    nativeCompletion: ObservationNativeCompletionSchema.optional(),
+    nativeCompletion: ObservationAnyNativeCompletionSchema.optional(),
     nativeProcess: ObservationNativeProcessFactSchema.optional(),
   })
   .strict()
@@ -177,6 +190,14 @@ function validateNativeFrame(value: z.infer<typeof capturedNumericUsage>, ctx: z
     })
   if (value.nativeCompletion) {
     const proof = value.nativeCompletion
+    if (proof.contract === 'opencode-child-root-pages-v3') {
+      if (proof.beforeSpawn.invocationId !== value.invocationId)
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Native root source changed its original invocation',
+        })
+      return
+    }
     const identities = [
       proof.final?.ack.identity,
       proof.finalProgress?.identity,

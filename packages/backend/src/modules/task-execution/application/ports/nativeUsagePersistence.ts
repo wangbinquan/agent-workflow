@@ -5,7 +5,7 @@ import type {
   ObservationNativePassPage,
 } from '@agent-workflow/shared'
 import type {
-  ObservationNativeCompletion,
+  ObservationAnyNativeCompletion,
   ObservationNativeBeforeSpawnAck,
   ObservationNativeMeasurement,
   ObservationNativeSourceAck,
@@ -22,6 +22,11 @@ export interface NativeUsageOwnerBinding {
   readonly invocationId: string
   readonly executionContext: TaskExecutionContextRef
 }
+/** Read-only original identity; it grants no execution claim or write capability. */
+export type NativeUsageReadBinding = Pick<
+  NativeUsageOwnerBinding,
+  'taskId' | 'nodeRunId' | 'invocationId'
+>
 export type NativeUsageSourceAck = ObservationNativeSourceAck
 export type NativeUsageEvidence = Omit<ObservationCapturedUsage, 'measurements' | 'capture'> & {
   readonly measurements: readonly (ObservationMeasurement | ObservationNativeMeasurement)[]
@@ -86,6 +91,6 @@ export interface NativeUsagePersistence {
   /** Verifies every page, membership, emission and original process receipt before appending. */
   seal(input: {
     readonly binding: NativeUsageOwnerBinding
-    readonly completion: ObservationNativeCompletion
+    readonly completion: ObservationAnyNativeCompletion
   }): Promise<NativeUsageSourceAck>
 }

@@ -45,7 +45,7 @@ const acceptObservationInvocation = z
     authority: ObservationExecutionAuthoritySchema,
     /** Absent on older invocations; never infer child completeness from root counters. */
     nativeCaptureContract: z
-      .enum(['opencode-child-steps-v1', 'opencode-child-pages-v2'])
+      .enum(['opencode-child-steps-v1', 'opencode-child-pages-v2', 'opencode-child-root-pages-v3'])
       .optional(),
     nativeCaptureSource: key.optional(),
     /** Metadata capability is accepted separately from numeric capture. Older documents omit it. */

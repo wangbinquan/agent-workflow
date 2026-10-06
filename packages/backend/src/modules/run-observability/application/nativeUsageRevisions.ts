@@ -37,7 +37,11 @@ export async function reconcileNativeUsageRevisions(input: {
   const { value, scope, watermark } = input,
     proof = value.capture
   // Page histories are repaired from original bounded source frames, never a legacy array.
-  if (proof.contract === 'opencode-child-pages-v2') return []
+  if (
+    proof.contract === 'opencode-child-pages-v2' ||
+    proof.contract === 'opencode-child-root-pages-v3'
+  )
+    return []
   const references =
     proof.baselineSteps ??
     proof.priorRevisions.map((row) => ({

@@ -15,6 +15,7 @@ import {
   withTaskExecutionSerializable,
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
+import { recordNativeUsageLeaseRoot } from './nativeUsageLeaseRoot'
 
 const TERMINAL = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 
@@ -97,12 +98,21 @@ export function createRuntimeSessionLeaseOperations(
             .set({ opencodeSessionId: input.sessionId })
             .where(eq(nodeRuns.id, input.currentNodeRunId))
             .run()
-          return {
+          const token: RuntimeSessionLeaseToken = {
             protocol: input.protocol,
             sessionId: input.sessionId,
             nodeRunId: input.currentNodeRunId,
             leaseNonceDigest: input.leaseNonceDigest,
+            ...(input.nativeInvocationId ? { nativeInvocationId: input.nativeInvocationId } : {}),
           }
+          await recordNativeUsageLeaseRoot(tx, {
+            taskId: input.taskId,
+            token,
+            mode: 'fresh',
+            outgoingRootSessionId: null,
+            observedAt: input.leasedAt,
+          })
+          return token
         })
       } catch (error) {
         if (error instanceof RuntimeSessionLeaseError) throw error
@@ -168,6 +178,7 @@ export function createRuntimeSessionLeaseOperations(
           sessionId: input.sessionId,
           nodeRunId: input.currentNodeRunId,
           leaseNonceDigest: input.leaseNonceDigest,
+          ...(input.nativeInvocationId ? { nativeInvocationId: input.nativeInvocationId } : {}),
         }
       })
     },
@@ -202,6 +213,14 @@ export function createRuntimeSessionLeaseOperations(
             ),
           )
           .returning({ id: nodeRuns.id })
+        if (linked.length === 1)
+          await recordNativeUsageLeaseRoot(tx, {
+            taskId: owner.taskId,
+            token,
+            mode: 'resume',
+            outgoingRootSessionId: null,
+            observedAt: Date.now(),
+          })
         return linked.length === 1
       })
     },
@@ -328,7 +347,15 @@ export function createRuntimeSessionLeaseOperations(
             )
             .run()
 
-          return { ...token, sessionId: nextSessionId }
+          const nextToken = { ...token, sessionId: nextSessionId }
+          await recordNativeUsageLeaseRoot(tx, {
+            taskId: outgoing.taskId,
+            token: nextToken,
+            mode: 'reset',
+            outgoingRootSessionId: token.sessionId,
+            observedAt: Date.now(),
+          })
+          return nextToken
         })
       } catch (error) {
         if (error instanceof RuntimeSessionLeaseError) throw error

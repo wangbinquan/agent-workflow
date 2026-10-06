@@ -4,14 +4,14 @@ import type { ObservationNativeMeasurement } from '@agent-workflow/shared'
 import { ObservationNativePassPageSchema } from '@agent-workflow/shared'
 import { nativeUsageStepMembers } from '@/db/schema'
 import { chunkedAll } from '@/util/sqlChunk'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import { verifyNativeUsageScope } from './nativeUsageScopeReference'
 
 /** The numeric record must be the original step in the referenced persisted page. */
 export async function verifyNativeUsageMeasurementEvidence(
   tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
+  binding: NativeUsageReadBinding,
   measurements: readonly ObservationNativeMeasurement[],
 ): Promise<void> {
   const prefix = 'opencode:step:'

@@ -10,7 +10,10 @@ import { DrizzleNativeUsagePages } from '@/modules/task-execution/infrastructure
 import { openOpencodeUsagePass } from '@/modules/runtime-management/infrastructure/opencodeUsagePass'
 import type { NativeUsageOwnerBinding } from '@/modules/task-execution/application/ports/nativeUsagePersistence'
 import type { NativeUsagePassOwner } from '@/modules/runtime-management/application/ports/nativeUsageOwner'
-import type { ObservationNativePassIdentity } from '@agent-workflow/shared'
+import type {
+  ObservationNativePassIdentity,
+  AcceptObservationInvocation,
+} from '@agent-workflow/shared'
 import type { ProviderHarness } from './eachProvider'
 export async function originalNativeLedgerFixture(
   harness: Pick<ProviderHarness, 'db'>,
@@ -21,6 +24,11 @@ export async function originalNativeLedgerFixture(
     readonly generation?: string | null
     readonly sourceAbsentAt?: number
     readonly producer?: true
+    readonly rootSets?: true
+    readonly runtime?: Extract<
+      AcceptObservationInvocation['authority'],
+      { kind: 'local' }
+    >['runtime']
   } = {},
 ) {
   const db = harness.db
@@ -47,7 +55,13 @@ export async function originalNativeLedgerFixture(
   })
   await db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
   const persistence = createTaskExecutionPersistence(db, {
-    ...(nativeStore.producer ? { nativeUsage: createNativeUsageInvocationPersistence(db) } : {}),
+    ...(nativeStore.producer
+      ? {
+          nativeUsage: createNativeUsageInvocationPersistence(db, {
+            rootSets: nativeStore.rootSets,
+          }),
+        }
+      : {}),
   })
   const execution = createProviderTaskExecutionModule({
     daemonGeneration: 'native-generation',
@@ -86,8 +100,10 @@ export async function originalNativeLedgerFixture(
     agentId: null,
     agentRevision: null,
     purpose: 'task',
-    authority: { kind: 'local', runtime: null },
-    nativeCaptureContract: 'opencode-child-pages-v2',
+    authority: { kind: 'local', runtime: nativeStore.runtime ?? null },
+    nativeCaptureContract: nativeStore.rootSets
+      ? 'opencode-child-root-pages-v3'
+      : 'opencode-child-pages-v2',
     nativeCaptureSource: nativeStore.source ?? 'actual-native-store',
   })
   const pages = new DrizzleNativeUsagePages(db, numericPages)

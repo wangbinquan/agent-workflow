@@ -114,7 +114,9 @@ export async function commitUsageCapture(
   history?: NativeHistoryProgress,
 ) {
   const previous = await readUsageCapture(db, value.invocationId)
-  const paged = value.capture.contract === 'opencode-child-pages-v2'
+  const paged =
+    value.capture.contract === 'opencode-child-pages-v2' ||
+    value.capture.contract === 'opencode-child-root-pages-v3'
   const originalWatermark = (cursor: string) => {
     const match = /^node-event:([1-9]\d*)$/.exec(cursor)
     if (!match)
@@ -126,7 +128,7 @@ export async function commitUsageCapture(
   }
   const advancingNative =
     paged &&
-    previous?.capture.contract === 'opencode-child-pages-v2' &&
+    previous?.capture.contract === value.capture.contract &&
     previous.taskId === value.taskId &&
     previous.sourceId === sourceId &&
     previous.capture.nativeSource === value.capture.nativeSource &&
@@ -149,7 +151,8 @@ export async function commitUsageCapture(
       : sha256Hex(JSON.stringify([value.capture.nativeSource, value.capture.rootSessionId]))
   const priorRevisionGap = Number(
     (paged &&
-      value.capture.contract === 'opencode-child-pages-v2' &&
+      (value.capture.contract === 'opencode-child-pages-v2' ||
+        value.capture.contract === 'opencode-child-root-pages-v3') &&
       value.capture.reconciliation.unresolved !== '0') ||
       resolutions.some(
         (row) => row.status === 'unresolved' && row.reason !== 'native-owner-unseen',
@@ -202,13 +205,19 @@ export async function commitUsageCapture(
     priorRevisionGap,
     repairPending: Number(
       resolutions.some((row) => row.status === 'unresolved') ||
-        (value.capture.contract === 'opencode-child-pages-v2' &&
-          value.capture.baseline.kind === 'resume' &&
+        (((value.capture.contract === 'opencode-child-pages-v2' &&
+          value.capture.baseline.kind === 'resume') ||
+          (value.capture.contract === 'opencode-child-root-pages-v3' &&
+            value.capture.beforeSpawn.mode === 'resume')) &&
           (retainedHistory
             ? retainedHistory.state !== 'resolved'
             : value.capture.reconciliation.unresolved !== '0' ||
               value.capture.reconciliation.examined !==
-                value.capture.baseline.pass?.ack.counts.steps)),
+                (value.capture.contract === 'opencode-child-pages-v2'
+                  ? value.capture.baseline.kind === 'resume'
+                    ? value.capture.baseline.pass?.ack.counts.steps
+                    : '0'
+                  : undefined))),
     ),
     document: JSON.stringify({
       evidence: value,

@@ -17,6 +17,7 @@ import {
 } from './ownedTaskExecution'
 
 export interface NativeUsageOwnerFacts {
+  readonly contract: 'opencode-child-pages-v2' | 'opencode-child-root-pages-v3'
   readonly nativeSource: string
   readonly lineage: string
   readonly epoch: string
@@ -57,7 +58,8 @@ export async function withNativeUsageOwner<T>(
       accepted.taskId !== binding.taskId ||
       accepted.nodeRunId !== binding.nodeRunId ||
       accepted.authority.kind !== 'local' ||
-      accepted.nativeCaptureContract !== 'opencode-child-pages-v2' ||
+      (accepted.nativeCaptureContract !== 'opencode-child-pages-v2' &&
+        accepted.nativeCaptureContract !== 'opencode-child-root-pages-v3') ||
       !accepted.nativeCaptureSource
     )
       throw new Error('Original native invocation binding changed')
@@ -75,6 +77,7 @@ export async function withNativeUsageOwner<T>(
       throw new Error('Original native claim intent changed')
     const token = binding.executionContext.token
     const facts: NativeUsageOwnerFacts = {
+      contract: accepted.nativeCaptureContract,
       nativeSource: accepted.nativeCaptureSource,
       lineage: intent.lineage,
       epoch: String(token.epoch),

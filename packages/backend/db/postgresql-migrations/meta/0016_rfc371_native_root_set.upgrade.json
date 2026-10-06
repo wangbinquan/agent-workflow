@@ -1,0 +1,825 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:ad118eb1d59bd9930e60e1789b070e713b6a1bc596d6b1f964849195d2b1bb1c', 215, 6)"
+    },
+    "beforeDigest": "sha256:bcc5d72601e7e3d75876a107f205918c38dc9e782d0f9efb45f8d36d2b61ba63"
+  },
+  "digest": "sha256:16d1f417e575bb99243dbdc7df739baaf8917f75d615b0ac6057094938657151",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "task_execution_native_usage_root_heads",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_heads\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"node_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_fence\" TEXT COLLATE \"C\",\n  \"protocol\" TEXT COLLATE \"C\" NOT NULL,\n  \"next_ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"first_root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"last_root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_heads_pkey\" PRIMARY KEY (\"invocation_id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_execution_native_usage_root_results",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_results\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"result_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_results_pkey\" PRIMARY KEY (\"invocation_id\", \"result_id\", \"root_session_id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_execution_native_usage_root_sets",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_sets\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"next_ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"process_watermark\" TEXT COLLATE \"C\" NOT NULL,\n  \"observed_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_sets_pkey\" PRIMARY KEY (\"invocation_id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_execution_native_usage_root_transitions",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_transitions\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"ordinal_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_transitions_pkey\" PRIMARY KEY (\"invocation_id\", \"ordinal_key\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_execution_native_usage_root_transitions:index:native_usage_root_identity_idx",
+      "sql": "CREATE INDEX \"native_usage_root_identity_idx\" ON \"agent_workflow\".\"task_execution_native_usage_root_transitions\" (\"invocation_id\", \"root_session_id\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_execution_native_usage_root_heads:fk:task_execution_native_usage_root_heads_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_heads\" ADD CONSTRAINT \"task_execution_native_usage_root_heads_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_execution_native_usage_root_results:fk:task_execution_native_usage_root_results_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_results\" ADD CONSTRAINT \"task_execution_native_usage_root_results_invocatio_e9a248ae4f50\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_preparations\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_execution_native_usage_root_sets:fk:task_execution_native_usage_root_sets_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_sets\" ADD CONSTRAINT \"task_execution_native_usage_root_sets_invocation_i_13d93e099559\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_preparations\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_execution_native_usage_root_transitions:fk:task_execution_native_usage_root_transitions_invocation_id_task_execution_native_usage_root_heads_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_transitions\" ADD CONSTRAINT \"task_execution_native_usage_root_transitions_invoc_c0302dba6386\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_root_heads\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:ad118eb1d59bd9930e60e1789b070e713b6a1bc596d6b1f964849195d2b1bb1c', active_table_count = 215, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:e9073431b301f4759a5130406a6df904c69fe1dfdf4a96be6be82ee62fce4ee2' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:e9073431b301f4759a5130406a6df904c69fe1dfdf4a96be6be82ee62fce4ee2",
+    "planDigest": "sha256:3811ebcefc09dcccded601e2d0c0cfb9d015f13a26b2e78259e5c0c57d077e46"
+  },
+  "id": "0016_rfc371_native_root_set",
+  "indexAdditions": [
+    {
+      "position": 182,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_execution_native_usage_root_heads",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_heads\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"node_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_fence\" TEXT COLLATE \"C\",\n  \"protocol\" TEXT COLLATE \"C\" NOT NULL,\n  \"next_ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"first_root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"last_root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_heads_pkey\" PRIMARY KEY (\"invocation_id\")\n)"
+      }
+    },
+    {
+      "position": 183,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_execution_native_usage_root_results",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_results\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"result_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_results_pkey\" PRIMARY KEY (\"invocation_id\", \"result_id\", \"root_session_id\")\n)"
+      }
+    },
+    {
+      "position": 184,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_execution_native_usage_root_sets",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_sets\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"next_ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"process_watermark\" TEXT COLLATE \"C\" NOT NULL,\n  \"observed_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_sets_pkey\" PRIMARY KEY (\"invocation_id\")\n)"
+      }
+    },
+    {
+      "position": 185,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_execution_native_usage_root_transitions",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_root_transitions\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"ordinal_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_root_transitions_pkey\" PRIMARY KEY (\"invocation_id\", \"ordinal_key\")\n)"
+      }
+    },
+    {
+      "position": 515,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_execution_native_usage_root_transitions:index:native_usage_root_identity_idx",
+        "sql": "CREATE INDEX \"native_usage_root_identity_idx\" ON \"agent_workflow\".\"task_execution_native_usage_root_transitions\" (\"invocation_id\", \"root_session_id\")"
+      }
+    },
+    {
+      "position": 880,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_execution_native_usage_root_heads:fk:task_execution_native_usage_root_heads_task_id_tasks_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_heads\" ADD CONSTRAINT \"task_execution_native_usage_root_heads_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 881,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_execution_native_usage_root_results:fk:task_execution_native_usage_root_results_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_results\" ADD CONSTRAINT \"task_execution_native_usage_root_results_invocatio_e9a248ae4f50\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_preparations\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 882,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_execution_native_usage_root_sets:fk:task_execution_native_usage_root_sets_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_sets\" ADD CONSTRAINT \"task_execution_native_usage_root_sets_invocation_i_13d93e099559\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_preparations\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 883,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_execution_native_usage_root_transitions:fk:task_execution_native_usage_root_transitions_invocation_id_task_execution_native_usage_root_heads_invocation_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_transitions\" ADD CONSTRAINT \"task_execution_native_usage_root_transitions_invoc_c0302dba6386\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_root_heads\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 178,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "invocation_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "node_run_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "claim_fence",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "protocol",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "next_ordinal",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "first_root_session_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "last_root_session_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["task_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "tasks",
+            "name": "task_execution_native_usage_root_heads_task_id_tasks_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_execution_native_usage_root_heads",
+        "indexes": [],
+        "migrationKey": ["invocation_id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["invocation_id"],
+        "providerTables": {
+          "postgresql": "task_execution_native_usage_root_heads",
+          "sqlite": "task_execution_native_usage_root_heads"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "nativeUsageRootHeads",
+        "sourceTable": "task_execution_native_usage_root_heads",
+        "unique": []
+      }
+    },
+    {
+      "position": 179,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "invocation_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "result_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "root_session_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["invocation_id"],
+            "foreignColumns": ["invocation_id"],
+            "foreignTable": "task_execution_native_usage_preparations",
+            "name": "task_execution_native_usage_root_results_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_execution_native_usage_root_results",
+        "indexes": [],
+        "migrationKey": ["invocation_id", "result_id", "root_session_id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["invocation_id", "result_id", "root_session_id"],
+        "providerTables": {
+          "postgresql": "task_execution_native_usage_root_results",
+          "sqlite": "task_execution_native_usage_root_results"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "nativeUsageRootResults",
+        "sourceTable": "task_execution_native_usage_root_results",
+        "unique": []
+      }
+    },
+    {
+      "position": 180,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "invocation_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "next_ordinal",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "root_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "process_watermark",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "observed_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["invocation_id"],
+            "foreignColumns": ["invocation_id"],
+            "foreignTable": "task_execution_native_usage_preparations",
+            "name": "task_execution_native_usage_root_sets_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_execution_native_usage_root_sets",
+        "indexes": [],
+        "migrationKey": ["invocation_id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["invocation_id"],
+        "providerTables": {
+          "postgresql": "task_execution_native_usage_root_sets",
+          "sqlite": "task_execution_native_usage_root_sets"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "nativeUsageRootSets",
+        "sourceTable": "task_execution_native_usage_root_sets",
+        "unique": []
+      }
+    },
+    {
+      "position": 181,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "invocation_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "ordinal_key",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "root_session_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["invocation_id"],
+            "foreignColumns": ["invocation_id"],
+            "foreignTable": "task_execution_native_usage_root_heads",
+            "name": "task_execution_native_usage_root_transitions_invocation_id_task_execution_native_usage_root_heads_invocation_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_execution_native_usage_root_transitions",
+        "indexes": [
+          {
+            "columns": ["invocation_id", "root_session_id"],
+            "name": "native_usage_root_identity_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["invocation_id", "ordinal_key"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["invocation_id", "ordinal_key"],
+        "providerTables": {
+          "postgresql": "task_execution_native_usage_root_transitions",
+          "sqlite": "task_execution_native_usage_root_transitions"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "nativeUsageRootTransitions",
+        "sourceTable": "task_execution_native_usage_root_transitions",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:e9b81878a89d2f8809b58f72ed48917efebbe04f633cc1482c61db5db96c2a9e",
+  "sequence": 16,
+  "sqlDigest": "sha256:87a7df5654bf6bf6817d6494644e516404b79e3b0c0b8a7e3c93006a2105dcd5",
+  "sqlFile": "0016_rfc371_native_root_set.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791246232969,
+        "hash": "9f5bd313140c3ef5fe590206d6bd468fc3fc6ef1cc6457028fd5ae0d488da225",
+        "index": 239,
+        "tag": "0240_rfc371_native_root_set"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:36c1b6a95f4172a4e22383868b45003ebf078d0fb0b4cb57bd54845b80912a35",
+      "count": 239,
+      "last": {
+        "folderMillis": 1791232099052,
+        "hash": "a7b1eb5e42fe6545f443122fe11ff559a91bacb0cccfa909010818e474228468",
+        "index": 238,
+        "tag": "0239_rfc371_native_first_store"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:6d482fcdfddcab9cf38b2dda09c72dd305219711946a9c23991d7a771693e358",
+      "count": 240,
+      "last": {
+        "folderMillis": 1791246232969,
+        "hash": "9f5bd313140c3ef5fe590206d6bd468fc3fc6ef1cc6457028fd5ae0d488da225",
+        "index": 239,
+        "tag": "0240_rfc371_native_root_set"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:ad118eb1d59bd9930e60e1789b070e713b6a1bc596d6b1f964849195d2b1bb1c",
+    "planDigest": "sha256:cd21c5b9719e7f941d5ee6347144a6f0fcd3799ab7023b44ed011a9008e7f78b"
+  },
+  "version": 2
+}

@@ -16,7 +16,7 @@ import {
 } from '@/db/schema'
 import { chunkedAll } from '@/util/sqlChunk'
 import { sha256Hex } from '@/util/hash'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import { verifyNativeUsageScope } from './nativeUsageScopeReference'
 
@@ -61,7 +61,7 @@ async function scopePath(tx: TaskExecutionTransaction, meter: Meter) {
 /** Recheck every before step against the final snapshot and its actual unique historical meter. */
 export async function verifyNativeUsageReconciliation(
   tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
+  binding: NativeUsageReadBinding,
   proof: ObservationNativeCompletion,
 ): Promise<ObservationNativeCompletion['reconciliation']> {
   let digest = sha256Hex(JSON.stringify(['native-reconciliation-v2', binding.invocationId]))
@@ -253,7 +253,12 @@ export async function verifyNativeUsageReconciliation(
           captured.sourceId === meter.sourceId &&
           originalCapture?.invocationId === measured.invocationId &&
           originalCapture?.capture.nativeSource === proof.nativeSource &&
-          originalCapture?.capture.rootSessionId === baseline.identity.rootSessionId
+          (originalCapture?.capture.contract === 'opencode-child-root-pages-v3'
+            ? originalCapture.capture.beforeSpawn.invocationId === measured.invocationId &&
+              scope &&
+              'ancestry' in scope &&
+              originalCapture.capture.sourceGeneration === scope.ancestry.identity.sourceGeneration
+            : originalCapture?.capture.rootSessionId === baseline.identity.rootSessionId)
         const modelCorrect =
           measured.model === null ||
           currentStep.model === null ||

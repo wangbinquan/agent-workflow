@@ -1,4 +1,4 @@
-// RFC-349 T2/T8 — locks the exact 217-table source census, the 211-table
+// RFC-349 T2/T8 — locks the exact 221-table source census, the 215-table
 // PostgreSQL parity set, and the only six archive-then-omit tables approved by
 // D9. New/missing/ownerless tables and revived legacy consumers must fail here
 // before any migration can prepare a target.
@@ -27,9 +27,9 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(217)
-    expect(contract.sourceTableCount).toBe(217)
-    expect(contract.activeTableCount).toBe(211)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(221)
+    expect(contract.sourceTableCount).toBe(221)
+    expect(contract.activeTableCount).toBe(215)
     expect(contract.archiveOnlyTableCount).toBe(6)
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
     const binding = contract.tables.find(

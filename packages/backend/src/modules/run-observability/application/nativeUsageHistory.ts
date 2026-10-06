@@ -40,7 +40,11 @@ async function repairStep(input: {
 }) {
   const { receipt, step, scope, watermark } = input
   const proof = receipt.capture
-  if (proof.contract !== 'opencode-child-pages-v2' || proof.rootSessionId === null)
+  if (
+    (proof.contract !== 'opencode-child-pages-v2' &&
+      proof.contract !== 'opencode-child-root-pages-v3') ||
+    proof.rootSessionId === null
+  )
     throw new Error('Native history writer requires its original page completion')
   const unresolved = (reason: string, owner: string | null = null) => ({
     status: 'unresolved' as const,
@@ -69,7 +73,11 @@ async function repairStep(input: {
   if (
     captured.sourceId !== current.sourceId ||
     captured.capture.nativeSource !== proof.nativeSource ||
-    captured.capture.rootSessionId !== proof.rootSessionId ||
+    (captured.capture.contract === 'opencode-child-root-pages-v3'
+      ? captured.capture.beforeSpawn.invocationId !== owner ||
+        !isNativeUsageScope(originalScope) ||
+        captured.capture.sourceGeneration !== originalScope.ancestry.identity.sourceGeneration
+      : captured.capture.rootSessionId !== proof.rootSessionId) ||
     !originalScope ||
     meter.reporting !== 'delta' ||
     meter.inclusion !== 'self' ||
@@ -109,7 +117,10 @@ async function repairStep(input: {
   if (
     facts.pathDigest !== step.beforePath ||
     facts.nativeSource !== proof.nativeSource ||
-    facts.sourceGeneration !== proof.final!.ack.identity.sourceGeneration
+    facts.sourceGeneration !==
+      (proof.contract === 'opencode-child-pages-v2'
+        ? proof.final!.ack.identity.sourceGeneration
+        : proof.sourceGeneration)
   )
     return unresolved('native-scope-changed', owner)
   if ((current.nativeWatermark ?? 0) > watermark)
@@ -167,7 +178,11 @@ export async function repairNativeUsageHistory(input: {
   readonly append: Append
 }): Promise<NativeHistoryProgress | undefined> {
   const receipt = input.receipt
-  if (receipt.capture.contract !== 'opencode-child-pages-v2') return undefined
+  if (
+    receipt.capture.contract !== 'opencode-child-pages-v2' &&
+    receipt.capture.contract !== 'opencode-child-root-pages-v3'
+  )
+    return undefined
   const value = {
     invocationId: receipt.invocationId,
     taskId: receipt.taskId,

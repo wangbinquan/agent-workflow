@@ -31,7 +31,11 @@ export async function prepareOriginalNativeHistory(
   value: NativeHistoryPreparation['value'],
   snapshot: { readonly snapshotId: string; readonly generationId: string },
 ): Promise<NativeHistoryPreparation | null> {
-  if (value.capture.contract !== 'opencode-child-pages-v2') return null
+  if (
+    value.capture.contract !== 'opencode-child-pages-v2' &&
+    value.capture.contract !== 'opencode-child-root-pages-v3'
+  )
+    return null
   const qualified = await qualifyOriginalNativeUsage(db, value)
   if (qualified.records === null) return null
   const facts = await readOriginalNativeCaptureBinding(db, value)

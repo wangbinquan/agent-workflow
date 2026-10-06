@@ -112,7 +112,10 @@ export function createUsageIngestion(
   return {
     cursor: (sourceId: string) => store.cursor(sourceId),
     async repairCapture(receipt: UsageCaptureReceipt) {
-      if (receipt.capture.contract === 'opencode-child-pages-v2')
+      if (
+        receipt.capture.contract === 'opencode-child-pages-v2' ||
+        receipt.capture.contract === 'opencode-child-root-pages-v3'
+      )
         return nativeHistory
           ? repairNativeUsageHistory({ receipt, store, nativeHistory, nativeScopes, append })
           : undefined
@@ -143,6 +146,7 @@ export function createUsageIngestion(
       if (
         input.nativeProcess !== undefined ||
         input.capture?.capture.contract === 'opencode-child-pages-v2' ||
+        input.capture?.capture.contract === 'opencode-child-root-pages-v3' ||
         input.events.some((event) => isNativeUsageScope(event.measurement.scope))
       ) {
         if (!nativeScopes)
