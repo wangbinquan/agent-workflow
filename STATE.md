@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 验证命令 hosted CI 配套修复
+
+e6764009 的主 CI 37460301719 中，功能作业112257911350在新真实 provider 测试五处 FactCell.value 报 TS2339；仅加实际 known 分支的擦除型 Extract 投影，原断言、人口、持久结果和预算不变。同提交 Windows37460301674正式failure，唯一功能失败为 MCP 完整根验证逆向 callee 字面量，应为实际 composeSqliteAppDeps；只改这一准确名称，原三个完整函数摘要及其它所有判据保持。维护压力37460301589已正式success。主CI尚在执行，另一个Static scans failure仅保留状态、不读取分析该作业，不能记全仓绿。
+
+本片零生产／原规则变化，复用e676匹配的13份清单，不重复census或提前退役其实际增长。两份完整原测试AST可逆，全部expect及预算保持；自有format/lint与纯AST核对，不运行本机AW tests/typecheck/build/service。有限实现门、精确发布和后继exact-SHA hosted CI各自留证。Doctor和并行RFC371在制内容全部保留且不随本片提交。仍在阶段A，H7／全根／A-T7／A-G继续；CS adapters尚未开始，AW尚未部署到CS，后续M0先部署再逐项M1～M4不变。详见[CI修复记录](design/RFC-370-crewstation-hosted-deployment/verification-ci-repair.md)。以下全部旧共享正文逐字保留。
+
 ## 2026-10-06 RFC-370 验证命令完整效果家族候选收口
 
 DA 普通组合必选 verificationCommands factory，在原 profile 读取位置以同一 evidence receiver 创建完整 resolveProgram／execute／collectFiles 家族。共用唯一 step／profile 串行、stop、结果与不含 duration 的 receipt digest 规则；原 resolver、glob、spawn／输出／超时／finally 机制完整迁入 local，旧公开 resolver 的 value identity 保持。SQLite HTTP、SQLite CLI与PG三个实际根显式选择，五个完整根／透传函数、八个实际原生 fixture 的十一调用、原全部断言／预算及 W29／MCP／Windows 完整逆向保持。

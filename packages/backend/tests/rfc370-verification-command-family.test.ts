@@ -38,6 +38,7 @@ import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digit
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
 
+type KnownVerificationCell = Extract<FactCell<FactCellValue>, { readonly state: 'known' }>
 const workspaceRef = 'owner:workspace:verification'
 const artifact = {
   selector: 'file-glob:reports/*.json',
@@ -589,15 +590,21 @@ describeEachProvider('RFC-370 real DA selected verification family', (harness) =
             selected: { kind: 'run-verification', profileRef: seeded.profileRef },
             handled: passed ? 'collected' : 'blocked',
           })
-          expect(cells['__delivery.verifiedTreeOid']?.value).toBe(treeOid)
-          expect(cells['__delivery.verifiedProfiles']?.value).toBe(
-            JSON.stringify({ [seeded.profileRef]: passed ? 'passed' : 'failed' }),
-          )
-          expect(cells['verification.lastOutcome']?.value).toBe(passed ? 'passed' : 'failed')
-          expect(cells['verification.allRequiredPassed']?.value).toBe(passed)
-          expect(cells['verification.failedProfileRefs']?.value).toEqual(
-            passed ? [] : [seeded.profileRef],
-          )
+          expect(
+            (cells['__delivery.verifiedTreeOid'] as KnownVerificationCell | undefined)?.value,
+          ).toBe(treeOid)
+          expect(
+            (cells['__delivery.verifiedProfiles'] as KnownVerificationCell | undefined)?.value,
+          ).toBe(JSON.stringify({ [seeded.profileRef]: passed ? 'passed' : 'failed' }))
+          expect(
+            (cells['verification.lastOutcome'] as KnownVerificationCell | undefined)?.value,
+          ).toBe(passed ? 'passed' : 'failed')
+          expect(
+            (cells['verification.allRequiredPassed'] as KnownVerificationCell | undefined)?.value,
+          ).toBe(passed)
+          expect(
+            (cells['verification.failedProfileRefs'] as KnownVerificationCell | undefined)?.value,
+          ).toEqual(passed ? [] : [seeded.profileRef])
           const digest = createHash('sha256')
             .update(
               JSON.stringify([

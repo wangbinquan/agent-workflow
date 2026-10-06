@@ -533,7 +533,7 @@ describe('RFC-370 native MCP root completeness', () => {
                 )
                 selections++
               } else {
-                expect(callee).toBe('composeSqliteApplicationDeps')
+                expect(callee).toBe('composeSqliteAppDeps')
                 expect(value).toBe('input.verificationCommands')
                 forwards++
               }
