@@ -268,6 +268,13 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
   'source-control/composition/taskAgentWorkspaceContents: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
   'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+  // RFC-370: six actual native Runtime diagnostic pairings; retire in A-T7.
+  'runtime-management/infrastructure/local/agentProtocol: packages/backend/src/modules/task-execution/composition/localRuntimeSmokeRunFamily.ts',
+  'runtime-management/composition/localAgentMaterial: packages/backend/src/modules/task-execution/composition/localRuntimeSmokeRunFamily.ts',
+  'runtime-management/composition/runtimeDiagnosticTargets: packages/backend/src/modules/task-execution/composition/localRuntimeSmokeRunFamily.ts',
+  'runtime-management/composition/runtimeDiagnosticTargets: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
+  'runtime-management/infrastructure/local/runtimeManagementEffects: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
+  'runtime-management/composition/runtimeManagement: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   // RFC-370 H3: standalone binds the neutral SC presence query at this composition.

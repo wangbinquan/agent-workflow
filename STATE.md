@@ -1,3 +1,14 @@
+## 2026-10-06 RFC-370 Runtime 完整诊断族与本机装配
+
+普通 Runtime 管理显式接收完整 status／smoke／models effects，使用 owner 所选目标和 runtime material 引用；只有两处原生 HTTP 根选择 local pairing，继续复用唯一 smoke core 与原 native 材料。原管理业务语句、await／错误边界、receiptKey 的缓存及视图匹配、显示 label 语义保持。RFC360 全部原断言与预算、W29 完整原根逆向摘要、Windows 对称路径及原完整用例保留，新增双 provider 真库／class receiver／opaque target／getter 顺序回归。
+
+Runtime DESIGN-D1 有效 PASS；SOURCE23-R1 的 hook receiver 与 Bun matcher 类型两项 P2 FAIL 留证，R2 修正有效 PASS，R3 仅补注册表 getter／错误先于 effects／配置读取的三路径差额，有效有限 PASS74。源码指纹 cde03b2171aa91d86d97b19ab003ff89456b1770f2ae0311198f123fc80f9663。原完整管理算法、唯一执行核心、native smoke API、材料／preparation 与原 guard 判据不变，不重审已冻结的其他正文。
+
+一份原 scoped census 使用完整已提交 1820be8c2e59daedaeb076eda76f44403e673eff 与23冻结 owned（16 production），6568 committed nonowned source，四条原规则不变。sourceDigest sha256:5ec6a9605d8d674ba0dec37bb01b33e48ad709f4cc87fac5955f5f66e2c6a85f；13 matching 保留345 authored debts、129有序库存及 why、40SPI／69targets、9Task effects、原值级SCC／空implementation SCC与全部非本批guard注册。实际原counter native bridge28→34、mutation1907→1914、imports6623→6634、exceptions5827→5836、public1183→1187、owners27069→27086；只登记六项实际增长，退役前批三许可，下一普通后继退役本批许可。纯 projector PASS，没有重复 SOURCE 或 census。
+
+前批 System／Intent 2da744867c6391ea127b764c76987bdeeb23a75e：main 37414736815 已终态 failure，48 jobs success，failure 为 Static scans 及 CI required；Windows 37414736809 终态 success。功能作业通过不冒称整体CI绿色。本批正式验证交新确切SHA的GitHub CI，元数据有限门与发布分别留证。
+
+本机仅 owned format／lint、纯 AST／字节／JSON及一次静态清单生成，未运行 AW tests／typecheck／build／services。完整保留已提交 RFC371 观测输出和共享 STATE 旧全文。仍在阶段A：MCP／command／doctor／脚本、H7执行权／恢复／后台生命周期、全根与A-T7／A-G继续；CS独立 adapters、M0首次部署及M1～M4未完成。AW尚未部署到CS，RFC保持In Progress。以下共享旧正文完整保留。
 ## 2026-10-06 RFC-371 完整报告暖读与原启动复验
 
 完整报告 SOURCE23／CONTROL7 的有限功能门 V2 PASS；保留 V1 首屏空游标 FAIL，仅补真实 after:null／parent:null 与 Task／total／EOF 断言。新增不透明 retained revision 派生关系、双 provider 原生触发器和当前父 snapshot 资格复用；冷态完整 COUNT 与每次 Actor／Task／费用可见性保持，显式刷新重建全部原来源，无统计人口上限。原 SQLite 0241／PostgreSQL V2 0017 追加与实际逻辑导入 finalize 接线保留旧关系／历史字节。仅定向 format／lint 与一次原 scoped AST，hosted 新确切 CI、原规模资格和两个 RFC 关闭继续。

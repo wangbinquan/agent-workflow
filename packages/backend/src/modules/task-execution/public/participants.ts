@@ -382,3 +382,8 @@ export type {
 } from '../application/ports/systemAgentRunFamily'
 export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
 export { classifyMissingEnvelope } from '../application/systemAgentRun'
+export type {
+  RuntimeSmokeInvocationFamily,
+  RuntimeSmokeRunFamily,
+  RuntimeSmokeRunRequest,
+} from '../application/ports/runtimeSmoke'

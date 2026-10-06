@@ -1,43 +1,58 @@
-import type { RuntimeManagementConfigPort } from '../application/ports/runtimeManagement'
-import { createFileRuntimeManagementConfiguration } from '../infrastructure/local/fileRuntimeManagementConfiguration'
+import type { RuntimeManagementEffects } from '../application/ports/runtimeManagement'
 import { createRuntimeProfileConfigurationCommands } from '../application/runtimeConfiguration'
 import { withRuntimeProbeConfigFence } from '../infrastructure/runtimeProbeFence'
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/application/ports/runtimeRegistry'
-import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryEffects'
 import { createRuntimeManagement } from '../application/runtimeManagement'
 import { createRuntimeObservationQueries } from '../application/runtimeObservationQueries'
-import { createRuntimeManagementEffects } from '../infrastructure/runtimeManagementEffects'
 
 export type { RuntimeDiagnosticDependencies } from '../infrastructure/runtimeManagementEffects'
 
-/** One management instance supplies both route families; composition only binds effects. */
-export function composeRuntimeManagement(
-  input: Omit<Parameters<typeof createRuntimeManagementEffects>[0], 'configuration'> & {
-    readonly runtimeRegistry: RuntimeRegistryOperations
-  } & (
-      | { readonly configuration: RuntimeManagementConfigPort; readonly configPath?: never }
-      | { readonly configuration?: never; readonly configPath: string }
-    ),
-) {
-  const application = createRuntimeManagement({
-    registry: input.runtimeRegistry,
-    ...createRuntimeManagementEffects({
-      ...input,
-      configuration:
-        input.configuration ?? createFileRuntimeManagementConfiguration(input.configPath),
-    }),
-  })
-  return Object.freeze({
-    observations: createRuntimeObservationQueries(input.runtimeRegistry),
+/** Pure binding exposes the actual application context only to explicit
+ * bootstrap compatibility projections; ordinary effects keep their receiver. */
+export function bindRuntimeManagement(input: {
+  readonly runtimeRegistry: RuntimeRegistryOperations
+  readonly effects: RuntimeManagementEffects
+}) {
+  const runtimeRegistry = input.runtimeRegistry
+  const effects = input.effects
+  const beforeProbeReceipt = effects.beforeProbeReceipt
+  const dependencies = {
+    registry: runtimeRegistry,
+    get config() {
+      return effects.config
+    },
+    get drivers() {
+      return effects.drivers
+    },
+    get modelDiscovery() {
+      return effects.modelDiscovery
+    },
+    get tests() {
+      return effects.tests
+    },
+    get statusProbeTimeoutMs() {
+      return effects.statusProbeTimeoutMs
+    },
+    beforeProbeReceipt: () => beforeProbeReceipt.call(effects),
+  }
+  const application = createRuntimeManagement(dependencies)
+  const management = Object.freeze({
+    observations: createRuntimeObservationQueries(runtimeRegistry),
     models: application.models,
-    configuration: createRuntimeProfileConfigurationCommands(input.runtimeRegistry),
+    configuration: createRuntimeProfileConfigurationCommands(runtimeRegistry),
     runtimes: Object.freeze({
-      protocols: createRuntimeRegistryEffects().protocols,
+      protocols: effects.protocols,
       profiles: application.profiles,
       queries: application.queries,
       diagnostics: application.diagnostics,
     }),
   })
+  return { dependencies, management }
+}
+
+/** One required family supplies both ordinary management route families. */
+export function composeRuntimeManagement(input: Parameters<typeof bindRuntimeManagement>[0]) {
+  return bindRuntimeManagement(input).management
 }
 
 export function composeRuntimeProbeConfigFence(configPath: string) {

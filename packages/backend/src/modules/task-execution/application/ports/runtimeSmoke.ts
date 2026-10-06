@@ -6,6 +6,7 @@ import type {
 } from '@/modules/runtime-management/public/participants'
 import type { AgentInvocationPreparation } from './agentInvocationPreparation'
 import type { AgentInvocationBinding } from './agentInvocation'
+import type { RuntimeDiagnosticTarget } from '@/modules/runtime-management/public/participants'
 
 export type SmokeOutcome =
   | 'conforms'
@@ -55,4 +56,25 @@ export interface PreparedRuntimeSmokeOptions extends RuntimeSmokeCorePolicy {
   readonly isSandbox?: boolean
   readonly timeoutMs?: number
   readonly log?: Logger
+}
+
+/** An ordinary smoke invocation carries a selected target, never a command or
+ * workspace location. Its family opens before nonce/workspace allocation. */
+export interface RuntimeSmokeRunRequest extends RuntimeSmokeCorePolicy {
+  readonly target: RuntimeDiagnosticTarget
+  readonly extraArgs?: readonly string[]
+  readonly isSandbox?: boolean
+  readonly timeoutMs?: number
+  readonly log?: Logger
+}
+
+export interface RuntimeSmokeRunFamily {
+  run(request: RuntimeSmokeRunRequest): Promise<SmokeResult>
+}
+
+export interface RuntimeSmokeInvocationFamily {
+  open(
+    request: RuntimeSmokeRunRequest,
+    log: Logger,
+  ): { materialize(): RuntimeSmokeCoreInput['invocation'] }
 }

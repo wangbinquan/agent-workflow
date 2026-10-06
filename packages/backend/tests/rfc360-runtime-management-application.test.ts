@@ -4,7 +4,8 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createRuntimeProfileConfigurationCommands } from '../src/modules/runtime-management/application/runtimeConfiguration'
 import { createRuntimeManagement } from '../src/modules/runtime-management/application/runtimeManagement'
-import { composeRuntimeManagement } from '../src/modules/runtime-management/composition/runtimeManagement'
+import { composeLocalRuntimeManagement as composeRuntimeManagement } from '../src/modules/task-execution/composition/localRuntimeManagement'
+import { createLocalRuntimeDiagnosticTargets } from '../src/modules/runtime-management/composition/runtimeDiagnosticTargets'
 import type {
   RuntimeManagementConfig,
   RuntimeManagementDependencies,
@@ -26,6 +27,14 @@ const advisoryFailure: RuntimeSmokeResult = {
   exitCode: 1,
 }
 
+// Existing assertions retain their native observation vocabulary; the actual
+// application now forwards the selected target unchanged to its injected port.
+type NativeProbeObservation = Omit<RuntimeSmokeRequest, 'target'> & { readonly binaryPath: string }
+function observeNativeProbe(input: RuntimeSmokeRequest): NativeProbeObservation {
+  const { target, ...policy } = input
+  return { ...policy, binaryPath: target.label }
+}
+
 describeEachProvider('RFC-360 runtime management application', (harness) => {
   async function setup() {
     const registry = composeRuntimeRegistryOperations(harness.db)
@@ -35,7 +44,8 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
       opencodePath: 'first-opencode',
       claudeCodePath: 'first-claude',
     }
-    const probes: RuntimeSmokeRequest[] = []
+    const targets = createLocalRuntimeDiagnosticTargets()
+    const probes: NativeProbeObservation[] = []
     const models: { protocol: string; binary: string; refresh: boolean }[] = []
     let reconciles = 0
     const dependencies: RuntimeManagementDependencies = {
@@ -45,11 +55,16 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
         withProbeReceiptFence: (action) => action(),
       },
       drivers: {
-        resolveBinary: (row, config) =>
-          row.binaryPath ??
-          (row.protocol === 'opencode' ? config.opencodePath : config.claudeCodePath) ??
-          row.protocol,
-        async probeStatus(protocol, binary) {
+        resolveTarget(row, config) {
+          const binary =
+            row.binaryPath ??
+            (row.protocol === 'opencode' ? config.opencodePath : config.claudeCodePath) ??
+            row.protocol
+          return targets.capture({ protocol: () => row.protocol, binaryPath: binary })
+        },
+        capture: (input) => targets.capture(input),
+        async probeStatus(protocol, target) {
+          const binary = targets.binary(target)
           return {
             binary,
             version: 'fixture-version',
@@ -58,17 +73,21 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
           }
         },
         async smoke(input) {
-          probes.push(input)
+          probes.push(observeNativeProbe(input))
           return advisoryFailure
         },
         assertSpawnCapabilities() {},
       },
       modelDiscovery: {
-        resolveBinary: (protocol, binaryPath, config) =>
-          binaryPath ??
-          (protocol === 'opencode' ? config.opencodePath : config.claudeCodePath) ??
-          protocol,
-        async list(protocol, binary, refresh) {
+        resolveTarget(protocol, binaryPath, config) {
+          const binary =
+            binaryPath ??
+            (protocol === 'opencode' ? config.opencodePath : config.claudeCodePath) ??
+            protocol
+          return targets.capture({ protocol: () => protocol, binaryPath: binary })
+        },
+        async list(protocol, target, refresh) {
+          const binary = targets.binary(target)
           models.push({ protocol, binary, refresh })
           return { binary, models: [{ id: `${protocol}-model` }], cached: false }
         },
@@ -102,6 +121,9 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
       opencodePath: 'first-binary',
     }
     const management = composeRuntimeManagement({
+      appHome() {
+        throw new Error('a management query must not materialize a smoke workspace')
+      },
       runtimeRegistry: h.registry,
       runtimeTests: { async reconcileDurableIntents() {} },
       configuration: {
@@ -287,7 +309,7 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
   test('registered probe keeps its original target when config changes during the effect', async () => {
     const h = await setup()
     h.dependencies.drivers.smoke = async (input) => {
-      h.probes.push(input)
+      h.probes.push(observeNativeProbe(input))
       h.setConfig({ opencodePath: 'changed-while-probing' })
       return advisoryFailure
     }

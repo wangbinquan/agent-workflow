@@ -1,7 +1,50 @@
 import { randomBytes } from 'node:crypto'
-import { createLogger } from '@/util/log'
+import { createLogger, type Logger } from '@/util/log'
 import { DEFAULT_TIMEOUT_MS, runRuntimeSmokeCore } from '../application/runtimeSmoke'
 import type { PreparedRuntimeSmokeOptions, SmokeResult } from '../application/ports/runtimeSmoke'
+import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
+
+/** Shared complete smoke declaration. Callers choose its original read boundary;
+ * this helper performs no driver lookup, materialization or execution. */
+export function createRuntimeSmokeMaterialIntent(
+  opts: Pick<
+    PreparedRuntimeSmokeOptions,
+    'protocol' | 'model' | 'isSandbox' | 'extraArgs' | 'runtimeBinding'
+  >,
+  preparation: PreparedRuntimeSmokeOptions['preparation'],
+  prompt: string,
+  log: Logger,
+): AgentMaterialIntent {
+  return {
+    protocol: opts.protocol,
+    injection: { mcps: [] },
+    prompt,
+    agentName: 'aw-smoke',
+    systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
+    resolvedProfiles: [
+      [
+        'aw-smoke',
+        {
+          model: opts.model ?? null,
+          variant: null,
+          temperature: null,
+          steps: null,
+          maxSteps: null,
+          isSandbox: opts.isSandbox === true,
+        },
+      ],
+    ],
+    workspace: preparation.workspace.workspace,
+    runContent: preparation.workspace.runContent,
+    freshAgentRun: false,
+    ...(opts.extraArgs !== undefined && opts.extraArgs.length > 0
+      ? { extraArgs: opts.extraArgs }
+      : {}),
+    runtimeBinding: opts.runtimeBinding,
+    nodeRunId: 'runtime-smoke',
+    log,
+  }
+}
 
 /** The caller/root already selected the compatible material/execution family. */
 export async function runPreparedRuntimeSmoke(
@@ -19,35 +62,7 @@ export async function runPreparedRuntimeSmoke(
       workspace: preparation.workspace,
       prepareWorkspace: () => preparation.workspace.prepare(),
       compile: (prompt) =>
-        preparation.compile({
-          protocol: opts.protocol,
-          injection: { mcps: [] },
-          prompt,
-          agentName: 'aw-smoke',
-          systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
-          resolvedProfiles: [
-            [
-              'aw-smoke',
-              {
-                model: opts.model ?? null,
-                variant: null,
-                temperature: null,
-                steps: null,
-                maxSteps: null,
-                isSandbox: opts.isSandbox === true,
-              },
-            ],
-          ],
-          workspace: preparation.workspace.workspace,
-          runContent: preparation.workspace.runContent,
-          freshAgentRun: false,
-          ...(opts.extraArgs !== undefined && opts.extraArgs.length > 0
-            ? { extraArgs: opts.extraArgs }
-            : {}),
-          runtimeBinding: opts.runtimeBinding,
-          nodeRunId: 'runtime-smoke',
-          log,
-        }),
+        preparation.compile(createRuntimeSmokeMaterialIntent(opts, preparation, prompt, log)),
     },
   })
 }

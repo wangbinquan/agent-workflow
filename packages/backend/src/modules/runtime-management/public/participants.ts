@@ -172,3 +172,6 @@ export type {
   SystemAgentWorkspaceScope,
   SystemAgentWorkspaceScopes,
 } from '../application/ports/systemAgentRetainedContents'
+
+/** Diagnostic execution retains one selected target identity across effects. */
+export type { RuntimeDiagnosticTarget } from '../application/ports/runtimeManagement'

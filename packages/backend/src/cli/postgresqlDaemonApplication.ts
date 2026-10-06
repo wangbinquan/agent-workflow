@@ -95,10 +95,10 @@ import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import {
-  composeRuntimeManagement,
   composeRuntimeProbeConfigFence,
   type RuntimeDiagnosticDependencies,
 } from '@/modules/runtime-management/composition/runtimeManagement'
+import { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import {
   supportsEventCenterCodeHostDelivery,
   type WebhookDispatcher,
@@ -2140,7 +2140,7 @@ export async function composePostgresqlApplication(
       memories: memoryCatalog,
       tasks: taskExecutionProvider.overview,
     })
-  const runtimeManagement = composeRuntimeManagement({
+  const runtimeManagement = composeLocalRuntimeManagement({
     configuration: {
       current: () => configuration.read(),
       withProbeReceiptFence: composeRuntimeProbeConfigFence(
@@ -2152,6 +2152,7 @@ export async function composePostgresqlApplication(
     ...(input.runtimeDiagnosticTestDependencies === undefined
       ? {}
       : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
+    appHome: () => Paths.root,
   })
   const observationBuild = observationReportBuild(
     { provider: 'postgresql', runtime: input.provider.runtime },

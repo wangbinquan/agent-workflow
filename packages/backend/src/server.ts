@@ -283,10 +283,8 @@ import { mountPlantumlRoutes } from '@/routes/plantuml'
 import { mountPluginRoutes } from '@/routes/plugins'
 import { mountUserRoutes } from '@/routes/users'
 import { mountRepoRoutes } from '@/routes/repos'
-import {
-  composeRuntimeManagement,
-  composeRuntimeProbeConfigFence,
-} from '@/modules/runtime-management/composition/runtimeManagement'
+import { composeRuntimeProbeConfigFence } from '@/modules/runtime-management/composition/runtimeManagement'
+import { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import {
   mountRuntimeRoutes,
   mountRuntimesRoutes,
@@ -3651,7 +3649,7 @@ function composeSqliteApiRouteMounts(
       ),
     }),
   })
-  const runtimeManagement = composeRuntimeManagement({
+  const runtimeManagement = composeLocalRuntimeManagement({
     configuration: {
       current: () => configuration.read(),
       withProbeReceiptFence: composeRuntimeProbeConfigFence(
@@ -3663,6 +3661,7 @@ function composeSqliteApiRouteMounts(
     ...(deps.runtimeDiagnosticTestDependencies === undefined
       ? {}
       : { runtimeDiagnosticTestDependencies: deps.runtimeDiagnosticTestDependencies }),
+    appHome: () => Paths.root,
   })
   const apiRoutes = Object.freeze({
     config: (app) =>

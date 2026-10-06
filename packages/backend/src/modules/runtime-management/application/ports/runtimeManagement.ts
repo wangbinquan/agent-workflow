@@ -5,6 +5,7 @@ import type {
 } from '@/modules/runtime-management/application/ports/runtimeRegistry'
 import type { RuntimeKind, RuntimeSmokeResult } from '../../public/types'
 import type { RuntimeModelList } from '../../public/queries'
+import type { AgentMaterialContentReference } from './agentMaterial'
 
 /** Read on demand, retaining the existing per-operation hot configuration semantics. */
 export interface RuntimeManagementConfig extends RuntimeRefConfig {
@@ -17,9 +18,18 @@ export interface RuntimeManagementConfigPort {
   withProbeReceiptFence<T>(action: () => Promise<T>): Promise<T>
 }
 
+/** Label and receiptKey retain the existing views and receipt comparison;
+ * execution uses only the selected owner's opaque runtime binding. */
+export interface RuntimeDiagnosticTarget {
+  readonly protocol: RuntimeKind
+  readonly label: string
+  readonly receiptKey: string
+  readonly runtimeBinding: AgentMaterialContentReference
+}
+
 export interface RuntimeSmokeRequest {
   readonly protocol: RuntimeKind
-  readonly binaryPath: string
+  readonly target: RuntimeDiagnosticTarget
   readonly config: Pick<RuntimeManagementConfig, 'opencodePath' | 'claudeCodePath'>
   readonly model?: string
   readonly isSandbox: boolean
@@ -27,13 +37,17 @@ export interface RuntimeSmokeRequest {
 }
 
 export interface RuntimeDriverManagementPort {
-  resolveBinary(
+  resolveTarget(
     row: Pick<RuntimeRow, 'protocol' | 'binaryPath'>,
     config: RuntimeManagementConfig,
-  ): string
+  ): RuntimeDiagnosticTarget
+  capture(input: {
+    readonly protocol: () => RuntimeKind
+    readonly binaryPath: string
+  }): RuntimeDiagnosticTarget
   probeStatus(
     protocol: RuntimeKind,
-    binary: string,
+    target: RuntimeDiagnosticTarget,
     timeoutMs: number,
   ): Promise<{
     readonly binary: string
@@ -49,12 +63,16 @@ export interface RuntimeDriverManagementPort {
 }
 
 export interface RuntimeModelDiscoveryPort {
-  resolveBinary(
+  resolveTarget(
     protocol: RuntimeKind,
     binaryPath: string | null,
     config: RuntimeManagementConfig,
-  ): string
-  list(protocol: RuntimeKind, binary: string, refresh: boolean): Promise<RuntimeModelList>
+  ): RuntimeDiagnosticTarget
+  list(
+    protocol: RuntimeKind,
+    target: RuntimeDiagnosticTarget,
+    refresh: boolean,
+  ): Promise<RuntimeModelList>
 }
 
 export interface RuntimeTestManagementPort {
@@ -70,4 +88,9 @@ export interface RuntimeManagementDependencies {
   readonly tests: RuntimeTestManagementPort
   readonly statusProbeTimeoutMs: number
   readonly beforeProbeReceipt: () => void | Promise<void>
+}
+
+/** A root selects the whole family, including its supported protocol view. */
+export interface RuntimeManagementEffects extends Omit<RuntimeManagementDependencies, 'registry'> {
+  readonly protocols: readonly RuntimeKind[]
 }

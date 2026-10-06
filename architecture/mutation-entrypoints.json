@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1907,
+    "entries": 1914,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -21831,6 +21831,31 @@
       },
       "file": "packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts#RuntimeDiagnosticTarget",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts#RuntimeDiagnosticTarget",
+      "symbol": "RuntimeDiagnosticTarget",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts#RuntimeDriverManagementPort",
       "missingControls": [
         "audit",
@@ -21916,6 +21941,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts#RuntimeManagementDependencies",
       "symbol": "RuntimeManagementDependencies",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts#RuntimeManagementEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeManagement.ts#RuntimeManagementEffects",
+      "symbol": "RuntimeManagementEffects",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -22943,6 +22993,81 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/runtimeDiagnosticTargets.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/runtimeDiagnosticTargets.ts#createLocalRuntimeDiagnosticTargets",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/runtimeDiagnosticTargets.ts#createLocalRuntimeDiagnosticTargets",
+      "symbol": "createLocalRuntimeDiagnosticTargets",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/runtimeManagementEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/runtimeManagementEffects.ts#createLocalRuntimeManagementEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/runtimeManagementEffects.ts#createLocalRuntimeManagementEffects",
+      "symbol": "createLocalRuntimeManagementEffects",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/runtimeManagementEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/runtimeManagementEffects.ts#RuntimeDiagnosticDependencies",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/runtimeManagementEffects.ts#RuntimeDiagnosticDependencies",
+      "symbol": "RuntimeDiagnosticDependencies",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -23056,56 +23181,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#openOpencodeUsagePass",
       "symbol": "openOpencodeUsagePass",
-      "targetContext": "runtime-management",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#createRuntimeManagementEffects",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#createRuntimeManagementEffects",
-      "symbol": "createRuntimeManagementEffects",
-      "targetContext": "runtime-management",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#RuntimeDiagnosticDependencies",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#RuntimeDiagnosticDependencies",
-      "symbol": "RuntimeDiagnosticDependencies",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -27707,6 +27782,81 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeInvocationFamily",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeInvocationFamily",
+      "symbol": "RuntimeSmokeInvocationFamily",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeRunFamily",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeRunFamily",
+      "symbol": "RuntimeSmokeRunFamily",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeRunRequest",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeRunRequest",
+      "symbol": "RuntimeSmokeRunRequest",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -29171,6 +29321,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#createTaskArchiveMaintenanceCommand",
       "symbol": "createTaskArchiveMaintenanceCommand",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/runtimeSmoke.ts#createRuntimeSmokeMaterialIntent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/runtimeSmoke.ts#createRuntimeSmokeMaterialIntent",
+      "symbol": "createRuntimeSmokeMaterialIntent",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -45626,7 +45801,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ce2f94f257c61b6aab8f16d98ce291179cc4f027ba847d97ad8e50c619f94667",
+  "sourceDigest": "sha256:5ec6a9605d8d674ba0dec37bb01b33e48ad709f4cc87fac5955f5f66e2c6a85f",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

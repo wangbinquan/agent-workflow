@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ce2f94f257c61b6aab8f16d98ce291179cc4f027ba847d97ad8e50c619f94667`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:5ec6a9605d8d674ba0dec37bb01b33e48ad709f4cc87fac5955f5f66e2c6a85f`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2282 |
+| backend production TS 文件 | 2288 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1693 / 18 |
+| `modules/**` 文件 / 非空 context | 1699 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5827 |
+| `architectureExceptions` | 5836 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6623 |
+| `crossContextImports` | 6634 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27069 |
-| `mutationEntrypoints` | 1907 |
+| `moduleSymbolOwners` | 27086 |
+| `mutationEntrypoints` | 1914 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1183 |
+| `publicSurfaces` | 1187 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -50,7 +50,7 @@
 | task-execution / infrastructure | 153 |
 | task-execution / application | 134 |
 | resource-catalog / infrastructure | 130 |
-| task-execution / composition | 82 |
+| task-execution / composition | 85 |
 | resource-catalog / application | 78 |
 | development-automation / application | 61 |
 | collaboration / infrastructure | 47 |
@@ -64,8 +64,8 @@
 | intent / application | 30 |
 | runtime-management / application | 30 |
 | source-control / application | 30 |
+| runtime-management / infrastructure | 28 |
 | system-operations / infrastructure | 27 |
-| runtime-management / infrastructure | 26 |
 | identity-access / application | 25 |
 | run-observability / domain | 25 |
 | integration / application | 23 |
@@ -88,9 +88,9 @@
 | digital-employee / infrastructure | 11 |
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
+| runtime-management / composition | 11 |
 | source-control / domain | 11 |
 | intent / infrastructure | 10 |
-| runtime-management / composition | 10 |
 | memory / domain | 9 |
 | collaboration / composition | 8 |
 | event-center / application | 8 |
@@ -208,11 +208,11 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3769 |
+| legacy-outbound | 3771 |
 | legacy-inbound | 1846 |
-| offered-consumption | 328 |
+| offered-consumption | 330 |
 | infrastructure-external | 324 |
-| temporary-internal-debt | 107 |
+| temporary-internal-debt | 114 |
 | off-dag-offered | 93 |
 | authority-type-only | 78 |
 | required-implementation | 72 |
@@ -223,9 +223,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3769 |
+| legacy-outbound | 3771 |
 | legacy-inbound | 1846 |
-| temporary-internal-debt | 107 |
+| temporary-internal-debt | 114 |
 | off-dag-offered | 93 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3129 |
-| W9-D | 1060 |
-| W4-E1 | 775 |
+| W9 | 3131 |
+| W9-D | 1058 |
+| W4-E1 | 784 |
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -255,13 +255,13 @@
 
 | context | 数量 |
 | --- | --- |
-| task-execution | 284 |
+| task-execution | 287 |
 | resource-catalog | 242 |
 | collaboration | 122 |
 | source-control | 101 |
 | system-operations | 69 |
 | identity-access | 65 |
-| runtime-management | 64 |
+| runtime-management | 65 |
 | digital-employee | 51 |
 | development-automation | 39 |
 | knowledge-evolution | 25 |
@@ -274,7 +274,7 @@
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1183）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1187）
 
 | context | 数量 |
 | --- | --- |

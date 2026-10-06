@@ -228,6 +228,66 @@ function isRuntimeFactoryChoice(node: ts.Node, source: ts.SourceFile): node is t
   )
 }
 
+// RFC-370: reverse the sole management slot after validating its complete
+// original arguments and the lazy native home selection; keep every body lock.
+function oldRuntimeDiagnosticsFamilyBody(
+  source: ts.SourceFile,
+  name: string,
+  body: ts.Block,
+): ts.Block {
+  const sqlite = source === server && name === 'composeSqliteApiRouteMounts'
+  const postgres = source === pg && name === 'composePostgresqlApplication'
+  if (!sqlite && !postgres) return body
+  const calls = namedCalls(body, source, 'composeLocalRuntimeManagement')
+  const call = calls[0]
+  const argument = call?.arguments[0]
+  if (
+    calls.length !== 1 ||
+    call === undefined ||
+    call.arguments.length !== 1 ||
+    argument === undefined ||
+    !ts.isObjectLiteralExpression(argument) ||
+    argument.properties.length !== 5 ||
+    compact(argument.properties.at(-1)!, source) !== 'appHome:()=>Paths.root'
+  )
+    throw new Error('Runtime management must select one complete native family with a lazy home')
+  const originalArguments = ts.factory.updateObjectLiteralExpression(
+    argument,
+    ts.factory.createNodeArray(
+      argument.properties.slice(0, -1),
+      argument.properties.hasTrailingComma,
+    ),
+  )
+  const originalDigest = createHash('sha256')
+    .update(printer.printNode(ts.EmitHint.Unspecified, originalArguments, source))
+    .digest('hex')
+  const expected = sqlite
+    ? 'a85f996db9411ba44fc37b79e85d5171c316767e8bc0ff5c188734df6fbb917a'
+    : '8bced644f181486b3e75b4b6281a16731d9c6362f5ff16f0fe027790e54855b3'
+  if (originalDigest !== expected)
+    throw new Error(
+      'Runtime management must retain the complete original configuration and fixtures',
+    )
+  const transformed = ts.transform(body, [
+    (context) => {
+      const visit: ts.Visitor = (node) => {
+        if (node === call)
+          return ts.factory.updateCallExpression(
+            call,
+            ts.factory.createIdentifier('composeRuntimeManagement'),
+            call.typeArguments,
+            [originalArguments],
+          )
+        return ts.visitEachChild(node, visit, context)
+      }
+      return (node) => ts.visitNode(node, visit, ts.isBlock)!
+    },
+  ])
+  const restored = transformed.transformed[0]!
+  transformed.dispose()
+  return restored
+}
+
 // RFC-370: reverse only the selected System roots, preserving all old body locks.
 function oldSystemFamilyBody(source: ts.SourceFile, name: string, body: ts.Block): ts.Block {
   const sqliteCore = source === server && name === 'composeSqliteApplicationDeps'
@@ -466,7 +526,11 @@ function oldSystemFamilyBody(source: ts.SourceFile, name: string, body: ts.Block
 
 /** Only the approved composition seams are removed; every original subtree remains. */
 function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
-  const body = oldSystemFamilyBody(source, name, functionBody(source, name))
+  const body = oldSystemFamilyBody(
+    source,
+    name,
+    oldRuntimeDiagnosticsFamilyBody(source, name, functionBody(source, name)),
+  )
   if (
     (source === pg && name === 'composePostgresqlApplication') ||
     (source === server && name === 'composeSqliteApplicationDeps')
@@ -1003,7 +1067,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // Both declarations remain inside the original composition; phase and lifetime checks stay intact.
     // RFC-370: one complete paired conflict/action selection precedes allocation; original phase blocks remain.
     expect(restored.statements).toHaveLength(176)
-    expect(namedCalls(body, pg, 'composeRuntimeManagement')).toHaveLength(1)
+    expect(namedCalls(body, pg, 'composeLocalRuntimeManagement')).toHaveLength(1)
     // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
     // 相同、函数体从不读它），删掉它同时消掉了 `main.ts` 里那条三元分叉。
@@ -1345,7 +1409,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       namedCalls(
         functionBody(server, 'composeSqliteApiRouteMounts'),
         server,
-        'composeRuntimeManagement',
+        'composeLocalRuntimeManagement',
       ),
     ).toHaveLength(1)
     // RFC-365: the Event Center body now wires the two exact target providers, the IA

@@ -29,7 +29,7 @@ export function createRuntimeManagement(
   ) => drivers.assertSpawnCapabilities(protocol, input)
   const view = async (row: RuntimeRow) => {
     const cfg = await config.current()
-    return runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveBinary(row, cfg))
+    return runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveTarget(row, cfg).receiptKey)
   }
   const staleProbe = (name: string): never => {
     throw new ConflictError(
@@ -49,7 +49,7 @@ export function createRuntimeManagement(
         const cfg = await config.current()
         smoke = await smokeRuntime({
           protocol,
-          binaryPath: input.binaryPath,
+          target: drivers.capture({ protocol: () => protocol, binaryPath: input.binaryPath }),
           config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
           ...(typeof input.model === 'string' ? { model: input.model } : {}),
           isSandbox: input.isSandbox === true,
@@ -61,13 +61,17 @@ export function createRuntimeManagement(
       let row = await registry.createRuntime({ ...input, binaryPath: input.binaryPath ?? null })
       const cfg = await config.current()
       if (smoke !== undefined) {
-        const target = runtimeProbeTargetOf(row, drivers.resolveBinary(row, cfg))
+        const target = runtimeProbeTargetOf(row, drivers.resolveTarget(row, cfg).receiptKey)
         await registry.cacheRuntimeProbe(target, smoke)
         const refreshed = await registry.getRuntime(row.name)
         if (refreshed?.id === row.id) row = refreshed
       }
       return {
-        runtime: runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveBinary(row, cfg)),
+        runtime: runtimeRowToView(
+          row,
+          cfg.defaultRuntime,
+          drivers.resolveTarget(row, cfg).receiptKey,
+        ),
         ...(smoke !== undefined ? { smoke } : {}),
       }
     },
@@ -80,7 +84,13 @@ export function createRuntimeManagement(
       const cfg = await config.current()
       const row = await registry.setRuntimeEnabled(name, enabled, cfg.defaultRuntime)
       await tests.reconcile()
-      return { runtime: runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveBinary(row, cfg)) }
+      return {
+        runtime: runtimeRowToView(
+          row,
+          cfg.defaultRuntime,
+          drivers.resolveTarget(row, cfg).receiptKey,
+        ),
+      }
     },
     async remove(name) {
       const cfg = await config.current()
@@ -103,7 +113,7 @@ export function createRuntimeManagement(
       const cfg = await config.current()
       return {
         runtimes: rows.map((row) => ({
-          ...runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveBinary(row, cfg)),
+          ...runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveTarget(row, cfg).receiptKey),
           capabilities: { mcpRuntimeTestV1: tests.eligible(row) },
         })),
       }
@@ -116,8 +126,8 @@ export function createRuntimeManagement(
       return {
         runtimes: await Promise.all(
           rows.map(async (row) => {
-            const binary = drivers.resolveBinary(row, cfg)
-            const probe = await drivers.probeStatus(row.protocol, binary, deps.statusProbeTimeoutMs)
+            const target = drivers.resolveTarget(row, cfg)
+            const probe = await drivers.probeStatus(row.protocol, target, deps.statusProbeTimeoutMs)
             const state =
               probe.ran === true
                 ? probe.compatible
@@ -147,7 +157,7 @@ export function createRuntimeManagement(
         const cfg = await config.current()
         const smoke = await smokeRuntime({
           protocol: input.protocol,
-          binaryPath: input.binaryPath,
+          target: drivers.capture({ protocol: () => input.protocol, binaryPath: input.binaryPath }),
           config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
           ...(input.model !== undefined ? { model: input.model } : {}),
           isSandbox: input.isSandbox === true,
@@ -161,13 +171,13 @@ export function createRuntimeManagement(
       const row = await registry.getRuntime(name)
       if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
       const cfg = await config.current()
-      const binaryPath = drivers.resolveBinary(row, cfg)
-      const target = runtimeProbeTargetOf(row, binaryPath)
+      const diagnosticTarget = drivers.resolveTarget(row, cfg)
+      const target = runtimeProbeTargetOf(row, diagnosticTarget.receiptKey)
       const extraArgs = parseRuntimeExtraArgs(row.extraArgsJson)
       assertRuntimeSpawnCapabilities(row.protocol, { extraArgs, isSandbox: row.isSandbox })
       const smoke = await smokeRuntime({
         protocol: row.protocol,
-        binaryPath,
+        target: diagnosticTarget,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
         ...(row.model !== null ? { model: row.model } : {}),
         isSandbox: row.isSandbox,
@@ -177,7 +187,8 @@ export function createRuntimeManagement(
         const current = await registry.getRuntime(name)
         if (
           current === null ||
-          drivers.resolveBinary(current, await config.current()) !== target.resolvedBinaryPath
+          drivers.resolveTarget(current, await config.current()).receiptKey !==
+            target.resolvedBinaryPath
         ) {
           staleProbe(name)
         }
@@ -202,14 +213,14 @@ export function createRuntimeManagement(
         : rtParam === 'claude' || rtParam === 'claude-code'
           ? 'claude-code'
           : 'opencode'
-      const binary = modelDiscovery.resolveBinary(
+      const target = modelDiscovery.resolveTarget(
         protocol,
         matchedReal ? resolved.binaryPath : null,
         cfg,
       )
       try {
-        const listed = await modelDiscovery.list(protocol, binary, input.refresh)
-        return { kind: 'listed', models: { ...listed, binary } }
+        const listed = await modelDiscovery.list(protocol, target, input.refresh)
+        return { kind: 'listed', models: { ...listed, binary: target.label } }
       } catch (error) {
         return {
           kind: 'unavailable',
