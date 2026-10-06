@@ -20,6 +20,8 @@ import {
   nativeUsageRootTransitions,
   nativeUsageRootSets,
   nativeUsageRootResults,
+  nativeUsageEmissions,
+  taskExecutionObservationSources,
 } from '@/db/schema'
 import { createOpencodeNativeUsageCapture } from '@/modules/runtime-management/composition/nativeUsageCapture'
 import { opencodeNativeStoreGeneration } from '@/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration'
@@ -558,6 +560,38 @@ describeEachProvider('RFC-371 original multi-root Task native collection', (harn
     const result = await execute(nativeStore(), { loseCompletionAck: true })
     expect(result.value.state).toBe('complete')
     const before = sum(result.rows)
+    // A newer unrelated marker that differs only in case must never replace the original seal.
+    const unrelatedEventId = 'Native-completion:diagnostic-only'
+    const unrelatedEvidence = JSON.stringify({
+      invocationId: result.f.binding.invocationId,
+      measurements: [],
+      diagnostics: ['diagnostic-only'],
+    })
+    const unrelatedSource = (
+      await harness.db
+        .insert(taskExecutionObservationSources)
+        .values({
+          taskId: result.f.binding.taskId,
+          nodeRunId: result.f.binding.nodeRunId,
+          evidenceJson: unrelatedEvidence,
+        })
+        .returning({ id: taskExecutionObservationSources.id })
+    )[0]!
+    await harness.db.insert(nativeUsageEmissions).values({
+      invocationId: result.f.binding.invocationId,
+      eventId: unrelatedEventId,
+      fingerprint: sha256Hex(unrelatedEvidence),
+      sourceRowId: unrelatedSource.id,
+      document: JSON.stringify({ request: unrelatedEvidence, evidence: unrelatedEvidence }),
+      ack: JSON.stringify({
+        contract: 'native-usage-source-ack-v2',
+        invocationId: result.f.binding.invocationId,
+        eventId: unrelatedEventId,
+        fingerprint: sha256Hex(unrelatedEvidence),
+        sourceWatermark: String(unrelatedSource.id),
+        measurements: [],
+      }),
+    })
     const rebuilt = runWithTaskExecutionContext(result.f.binding.executionContext, () =>
       result.f.persistence.nativeUsage!.forInvocation(result.f.binding),
     )!

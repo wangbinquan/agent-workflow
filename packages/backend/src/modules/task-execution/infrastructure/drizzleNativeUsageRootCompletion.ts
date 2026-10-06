@@ -1,4 +1,4 @@
-import { and, desc, eq, like } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
   ObservationNativeRootCompletionSchema,
@@ -48,7 +48,10 @@ export class DrizzleNativeUsageRootCompletion implements Pick<NativeUsagePersist
             .where(
               and(
                 eq(nativeUsageEmissions.invocationId, input.binding.invocationId),
-                like(nativeUsageEmissions.eventId, 'native-completion:%'),
+                eq(
+                  sql<string>`substr(${nativeUsageEmissions.eventId}, 1, ${'native-completion:'.length})`,
+                  'native-completion:',
+                ),
               ),
             )
             .orderBy(desc(nativeUsageEmissions.sourceRowId))

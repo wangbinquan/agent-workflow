@@ -31,6 +31,7 @@ import { Metrics } from '../src/components/observability/ObservationMetrics'
 import { ObservationPlatformNativeCaptureSchema } from '@agent-workflow/shared'
 import { observationRuntimeKey } from '@agent-workflow/shared'
 import { ObservationNativeCompletionSchema } from '@agent-workflow/shared'
+import { ObservationNativeRootCompletionSchema } from '@agent-workflow/shared'
 import { validateObservationSearch } from '../src/routes/observability'
 import nativeCapture from '../../shared/tests/fixtures/crewstation-native-capture-v2.json'
 import i18n from '../src/i18n'
@@ -1310,6 +1311,66 @@ test('page-based native capture displays exact committed progress beyond legacy 
     expect(
       screen.queryByRole('button', { name: i18n.t('runObservability.nativeRevisionDetails') }),
     ).toBeNull()
+    mounted.unmount()
+  }
+})
+
+test('root-based native completion keeps scan counts unknown rather than borrowing emission records', async () => {
+  const digest = 'a'.repeat(64)
+  const proof = ObservationNativeRootCompletionSchema.parse({
+    contract: 'opencode-child-root-pages-v3',
+    nativeSource: 'original-store',
+    rootSessionId: 'root',
+    state: 'partial',
+    sourceGeneration: 'original-generation',
+    beforeSpawn: {
+      contract: 'native-usage-before-spawn-v2',
+      invocationId: 'original-call',
+      nativeSource: 'original-store',
+      sourceGeneration: 'original-generation',
+      lineage: 'original-task',
+      epoch: '1',
+      ownerReceiptId: 'before',
+      preparedAt: 1,
+      mode: 'fresh',
+      rootSessionId: null,
+    },
+    roots: {
+      transitions: '43',
+      count: '41',
+      sourceDigest: digest,
+      resultDigest: digest,
+      resultId: digest,
+      frozenAt: 3,
+      processWatermark: '41',
+    },
+    observedAt: NOW,
+    process: { spawnedAt: 2, reapedAt: null, drainedAt: null },
+    emissions: { records: '10000001', frames: '50001', digest, sourceWatermark: '41' },
+    reconciliation: { examined: '0', resolved: '0', unresolved: '0', digest },
+    issues: ['native-final-unavailable'],
+  })
+  for (const language of ['zh', 'en']) {
+    await i18n.changeLanguage(language)
+    const mounted = render(
+      <ObservationNativeCapture
+        rows={[
+          {
+            invocationId: 'original-call',
+            nodeRunId: 'original-run',
+            state: 'partial',
+            priorRevisionGap: false,
+            proof,
+          },
+        ]}
+      />,
+    )
+    const unknown = i18n.t('runObservability.unknown')
+    expect(screen.getByText(`${unknown} / ${unknown}`)).toBeTruthy()
+    expect(screen.queryByText('41 / 10,000,001')).toBeNull()
+    expect(screen.queryByText('0 / 0')).toBeNull()
+    expect(screen.queryByText('undefined / undefined')).toBeNull()
+    expect(screen.getByText('original-call')).toBeTruthy()
     mounted.unmount()
   }
 })

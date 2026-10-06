@@ -51,6 +51,7 @@ export function ObservationNativeCapture({
     if (!proof) return '—'
     if (proof.contract === 'opencode-child-steps-v1')
       return `${count(String(proof.scannedSessions))} / ${count(String(proof.scannedSteps))}`
+    if (proof.contract === 'opencode-child-root-pages-v3') return `${count(null)} / ${count(null)}`
     const counts = proof.final?.ack.counts ?? proof.finalProgress?.counts
     return `${count(counts?.sessions)} / ${count(counts?.steps)}`
   }
