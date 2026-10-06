@@ -1,6 +1,12 @@
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
-import type { TaskExecutionRuntimeParticipantsInput } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
+import type { LegacyTaskRunComposition } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeTaskWorkspaceExcludeProfilesFor } from '@/modules/task-execution/composition/localTaskRunSelection'
+import {
+  selectTaskRunRootSelection,
+  type TaskRunRootSelection,
+} from '@/modules/task-execution/composition/taskRunSelection'
+import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
@@ -121,7 +127,11 @@ export async function createEachProviderTaskExecution(
     readonly workspacePresence?: WorkspacePresenceQueries
     /** Complete explicit family replacement exercised by actual provider drives. */
     readonly taskAgentRunsFor?: typeof composeLocalTaskAgentRunFamilyFor
-    readonly taskScriptRunsFor?: TaskExecutionRuntimeParticipantsInput['taskScriptRunsFor']
+    readonly taskScriptRunsFor?: LegacyTaskRunComposition['taskScriptRunsFor']
+    readonly nodeRunPromptsFor?: LegacyTaskRunComposition['nodeRunPromptsFor']
+    readonly portArtifactsFor?: LegacyTaskRunComposition['portArtifactsFor']
+    readonly taskRunSelection?: TaskRunRootSelection
+    readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
     readonly isolationWorkspaces?: IsolationWorkspaceFactory
     /**
      * RFC-359 AC-1（第 9 刀第 1 步）：SQLite 的路由壳在调用 `retryNode` / `resumeTask`
@@ -132,6 +142,23 @@ export async function createEachProviderTaskExecution(
   } = {},
 ) {
   const completionMode = options.completionMode ?? 'await-settle'
+  const taskRunRoot = selectTaskRunRootSelection(options.taskRunSelection)
+  const runBinding =
+    taskRunRoot === undefined
+      ? {
+          taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
+          taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
+          ...(options.nodeRunPromptsFor === undefined
+            ? {}
+            : { nodeRunPromptsFor: options.nodeRunPromptsFor }),
+          ...(options.portArtifactsFor === undefined
+            ? {}
+            : { portArtifactsFor: options.portArtifactsFor }),
+        }
+      : { taskRunBinding: taskRunRoot.drive }
+  const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
+    options.workspaceExcludeProfiles,
+  )
   const workspacePresence = options.workspacePresence ?? createFileWorkspacePresenceQueries()
   const { db } = harness
   const identityAccess = createIdentityAccessRuntime({ db })
@@ -226,8 +253,8 @@ export async function createEachProviderTaskExecution(
     const provider: SelectedSqliteTaskExecutionProviderRuntime =
       composeSqliteTaskExecutionProviderRuntime(sqlite, {
         runtime: {
-          taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
-          taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
+          ...runBinding,
+          workspaceExcludeProfilesFor,
           ...(options.isolationWorkspaces === undefined
             ? {}
             : { isolationWorkspaces: options.isolationWorkspaces }),
@@ -278,6 +305,7 @@ export async function createEachProviderTaskExecution(
           owners: composeOwnerIdentityQueries(db),
           assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
           appHome,
+          ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
         }),
         lifecycleRepair: {},
         fusion: { appHome },
@@ -369,8 +397,8 @@ export async function createEachProviderTaskExecution(
   const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
       runtime: {
-        taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
-        taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
+        ...runBinding,
+        workspaceExcludeProfilesFor,
         ...(options.isolationWorkspaces === undefined
           ? {}
           : { isolationWorkspaces: options.isolationWorkspaces }),
@@ -420,6 +448,7 @@ export async function createEachProviderTaskExecution(
         membershipEvents: unusedCapability('task member events'),
         deletionEvents: unusedCapability('task deletion events'),
         appHome,
+        ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
       }),
       lifecycleRepair: {},
       fusion: { appHome },

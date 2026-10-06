@@ -30,6 +30,7 @@ import type { TaskOperationConfigurationQueries } from '../application/ports/tas
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
 import type { TaskScriptRunFamily } from '../application/ports/taskScriptRunFamily'
+import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 
 export interface RunTaskOptions {
   taskId: string
@@ -54,6 +55,8 @@ export interface RunTaskOptions {
   taskAgentRuns?: TaskAgentRunFamily
   /** Complete script effects selected again for every effective drive. */
   taskScriptRuns?: TaskScriptRunFamily
+  /** Complete profile factory selected at bootstrap and rebound for each drive. */
+  workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   /** Bootstrap selects a complete factory; each effective canonical scene binds its own scope. */
   isolationWorkspaces?: IsolationWorkspaceFactory
   repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
@@ -231,6 +234,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly portArtifacts: PortArtifactOperations
   readonly taskAgentRuns: TaskAgentRunFamily
   readonly taskScriptRuns: TaskScriptRunFamily
+  readonly workspaceExcludeProfiles: WorkspaceExcludeProfileFactory
   readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
   readonly taskDagCollaboration: TaskDagCollaborationOperations

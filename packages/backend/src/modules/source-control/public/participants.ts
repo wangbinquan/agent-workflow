@@ -46,6 +46,11 @@ export interface WorkspaceExcludeParticipant {
   ensure(input?: { directChildMounts?: readonly string[] }): Promise<WorkspaceExcludeProfileReceipt>
 }
 
+/** The selected owner interprets workspace references and binds a complete profile participant. */
+export interface WorkspaceExcludeProfileFactory {
+  bind(input: { readonly workspaceRef: string }): WorkspaceExcludeParticipant
+}
+
 /** Bound candidate/index/commit surface; no repository path crosses it. */
 export interface RepositoryCommitCandidateParticipant {
   prepare(): Promise<PrepareRepositoryCommitResult>
@@ -180,6 +185,11 @@ export {
   selectIsolationWorkspaceFactory,
   requireIsolationWorkspaceScope,
 } from '../composition/isolationWorkspaces'
+
+export {
+  selectWorkspaceExcludeProfileFactory,
+  bindWorkspaceExcludeProfile,
+} from '../composition/workspaceExcludeProfiles'
 
 export type {
   AgentWorkspaceGitControlSnapshot,

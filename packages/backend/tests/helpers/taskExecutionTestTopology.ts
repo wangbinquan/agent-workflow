@@ -31,6 +31,10 @@ import {
 } from '../../src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
+import {
+  composeLegacyTaskRunDriveBinding,
+  composeTaskWorkspaceExcludeProfilesFor,
+} from '../../src/modules/task-execution/composition/localTaskRunSelection'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
@@ -143,11 +147,14 @@ export function composeTaskExecutionTestRuntime(
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
-      taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
-      taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-      nodeRunPromptsFor: (appHome) =>
-        composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-      portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+      taskRunBinding: composeLegacyTaskRunDriveBinding({
+        taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
+        taskScriptRunsFor: composeLocalTaskScriptRunFamily,
+        nodeRunPromptsFor: (appHome) =>
+          composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+        portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+      }),
+      workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
       db,
       ...singleProcessDeploymentPorts(db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
@@ -296,6 +303,10 @@ export function runTaskWithRealTestTopology(
       portArtifacts,
     })
   const taskScriptRuns = options.taskScriptRuns ?? composeLocalTaskScriptRunFamily()
+  const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
+    options.workspaceExcludeProfiles,
+  )
+  const workspaceExcludeProfiles = workspaceExcludeProfilesFor(options)
   const repositoryPublicationTransport =
     options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
   const isolationWorkspaces = selectIsolationWorkspaceFactory(options.isolationWorkspaces)
@@ -311,11 +322,14 @@ export function runTaskWithRealTestTopology(
   const runtime = composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
-      taskAgentRunsFor: (binding) =>
-        options.taskAgentRuns ?? composeLocalTaskAgentRunFamilyFor(binding),
-      taskScriptRunsFor: () => options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(),
-      nodeRunPromptsFor: () => nodeRunPrompts,
-      portArtifactsFor: () => portArtifacts,
+      taskRunBinding: composeLegacyTaskRunDriveBinding({
+        taskAgentRunsFor: (binding) =>
+          options.taskAgentRuns ?? composeLocalTaskAgentRunFamilyFor(binding),
+        taskScriptRunsFor: () => options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(),
+        nodeRunPromptsFor: () => nodeRunPrompts,
+        portArtifactsFor: () => portArtifacts,
+      }),
+      workspaceExcludeProfilesFor,
       db: options.db,
       ...singleProcessDeploymentPorts(options.db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(options.db),
@@ -349,6 +363,7 @@ export function runTaskWithRealTestTopology(
       portArtifacts,
       taskAgentRuns,
       taskScriptRuns,
+      workspaceExcludeProfiles,
       identityAccess,
       memoryInjectionQueries,
       observationInvocations,

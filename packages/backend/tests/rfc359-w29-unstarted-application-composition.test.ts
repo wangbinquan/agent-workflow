@@ -786,25 +786,28 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
     (source === pg && name === 'composePostgresqlApplication') ||
     (source === server && name === 'composeSqliteApplicationDeps')
   ) {
-    const selections = descendants(
+    const receiver = source === pg ? 'input' : 'deps'
+    const bindings = descendants(
       body,
-      (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'taskAgentRunsFor',
+      (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'taskRunBinding',
     ) as ts.PropertyAssignment[]
+    const selected = namedCalls(body, source, 'selectTaskRunRootSelection')
+    const native = namedCalls(body, source, 'composeLocalTaskRunRootSelection')
+    const profiles = namedCalls(body, source, 'composeTaskWorkspaceExcludeProfilesFor')
     if (
-      selections.length !== 1 ||
-      selections[0]!.initializer.getText(source) !== 'composeLocalTaskAgentRunFamilyFor'
+      bindings.length !== 1 ||
+      compact(bindings[0]!.initializer, source) !== 'taskRunRoot.drive' ||
+      selected.length !== 1 ||
+      selected[0]!.arguments.length !== 1 ||
+      compact(selected[0]!.arguments[0]!, source) !== `${receiver}.taskRunSelection` ||
+      native.length !== 1 ||
+      native[0]!.arguments.length !== 1 ||
+      compact(native[0]!.arguments[0]!, source) !== '{nodeRunPrompts,portArtifacts}' ||
+      profiles.length !== 1 ||
+      profiles[0]!.arguments.length !== 1 ||
+      compact(profiles[0]!.arguments[0]!, source) !== `${receiver}.workspaceExcludeProfiles`
     )
-      throw new Error('the actual root must select exactly one complete local Task family')
-    const scriptSelections = descendants(
-      body,
-      (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'taskScriptRunsFor',
-    ) as ts.PropertyAssignment[]
-    if (
-      scriptSelections.length !== 1 ||
-      scriptSelections[0]!.initializer.getText(source) !== 'composeLocalTaskScriptRunFamily' ||
-      scriptSelections[0]!.parent !== selections[0]!.parent
-    )
-      throw new Error('the actual root must select exactly one complete local Script family')
+      throw new Error('the actual root must bind one complete Task selection and profile factory')
   }
   const original =
     source === server && name === 'composeSqliteApplicationDeps'
@@ -813,6 +816,67 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
   const transformed = ts.transform(original, [
     (context) => {
       const visit: ts.Visitor = (node) => {
+        if (
+          ts.isObjectLiteralExpression(node) &&
+          node.properties.some(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              ts.isIdentifier(property.name) &&
+              property.name.text === 'taskRunBinding' &&
+              compact(property.initializer, source) === 'taskRunRoot.drive',
+          )
+        ) {
+          const properties: ts.ObjectLiteralElementLike[] = []
+          let removedProfiles = 0
+          for (const property of node.properties) {
+            if (
+              ts.isPropertyAssignment(property) &&
+              ts.isIdentifier(property.name) &&
+              property.name.text === 'taskRunBinding'
+            ) {
+              for (const [field, value] of [
+                ['nodeRunPromptsFor', 'nodeRunPrompts'],
+                ['portArtifactsFor', 'portArtifacts'],
+              ] as const) {
+                properties.push(
+                  ts.factory.createPropertyAssignment(
+                    field,
+                    ts.factory.createArrowFunction(
+                      undefined,
+                      undefined,
+                      [],
+                      undefined,
+                      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                      ts.factory.createIdentifier(value),
+                    ),
+                  ),
+                )
+              }
+            } else if (
+              ts.isShorthandPropertyAssignment(property) &&
+              property.name.text === 'workspaceExcludeProfilesFor'
+            ) {
+              removedProfiles += 1
+            } else {
+              properties.push(ts.visitNode(property, visit, ts.isObjectLiteralElementLike)!)
+            }
+          }
+          if (removedProfiles !== 1)
+            throw new Error('Task drive must use its chosen profile factory')
+          return ts.factory.updateObjectLiteralExpression(
+            node,
+            ts.factory.createNodeArray(properties, node.properties.hasTrailingComma),
+          )
+        }
+        if (
+          ts.isConditionalExpression(node) &&
+          compact(node.condition, source) === 'selectedTaskRuns===undefined' &&
+          ['selectedTaskRuns.nodeRunPrompts', 'selectedTaskRuns.portArtifacts'].includes(
+            compact(node.whenFalse, source),
+          )
+        ) {
+          return ts.visitNode(node.whenTrue, visit)
+        }
         if (
           ts.isParenthesizedExpression(node) &&
           (isDaemonChoice(node.expression, source) ||
@@ -885,6 +949,41 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
         if (ts.isBlock(node)) {
           const statements: ts.Statement[] = []
           for (const statement of node.statements) {
+            if (
+              ts.isVariableStatement(statement) &&
+              statement.declarationList.declarations.length === 1
+            ) {
+              const declaration = statement.declarationList.declarations[0]!
+              const expected = new Map([
+                [
+                  'selectedTaskRuns',
+                  `selectTaskRunRootSelection(${source === pg ? 'input' : 'deps'}.taskRunSelection)`,
+                ],
+                [
+                  'workspaceExcludeProfilesFor',
+                  `composeTaskWorkspaceExcludeProfilesFor(${source === pg ? 'input' : 'deps'}.workspaceExcludeProfiles)`,
+                ],
+                [
+                  'taskRunRoot',
+                  'selectedTaskRuns===undefined?composeLocalTaskRunRootSelection({nodeRunPrompts,portArtifacts}):selectedTaskRuns',
+                ],
+              ])
+              if (ts.isIdentifier(declaration.name) && expected.has(declaration.name.text)) {
+                if (
+                  declaration.initializer === undefined ||
+                  ![
+                    expected.get(declaration.name.text),
+                    declaration.name.text === 'workspaceExcludeProfilesFor'
+                      ? `composeTaskWorkspaceExcludeProfilesFor(${source === pg ? 'input' : 'deps'}.workspaceExcludeProfiles,)`
+                      : undefined,
+                  ].includes(compact(declaration.initializer, source))
+                )
+                  throw new Error(
+                    'Task selection inverse accepts only the exact approved root seam',
+                  )
+                continue
+              }
+            }
             if (
               ts.isIfStatement(statement) &&
               compact(statement.expression, source) === "phase.kind==='daemon'"

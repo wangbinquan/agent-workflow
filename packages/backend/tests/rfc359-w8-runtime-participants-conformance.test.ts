@@ -1,5 +1,9 @@
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
+import {
+  composeLegacyTaskRunDriveBinding,
+  composeTaskWorkspaceExcludeProfilesFor,
+} from '@/modules/task-execution/composition/localTaskRunSelection'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
@@ -149,11 +153,14 @@ function sharedInput(
 > {
   return {
     db,
-    taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
-    taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-    nodeRunPromptsFor: (appHome) =>
-      composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-    portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+    taskRunBinding: composeLegacyTaskRunDriveBinding({
+      taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
+      taskScriptRunsFor: composeLocalTaskScriptRunFamily,
+      nodeRunPromptsFor: (appHome) =>
+        composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+      portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+    }),
+    workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),

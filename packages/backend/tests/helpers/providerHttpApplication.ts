@@ -39,6 +39,8 @@ export type ProviderHttpApplicationInput = Pick<
   | 'pluginInstaller'
   | 'evidenceRead'
   | 'portArtifactContentEffects'
+  | 'taskRunSelection'
+  | 'workspaceExcludeProfiles'
   | 'evidenceArtifacts'
   | 'resourcePackageSkillArtifacts'
   | 'resourcePackagePluginArtifacts'

@@ -505,13 +505,13 @@ test('both real fanout shard and aggregator runNode sites retain the same select
 // RFC-370 binds the original selected artifact receiver once into the complete
 // family; each launch above uses that family instead of a native options member.
 test('the real drive binds its exact selected artifact receiver into the family and preserves the native archive/read receiver', () => {
-  const drive = source('modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts')
+  const drive = source('modules/task-execution/composition/localTaskRunSelection.ts')
   const selected = calls(drive, drive, 'input.taskAgentRunsFor')
   expect(selected).toHaveLength(1)
   expect(objectFields(selected[0]!.arguments[0]!, drive).get('portArtifacts')).toBe(
-    'driveOptions.portArtifacts',
+    'binding.portArtifacts',
   )
-  expect(drive.text).toContain('portArtifacts: input.portArtifactsFor(request.appHome)')
+  expect(drive.text).toContain('const portArtifacts = input.portArtifactsFor(request.appHome)')
   const local = source('modules/task-execution/composition/localTaskAgentRunFamily.ts')
   expect(calls(local, local, 'input.portArtifacts.archive')).toHaveLength(1)
   expect(calls(local, local, 'input.portArtifacts.read')).toHaveLength(1)
@@ -551,7 +551,7 @@ test('PG and HTTP roots share one selected service between runtime, review and t
     'input.portArtifactContentEffects',
     'input.appHome',
   ])
-  expect(pg.text).toContain('portArtifactsFor: () => portArtifacts')
+  expect(pg.text).toContain('taskRunBinding: taskRunRoot.drive')
   expect(pg.text).toContain('portArtifactReaderFor: () => portArtifacts')
   expect(pg.text).toMatch(
     /portArtifacts:\s*Object\.freeze\(\{\s*taskExecutionReadModels: [^,]+,\s*portArtifacts,\s*\}\)/,
@@ -564,7 +564,7 @@ test('PG and HTTP roots share one selected service between runtime, review and t
   ])
   expect(server.text).toContain('deps.portArtifacts === undefined')
   expect(server.text).toContain('selectPortArtifactOperations(deps.portArtifacts, appHome)')
-  expect(server.text).toContain('portArtifactsFor: () => portArtifacts')
+  expect(server.text).toContain('taskRunBinding: taskRunRoot.drive')
   expect(server.text).toContain('portArtifactReaderFor: () => portArtifacts')
   expect(server.text).toContain(
     'portArtifactReaderFor: () => selectPortArtifactReader(deps.portArtifacts, appHome)',

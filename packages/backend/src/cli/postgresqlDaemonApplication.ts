@@ -1,6 +1,13 @@
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
-import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
+import {
+  composeLocalTaskRunRootSelection,
+  composeTaskWorkspaceExcludeProfilesFor,
+} from '@/modules/task-execution/composition/localTaskRunSelection'
+import {
+  selectTaskRunRootSelection,
+  type TaskRunRootSelection,
+} from '@/modules/task-execution/composition/taskRunSelection'
+import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
@@ -482,6 +489,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly portArtifactContentEffects?: PortArtifactContentEffects
+  readonly taskRunSelection?: TaskRunRootSelection
+  readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -627,10 +636,17 @@ export async function composePostgresqlApplication(
   input: PostgresqlApplicationInput,
   phase: PostgresqlApplicationPhase,
 ): Promise<PostgresqlDaemonApplication> {
-  const nodeRunPrompts = composeNodeRunPromptOperations(
-      input.nodeRunPromptContentEffects,
-      join(input.appHome, 'runs'),
-    ),
+  const selectedTaskRuns = selectTaskRunRootSelection(input.taskRunSelection)
+  const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
+    input.workspaceExcludeProfiles,
+  )
+  const nodeRunPrompts =
+      selectedTaskRuns === undefined
+        ? composeNodeRunPromptOperations(
+            input.nodeRunPromptContentEffects,
+            join(input.appHome, 'runs'),
+          )
+        : selectedTaskRuns.nodeRunPrompts,
     workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
   const workspaceUploads = selectWorkspaceUploadContentFactory(input.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
@@ -641,10 +657,14 @@ export async function composePostgresqlApplication(
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     conflictWorkspaceSelected: input.conflictMergeWorkspaceEffects !== undefined,
   })
-  const portArtifacts = composePortArtifactOperations(
-    input.portArtifactContentEffects,
-    input.appHome,
-  )
+  const portArtifacts =
+    selectedTaskRuns === undefined
+      ? composePortArtifactOperations(input.portArtifactContentEffects, input.appHome)
+      : selectedTaskRuns.portArtifacts
+  const taskRunRoot =
+    selectedTaskRuns === undefined
+      ? composeLocalTaskRunRootSelection({ nodeRunPrompts, portArtifacts })
+      : selectedTaskRuns
   const applicationConfiguration =
     input.applicationConfiguration ??
     composeApplicationConfigurationBinding({
@@ -1127,10 +1147,8 @@ export async function composePostgresqlApplication(
     archive: input.taskArchive,
     workspaceReads,
     runtime: {
-      taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
-      taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-      nodeRunPromptsFor: () => nodeRunPrompts,
-      portArtifactsFor: () => portArtifacts,
+      taskRunBinding: taskRunRoot.drive,
+      workspaceExcludeProfilesFor,
       isolationWorkspaces,
       repositoryGitWorkspaces,
       workspacePresence,

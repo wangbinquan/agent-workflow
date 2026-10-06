@@ -584,6 +584,16 @@ function binding(root: ts.Node, sf: ts.SourceFile, name: string): ts.Expression 
   expect(found).toHaveLength(1)
   const expression = found[0]!.initializer
   if (expression === undefined) throw new Error('missing initializer: ' + name)
+  if (
+    name === 'nodeRunPrompts' &&
+    ts.isConditionalExpression(expression) &&
+    compact(expression.condition, sf) === 'selectedTaskRuns===undefined'
+  ) {
+    if (compact(expression.whenFalse, sf) !== 'selectedTaskRuns.nodeRunPrompts') {
+      throw new Error('the complete run selection must own the root prompt reader')
+    }
+    return expression.whenTrue
+  }
   return expression
 }
 
@@ -672,8 +682,8 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
     onlyCall(body, sf, 'composeSqliteTaskExecutionProviderRuntime').arguments[1]!,
     sf,
   )
-  expect(compact(properties(provider.get('runtime')!, sf).get('nodeRunPromptsFor')!, sf)).toBe(
-    '()=>nodeRunPrompts',
+  expect(compact(properties(provider.get('runtime')!, sf).get('taskRunBinding')!, sf)).toBe(
+    'taskRunRoot.drive',
   )
   expect(
     compact(properties(factoryResult(provider.get('routes')!), sf).get('nodeRunPrompts')!, sf),
@@ -734,8 +744,8 @@ test('PG application carries its one prompt receiver through memory, runtime and
     onlyCall(body, sf, 'composePostgresqlTaskExecutionProviderRuntime').arguments[1]!,
     sf,
   )
-  expect(compact(properties(provider.get('runtime')!, sf).get('nodeRunPromptsFor')!, sf)).toBe(
-    '()=>nodeRunPrompts',
+  expect(compact(properties(provider.get('runtime')!, sf).get('taskRunBinding')!, sf)).toBe(
+    'taskRunRoot.drive',
   )
   expect(
     compact(properties(factoryResult(provider.get('routes')!), sf).get('nodeRunPrompts')!, sf),
@@ -776,10 +786,10 @@ test('standalone HTTP chooses raw content only for absent operations and forward
       properties(
         onlyCall(body, sf, 'createTaskExecutionRuntimeParticipants').arguments[0]!,
         sf,
-      ).get('nodeRunPromptsFor')!,
+      ).get('taskRunBinding')!,
       sf,
     ),
-  ).toBe('()=>nodeRunPrompts')
+  ).toBe('taskRunRoot.drive')
   const memory = binding(body, sf, 'memoryOperations')
   if (!ts.isBinaryExpression(memory)) throw new Error('original memory receiver choice required')
   expect(memory.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)

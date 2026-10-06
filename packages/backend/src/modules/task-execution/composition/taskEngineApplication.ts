@@ -16,7 +16,7 @@ import {
   type ExecutionScopeIndex,
 } from '../domain/executionScope'
 import type { WrapperNodeKind } from '../domain/wrapperExecution'
-import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
+import { bindWorkspaceExcludeProfile } from '@/modules/source-control/public/participants'
 import { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
 import type { BoundRunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 import { taskEngineOutcomeFromScope, type TaskScopeOutcome } from '../domain/taskEngine'
@@ -45,7 +45,6 @@ import {
 import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import { createTaskAgentResourceSession } from '@/services/execution/taskExecutionResources'
 import { taskStopProjection, type TaskStopCause } from '../public/types'
@@ -294,9 +293,8 @@ async function runTaskEngineOrchestratorInner(
     try {
       const allMounts = repos.map((repo) => repo.mountPath)
       for (const repo of repos) {
-        const receipt = await bindWorkspaceExcludeParticipant({
-          worktreePath: repo.worktreePath,
-          appHome: opts.appHome ?? Paths.root,
+        const receipt = await bindWorkspaceExcludeProfile(opts.workspaceExcludeProfiles, {
+          workspaceRef: repo.worktreePath,
         }).ensure({ directChildMounts: exclusionPlanFor(repo.mountPath, allMounts) })
         const updated = await opts.persistence.drive.updateWorkspaceProfile({
           taskId,

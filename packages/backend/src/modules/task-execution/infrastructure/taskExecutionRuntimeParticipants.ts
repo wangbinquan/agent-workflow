@@ -1,4 +1,4 @@
-import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
+import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
@@ -70,10 +70,7 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  * 看起来「两侧不同」，只是**谁来构造**的差别——SQLite 由装配方交、PG 在工厂里现造；
  * 那从来不是引擎差异，合并后一律由装配方交。
  */
-import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
-import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
-import type { TaskScriptRunFamily } from '../application/ports/taskScriptRunFamily'
-import type { LocalTaskAgentRunFamilyBinding } from '../composition/localTaskAgentRunFamily'
+import { taskRunBindingPending, type TaskRunDriveBinding } from '../composition/taskRunSelection'
 
 export interface TaskExecutionRuntimeParticipantsInput {
   readonly workspacePresence: WorkspacePresenceQueries
@@ -85,12 +82,10 @@ export interface TaskExecutionRuntimeParticipantsInput {
   /** 运行时**档案**注册表（`getRuntime(name)`）——与下面的 `stop` 同名不同物。 */
   readonly runtimeRegistry: RuntimeExecutionQueries
   readonly nodeRunRuntime: NodeRunRuntimePersistence
-  readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
-  readonly portArtifactsFor: (appHome: string) => PortArtifactOperations
-  readonly taskAgentRunsFor: (binding: LocalTaskAgentRunFamilyBinding) => TaskAgentRunFamily
-  readonly taskScriptRunsFor: (
+  readonly taskRunBinding: TaskRunDriveBinding
+  readonly workspaceExcludeProfilesFor: (
     request: Parameters<TaskExecutionDriveParticipant['drive']>[0],
-  ) => TaskScriptRunFamily
+  ) => WorkspaceExcludeProfileFactory
   readonly isolationWorkspaces?: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   readonly operationConfiguration?: TaskOperationConfigurationQueries
@@ -152,8 +147,6 @@ export function createTaskExecutionRuntimeParticipants(
         runtimeSessionLeases: input.runtimeSessionLeases,
         runtimeRegistry: input.runtimeRegistry,
         nodeRunRuntime: input.nodeRunRuntime,
-        nodeRunPrompts: input.nodeRunPromptsFor(request.appHome),
-        portArtifacts: input.portArtifactsFor(request.appHome),
         isolationWorkspaces,
         repositoryGitWorkspaces,
         ...(input.operationConfiguration === undefined
@@ -171,22 +164,19 @@ export function createTaskExecutionRuntimeParticipants(
         repositoryPublicationTransport: input.repositoryPublicationTransport,
         dynamicWorkflow: input.dynamicWorkflow,
       }
-      const taskAgentRuns = input.taskAgentRunsFor({
-        request,
+      const pendingRuns = input.taskRunBinding.bind(request, {
         nodeRunRuntime: driveOptions.nodeRunRuntime,
         runtimeRegistry: driveOptions.runtimeRegistry,
-        nodeRunPrompts: driveOptions.nodeRunPrompts,
-        portArtifacts: driveOptions.portArtifacts,
         ...(driveOptions.operationConfiguration === undefined
           ? {}
           : { operationConfiguration: driveOptions.operationConfiguration }),
       })
-      const taskScriptRuns = input.taskScriptRunsFor(request)
+      const taskRuns = taskRunBindingPending(pendingRuns) ? await pendingRuns : pendingRuns
       await driveTaskEngineApplication(
         {
           ...driveOptions,
-          taskAgentRuns,
-          taskScriptRuns,
+          ...taskRuns,
+          workspaceExcludeProfiles: input.workspaceExcludeProfilesFor(driveOptions),
         },
         topology,
         runtimeComponents,

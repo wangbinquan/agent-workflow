@@ -1,6 +1,13 @@
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
-import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
+import {
+  composeLocalTaskRunRootSelection,
+  composeTaskWorkspaceExcludeProfilesFor,
+} from '@/modules/task-execution/composition/localTaskRunSelection'
+import {
+  selectTaskRunRootSelection,
+  type TaskRunRootSelection,
+} from '@/modules/task-execution/composition/taskRunSelection'
+import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
@@ -487,6 +494,8 @@ export interface StartOptions {
   taskDeletionEffects?: TaskDeletionEffects
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
+  taskRunSelection?: TaskRunRootSelection
+  workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -650,6 +659,8 @@ async function composePostgresqlProviderSession(
     taskDeletionEffects: input.taskDeletionEffects,
     nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
     portArtifactContentEffects: input.portArtifactContentEffects,
+    taskRunSelection: input.taskRunSelection,
+    workspaceExcludeProfiles: input.workspaceExcludeProfiles,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     actionWorkspaceEffects: input.actionWorkspaceEffects,
     conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
@@ -1239,6 +1250,8 @@ interface DaemonProviderSessionComposeInput {
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
+  readonly taskRunSelection?: TaskRunRootSelection
+  readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1684,6 +1697,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       taskDeletionEffects: opts.taskDeletionEffects,
       nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
       portArtifactContentEffects: opts.portArtifactContentEffects,
+      taskRunSelection: opts.taskRunSelection,
+      workspaceExcludeProfiles: opts.workspaceExcludeProfiles,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
       actionWorkspaceEffects: opts.actionWorkspaceEffects,
       conflictMergeWorkspaceEffects: opts.conflictMergeWorkspaceEffects,
@@ -1804,11 +1819,22 @@ async function composeSqliteProviderSession(
     conflictWorkspaceSelected: input.conflictMergeWorkspaceEffects !== undefined,
   })
   const databaseProvider = requireDatabaseProviderRuntime(input.provider, 'sqlite')
-  const nodeRunPrompts = composeNodeRunPromptOperations(
-    input.nodeRunPromptContentEffects,
-    Paths.runsDir,
+  const selectedTaskRuns = selectTaskRunRootSelection(input.taskRunSelection)
+  const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
+    input.workspaceExcludeProfiles,
   )
-  const portArtifacts = composePortArtifactOperations(input.portArtifactContentEffects, Paths.root)
+  const nodeRunPrompts =
+    selectedTaskRuns === undefined
+      ? composeNodeRunPromptOperations(input.nodeRunPromptContentEffects, Paths.runsDir)
+      : selectedTaskRuns.nodeRunPrompts
+  const portArtifacts =
+    selectedTaskRuns === undefined
+      ? composePortArtifactOperations(input.portArtifactContentEffects, Paths.root)
+      : selectedTaskRuns.portArtifacts
+  const taskRunRoot =
+    selectedTaskRuns === undefined
+      ? composeLocalTaskRunRootSelection({ nodeRunPrompts, portArtifacts })
+      : selectedTaskRuns
   const {
     config,
     configuration,
@@ -2046,10 +2072,8 @@ async function composeSqliteProviderSession(
       archive: input.taskArchive,
       workspaceReads: input.workspaceReads,
       runtime: {
-        taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
-        taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-        nodeRunPromptsFor: () => nodeRunPrompts,
-        portArtifactsFor: () => portArtifacts,
+        taskRunBinding: taskRunRoot.drive,
+        workspaceExcludeProfilesFor,
         isolationWorkspaces: input.isolationWorkspaces,
         repositoryGitWorkspaces: input.repositoryGitWorkspaces,
         workspacePresence,
@@ -3234,6 +3258,8 @@ async function composeSqliteProviderSession(
     completeObservationReports: observationReports.queries,
     nodeRunPrompts,
     portArtifacts,
+    taskRunSelection: input.taskRunSelection,
+    workspaceExcludeProfiles: input.workspaceExcludeProfiles,
     taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,

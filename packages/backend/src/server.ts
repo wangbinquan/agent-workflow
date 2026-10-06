@@ -1,6 +1,13 @@
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
-import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
+import {
+  composeLocalTaskRunRootSelection,
+  composeTaskWorkspaceExcludeProfilesFor,
+} from '@/modules/task-execution/composition/localTaskRunSelection'
+import {
+  selectTaskRunRootSelection,
+  type TaskRunRootSelection,
+} from '@/modules/task-execution/composition/taskRunSelection'
+import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
@@ -866,6 +873,8 @@ export interface AppDeps {
   nodeRunPrompts?: NodeRunPromptOperations
   portArtifactContentEffects?: PortArtifactContentEffects
   portArtifacts?: PortArtifactOperations
+  taskRunSelection?: TaskRunRootSelection
+  workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2140,14 +2149,26 @@ export function composeSqliteApplicationDeps(
   const isolationWorkspaces = selectIsolationWorkspaceFactory(deps.isolationWorkspaces)
   const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(deps.repositoryGitWorkspaces)
   const workspaceReads = selectRepositoryWorkspaceReadQueries(deps.workspaceReads)
+  const selectedTaskRuns = selectTaskRunRootSelection(deps.taskRunSelection)
+  const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
+    deps.workspaceExcludeProfiles,
+  )
   const nodeRunPrompts =
-    deps.nodeRunPrompts === undefined
-      ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
-      : selectNodeRunPromptOperations(deps.nodeRunPrompts)
+    selectedTaskRuns === undefined
+      ? deps.nodeRunPrompts === undefined
+        ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
+        : selectNodeRunPromptOperations(deps.nodeRunPrompts)
+      : selectedTaskRuns.nodeRunPrompts
   const portArtifacts =
-    deps.portArtifacts === undefined
-      ? composePortArtifactOperations(deps.portArtifactContentEffects, appHome)
-      : selectPortArtifactOperations(deps.portArtifacts, appHome)
+    selectedTaskRuns === undefined
+      ? deps.portArtifacts === undefined
+        ? composePortArtifactOperations(deps.portArtifactContentEffects, appHome)
+        : selectPortArtifactOperations(deps.portArtifacts, appHome)
+      : selectedTaskRuns.portArtifacts
+  const taskRunRoot =
+    selectedTaskRuns === undefined
+      ? composeLocalTaskRunRootSelection({ nodeRunPrompts, portArtifacts })
+      : selectedTaskRuns
   const applicationConfiguration =
     deps.applicationConfiguration ??
     composeApplicationConfigurationBinding({
@@ -2196,10 +2217,8 @@ export function composeSqliteApplicationDeps(
       : composeTaskExecutionRuntime({
           participants: createTaskExecutionRuntimeParticipants({
             db: deps.db,
-            taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
-            taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-            nodeRunPromptsFor: () => nodeRunPrompts,
-            portArtifactsFor: () => portArtifacts,
+            taskRunBinding: taskRunRoot.drive,
+            workspaceExcludeProfilesFor,
             isolationWorkspaces,
             repositoryGitWorkspaces,
             workspacePresence,

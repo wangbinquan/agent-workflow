@@ -37,6 +37,10 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import {
+  composeLegacyTaskRunDriveBinding,
+  composeTaskWorkspaceExcludeProfilesFor,
+} from '@/modules/task-execution/composition/localTaskRunSelection'
+import {
   composeTestChildLaunchWorkgroup,
   singleProcessDeploymentPorts,
 } from './helpers/taskExecutionTestTopology'
@@ -215,11 +219,14 @@ describe('RFC-359 任务执行读模型的装配身份（SQLite 组合根）', (
     const runtime = composeTaskExecutionRuntime({
       readModels,
       participants: createTaskExecutionRuntimeParticipants({
-        taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
-        taskScriptRunsFor: composeLocalTaskScriptRunFamily,
-        nodeRunPromptsFor: (appHome) =>
-          composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
-        portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+        taskRunBinding: composeLegacyTaskRunDriveBinding({
+          taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
+          taskScriptRunsFor: composeLocalTaskScriptRunFamily,
+          nodeRunPromptsFor: (appHome) =>
+            composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+          portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+        }),
+        workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
         db: sqlite,
         ...singleProcessDeploymentPorts(sqlite),
         childLaunchWorkgroup: composeTestChildLaunchWorkgroup(sqlite),

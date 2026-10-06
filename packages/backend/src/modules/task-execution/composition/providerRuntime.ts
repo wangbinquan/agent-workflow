@@ -43,6 +43,11 @@ import {
   type TaskExecutionRuntimeParticipantsInput,
 } from '../infrastructure/taskExecutionRuntimeParticipants'
 import {
+  composeTaskWorkspaceExcludeProfilesFor,
+  bindProviderTaskRunParticipantsInput,
+  type ProviderTaskRunBindingSelection,
+} from './localTaskRunSelection'
+import {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,
 } from '../infrastructure/taskDriverLifecycle'
@@ -234,8 +239,8 @@ type SqliteRuntimeParticipantsAssembled =
   | 'lifecycle'
   | 'activity'
   | 'stop'
-  | 'nodeRunPromptsFor'
-  | 'portArtifactsFor'
+  | 'taskRunBinding'
+  | 'workspaceExcludeProfilesFor'
 
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
@@ -249,7 +254,8 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     SqliteRuntimeParticipantsAssembled
   > &
     Required<Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections'>> &
-    Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'nodeRunPromptsFor' | 'portArtifactsFor'>>
+    ProviderTaskRunBindingSelection &
+    Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'workspaceExcludeProfilesFor'>>
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     TaskRouteOperationsDependencies,
@@ -280,35 +286,40 @@ export function composeSqliteTaskExecutionProviderRuntime<
     workspacePresence: dependencies.runtime.workspacePresence,
   })
   const log = createLogger('task')
-  const participants = createTaskExecutionRuntimeParticipants({
-    db,
-    persistence,
-    ...dependencies.runtime,
-    nodeRunPromptsFor:
-      dependencies.runtime.nodeRunPromptsFor === undefined
-        ? (appHome) => composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
-        : dependencies.runtime.nodeRunPromptsFor,
-    portArtifactsFor:
-      dependencies.runtime.portArtifactsFor === undefined
-        ? (appHome) => composePortArtifactOperations(undefined, appHome)
-        : dependencies.runtime.portArtifactsFor,
-    childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
-    taskDagCollaboration: createTaskDagCollaborationOperations(db),
-    processConcurrencyScope: db,
-    log,
-    // RFC-359 AC-1（第 12 刀）：这一支的部署形态——进程级单例的同步认领
-    //（执行上下文带 `legacyConnection`）+ 进程内注册表的活跃度 / 停机票据。
-    lifecycle: createDatabaseTaskDriverLifecyclePort({
-      db,
-      persistence,
-      log,
-      finalizeWorkspace: async (taskId: string) => {
-        await finishClaimedWebhookWorkspacePrune(db, taskId)
+  const participants = createTaskExecutionRuntimeParticipants(
+    bindProviderTaskRunParticipantsInput(
+      {
+        db,
+        persistence,
+        ...dependencies.runtime,
+        workspaceExcludeProfilesFor:
+          dependencies.runtime.workspaceExcludeProfilesFor === undefined
+            ? composeTaskWorkspaceExcludeProfilesFor()
+            : dependencies.runtime.workspaceExcludeProfilesFor,
+        childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
+        taskDagCollaboration: createTaskDagCollaborationOperations(db),
+        processConcurrencyScope: db,
+        log,
+        // RFC-359 AC-1（第 12 刀）：这一支的部署形态——进程级单例的同步认领
+        //（执行上下文带 `legacyConnection`）+ 进程内注册表的活跃度 / 停机票据。
+        lifecycle: createDatabaseTaskDriverLifecyclePort({
+          db,
+          persistence,
+          log,
+          finalizeWorkspace: async (taskId: string) => {
+            await finishClaimedWebhookWorkspacePrune(db, taskId)
+          },
+        }),
+        activity: composeLegacyTaskActivityParticipant(),
+        stop: composeLegacyTaskStopRegistry(),
       },
-    }),
-    activity: composeLegacyTaskActivityParticipant(),
-    stop: composeLegacyTaskStopRegistry(),
-  })
+      {
+        nodeRunPromptsFor: (appHome) =>
+          composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+        portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+      },
+    ),
+  )
   const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
   const routeLaunch = createSqliteTaskRouteLaunchOperations({
     db,
@@ -423,36 +434,40 @@ export function composeSqliteTaskExecutionProviderRuntime<
  * 再挑一条认领策略），一行适配逻辑都没有。按 RFC-294 装配归 `composition/`，所以它整条搬到
  * 这里，跟本支其余的装配放在一起；参与者实现只剩中立的那一份。
  */
-export interface PostgresqlTaskExecutionRuntimeDependencies extends Omit<
+export type PostgresqlTaskExecutionRuntimeDependencies = Omit<
   TaskExecutionRuntimeParticipantsInput,
   | 'db'
   | 'persistence'
   | 'runtimeSessionLeases'
   | 'memoryInjectionQueries'
   | 'childLaunchWorkgroup'
-  | 'nodeRunPromptsFor'
-  | 'portArtifactsFor'
-> {
-  readonly nodeRunPromptsFor?: TaskExecutionRuntimeParticipantsInput['nodeRunPromptsFor']
-  readonly portArtifactsFor?: TaskExecutionRuntimeParticipantsInput['portArtifactsFor']
-  readonly childLaunchWorkgroup: TaskExecutionRuntimeParticipantsInput['childLaunchWorkgroup']
-  /** 装配方选定的凭据读取面；PostgreSQL 执行绝不回头开一条 SQLite 兜底。 */
-  readonly codeHostConnections: CodeHostConnectionsService
-  /** 落进所有权租约的确切进程代号。 */
-  readonly daemonGeneration: string
-  /** Source-control 选定的终态工作区收尾器。 */
-  readonly finalizeWorkspace: (taskId: string) => Promise<void>
-  /** 可选的预装实例，让一个 bootstrap 能共享同一批聚合。 */
-  readonly persistence?: TaskExecutionPersistence
-  readonly runtimeSessionLeases?: RuntimeSessionLeaseOperations
-  /** 让启动 / 取消装配共享同一道认领闸门与进程注册表。 */
-  readonly executionModule?: ProviderTaskExecutionModule
-}
+  | 'taskRunBinding'
+  | 'workspaceExcludeProfilesFor'
+> &
+  ProviderTaskRunBindingSelection & {
+    readonly workspaceExcludeProfilesFor?: TaskExecutionRuntimeParticipantsInput['workspaceExcludeProfilesFor']
+    readonly childLaunchWorkgroup: TaskExecutionRuntimeParticipantsInput['childLaunchWorkgroup']
+    /** 装配方选定的凭据读取面；PostgreSQL 执行绝不回头开一条 SQLite 兜底。 */
+    readonly codeHostConnections: CodeHostConnectionsService
+    /** 落进所有权租约的确切进程代号。 */
+    readonly daemonGeneration: string
+    /** Source-control 选定的终态工作区收尾器。 */
+    readonly finalizeWorkspace: (taskId: string) => Promise<void>
+    /** 可选的预装实例，让一个 bootstrap 能共享同一批聚合。 */
+    readonly persistence?: TaskExecutionPersistence
+    readonly runtimeSessionLeases?: RuntimeSessionLeaseOperations
+    /** 让启动 / 取消装配共享同一道认领闸门与进程注册表。 */
+    readonly executionModule?: ProviderTaskExecutionModule
+  }
+
+type ProviderRuntimeWithoutChildLaunch<Runtime> = Runtime extends unknown
+  ? Omit<Runtime, 'childLaunchWorkgroup'>
+  : never
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
-  readonly runtime: Omit<PostgresqlTaskExecutionRuntimeDependencies, 'childLaunchWorkgroup'>
+  readonly runtime: ProviderRuntimeWithoutChildLaunch<PostgresqlTaskExecutionRuntimeDependencies>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
   readonly routeLaunch: Omit<TaskRouteLaunchDependencies, 'db' | 'workspace'>
   readonly routeWorkspace: Omit<TaskRouteWorkspaceDependencies, 'db'>
@@ -494,33 +509,38 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     awaitReleasedSettled: (taskId: string) =>
       executionModule.runtimeRegistry.awaitReleasedSettled(taskId),
   })
-  const participants = createTaskExecutionRuntimeParticipants({
-    ...dependencies.runtime,
-    nodeRunPromptsFor:
-      dependencies.runtime.nodeRunPromptsFor === undefined
-        ? (appHome) => composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
-        : dependencies.runtime.nodeRunPromptsFor,
-    portArtifactsFor:
-      dependencies.runtime.portArtifactsFor === undefined
-        ? (appHome) => composePortArtifactOperations(undefined, appHome)
-        : dependencies.runtime.portArtifactsFor,
-    db,
-    persistence,
-    runtimeSessionLeases:
-      dependencies.runtime.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
-    memoryInjectionQueries: composePostgresqlMemoryInjectionQueries(db),
-    childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
-    lifecycle: createTaskDriverLifecyclePort({
-      db,
-      module: executionModule,
-      claim: (intentId) => executionModule.claimPersisted({ intentId }),
-      persistence,
-      log: dependencies.runtime.log,
-      finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
-    }),
-    activity,
-    stop: executionModule.runtimeRegistry,
-  })
+  const participants = createTaskExecutionRuntimeParticipants(
+    bindProviderTaskRunParticipantsInput(
+      {
+        ...dependencies.runtime,
+        workspaceExcludeProfilesFor:
+          dependencies.runtime.workspaceExcludeProfilesFor === undefined
+            ? composeTaskWorkspaceExcludeProfilesFor()
+            : dependencies.runtime.workspaceExcludeProfilesFor,
+        db,
+        persistence,
+        runtimeSessionLeases:
+          dependencies.runtime.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
+        memoryInjectionQueries: composePostgresqlMemoryInjectionQueries(db),
+        childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
+        lifecycle: createTaskDriverLifecyclePort({
+          db,
+          module: executionModule,
+          claim: (intentId) => executionModule.claimPersisted({ intentId }),
+          persistence,
+          log: dependencies.runtime.log,
+          finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
+        }),
+        activity,
+        stop: executionModule.runtimeRegistry,
+      },
+      {
+        nodeRunPromptsFor: (appHome) =>
+          composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+        portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
+      },
+    ),
+  )
   const runtime = composeTaskExecutionRuntime({ participants, readModels: persistence.reads })
   const workspaceDependencies: TaskRouteWorkspaceDependencies = {
     db,
