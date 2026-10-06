@@ -15,6 +15,8 @@ export function completeCoverageWorkspace(
   const dirtyRoots = new Map<string, Root>(),
     dirtyNodes = new Map<string, CoverageIntervalNode>()
   let sequence = 0n
+  let originalRootsEmpty: boolean | undefined
+  let rootWriteRevision = 0n
   const remember = <T>(cache: Map<string, T>, key: string, value: T) => {
     cache.delete(key)
     cache.set(key, value)
@@ -31,15 +33,34 @@ export function completeCoverageWorkspace(
   const nodeKey = (tree: string, id: string) => keyOf(JSON.stringify([tree, id]))
   const coverage: CoverageIntervalStore = {
     async root(tree) {
-      const key = keyOf(tree),
-        hit = roots.get(key) ?? dirtyRoots.get(key),
-        row = hit ?? (await rows.get<Root>(rootSpace, key))
-      if (!row) return null
+      const key = keyOf(tree)
+      let row = roots.get(key) ?? dirtyRoots.get(key)
+      if (!row && originalRootsEmpty === true) return null
+      if (!row && originalRootsEmpty === undefined) {
+        const first = await rows.page<Root>(rootSpace, null, 1)
+        if (originalRootsEmpty === undefined)
+          originalRootsEmpty = first.items.length === 0 && first.nextCursor === null
+        row = roots.get(key) ?? dirtyRoots.get(key)
+      }
+      while (!row) {
+        const revision = rootWriteRevision
+        const retained = await rows.get<Root>(rootSpace, key)
+        row = roots.get(key) ?? dirtyRoots.get(key)
+        // A root written during the read may already have been flushed and evicted.
+        if (!row && revision !== rootWriteRevision) continue
+        row ??= retained
+        if (!row) {
+          remember(roots, key, { tree, id: null })
+          return null
+        }
+      }
       if (row.tree !== tree) throw new Error('Coverage root key identity conflict')
       remember(roots, key, row)
       return row.id
     },
     async setRoot(tree, id) {
+      originalRootsEmpty = false
+      rootWriteRevision++
       const key = keyOf(tree),
         row = { tree, id }
       remember(roots, key, row)

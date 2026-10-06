@@ -163,3 +163,128 @@ describe('full retained usage workspace', () => {
     await expect(interrupted.append([record(0)])).rejects.toThrow('cancelled')
   })
 })
+
+function observedWorkingRows() {
+  const original = workingRows()
+  const reads = { pages: 0, points: 0 }
+  const pointKeys: string[] = []
+  const storage: CompleteWorkingRows = {
+    ...original.storage,
+    async get<T>(space: string, key: string) {
+      reads.points++
+      pointKeys.push(key)
+      return original.storage.get<T>(space, key)
+    },
+    async page<T>(space: string, after: string | null, size = 100) {
+      reads.pages++
+      return original.storage.page<T>(space, after, size)
+    },
+  }
+  return { ...original, storage, reads, pointKeys }
+}
+
+describe('original empty coverage EOF', () => {
+  test('10001 original trees reuse only an affirmative empty relation EOF', async () => {
+    const backing = observedWorkingRows()
+    const workspace = completeCoverageWorkspace(backing.storage, 'empty', (s) => s)
+    for (let n = 0; n < 10001; n++)
+      expect(await workspace.coverage.root('original-tree-' + n)).toBeNull()
+    expect(backing.reads).toEqual({ pages: 1, points: 1 })
+    await workspace.coverage.setRoot('original-tree-0', 'actual-node')
+    await workspace.flush()
+    expect(await workspace.coverage.root('original-tree-0')).toBe('actual-node')
+    for (let n = 1; n < 5001; n++)
+      expect(await workspace.coverage.root('later-tree-' + n)).toBeNull()
+    expect(await workspace.coverage.root('original-tree-0')).toBe('actual-node')
+    expect(backing.reads).toEqual({ pages: 1, points: 5002 })
+  }, 30000)
+
+  test('a retained nonempty relation and a cached missing key preserve original point reads', async () => {
+    const backing = observedWorkingRows()
+    await backing.storage.put('retained/roots', {
+      key: 'original-tree',
+      document: { tree: 'original-tree', id: 'original-node' },
+    })
+    const workspace = completeCoverageWorkspace(backing.storage, 'retained', (s) => s)
+    expect(await workspace.coverage.root('original-tree')).toBe('original-node')
+    expect(await workspace.coverage.root('missing-tree')).toBeNull()
+    expect(await workspace.coverage.root('missing-tree')).toBeNull()
+    expect(backing.reads).toEqual({ pages: 1, points: 2 })
+  })
+
+  test('an empty page without original EOF cannot prove the relation empty', async () => {
+    const backing = observedWorkingRows()
+    backing.storage.page = async () => {
+      backing.reads.pages++
+      return { items: [], nextCursor: 'original-not-at-eof' }
+    }
+    const workspace = completeCoverageWorkspace(backing.storage, 'not-eof', (s) => s)
+    expect(await workspace.coverage.root('first-tree')).toBeNull()
+    expect(await workspace.coverage.root('second-tree')).toBeNull()
+    expect(backing.reads).toEqual({ pages: 1, points: 2 })
+  })
+
+  test('a root written while empty EOF is pending invalidates that proof before eviction', async () => {
+    const backing = observedWorkingRows()
+    let release!: () => void, entered!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const began = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    backing.storage.page = async () => {
+      backing.reads.pages++
+      entered()
+      await pending
+      return { items: [], nextCursor: null }
+    }
+    const workspace = completeCoverageWorkspace(backing.storage, 'pending-eof', (s) => s)
+    const missing = workspace.coverage.root('actual-tree')
+    await began
+    await workspace.coverage.setRoot('actual-tree', 'actual-node')
+    release()
+    expect(await missing).toBe('actual-node')
+    await workspace.flush()
+    for (let n = 0; n < 5001; n++)
+      expect(await workspace.coverage.root('unrelated-' + n)).toBeNull()
+    expect(await workspace.coverage.root('actual-tree')).toBe('actual-node')
+    expect(backing.reads).toEqual({ pages: 1, points: 5002 })
+  }, 30000)
+
+  for (const evict of [false, true])
+    test(`a pending original point read cannot erase a later root; eviction=${evict}`, async () => {
+      const backing = observedWorkingRows()
+      const originalGet = backing.storage.get
+      let release!: () => void, entered!: () => void
+      const pending = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const began = new Promise<void>((resolve) => {
+        entered = resolve
+      })
+      let first = true
+      backing.storage.get = async <T>(space: string, key: string) => {
+        const retained = await originalGet<T>(space, key)
+        if (key === 'actual-tree' && first) {
+          first = false
+          entered()
+          await pending
+        }
+        return retained
+      }
+      const workspace = completeCoverageWorkspace(backing.storage, 'pending-point', (s) => s)
+      const missing = workspace.coverage.root('actual-tree')
+      await began
+      await workspace.coverage.setRoot('actual-tree', 'actual-node')
+      await workspace.flush()
+      if (evict)
+        for (let n = 0; n < 4097; n++)
+          expect(await workspace.coverage.root('unrelated-' + n)).toBeNull()
+      release()
+      expect(await missing).toBe('actual-node')
+      expect(await workspace.coverage.root('actual-tree')).toBe('actual-node')
+      expect(backing.pointKeys.filter((key) => key === 'actual-tree')).toHaveLength(evict ? 2 : 1)
+      expect(backing.reads.pages).toBe(1)
+    }, 30000)
+})
