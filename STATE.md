@@ -1,3 +1,13 @@
+## 2026-10-07 RFC-370 独立执行后台生命周期
+
+system-operations-owned中立执行后台端口、exact composition及原session唯一queue/registry/start/stop/drain接线完成有限独立DESIGN与SOURCE6-R1 PASS。资源HTTP/WS在execution pause后继续读取编辑；provider切换和原完整暂停关闭语义保留。两根、六份原回归全文不变，新增18个双provider案例及Windows对称覆盖，实际新功能交本批hosted CI。
+
+3个production候选一次原scoped生成13 matching，四原规则不改，sourceDigest sha256:8c4e11676288a371c1ecd1421076d08ab70f8fe3a417863cf9b9a3df8ff80140；129有序库存/why、214guards、365background/504ambient、40SPI/69targets与原SCC保持。两项实际type-only分类和五个owner如实登记，原356 authored debt完整保留、追加2项成为358，只登记3个实测增长并退役前继owner回执。元数据门/发布另验。
+
+3645诊断SHA的Windows37505158767正式success，0fd原失败仍保留且根因未知，不记复现问题已修复或整仓绿。主CI37505158718记录的两个历史run五处502外链改原label文本引用，4份文档其余全文及共享RFC371历史并行产物保持；无跨会话消息。
+
+完整H7、purpose九命令、实际roots/A-T7/A-G、各层CS adapter及M0～M4尚未完成，AW未部署CS，RFC继续。详见[发布候选](design/RFC-370-crewstation-hosted-deployment/execution-runtime-lifecycle-publication.md)。以下所有旧STATE和并行输出逐字保留。
+
 ## 2026-10-07 RFC-370 CI 修复已上库与 Windows 原生失败诊断
 
 有限源码与元数据功能复核通过后，32 个自有文件已提交并推送 0fd9973f06967c3628205ea0bcaec5501428b7b6，main／origin 0/0、index 空；并行 STATE 已在其前继提交完整保留。该 SHA 的 Windows37502737291 正式 failure：681 pass／3 skip／1 fail，唯一是原全局观察脚本实际 validate promise 拒绝，原日志缺少具体 Error。主 CI 与 maintenance 仍待正式终态，不记整仓绿。

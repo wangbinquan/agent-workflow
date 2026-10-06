@@ -5614,9 +5614,7 @@
       "targetContext": "identity-access"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#$setTimeout:106",
@@ -5658,9 +5656,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "runtime"
-      ],
+      "dependencies": ["runtime"],
       "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#createPollingDaemonRuntimeHandleFactory",
@@ -5681,9 +5677,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#waitForPollingInterval",
@@ -5704,10 +5698,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "client",
-        "runtime"
-      ],
+      "dependencies": ["client", "runtime"],
       "file": "packages/backend/src/cli/daemonProviderRuntimeRouter.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/cli/daemonProviderRuntimeRouter.ts#createDaemonProviderRuntimeRouter",
@@ -5749,9 +5740,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/mcp/watch.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/mcp/watch.ts#$setTimeout:57",
@@ -5898,9 +5887,7 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#countAwaitingClarifyRounds",
@@ -5921,9 +5908,7 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/collaboration/infrastructure/humanGateContinuationRecovery.ts#createHumanGateContinuationRecoveryQueries",
@@ -5944,9 +5929,7 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#createHumanGateTerminalSweepCommand",
@@ -5967,9 +5950,7 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/collaboration/infrastructure/review.ts#iterateSiblingCascadeApplies",
@@ -5990,9 +5971,7 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
@@ -6034,9 +6013,7 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#reconcileTaskQuestionsForRound",
@@ -6204,9 +6181,7 @@
       "targetContext": "development-automation"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$setTimeout:122",
@@ -6227,9 +6202,7 @@
       "targetContext": "development-automation"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$setTimeout:127",
@@ -6334,9 +6307,7 @@
       "targetContext": "development-automation"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts#sweepDevelopmentRetention",
@@ -6378,9 +6349,7 @@
       "targetContext": "development-automation"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/digital-employee/application/osWorker.ts#$setInterval:122",
@@ -6401,9 +6370,7 @@
       "targetContext": "digital-employee"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/digital-employee/application/osWorker.ts#startDigitalEmployeeOsWorker",
@@ -6445,9 +6412,7 @@
       "targetContext": "digital-employee"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/event-center/application/eventCenterWorker.ts#$setInterval:74",
@@ -6468,9 +6433,7 @@
       "targetContext": "event-center"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/event-center/application/eventCenterWorker.ts#startEventCenterWorker",
@@ -6554,9 +6517,7 @@
       "targetContext": "execution-contract"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/identity-access/infrastructure/inMemoryPresence.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/identity-access/infrastructure/inMemoryPresence.ts#$setTimeout:59",
@@ -6598,9 +6559,7 @@
       "targetContext": "identity-access"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$setInterval:49",
@@ -6621,9 +6580,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$setTimeout:210",
@@ -6644,9 +6601,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#MrTerminalControlWorker",
@@ -6688,9 +6643,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composeWebhookTerminalWorkspacePrunePolicy",
@@ -6774,9 +6727,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts#$setTimeout:424",
@@ -6797,9 +6748,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/integration/infrastructure/developmentAdapterRunner.ts#$setTimeout:429",
@@ -6841,9 +6790,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/intent/application/dispatcher.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/intent/application/dispatcher.ts#$setTimeout:113",
@@ -6885,9 +6832,7 @@
       "targetContext": "intent"
     },
     {
-      "dependencies": [
-        "logger"
-      ],
+      "dependencies": ["logger"],
       "file": "packages/backend/src/modules/intent/application/maintenance.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/intent/application/maintenance.ts#recoverIntentTurnsOnBoot",
@@ -6908,9 +6853,7 @@
       "targetContext": "intent"
     },
     {
-      "dependencies": [
-        "logger"
-      ],
+      "dependencies": ["logger"],
       "file": "packages/backend/src/modules/intent/application/maintenance.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/intent/application/maintenance.ts#sweepIntentScratch",
@@ -6931,10 +6874,7 @@
       "targetContext": "intent"
     },
     {
-      "dependencies": [
-        "config",
-        "runtime"
-      ],
+      "dependencies": ["config", "runtime"],
       "file": "packages/backend/src/modules/intent/composition/auxiliaryQueries.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/intent/composition/auxiliaryQueries.ts#composeIntentTurnRuntimeResolver",
@@ -7018,9 +6958,7 @@
       "targetContext": "intent"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#$setInterval:583",
@@ -7104,9 +7042,7 @@
       "targetContext": "knowledge-evolution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#startFusionReconcileLoop",
@@ -7148,9 +7084,7 @@
       "targetContext": "knowledge-evolution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/memory/application/distill/schedule.ts#$setInterval:570",
@@ -7192,9 +7126,7 @@
       "targetContext": "memory"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#DrizzleMemoryDistillRuntimeResolver",
@@ -7299,9 +7231,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#composePluginGenerationGcCommand",
@@ -7364,9 +7294,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "runtime"
-      ],
+      "dependencies": ["runtime"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts",
       "finalCriterion": "remain disabled or delete",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#assertRuntimeReference",
@@ -7387,10 +7315,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db",
-        "runtime"
-      ],
+      "dependencies": ["db", "runtime"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "finalCriterion": "remain disabled or delete",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#validateRuntimeReference",
@@ -7432,9 +7357,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts",
       "finalCriterion": "remain disabled or delete",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts#assertRecoveryPreconditions",
@@ -7455,9 +7378,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts#sweepMissingLegacyHusks",
@@ -7520,9 +7441,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRecovery.ts",
       "finalCriterion": "remain disabled or delete",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRecovery.ts#recoveryDirection",
@@ -7543,10 +7462,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db",
-        "registry"
-      ],
+      "dependencies": ["db", "registry"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver.ts",
       "finalCriterion": "remain disabled or delete",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver.ts#recoverSkillOperations",
@@ -7588,9 +7504,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillReserveOp.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillReserveOp.ts#reserveRecoveryHandler",
@@ -7611,9 +7525,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#reconcileSkillLiveFiles",
@@ -7655,9 +7567,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersionOp.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersionOp.ts#versionWriteRecoveryHandler",
@@ -7804,9 +7714,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#$setInterval:138",
@@ -7827,9 +7735,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#$setTimeout:134",
@@ -7850,9 +7756,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#createPostgresqlResourcePackageApplyArtifactRecovery",
@@ -7936,9 +7840,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts#createSqliteResourcePackageApplyArtifactRecovery",
@@ -7959,9 +7861,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#$setTimeout:831",
@@ -8003,9 +7903,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/run-observability/application/completeObservationReportService.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:61",
@@ -8089,9 +7987,7 @@
       "targetContext": "run-observability"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts#readPendingCaptureRepairs",
@@ -8112,9 +8008,7 @@
       "targetContext": "run-observability"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#$setTimeout:258",
@@ -8135,13 +8029,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "client",
-        "config",
-        "db",
-        "registry",
-        "runtime"
-      ],
+      "dependencies": ["client", "config", "db", "registry", "runtime"],
       "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
       "finalCriterion": "remain disabled or delete",
       "id": "background:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
@@ -8162,9 +8050,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "config"
-      ],
+      "dependencies": ["config"],
       "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/runtime-management/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot",
@@ -8206,9 +8092,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/runtime-management/composition.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/runtime-management/composition.ts#composeRealtimeRuntimeFor",
@@ -8229,9 +8113,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#composeRuntimeRegistryOperations",
@@ -8273,9 +8155,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "runtime"
-      ],
+      "dependencies": ["runtime"],
       "file": "packages/backend/src/modules/runtime-management/infrastructure/http/runtimeRoutes.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/runtime-management/infrastructure/http/runtimeRoutes.ts#mountRuntimeRoutes",
@@ -8317,11 +8197,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "config",
-        "db",
-        "runtime"
-      ],
+      "dependencies": ["config", "db", "runtime"],
       "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts",
       "finalCriterion": "remain disabled or delete",
       "id": "background:packages/backend/src/modules/runtime-management/infrastructure/runtimeRegistryPersistence.ts#DrizzleRuntimeRegistryPersistence",
@@ -8426,9 +8302,7 @@
       "targetContext": "system-operations"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/system-operations/composition.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/system-operations/composition.ts#composeSqlitePostRestoreRecovery",
@@ -8512,9 +8386,7 @@
       "targetContext": "system-operations"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts#$setTimeout:102",
@@ -8535,9 +8407,7 @@
       "targetContext": "system-operations"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts#createLegacyPlatformRecoveryAdapter",
@@ -8558,9 +8428,7 @@
       "targetContext": "system-operations"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts#createFileDatabasePreOpenRecovery",
@@ -8602,9 +8470,7 @@
       "targetContext": "system-operations"
     },
     {
-      "dependencies": [
-        "runtime"
-      ],
+      "dependencies": ["runtime"],
       "file": "packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts#runBootExecutionRecovery",
@@ -8625,9 +8491,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/task-execution/application/effectResourceWait.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/application/effectResourceWait.ts#$setTimeout:30",
@@ -8732,9 +8596,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "config"
-      ],
+      "dependencies": ["config"],
       "file": "packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts#runTaskIdleTimeoutSweep",
@@ -8818,9 +8680,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "logger"
-      ],
+      "dependencies": ["logger"],
       "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#composeExecutionMergeRecovery",
@@ -8862,9 +8722,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1593",
@@ -8885,9 +8743,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1977",
@@ -8908,9 +8764,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:115",
@@ -8952,9 +8806,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createRecoveryAdministration",
@@ -9206,9 +9058,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$setTimeout:868",
@@ -9229,9 +9079,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#closeRecoveredOutcomeUnknownAndRelease",
@@ -9315,9 +9163,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "runtime"
-      ],
+      "dependencies": ["runtime"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts#InMemoryTaskRuntimeRegistry",
@@ -9380,9 +9226,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$setTimeout:306",
@@ -9403,9 +9247,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts#recoverClaimedArchives",
@@ -9426,9 +9268,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes",
@@ -9449,9 +9289,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:137",
@@ -9493,10 +9331,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db",
-        "timer"
-      ],
+      "dependencies": ["db", "timer"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat",
@@ -9517,9 +9352,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts#DrizzleTaskExecutionRecoveryPersistence",
@@ -9540,10 +9373,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "config",
-        "db"
-      ],
+      "dependencies": ["config", "db"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#createTaskRecoveryOperations",
@@ -9816,9 +9646,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceSchedule.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceSchedule.ts#$setTimeout:103",
@@ -9860,9 +9688,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setInterval:325",
@@ -9883,9 +9709,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setInterval:560",
@@ -9906,9 +9730,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setTimeout:169",
@@ -9929,9 +9751,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceService.ts#$setTimeout:512",
@@ -9952,9 +9772,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:834",
@@ -9975,9 +9793,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:836",
@@ -9998,9 +9814,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:233",
@@ -10378,9 +10192,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceWorkerErrorBoundary.ts#$setTimeout:45",
@@ -10443,9 +10255,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#$setTimeout:126",
@@ -10592,9 +10402,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/providerBackupScheduler.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/providerBackupScheduler.ts#$setInterval:257",
@@ -10615,9 +10423,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/background/providerBackupScheduler.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/providerBackupScheduler.ts#$setInterval:346",
@@ -10638,9 +10444,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/background/providerBackupScheduler.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/providerBackupScheduler.ts#pruneBackups",
@@ -10703,10 +10507,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config",
-        "runtime"
-      ],
+      "dependencies": ["config", "runtime"],
       "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/configuration/fileConfiguration.ts#migrateDeprecatedRuntimeHardeningConfig",
@@ -10727,9 +10528,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config"
-      ],
+      "dependencies": ["config"],
       "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/configuration/fileConfiguration.ts#readConfigCache",
@@ -10750,9 +10549,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/events/committed/workerDefinitions.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/events/committed/workerDefinitions.ts#$setTimeout:35",
@@ -10815,9 +10612,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/execution/local/managedProcess.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/execution/local/managedProcess.ts#$setTimeout:799",
@@ -10838,9 +10633,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/execution/local/managedProcess.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/execution/local/managedProcess.ts#$setTimeout:809",
@@ -10861,9 +10654,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/execution/local/managedProcess.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/execution/local/managedProcess.ts#$setTimeout:857",
@@ -10884,9 +10675,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/execution/local/managedProcess.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/execution/local/managedProcess.ts#$setTimeout:944",
@@ -10949,9 +10738,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts#recoverPendingArchiveAppend",
@@ -10972,9 +10759,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemEventsArchive.ts#recoverPendingArchiveAppendFromState",
@@ -11016,10 +10801,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config",
-        "runtime"
-      ],
+      "dependencies": ["config", "runtime"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts#retentionCursor",
@@ -11040,9 +10822,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "runtime"
-      ],
+      "dependencies": ["runtime"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts#retentionPhases",
@@ -11063,10 +10843,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config",
-        "db"
-      ],
+      "dependencies": ["config", "db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts#runRetentionSweep",
@@ -11087,11 +10864,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config",
-        "db",
-        "runtime"
-      ],
+      "dependencies": ["config", "db", "runtime"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts#runRetentionSweepSlice",
@@ -11112,9 +10885,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts",
       "finalCriterion": "managed definition contract",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemMaintenanceRetention.ts#startRetentionSweeper",
@@ -11219,9 +10990,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemProviderRestore.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemProviderRestore.ts#recordSqliteRestoreRecoveryEvent",
@@ -11242,9 +11011,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#claimWorkspacePrune",
@@ -11265,9 +11032,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#ensureWorkspaceGcClaim",
@@ -11288,9 +11053,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#finishClaimedWebhookWorkspacePrune",
@@ -11311,9 +11074,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#finishClaimedWorkspacePrune",
@@ -11355,9 +11116,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#reconcileLegacyPrunedWorkspaces",
@@ -11378,9 +11137,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#recoverInterruptedWorkspaceGc",
@@ -11401,9 +11158,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#resumeWorkspaceGcClaim",
@@ -11424,9 +11179,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#runClaimedWebhookWorkspacePrunes",
@@ -11447,9 +11200,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#runIsoWorktreeGc",
@@ -11470,9 +11221,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#runPartialCloneGc",
@@ -11493,9 +11242,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#runScratchOrphanGc",
@@ -11516,10 +11263,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config",
-        "db"
-      ],
+      "dependencies": ["config", "db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#runWorktreeGc",
@@ -11540,9 +11284,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#runWorktreeOrphanGc",
@@ -11563,10 +11305,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config",
-        "db"
-      ],
+      "dependencies": ["config", "db"],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "managed definition contract",
       "id": "background:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#startWorktreeGc",
@@ -11650,9 +11389,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts#$setTimeout:84",
@@ -11673,9 +11410,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts#openSqliteLogicalSourceWorker",
@@ -11717,9 +11452,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/persistence/sqliteWriteRetry.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqliteWriteRetry.ts#$setTimeout:105",
@@ -11761,9 +11494,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "config"
-      ],
+      "dependencies": ["config"],
       "file": "packages/backend/src/platform/persistence/terminalWorkspacePrune.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/terminalWorkspacePrune.ts#resolveTerminalWorkspacePruneDecision",
@@ -11805,9 +11536,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/platform/persistence/writerLease.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/writerLease.ts#$setTimeout:64",
@@ -11870,9 +11599,7 @@
       "targetContext": "bootstrap"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/autoKill.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/autoKill.ts#$setInterval:190",
@@ -11935,9 +11662,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/autoKill.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/autoKill.ts#startHeartbeatKillLoop",
@@ -11958,9 +11683,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/autoRepair.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/autoRepair.ts#$setInterval:161",
@@ -11981,9 +11704,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:686",
@@ -12004,9 +11725,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:728",
@@ -12027,9 +11746,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/codeHost/call.ts#$setTimeout:775",
@@ -12050,9 +11767,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/codeHost/call.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/codeHost/call.ts#captureRecoveryPreMutationResponse",
@@ -12094,9 +11809,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/codeHost/connections.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/codeHost/connections.ts#$setTimeout:620",
@@ -12117,9 +11830,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/codeHost/recoveryProbe.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/codeHost/recoveryProbe.ts#$setTimeout:73",
@@ -12161,9 +11872,7 @@
       "targetContext": "digital-employee"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/execution/childBudget.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/execution/childBudget.ts#$setInterval:216",
@@ -12184,9 +11893,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/execution/executionWatch.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/execution/executionWatch.ts#$setInterval:102",
@@ -12207,9 +11914,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/gitRepoCache.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/gitRepoCache.ts#$setTimeout:109",
@@ -12230,9 +11935,7 @@
       "targetContext": "source-control"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/gitRepoCache.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/gitRepoCache.ts#$setTimeout:202",
@@ -12274,9 +11977,7 @@
       "targetContext": "collaboration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/lifecycleInvariants.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/lifecycleInvariants.ts#$setTimeout:632",
@@ -12297,9 +11998,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/lifecycleInvariants.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/lifecycleInvariants.ts#$setTimeout:735",
@@ -12341,9 +12040,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/maintenanceTicker.ts#$setInterval:29",
@@ -12364,9 +12061,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/maintenanceTicker.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/maintenanceTicker.ts#$setTimeout:27",
@@ -12429,9 +12124,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/managedPeriodicJob.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/managedPeriodicJob.ts#$setTimeout:10",
@@ -12473,9 +12166,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/mcpProbe.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/mcpProbe.ts#$setTimeout:148",
@@ -12496,9 +12187,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/mcpProbe.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/mcpProbe.ts#$setTimeout:499",
@@ -12519,9 +12208,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "config"
-      ],
+      "dependencies": ["config"],
       "file": "packages/backend/src/services/mcpSurface.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/mcpSurface.ts#tokenAuditRetentionDays",
@@ -12563,9 +12250,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/plantuml.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/plantuml.ts#$setTimeout:136",
@@ -12796,9 +12481,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "config"
-      ],
+      "dependencies": ["config"],
       "file": "packages/backend/src/services/recoveryBreaker.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/services/recoveryBreaker.ts#recordAutoRecoveryAttempt",
@@ -12903,9 +12586,7 @@
       "targetContext": "source-control"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts#$setInterval:241",
@@ -12926,9 +12607,7 @@
       "targetContext": "runtime-management"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/scheduledTaskScheduler.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/scheduledTaskScheduler.ts#$setInterval:186",
@@ -12970,9 +12649,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/structuralDiff/deep/runner.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/structuralDiff/deep/runner.ts#$setTimeout:61",
@@ -12993,9 +12670,7 @@
       "targetContext": "workspace-insight"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/stuckTaskDetector.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/stuckTaskDetector.ts#$setInterval:582",
@@ -13016,9 +12691,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/task.ts#$setTimeout:404",
@@ -13039,9 +12712,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/task.ts#$setTimeout:4275",
@@ -13083,9 +12754,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": ["db"],
       "file": "packages/backend/src/services/taskArchive.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/taskArchive.ts#recoverInterruptedArchives",
@@ -13106,10 +12775,7 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "config",
-        "db"
-      ],
+      "dependencies": ["config", "db"],
       "file": "packages/backend/src/services/taskArchive.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/taskArchive.ts#runTaskArchiveSweep",
@@ -13382,9 +13048,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "config"
-      ],
+      "dependencies": ["config"],
       "file": "packages/backend/src/services/webhook/webhookGc.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/webhook/webhookGc.ts#runDeliveryGcSlice",
@@ -13447,9 +13111,7 @@
       "targetContext": "integration"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/util/git.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/util/git.ts#$setTimeout:276",
@@ -13470,9 +13132,7 @@
       "targetContext": "source-control"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/util/process.ts#$setTimeout:460",
@@ -13493,9 +13153,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/util/process.ts#$setTimeout:601",
@@ -13516,9 +13174,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/util/process.ts#$setTimeout:621",
@@ -13539,9 +13195,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/util/timeoutSignal.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/util/timeoutSignal.ts#$setTimeout:32",
@@ -13562,9 +13216,7 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
+      "dependencies": ["timer"],
       "file": "packages/backend/src/util/win32Acl.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/util/win32Acl.ts#$setTimeout:171",
@@ -13588,5 +13240,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9e433590b0da283221187980b65afce8fd6ef0a6588fee93ac5562c03f23043b"
+  "sourceDigest": "sha256:8c4e11676288a371c1ecd1421076d08ab70f8fe3a417863cf9b9a3df8ff80140"
 }

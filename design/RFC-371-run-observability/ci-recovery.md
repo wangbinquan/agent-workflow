@@ -268,7 +268,7 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 
 ## 2026-10-02 当前主 CI 的两项精确修正
 
-`3bf8cc6c6364773f251b4fae9ea0399b2be349c8` 的原主 CI `36995661723` 终态 cancelled，九类默认定时检查全部 completed/success、25 个成功作业。取消原回执完整保留；这 25 个成功作业不等于主 CI 已通过。后继 `ba47e5d24c4f8f95f27defb82545ea1766b0e7a9` 是其远端祖先链上的同内容候选，[主 CI 36997889808](https://github.com/wangbinquan/agent-workflow/actions/runs/36997889808) completed/failure、46/50 作业成功。
+`3bf8cc6c6364773f251b4fae9ea0399b2be349c8` 的原主 CI `36995661723` 终态 cancelled，九类默认定时检查全部 completed/success、25 个成功作业。取消原回执完整保留；这 25 个成功作业不等于主 CI 已通过。后继 `ba47e5d24c4f8f95f27defb82545ea1766b0e7a9` 是其远端祖先链上的同内容候选，主 CI 36997889808 completed/failure、46/50 作业成功。
 
 两个后端分片唯一失败都在 RFC-359 W5 原型别守卫：`submoduleRefresh.ts` 的初始化 `reconfigure()` 返回类型为 `boolean | Promise<boolean>`，直接 `void` 丢弃把新的无拒绝处理站点计入账本。原“只有同步值”的说明不足。当前共享文件已加入对 Promise 分支的明确拒绝处理及错误日志；提交保留这份并行输出的完整文件。旧同步入口保持同步、异步初始读取继续由调用者 await；热重配的失败仍传播、停止和在途排空断言保留。W5 账本、扫描算法、预算及断言不放宽，既有 `rfc370-submodule-refresh-configuration.test.ts` 和 W5 实际托管执行负责回归验证。
 

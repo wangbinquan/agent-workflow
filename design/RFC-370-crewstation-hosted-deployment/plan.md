@@ -362,7 +362,7 @@ SC-owned `WorkspacePresenceQueries` 与独立 file adapter 只提供同步或异
 
 按只读剩余依赖审计收束 [八个阶段 A 实施组](./remaining-a.md)，不新增平台业务耦合、不改 A-G 或 M0～M4 顺序。共享架构清单已与 RFC371 原会话按用户授权协调，双方源代码保持；其 c2c96cef4 发布后，本候选登记已重新生成，imports5615→5620、exception4984→4987、owner25648→25647，仅前两项实际增长按原协议登记/后继退役。其他有限候选源码均排除。
 
-行号修正 b8995791eb0eb177f944b04166c1e4922d7b3690 和三条已消费观测增长许可的退役后继8cb41fdfa9331183e4a27f32cedfd94b967fbb00均已同步远端。退役不改计数、源清单或历史说明；[CI36938903292](https://github.com/wangbinquan/agent-workflow/actions/runs/36938903292) 正式终态仍待验证，不能以静态对拍替代。普通 resume 与其他 feature 候选先等 CI 恢复再发布，持续推进不冲突的 A 实施。
+行号修正 b8995791eb0eb177f944b04166c1e4922d7b3690 和三条已消费观测增长许可的退役后继8cb41fdfa9331183e4a27f32cedfd94b967fbb00均已同步远端。退役不改计数、源清单或历史说明；CI36938903292 正式终态仍待验证，不能以静态对拍替代。普通 resume 与其他 feature 候选先等 CI 恢复再发布，持续推进不冲突的 A 实施。
 
 ### 阶段 A 八个有限候选的发布准备（2026-10-02）
 
@@ -495,7 +495,7 @@ scoped canonical只纳入26路径、原规则保持；四项实际增长依原�
 
 官方 scoped canonical 仅已提交 ba47e5d24c4f8f95f27defb82545ea1766b0e7a9 加这七路径，四原生成规则逐字保持。实际新增三条 symbol import：raw port type 与 config CLI 的既有 persistence type/used file factory；imports 5697→5700、原 exception 投影 5059→5062。六个 owner 是五个私有已用 CLI helper 与一个 SO composition file，25731→25737。entry1805、background342、public1045、required-port liveness38 与原空 value SCC 保持。只给实际 CLI type/value 两项 R1 记账，inbound270→272、outbound31；原 bootstrap 列表、条款和所有旧记录保持，owner SO、A-T7 退役。三项真实 growth receipt 一次登记，匹配 canonical 提交后另行退役，不把新切面作为规则豁免。
 
-截至本节候选冻结，上一批 ba47 的 [主 CI36997889808](https://github.com/wangbinquan/agent-workflow/actions/runs/36997889808) 尚未取得终态回执；同 SHA [Windows36998073470](https://github.com/wangbinquan/agent-workflow/actions/runs/36998073470) 已 completed/success 1/1，headSha 严格一致。前批 96eb 的主取消42/7/1、Windows成功及更早717取消19/1/30等原历史完整保留；不能把有限源码门或 Windows 记成主 CI 全绿。正式行为以发布后的 exact-SHA hosted CI 为准。
+截至本节候选冻结，上一批 ba47 的 主 CI36997889808 尚未取得终态回执；同 SHA [Windows36998073470](https://github.com/wangbinquan/agent-workflow/actions/runs/36998073470) 已 completed/success 1/1，headSha 严格一致。前批 96eb 的主取消42/7/1、Windows成功及更早717取消19/1/30等原历史完整保留；不能把有限源码门或 Windows 记成主 CI 全绿。正式行为以发布后的 exact-SHA hosted CI 为准。
 
 只有目标 format/lint、纯源码/AST/JSON证明与官方 scoped 生成，无本机 AW test/typecheck/build/service。doctor 配置、SQLite queued Intent、外层启动锁与宿主生命周期、安装/恢复剩余入口及其他 A1～A8 持续，完整 A-G 尚未关闭。独立 CS adapters 和 B/M0～M4 仍按批准顺序推进，尚无 AW-in-CS 部署，不关闭 RFC。下方/既有全文、并行输出及全部 gate/CI 历史完整保留。
 

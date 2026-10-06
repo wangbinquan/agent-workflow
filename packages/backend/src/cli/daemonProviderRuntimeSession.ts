@@ -4,6 +4,7 @@
 // clients stay captured by the factories and close callbacks supplied by the
 // composition root; they never cross this boundary in the runtime payload.
 
+import type { DaemonExecutionRuntimeControl } from '@/modules/system-operations/composition/daemonExecutionRuntime'
 import type {
   DaemonProviderKind,
   DaemonProviderSessionLifecycleInput,
@@ -76,6 +77,8 @@ export interface DaemonProviderRuntimeSession<
 > extends ManagedDaemonProviderSession {
   /** No provider client is present on this deliberately closed payload. */
   readonly runtime: DaemonProviderRuntimePayload<UpgradeServer, WebSocketHandlers>
+  /** Pause execution handles independently of the resource HTTP/WS delegates. */
+  readonly execution: DaemonExecutionRuntimeControl
   readonly state: () => DaemonProviderRuntimeSessionState
 }
 
@@ -149,6 +152,8 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
 
   let phase: DaemonProviderRuntimeSessionPhase = 'frozen'
   let activeHandles: ActiveHandle[] = []
+  let executionEnabled = true
+  let executionRunning = false
   let writerAdmissionMayBeOpen = true
   let webSocketAdmissionMayBeOpen = true
   let identityShutdown = false
@@ -198,6 +203,7 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
   }
 
   const stopAndDrainHandles = async (): Promise<unknown[]> => {
+    executionRunning = false
     const failures: unknown[] = []
     for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
       const active = activeHandles[index]!
@@ -221,6 +227,16 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
     }
     activeHandles = activeHandles.filter((active) => !active.stopped || !active.drained)
     return failures
+  }
+
+  const startHandles = async (
+    lifecycleInput: DaemonProviderSessionLifecycleInput,
+  ): Promise<void> => {
+    for (const factory of handleFactories) {
+      const handle = await factory.start(lifecycleInput)
+      activeHandles.push({ id: factory.id, handle, stopped: false, drained: false })
+    }
+    executionRunning = true
   }
 
   const freezeRuntime = async (): Promise<unknown[]> => {
@@ -301,6 +317,67 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
     provider: input.provider,
     generationId: input.generationId,
     runtime,
+    execution: Object.freeze<DaemonExecutionRuntimeControl>({
+      state: () =>
+        Object.freeze({
+          enabled: executionEnabled,
+          running: phase === 'running' && executionEnabled && executionRunning,
+          activeHandleIds: Object.freeze(activeHandles.map(({ id }) => id)),
+        }),
+
+      pause(lifecycleInput) {
+        return serialize(async () => {
+          assertLifecycleMatches(lifecycleInput)
+          if (phase === 'closing' || phase === 'closed') {
+            throw new DaemonProviderRuntimeSessionError(
+              'daemon-provider-runtime-session-closing',
+              `cannot pause daemon execution runtime while ${phase}`,
+            )
+          }
+          executionEnabled = false
+          const failures = await stopAndDrainHandles()
+          if (failures.length > 0) {
+            throw lifecycleFailure('failed to pause daemon execution runtime', failures)
+          }
+        })
+      },
+
+      resume(lifecycleInput) {
+        return serialize(async () => {
+          assertLifecycleMatches(lifecycleInput)
+          if (phase === 'closing' || phase === 'closed') {
+            throw new DaemonProviderRuntimeSessionError(
+              'daemon-provider-runtime-session-closing',
+              `cannot resume daemon execution runtime while ${phase}`,
+            )
+          }
+          if (executionEnabled && executionRunning) return
+          executionEnabled = true
+          if (phase === 'frozen') return
+
+          const staleFailures = await stopAndDrainHandles()
+          if (staleFailures.length > 0) {
+            executionEnabled = false
+            throw lifecycleFailure(
+              'failed to settle daemon execution runtime before resume',
+              staleFailures,
+            )
+          }
+
+          try {
+            await startHandles(lifecycleInput)
+          } catch (error) {
+            executionEnabled = false
+            const rollbackFailures = await stopAndDrainHandles()
+            if (rollbackFailures.length === 0) throw error
+            throw new AggregateError(
+              [error, ...rollbackFailures],
+              'failed to resume daemon execution runtime and roll back started handles',
+            )
+          }
+        })
+      },
+    }),
     state: () =>
       Object.freeze({
         phase,
@@ -346,10 +423,7 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
         }
 
         try {
-          for (const factory of handleFactories) {
-            const handle = await factory.start(lifecycleInput)
-            activeHandles.push({ id: factory.id, handle, stopped: false, drained: false })
-          }
+          if (executionEnabled) await startHandles(lifecycleInput)
           webSocketAdmissionMayBeOpen = true
           await input.admission.openWebSocketAdmission()
           writerAdmissionMayBeOpen = true

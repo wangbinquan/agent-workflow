@@ -5,9 +5,7 @@
   },
   "entries": [
     {
-      "effectTokens": [
-        "provider"
-      ],
+      "effectTokens": ["provider"],
       "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:149",
@@ -55,9 +53,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
+      "effectTokens": ["provider"],
       "file": "packages/backend/src/auth/infrastructure/authPersistence.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/auth/infrastructure/authPersistence.ts#transaction:483",
@@ -105,9 +101,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#transaction:202",
@@ -131,9 +125,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts#transaction:110",
@@ -301,10 +293,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider",
-        "push"
-      ],
+      "effectTokens": ["provider", "push"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts#transaction:27",
@@ -352,10 +341,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "publish",
-        "push"
-      ],
+      "effectTokens": ["publish", "push"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:3517",
@@ -415,9 +401,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#transaction:387",
@@ -429,9 +413,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "fetch"
-      ],
+      "effectTokens": ["fetch"],
       "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#transaction:1239",
@@ -575,9 +557,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "upload"
-      ],
+      "effectTokens": ["upload"],
       "file": "packages/backend/src/modules/development-automation/infrastructure/missionStore.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/development-automation/infrastructure/missionStore.ts#transaction:291",
@@ -673,9 +653,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "upload"
-      ],
+      "effectTokens": ["upload"],
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#transaction:38",
@@ -687,9 +665,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "upload"
-      ],
+      "effectTokens": ["upload"],
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#transaction:116",
@@ -917,9 +893,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "upload"
-      ],
+      "effectTokens": ["upload"],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#transaction:357",
@@ -1003,9 +977,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "publish"
-      ],
+      "effectTokens": ["publish"],
       "file": "packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#transaction:129",
@@ -1161,9 +1133,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "webhook"
-      ],
+      "effectTokens": ["webhook"],
       "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#transaction:39",
@@ -1235,9 +1205,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
+      "effectTokens": ["provider"],
       "file": "packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts#transaction:34",
@@ -1309,9 +1277,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#transaction:398",
@@ -1851,9 +1817,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts#transaction:765",
@@ -1901,9 +1865,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "rename"
-      ],
+      "effectTokens": ["rename"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#transaction:815",
@@ -1927,9 +1889,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "rename"
-      ],
+      "effectTokens": ["rename"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#transaction:975",
@@ -2577,9 +2537,7 @@
       "transactionCallee": "withTransaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:518",
@@ -2603,9 +2561,7 @@
       "transactionCallee": "withTransaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts#withTransaction:85",
@@ -2653,9 +2609,7 @@
       "transactionCallee": "withTransaction"
     },
     {
-      "effectTokens": [
-        "publish"
-      ],
+      "effectTokens": ["publish"],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:195",
@@ -2667,9 +2621,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:48",
@@ -2801,9 +2753,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
+      "effectTokens": ["provider"],
       "file": "packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts#transaction:251",
@@ -2815,9 +2765,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
+      "effectTokens": ["provider"],
       "file": "packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts#transaction:357",
@@ -2829,9 +2777,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
+      "effectTokens": ["provider"],
       "file": "packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/source-control/infrastructure/repositoryTransportCredentialRepository.ts#transaction:373",
@@ -2951,9 +2897,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:922",
@@ -3013,9 +2957,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#transaction:177",
@@ -3207,9 +3149,7 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "push"
-      ],
+      "effectTokens": ["push"],
       "file": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
       "finalCriterion": "commit-intent-then-effect",
       "id": "tx:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#transaction:861",
@@ -3272,7 +3212,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9e433590b0da283221187980b65afce8fd6ef0a6588fee93ac5562c03f23043b",
+  "sourceDigest": "sha256:8c4e11676288a371c1ecd1421076d08ab70f8fe3a417863cf9b9a3df8ff80140",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

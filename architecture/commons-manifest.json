@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:9e433590b0da283221187980b65afce8fd6ef0a6588fee93ac5562c03f23043b",
+    "sourceDigest": "sha256:8c4e11676288a371c1ecd1421076d08ab70f8fe3a417863cf9b9a3df8ff80140",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "kernels": [
@@ -11,9 +11,7 @@
       ],
       "claimAudit": "Claims to be the wrapper for secrets at rest. Not verified further in this pass; flagged as unaudited surface \u2014 no family audit opened auth/ at all except via the rfc305 identity-access module ratchets, which cover permission axes, not sealing.",
       "core": false,
-      "files": [
-        "packages/backend/src/auth/secretBox.ts"
-      ],
+      "files": ["packages/backend/src/auth/secretBox.ts"],
       "guards": [],
       "id": "at-rest-sealing-kernel",
       "layer": "infrastructure",
@@ -28,9 +26,7 @@
       ],
       "claimAudit": "Claims (header :1-6) to be the single admission point that proves receipts and physical schema describe the same database. Mostly holds \u2014 but it carries a per-migration hash-alias escape hatch (LEGACY_MIGRATION_HASHES :51-70, consumed at :218-222) whose only test hand-copies the table rather than importing it, so the hatch can grow silently. AUDITED BY NOBODY in the eight-family sweep.",
       "core": false,
-      "files": [
-        "packages/backend/src/db/schemaAdmission.ts"
-      ],
+      "files": ["packages/backend/src/db/schemaAdmission.ts"],
       "guards": [],
       "id": "migration-physical-schema-admission-kernel",
       "layer": "infrastructure",
@@ -45,9 +41,7 @@
       ],
       "claimAudit": "Header states verbatim 'the ONLY sanctioned way to get transactional atomicity in this codebase'. DOES NOT HOLD: 37 raw `db.transaction(` sites exist in packages/backend/src outside txSync.ts, and two of them are re-exported as generic transaction-boundary PORTS (`inTx<T>(fn: () => T): T`, `transact: <T>(fn: () => T) => T`) with no NotPromise constraint. AUDITED BY NOBODY.",
       "core": false,
-      "files": [
-        "packages/backend/src/db/txSync.ts"
-      ],
+      "files": ["packages/backend/src/db/txSync.ts"],
       "guards": [],
       "id": "transaction-atomicity-kernel",
       "layer": "infrastructure",
@@ -62,9 +56,7 @@
       ],
       "claimAudit": "Genuinely holds. This is the approved registry pattern, and it has a real drift lock: rfc247-mcp-server.test.ts:317-352 asserts every MATRIX_RESOURCES entry except 'tasks' has tools and that any extra kind's permission domain exists in the matrix. Per-kind quirks (confirmQuery/forceQuery) are declarative table fields, not buried ifs.",
       "core": false,
-      "files": [
-        "packages/backend/src/mcp/tools.ts"
-      ],
+      "files": ["packages/backend/src/mcp/tools.ts"],
       "guards": [],
       "id": "mcp-tool-surface",
       "layer": "inbound",
@@ -181,9 +173,7 @@
       ],
       "claimAudit": "Claims to be THE route gate ('there is exactly one route gate to reason about', registry.ts:24-25). Holds for authorization: all 57 route files register through registerRoute, routes-to-points drift is caught by assertRouteMetaCoverage (server.ts:408), and route-gate-single-source.test.ts:39-104 bans the 7 retired helpers by name. Does NOT hold for coverage completeness: routeMetaCoverage drops every method='ALL' mount (registry.ts:298) and every EXEMPT_MOUNTS path (registry.ts:299,318-331), and neither hole is test-frozen.",
       "core": true,
-      "files": [
-        "packages/backend/src/routes/registry.ts"
-      ],
+      "files": ["packages/backend/src/routes/registry.ts"],
       "guards": [],
       "id": "routemeta-declarative-gate-startup-two-way-self-chec",
       "layer": "inbound",
@@ -193,14 +183,10 @@
     },
     {
       "auditedBy": "transport-platform",
-      "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/server.ts#$file"
-      ],
+      "canonicalOwnerEntryIds": ["owner:packages/backend/src/server.ts#$file"],
       "claimAudit": "RFC-294 requires bootstrap to be the only assembler. Partly false in practice: mountApiRoutes is BOTH the route table and an assembler, and mcp/dispatch.ts:82 calls it a second time per process, re-composing every module and silently rebinding the process-wide work-start participant (server.ts:524-536 + modules/integration/composition.ts:28-31, last-write-wins). AppDeps is also a god-object: 72 route-mount signatures take it whole vs 4 that take an exact module contract (server.ts:574,582,583,584).",
       "core": true,
-      "files": [
-        "packages/backend/src/server.ts"
-      ],
+      "files": ["packages/backend/src/server.ts"],
       "guards": [],
       "id": "appdeps-createapp-mountapiroutes-composition-root",
       "layer": "composition",
@@ -215,9 +201,7 @@
       ],
       "claimAudit": "Does NOT hold. 14 entries are registered and consumed, but at least 6 background loops keep their own literals outside it (backupScheduler.ts:194, taskArchive.ts:573, maintenanceRetention.ts:185, pluginGenerationGc.ts:16, memoryDistillScheduler.ts:431, scheduledTaskScheduler.ts:261). The guard rfc284-daemon-cadence.test.ts:6-28 pins the VALUES of table members only; membership is unguarded.",
       "core": false,
-      "files": [
-        "packages/backend/src/services/daemonCadence.ts"
-      ],
+      "files": ["packages/backend/src/services/daemonCadence.ts"],
       "guards": [],
       "id": "daemon-cadence-background-timer-registry",
       "layer": "infrastructure",
@@ -232,9 +216,7 @@
       ],
       "claimAudit": "Does NOT hold as a runtime-neutral commons: the generic core `renderMcpInjection(mcps, renderEntry)` is parameterized, but both per-runtime instantiations were hoisted into the shared module instead of staying behind the driver contract (see EK-02).",
       "core": true,
-      "files": [
-        "packages/backend/src/services/execution/agentInjection.ts"
-      ],
+      "files": ["packages/backend/src/services/execution/agentInjection.ts"],
       "guards": [],
       "id": "execution-agentinjection",
       "layer": "engine",
@@ -249,9 +231,7 @@
       ],
       "claimAudit": "Claims it copies no timers and only adapts agent semantics. Verified true \u2014 it owns no setTimeout and delegates every reliability concern. mapOutcome (agentProcess.ts:120-134) is a clean exhaustive switch over ManagedProcessOutcome.",
       "core": true,
-      "files": [
-        "packages/backend/src/services/execution/agentProcess.ts"
-      ],
+      "files": ["packages/backend/src/services/execution/agentProcess.ts"],
       "guards": [],
       "id": "runagentprocess-mapoutcome",
       "layer": "engine",
@@ -266,9 +246,7 @@
       ],
       "claimAudit": "Dispatch is compile-time exhaustive (`const unhandled: never = kind`, outcome.ts:265-271) - the approved pattern. But the projection reaches directly into one domain's table and service (see EK-07).",
       "core": true,
-      "files": [
-        "packages/backend/src/services/execution/outcome.ts"
-      ],
+      "files": ["packages/backend/src/services/execution/outcome.ts"],
       "guards": [],
       "id": "projectexecutionoutcome",
       "layer": "engine",
@@ -283,9 +261,7 @@
       ],
       "claimAudit": "Header claims it owns process reliability with no policy. TRUE for the 5 callers that go through it (agentProcess, scriptRun, scriptDepsEnv, pluginInstaller, customEventObserverProgram). FALSE as a repo-wide claim: mcpProbe (SDK StdioClientTransport), structuralDiff/deep/runner, verificationRunner, developmentAdapterRunner, util/git, gitRepoCache and spawnVersionProbe all start children outside it, each with a weaker or absent kill/reap chain.",
       "core": true,
-      "files": [
-        "packages/backend/src/services/execution/managedProcess.ts"
-      ],
+      "files": ["packages/backend/src/services/execution/managedProcess.ts"],
       "guards": [],
       "id": "runmanagedprocess",
       "layer": "engine",
@@ -300,9 +276,7 @@
       ],
       "claimAudit": "Holds, and is the model of the repo's approved pattern: an exhaustive Record keyed by kind, backed by a schema-reflection guard (tests/rfc284-resource-policy-schema-guard.test.ts) that verifies each keyed kind's `enabled` column actually exists rather than trusting the comment. This is the shape the other per-type tables in this family should be converted to.",
       "core": false,
-      "files": [
-        "packages/backend/src/services/execution/resourcePolicy.ts"
-      ],
+      "files": ["packages/backend/src/services/execution/resourcePolicy.ts"],
       "guards": [],
       "id": "execution-resourcepolicy-ts",
       "layer": "application",
@@ -336,9 +310,7 @@
       ],
       "claimAudit": "No explicit single-source claim, and none is warranted: the predicate 'which space kinds own disk and are prunable' is hand-written three times as an include list (gc.ts:215, gc.ts:267, packages/backend/src/services/webhook/terminalWorkspaceCleanup.ts:32) and once as an exclude list (gc.ts:365-366), with no `satisfies Record<SpaceKind, \u2026>` anywhere. The three currently agree \u2014 verified \u2014 but nothing holds them together. AUDITED BY NOBODY.",
       "core": false,
-      "files": [
-        "packages/backend/src/services/gc.ts"
-      ],
+      "files": ["packages/backend/src/services/gc.ts"],
       "guards": [],
       "id": "workspace-gc-prune-eligibility-kernel",
       "layer": "application",
@@ -353,9 +325,7 @@
       ],
       "claimAudit": "The 'only writer' claim DOES hold for the drizzle builder form \u2014 packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts:38-40 pins exactly 1 write in this file and rejects any other file. It does NOT hold for raw SQL: the scanner matches only `.update(tasks)`, and packages/backend/src/services/restore.ts:317-326 already writes `UPDATE tasks SET ...` through an `as unknown as` cast to the raw bun:sqlite handle.",
       "core": true,
-      "files": [
-        "packages/backend/src/services/lifecycle.ts"
-      ],
+      "files": ["packages/backend/src/services/lifecycle.ts"],
       "guards": [],
       "id": "settaskstatus-trysettaskstatus",
       "layer": "application",
@@ -370,9 +340,7 @@
       ],
       "claimAudit": "Holds and is genuinely clean \u2014 no per-rule branching, no business identity, one GRACE_MS for all rules, key is (taskId, rule). The `ownedRules` partition is a real port, not a special case.",
       "core": false,
-      "files": [
-        "packages/backend/src/services/lifecycleInvariants.ts"
-      ],
+      "files": ["packages/backend/src/services/lifecycleInvariants.ts"],
       "guards": [],
       "id": "reconcilelifecyclealerts",
       "layer": "application",
@@ -406,9 +374,7 @@
       ],
       "claimAudit": "Holds. The only mode switches are `resetOnEmptySnapshot` (resume vs in-process retry) and `checkOnly` (dry run) \u2014 both stated semantics with explicit rationale, not caller identity. No table/service reach-in beyond tasks/taskRepos which it legitimately owns.",
       "core": true,
-      "files": [
-        "packages/backend/src/services/nodeRollback.ts"
-      ],
+      "files": ["packages/backend/src/services/nodeRollback.ts"],
       "guards": [],
       "id": "rollbacknoderunworktrees",
       "layer": "engine",
@@ -423,9 +389,7 @@
       ],
       "claimAudit": "Holds. Direct inserts are grep-guarded (rfc098-node-run-mint-grep-guard) with an explicit escape-hatch comment. The 4-line prelude parameterizes its 5 real differences as booleans rather than branching on node kind \u2014 the approved shape. No business-identity branch found in the mint path.",
       "core": true,
-      "files": [
-        "packages/backend/src/services/nodeRunMint.ts"
-      ],
+      "files": ["packages/backend/src/services/nodeRunMint.ts"],
       "guards": [],
       "id": "mintnoderun-buildmintnoderunvalues-resolveschedulerr",
       "layer": "engine",
@@ -440,9 +404,7 @@
       ],
       "claimAudit": "Holds for the five original CRUD services (agent/skill/mcp/plugin/workgroup all import both). Does NOT hold inside the ACL kernel itself (resourceAcl.ts:664-679 and 709-723 hand-write both halves) nor for the 5 RFC-310 types (modules/development-automation/infrastructure/sqliteConfigResourceStore.ts:27-30 rolls its own looser detector).",
       "core": false,
-      "files": [
-        "packages/backend/src/services/ownerScopedName.ts"
-      ],
+      "files": ["packages/backend/src/services/ownerScopedName.ts"],
       "guards": [],
       "id": "ownerscopedname-ts",
       "layer": "application",
@@ -457,9 +419,7 @@
       ],
       "claimAudit": "Claims to be 'the single authority for can this actor see / modify this resource' (file header line 4-6). HOLDS for the read/visibility half: all 7 `.from(resourceGrants)` reads in production live in this file, and every visibility predicate branch-matches. DOES NOT hold for the MODIFY half: routes/developmentConfig.ts gates revise/publish/archive on 5 of the 12 types with canViewResource only, never requireResourceOwner (see F1). ACL_TABLES itself is the GOOD pattern \u2014 an object literal indexed by the full AclResourceType union, so a 13th type is a compile error at `ACL_TABLES[type]`.",
       "core": true,
-      "files": [
-        "packages/backend/src/services/resourceAcl.ts"
-      ],
+      "files": ["packages/backend/src/services/resourceAcl.ts"],
       "guards": [],
       "id": "resourceacl-ts",
       "layer": "application",
@@ -474,9 +434,7 @@
       ],
       "claimAudit": "Holds. Fully table-driven off ACL_TABLES with an `'id' | 'name'` token-domain tag that RFC-282 D4 made REQUIRED so a mis-tagged group is a compile error. The four delete guards genuinely keep only a matcher + one delegation (services/mcp.ts:372-376, plugin.ts:331-335, skillReferenceGuard.ts:40-47, agentDeps.ts:234). No per-type branch inside the kernel.",
       "core": false,
-      "files": [
-        "packages/backend/src/services/resourceRefs.ts"
-      ],
+      "files": ["packages/backend/src/services/resourceRefs.ts"],
       "guards": [],
       "id": "resourcerefs-ts",
       "layer": "application",
@@ -491,9 +449,7 @@
       ],
       "claimAudit": "Claims to be the single head-selection point. Holds \u2014 genuinely clean, no runtime literal, no per-caller flag.",
       "core": true,
-      "files": [
-        "packages/backend/src/services/runtime/head.ts"
-      ],
+      "files": ["packages/backend/src/services/runtime/head.ts"],
       "guards": [],
       "id": "pickruntimehead",
       "layer": "infrastructure",
@@ -508,9 +464,7 @@
       ],
       "claimAudit": "Claims to be THE source for which runtime kinds exist and for execution dispatch. HOLDS for kind existence (RUNTIME_PROTOCOLS/BUILTIN_RUNTIMES/BUILTIN_NAMES at runtimeRegistry.ts:48-57 all derive). DOES NOT hold for 'which runtime is the default' \u2014 that is the bare literal 'opencode' in 15 production sites (see F6).",
       "core": true,
-      "files": [
-        "packages/backend/src/services/runtime/index.ts"
-      ],
+      "files": ["packages/backend/src/services/runtime/index.ts"],
       "guards": [],
       "id": "runtimedriver-port-drivers-registry",
       "layer": "infrastructure",
@@ -525,9 +479,7 @@
       ],
       "claimAudit": "Claims to be the single enforcement of driver capability declarations. HOLDS for the 3 dimensions in RuntimeDriverCapabilities. Covers only 2 of the ~11 optional driver methods; acceptsExtraArgs / acceptsSandboxCompatibilityMarker / mcpTest* have no implication check here (F3, F12).",
       "core": true,
-      "files": [
-        "packages/backend/src/services/runtime/selfCheck.ts"
-      ],
+      "files": ["packages/backend/src/services/runtime/selfCheck.ts"],
       "guards": [],
       "id": "boot-declaration-self-check",
       "layer": "infrastructure",
@@ -542,9 +494,7 @@
       ],
       "claimAudit": "Claims byte-for-byte-parity neutral translation. Mostly holds, but it forges an Agent via `as unknown as Agent` and its `head` parameter is typed as the union of two runtime-named knobs `{opencodeCmd?} | {runtimeCmd?}` (F13).",
       "core": true,
-      "files": [
-        "packages/backend/src/services/runtime/spawnCtx.ts"
-      ],
+      "files": ["packages/backend/src/services/runtime/spawnCtx.ts"],
       "guards": [],
       "id": "agentspawncontext-translation",
       "layer": "infrastructure",
@@ -559,9 +509,7 @@
       ],
       "claimAudit": "Claims 'the ONE skill-staging loop, shared by both runtimes'. Definition-uniqueness HOLDS. Runtime-neutrality DOES NOT \u2014 it hardcodes a Claude-Code plugin-escalation exclusion and applies it to opencode (F1), and its header's per-caller failure-semantics claim is false in current source (F1).",
       "core": true,
-      "files": [
-        "packages/backend/src/services/runtime/stageSkills.ts"
-      ],
+      "files": ["packages/backend/src/services/runtime/stageSkills.ts"],
       "guards": [],
       "id": "stageskills",
       "layer": "infrastructure",
@@ -593,9 +541,7 @@
       ],
       "claimAudit": "Genuinely clean: the body contains zero node-kind, runtime or business-name branches \u2014 every divergence arrives through the spec. Guarded by rfc287-t9 (extinction lock) + rfc287-t1-release-before-discard. Residual: the kernel's IsoLike type and MergeSkipKind still spell workgroup-specific concepts (see EK-10).",
       "core": true,
-      "files": [
-        "packages/backend/src/services/schedulerAssembly.ts"
-      ],
+      "files": ["packages/backend/src/services/schedulerAssembly.ts"],
       "guards": [],
       "id": "runassembly-assemblyspec",
       "layer": "engine",
@@ -610,9 +556,7 @@
       ],
       "claimAudit": "Does NOT hold. resourcePackage/closure.ts:62 exports a byte-identical second isBuiltinRow, and its header claim ('only agents + workflows carry the column today', systemResources.ts:24-27) is factually stale \u2014 capabilityTemplates carries the column (db/schema.ts:4621). Four other files hand-copy the same stale two-type claim.",
       "core": false,
-      "files": [
-        "packages/backend/src/services/systemResources.ts"
-      ],
+      "files": ["packages/backend/src/services/systemResources.ts"],
       "guards": [],
       "id": "systemresources-ts",
       "layer": "application",
@@ -627,9 +571,7 @@
       ],
       "claimAudit": "Claims (comment at :223, and the guard's own preamble at packages/backend/tests/rfc311-task-archive.test.ts:479-485) that every table that vanishes with the archive is either exported or explicitly exempt. DOES NOT HOLD: the guard walks exactly one FK hop, and review_comments (a transitive cascade descendant) is in neither list. AUDITED BY NOBODY.",
       "core": false,
-      "files": [
-        "packages/backend/src/services/taskArchive.ts"
-      ],
+      "files": ["packages/backend/src/services/taskArchive.ts"],
       "guards": [],
       "id": "task-archive-cascade-table-registry",
       "layer": "application",
@@ -644,9 +586,7 @@
       ],
       "claimAudit": "Holds structurally, with one ad-hoc business branch: errorHandler duck-types the literal code 'illegal-node-run-transition' from the task-execution domain (errors.ts:143,157-161). staleConflictError (errors.ts:68-74) successfully unified 6 dialect conflict codes into resource-operation-stale, but its 7-member resource union is hand-written and has no compile link to shared ACL_RESOURCE_TYPES (12 members, shared/src/schemas/resourceAcl.ts:19-43).",
       "core": true,
-      "files": [
-        "packages/backend/src/util/errors.ts"
-      ],
+      "files": ["packages/backend/src/util/errors.ts"],
       "guards": [],
       "id": "error-taxonomy",
       "layer": "application",
@@ -661,9 +601,7 @@
       ],
       "claimAudit": "Holds, and it is ratcheted properly: rfc284-safejson-convergence.test.ts:21,32-48 keeps the local-definition allowlist EMPTY and fails on any new `async function safeJson(`. This is the template the other commons in this family lack.",
       "core": false,
-      "files": [
-        "packages/backend/src/util/http.ts"
-      ],
+      "files": ["packages/backend/src/util/http.ts"],
       "guards": [],
       "id": "util-http-safejsonorempty-safejsonorthrowinvalid",
       "layer": "inbound",
@@ -678,9 +616,7 @@
       ],
       "claimAudit": "Holds as a platform kernel. It does host caller-family-specific helpers (buildScriptPath for script nodes, GIT_NULL_CONFIG_PATH for git, disabledShellCommand for drivers), but each is named for its family and takes no hidden identity branch \u2014 honest placement debt, not a smuggled special case.",
       "core": false,
-      "files": [
-        "packages/backend/src/util/platformExec.ts"
-      ],
+      "files": ["packages/backend/src/util/platformExec.ts"],
       "guards": [],
       "id": "platformexec",
       "layer": "infrastructure",
@@ -695,9 +631,7 @@
       ],
       "claimAudit": "Partially. The three --version twins really did converge here. But `detached` is gated on `timeoutMs !== undefined` to preserve one caller family's legacy flat spawn, so the skeleton has a mode in which none of its governance runs (see EK-05).",
       "core": false,
-      "files": [
-        "packages/backend/src/util/process.ts"
-      ],
+      "files": ["packages/backend/src/util/process.ts"],
       "guards": [],
       "id": "spawnversionprobe-killprocesstree",
       "layer": "infrastructure",
@@ -712,9 +646,7 @@
       ],
       "claimAudit": "Header explicitly disclaims being a security boundary (:17-20) \u2014 an honest, non-forgeable stance. No adoption ratchet exists: nothing asserts which persistence sites must call it. AUDITED BY NOBODY.",
       "core": false,
-      "files": [
-        "packages/backend/src/util/redact.ts"
-      ],
+      "files": ["packages/backend/src/util/redact.ts"],
       "guards": [],
       "id": "secret-redaction-kernel",
       "layer": "infrastructure",
@@ -729,9 +661,7 @@
       ],
       "claimAudit": "Header claims 'every fs read/write inside a skill must land strictly under the skill's root'. Adoption is 8 files (skill.ts, skillVersion.ts, skillTree.ts, worktreeFiles.ts, upload.ts, runtime/claudeCode/config.ts, programArtifactStore.ts) out of ~83 backend files containing an fs write call, and there is no allowlist ratchet on write sites the way there is on spawn sites. AUDITED BY NOBODY.",
       "core": false,
-      "files": [
-        "packages/backend/src/util/safePath.ts"
-      ],
+      "files": ["packages/backend/src/util/safePath.ts"],
       "guards": [],
       "id": "path-containment-kernel",
       "layer": "infrastructure",
@@ -746,9 +676,7 @@
       ],
       "claimAudit": "Claims all channel-specific behaviour is data, with zero per-channel branches in the transport skeleton (ws/server.ts:19-21). Largely true and well built \u2014 WsChannelRegistry is a mapped type so a new channel cannot compile without declaring revalidation, and RFC-312 added `resync` as spec data rather than a `kind==='presence'` branch (registry.ts:338-352). Two leaks remain: TOKEN_ALLOWED_WS_CHANNELS is a per-channel policy Set living in ws/server.ts:304-313, and presence's release handle is a field on the shared WsConnectionData (registry.ts:209-217) invoked unconditionally from the generic untrackConnection (connections.ts:79-82).",
       "core": true,
-      "files": [
-        "packages/backend/src/ws/registry.ts"
-      ],
+      "files": ["packages/backend/src/ws/registry.ts"],
       "guards": [],
       "id": "ws-channel-registry",
       "layer": "inbound",
@@ -763,9 +691,7 @@
       ],
       "claimAudit": "'no second error decoder, no bare fetch'. HOLDS \u2014 the only literal `fetch(` in src is client.ts:159 inside `fetchOrNetworkError`; the other three grep hits are methods named `fetch` on injected port objects (useWorkgroupAutosave.ts:99,312; useWorkflowEditorDraft.ts:45). Tests fail closed on unmocked network (tests/unexpectedNetwork + unexpected-network-guard.test.ts).",
       "core": false,
-      "files": [
-        "packages/frontend/src/api/client.ts"
-      ],
+      "files": ["packages/frontend/src/api/client.ts"],
       "guards": [],
       "id": "http-client",
       "layer": "ui-data",
@@ -799,9 +725,7 @@
       ],
       "claimAudit": "The sanctioned primitive for 'pick one of N described options'. DOES NOT HOLD \u2014 WorkflowStarterDialog hand-rolls the identical widget with a weaker a11y contract (F-CHOICE-FORK).",
       "core": false,
-      "files": [
-        "packages/frontend/src/components/ChoiceCards.tsx"
-      ],
+      "files": ["packages/frontend/src/components/ChoiceCards.tsx"],
       "guards": [],
       "id": "choicecards",
       "layer": "ui-primitive",
@@ -816,9 +740,7 @@
       ],
       "claimAudit": "CLAUDE.md: every modal/overlay goes through it; no bespoke `.xxx__overlay`/`__panel`. VERIFIED HOLDS in TSX \u2014 only 4 files carry `role=\"dialog\"` and all 4 are in the ux-source-ratchets allowlist (tests/ux-source-ratchets.test.ts:84-93), the 3 non-Dialog ones being genuinely non-modal (ReviewDocPane comment popover, ValidationPanel wide-surface panel, SpotlightTour coach-mark). DOES NOT HOLD in CSS: the shared `.dialog__overlay` rule surface now names four specific features via `:has()` and one feature via a hardcoded dark-mode button color (see F-CSS-DIALOG-HATCH, F-CSS-AGENTIMPORT).",
       "core": false,
-      "files": [
-        "packages/frontend/src/components/Dialog.tsx"
-      ],
+      "files": ["packages/frontend/src/components/Dialog.tsx"],
       "guards": [],
       "id": "dialog",
       "layer": "ui-primitive",
@@ -833,9 +755,7 @@
       ],
       "claimAudit": "CLAUDE.md forbids bare `<input className=\"form-input\">` / self-written focus rings. HOLDS and is genuinely enforced: tests/ux-source-ratchets.test.ts:169-194 bans every bare text-like `<input>` and every bare `<textarea>` outside an explicit per-file allowlist. Zero business literals inside the file; every prop is generic (verified by grep for domain names and non-`common.*` i18n keys \u2014 none).",
       "core": false,
-      "files": [
-        "packages/frontend/src/components/Form.tsx"
-      ],
+      "files": ["packages/frontend/src/components/Form.tsx"],
       "guards": [],
       "id": "form-primitives",
       "layer": "ui-primitive",
@@ -869,9 +789,7 @@
       ],
       "claimAudit": "CLAUDE.md: `.segmented` is the only sanctioned way to do a short exclusive picker; the 2026-08-12 audit recorded 'Segmented 37 / TabBar 17 \u624b\u62fc\u96f6'. NO LONGER HOLDS \u2014 JoinModeField (RFC-306, 2026-08-17) hand-rolls the container and buttons (F-SEG-FORK).",
       "core": false,
-      "files": [
-        "packages/frontend/src/components/Segmented.tsx"
-      ],
+      "files": ["packages/frontend/src/components/Segmented.tsx"],
       "guards": [],
       "id": "segmented",
       "layer": "ui-primitive",
@@ -905,9 +823,7 @@
       ],
       "claimAudit": "One chip for four retired parallel implementations. HOLDS \u2014 no domain literal in the file; TaskStatusChip is a thin wrapper reading the TASK_STATUS_KIND map from lib/task-status.ts, i.e. the mapping lives outside the kernel where it belongs.",
       "core": false,
-      "files": [
-        "packages/frontend/src/components/StatusChip.tsx"
-      ],
+      "files": ["packages/frontend/src/components/StatusChip.tsx"],
       "guards": [],
       "id": "statuschip-taskstatuschip",
       "layer": "ui-primitive",
@@ -922,9 +838,7 @@
       ],
       "claimAudit": "Single owner of tab semantics. PARTIALLY HOLDS \u2014 TaskOutputPanel.tsx:130-166 hand-rolls a vertical tablist with its own roving-tabindex/arrow-key implementation, because TabBar exposes no `orientation` prop (F-TAB-VERTICAL).",
       "core": false,
-      "files": [
-        "packages/frontend/src/components/TabBar.tsx"
-      ],
+      "files": ["packages/frontend/src/components/TabBar.tsx"],
       "guards": [],
       "id": "tabbar",
       "layer": "ui-primitive",
@@ -939,9 +853,7 @@
       ],
       "claimAudit": "'one WS implementation'. HOLDS structurally \u2014 `new WebSocket` appears exactly once (useWebSocket.ts:162). But the 'generic JSON transport' claim in its own header comment is violated: it imports a feature hook's query key and branches on a domain message type (F-WS-AUTHORITY).",
       "core": false,
-      "files": [
-        "packages/frontend/src/hooks/useWebSocket.ts"
-      ],
+      "files": ["packages/frontend/src/hooks/useWebSocket.ts"],
       "guards": [],
       "id": "websocket-transport",
       "layer": "ui-data",
@@ -956,9 +868,7 @@
       ],
       "claimAudit": "Turns per-domain if-chains into data. HOLDS \u2014 zero domain literals in the hook; every domain lives in its own rules table.",
       "core": false,
-      "files": [
-        "packages/frontend/src/hooks/useWsInvalidation.ts"
-      ],
+      "files": ["packages/frontend/src/hooks/useWsInvalidation.ts"],
       "guards": [],
       "id": "ws-query-invalidation",
       "layer": "ui-data",
@@ -973,9 +883,7 @@
       ],
       "claimAudit": "'the ONE error resolver'. HOLDS \u2014 the only `describeError`-shaped fork is `describeApiError` (i18n/index.ts:54), which the module documents as a string-only shell over the same resolver. `DOMAIN_PREFIXES` (errors.ts:57-144) is a data table, the GOOD registry pattern, and the per-domain `.code === '\u2026'` branches all live in feature files, not in the kernel.",
       "core": false,
-      "files": [
-        "packages/frontend/src/i18n/errors.ts"
-      ],
+      "files": ["packages/frontend/src/i18n/errors.ts"],
       "guards": [],
       "id": "error-resolver",
       "layer": "ui-data",
@@ -990,9 +898,7 @@
       ],
       "claimAudit": "Header claims a single source, but the same header (and audit decision D16) scopes it to 'WS-related keys only'. DOES NOT HOLD as a single source of truth: the producing side (WS rule tables) is factory-only and locked, the consuming side is still string literals (F-QK-DUALTRACK).",
       "core": false,
-      "files": [
-        "packages/frontend/src/lib/query-keys.ts"
-      ],
+      "files": ["packages/frontend/src/lib/query-keys.ts"],
       "guards": [],
       "id": "querykey-factory",
       "layer": "ui-data",
@@ -1007,9 +913,7 @@
       ],
       "claimAudit": "Claims to be the single projection both renderers derive from, with no ACL/audit field reachable. HOLDS \u2014 I found no runtime/business identity branching, no escape hatch. Clean.",
       "core": false,
-      "files": [
-        "packages/shared/src/agentCapability.ts"
-      ],
+      "files": ["packages/shared/src/agentCapability.ts"],
       "guards": [],
       "id": "shared-agentcapability",
       "layer": "domain",
@@ -1024,9 +928,7 @@
       ],
       "claimAudit": "Genuinely clean. Zero-import module by design (cycle avoidance), and the allowlist is cross-checked against handler `baseNames` at module load (registry.ts:302-334), so adding a base kind on one side without the other throws at boot.",
       "core": true,
-      "files": [
-        "packages/shared/src/kindParser.ts"
-      ],
+      "files": ["packages/shared/src/kindParser.ts"],
       "guards": [],
       "id": "kindparser-registered-base-kinds",
       "layer": "domain",
@@ -1060,9 +962,7 @@
       ],
       "claimAudit": "Header claims \"Every site that writes node_runs.status is supposed to go through transitionNodeRunStatus() or nextNodeRunStatus()\". FALSE in source: the backend CAS helper `setNodeRunStatus` (packages/backend/src/services/lifecycle.ts:175-229) never calls it \u2014 it checks only a caller-supplied `allowedFrom`. 49 production call sites use that bypass vs 25 using the event path, and 5 sites write the column with raw drizzle behind a comment marker.",
       "core": true,
-      "files": [
-        "packages/shared/src/lifecycle.ts"
-      ],
+      "files": ["packages/shared/src/lifecycle.ts"],
       "guards": [],
       "id": "nextnoderunstatus-node-run-transition-table",
       "layer": "domain",
@@ -1072,14 +972,10 @@
     },
     {
       "auditedBy": "node-kind-ports-sharding",
-      "canonicalOwnerEntryIds": [
-        "owner:packages/shared/src/listWire.ts#$file"
-      ],
+      "canonicalOwnerEntryIds": ["owner:packages/shared/src/listWire.ts#$file"],
       "claimAudit": "The codec functions are single-source. The DECISION of which codec applies to a given kind is not: it lives at each call site (scheduler.ts:7767, review.ts:582-591) and is simply absent at two others (outputKinds/list.ts:142, portArtifacts.ts:424) \u2014 F2/F3.",
       "core": false,
-      "files": [
-        "packages/shared/src/listWire.ts"
-      ],
+      "files": ["packages/shared/src/listWire.ts"],
       "guards": [],
       "id": "listwire-codec",
       "layer": "domain",
@@ -1113,9 +1009,7 @@
       ],
       "claimAudit": "Claims to be the single declared-port authority. Verified: all five named forks now call `declaredPorts` (WorkflowCanvas.tsx:3584, workflow.validator.ts:1004, wrapperCandidates.ts:56, controlFlowEdge.ts:86, dropTarget.ts:42). Exhaustiveness is real. One residual leak: wrapperCandidates re-adds a phantom `'out'` port outside the table (F12). RFC-354 D6 closes RFC-147's F6 by construction: the clarify NODE-side `questions` / `answers` system ports live in the same table and simply carry no `channel`.",
       "core": true,
-      "files": [
-        "packages/shared/src/nodePorts.ts"
-      ],
+      "files": ["packages/shared/src/nodePorts.ts"],
       "guards": [],
       "id": "port-derivers-declaredports",
       "layer": "domain",
@@ -1130,9 +1024,7 @@
       ],
       "claimAudit": "Claims to be a static registry whose exhaustiveness the type system enforces. Neither half holds: it is a dead second registry (zero production callers) and `AgentOutputKind` widened to `string`, so `Record<AgentOutputKind, \u2026>` enforces nothing (F4).",
       "core": true,
-      "files": [
-        "packages/shared/src/outputKinds/index.ts"
-      ],
+      "files": ["packages/shared/src/outputKinds/index.ts"],
       "guards": [],
       "id": "handlers",
       "layer": "domain",
@@ -1147,9 +1039,7 @@
       ],
       "claimAudit": "Claims (registry.ts:14-22) that agent-output runtime callers are fully migrated onto it and that the legacy `HANDLERS` Record has no runtime consumers. Verified true for the migration. But the legacy Record still exists, is exported from the shared barrel, and its own doc claim of type-level exhaustiveness is now false (F4). The list handler additionally hardcodes one item-kind's semantics (F2/F3).",
       "core": true,
-      "files": [
-        "packages/shared/src/outputKinds/registry.ts"
-      ],
+      "files": ["packages/shared/src/outputKinds/registry.ts"],
       "guards": [],
       "id": "parametric-handlers",
       "layer": "domain",
@@ -1159,14 +1049,10 @@
     },
     {
       "auditedBy": "execution-kernel",
-      "canonicalOwnerEntryIds": [
-        "owner:packages/shared/src/prompt.ts#$file"
-      ],
+      "canonicalOwnerEntryIds": ["owner:packages/shared/src/prompt.ts#$file"],
       "claimAudit": "Holds. The one caller-specific input, `suppressRestart`, is an abstract boolean with a documented product reason (clarify STOP flip) rather than a clarify literal. No node-kind or runtime input reaches it.",
       "core": false,
-      "files": [
-        "packages/shared/src/prompt.ts"
-      ],
+      "files": ["packages/shared/src/prompt.ts"],
       "guards": [],
       "id": "decideretryshape",
       "layer": "domain",
@@ -1181,9 +1067,7 @@
       ],
       "claimAudit": "Claims to be the shared choke point every prompt producer crosses. DOES NOT HOLD: a second, independent fencing implementation ships in packages/backend/src/modules/development-automation/engine/prompt/assembleAgentPrompt.ts:14-34 with a static delimiter and two literal replaceAll escapes. The RFC-200 wiring guard (packages/backend/tests/rfc200-source-lock.test.ts:13-129) is a positive whitelist of named files, so it cannot see a new producer. AUDITED BY NOBODY (node-kind family touched prompt.ts token rendering only).",
       "core": true,
-      "files": [
-        "packages/shared/src/promptFencing.ts"
-      ],
+      "files": ["packages/shared/src/promptFencing.ts"],
       "guards": [],
       "id": "prompt-injection-fencing-kernel",
       "layer": "domain",
@@ -1193,14 +1077,10 @@
     },
     {
       "auditedBy": "resource-acl-catalog",
-      "canonicalOwnerEntryIds": [
-        "owner:packages/shared/src/ref/ast.ts#$file"
-      ],
+      "canonicalOwnerEntryIds": ["owner:packages/shared/src/ref/ast.ts#$file"],
       "claimAudit": "Largely holds, and it is the best guard in this family: RESOURCE_REF_AST_KINDS is locked to the union in BOTH directions by compile-time AssertTrue types (ast.ts:141-159), and the zod schema is proven equivalent to the type union. Weak spot: the codecs re-encode business identity lists as regex alternations (codecs.ts:29-30, 158, 211) that duplicate INTENT_RESOURCE_TYPES and the 'which tables have a builtin column' fact with no link back.",
       "core": false,
-      "files": [
-        "packages/shared/src/ref/ast.ts"
-      ],
+      "files": ["packages/shared/src/ref/ast.ts"],
       "guards": [],
       "id": "shared-ref",
       "layer": "domain",
@@ -1215,9 +1095,7 @@
       ],
       "claimAudit": "Comment at :87 claims '\u5404\u57df\u7684\u9759\u6001\u7b56\u7565\uff08\u5355\u4e00\u4e8b\u5b9e\u6e90\uff1bresolver \u5b9e\u73b0\u4ece\u8fd9\u91cc\u53d6\uff0c\u4e0d\u5404\u5199\u5404\u7684\uff09'. DOES NOT HOLD: REF_DOMAIN_POLICIES has ZERO production consumers (only packages/backend/tests/rfc271-ref-contract.test.ts reads it), and EXPORT_CALL_POLICY (:103-110) likewise. Partially audited (ACL family covered ref/codecs.ts) but resolution.ts itself was not.",
       "core": false,
-      "files": [
-        "packages/shared/src/ref/resolution.ts"
-      ],
+      "files": ["packages/shared/src/ref/resolution.ts"],
       "guards": [],
       "id": "resource-ref-resolution-policy-kernel",
       "layer": "domain",
@@ -1232,9 +1110,7 @@
       ],
       "claimAudit": "Its own header (lines 12-19) says it is shared by review AND fanout 'so the two can't drift'. Those two do use it. Three further hand-inlined copies of the same expression live inside outputKinds/list.ts (F3).",
       "core": false,
-      "files": [
-        "packages/shared/src/reviewMultiDoc.ts"
-      ],
+      "files": ["packages/shared/src/reviewMultiDoc.ts"],
       "guards": [],
       "id": "isinlinemarkdownitemkind",
       "layer": "domain",
@@ -1249,9 +1125,7 @@
       ],
       "claimAudit": "Claims both surfaces project from one table. HOLDS \u2014 and it is guarded: packages/shared/tests/rfc295-runtime-parameter-authority.test.ts:51-56 asserts the two derived name sets equal the surface projection, so the one hand-written list (CALL_WORKGROUP_BUILTIN_NAMES) cannot drift. This is the repo's approved registry pattern done correctly.",
       "core": false,
-      "files": [
-        "packages/shared/src/runtimeBuiltins.ts"
-      ],
+      "files": ["packages/shared/src/runtimeBuiltins.ts"],
       "guards": [],
       "id": "shared-runtimebuiltins",
       "layer": "domain",
@@ -1266,9 +1140,7 @@
       ],
       "claimAudit": "Claims 'the SINGLE SOURCE for the protocol defaults \u2014 spawn/driver code must import from here'. The Record half HOLDS (typecheck completeness guard at runtimeRegistry.ts:266-269). RESERVED_SPAWN_ENV is a HAND-MAINTAINED list of env keys the drivers actually write, with no cross-check back to the spawn builders (guardCoverage).",
       "core": false,
-      "files": [
-        "packages/shared/src/runtimeConfigDir.ts"
-      ],
+      "files": ["packages/shared/src/runtimeConfigDir.ts"],
       "guards": [],
       "id": "shared-runtimeconfigdir",
       "layer": "domain",
@@ -1283,9 +1155,7 @@
       ],
       "claimAudit": "Claims (and the sibling-list comments argue well) to be the one list of ACL types. It IS the only definition \u2014 but it is now 15 entries (RFC-330 added employee_tool / employee_job_template) while the file's own header (line 3) still says 'Six resource types', and it is consumed only to build a zod enum: nothing in the repo iterates ACL_RESOURCE_TYPES, so per-type symmetry is enforced nowhere.",
       "core": false,
-      "files": [
-        "packages/shared/src/schemas/resourceAcl.ts"
-      ],
+      "files": ["packages/shared/src/schemas/resourceAcl.ts"],
       "guards": [],
       "id": "aclresourcetype-acl-resource-types",
       "layer": "domain",
@@ -1300,9 +1170,7 @@
       ],
       "claimAudit": "Holds. Guarded by a derived-property test (WRAPPER_NODE_KINDS equals every `wrapper-` prefixed NODE_KIND) plus a re-fork source ratchet over ten historical host files. The ratchet only matches triple-unions and its file list omits workflowScope.ts.",
       "core": false,
-      "files": [
-        "packages/shared/src/schemas/workflow.ts"
-      ],
+      "files": ["packages/shared/src/schemas/workflow.ts"],
       "guards": [],
       "id": "wrapper-node-kinds-iswrapperkind",
       "layer": "domain",
@@ -1317,9 +1185,7 @@
       ],
       "claimAudit": "Claims to be the single shard-key oracle, and is (scheduler.ts:7805 is the only production reader). But it is a MUTABLE module-global Map with exported `registerKeyOf` / `clearShardingRegistry`; the 'production code should never call it' guarantee is a comment only (F5).",
       "core": true,
-      "files": [
-        "packages/shared/src/shardingRegistry.ts"
-      ],
+      "files": ["packages/shared/src/shardingRegistry.ts"],
       "guards": [],
       "id": "shardingregistry",
       "layer": "domain",
@@ -1334,9 +1200,7 @@
       ],
       "claimAudit": "All three are clean. `canonicalJson` has one implementation; `wrapperAncestryOf` / `inboundEdgeSignature` are consumed by both author gates (scriptNode.ts:576-577, codeHost/authorProjection.ts:57-58) AND the canvas drag guard (WorkflowCanvas.tsx:3044) with no second copy; `readContinueOnMaxIterations` is the only reader in scheduler.ts:7316, workflow.validator.ts:838 and the Inspector.",
       "core": false,
-      "files": [
-        "packages/shared/src/workflow-canonical.ts"
-      ],
+      "files": ["packages/shared/src/workflow-canonical.ts"],
       "guards": [],
       "id": "workflow-canonical-workflownodeancestry-looppolicy",
       "layer": "domain",
@@ -1351,9 +1215,7 @@
       ],
       "claimAudit": "Clean and genuinely exhaustive (`as const satisfies Record<NodeKind, \u2026>`), with an explicit opaque-subtree escape that is declared rather than heuristic. No findings.",
       "core": false,
-      "files": [
-        "packages/shared/src/workflow-node-references.ts"
-      ],
+      "files": ["packages/shared/src/workflow-node-references.ts"],
       "guards": [],
       "id": "workflow-node-reference-inventory",
       "layer": "domain",
@@ -1368,9 +1230,7 @@
       ],
       "claimAudit": "Claims to be THE structural oracle, and all six execution/validation consumers do route through `resolveWorkflowSourceRef`. But the per-wrapper-kind promotion rule inside it is an ad-hoc if-chain with a silent null default and a `'wrapper-git'` placeholder for unknown wrappers (F7).",
       "core": true,
-      "files": [
-        "packages/shared/src/workflowScope.ts"
-      ],
+      "files": ["packages/shared/src/workflowScope.ts"],
       "guards": [],
       "id": "workflowscope",
       "layer": "domain",
@@ -1385,9 +1245,7 @@
       ],
       "claimAudit": "Genuinely single-source: `FANOUT_DONE_PORT_NAME` is an exported const consumed by shared, backend (scheduler.ts:8059) and frontend (WrapperNodes.tsx:229,285). Its sibling framework-minted port `git_diff` did NOT get the same treatment (F13).",
       "core": true,
-      "files": [
-        "packages/shared/src/wrapperFanout.ts"
-      ],
+      "files": ["packages/shared/src/wrapperFanout.ts"],
       "guards": [],
       "id": "wrapperfanout-outlet-derivation",
       "layer": "domain",
@@ -1401,8 +1259,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "f69bd6a3424bbbaf17b23f439076a5066ef2e3bf",
-    "contentDigest": "sha256:60026481a5025a8ca6261fd2c0ecb3951d522f33118a860b90eca67881974d9a",
+    "currentSnapshotSha": "3645f05a50e25ca248ebba71abd1205b93c1a1b6",
+    "contentDigest": "sha256:4a284cac80e5335ad4381d98567934076c7d55706e39748f477bfd5d1a7be44d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
