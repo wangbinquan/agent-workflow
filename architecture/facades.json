@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 60
+    "thinFacades": 62
   },
   "entries": [
     {
@@ -3766,7 +3766,6 @@
         "import:39ddda7a36b8ec55d9e0",
         "import:3b0939b8480fceab955a",
         "import:4f04ba4f9384bce241d8",
-        "import:508585b40e2cf04f1432",
         "import:55f7c3a1e3e1628e4302",
         "import:63fad3747b478edc6675",
         "import:64a3671d1cfcaeb2a1c6",
@@ -3774,6 +3773,7 @@
         "import:79e677a27db127530105",
         "import:7fffe1f742017d910ca9",
         "import:835ec062b66a4ad7e8a4",
+        "import:d50add293d533727c6e4",
         "import:d84409822ef4e47283a6",
         "import:d98eada297d0a956485e",
         "import:e476ae62c20624ad3827",
@@ -4616,23 +4616,19 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:04b9c59b4fc398592699",
-        "import:37e08f73e55289a7d8fd",
-        "import:ebcd92949618d5782fb5"
+        "import:203826d1327df6e1b4b8",
+        "import:45d5e25e5a3b3b901375",
+        "import:5842f08b5be8d38997ea",
+        "import:7f47be1e609764290cfd",
+        "import:b0a2ab06aee33f0f918c",
+        "import:d3c0fa11454ecb20cf93"
       ],
-      "exportedSymbols": [
-        "EnsureDepsInput",
-        "ScriptDepsEnv",
-        "ScriptDepsInstallError",
-        "collectScriptDepsEnvs",
-        "ensureScriptDepsEnv",
-        "scriptEnvsRoot"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/scriptDepsEnv.ts",
       "id": "facade:packages/backend/src/services/scriptDepsEnv.ts",
       "ownerEntryId": "owner:packages/backend/src/services/scriptDepsEnv.ts#$file",
       "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -4654,36 +4650,36 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:05506d4adeddff6117c9",
         "import:172bab911cae9acd8918",
+        "import:1a6ee3c32b9324c46405",
         "import:1b041f5b55bc114a9d11",
+        "import:206dee70ed0aece2c1a8",
         "import:2433dd6e02c29fb84491",
-        "import:2d3bbb550ca951a96dfd",
-        "import:7556465f1964616e4bb3",
+        "import:26838393eebd1dd8717d",
+        "import:3690f736319285c9e91f",
+        "import:37824620b5a81aa0468b",
+        "import:3946dcd5acdec8d03894",
+        "import:4ce4e41865ea2ee5284c",
+        "import:6a82ca858268a39d8890",
         "import:793396dc6dc2f7b524dd",
-        "import:a81f6a94e5b1894549b2"
+        "import:7de942c04a3ad9660b3e",
+        "import:7f9d7ee01c53e4d73565",
+        "import:81ec44c850bdd5c4df2c",
+        "import:9e7faba224d109447b84",
+        "import:9efed3fd60ee041116f9",
+        "import:a8ed06a908e09228393c",
+        "import:ac46eb2d541e878f13fc",
+        "import:adc00d3c6d755925fff9",
+        "import:c0637a7f709cf7944825",
+        "import:e4d24e0f881abc708004"
       ],
-      "exportedSymbols": [
-        "INTERPRETER_PROBE_TIMEOUT_MS",
-        "INTERPRETER_SPEC",
-        "ResolvedInterpreter",
-        "ScriptEnvAssembly",
-        "ScriptRunOutcome",
-        "ScriptRunRequest",
-        "WINDOWS_INTERPRETER_CANDIDATES",
-        "assembleScriptEnv",
-        "classifyScriptOutcome",
-        "describeInterpreterResolution",
-        "gitBashCandidatesFromGitPath",
-        "gitBashFromGitPath",
-        "interpreterCandidatePaths",
-        "resolveScriptInterpreter",
-        "runScriptProcess"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/scriptRun.ts",
       "id": "facade:packages/backend/src/services/scriptRun.ts",
       "ownerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file",
       "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -5694,7 +5690,6 @@
         "import:38011687fcacff23132a",
         "import:5af1d7f41e548afc4039",
         "import:5c19ced6a46fc4648046",
-        "import:7554c5e3084264ee6df6",
         "import:866ffe525e1682d2ca3e",
         "import:87d0196cb2e342542c3a",
         "import:93aa74aea542bf463a9a",
@@ -5709,7 +5704,6 @@
         "import:dbdc9d8483fabd8dd9f6",
         "import:dfca015826eecaaa8b83",
         "import:e85f8a7b7ff0032220e4",
-        "import:ed1679a048f2aad20582",
         "import:f0f61dc055dab82c8722"
       ],
       "exportedSymbols": [
@@ -6484,5 +6478,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:783ae02a0fd9d3ab72b2b2a869eeba9b42565880e6be202e8f8f603ae060472a"
+  "sourceDigest": "sha256:0673df097f068e92d2d122b794d09987684684912ccf22cc284bfc1cee36fd28"
 }

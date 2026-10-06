@@ -79,32 +79,32 @@ import { toContainerRelative } from '@/modules/task-execution/public/queries'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import { runTaskAgentWithFamily as runNode } from './taskAgentRunFamily'
 import type { RunResult } from '../application/ports/taskAgentRun'
-import { getRuntimeDriver, runRootFor } from '@/services/runtime'
+import { getRuntimeDriver } from '@/services/runtime'
 import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
 import {
-  ensureScriptDepsEnv,
   ScriptDepsInstallError,
-  type ScriptDepsEnv,
-} from '@/services/scriptDepsEnv'
-import { extractScriptPorts } from '@/services/scriptPorts'
+  type TaskScriptDependencyEnvironment,
+  type TaskScriptInterpreter,
+  type TaskScriptResult,
+  type TaskScriptStartReceipt,
+} from '../application/ports/taskScriptRunFamily'
 import {
-  describeInterpreterResolution,
-  resolveScriptInterpreter,
-  runScriptProcess,
-} from '@/services/scriptRun'
+  createProcessEffectAttemptObserver,
+  type ProcessEffectAttemptObserver,
+} from '../application/processEffectObserver'
+import { runScriptWithFamily as runScriptProcess } from './taskScriptRunFamily'
+import { extractScriptPorts } from '@/services/scriptPorts'
 import {
   decideResumeSessionId,
   type ClarifyInlineFallbackReason,
 } from '@/services/sessionModeFallback'
 import {
   createCodeHostEffectAttemptObserver,
-  createProcessEffectAttemptObserver,
   decodeLineageSlotPath,
   encodeLineageSlotPath,
   taskExecutionRequestHash as executionEffectRequestHash,
   operationFamilyKey,
   type LineageSlot,
-  type ProcessEffectAttemptObserver,
   type TaskExecutionContext,
 } from '@/services/taskExecutionParticipants'
 import type {
@@ -167,7 +167,6 @@ import {
   type Permission,
   type StartTask,
 } from '@agent-workflow/shared'
-import { mkdirSync } from 'node:fs'
 import { processTreeOwnershipStatus } from '@/util/process'
 import { ulid } from 'ulid'
 
@@ -2684,7 +2683,10 @@ export async function runScriptNode(
   let nodeRunId = resolvedRow.nodeRunId
   const retryIndex = resolvedRow.retryIndex
 
-  const interpreter = await resolveScriptInterpreter(language, opts.scriptInterpreters ?? {})
+  const interpreter = await opts.taskScriptRuns.resolveInterpreter(
+    language,
+    opts.scriptInterpreters ?? {},
+  )
   if (interpreter === null) {
     await setRunStatus(state, {
       nodeRunId,
@@ -2697,7 +2699,10 @@ export async function runScriptNode(
         // 失败时长得一模一样，光看结论排不了障（RFC-253 T41 的 Windows 首红实证）。
         errorMessage:
           `no ${language} interpreter available on this host: ` +
-          describeInterpreterResolution(language, opts.scriptInterpreters ?? {}),
+          opts.taskScriptRuns.describeInterpreterResolution(
+            language,
+            opts.scriptInterpreters ?? {},
+          ),
         failureCode: 'script-interpreter-missing',
       },
     })
@@ -2934,7 +2939,7 @@ interface ScriptAttemptArgs {
   iteration: number
   retryIndex: number
   inputs: Record<string, string>
-  interpreter: Awaited<ReturnType<typeof resolveScriptInterpreter>> & object
+  interpreter: TaskScriptInterpreter
   isoHandle: IsoHandle | null
   isReadonly: boolean
   language: ScriptLanguage
@@ -2951,8 +2956,7 @@ async function runOneScriptAttempt(
   a: ScriptAttemptArgs,
 ): Promise<ScriptAttemptOutcome> {
   const { task, taskId, opts, log } = state
-  const runDir = runRootFor(taskId, a.nodeRunId)
-  mkdirSync(runDir, { recursive: true })
+  const runContent = opts.taskScriptRuns.prepareRunContent(taskId, a.nodeRunId)
 
   // The iso handle is created before every attempt, including readonly. The
   // scope-root fallback exists only for defensive compatibility with a
@@ -2973,15 +2977,14 @@ async function runOneScriptAttempt(
         }))
   // Dependencies are deterministic and prebuilt-only, but otherwise run with
   // the daemon's natural toolchain and network access.
-  let depsEnv: ScriptDepsEnv | null = null
+  let depsEnv: TaskScriptDependencyEnvironment | null = null
   const specs = readScriptDependencies(a.node)
   if (specs.length > 0) {
     try {
-      depsEnv = await ensureScriptDepsEnv({
-        appHome: opts.appHome,
+      depsEnv = await opts.taskScriptRuns.ensureDependencies({
+        contentHomeRef: opts.appHome,
         language: a.language,
-        interpreterPath: a.interpreter.path,
-        interpreterVersion: a.interpreter.version,
+        interpreter: opts.taskScriptRuns.dependencyInterpreter(a.interpreter),
         specs,
         timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
         ...(opts.signal === undefined ? {} : { signal: opts.signal }),
@@ -3031,12 +3034,14 @@ async function runOneScriptAttempt(
   })
   broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'running')
 
-  let processEffect: ProcessEffectAttemptObserver | undefined
-  const outcome = await runScriptProcess({
+  let processEffect:
+    | ProcessEffectAttemptObserver<TaskScriptStartReceipt, TaskScriptResult>
+    | undefined
+  const outcome = await runScriptProcess(opts.taskScriptRuns, {
     node: a.node,
     inputs: a.inputs,
-    runDir,
-    worktreePath,
+    runContent,
+    workspaceRef: worktreePath,
     // 2026-08-04 audit: hand the script the paths it is actually allowed to
     // touch. This used to be the CANONICAL worktree while a non-readonly node
     // runs in its iso copy — so a script that followed the documented
@@ -3044,7 +3049,7 @@ async function runOneScriptAttempt(
     // and on Linux a silent write into the appHome tmpfs that evaporated at
     // exit. The agent path next door already resolves iso paths for the same
     // reason (`{{__repos__}}` below).
-    repos: repoProjection.map((r) => ({ name: r.name, path: r.path })),
+    repositories: repoProjection.map((r) => ({ name: r.name, reference: r.path })),
     taskId,
     nodeId: a.node.id,
     nodeRunId: a.nodeRunId,
@@ -3053,54 +3058,48 @@ async function runOneScriptAttempt(
     shardKey: null,
     envelopeNonce,
     interpreter: a.interpreter,
-    depsEnv,
+    dependencies: depsEnv,
     ...(opts.defaultPerNodeTimeoutMs === undefined
       ? {}
       : { timeoutMs: opts.defaultPerNodeTimeoutMs }),
     ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-    beforeSpawn: async ({ argv, cwd }) => {
+    beforeStart: async (start) => {
+      const persistence = opts.persistence.effects
       processEffect = createProcessEffectAttemptObserver({
-        persistence: opts.persistence.effects,
+        persistence,
         taskId,
         nodeRunId: a.nodeRunId,
         processKind: 'script',
-        argv,
-        cwd,
-        resourceKeys: a.isReadonly ? [] : { writerWorkspace: worktreePath },
+        resourceKeys: (description) => description.resourceKeys,
+        projection: start.project(
+          persistence,
+          a.isReadonly ? [] : { writerWorkspace: worktreePath },
+        ),
       })
       await processEffect?.beforeSpawn()
     },
     gitUserName: task.gitUserName,
     gitUserEmail: task.gitUserEmail,
-    onSpawned: async ({ pid, spawnBinaryPath, launchNonce }) => {
+    onStarted: async (receipt) => {
       // Persist before reading a single byte of output: a daemon crash after
       // this point leaves the boot reaper something to match (design-gate P0-3).
-      const runtimeParamsJson = JSON.stringify({
-        script: {
-          interpreter: a.interpreter.path,
-          interpreterVersion: a.interpreter.version,
-          depsHash: depsEnv?.hash ?? null,
-        },
+      const runtimeParamsJson = opts.taskScriptRuns.runtimeParameters({
+        interpreter: a.interpreter,
+        dependencies: depsEnv,
       })
       if (processEffect === undefined) {
-        await opts.persistence.nodeExecution.patch({
+        await opts.taskScriptRuns.recordUnownedStart({
+          persistence: opts.persistence.nodeExecution,
           nodeRunId: a.nodeRunId,
-          values: {
-            pid,
-            spawnBinaryPath,
-            spawnLaunchNonce: launchNonce ?? null,
-            runtimeParamsJson,
-          },
-          ...executionContextInput(state),
+          receipt,
+          runtimeParamsJson,
+          executionContext: () => executionContextInput(state),
         })
       } else {
-        await processEffect.recordSpawnReceipt(
-          { pid, spawnBinaryPath, launchNonce },
-          runtimeParamsJson,
-        )
+        await processEffect.recordSpawnReceipt(receipt, runtimeParamsJson)
       }
     },
-    requireSpawnReceipt: true,
+    requireStartReceipt: true,
     onStdoutLine: async (line) => {
       // NOT masked, deliberately: stdout is the DATA channel. Its bytes become
       // the port value verbatim (AC-27), so masking this mirror would show the

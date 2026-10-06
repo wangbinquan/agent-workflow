@@ -562,17 +562,52 @@ describe('RFC-370 native MCP root completeness', () => {
       visit(fn.body)
       expect(calls).toHaveLength(1)
       expect(hash(calls[0]!.arguments[0]!, source)).toBe(argumentHash)
+      let scriptSelections = 0
       const transformed = ts.transform(fn.body, [
         (context) => {
-          const inverse: ts.Visitor = (node) =>
-            ts.isIdentifier(node) && node.text === 'composeLocalMcpDiagnostics'
+          const inverse: ts.Visitor = (node) => {
+            if (ts.isObjectLiteralExpression(node)) {
+              const script = node.properties.filter(
+                (property) =>
+                  ts.isPropertyAssignment(property) &&
+                  property.name.getText(source) === 'taskScriptRunsFor' &&
+                  property.initializer.getText(source) === 'composeLocalTaskScriptRunFamily',
+              )
+              if (script.length > 0) {
+                expect(script).toHaveLength(1)
+                expect(
+                  node.properties.some(
+                    (property) =>
+                      ts.isPropertyAssignment(property) &&
+                      property.name.getText(source) === 'taskAgentRunsFor' &&
+                      property.initializer.getText(source) === 'composeLocalTaskAgentRunFamilyFor',
+                  ),
+                ).toBe(true)
+                scriptSelections++
+                return ts.factory.updateObjectLiteralExpression(
+                  node,
+                  ts.factory.createNodeArray(
+                    node.properties
+                      .filter((property) => property !== script[0])
+                      .map(
+                        (property) =>
+                          ts.visitNode(property, inverse, ts.isObjectLiteralElementLike)!,
+                      ),
+                    node.properties.hasTrailingComma,
+                  ),
+                )
+              }
+            }
+            return ts.isIdentifier(node) && node.text === 'composeLocalMcpDiagnostics'
               ? ts.factory.createIdentifier('composeMcpDiagnostics')
               : ts.visitEachChild(node, inverse, context)
+          }
           return (node) => ts.visitNode(node, inverse, ts.isBlock)!
         },
       ])
       expect(hash(transformed.transformed[0]!, source)).toBe(bodyHash)
       expect(transformed.transformed[0]!.statements.length).toBe(statements)
+      expect(scriptSelections).toBe(1)
       transformed.dispose()
       expect(source.text).toContain(
         "from '@/modules/resource-catalog/composition/localMcpDiagnostics'",

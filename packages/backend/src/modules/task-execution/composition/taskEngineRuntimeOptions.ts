@@ -29,6 +29,7 @@ import type { TaskOperationConfigurationQueries } from '../application/ports/tas
 
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
+import type { TaskScriptRunFamily } from '../application/ports/taskScriptRunFamily'
 
 export interface RunTaskOptions {
   taskId: string
@@ -51,6 +52,8 @@ export interface RunTaskOptions {
   portArtifacts?: PortArtifactOperations
   /** Complete invocation family selected by bootstrap for this drive. */
   taskAgentRuns?: TaskAgentRunFamily
+  /** Complete script effects selected again for every effective drive. */
+  taskScriptRuns?: TaskScriptRunFamily
   /** Bootstrap selects a complete factory; each effective canonical scene binds its own scope. */
   isolationWorkspaces?: IsolationWorkspaceFactory
   repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
@@ -227,6 +230,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
   readonly taskAgentRuns: TaskAgentRunFamily
+  readonly taskScriptRuns: TaskScriptRunFamily
   readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
   readonly taskDagCollaboration: TaskDagCollaborationOperations

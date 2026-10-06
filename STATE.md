@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 Task Script 完整效果家族候选收口
+
+Script 普通策略使用完整所选家族，解释器、依赖环境、run-content、启动及结果由 owner 引用承载，原生算法完整迁入 TE local。SQLite HTTP／SQLite CLI／PG三个根显式选择local；子任务在自己的drive重新绑定。原两native全文件与19／6个公开名、完整policy／wiring11文件45组、原oracle／Windows及MCP三根完整hash／语句保持。SOURCE26-R1的dropped集合漏键FAIL留证；R2修正后PASS，首轮原census因缺显式资源resolver失败留证；R3只补同一所选description.resourceKeys的resolver，59入口有效稳定PASS。新增31个预期双provider／constructor回归交GitHub，本机没有AW tests/typecheck/build/service。
+
+有效后继原scoped census一次使用全部committed85cdf556和26冻结候选，13份matching清单sourceDigest sha256:0673df097f068e92d2d122b794d09987684684912ccf22cc284bfc1cee36fd28，四原规则不变。原345条authored债全部保留，新增四条真实legacy identity reexport地址债并保留A-T7退役；129有序库存／why、214guards、40SPI／69targets、9Task effects及原SCC保持。仅四项实际增长1915→1917、6632→6661、5834→5863、27110→27130登记匹配许可，下一个正常后继退役。本候选／门／清单不等于上库或正式CI通过，发布回执和新确切SHA另验。
+
+a26主CI终态cancelled、Windows成功；已包含a26的85cdf556主CI37439571232终态failure（46成功／3失败／1取消），其中原macOS shard5、真实PG和typecheck成功，macOS shard6取消以及文档／Static／required失败状态保留。不称整套成功。A-T7、公有出口与native bridge、doctor／专用命令、authority／recovery／background、完整A-G继续；CS adapter尚未开始，AW尚未部署到CS。M0先部署后逐项M1–M4的顺序保持，RFC未完成。详见[Script发布证据](design/RFC-370-crewstation-hosted-deployment/task-script-family-publication.md)。以下共享原文逐字保留。
+
 ## 2026-10-06 RFC-370 MCP 正式 CI 配套修复
 
 4a16c26f 的 Windows 平台正式 CI failure，原 boot recovery fixture 的四字符 requestDigest 不符合原迁移0125的64字符 SHA256 合同；仅修该 fixture 的真实 digest。macOS shard5 正式 failure 的原 RFC364 source oracle 仍寻找搬迁前 writer；仅对准实际 local 的唯一 recordSpawn，追加 application 显式 captureTurnStart 断言。全部原测试名、断言、预算和生产算法保持。SOURCE3-R1 独立功能 PASS（3 owned／4 control／6 evidence，共13；a1dcbda680d9e70fe10aec27acee5c64d1655992115812a177834b648cf802ea），完整两文件 AST 逆向证明通过。候选 PASS 不代表正式 CI 成功，后继 exact-SHA 另验。

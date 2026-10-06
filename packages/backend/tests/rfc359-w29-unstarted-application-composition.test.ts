@@ -618,6 +618,16 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
       selections[0]!.initializer.getText(source) !== 'composeLocalTaskAgentRunFamilyFor'
     )
       throw new Error('the actual root must select exactly one complete local Task family')
+    const scriptSelections = descendants(
+      body,
+      (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'taskScriptRunsFor',
+    ) as ts.PropertyAssignment[]
+    if (
+      scriptSelections.length !== 1 ||
+      scriptSelections[0]!.initializer.getText(source) !== 'composeLocalTaskScriptRunFamily' ||
+      scriptSelections[0]!.parent !== selections[0]!.parent
+    )
+      throw new Error('the actual root must select exactly one complete local Script family')
   }
   const original =
     source === server && name === 'composeSqliteApplicationDeps'
@@ -655,10 +665,16 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
                   (property) =>
                     !(
                       ts.isPropertyAssignment(property) &&
-                      (ts.isIdentifier(property.name)
+                      (((ts.isIdentifier(property.name)
                         ? property.name.text
                         : property.name.getText(source)) === 'taskAgentRunsFor' &&
-                      property.initializer.getText(source) === 'composeLocalTaskAgentRunFamilyFor'
+                        property.initializer.getText(source) ===
+                          'composeLocalTaskAgentRunFamilyFor') ||
+                        ((ts.isIdentifier(property.name)
+                          ? property.name.text
+                          : property.name.getText(source)) === 'taskScriptRunsFor' &&
+                          property.initializer.getText(source) ===
+                            'composeLocalTaskScriptRunFamily'))
                     ),
                 )
                 .map((property) => ts.visitNode(property, visit, ts.isObjectLiteralElementLike)!),

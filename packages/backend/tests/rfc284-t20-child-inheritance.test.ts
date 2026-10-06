@@ -56,6 +56,8 @@ const DISPOSITION = {
   nodeRunPrompts: 'dropped-registered',
   portArtifacts: 'dropped-registered',
   taskAgentRuns: 'dropped-registered',
+  // RFC-370: each child selects its complete script family at its own drive.
+  taskScriptRuns: 'dropped-registered',
   // The complete factory is re-supplied; a parent canonical scene is never inherited.
   isolationWorkspaces: 'dropped-registered',
   // Each child reuses its selected factory and binds its own repository workspaces.
@@ -137,6 +139,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'nodeRunRuntime',
         'nodeRunPrompts',
         'taskAgentRuns',
+        'taskScriptRuns',
         'portArtifacts',
         'isolationWorkspaces',
         'repositoryGitWorkspaces',

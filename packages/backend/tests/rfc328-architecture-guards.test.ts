@@ -17,7 +17,7 @@ const WORKER_MUTATION_FILES = new Set([
   'packages/backend/src/services/nodeRunMint.ts',
   'packages/backend/src/services/runner.ts',
   'packages/backend/src/services/scheduler.ts',
-  'packages/backend/src/services/scriptRun.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts',
 ])
 const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
   [

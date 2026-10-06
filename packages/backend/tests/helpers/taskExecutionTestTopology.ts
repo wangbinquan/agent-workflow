@@ -1,4 +1,5 @@
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
+import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
 import { join } from 'node:path'
 import {
   composePortArtifactOperations,
@@ -143,6 +144,7 @@ export function composeTaskExecutionTestRuntime(
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
       taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
+      taskScriptRunsFor: composeLocalTaskScriptRunFamily,
       nodeRunPromptsFor: (appHome) =>
         composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
       portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
@@ -293,6 +295,7 @@ export function runTaskWithRealTestTopology(
       nodeRunPrompts,
       portArtifacts,
     })
+  const taskScriptRuns = options.taskScriptRuns ?? composeLocalTaskScriptRunFamily()
   const repositoryPublicationTransport =
     options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
   const isolationWorkspaces = selectIsolationWorkspaceFactory(options.isolationWorkspaces)
@@ -310,6 +313,7 @@ export function runTaskWithRealTestTopology(
     participants: createTaskExecutionRuntimeParticipants({
       taskAgentRunsFor: (binding) =>
         options.taskAgentRuns ?? composeLocalTaskAgentRunFamilyFor(binding),
+      taskScriptRunsFor: () => options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(),
       nodeRunPromptsFor: () => nodeRunPrompts,
       portArtifactsFor: () => portArtifacts,
       db: options.db,
@@ -344,6 +348,7 @@ export function runTaskWithRealTestTopology(
       nodeRunPrompts,
       portArtifacts,
       taskAgentRuns,
+      taskScriptRuns,
       identityAccess,
       memoryInjectionQueries,
       observationInvocations,

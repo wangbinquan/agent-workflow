@@ -337,7 +337,7 @@ describe('T28 — plaintext at execution, masked in diagnostics', () => {
     // The script branch, delimited so a match from the agent branch cannot
     // stand in for one of these.
     const branch = mechanics.slice(
-      mechanics.indexOf('const outcome = await runScriptProcess({'),
+      mechanics.indexOf('const outcome = await runScriptProcess(opts.taskScriptRuns, {'),
       mechanics.indexOf('async function runAgentSingleNode('),
     )
 

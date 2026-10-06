@@ -1,4 +1,6 @@
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
+import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
+import type { TaskExecutionRuntimeParticipantsInput } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
@@ -119,6 +121,7 @@ export async function createEachProviderTaskExecution(
     readonly workspacePresence?: WorkspacePresenceQueries
     /** Complete explicit family replacement exercised by actual provider drives. */
     readonly taskAgentRunsFor?: typeof composeLocalTaskAgentRunFamilyFor
+    readonly taskScriptRunsFor?: TaskExecutionRuntimeParticipantsInput['taskScriptRunsFor']
     readonly isolationWorkspaces?: IsolationWorkspaceFactory
     /**
      * RFC-359 AC-1（第 9 刀第 1 步）：SQLite 的路由壳在调用 `retryNode` / `resumeTask`
@@ -224,6 +227,7 @@ export async function createEachProviderTaskExecution(
       composeSqliteTaskExecutionProviderRuntime(sqlite, {
         runtime: {
           taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
+          taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
           ...(options.isolationWorkspaces === undefined
             ? {}
             : { isolationWorkspaces: options.isolationWorkspaces }),
@@ -366,6 +370,7 @@ export async function createEachProviderTaskExecution(
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
       runtime: {
         taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
+        taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
         ...(options.isolationWorkspaces === undefined
           ? {}
           : { isolationWorkspaces: options.isolationWorkspaces }),

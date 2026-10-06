@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1915,
+    "entries": 1917,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -29734,6 +29734,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/composition/taskScriptRunFamily.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/taskScriptRunFamily.ts#runScriptWithFamily",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskScriptRunFamily.ts#runScriptWithFamily",
+      "symbol": "runScriptWithFamily",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/composition/triggerExecution.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createBuildScheduleLaunch",
@@ -31550,6 +31575,54 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts#createLocalProcessEffectProjection",
       "symbol": "createLocalProcessEffectProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts#runScriptProcess",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts#runScriptProcess",
+      "symbol": "runScriptProcess",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/taskScriptRunFamily.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/taskScriptRunFamily.ts#createLocalTaskScriptRunFamily",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/taskScriptRunFamily.ts#createLocalTaskScriptRunFamily",
+      "symbol": "createLocalTaskScriptRunFamily",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -42797,30 +42870,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/scriptRun.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/scriptRun.ts#runScriptProcess",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/scriptRun.ts#runScriptProcess",
-      "symbol": "runScriptProcess",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": true,
         "fenceOrOcc": false,
@@ -45826,7 +45875,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:783ae02a0fd9d3ab72b2b2a869eeba9b42565880e6be202e8f8f603ae060472a",
+  "sourceDigest": "sha256:0673df097f068e92d2d122b794d09987684684912ccf22cc284bfc1cee36fd28",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

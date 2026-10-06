@@ -72,6 +72,7 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  */
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
+import type { TaskScriptRunFamily } from '../application/ports/taskScriptRunFamily'
 import type { LocalTaskAgentRunFamilyBinding } from '../composition/localTaskAgentRunFamily'
 
 export interface TaskExecutionRuntimeParticipantsInput {
@@ -87,6 +88,9 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
   readonly portArtifactsFor: (appHome: string) => PortArtifactOperations
   readonly taskAgentRunsFor: (binding: LocalTaskAgentRunFamilyBinding) => TaskAgentRunFamily
+  readonly taskScriptRunsFor: (
+    request: Parameters<TaskExecutionDriveParticipant['drive']>[0],
+  ) => TaskScriptRunFamily
   readonly isolationWorkspaces?: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   readonly operationConfiguration?: TaskOperationConfigurationQueries
@@ -177,10 +181,12 @@ export function createTaskExecutionRuntimeParticipants(
           ? {}
           : { operationConfiguration: driveOptions.operationConfiguration }),
       })
+      const taskScriptRuns = input.taskScriptRunsFor(request)
       await driveTaskEngineApplication(
         {
           ...driveOptions,
           taskAgentRuns,
+          taskScriptRuns,
         },
         topology,
         runtimeComponents,
