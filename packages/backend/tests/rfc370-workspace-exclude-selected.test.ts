@@ -284,7 +284,7 @@ describeEachProvider('RFC-370 selected workspace profiles in real Task drives', 
             ? ['prompt', 'archive', 'agent', 'script', 'prompt', 'archive', 'agent', 'script']
             : ['agent', 'script', 'agent', 'script'],
         )
-        for (const receiver of receivers) expect(receiver).toBe(receivers[0])
+        for (const receiver of receivers) expect(receiver).toBe(receivers[0]!)
         expect(receivers[0]!.taskRunBinding).toBeDefined()
         expect((await h.rows()).map((row) => row.workspaceProfileDigest)).toEqual([
           'legacy-receiver',
@@ -447,9 +447,12 @@ describe('RFC-370 profile bootstrap choice', () => {
       selectWorkspaceExcludeProfileFactory({} as WorkspaceExcludeProfileFactory),
     ).toThrow(TypeError)
     expect(() =>
-      bindWorkspaceExcludeProfile({ bind: () => ({}) } as WorkspaceExcludeProfileFactory, {
-        workspaceRef: 'object:missing',
-      }),
+      bindWorkspaceExcludeProfile(
+        { bind: () => ({}) } as unknown as WorkspaceExcludeProfileFactory,
+        {
+          workspaceRef: 'object:missing',
+        },
+      ),
     ).toThrow(TypeError)
   })
 

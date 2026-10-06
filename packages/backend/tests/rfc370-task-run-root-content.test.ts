@@ -32,7 +32,7 @@ describeEachProvider('RFC-370 real application root content coherence', (harness
         return ack.promise
       },
     })
-    const nodeRunPrompts: NodeRunPromptOperations = Object.freeze({
+    const nodeRunPrompts: NodeRunPromptOperations = Object.freeze<NodeRunPromptOperations>({
       async store(receivedTask, receivedRun, text) {
         expect(this).toBe(nodeRunPrompts)
         const promptPath = 'object:prompt:' + receivedTask + '/' + receivedRun

@@ -347,7 +347,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(webhookDispatch).not.toContain('TaskRepositoryPublicationTransport')
     expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
     expect(
-      providerRuntime.match(/createTaskExecutionRuntimeParticipants\(\{/g)?.length,
+      providerRuntime.match(
+        /createTaskExecutionRuntimeParticipants\(\s*bindProviderTaskRunParticipantsInput\(/g,
+      )?.length,
       '两个组合根都必须调那**同一个**中立工厂：发布 transport 由装配方交，不许任一侧自己重建',
     ).toBe(2)
     expect(

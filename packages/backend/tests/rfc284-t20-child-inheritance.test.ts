@@ -62,6 +62,8 @@ const DISPOSITION = {
   isolationWorkspaces: 'dropped-registered',
   // Each child reuses its selected factory and binds its own repository workspaces.
   repositoryGitWorkspaces: 'dropped-registered',
+  // RFC-370: each child binds the selected profiles at its own runtime composition.
+  workspaceExcludeProfiles: 'dropped-registered',
   // RFC-370: the selected driver binds current settings for every child drive.
   operationConfiguration: 'dropped-registered',
   taskDagCollaboration: 'dropped-registered',
@@ -143,6 +145,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'portArtifacts',
         'isolationWorkspaces',
         'repositoryGitWorkspaces',
+        'workspaceExcludeProfiles',
         'operationConfiguration',
         'taskDagCollaboration',
         'collaborationRuntime',
