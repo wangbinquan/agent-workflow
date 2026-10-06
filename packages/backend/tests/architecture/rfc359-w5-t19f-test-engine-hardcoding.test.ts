@@ -403,6 +403,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc371-native-owner-pass.test.ts: 2',
   // RFC-371：外部原生格式固定 SQLite，AW durable owner/source/revision/archive 由两个 provider 验证。
   'rfc371-native-pages-provider.test.ts: 2',
+  // RFC-371：原外部 OpenCode SQLite 的建库与实际子进程各一处；AW 根、数字与恢复全部走双 provider。
+  'rfc371-native-root-collection.test.ts: 2',
   // RFC-371（Codex）：OpenCode 原生文件格式的元数据夹具，机械归类 real-file-database；
   // AW 来源存储、分页与投影仍由 rfc371-span-source-provider 的双 provider 回归验证。
   'rfc371-native-span-capture.test.ts: 1',

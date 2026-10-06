@@ -195,7 +195,7 @@ export async function qualifyOriginalNativeRoots(
   }
   const population = (
     await db
-      .select({ count: sql<string>`CAST(count(*) AS TEXT)` })
+      .select({ count: sql<string>`CAST(count(*) AS TEXT)`.mapWith(String) })
       .from(nativeUsageRootResults)
       .where(
         and(

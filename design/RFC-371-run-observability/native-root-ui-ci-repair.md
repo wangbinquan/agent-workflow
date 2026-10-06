@@ -26,3 +26,11 @@
 原真实子进程丢 ACK / 重建回归追加实际 source/emission 插入，验证新大写前缀记录
 不能取代原完整 seal，原 810 条、四桶、¥0.076140、严格 qualification 和 120000ms
 预算全部保持。原已通过 SOURCE3 及其材料保留；后继有限 SOURCE5 复核两个实际增量。
+
+# 补充完整主 CI 的两项实际失败
+
+`bc783298` 主 CI 的完整失败日志还发现两项本会话配套遗漏。原根结果人口已经用 `CAST(count(*) AS TEXT)` 保持任意精度十进制；现补显式 `.mapWith(String)`，使 PostgreSQL 聚合守卫能确认驱动结果经过解码，不转成可能失真的 Number。原双 provider 的 2 根、41 根、缺页、修订、回滚与丢 ACK 用例和全部判据、预算保持。
+
+原单引擎调用库存实际发现 `rfc371-native-root-collection.test.ts` 两处 OpenCode 外部 SQLite 文件构造：父进程建原生格式，实际子进程写同一原生 WAL。AW 自己的持久库继续取 `describeEachProvider` 的 `harness.db`。本批只在原排序位置登记该实际两处及原因，沿用原 `real-file-database` 机械分类；不增加例外、规则、开放迁移债或测试预算。原全库存与原断言保留。
+
+这是同一原生根功能的 CI 配套修复。正式功能结论仍由新确切 SHA 的 hosted CI 验收，本机没有运行 AW 测试、类型检查、构建或服务。
