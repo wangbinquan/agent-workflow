@@ -23,6 +23,7 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
     if (metrics.costCoverage) {
       fold.costRecords = metrics.costCoverage.records
       fold.pricedRecords = metrics.costCoverage.pricedRecords
+      fold.partiallyPricedRecords = metrics.costCoverage.partiallyPricedRecords ?? '0'
       fold.visible = metrics.costCoverage.visibility !== 'hidden'
       fold.priced = false
     }
@@ -50,6 +51,7 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
     metrics.cost.state === 'complete'
       ? metrics.records
       : (metrics.recordedCost?.pricedRecords ?? '0')
+  fold.partiallyPricedRecords = metrics.recordedCost?.partiallyPricedRecords ?? '0'
   fold.visible = metrics.cost.state !== 'hidden'
   fold.priced = metrics.cost.state === 'complete'
   const amount = metrics.cost.amount ?? metrics.recordedCost?.amount

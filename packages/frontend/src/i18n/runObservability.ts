@@ -24,6 +24,8 @@ export const runObservabilityZh = {
   recordedCost: '已记录人民币估值',
   incompleteEstimate: '估值不完整',
   recordedCostCoverage: '估值不完整 · {{priced}} / {{records}} 条记录已定价',
+  recordedPartialCostCoverage:
+    '估值不完整 · 完整估值 {{priced}} 条，部分估值 {{partial}} 条，共 {{records}} 条',
   recordedTokens: '已记录',
   recordedUsageCoverage:
     '已收到 {{records}} 条用量记录，{{observed}} / {{calls}} 次调用已有用量或零消耗证明。',
@@ -358,6 +360,8 @@ export const runObservabilityEn: RunObservabilityMessages = {
   recordedCost: 'Recorded CNY estimate',
   incompleteEstimate: 'Incomplete estimate',
   recordedCostCoverage: 'Incomplete estimate · {{priced}} / {{records}} records priced',
+  recordedPartialCostCoverage:
+    'Incomplete estimate · {{priced}} fully priced, {{partial}} partially priced, {{records}} records total',
   recordedTokens: 'Recorded',
   recordedUsageCoverage:
     '{{records}} usage records received; {{observed}} / {{calls}} calls have usage or proven zero usage.',

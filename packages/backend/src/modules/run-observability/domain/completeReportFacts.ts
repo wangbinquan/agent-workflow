@@ -16,6 +16,20 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
   try {
     const canonicalCount = (count: unknown) =>
       typeof count === 'string' && /^(0|[1-9]\d*)$/.test(count)
+    const partialCount = (value: { readonly partiallyPricedRecords?: string }) =>
+      value.partiallyPricedRecords ?? '0'
+    const partialFields = (value: { readonly partiallyPricedRecords?: string }) =>
+      value.partiallyPricedRecords === undefined
+        ? {}
+        : { partiallyPricedRecords: value.partiallyPricedRecords }
+    const qualifiedPopulation = (value: {
+      readonly records: string
+      readonly pricedRecords: string
+      readonly partiallyPricedRecords?: string
+    }) =>
+      [value.records, value.pricedRecords, partialCount(value)].every(canonicalCount) &&
+      (value.partiallyPricedRecords === undefined || BigInt(value.partiallyPricedRecords) > 0n) &&
+      BigInt(value.pricedRecords) + BigInt(partialCount(value)) <= BigInt(value.records)
     if (metrics.state === 'not-applicable')
       return (
         !('recordedCost' in metrics) &&
@@ -52,7 +66,13 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
               (bucket) =>
                 BigInt(metrics.costCoverage!.pricedRecords) <=
                 BigInt(coverage.bucketRecords[bucket]),
-            )))
+            ) ||
+            TOKEN_BUCKETS.reduce(
+              (sum, bucket) => sum + BigInt(coverage.bucketRecords[bucket]),
+              0n,
+            ) <
+              BigInt(metrics.costCoverage.pricedRecords) * 4n +
+                BigInt(partialCount(metrics.costCoverage))))
       )
         return false
     }
@@ -86,12 +106,13 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
       const coverage = metrics.costCoverage
       if (
         !coverage ||
-        ![coverage.records, coverage.pricedRecords].every(canonicalCount) ||
-        BigInt(coverage.pricedRecords) > BigInt(coverage.records) ||
+        !qualifiedPopulation(coverage) ||
+        (BigInt(partialCount(coverage)) > 0n && !metrics.tokenCoverage) ||
         !['visible', 'hidden'].includes(coverage.visibility) ||
         !isDeepStrictEqual(coverage, {
           records: coverage.records,
           pricedRecords: coverage.pricedRecords,
+          ...partialFields(coverage),
           visibility: coverage.visibility,
         })
       )
@@ -104,19 +125,20 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
         recorded.currency !== 'CNY' ||
         typeof recorded.amount !== 'string' ||
         !/^(0|[1-9]\d*)(\.\d{1,12})?$/.test(recorded.amount) ||
-        ![recorded.records, recorded.pricedRecords].every(canonicalCount) ||
-        BigInt(recorded.pricedRecords) <= 0n ||
-        BigInt(recorded.pricedRecords) > BigInt(recorded.records) ||
+        !qualifiedPopulation(recorded) ||
+        BigInt(recorded.pricedRecords) + BigInt(partialCount(recorded)) <= 0n ||
         !isDeepStrictEqual(recorded, {
           currency: 'CNY',
           amount: recorded.amount,
           records: recorded.records,
           pricedRecords: recorded.pricedRecords,
+          ...partialFields(recorded),
         }) ||
         (metrics.state === 'not-ready'
           ? metrics.costCoverage?.visibility !== 'visible' ||
             metrics.costCoverage.records !== recorded.records ||
-            metrics.costCoverage.pricedRecords !== recorded.pricedRecords
+            metrics.costCoverage.pricedRecords !== recorded.pricedRecords ||
+            partialCount(metrics.costCoverage) !== partialCount(recorded)
           : metrics.cost.state !== 'unpriced' || metrics.records !== recorded.records)
       )
         return false

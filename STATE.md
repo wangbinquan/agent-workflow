@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-371 显示已知部分人民币估值
+
+原账本中已经计算出的 partial 人民币金额现在进入原报告 fold 与页面，并继续标记估值不完整。完整估值／部分估值计数互斥、不重复，四桶未知不补零；原受理价、usageRevision、全额 allocation、不可显示范围与完整总价资格保持。服务和实际前端缓存同步推进 scope-metrics/8，原历史报告和 projectionVersion=2 不改写。
+
+独立设计及 SOURCE22-v3 实现功能门有效 PASS，P1／P2 均为零，22 项实际 EOF 指纹稳定。自有 format／lint 通过；双 provider 137 条实际 partial 报告、原维度 EOF、新缓存与 zh/en 回归交本片新 exact-SHA hosted CI，没有本机 AW tests／typecheck／build。已有 CI 失败不冒称全仓绿，CS 自动刷新、原生接线和规模验收继续，两 RFC 仍开放。详见[部分人民币估值](design/RFC-371-run-observability/known-partial-cny.md)。以下共享 STATE 全部旧正文与并行输出逐字保留。
+
 ## 2026-10-06 RFC-370 自定义观察程序完整效果切面
 
 DESIGN-D1与SOURCE16-R2有效有限PASS；首SOURCE16-R1的两项功能P2与FAIL完整留证，修正legacy getter时点／receiver及原publish再validate的四次调用预期，未变38项复用原功能分析。42项稳定指纹d622818729f87bf2b0bef30fbc46d9d5faea1193243282ebb6b19775a3323453。完整七成员selected factory与opaque配对由adapter解释，唯一共同execute／run／validate与原native机制、三纯helper／env、3root＋module AST逆向、旧reader／expect／预算及真实native／双provider回归保持。Windows对称11触发路径、4suite原完整workflow inverse通过，新功能测试交hostedCI，不记未跑的用例成功。

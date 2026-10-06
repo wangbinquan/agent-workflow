@@ -88,10 +88,7 @@ export async function allocateCompleteObservationUsage(
           usage: contribution,
         })
         cost = {
-          amount:
-            value.availability === 'priced' && value.completeness === 'complete'
-              ? value.amountDecimal
-              : null,
+          amount: value.availability === 'priced' ? value.amountDecimal : null,
           complete: value.availability === 'priced' && value.completeness === 'complete',
           hidden: false,
         }
@@ -123,14 +120,13 @@ export async function allocateCompleteObservationUsage(
         const whole = TOKEN_BUCKETS.every(
           (bucket) => contribution[bucket] === original.projection.contribution[bucket],
         )
-        const complete =
+        const valued =
           whole &&
           value?.availability === 'priced' &&
-          value.completeness === 'complete' &&
           value.usageRevision === original.projection.projectionRevision
         cost = {
-          amount: complete ? value.amountDecimal : null,
-          complete,
+          amount: valued ? value.amountDecimal : null,
+          complete: valued && value.completeness === 'complete',
           hidden: !entry.fold.visible || value?.availability === 'not-authorized',
         }
       }

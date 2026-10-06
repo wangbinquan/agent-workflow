@@ -11,6 +11,7 @@ export interface CompleteObservationFold {
   records: string
   costRecords?: string
   pricedRecords?: string
+  partiallyPricedRecords?: string
   picos: string
   visible: boolean
   priced: boolean
@@ -26,6 +27,7 @@ export function emptyCompleteObservationFold(invocations = '0'): CompleteObserva
     records: '0',
     costRecords: '0',
     pricedRecords: '0',
+    partiallyPricedRecords: '0',
     picos: '0',
     visible: true,
     priced: true,
@@ -61,15 +63,22 @@ export function addCompleteObservationAllocation(
       fold.bucketRecords[bucket] = String(BigInt(fold.bucketRecords[bucket]) + 1n)
     }
   }
-  if (
-    !cost.complete ||
-    cost.amount === null ||
-    TOKEN_BUCKETS.some((bucket) => contribution[bucket] === null)
-  )
-    fold.priced = false
-  else {
-    fold.picos = String(BigInt(fold.picos) + cnyPicos(cost.amount))
+  const completeCost =
+    cost.complete &&
+    cost.amount !== null &&
+    TOKEN_BUCKETS.every((bucket) => contribution[bucket] !== null)
+  if (!completeCost) fold.priced = false
+  if (completeCost) {
+    fold.picos = String(BigInt(fold.picos) + cnyPicos(cost.amount!))
     if (!cost.hidden) fold.pricedRecords = String(BigInt(fold.pricedRecords) + 1n)
+  } else if (
+    !cost.hidden &&
+    !cost.complete &&
+    cost.amount !== null &&
+    TOKEN_BUCKETS.some((bucket) => contribution[bucket] !== null)
+  ) {
+    fold.picos = String(BigInt(fold.picos) + cnyPicos(cost.amount))
+    fold.partiallyPricedRecords = String(BigInt(fold.partiallyPricedRecords ?? '0') + 1n)
   }
 }
 export function mergeCompleteObservationFold(
@@ -93,6 +102,9 @@ export function mergeCompleteObservationFold(
     BigInt(into.pricedRecords ?? (into.priced ? into.records : '0')) +
       BigInt(next.pricedRecords ?? (next.priced ? next.records : '0')),
   )
+  into.partiallyPricedRecords = String(
+    BigInt(into.partiallyPricedRecords ?? '0') + BigInt(next.partiallyPricedRecords ?? '0'),
+  )
   for (const bucket of TOKEN_BUCKETS)
     into.tokens[bucket] = String(BigInt(into.tokens[bucket]) + BigInt(next.tokens[bucket]))
   for (const field of ['invocations', 'observedInvocations', 'records', 'picos'] as const)
@@ -109,9 +121,11 @@ export function completeObservationMetrics(
   const amount = `${n / 1_000_000_000_000n}${fraction ? '.' + fraction : ''}`
   const records = fold.costRecords ?? fold.records,
     pricedRecords = fold.pricedRecords ?? (fold.priced ? fold.records : '0')
+  const partiallyPricedRecords = fold.partiallyPricedRecords ?? '0'
+  const partialCoverage = BigInt(partiallyPricedRecords) > 0n ? { partiallyPricedRecords } : {}
   const recordedCost =
-    fold.visible && BigInt(pricedRecords) > 0n
-      ? { currency: 'CNY' as const, amount, records, pricedRecords }
+    fold.visible && BigInt(pricedRecords) + BigInt(partiallyPricedRecords) > 0n
+      ? { currency: 'CNY' as const, amount, records, pricedRecords, ...partialCoverage }
       : undefined
   if (fold.gaps.length) {
     const tokenCoverage = {
@@ -155,6 +169,7 @@ export function completeObservationMetrics(
             costCoverage: {
               records,
               pricedRecords,
+              ...partialCoverage,
               visibility: fold.visible ? ('visible' as const) : ('hidden' as const),
             },
           }

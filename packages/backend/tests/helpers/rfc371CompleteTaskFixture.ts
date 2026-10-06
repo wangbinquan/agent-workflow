@@ -79,6 +79,7 @@ export async function seedCompleteTask(
   harness: Pick<ProviderHarness, 'db'>,
   attempts = 1001,
   records = 10001,
+  transform?: (record: UsageLedgerRecord) => UsageLedgerRecord,
 ) {
   await harness.db
     .insert(users)
@@ -232,7 +233,8 @@ export async function seedCompleteTask(
       .insert(observationUsageCurrent)
       .values(
         Array.from({ length: Math.min(50, records - start) }, (_, i) => {
-          const row = completeTaskRecord(start + i, attempts)
+          const original = completeTaskRecord(start + i, attempts)
+          const row = transform ? transform(original) : original
           return {
             id: sha256Hex(
               JSON.stringify([

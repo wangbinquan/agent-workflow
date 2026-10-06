@@ -7,6 +7,7 @@ interface RecordedObservationCost {
   readonly amount: string
   readonly records: string
   readonly pricedRecords: string
+  readonly partiallyPricedRecords?: string
 }
 /** Decimal strings preserve exact cardinalities and every original token bucket. */
 export type CompleteObservationMetrics =
@@ -45,6 +46,7 @@ export type CompleteObservationMetrics =
       readonly costCoverage?: {
         readonly records: string
         readonly pricedRecords: string
+        readonly partiallyPricedRecords?: string
         readonly visibility: 'visible' | 'hidden'
       }
       readonly recordedCost?: RecordedObservationCost

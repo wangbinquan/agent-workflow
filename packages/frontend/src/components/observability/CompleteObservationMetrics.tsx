@@ -88,12 +88,20 @@ export function CompleteCost({
     return (
       <>
         <strong>{formatObservationCny(recorded.amount, true)}</strong>
-        {compact ? (
+        {compact || BigInt(recorded.partiallyPricedRecords ?? '0') > 0n ? (
           <p className="muted">
-            {t('runObservability.recordedCostCoverage', {
-              priced: BigInt(recorded.pricedRecords).toLocaleString(i18n.language),
-              records: BigInt(recorded.records).toLocaleString(i18n.language),
-            })}
+            {t(
+              BigInt(recorded.partiallyPricedRecords ?? '0') > 0n
+                ? 'runObservability.recordedPartialCostCoverage'
+                : 'runObservability.recordedCostCoverage',
+              {
+                priced: BigInt(recorded.pricedRecords).toLocaleString(i18n.language),
+                partial: BigInt(recorded.partiallyPricedRecords ?? '0').toLocaleString(
+                  i18n.language,
+                ),
+                records: BigInt(recorded.records).toLocaleString(i18n.language),
+              },
+            )}
           </p>
         ) : (
           <span className="muted"> · {t('runObservability.incompleteEstimate')}</span>
