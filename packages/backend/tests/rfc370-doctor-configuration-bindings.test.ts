@@ -200,11 +200,17 @@ describe('RFC-370 doctor configuration selection', () => {
   })
 
   test('the actual doctor root passes one selected instance to all three configuration consumers', () => {
-    const file = readFileSync(new URL('../src/cli/doctor.ts', import.meta.url), 'utf8')
+    const file = readFileSync(
+      new URL(
+        '../src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    )
     const source = ts.createSourceFile('doctor.ts', file, ts.ScriptTarget.Latest, true)
     const root = source.statements.find(
       (node): node is ts.FunctionDeclaration =>
-        ts.isFunctionDeclaration(node) && node.name?.text === 'doctorCommand',
+        ts.isFunctionDeclaration(node) && node.name?.text === 'createLocalDoctorDiagnostics',
     )
     expect(root?.body).toBeDefined()
     const compact = (node: ts.Node) => node.getText(source).replace(/\s+/g, '')

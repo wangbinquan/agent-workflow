@@ -102,7 +102,7 @@ const SCANNED = scanSameFileProviderPairs(
  * 裁决只能是 ① / ② / ③ / 漂移待合 四者之一（见文件头注）。
  */
 export const SAME_FILE_PROVIDER_PAIRS: readonly string[] = [
-  'cli/doctor.ts::checkSealedCredentials = checkPostgresqlSealedCredentials + checkSealedCredentials — ②：doctor 要在**守护进程没起来**时也能查：SQLite 直接 `new Database(<文件>, {readonly:true})` 打开那个文件，PostgreSQL 必须问一台**服务器**要连接池。文件 vs 服务器，判据第二条',
+  'modules/system-operations/infrastructure/local/doctorDiagnostics.ts::checkSealedCredentials = checkPostgresqlSealedCredentials + checkSealedCredentials — ②：doctor 要在**守护进程没起来**时也能查：SQLite 直接 `new Database(<文件>, {readonly:true})` 打开那个文件，PostgreSQL 必须问一台**服务器**要连接池。文件 vs 服务器，判据第二条',
   'embed.ts::countEmbeddedSqlMigrations = countEmbeddedPostgresqlSqlMigrations + countEmbeddedSqlMigrations — ②：两条迁移链是**两套各自落盘的工件**（`MIGRATION_FILES` / `POSTGRESQL_MIGRATION_FILES`），不是同一份 SQL 的两种渲染——与 `util/migrationsFolder.ts` 同一条理由',
   'embed.ts::extractMigrationsTo = extractMigrationsTo + extractPostgresqlMigrationsTo — ②：两条迁移链是**两套各自落盘的工件**（`MIGRATION_FILES` / `POSTGRESQL_MIGRATION_FILES`），不是同一份 SQL 的两种渲染——与 `util/migrationsFolder.ts` 同一条理由',
   'modules/resource-catalog/composition/resourcePackageMaintenance.ts::composeResourcePackageApplyMaintenance = composePostgresqlResourcePackageApplyMaintenance + composeSqliteResourcePackageApplyMaintenance — 漂移待合：两份的 `db` 都已是中立句柄，差别有二。①「谁提供 activity 登记表」——SQLite 那份靠注入、PG 那份自己建并对外交出 `activity`/`activityTracker`（§5fy 的老形状，可用缺省实参收口）；②**legacy 工件回收链**——SQLite 那份把「PG 格式回收 → 旧 SQLite 格式回收」串成 chain，PG 那份只读当前格式。第二点不是引擎差异而是**版本兼容尾巴**（盘上可能留着合一之前写的半成品），它绑的是「这台机器升级前跑过旧版本」，不是「这台机器用哪种数据库」。合一前要先回答：那条 legacy 回落还需要保留多久、能不能改成一次性迁移。**这个问题不该由本轮顺手定。**',

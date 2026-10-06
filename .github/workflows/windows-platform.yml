@@ -175,6 +175,18 @@ on:
       - 'packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts'
       - 'packages/backend/src/modules/development-automation/composition.ts'
       - 'packages/backend/tests/rfc370-verification-command-family.test.ts'
+      - 'packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/application/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts'
+      - 'packages/backend/src/cli/doctor.ts'
+      - 'packages/backend/src/main.ts'
+      - 'packages/backend/tests/rfc370-doctor-diagnostic-family.test.ts'
+      - 'packages/backend/tests/rfc370-doctor-configuration-bindings.test.ts'
+      - 'packages/backend/tests/rfc130-git-version-gate.test.ts'
+      - 'packages/backend/tests/cli-doctor-migrations.test.ts'
       - 'packages/backend/tests/rfc370-task-runtime-bindings.test.ts'
       - 'packages/backend/tests/rfc370-port-artifact-bindings.test.ts'
       - 'packages/backend/src/modules/runtime-management/application/ports/systemAgentRetainedContents.ts'
@@ -368,6 +380,18 @@ on:
       - 'packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts'
       - 'packages/backend/src/modules/development-automation/composition.ts'
       - 'packages/backend/tests/rfc370-verification-command-family.test.ts'
+      - 'packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/application/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts'
+      - 'packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts'
+      - 'packages/backend/src/cli/doctor.ts'
+      - 'packages/backend/src/main.ts'
+      - 'packages/backend/tests/rfc370-doctor-diagnostic-family.test.ts'
+      - 'packages/backend/tests/rfc370-doctor-configuration-bindings.test.ts'
+      - 'packages/backend/tests/rfc130-git-version-gate.test.ts'
+      - 'packages/backend/tests/cli-doctor-migrations.test.ts'
       - 'packages/backend/tests/rfc370-task-runtime-bindings.test.ts'
       - 'packages/backend/tests/rfc370-port-artifact-bindings.test.ts'
       - 'packages/backend/src/modules/runtime-management/application/ports/systemAgentRetainedContents.ts'
@@ -444,7 +468,7 @@ jobs:
         run: bun test --isolate packages/backend/tests/rfc363-preparation-process-recovery.test.ts packages/backend/tests/rfc363-task-workspace-process-recovery.test.ts
 
       - name: RFC-254 platform suites
-        run: bun test --isolate packages/backend/tests/rfc254-platform-exec.test.ts packages/backend/tests/rfc254-file-trust.test.ts packages/backend/tests/rfc254-env-case-folding.test.ts packages/backend/tests/rfc254-git-windows.test.ts packages/backend/tests/rfc254-script-node-windows.test.ts packages/backend/tests/rfc254-process-tree-ownership.test.ts packages/backend/tests/rfc254-platform-surface-guard.test.ts packages/backend/tests/rfc328-process-preactivation.test.ts packages/backend/tests/rfc370-native-process-location.test.ts packages/backend/tests/rfc370-process-effect-projection.test.ts packages/backend/tests/rfc370-execution-effect.test.ts packages/backend/tests/rfc359-w10-effect-observer-conformance.test.ts packages/backend/tests/rfc282-b1a-unified-spawn-parity.test.ts packages/backend/tests/rfc282-a1-eslint-boundary.test.ts packages/backend/tests/rfc282-single-implementation-lock.test.ts packages/backend/tests/rfc370-agent-material-compiler.test.ts packages/backend/tests/rfc370-agent-material-evidence.test.ts packages/backend/tests/rfc370-agent-material-workspace.test.ts packages/backend/tests/subagent-live-capture-source.test.ts packages/backend/tests/rfc371-invocation-wiring.test.ts packages/backend/tests/rfc143-runtime-driver-capability.test.ts packages/backend/tests/runner-inventory-integration.test.ts packages/backend/tests/rfc370-agent-invocation-binding.test.ts packages/backend/tests/rfc370-agent-invocation-preparation.test.ts packages/backend/tests/rfc370-system-agent-selected.test.ts packages/backend/tests/rfc370-system-agent-family.test.ts packages/backend/tests/rfc370-system-agent-callers.test.ts packages/backend/tests/rfc370-intent-system-purpose.test.ts packages/shared/tests/rfc370-workflow-output-evidence.test.ts packages/backend/tests/rfc370-runtime-smoke-selected.test.ts packages/backend/tests/rfc370-runtime-smoke-family.test.ts packages/backend/tests/rfc370-runtime-diagnostic-family.test.ts packages/backend/tests/rfc370-mcp-diagnostics-family.test.ts packages/backend/tests/rfc370-mcp-diagnostics-configuration.test.ts packages/backend/tests/rfc238-mcp-runtime-test-service.test.ts packages/backend/tests/rfc359-w29-mcp-application-lifecycle.test.ts packages/backend/tests/rfc364-diagnostics-bindings.test.ts packages/backend/tests/rfc360-runtime-management-application.test.ts packages/backend/tests/rfc370-task-agent-selected.test.ts packages/backend/tests/rfc370-task-agent-material-preparation.test.ts packages/backend/tests/rfc370-task-agent-native-compatibility.test.ts packages/backend/tests/rfc370-task-agent-family.test.ts packages/backend/tests/rfc370-task-agent-family-drive.test.ts packages/backend/tests/rfc370-task-script-family.test.ts packages/backend/tests/rfc370-verification-command-family.test.ts packages/backend/tests/rfc370-task-runtime-bindings.test.ts packages/backend/tests/rfc370-port-artifact-bindings.test.ts
+        run: bun test --isolate packages/backend/tests/rfc254-platform-exec.test.ts packages/backend/tests/rfc254-file-trust.test.ts packages/backend/tests/rfc254-env-case-folding.test.ts packages/backend/tests/rfc254-git-windows.test.ts packages/backend/tests/rfc254-script-node-windows.test.ts packages/backend/tests/rfc254-process-tree-ownership.test.ts packages/backend/tests/rfc254-platform-surface-guard.test.ts packages/backend/tests/rfc328-process-preactivation.test.ts packages/backend/tests/rfc370-native-process-location.test.ts packages/backend/tests/rfc370-process-effect-projection.test.ts packages/backend/tests/rfc370-execution-effect.test.ts packages/backend/tests/rfc359-w10-effect-observer-conformance.test.ts packages/backend/tests/rfc282-b1a-unified-spawn-parity.test.ts packages/backend/tests/rfc282-a1-eslint-boundary.test.ts packages/backend/tests/rfc282-single-implementation-lock.test.ts packages/backend/tests/rfc370-agent-material-compiler.test.ts packages/backend/tests/rfc370-agent-material-evidence.test.ts packages/backend/tests/rfc370-agent-material-workspace.test.ts packages/backend/tests/subagent-live-capture-source.test.ts packages/backend/tests/rfc371-invocation-wiring.test.ts packages/backend/tests/rfc143-runtime-driver-capability.test.ts packages/backend/tests/runner-inventory-integration.test.ts packages/backend/tests/rfc370-agent-invocation-binding.test.ts packages/backend/tests/rfc370-agent-invocation-preparation.test.ts packages/backend/tests/rfc370-system-agent-selected.test.ts packages/backend/tests/rfc370-system-agent-family.test.ts packages/backend/tests/rfc370-system-agent-callers.test.ts packages/backend/tests/rfc370-intent-system-purpose.test.ts packages/shared/tests/rfc370-workflow-output-evidence.test.ts packages/backend/tests/rfc370-runtime-smoke-selected.test.ts packages/backend/tests/rfc370-runtime-smoke-family.test.ts packages/backend/tests/rfc370-runtime-diagnostic-family.test.ts packages/backend/tests/rfc370-mcp-diagnostics-family.test.ts packages/backend/tests/rfc370-mcp-diagnostics-configuration.test.ts packages/backend/tests/rfc238-mcp-runtime-test-service.test.ts packages/backend/tests/rfc359-w29-mcp-application-lifecycle.test.ts packages/backend/tests/rfc364-diagnostics-bindings.test.ts packages/backend/tests/rfc360-runtime-management-application.test.ts packages/backend/tests/rfc370-task-agent-selected.test.ts packages/backend/tests/rfc370-task-agent-material-preparation.test.ts packages/backend/tests/rfc370-task-agent-native-compatibility.test.ts packages/backend/tests/rfc370-task-agent-family.test.ts packages/backend/tests/rfc370-task-agent-family-drive.test.ts packages/backend/tests/rfc370-task-script-family.test.ts packages/backend/tests/rfc370-verification-command-family.test.ts packages/backend/tests/rfc370-doctor-diagnostic-family.test.ts packages/backend/tests/rfc370-doctor-configuration-bindings.test.ts packages/backend/tests/rfc130-git-version-gate.test.ts packages/backend/tests/cli-doctor-migrations.test.ts packages/backend/tests/rfc370-task-runtime-bindings.test.ts packages/backend/tests/rfc370-port-artifact-bindings.test.ts
 
       # Bun.which resolves npm-installed OpenCode to opencode.cmd. Detached
       # wrappers can exit 0 while losing piped stdout, so this must run on a

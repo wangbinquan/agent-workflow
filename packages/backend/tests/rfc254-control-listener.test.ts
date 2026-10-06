@@ -311,7 +311,19 @@ describe('RFC-254 T7 — the daemon publishes and retracts the endpoint', () => 
 })
 
 describe('RFC-254 T7 / D19 — doctor reports the protection that is actually in force', () => {
-  const doctor = readFileSync(join(import.meta.dir, '..', 'src', 'cli', 'doctor.ts'), 'utf8')
+  const doctor = readFileSync(
+    join(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'system-operations',
+      'infrastructure',
+      'local',
+      'doctorDiagnostics.ts',
+    ),
+    'utf8',
+  )
 
   test('the mode-600 assertion is gated on the platform that HAS mode bits', () => {
     // Windows carries no POSIX permission bits — `statSync().mode & 0o777`

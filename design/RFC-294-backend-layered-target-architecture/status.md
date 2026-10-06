@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:aa63b6db90a5fe310cefde89187170f9435cb10466a39aefce1a971496e0b850`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6e608ac1d70d72ef7e76776c49bf9ea42eb56242d255f41524c3bacea83d32d9`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2304 |
+| backend production TS 文件 | 2310 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1715 / 18 |
+| `modules/**` 文件 / 非空 context | 1721 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 361 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 302 / 47 |
+| RFC-317 boundary census（inbound / outbound） | 307 / 48 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5869 |
+| `architectureExceptions` | 5906 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6667 |
+| `crossContextImports` | 6707 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27141 |
-| `mutationEntrypoints` | 1920 |
+| `moduleSymbolOwners` | 27157 |
+| `mutationEntrypoints` | 1923 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1187 |
 | `transactionExternalEffects` | 267 |
@@ -65,12 +65,12 @@
 | runtime-management / application | 30 |
 | source-control / application | 30 |
 | runtime-management / infrastructure | 28 |
-| system-operations / infrastructure | 27 |
+| system-operations / infrastructure | 28 |
 | run-observability / domain | 26 |
 | identity-access / application | 25 |
 | run-observability / infrastructure | 25 |
+| system-operations / application | 25 |
 | integration / application | 23 |
-| system-operations / application | 23 |
 | integration / infrastructure | 22 |
 | code-capability / application | 20 |
 | task-execution / engine | 20 |
@@ -81,9 +81,9 @@
 | code-capability / infrastructure | 15 |
 | collaboration / domain | 14 |
 | digital-employee / application | 14 |
+| system-operations / composition | 14 |
 | source-control / composition | 13 |
 | identity-access / infrastructure | 12 |
-| system-operations / composition | 12 |
 | code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
 | memory / application | 11 |
@@ -112,13 +112,13 @@
 | integration / public | 5 |
 | resource-catalog / public | 5 |
 | source-control / public | 5 |
+| system-operations / domain | 5 |
 | system-operations / public | 5 |
 | code-capability / composition | 4 |
 | development-automation / public | 4 |
 | integration / domain | 4 |
 | knowledge-evolution / application | 4 |
 | runtime-management / public | 4 |
-| system-operations / domain | 4 |
 | event-center / domain | 3 |
 | execution-contract / application | 3 |
 | identity-access / domain | 3 |
@@ -208,14 +208,14 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3770 |
-| legacy-inbound | 1880 |
+| legacy-outbound | 3788 |
+| legacy-inbound | 1899 |
 | offered-consumption | 330 |
 | infrastructure-external | 324 |
 | temporary-internal-debt | 114 |
 | off-dag-offered | 93 |
 | authority-type-only | 78 |
-| required-implementation | 72 |
+| required-implementation | 75 |
 | external-layer-debt | 4 |
 | provider-mirror | 2 |
 
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3770 |
-| legacy-inbound | 1880 |
+| legacy-outbound | 3788 |
+| legacy-inbound | 1899 |
 | temporary-internal-debt | 114 |
 | off-dag-offered | 93 |
 | no-circular | 6 |
@@ -235,10 +235,10 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3138 |
-| W9-D | 1058 |
+| W9 | 3151 |
+| W9-D | 1079 |
 | W4-E1 | 804 |
-| W5 | 203 |
+| W5 | 206 |
 | W4 | 201 |
 | W4-B | 187 |
 | W4-E8 | 163 |

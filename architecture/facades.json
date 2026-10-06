@@ -1825,7 +1825,11 @@
       "targetLayer": "infrastructure"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:4c05d218695b91f0e0ad",
+        "import:6859b9067132964dd9dc",
+        "import:7902936d6a5f4b1a146e"
+      ],
       "exportedSymbols": [
         "GIT_PROBE_TIMEOUT_MS",
         "GitCapabilities",
@@ -3773,6 +3777,7 @@
         "import:79e677a27db127530105",
         "import:7fffe1f742017d910ca9",
         "import:835ec062b66a4ad7e8a4",
+        "import:c507036df92521701751",
         "import:d50add293d533727c6e4",
         "import:d84409822ef4e47283a6",
         "import:d98eada297d0a956485e",
@@ -6478,5 +6483,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aa63b6db90a5fe310cefde89187170f9435cb10466a39aefce1a971496e0b850"
+  "sourceDigest": "sha256:6e608ac1d70d72ef7e76776c49bf9ea42eb56242d255f41524c3bacea83d32d9"
 }

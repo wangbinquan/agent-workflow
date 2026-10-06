@@ -20,7 +20,9 @@ import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { dbCompactCommand } from './cli/dbCompact'
 import { databaseCommand } from './cli/database'
-import { doctorCommand, formatDoctor } from './cli/doctor'
+import { formatDoctor } from './cli/doctor'
+import { composeDoctorApplication } from '@/modules/system-operations/composition/doctorDiagnostics'
+import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
 import { frameBackfillCommand } from './cli/frameBackfill'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { migrateCommand } from './cli/migrate'
@@ -400,7 +402,9 @@ async function main(): Promise<void> {
         if (result.status !== 'ok') process.exit(1)
         break
       }
-      const result = await doctorCommand()
+      const result = await composeDoctorApplication({
+        diagnostics: createLocalDoctorDiagnosticsFactory(),
+      }).run()
       process.stdout.write(formatDoctor(result))
       if (!result.ok) process.exit(1)
       break

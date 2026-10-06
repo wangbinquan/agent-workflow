@@ -113,7 +113,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 3,
     why: 'win32 icacls DACL 平台工具（node:child_process import + 同步调用）。',
   },
-  'cli/doctor.ts': {
+  'modules/system-operations/infrastructure/local/doctorDiagnostics.ts': {
     governance: 'short-lived',
     count: 2,
     why: 'doctor 诊断探针（daemon 外一次性 CLI，独立于执行层）。',

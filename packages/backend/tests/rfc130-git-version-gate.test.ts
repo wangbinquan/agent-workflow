@@ -92,7 +92,13 @@ describe('boot wiring (source locks + real probe)', () => {
   })
 
   test('doctor checkGit routes through evaluateGitCheck (no private 2.5.0 floor left)', () => {
-    const src = readFileSync(resolve(import.meta.dir, '../src/cli/doctor.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts',
+      ),
+      'utf8',
+    )
     expect(src).toContain('evaluateGitCheck(out)')
     // The old private floor (`compareSemver(v, '2.5.0') < 0`) must not return;
     // docstrings may still MENTION 2.5.0 as history, so lock the code shape.

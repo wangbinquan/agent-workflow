@@ -4098,6 +4098,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:095f156b40628bd4ab26",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#CheckResult",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "CheckResult",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
@@ -4979,6 +4996,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun",
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "pickFrameSourceRun",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0bc2b5df776cb362d577",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolvedDatabaseProviderRuntime",
+      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toSymbol": "ResolvedDatabaseProviderRuntime",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -14844,6 +14878,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:24116399182e76e669db",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/embed.ts#$file",
+      "toPath": "packages/backend/src/embed.ts",
+      "toSymbol": "IS_EMBEDDED",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/runtimeDiagnostics.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/application/mcps/runtimeDiagnostics.ts",
       "fromSymbol": "$file",
@@ -16182,6 +16233,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#composeDigitalEmployeeBuiltinToolCatalog",
       "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
       "toSymbol": "composeDigitalEmployeeBuiltinToolCatalog",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:275b4760669cc303862b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateSshCheck",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "evaluateSshCheck",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -19228,6 +19296,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2ee19dffd62e7fa6d23a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkBackups",
+      "toPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toSymbol": "checkBackups",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
@@ -21525,6 +21610,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:347d8880939f2247706c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
+      "toPath": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toSymbol": "databaseProviderTraits",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -22269,6 +22371,40 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:36a5fe62743f9416dfc8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#DoctorResult",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "DoctorResult",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "fromPath": "packages/backend/src/main.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:36b4dc1352f9679c7449",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts#composeDoctorApplication",
+      "toPath": "packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts",
+      "toSymbol": "composeDoctorApplication",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -30431,6 +30567,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4c05d218695b91f0e0ad",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W5",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/gitVersion.ts#MIN_GIT_VERSION",
+      "toPath": "packages/backend/src/services/gitVersion.ts",
+      "toSymbol": "MIN_GIT_VERSION",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file",
@@ -37505,6 +37658,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "fromPath": "packages/backend/src/main.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5f28e46a4a31c357fdbe",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts",
+      "toSymbol": "createLocalDoctorDiagnosticsFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromSymbol": "$file",
@@ -40191,6 +40361,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:66c17bed4f8a5fda34f3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#formatDoctor",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "formatDoctor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
       "fromSymbol": "$file",
@@ -40594,6 +40781,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree",
       "toPath": "packages/backend/src/util/git.ts",
       "toSymbol": "removeWorktree",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6859b9067132964dd9dc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W5",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/gitVersion.ts#parseGitVersion",
+      "toPath": "packages/backend/src/services/gitVersion.ts",
+      "toSymbol": "parseGitVersion",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -41211,6 +41415,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:69c2d72a6629c725cc26",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#requireDatabaseProviderRuntime",
+      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toSymbol": "requireDatabaseProviderRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "fromPath": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "fromSymbol": "$file",
@@ -41359,6 +41580,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6a4bcda6b6091ccf897e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/integrity.ts#quickCheckDbFile",
+      "toPath": "packages/backend/src/db/integrity.ts",
+      "toSymbol": "quickCheckDbFile",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -46668,6 +46906,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:78729ab050ee1e52a956",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateMigrationsStatus",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "evaluateMigrationsStatus",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/userIdentities.ts#$file",
       "fromPath": "packages/backend/src/services/userIdentities.ts",
       "fromSymbol": "$file",
@@ -46957,6 +47212,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7902936d6a5f4b1a146e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W5",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/gitVersion.ts#capabilitiesFromVersion",
+      "toPath": "packages/backend/src/services/gitVersion.ts",
+      "toSymbol": "capabilitiesFromVersion",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts",
       "fromSymbol": "$file",
@@ -47055,6 +47327,23 @@
       "toPath": "packages/backend/src/auth/actor.ts",
       "toSymbol": "Actor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7930324a0237b250d068",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkDbIntegrity",
+      "toPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toSymbol": "checkDbIntegrity",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -47547,6 +47836,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts#WebhookDeliveryGcSliceReceipt",
       "toPath": "packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts",
       "toSymbol": "WebhookDeliveryGcSliceReceipt",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7a92a3d46b8e1ca0237a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkPostgresqlSealedCredentials",
+      "toPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toSymbol": "checkPostgresqlSealedCredentials",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -52138,6 +52444,23 @@
       "toPath": "packages/backend/src/modules/runtime-management/public/types.ts",
       "toSymbol": "DISTILL_CAPTURE_FAILED_KIND",
       "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:86cb33276ceb6c4262e3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths",
+      "toPath": "packages/backend/src/util/paths.ts",
+      "toSymbol": "Paths",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -58991,6 +59314,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:991f4a4f285eaffdfb20",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#DoctorResult",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "DoctorResult",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -59210,23 +59550,6 @@
       "toPath": "packages/backend/src/auth/systemIdentity.ts",
       "toSymbol": "SYSTEM_USER_ID",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
-      "fromPath": "packages/backend/src/cli/doctor.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:99a987ad8356be9a651d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts#composeFileDoctorConfigurationQueries",
-      "toPath": "packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts",
-      "toSymbol": "composeFileDoctorConfigurationQueries",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -62391,6 +62714,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a15fa5e48fe223d34f64",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#buildLogicalSchemaContract",
+      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toSymbol": "buildLogicalSchemaContract",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/auth.ts#$file",
@@ -64246,6 +64586,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a6877e34019b59e56916",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#resolveDatabaseProviderRuntime",
+      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toSymbol": "resolveDatabaseProviderRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -64259,6 +64616,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/localMcpDiagnostics.ts",
       "toSymbol": "composeLocalMcpDiagnostics",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a69bc1a598a39bcc78fb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/fileTrust.ts#statMetadataIsAuthoritative",
+      "toPath": "packages/backend/src/util/fileTrust.ts",
+      "toSymbol": "statMetadataIsAuthoritative",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -64446,6 +64820,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nativeUsageEmissions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a6f7e07de60aa8e2c8b0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts",
+      "toSymbol": "createLocalDoctorDiagnosticsFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -67301,6 +67692,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:af8f9991781c340cce95",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost",
+      "toPath": "packages/backend/src/util/platformExec.ts",
+      "toSymbol": "platformSpawnOptionsForHost",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -71998,6 +72406,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bb60c55caf2491c2b09e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlRuntime.ts#PostgresqlDatabaseRuntime",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlRuntime.ts",
+      "toSymbol": "PostgresqlDatabaseRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
       "fromPath": "packages/backend/src/services/scheduler.ts",
       "fromSymbol": "$file",
@@ -73409,6 +73834,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bf227064b62c37ef7007",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts#composeDoctorApplication",
+      "toPath": "packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts",
+      "toSymbol": "composeDoctorApplication",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/localIsolationWorkspace.ts#$file",
       "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/localIsolationWorkspace.ts",
       "fromSymbol": "$file",
@@ -74356,6 +74798,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c1587abde41e9dfacd5b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file",
+      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toSymbol": "DatabaseProvider",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -75921,6 +76380,23 @@
       "toPath": "packages/backend/src/modules/collaboration/composition.ts",
       "toSymbol": "composeWorkgroupTaskRoomClarifyParticipantFactory",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c507036df92521701751",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#getRuntimeDriver",
+      "toPath": "packages/backend/src/services/runtime/index.ts",
+      "toSymbol": "getRuntimeDriver",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -78847,6 +79323,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cd3d76d74b76cd8021ab",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkConfig",
+      "toPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toSymbol": "checkConfig",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts#$file",
@@ -79408,6 +79901,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ce99a56f5f380ecc6b44",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/embed.ts#countEmbeddedSqlMigrations",
+      "toPath": "packages/backend/src/embed.ts",
+      "toSymbol": "countEmbeddedSqlMigrations",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts#$file",
@@ -79490,6 +80000,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
       "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
       "toSymbol": "admitDurableWorkOwner",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cef9c5f2f6183947532a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateLifecycleHealth",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "evaluateLifecycleHealth",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -82840,6 +83367,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d6a120ee522fed2809f1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkConfiguredDatabase",
+      "toPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toSymbol": "checkConfiguredDatabase",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -87007,6 +87551,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e02a0ba971dc28cf2bde",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateGitCheck",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "evaluateGitCheck",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -88484,6 +89045,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ConflictError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e3ec128a171a3b67b424",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#LifecycleHealthCounts",
+      "toPath": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toSymbol": "LifecycleHealthCounts",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -93212,6 +93790,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:efec1cec3e63dd02605f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkSealedCredentials",
+      "toPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toSymbol": "checkSealedCredentials",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/platformInventory.ts#$file",
@@ -94060,6 +94655,23 @@
       "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
       "toSymbol": "PortArtifactContentEffects",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f209bfdd4c36fdd7a2a9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#createSecretBox",
+      "toPath": "packages/backend/src/auth/secretBox.ts",
+      "toSymbol": "createSecretBox",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -96988,6 +97600,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f96832bcc774f6dcd1fc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkPostgresqlLifecycleHealth",
+      "toPath": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toSymbol": "checkPostgresqlLifecycleHealth",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupCommitQueue.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupCommitQueue.ts",
       "fromSymbol": "$file",
@@ -99775,9 +100404,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5869,
+    "architectureExceptions": 5906,
     "implementationSccs": 0,
-    "observedEdges": 6667,
+    "observedEdges": 6707,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -103850,6 +104479,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsagePreparations"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:095f156b40628bd4ab26",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "CheckResult",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#CheckResult"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/resourceAcl.ts",
@@ -104760,6 +105405,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/freshness.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:0bc2b5df776cb362d577",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseProviderRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "ResolvedDatabaseProviderRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolvedDatabaseProviderRuntime"
     },
     {
       "edgeKind": "type",
@@ -115451,6 +116112,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:24116399182e76e669db",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/embed",
+      "syntax": "static-import",
+      "targetSymbol": "IS_EMBEDDED",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/embed.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/embed.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/mcps/runtimeDiagnostics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/runtimeDiagnostics.ts#$file",
@@ -116968,6 +117645,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#composeDigitalEmployeeBuiltinToolCatalog"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:275b4760669cc303862b",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "evaluateSshCheck",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateSshCheck"
     },
     {
       "edgeKind": "value",
@@ -120074,6 +120767,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:2ee19dffd62e7fa6d23a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/infrastructure/local/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "checkBackups",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkBackups"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/nodeRollback.ts",
@@ -122491,6 +123200,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:347d8880939f2247706c",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/providerTraits",
+      "syntax": "static-import",
+      "targetSymbol": "databaseProviderTraits",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -123304,6 +124029,38 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:36a5fe62743f9416dfc8",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "DoctorResult",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#DoctorResult"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/main.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "id": "import:36b4dc1352f9679c7449",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/doctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "composeDoctorApplication",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts#composeDoctorApplication"
     },
     {
       "edgeKind": "type",
@@ -130778,6 +131535,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageMaintenance.ts#composeSqliteResourcePackageApplyMaintenance"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:48768d89044f9bd7991c",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/doctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "DoctorDiagnosticsFactory",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts#DoctorDiagnosticsFactory"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts",
@@ -132120,6 +132893,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#$file",
+      "id": "import:4c05d218695b91f0e0ad",
+      "owner": "system-operations",
+      "removeAfterWave": "W5",
+      "role": "legacy-outbound",
+      "specifier": "@/services/gitVersion",
+      "syntax": "static-import",
+      "targetSymbol": "MIN_GIT_VERSION",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/gitVersion.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/gitVersion.ts#MIN_GIT_VERSION"
     },
     {
       "edgeKind": "type",
@@ -139771,6 +140560,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/main.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "id": "import:5f28e46a4a31c357fdbe",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/localDoctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "createLocalDoctorDiagnosticsFactory",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "knowledge-evolution",
       "fromFile": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
@@ -142827,6 +143632,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:66c17bed4f8a5fda34f3",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "formatDoctor",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#formatDoctor"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
@@ -143352,6 +144173,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/git.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#$file",
+      "id": "import:6859b9067132964dd9dc",
+      "owner": "system-operations",
+      "removeAfterWave": "W5",
+      "role": "legacy-outbound",
+      "specifier": "@/services/gitVersion",
+      "syntax": "static-import",
+      "targetSymbol": "parseGitVersion",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/gitVersion.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/gitVersion.ts#parseGitVersion"
     },
     {
       "edgeKind": "type",
@@ -143995,6 +144832,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:69c2d72a6629c725cc26",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseProviderRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "requireDatabaseProviderRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#requireDatabaseProviderRuntime"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
@@ -144168,6 +145021,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:6a4bcda6b6091ccf897e",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/integrity",
+      "syntax": "static-import",
+      "targetSymbol": "quickCheckDbFile",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/integrity.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/integrity.ts#quickCheckDbFile"
     },
     {
       "edgeKind": "type",
@@ -149836,6 +150705,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:78729ab050ee1e52a956",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "evaluateMigrationsStatus",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateMigrationsStatus"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/userIdentities.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/userIdentities.ts#$file",
       "id": "import:7874e055a3ef739faf9b",
@@ -150155,6 +151040,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#$file",
+      "id": "import:7902936d6a5f4b1a146e",
+      "owner": "system-operations",
+      "removeAfterWave": "W5",
+      "role": "legacy-outbound",
+      "specifier": "@/services/gitVersion",
+      "syntax": "static-import",
+      "targetSymbol": "capabilitiesFromVersion",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/gitVersion.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/gitVersion.ts#capabilitiesFromVersion"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts#$file",
@@ -150280,6 +151181,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/application/ports/daemonHostLifecycle.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/daemonHostLifecycle.ts#DaemonHostLifecyclePort"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:7930324a0237b250d068",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/infrastructure/local/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "checkDbIntegrity",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkDbIntegrity"
     },
     {
       "edgeKind": "value",
@@ -150744,6 +151661,22 @@
       "toContext": "integration",
       "toFile": "packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts#WebhookDeliveryGcSliceReceipt"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:7a92a3d46b8e1ca0237a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/infrastructure/local/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "checkPostgresqlSealedCredentials",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkPostgresqlSealedCredentials"
     },
     {
       "edgeKind": "type",
@@ -155592,6 +156525,22 @@
       "toContext": "runtime-management",
       "toFile": "packages/backend/src/modules/runtime-management/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#DISTILL_CAPTURE_FAILED_KIND"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:86cb33276ceb6c4262e3",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/paths",
+      "syntax": "static-import",
+      "targetSymbol": "Paths",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/paths.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths"
     },
     {
       "edgeKind": "value",
@@ -162954,6 +163903,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/definitions.ts#defineQueryOperation"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:991f4a4f285eaffdfb20",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "DoctorResult",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#DoctorResult"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
@@ -163176,22 +164141,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/systemIdentity.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/systemIdentity.ts#SYSTEM_USER_ID"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/doctor.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
-      "id": "import:99a987ad8356be9a651d",
-      "owner": "bootstrap",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/system-operations/composition/doctorConfiguration",
-      "syntax": "static-import",
-      "targetSymbol": "composeFileDoctorConfigurationQueries",
-      "toContext": "system-operations",
-      "toFile": "packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts#composeFileDoctorConfigurationQueries"
     },
     {
       "edgeKind": "value",
@@ -166554,6 +167503,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#createTaskAutomationWorkStartProvider"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:a15fa5e48fe223d34f64",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/schemaContract",
+      "syntax": "static-import",
+      "targetSymbol": "buildLogicalSchemaContract",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#buildLogicalSchemaContract"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/auth.ts",
@@ -168811,6 +169776,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:a6877e34019b59e56916",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseProviderRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "resolveDatabaseProviderRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#resolveDatabaseProviderRuntime"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -168824,6 +169805,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/localMcpDiagnostics.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/localMcpDiagnostics.ts#composeLocalMcpDiagnostics"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:a69bc1a598a39bcc78fb",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/fileTrust",
+      "syntax": "static-import",
+      "targetSymbol": "statMetadataIsAuthoritative",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/fileTrust.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/fileTrust.ts#statMetadataIsAuthoritative"
     },
     {
       "edgeKind": "value",
@@ -169016,6 +170013,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageEmissions"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:a6f7e07de60aa8e2c8b0",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/localDoctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "createLocalDoctorDiagnosticsFactory",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/localDoctorDiagnostics.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -172171,6 +173184,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:af8f9991781c340cce95",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/platformExec",
+      "syntax": "static-import",
+      "targetSymbol": "platformSpawnOptionsForHost",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/platformExec.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
@@ -172232,6 +173261,22 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#FrozenRepositoryPreparationRef"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:afbd6f3da7378d827228",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/doctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "DoctorRuntimeSelectionRef",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts#DoctorRuntimeSelectionRef"
     },
     {
       "edgeKind": "value",
@@ -177099,6 +178144,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:bb60c55caf2491c2b09e",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "PostgresqlDatabaseRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlRuntime.ts#PostgresqlDatabaseRuntime"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/scheduler.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
@@ -177448,6 +178509,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseInbox"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:bc361592585ed06631f4",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/doctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "DoctorDiagnosticsFamily",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/doctorDiagnostics.ts#DoctorDiagnosticsFamily"
     },
     {
       "edgeKind": "value",
@@ -178555,6 +179632,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:bf227064b62c37ef7007",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/doctorDiagnostics",
+      "syntax": "static-import",
+      "targetSymbol": "composeDoctorApplication",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorDiagnostics.ts#composeDoctorApplication"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/localIsolationWorkspace.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/localIsolationWorkspace.ts#$file",
@@ -179544,6 +180637,22 @@
       "toContext": "runtime-management",
       "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:c1587abde41e9dfacd5b",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/schemaContract",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseProvider",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -181192,6 +182301,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:c507036df92521701751",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/services/runtime",
+      "syntax": "static-import",
+      "targetSymbol": "getRuntimeDriver",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/runtime/index.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#getRuntimeDriver"
     },
     {
       "edgeKind": "value",
@@ -184298,6 +185423,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:cd3d76d74b76cd8021ab",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/infrastructure/local/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "checkConfig",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkConfig"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/composition/humanGateRecoveryTicker.ts",
@@ -184842,6 +185983,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#runGit"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:ce99a56f5f380ecc6b44",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/embed",
+      "syntax": "static-import",
+      "targetSymbol": "countEmbeddedSqlMigrations",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/embed.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/embed.ts#countEmbeddedSqlMigrations"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
@@ -184936,6 +186093,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:cef9c5f2f6183947532a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "evaluateLifecycleHealth",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateLifecycleHealth"
     },
     {
       "edgeKind": "value",
@@ -188504,6 +189677,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:d6a120ee522fed2809f1",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/infrastructure/local/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "checkConfiguredDatabase",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkConfiguredDatabase"
     },
     {
       "edgeKind": "value",
@@ -192986,6 +194175,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:e02a0ba971dc28cf2bde",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "evaluateGitCheck",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#evaluateGitCheck"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -194584,6 +195789,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:e3ec128a171a3b67b424",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "LifecycleHealthCounts",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/doctorDiagnostics.ts#LifecycleHealthCounts"
     },
     {
       "edgeKind": "value",
@@ -199514,6 +200735,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:efec1cec3e63dd02605f",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/infrastructure/local/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "checkSealedCredentials",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkSealedCredentials"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/composition/platformInventory.ts",
@@ -200392,6 +201629,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
+      "id": "import:f209bfdd4c36fdd7a2a9",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/secretBox",
+      "syntax": "static-import",
+      "targetSymbol": "createSecretBox",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/secretBox.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#createSecretBox"
     },
     {
       "edgeKind": "type",
@@ -203560,6 +204813,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:f96832bcc774f6dcd1fc",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/infrastructure/local/doctorDiagnostics",
+      "syntax": "export",
+      "targetSymbol": "checkPostgresqlLifecycleHealth",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#checkPostgresqlLifecycleHealth"
     },
     {
       "edgeKind": "value",
@@ -207348,7 +208617,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aa63b6db90a5fe310cefde89187170f9435cb10466a39aefce1a971496e0b850",
+  "sourceDigest": "sha256:6e608ac1d70d72ef7e76776c49bf9ea42eb56242d255f41524c3bacea83d32d9",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
