@@ -432,7 +432,7 @@ describeEachProvider(
             // Only this retained native ownerless fixture omits the context.
             // Ordinary provider drives keep the required production contract.
             await execution.provider.runtime.schedulerDriver.drive(
-              driveRequest as Parameters<
+              driveRequest as unknown as Parameters<
                 typeof execution.provider.runtime.schedulerDriver.drive
               >[0],
             )

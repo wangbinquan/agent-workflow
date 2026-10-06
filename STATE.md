@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 Script ownerless 夹具后继类型修复
+
+7ebdc4fa 的 Windows37451081925／job112227534465 正式 failure：TS2352要求缺 context 的兼容输入先显式转 unknown。仅补唯一 ownerless 分支的这一类型投影；完整测试类型擦除输出与7eb候选相同，14个普通调用、生产 required 合同、所有场景／断言／预算保持。零生产、零 canonical改动，不重复原 census。上一有限功能门与此正式失败分别留证，后继候选独立检视及新 exact-SHA CI另验；主37451081883尚未取得终态，不称全仓成功。
+
+验证命令设计PASS、独立实现正在全算法／真实根与双provider回归核对，未随本片发布。仍在阶段A，专用命令余项、H7 authority/recovery、A-T7/A-G及CS adapters、M0首部署和M1～M4继续；AW尚未部署CS，RFC未完成。以下共享旧正文及并行输出逐字保留。
+
 ## 2026-10-06 RFC-370 Script fixture 的确切 CI 类型补正
 
 464ae329 的 Windows37447284274 正式 failure，唯一类型错误 TS2345 是新增 fixture 将 required executionContext 推为 optional；15个SQLite场景及constructor identity已先实际通过，仍不代表整套成功。正常14场景改为显式 required context，唯一 ownerless 本机兼容场景保留原缺字段输入并仅作fixture类型投影；生产合同、原断言／名称／预算不变，完整测试逆向恢复旧全文。主37447284205正式cancelled：7 success／36 cancelled／2 failure，原 Static 和汇总状态保留；维护37447284199 success。新exact-SHA hosted CI另验，没有本机AW tests/typecheck/build/service。

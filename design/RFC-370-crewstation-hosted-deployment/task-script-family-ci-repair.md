@@ -9,3 +9,9 @@
 生产源码人口与 sourceDigest 完全不变，本片不重复原 census；只按既定一次性规则退役上一发布已消费的四项增长声明，全部129条库存、why、实际 counter及其余 canonical保持。STATE新增本片事实并保留完整旧字节与并行输出。仅目标 format/lint及纯字节／AST／JSON核对，无本机 AW tests/typecheck/build/service。
 
 验证命令家族另在设计门；其未提交文档保留且不纳入这片修复。专用命令余项、执行权／恢复、A-T7/A-G、CS adapter、M0首部署与M1～M4继续，AW尚未部署CS，RFC不记Done。
+
+## 7ebdc4f 的后继类型修复
+
+7ebdc4fa0d7da70f74840d81cfbf12000921283f 的 Windows37451081925／job112227534465 正式 failure，仍在 Typecheck；其错误已变为 TS2352：缺字段对象直接投影成 TaskDriveRequest 时，TypeScript 要求显式 unknown 中转。上一有限功能门 PASS 不等于类型检查通过，此失败完整留证。
+
+仅在唯一 ownerless 兼容分支的已有类型投影中增加 unknown；类型擦除后的完整测试代码与7eb候选相同。14个有 context 的正常调用、生产 required 合同、所有原场景／断言／预算不变。保留旧完整文档与 STATE，仅追加本次真实 CI 事实；主37451081883仍未取得终态，不称整体通过。零生产改动、不重复 census、不修改 canonical 或增长声明；新 exact-SHA hosted CI继续验收。验证命令的设计门已通过，独立实现候选另行接线和检视，CS adapter与AW在CS部署仍未开始。
