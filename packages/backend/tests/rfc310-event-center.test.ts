@@ -1281,7 +1281,15 @@ console.log(JSON.stringify({
       'validation needs at least one real test object',
     )
     await eventCenter.customSources.commands.update(created.id, draft)
-    await expect(eventCenter.customSources.commands.validate(created.id)).resolves.toMatchObject({
+    // RFC-370: Bun's resolves failure hides the original Windows rejection.
+    // Print this real native validation error, then retain the same rejection
+    // object and every original assertion and execution budget.
+    await expect(
+      eventCenter.customSources.commands.validate(created.id).catch((error: unknown) => {
+        console.error('RFC-370 real custom observer validation rejected', error)
+        throw error
+      }),
+    ).resolves.toMatchObject({
       observationCount: 1,
     })
     const published = (await eventCenter.customSources.commands.publish(

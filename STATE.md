@@ -1,3 +1,9 @@
+## 2026-10-07 RFC-370 CI 修复已上库与 Windows 原生失败诊断
+
+有限源码与元数据功能复核通过后，32 个自有文件已提交并推送 0fd9973f06967c3628205ea0bcaec5501428b7b6，main／origin 0/0、index 空；并行 STATE 已在其前继提交完整保留。该 SHA 的 Windows37502737291 正式 failure：681 pass／3 skip／1 fail，唯一是原全局观察脚本实际 validate promise 拒绝，原日志缺少具体 Error。主 CI 与 maintenance 仍待正式终态，不记整仓绿。
+
+本片仅给该失败点增加原 Error 打印并重抛同一对象；原109 expect、四次原生执行、单次10s与whole-test50s保持，生产代码不改、不重复原架构采数。独立有限功能门及新 exact-SHA hosted CI 另验，按实际错误继续修复，不记原生失败已解决。详情见[原生诊断](design/RFC-370-crewstation-hosted-deployment/custom-observer-native-ci-diagnostics.md)。H7独立执行后台生命周期设计在审；剩余purpose／真实根／A-G与CS adapters、M0～M4继续，尚无AW-in-CS部署。以下共享STATE全部旧字节保持。
+
 ## 2026-10-07 RFC-371 部分估值夹具修复与原规模完整资格
 
 f69 的正式 CI failure 保留；本片仅修正自有 partial-CNY 夹具的无效 issue 和不存在的清理方法，原未知桶、137 条／2 attempts、9453／¥0.009453、所有断言与 60 秒预算不变。格式／lint 已通过，独立有限功能门和新 exact-SHA CI 分别验收，不运行本机 AW tests／typecheck／build。并行代码和架构清单未随本片收编或覆盖。
