@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 验证命令完整效果家族候选收口
+
+DA 普通组合必选 verificationCommands factory，在原 profile 读取位置以同一 evidence receiver 创建完整 resolveProgram／execute／collectFiles 家族。共用唯一 step／profile 串行、stop、结果与不含 duration 的 receipt digest 规则；原 resolver、glob、spawn／输出／超时／finally 机制完整迁入 local，旧公开 resolver 的 value identity 保持。SQLite HTTP、SQLite CLI与PG三个实际根显式选择，五个完整根／透传函数、八个实际原生 fixture 的十一调用、原全部断言／预算及 W29／MCP／Windows 完整逆向保持。
+
+SOURCE24-R1 有效稳定有限 PASS：24 owned／23 controls／4 evidence 共51，另2份原 missionStore 合同／落表 supplementary controls，实际53项独立首末读取。一次原 scoped census 使用全部committed8182及冻结9 production，四原规则不变，13 matching sourceDigest sha256:c19ee2e5ffa55d42caad7b5da102f34c991768d2ab4b2e56d4ab6e18532abef8。349 authored债、129有序库存／why、214 guards、40SPI／69targets、9 Task effects及原SCC保持，仅实测 mutation1917→1920、imports6661→6667、exceptions5863→5869、owners27130→27141登记一次性增长。
+
+8182 Windows37453467990正式success，包括Typecheck／构建；主37453467967正式failure（51 success／4 failure／1 cancelled）：Ubuntu shard8和macOS shard12同一旧facade精确清单漏Script两个已发布native转发地址，本片仅补两条实测thin-facade字面量、原完整测试可逆，原Static与required失败状态保留，未读取或分析Static日志。7eb主37451081883正式cancelled（38 success／15 cancelled／3 failure），不记成功。此候选／功能门／matching本身不等于本片上库或新正式CI通过。Doctor设计D1有效PASS但未随本片实现或发布；H7 authority/recovery、后台生命周期、A-T7/A-G继续。CS adapters尚未开始，M0首次部署及M1～M4未完成，AW未部署CS、RFC未完成。仅本片format/lint／纯AST字节JSON及一次原静态生成，无本机AW tests/typecheck/build/service。以下旧共享正文及所有并行输出逐字保留。
+
 ## 2026-10-06 RFC-370 Script ownerless 夹具后继类型修复
 
 7ebdc4fa 的 Windows37451081925／job112227534465 正式 failure：TS2352要求缺 context 的兼容输入先显式转 unknown。仅补唯一 ownerless 分支的这一类型投影；完整测试类型擦除输出与7eb候选相同，14个普通调用、生产 required 合同、所有场景／断言／预算保持。零生产、零 canonical改动，不重复原 census。上一有限功能门与此正式失败分别留证，后继候选独立检视及新 exact-SHA CI另验；主37451081883尚未取得终态，不称全仓成功。

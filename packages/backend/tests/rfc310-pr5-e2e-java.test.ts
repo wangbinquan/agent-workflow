@@ -13,6 +13,7 @@
 // requirement title）→ watching + mr-care wait。mock 侧断言 MR 与分支真实
 // 存在——平台从不 force push、从不 merge。
 
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { afterAll, beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -190,6 +191,7 @@ async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
   ;(fx as { e2ePolicyId?: string } as Record<string, unknown>).e2ePolicyId = vPolicy.id
 
   automation = composeDevelopmentAutomation({
+    verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,

@@ -22,6 +22,7 @@
 // `__mr.factsCollectedAt` cells 实现（PR-7 集成测试同款手法）——快进时钟，
 // 不伪造行为。
 
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { afterAll, beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmodSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -287,6 +288,7 @@ async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
     },
   }
   automation = composeDevelopmentAutomation({
+    verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,

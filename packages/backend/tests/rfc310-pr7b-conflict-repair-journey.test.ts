@@ -15,6 +15,7 @@
 // 必须前进（否则后续 fast-forward 发布拿旧 sha 当 CAS 期望值，必推不上去），
 // 以及 `__mr.factsCollectedAt` 归零（head 变了，mr.* 全部要重采）。
 
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -172,6 +173,7 @@ async function seedLaneDatabase(
   })
 
   automation = composeDevelopmentAutomation({
+    verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,
@@ -463,6 +465,7 @@ describeEachProvider(
       const evidence = new OpaqueEvidenceArtifacts(codec, join(HOME, 'selected-evidence'))
       const compose = () =>
         composeDevelopmentAutomation({
+          verificationCommands: createLocalVerificationCommandEffectsFactory(),
           db: fx.db,
           appHome: codec.reference(HOME),
           evidenceArtifacts: evidence,

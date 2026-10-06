@@ -598,12 +598,67 @@ function oldMcpDiagnosticsFamilyBody(
   return restored
 }
 
+// RFC-370: inverse only the new factory selection in the actual PostgreSQL DA root.
+function oldVerificationCommandsBody(
+  source: ts.SourceFile,
+  name: string,
+  body: ts.Block,
+): ts.Block {
+  if (source !== pg || name !== 'composePostgresqlApplication') return body
+  let selections = 0
+  const transformed = ts.transform(body, [
+    (context) => {
+      const inverse: ts.Visitor = (node) => {
+        if (
+          ts.isObjectLiteralExpression(node) &&
+          ts.isCallExpression(node.parent) &&
+          node.parent.expression.getText(source) === 'composeDevelopmentAutomation'
+        ) {
+          const entries = node.properties.filter(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              property.name.getText(source) === 'verificationCommands',
+          ) as ts.PropertyAssignment[]
+          if (
+            entries.length !== 1 ||
+            compact(entries[0]!.initializer, source) !==
+              'input.verificationCommands===undefined?createLocalVerificationCommandEffectsFactory():input.verificationCommands'
+          )
+            throw new Error(
+              'the actual PostgreSQL DA root must select one complete verification family',
+            )
+          selections++
+          return ts.factory.updateObjectLiteralExpression(
+            node,
+            ts.factory.createNodeArray(
+              node.properties
+                .filter((property) => property !== entries[0])
+                .map((property) => ts.visitNode(property, inverse, ts.isObjectLiteralElementLike)!),
+              node.properties.hasTrailingComma,
+            ),
+          )
+        }
+        return ts.visitEachChild(node, inverse, context)
+      }
+      return (node) => ts.visitNode(node, inverse, ts.isBlock)!
+    },
+  ])
+  if (selections !== 1) throw new Error('missing actual PostgreSQL verification selection')
+  const original = transformed.transformed[0]!
+  transformed.dispose()
+  return original
+}
+
 /** Only the approved composition seams are removed; every original subtree remains. */
 function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
   const body = oldSystemFamilyBody(
     source,
     name,
-    oldRuntimeDiagnosticsFamilyBody(source, name, functionBody(source, name)),
+    oldRuntimeDiagnosticsFamilyBody(
+      source,
+      name,
+      oldVerificationCommandsBody(source, name, functionBody(source, name)),
+    ),
   )
   if (
     (source === pg && name === 'composePostgresqlApplication') ||

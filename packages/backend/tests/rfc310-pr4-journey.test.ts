@@ -16,6 +16,7 @@
 //      changed 正常结算；violation 现场绝不产生 candidate；
 //   3. no-change 相对 action baseline clean 的合法性。
 
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -113,6 +114,7 @@ async function seedLaneDatabase(db: ProviderNeutralDatabase, repoPath: string): 
     createdAt: Date.now(),
   })
   automation = composeDevelopmentAutomation({
+    verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
     agentLauncher: scripted,
@@ -237,6 +239,7 @@ describeEachProvider(
       store.locations.set(repoPath, repoPath)
       const candidateEffects = Object.freeze(new MappedCandidateFactory(store))
       automation = composeDevelopmentAutomation({
+        verificationCommands: createLocalVerificationCommandEffectsFactory(),
         db: fx.db,
         appHome: HOME,
         agentLauncher: scripted,
@@ -308,6 +311,7 @@ describeEachProvider(
         resultText: null,
       })
       automation = composeDevelopmentAutomation({
+        verificationCommands: createLocalVerificationCommandEffectsFactory(),
         db: fx.db,
         appHome: HOME,
         evidenceArtifacts: evidence,

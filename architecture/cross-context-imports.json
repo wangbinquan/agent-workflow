@@ -3520,6 +3520,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/application/verificationRunner.ts#$file",
+      "fromPath": "packages/backend/src/modules/development-automation/application/verificationRunner.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:07f183829f68355f6708",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts#$file",
@@ -14147,6 +14164,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:22b7195c14bb01e45f93",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition.ts",
+      "toSymbol": "VerificationCommandEffectsFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts#$file",
       "fromPath": "packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts",
       "fromSymbol": "$file",
@@ -14313,6 +14347,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs.ts",
       "toSymbol": "*",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:22fecdcac51cad446408",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#reapDetachedGroup",
+      "toPath": "packages/backend/src/util/process.ts",
+      "toSymbol": "reapDetachedGroup",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -25940,6 +25991,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof",
       "toPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "toSymbol": "createDaemonLockProof",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:403e34edab8c5efb166a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts",
+      "toSymbol": "createLocalVerificationCommandEffectsFactory",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -53060,6 +53128,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8911e0154cc9dd044dc0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts",
+      "toSymbol": "createLocalVerificationCommandEffectsFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts",
       "fromSymbol": "$file",
@@ -53701,6 +53786,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentMissionLinks",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentMissionLinks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8aba785cca10cdc178a3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost",
+      "toPath": "packages/backend/src/util/platformExec.ts",
+      "toSymbol": "platformSpawnOptionsForHost",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -61509,23 +61611,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9f26ceae8af2c4e5cb3f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#reapDetachedGroup",
-      "toPath": "packages/backend/src/util/process.ts",
-      "toSymbol": "reapDetachedGroup",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -62422,6 +62507,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/sqlChunk.ts#chunkedAll",
       "toPath": "packages/backend/src/util/sqlChunk.ts",
       "toSymbol": "chunkedAll",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a197b3770dcdd7384796",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#killProcessTree",
+      "toPath": "packages/backend/src/util/process.ts",
+      "toSymbol": "killProcessTree",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -67015,6 +67117,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:af15067a4da1182b0e56",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition.ts",
+      "toSymbol": "VerificationCommandEffectsFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
@@ -70889,6 +71008,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentDecisions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b8d2eea8fbcd7c61eaea",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition.ts",
+      "toSymbol": "VerificationCommandEffectsFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -78815,23 +78951,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cd9ffae4fd0cdf2a7835",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#killProcessTree",
-      "toPath": "packages/backend/src/util/process.ts",
-      "toSymbol": "killProcessTree",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromSymbol": "$file",
@@ -84306,23 +84425,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d9a1679583594f8eba11",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
-      "toPath": "packages/backend/src/util/hash.ts",
-      "toSymbol": "sha256Hex",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromSymbol": "$file",
@@ -86652,23 +86754,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "fromPath": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:df958c192e5406e3f0a8",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost",
-      "toPath": "packages/backend/src/util/platformExec.ts",
-      "toSymbol": "platformSpawnOptionsForHost",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -88008,6 +88093,23 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e2fed1e8fb338c4a355d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts",
+      "toSymbol": "createLocalVerificationCommandEffectsFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -99673,9 +99775,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5863,
+    "architectureExceptions": 5869,
     "implementationSccs": 0,
-    "observedEdges": 6661,
+    "observedEdges": 6667,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -103170,6 +103272,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionMaintenanceClaims"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/application/verificationRunner.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/application/verificationRunner.ts#$file",
+      "id": "import:07f183829f68355f6708",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "type",
@@ -114597,6 +114715,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:22b7195c14bb01e45f93",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition",
+      "syntax": "static-import",
+      "targetSymbol": "VerificationCommandEffectsFactory",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "identity-access",
       "fromFile": "packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts#$file",
@@ -114786,6 +114920,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$file",
+      "id": "import:22fecdcac51cad446408",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/process",
+      "syntax": "static-import",
+      "targetSymbol": "reapDetachedGroup",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/process.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#reapDetachedGroup"
     },
     {
       "edgeKind": "type",
@@ -127138,6 +127288,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:403e34edab8c5efb166a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/localVerificationCommands",
+      "syntax": "static-import",
+      "targetSymbol": "createLocalVerificationCommandEffectsFactory",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -156485,6 +156651,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:8911e0154cc9dd044dc0",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/localVerificationCommands",
+      "syntax": "static-import",
+      "targetSymbol": "createLocalVerificationCommandEffectsFactory",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts#$file",
@@ -157170,6 +157352,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentMissionLinks"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$file",
+      "id": "import:8aba785cca10cdc178a3",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/platformExec",
+      "syntax": "static-import",
+      "targetSymbol": "platformSpawnOptionsForHost",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/platformExec.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost"
     },
     {
       "edgeKind": "type",
@@ -165557,22 +165755,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "development-automation",
-      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "id": "import:9f26ceae8af2c4e5cb3f",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/process",
-      "syntax": "static-import",
-      "targetSymbol": "reapDetachedGroup",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/process.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#reapDetachedGroup"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -166498,6 +166680,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/sqlChunk.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/sqlChunk.ts#chunkedAll"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "development-automation",
+      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#$file",
+      "id": "import:a197b3770dcdd7384796",
+      "owner": "development-automation",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/process",
+      "syntax": "static-import",
+      "targetSymbol": "killProcessTree",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/process.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#killProcessTree"
     },
     {
       "edgeKind": "value",
@@ -171780,6 +171978,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#codeRoundStages"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:af15067a4da1182b0e56",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition",
+      "syntax": "static-import",
+      "targetSymbol": "VerificationCommandEffectsFactory",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/background/observationReportWorker.ts",
@@ -175874,6 +176088,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentDecisions"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:b8d2eea8fbcd7c61eaea",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition",
+      "syntax": "static-import",
+      "targetSymbol": "VerificationCommandEffectsFactory",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -184181,22 +184411,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "development-automation",
-      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "id": "import:cd9ffae4fd0cdf2a7835",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/process",
-      "syntax": "static-import",
-      "targetSymbol": "killProcessTree",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/process.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/process.ts#killProcessTree"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
@@ -189989,22 +190203,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "development-automation",
-      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "id": "import:d9a1679583594f8eba11",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/hash",
-      "syntax": "static-import",
-      "targetSymbol": "sha256Hex",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/hash.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "knowledge-evolution",
       "fromFile": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepository.ts#$file",
@@ -192516,22 +192714,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/auxiliaryQueries.ts#composeIntentDumpAuxiliaryQueries"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "development-automation",
-      "fromFile": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#$file",
-      "id": "import:df958c192e5406e3f0a8",
-      "owner": "development-automation",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/platformExec",
-      "syntax": "static-import",
-      "targetSymbol": "platformSpawnOptionsForHost",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/platformExec.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
@@ -193922,6 +194104,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:e2fed1e8fb338c4a355d",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/localVerificationCommands",
+      "syntax": "static-import",
+      "targetSymbol": "createLocalVerificationCommandEffectsFactory",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/localVerificationCommands.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -207150,7 +207348,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0673df097f068e92d2d122b794d09987684684912ccf22cc284bfc1cee36fd28",
+  "sourceDigest": "sha256:c19ee2e5ffa55d42caad7b5da102f34c991768d2ab4b2e56d4ab6e18532abef8",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

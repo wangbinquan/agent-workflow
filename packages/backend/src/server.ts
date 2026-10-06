@@ -27,7 +27,11 @@ import {
   type AutomationWorkspaceEffectsFactory,
 } from '@/modules/development-automation/composition'
 import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
-import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
+import type {
+  RepositoryBaselineEffectsFactory,
+  VerificationCommandEffectsFactory,
+} from '@/modules/development-automation/composition'
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import type {
   CompleteObservationReportQueries,
   ObservationTaskQueries,
@@ -850,6 +854,7 @@ export interface AppDeps {
   repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
+  verificationCommands?: VerificationCommandEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   actionWorkspaceEffects?: ActionWorkspaceEffects
   conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -2067,6 +2072,10 @@ function composeFallbackDevelopmentAutomation(
     drive: (missionId) => automation.drive(missionId),
   })
   const automation = composeDevelopmentAutomation({
+    verificationCommands:
+      deps.verificationCommands === undefined
+        ? createLocalVerificationCommandEffectsFactory()
+        : deps.verificationCommands,
     actionWorkspaceEffects: deps.actionWorkspaceEffects,
     automationWorkspaceEffects: deps.automationWorkspaceEffects,
     repositoryBaselines: deps.repositoryBaselines,

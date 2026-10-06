@@ -25,7 +25,11 @@ import {
   type AutomationWorkspaceEffectsFactory,
 } from '@/modules/development-automation/composition'
 import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
-import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
+import type {
+  RepositoryBaselineEffectsFactory,
+  VerificationCommandEffectsFactory,
+} from '@/modules/development-automation/composition'
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
@@ -470,6 +474,7 @@ export interface StartOptions {
   workspaceReads?: RepositoryWorkspaceReadQueries
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
+  verificationCommands?: VerificationCommandEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   actionWorkspaceEffects?: ActionWorkspaceEffects
   conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -665,6 +670,7 @@ async function composePostgresqlProviderSession(
     workspaceReads: input.workspaceReads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
+    verificationCommands: input.verificationCommands,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1216,6 +1222,7 @@ interface DaemonProviderSessionComposeInput {
   readonly workspaceReads: RepositoryWorkspaceReadQueries
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
+  readonly verificationCommands?: VerificationCommandEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -1692,6 +1699,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       workspaceReads: selectRepositoryWorkspaceReadQueries(opts.workspaceReads),
       employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
       repositoryBaselines: opts.repositoryBaselines,
+      verificationCommands: opts.verificationCommands,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
@@ -2822,6 +2830,10 @@ async function composeSqliteProviderSession(
     }
   })()
   const developmentAutomation = composeDevelopmentAutomation({
+    verificationCommands:
+      input.verificationCommands === undefined
+        ? createLocalVerificationCommandEffectsFactory()
+        : input.verificationCommands,
     actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
     automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
@@ -3256,6 +3268,7 @@ async function composeSqliteProviderSession(
     workspaceReads: input.workspaceReads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
+    verificationCommands: input.verificationCommands,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,

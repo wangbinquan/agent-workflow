@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1917,
+    "entries": 1920,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -6386,6 +6386,56 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/development-automation/application/verificationRunner.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/application/verificationRunner.ts#runStep",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/verificationRunner.ts#runStep",
+      "symbol": "runStep",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/application/verificationRunner.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/application/verificationRunner.ts#runVerificationProfileWithEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/verificationRunner.ts#runVerificationProfileWithEffects",
+      "symbol": "runVerificationProfileWithEffects",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/development-automation/composition/digitalEmployeeWorkspace.ts#createDevelopmentEmployeeCaseWorkspaceDetailReader",
@@ -7615,6 +7665,81 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#createLocalVerificationCommandEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#createLocalVerificationCommandEffects",
+      "symbol": "createLocalVerificationCommandEffects",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#createLocalVerificationCommandEffectsFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#createLocalVerificationCommandEffectsFactory",
+      "symbol": "createLocalVerificationCommandEffectsFactory",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#createRepoScriptResolver",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts#createRepoScriptResolver",
+      "symbol": "createRepoScriptResolver",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -8057,56 +8182,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadSessionStore.ts#createUploadSessionPersistence",
       "symbol": "createUploadSessionPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#createRepoScriptResolver",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#createRepoScriptResolver",
-      "symbol": "createRepoScriptResolver",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#runStep",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts#runStep",
-      "symbol": "runStep",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -45875,7 +45950,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0673df097f068e92d2d122b794d09987684684912ccf22cc284bfc1cee36fd28",
+  "sourceDigest": "sha256:c19ee2e5ffa55d42caad7b5da102f34c991768d2ab4b2e56d4ab6e18532abef8",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

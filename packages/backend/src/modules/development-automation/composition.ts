@@ -7,6 +7,8 @@ import { selectActionWorkspaceEffects } from './infrastructure/actionWorkspaceEf
 export type { ActionWorkspaceEffects }
 export { selectDevelopmentWorkspaceEffectBinding } from './infrastructure/actionWorkspaceEffects'
 import type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'
+import type { VerificationCommandEffectsFactory } from './application/ports/verificationCommandEffects'
+export type { VerificationCommandEffectsFactory }
 // development-automation 装配入口（RFC-310）。
 //
 // 仅装配点可 import 本文件；它只做实例化与注入——不查 DB、无业务 if/switch、
@@ -113,10 +115,7 @@ import {
 } from './infrastructure/configResourceStore'
 import { createRepositoryFactsCollector } from './infrastructure/repositoryFactsCollector'
 import { recordUploadPublicationReceipt } from './infrastructure/uploadPublicationReceipt'
-import {
-  createRepoScriptResolver,
-  runVerificationProfile,
-} from './infrastructure/verificationRunner'
+import { runVerificationProfileWithEffects } from './application/verificationRunner'
 import { verificationProfileContentSchema } from './domain/verificationProfile'
 import { readUploadPlan } from './infrastructure/uploadPlanStore'
 import { createUploadMaintenancePersistence } from './infrastructure/missionInputUploadPersistence'
@@ -215,6 +214,7 @@ export interface DevelopmentAutomationModule {
 }
 
 export interface DevelopmentAutomationCompositionOptions {
+  readonly verificationCommands: VerificationCommandEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
@@ -367,13 +367,10 @@ function composeDevelopmentAutomationFromPersistence(
     },
     verificationExecution: {
       run: (input) =>
-        runVerificationProfile(
-          { evidence, resolver: createRepoScriptResolver() },
-          {
-            workspacePath: input.workspacePath,
-            profile: verificationProfileContentSchema.parse(input.profile),
-          },
-        ),
+        runVerificationProfileWithEffects(deps.verificationCommands.create({ evidence }), {
+          workspacePath: input.workspacePath,
+          profile: verificationProfileContentSchema.parse(input.profile),
+        }),
     },
     uploadPublication: persistence.uploadPublication,
     ...(deps.pipelineEvidence === undefined ? {} : { pipelineEvidence: deps.pipelineEvidence }),

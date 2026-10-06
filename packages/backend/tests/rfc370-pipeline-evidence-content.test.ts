@@ -1,5 +1,6 @@
 // RFC-370 A2: selected evidence content drives the actual Mission read faces.
 // Bounded range policy remains in the application; file IO has its own adapter.
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -179,6 +180,7 @@ describeEachProvider('RFC-370 selected Mission evidence contents', (harness) => 
     const appHome = mkdtempSync(join(tmpdir(), 'rfc370-selected-evidence-'))
     roots.push(appHome)
     const automation = composeDevelopmentAutomation({
+      verificationCommands: createLocalVerificationCommandEffectsFactory(),
       db: harness.db,
       appHome,
       evidenceContents: contents,

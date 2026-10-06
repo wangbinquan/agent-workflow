@@ -136,7 +136,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       '流式落盘再 hash——runGit 走 text() 会把二进制字节按 utf8 解码损坏，无法复用；' +
       '只读 git 对象、nonInteractiveGitEnv、用后即删临时目录。',
   },
-  'modules/development-automation/infrastructure/verificationRunner.ts': {
+  'modules/development-automation/infrastructure/local/verificationCommandEffects.ts': {
     governance: 'process-group',
     count: 1,
     why:

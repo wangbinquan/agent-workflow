@@ -5,6 +5,7 @@
 // newly launched direct mission stops after requirement materialization and no
 // wake source exists to ever start its Agent.
 
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -67,6 +68,7 @@ describeEachProvider('rfc310 mission driver', (harness) => {
       },
     }
     const automation = composeDevelopmentAutomation({
+      verificationCommands: createLocalVerificationCommandEffectsFactory(),
       db: fx.db,
       appHome: home,
       agentLauncher: launcher,

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:0673df097f068e92d2d122b794d09987684684912ccf22cc284bfc1cee36fd28`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:c19ee2e5ffa55d42caad7b5da102f34c991768d2ab4b2e56d4ab6e18532abef8`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2300 |
+| backend production TS 文件 | 2304 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1711 / 18 |
+| `modules/**` 文件 / 非空 context | 1715 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5863 |
+| `architectureExceptions` | 5869 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6661 |
+| `crossContextImports` | 6667 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27130 |
-| `mutationEntrypoints` | 1917 |
+| `moduleSymbolOwners` | 27141 |
+| `mutationEntrypoints` | 1920 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1187 |
 | `transactionExternalEffects` | 267 |
@@ -52,9 +52,9 @@
 | resource-catalog / infrastructure | 131 |
 | task-execution / composition | 87 |
 | resource-catalog / application | 78 |
-| development-automation / application | 61 |
+| development-automation / application | 63 |
 | collaboration / infrastructure | 47 |
-| development-automation / infrastructure | 44 |
+| development-automation / infrastructure | 45 |
 | resource-catalog / composition | 39 |
 | collaboration / application | 36 |
 | source-control / infrastructure | 36 |
@@ -77,8 +77,8 @@
 | integration / composition | 18 |
 | intent / domain | 18 |
 | run-observability / ports | 17 |
+| development-automation / composition | 16 |
 | code-capability / infrastructure | 15 |
-| development-automation / composition | 15 |
 | collaboration / domain | 14 |
 | digital-employee / application | 14 |
 | source-control / composition | 13 |
@@ -209,7 +209,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3770 |
-| legacy-inbound | 1874 |
+| legacy-inbound | 1880 |
 | offered-consumption | 330 |
 | infrastructure-external | 324 |
 | temporary-internal-debt | 114 |
@@ -224,7 +224,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3770 |
-| legacy-inbound | 1874 |
+| legacy-inbound | 1880 |
 | temporary-internal-debt | 114 |
 | off-dag-offered | 93 |
 | no-circular | 6 |
@@ -241,7 +241,7 @@
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 187 |
-| W4-E8 | 157 |
+| W4-E8 | 163 |
 | W4-E9 | 77 |
 | RFC-371 | 12 |
 | W2-D/W3/W5 | 12 |

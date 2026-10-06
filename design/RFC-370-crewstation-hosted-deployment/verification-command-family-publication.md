@@ -1,0 +1,11 @@
+# 验证命令家族有限发布记录
+
+本片是已批准 RFC-370 阶段 A 的独立验证命令切面，不包含 Doctor、H7 或任何 CS adapter。
+
+源码候选24文件（9 production）及原51项／另2 supplementary controls 的 SOURCE24-R1 有效稳定功能PASS，0 findings。原源码指纹250814ee03d05b2c4ba3ce815ba2336940b0f3574da01eb4588cab5e8d2d462c；完整12组native／policy、14份绑定和5个真实根／透传函数均逆向恢复原AST。新增13个common、双provider各8个真实DA场景及5个实际组合回归交正式GitHub CI，本机未执行AW tests/typecheck/build/service。新增夹具沿真实 mission/action/attempt/snapshot 接线，异步cleanup ACK先于持久verification facts。
+
+一份原 scoped census 使用全部 committed8182aeaa4223a5c5d2cd31d232c61684824b39f0 与冻结候选，sourceDigest sha256:c19ee2e5ffa55d42caad7b5da102f34c991768d2ab4b2e56d4ab6e18532abef8。四条原生成规则不变；13匹配清单保留全部349 authored债、129有序库存及why、214 guards、40SPI／69targets、9 Task effects与原SCC。只有实际测量的 mutation1917→1920、imports6661→6667、exceptions5863→5869、owners27130→27141登记一次增长，下一正常后继退役；没有扫描收缩、豁免或预算调整。完整已提交并行RFC371输出与共享STATE所有旧字节保持。
+
+前次Script ownerless夹具TS2352由8182的显式unknown类型投影修复；8182的Windows37453467990已正式success，包括Typecheck与single binary，主37453467967正式failure（51success／4failure／1cancelled），Ubuntu shard8和macOS shard12同一原facade精确清单遗漏services/scriptDepsEnv.ts和services/scriptRun.ts，已按原生成的thin-facade事实仅补这两个字面量；全文件逆向与全部原断言／预算保持，无规则或guard注册变化，不再生成census；原Static及required失败状态保留，未读取或分析Static日志。7eb主37451081883正式cancelled（38success／15cancelled／3failure）；原failure与cancelled保留，不混为本片成功。本文及候选门不替代实际publication receipt或新exact-SHA CI；本片提交后再按确切SHA取得正式终态。
+
+接续次序保持：先发布本片；实现Doctor完整家族，再H7执行权／恢复／后台生命周期与A-T7/A-G；其后B/M0必须adapters与首次实际部署，再逐项M1～M4。Doctor DESIGN-D1仅设计有效PASS，无生产改动；AW尚未部署CS、RFC仍In Progress。

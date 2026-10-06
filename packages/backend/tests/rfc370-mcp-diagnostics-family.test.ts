@@ -510,6 +510,56 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
 })
 
 describe('RFC-370 native MCP root completeness', () => {
+  // RFC-370: preserve the old complete roots after the exact verification binding inverse.
+  function inverseVerificationBindings(source: ts.SourceFile, body: ts.Block) {
+    let selections = 0
+    let forwards = 0
+    const transformed = ts.transform(body, [
+      (context) => {
+        const inverse: ts.Visitor = (node) => {
+          if (ts.isObjectLiteralExpression(node) && ts.isCallExpression(node.parent)) {
+            const entries = node.properties.filter(
+              (property) =>
+                ts.isPropertyAssignment(property) &&
+                property.name.getText(source) === 'verificationCommands',
+            ) as ts.PropertyAssignment[]
+            if (entries.length > 0) {
+              expect(entries).toHaveLength(1)
+              const callee = node.parent.expression.getText(source)
+              const value = entries[0]!.initializer.getText(source).replace(/\s/g, '')
+              if (callee === 'composeDevelopmentAutomation') {
+                expect(value).toBe(
+                  'input.verificationCommands===undefined?createLocalVerificationCommandEffectsFactory():input.verificationCommands',
+                )
+                selections++
+              } else {
+                expect(callee).toBe('composeSqliteApplicationDeps')
+                expect(value).toBe('input.verificationCommands')
+                forwards++
+              }
+              return ts.factory.updateObjectLiteralExpression(
+                node,
+                ts.factory.createNodeArray(
+                  node.properties
+                    .filter((property) => property !== entries[0])
+                    .map(
+                      (property) => ts.visitNode(property, inverse, ts.isObjectLiteralElementLike)!,
+                    ),
+                  node.properties.hasTrailingComma,
+                ),
+              )
+            }
+          }
+          return ts.visitEachChild(node, inverse, context)
+        }
+        return (node) => ts.visitNode(node, inverse, ts.isBlock)!
+      },
+    ])
+    const original = transformed.transformed[0]!
+    transformed.dispose()
+    return { body: original, selections, forwards }
+  }
+
   const root = resolve(import.meta.dir, '../src'),
     printer = ts.createPrinter({ removeComments: true })
   const hash = (node: ts.Node, source: ts.SourceFile) =>
@@ -562,8 +612,9 @@ describe('RFC-370 native MCP root completeness', () => {
       visit(fn.body)
       expect(calls).toHaveLength(1)
       expect(hash(calls[0]!.arguments[0]!, source)).toBe(argumentHash)
+      const verification = inverseVerificationBindings(source, fn.body)
       let scriptSelections = 0
-      const transformed = ts.transform(fn.body, [
+      const transformed = ts.transform(verification.body, [
         (context) => {
           const inverse: ts.Visitor = (node) => {
             if (ts.isObjectLiteralExpression(node)) {
@@ -608,6 +659,8 @@ describe('RFC-370 native MCP root completeness', () => {
       expect(hash(transformed.transformed[0]!, source)).toBe(bodyHash)
       expect(transformed.transformed[0]!.statements.length).toBe(statements)
       expect(scriptSelections).toBe(1)
+      expect(verification.selections).toBe(name === 'composeSqliteApplicationDeps' ? 0 : 1)
+      expect(verification.forwards).toBe(name === 'composeSqliteProviderSession' ? 1 : 0)
       transformed.dispose()
       expect(source.text).toContain(
         "from '@/modules/resource-catalog/composition/localMcpDiagnostics'",

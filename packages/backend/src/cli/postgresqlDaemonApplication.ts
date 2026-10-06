@@ -25,7 +25,11 @@ import {
   type AutomationWorkspaceEffectsFactory,
 } from '@/modules/development-automation/composition'
 import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
-import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
+import type {
+  RepositoryBaselineEffectsFactory,
+  VerificationCommandEffectsFactory,
+} from '@/modules/development-automation/composition'
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
   readDaemonStartupRecoveryAuthority,
   type DaemonStartupLease,
@@ -465,6 +469,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
+  readonly verificationCommands?: VerificationCommandEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -1823,6 +1828,10 @@ export async function composePostgresqlApplication(
     },
   }
   const developmentAutomation = composeDevelopmentAutomation({
+    verificationCommands:
+      input.verificationCommands === undefined
+        ? createLocalVerificationCommandEffectsFactory()
+        : input.verificationCommands,
     actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
     automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,

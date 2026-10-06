@@ -1,6 +1,7 @@
 // RFC-359 P0-9: legacy mission -> action launcher -> real TaskEngine child ->
 // persisted output -> original terminal observer -> attempt settlement.
 // A no-change action settles here; this is not a completed mission delivery.
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
   WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
@@ -346,6 +347,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         })
         const lookup = composeDevelopmentAdmissionLookup(db)
         const automation = composeDevelopmentAutomation({
+          verificationCommands: createLocalVerificationCommandEffectsFactory(),
           db,
           appHome,
           admissionLookup: lookup,

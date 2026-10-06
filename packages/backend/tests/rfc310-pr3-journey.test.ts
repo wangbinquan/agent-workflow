@@ -28,6 +28,7 @@
 // 原来放在 beforeAll 里的整套 fixture 因此改成 `seedFixture` 按用例重铺；只有
 // requirement provider mock 与只读的 baseline git 仓仍是整文件一份。
 
+import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
   afterAll,
   beforeAll,
@@ -275,6 +276,7 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
   // 与应用同一个 app home：evidence 根 = `<appHome>/evidence`，用例最后要 unlink
   // 应用刚经 HTTP 落盘的那个 blob，两个 EvidenceStore 必须指向同一棵目录。
   automation = composeDevelopmentAutomation({
+    verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db,
     appHome: opened.appHome,
     requirementSource: composeRequirementSourceRunnerFor(db),

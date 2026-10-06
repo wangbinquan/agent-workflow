@@ -49,6 +49,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'repositoryCandidateEffects'
   | 'employeeCaseWorkspaceEffects'
   | 'repositoryBaselines'
+  | 'verificationCommands'
   | 'automationWorkspaceEffects'
   | 'actionWorkspaceEffects'
   | 'conflictMergeWorkspaceEffects'
