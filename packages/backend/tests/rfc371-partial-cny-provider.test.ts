@@ -43,7 +43,7 @@ const partialRecord = (row: UsageLedgerRecord): UsageLedgerRecord => {
     ...row,
     contribution,
     complete: false,
-    issues: ['usage-incomplete'],
+    issues: [],
     measurement: { ...row.measurement, usage: contribution, coverage: 'partial' },
   }
 }
@@ -186,7 +186,6 @@ describeEachProvider('RFC-371 known partial CNY original population', (harness) 
       expect(await service.status(actor, old.id)).toEqual(historical)
     } finally {
       await service.worker.stop()
-      await spool.clear()
       rmSync(folder, { recursive: true, force: true })
     }
   }, 60000)

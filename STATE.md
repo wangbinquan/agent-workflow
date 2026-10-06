@@ -1,3 +1,17 @@
+## 2026-10-07 RFC-371 部分估值夹具修复与原规模完整资格
+
+f69 的正式 CI failure 保留；本片仅修正自有 partial-CNY 夹具的无效 issue 和不存在的清理方法，原未知桶、137 条／2 attempts、9453／¥0.009453、所有断言与 60 秒预算不变。格式／lint 已通过，独立有限功能门和新 exact-SHA CI 分别验收，不运行本机 AW tests／typecheck／build。并行代码和架构清单未随本片收编或覆盖。
+
+9fa8 的原尺度 run37465488198 已正式 success：原 10M self-total 与原 100K Task／10M完整报告均实际 EOF，四桶10M／30M／50M／70M、总160M／验收CNY500一致，原240min预算不变。两作业原耗时与磁盘／RSS、首次构建和状态最长阻塞如实记录；旧失败保持，性能、CS原生接线与两个RFC其余工作未完成。详见[部分估值](design/RFC-371-run-observability/known-partial-cny.md)、[原尺度结果](design/RFC-371-run-observability/single-interval-temp-progress.md)。以下共享 STATE 与所有并行输出逐字保留。
+
+## 2026-10-07 RFC-370 分层和事件观察程序 CI 修复
+
+纯 Git 规则独立叶层保留原机制和 identity；Boot factory 经现有 bootstrap composition type-only 接入两根，public/types 与原 committed 全字节相同；Event Center selector／factory type 收口 exact composition，原根完整 inverse 保持。观察程序 fixture 仅 erased 类型修正，原四次 native 执行与全部旧断言保留，whole-test 明确 50s。原架构 scanner／classifier／allowlist 和 budgets 保持，Windows 自有新增与原 workflow 完整 inverse 通过。
+
+首 SOURCE18-R1 有限 PASS 后，第一次原 census 因 public opaque allowlist mismatch 失败，完整候选／日志／标记保留。独立设计补正及新 SOURCE18-R1 有效 PASS，未变42项复用；改变后的八 production 候选一次原生成成功，完整 committed f69bd6a3424bbbaf17b23f439076a5066ef2e3bf 与并行输出保留，sourceDigest sha256:9e433590b0da283221187980b65afce8fd6ef0a6588fee93ac5562c03f23043b。13 matching 保留129有序库存／why、全部 guard、40SPI／69targets／9Task effects／原SCC，只按实际地址与真实计数更新。原债359保留356，退役3／新增0，共356。有限元数据门、发布和新exact-SHA CI另验；旧ecf正式功能失败保留，不记全仓绿。
+
+尚在阶段 A，完整 H7／purpose callers／A-T7／A-G、CS adapters 和 M0～M4 均未完成，aw 尚未部署 CS，RFC 不关闭。详见[发布记录](design/RFC-370-crewstation-hosted-deployment/doctor-boot-layer-ci-repair-publication.md)。以下所有旧 STATE 与并行输出逐字保留。
+
 ## 2026-10-06 RFC-371 显示已知部分人民币估值
 
 原账本中已经计算出的 partial 人民币金额现在进入原报告 fold 与页面，并继续标记估值不完整。完整估值／部分估值计数互斥、不重复，四桶未知不补零；原受理价、usageRevision、全额 allocation、不可显示范围与完整总价资格保持。服务和实际前端缓存同步推进 scope-metrics/8，原历史报告和 projectionVersion=2 不改写。

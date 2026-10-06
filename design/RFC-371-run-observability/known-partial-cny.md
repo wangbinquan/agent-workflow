@@ -37,3 +37,9 @@ AW 已按本设计接入原 allocation、fold／restore、事实资格与已有�
 独立设计门有效 PASS；实现 SOURCE22-v3 也为有效 PASS，P1／P2 均为零，22 项实际 EOF 首末指纹稳定。v1／v2 在必要源定义和客户端缓存补齐前没有终态 PASS；公共维度页签回归已按原 runtimes／agents 两个实际 section 分别遍历 EOF。新增双 provider 的 137 条真实 partial 数据验证任务、趋势、维度、重建和新缓存能力；输入 9,453、已记录估值 ¥0.009453、完整估值 0 条、部分估值 137 条，同时保留原缺口状态。这里描述的是已提交候选的回归断言，尚不冒称 hosted 测试已经执行成功。
 
 自有 TypeScript／TSX 的 format 和 lint 已通过。遵照仓库约束没有运行 AW 本机测试、类型检查或构建；最终功能执行以本片新 exact-SHA GitHub CI 为准。旧 21bc CI 的功能架构失败仍保留，相关并行修复由原任务负责，未收编其在制文件。CS 同设计实现、自动刷新修复、原生消费接线、正式页面与规模验收仍继续；两个 RFC 不标记完成。
+
+## 双 provider 夹具 CI 修复（2026-10-07）
+
+提交 f69bd6a3424bbbaf17b23f439076a5066ef2e3bf 的正式 CI 已终态 failure。该夹具使用了不存在的 `usage-incomplete` issue 和 `CompleteObservationSpool.clear()`，分别导致类型错误及 SQLite／PG 清理阶段异常。现仅将该合法 partial 原记录的 issues 置为空数组，并删除不存在的 clear 调用；原 worker.stop 和专用临时目录 rmSync 仍保留。实际两个未知桶、partial coverage、137 条记录、2 attempts、9,453 输入、¥0.009453、所有旧断言与 60 秒预算全部保持。该修复不修改生产代码或采集人口。
+
+自有夹具格式与 lint 通过；独立功能复核和后继 exact-SHA CI 分别记录。旧 run 的 nullable raw 用例在 SQLite／PG 已实际通过；报告用例在清理阶段失败，仍保留 failure，不将执行到 finally 当作全用例通过。并行架构清单与它的原任务代码保持完整，未用私有生成产物覆盖共享文件。两个 RFC 仍未完成。
