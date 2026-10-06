@@ -39,6 +39,12 @@ function workingRows() {
     async get<T>(namespace: string, key: string) {
       return rows(namespace).get(key) as T | undefined
     },
+    async getMany<T>(namespace: string, keys: readonly string[]) {
+      const found = new Map<string, T>()
+      for (const key of keys)
+        if (rows(namespace).has(key)) found.set(key, structuredClone(rows(namespace).get(key)) as T)
+      return found
+    },
     async page<T>(namespace: string, after: string | null, size = 100) {
       const selected = [...rows(namespace)]
           .filter(([key]) => after === null || key > after)

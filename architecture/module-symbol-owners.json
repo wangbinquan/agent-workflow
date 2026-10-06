@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2288,
+    "backendFiles": 2292,
     "frontendFiles": 654,
     "legacyFiles": 589,
-    "moduleFiles": 1699,
-    "productionFiles": 3112,
+    "moduleFiles": 1703,
+    "productionFiles": 3116,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27087
+    "symbolsIncludingFileRoots": 27097
   },
   "entries": [
     {
@@ -109088,42 +109088,6 @@
       "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/application/completeUsageSelection.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/completeUsageSelection.ts#groupOf",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "groupOf",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/completeUsageSelection.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/completeUsageSelection.ts#modelAnyProvider",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "modelAnyProvider",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/completeUsageSelection.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/completeUsageSelection.ts#modelPartition",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "modelPartition",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/completeUsageSelection.ts",
       "id": "owner:packages/backend/src/modules/run-observability/application/completeUsageSelection.ts#rank",
       "removeAfterWave": null,
       "status": "current-module",
@@ -109152,18 +109116,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "sessionsOf",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/completeUsageSelection.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/completeUsageSelection.ts#treeKey",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "treeKey",
       "targetContext": "run-observability",
       "targetLayer": "application"
     },
@@ -110508,6 +110460,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "valueTokenUsage",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts#groupOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "groupOf",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts#modelAnyProvider",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "modelAnyProvider",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts#modelPartition",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "modelPartition",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeCoverageKeys.ts#treeKey",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "treeKey",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -112147,6 +112159,66 @@
       "currentContext": "run-observability",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeAncestryWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeAncestryWorkspace.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeAncestryWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeAncestryWorkspace.ts#completeAncestryWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "completeAncestryWorkspace",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeCoveragePrefetch.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCoveragePrefetch.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeCoveragePrefetch.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCoveragePrefetch.ts#completeCoveragePrefetchTrees",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "completeCoveragePrefetchTrees",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeCoveragePrefetch.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCoveragePrefetch.ts#sessionsOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "sessionsOf",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeCoverageWorkspace.ts",
       "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCoverageWorkspace.ts#$file",
       "removeAfterWave": null,
@@ -112164,6 +112236,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "completeCoverageWorkspace",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeCoverageWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCoverageWorkspace.ts#prefetchRoots",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "prefetchRoots",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -112615,6 +112699,30 @@
       "currentContext": "run-observability",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeUsagePrefetch.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeUsagePrefetch.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeUsagePrefetch.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeUsagePrefetch.ts#completeUsagePrefetch",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "completeUsagePrefetch",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeUsageWorkspace.ts",
       "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeUsageWorkspace.ts#$file",
       "removeAfterWave": null,
@@ -112632,6 +112740,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "completeUsageWorkspace",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeUsageWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeUsageWorkspace.ts#legacyAncestry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "legacyAncestry",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -325783,5 +325903,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:261ca20a23bc3706ff827dbfca2425bc3b6c3c46c8a0a5e72218571d216393da"
+  "sourceDigest": "sha256:e690ef4dc6ee3ca4764d4d029496e31bfcbb1d6b5ec06f6da275231e6f60a697"
 }

@@ -27,6 +27,8 @@ async function execute(snapshot: OriginalReportSnapshot, request: ObservationRep
       return snapshot.workspace[request.method](request.namespace, request.rows)
     case 'get-working':
       return snapshot.workspace.get(request.namespace, request.key)
+    case 'get-many-working':
+      return snapshot.workspace.getMany(request.namespace, request.keys)
     case 'page-working':
       return snapshot.workspace.page(request.namespace, request.after, request.size)
     case 'clear-working':

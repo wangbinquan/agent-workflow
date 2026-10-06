@@ -44,6 +44,12 @@ function workingRows() {
     async get<T>(space: string, key: string) {
       return structuredClone(rows(space).get(key)) as T | undefined
     },
+    async getMany<T>(space: string, keys: readonly string[]) {
+      const found = new Map<string, T>()
+      for (const key of keys)
+        if (rows(space).has(key)) found.set(key, structuredClone(rows(space).get(key)) as T)
+      return found
+    },
     async page<T>(space: string, after: string | null, size = 100) {
       const selected = [...rows(space)]
         .filter(([key]) => after === null || key > after)

@@ -44,6 +44,11 @@ export type ObservationReportRequest =
     }
   | { readonly kind: 'get-working'; readonly namespace: string; readonly key: string }
   | {
+      readonly kind: 'get-many-working'
+      readonly namespace: string
+      readonly keys: readonly string[]
+    }
+  | {
       readonly kind: 'page-working'
       readonly namespace: string
       readonly after: string | null

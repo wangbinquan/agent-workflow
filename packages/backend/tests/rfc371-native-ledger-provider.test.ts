@@ -41,7 +41,7 @@ const cleanup: (() => void)[] = []
 afterEach(() => {
   for (const close of cleanup.splice(0).reverse()) close()
 })
-function nativeStore(steps: number, unknownOutput = false) {
+function nativeStore(steps: number, unknownOutput = false, depth = 80) {
   const directory = mkdtempSync(join(tmpdir(), 'aw-native-ledger-')),
     path = join(directory, 'original.db')
   const db = new Database(path)
@@ -53,10 +53,10 @@ function nativeStore(steps: number, unknownOutput = false) {
     'PRAGMA journal_mode=WAL; CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,time_created INTEGER); CREATE INDEX session_parent ON session(parent_id,id); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,session_id TEXT,message_id TEXT,time_created INTEGER,data TEXT); CREATE INDEX part_session ON part(session_id,id);',
   )
   const bornAt = Date.now(),
-    leaf = 'child-80'
+    leaf = 'child-' + depth
   db.transaction(() => {
     db.run('INSERT INTO session VALUES (?,?,?)', ['root', null, bornAt])
-    for (let n = 1; n <= 80; n++)
+    for (let n = 1; n <= depth; n++)
       db.run('INSERT INTO session VALUES (?,?,?)', [
         'child-' + n,
         n === 1 ? 'root' : 'child-' + (n - 1),
@@ -150,7 +150,10 @@ describeEachProvider('RFC-371 original native ledger projection and complete rep
     })
     return fact
   }
-  async function report(f: Awaited<ReturnType<typeof originalNativeLedgerFixture>>) {
+  async function report(
+    f: Awaited<ReturnType<typeof originalNativeLedgerFixture>>,
+    observe?: (namespace: string, keys: readonly string[]) => void,
+  ) {
     const binding = harness.applicationBinding
     const snapshot = originalReportSnapshotSession(
       binding.provider === 'sqlite'
@@ -178,7 +181,19 @@ describeEachProvider('RFC-371 original native ledger projection and complete rep
         rows: workspace,
         namespace: 'native-task',
         keyOf: sha256Hex,
-        usageWorkspace: completeUsageWorkspace,
+        usageWorkspace: observe
+          ? (input) =>
+              completeUsageWorkspace({
+                ...input,
+                rows: {
+                  ...input.rows,
+                  getMany<T>(namespace: string, keys: readonly string[]) {
+                    observe(namespace, keys)
+                    return input.rows.getMany<T>(namespace, keys)
+                  },
+                },
+              })
+          : completeUsageWorkspace,
         value: value.value,
       })
       await value.flush()
@@ -246,6 +261,41 @@ describeEachProvider('RFC-371 original native ledger projection and complete rep
       await runtime?.close()
     }
   }, 30000)
+
+  test('521 actual native ancestors cross every reserved TEMP packet before the original report reaches EOF', async () => {
+    const f = await originalNativeLedgerFixture(harness),
+      spawn = await processFacts(f),
+      native = nativeStore(1, false, 521)
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 61), f.owner())
+    await processFacts(f, true, spawn)
+    expect((await seal(f)).state).toBe('complete')
+    expect(await drain(f)).toBeGreaterThan(0)
+    const records = (await createUsageLedgerStore(f.db).records(f.binding.taskId, { limit: 10 }))
+      .items
+    expect(records).toHaveLength(1)
+    expect(records[0]?.nativeScopeFacts?.depth).toBe('521')
+    const batches: Array<{ namespace: string; keys: number }> = []
+    const result = await report(f, (namespace, keys) =>
+      batches.push({ namespace, keys: keys.length }),
+    )
+    const metrics = result.summary.metrics
+    expect(metrics.state).toBe('ready')
+    if (metrics.state !== 'ready') throw Error('Deep original native path did not reach EOF')
+    expect(result.originalNumericRecords).toBe('1')
+    expect(result.selectedAllocationCount).toBe('1')
+    expect(metrics.tokens).toEqual({
+      input: '1',
+      cacheRead: '3',
+      cacheWrite: '5',
+      output: '18',
+      total: '27',
+    })
+    expect(metrics.cost).toEqual({ currency: 'CNY', state: 'unpriced', amount: null })
+    expect(
+      batches.filter((batch) => batch.namespace.endsWith('/ancestry')).map((batch) => batch.keys),
+    ).toEqual([500, 22])
+    expect(batches.every((batch) => batch.keys <= 500)).toBe(true)
+  }, 60000)
 
   test('all1001 steps at depth80 survive source ACK, projection, full report and original classification', async () => {
     const f = await originalNativeLedgerFixture(harness),

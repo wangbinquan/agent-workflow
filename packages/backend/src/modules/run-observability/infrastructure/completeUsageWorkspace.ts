@@ -9,9 +9,23 @@ import { completeOrdinalKey } from '../domain/completeOrdinal'
 import { completeExternalSort } from '../application/completeExternalSort'
 import { compareCompleteUsage } from '../application/completeUsageSelection'
 import { completeCoverageWorkspace } from './completeCoverageWorkspace'
+import { completeAncestryWorkspace } from './completeAncestryWorkspace'
+import { completeUsagePrefetch } from './completeUsagePrefetch'
+import { completeCoveragePrefetchTrees } from './completeCoveragePrefetch'
+import { groupOf } from '../domain/completeCoverageKeys'
 import { sha256Hex } from '@/util/hash'
 import { isNativeUsageScope } from '../domain/nativeUsageScope'
 import type { ObservationNativeScopeSource } from '../public/participants'
+
+function* legacyAncestry<T extends UsageContributionEvidence>(records: readonly T[]) {
+  for (const record of records) {
+    const scope = record.measurement.scope
+    if (!scope || isNativeUsageScope(scope)) continue
+    const group = groupOf(record)
+    for (const session of scope.ancestors) yield { group, session }
+    yield { group, session: scope.session }
+  }
+}
 
 async function* retainedInput<T>(input: {
   readonly rows: CompleteWorkingRows
@@ -55,22 +69,24 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
   readonly nativeScopes?: ObservationNativeScopeSource
 }) {
   const space = (suffix: string) => `${input.namespace}/${suffix}`
-  const coverage = completeCoverageWorkspace(input.rows, space('coverage'), input.keyOf)
-  const ancestryCache = new Map<string, string>()
-  const pendingAncestry = new Map<string, string>()
+  const coverage = completeCoverageWorkspace(
+    input.rows,
+    space('coverage'),
+    input.keyOf,
+    input.signal,
+  )
+  const ancestry = completeAncestryWorkspace(
+    input.rows,
+    space('ancestry'),
+    input.keyOf,
+    input.signal,
+  )
   const summaryGroups = new Map<string, boolean>()
   const pendingAllocations: CompleteWorkingRow[] = []
   let count = 0n,
     sealed = false
   let sort: ReturnType<typeof completeExternalSort<T>> | undefined
-  async function flushAncestry() {
-    if (!pendingAncestry.size) return
-    await input.rows.insert(
-      space('ancestry'),
-      [...pendingAncestry].map(([key, document]) => ({ key, document })),
-    )
-    pendingAncestry.clear()
-  }
+  let validatingAncestry = true
   async function flushAllocations() {
     if (!pendingAllocations.length) return
     await input.rows.insert(space('allocations'), pendingAllocations)
@@ -84,23 +100,14 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
       count: () => count,
       signal: input.signal,
     })
-  async function bind(group: string, session: string, path: string) {
-    const key = input.keyOf(JSON.stringify([group, session]))
-    const previous =
-      ancestryCache.get(key) ??
-      pendingAncestry.get(key) ??
-      (await input.rows.get<string>(space('ancestry'), key))
-    if (previous !== undefined && previous !== path)
-      throw new Error('Conflicting observation session ancestry')
-    if (previous === undefined) pendingAncestry.set(key, path)
-    ancestryCache.delete(key)
-    ancestryCache.set(key, path)
-    if (ancestryCache.size > 4096) ancestryCache.delete(ancestryCache.keys().next().value!)
-    if (pendingAncestry.size === 500) await flushAncestry()
-  }
   const workspace: CompleteUsageWorkspace<T> = {
     coverage: coverage.coverage,
-    records,
+    records: () =>
+      completeUsagePrefetch(
+        records(),
+        (batch) => ancestry.prefetch(legacyAncestry(batch)),
+        input.signal,
+      ),
     async markSummary(group) {
       const key = input.keyOf(group)
       if (summaryGroups.get(key) !== true)
@@ -119,6 +126,7 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
       return value
     },
     orderedRecords: async function* () {
+      validatingAncestry = false
       sort ??= completeExternalSort({
         workspace: input.rows,
         namespace: space('sort'),
@@ -126,12 +134,16 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
         compare: compareCompleteUsage,
         signal: input.signal,
       })
-      yield* (await sort).records()
+      yield* completeUsagePrefetch(
+        (await sort).records(),
+        (batch) => coverage.prefetchRoots(completeCoveragePrefetchTrees(batch, workspace)),
+        input.signal,
+      )
     },
     async bindAncestry(group, session, ancestors) {
       let digest: string | null = null
       for (const id of [...ancestors, session]) digest = sha256Hex(JSON.stringify([digest, id]))
-      await bind(
+      await ancestry.bind(
         group,
         session,
         JSON.stringify({
@@ -142,7 +154,7 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
       )
     },
     async bindNativeAncestry(group, link) {
-      await bind(
+      await ancestry.bind(
         group,
         link.session,
         JSON.stringify({
@@ -156,7 +168,18 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
       const scope = record.measurement.scope
       if (!isNativeUsageScope(scope) || !record.nativeScopeFacts || !input.nativeScopes)
         throw new Error('Original native ancestry source is not installed')
-      yield* input.nativeScopes.path(record.nativeScopeFacts, scope)
+      const path = input.nativeScopes.path(record.nativeScopeFacts, scope)
+      if (!validatingAncestry) {
+        yield* path
+        return
+      }
+      const group = groupOf(record)
+      yield* completeUsagePrefetch(
+        path,
+        (batch) => ancestry.prefetch(batch.map((link) => ({ group, session: link.session }))),
+        input.signal,
+        500,
+      )
     },
     async allocate(record, contribution, quality) {
       pendingAllocations.push({
@@ -191,7 +214,7 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
     },
     async flush() {
       input.signal?.throwIfAborted()
-      await flushAncestry()
+      await ancestry.flush()
       await flushAllocations()
       await coverage.flush()
     },

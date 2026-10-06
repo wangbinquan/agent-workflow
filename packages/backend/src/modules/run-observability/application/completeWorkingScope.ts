@@ -31,6 +31,10 @@ export function completeWorkingScope(original: CompleteWorkingRows, namespace: s
       check(name)
       return original.get<T>(name, key)
     },
+    async getMany<T>(name: string, keys: readonly string[]) {
+      check(name)
+      return original.getMany<T>(name, keys)
+    },
     async page<T>(name: string, after: string | null, size?: number) {
       check(name)
       return original.page<T>(name, after, size)

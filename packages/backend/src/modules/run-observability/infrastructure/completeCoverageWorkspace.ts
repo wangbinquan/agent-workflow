@@ -4,11 +4,54 @@ interface Root {
   readonly tree: string
   readonly id: string | null
 }
+async function prefetchRoots(
+  input: {
+    readonly rows: CompleteWorkingRows
+    readonly rootSpace: string
+    readonly keyOf: (value: string) => string
+    readonly roots: Map<string, Root>
+    readonly dirtyRoots: Map<string, Root>
+    readonly coverage: CoverageIntervalStore
+    readonly empty: () => boolean | undefined
+    readonly revision: () => bigint
+    readonly remember: (key: string, row: Root) => void
+    readonly signal?: AbortSignal
+  },
+  trees: AsyncIterable<string> | Iterable<string>,
+) {
+  const wanted = new Map<string, string>()
+  async function load() {
+    input.signal?.throwIfAborted()
+    const batch = new Map(wanted)
+    wanted.clear()
+    const before = input.revision()
+    const found = await input.rows.getMany<Root>(input.rootSpace, [...batch.keys()])
+    input.signal?.throwIfAborted()
+    if (input.revision() !== before) return
+    for (const [key, tree] of batch) {
+      const row = found.get(key)
+      if (row && row.tree !== tree) throw new Error('Coverage root key identity conflict')
+      if (!input.roots.has(key) && !input.dirtyRoots.has(key))
+        input.remember(key, row ?? { tree, id: null })
+    }
+  }
+  for await (const tree of trees) {
+    input.signal?.throwIfAborted()
+    if (input.empty() === undefined) await input.coverage.root(tree)
+    if (input.empty() === true) continue
+    const key = input.keyOf(tree)
+    if (input.roots.has(key) || input.dirtyRoots.has(key)) continue
+    wanted.set(key, tree)
+    if (wanted.size === 500) await load()
+  }
+  if (wanted.size) await load()
+}
 /** Bounded dirty buffers and caches; authority remains the original connection's TEMP rows. */
 export function completeCoverageWorkspace(
   rows: CompleteWorkingRows,
   namespace: string,
   keyOf: (value: string) => string,
+  signal?: AbortSignal,
 ) {
   const roots = new Map<string, Root>(),
     nodes = new Map<string, CoverageIntervalNode>()
@@ -90,6 +133,22 @@ export function completeCoverageWorkspace(
   }
   return {
     coverage,
+    prefetchRoots: (trees: AsyncIterable<string> | Iterable<string>) =>
+      prefetchRoots(
+        {
+          rows,
+          rootSpace,
+          keyOf,
+          roots,
+          dirtyRoots,
+          coverage,
+          empty: () => originalRootsEmpty,
+          revision: () => rootWriteRevision,
+          remember: (key, row) => remember(roots, key, row),
+          signal,
+        },
+        trees,
+      ),
     flush: async () => {
       await flushRows(rootSpace, dirtyRoots)
       await flushRows(nodeSpace, dirtyNodes)

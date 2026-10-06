@@ -46,6 +46,8 @@ export function observationReportChannel(
         request<void>({ kind: 'write-working', method: 'upsert', namespace, rows: [row] }),
       get: <T>(namespace: string, key: string) =>
         request<T | undefined>({ kind: 'get-working', namespace, key }),
+      getMany: <T>(namespace: string, keys: readonly string[]) =>
+        request<ReadonlyMap<string, T>>({ kind: 'get-many-working', namespace, keys }),
       page: <T>(namespace: string, after: string | null, size?: number) =>
         request<ReportWorkingPage<T>>({ kind: 'page-working', namespace, after, size }),
       clear: (namespace) => request<void>({ kind: 'clear-working', namespace }),

@@ -1,8 +1,12 @@
 // RFC-371: actual Worker success/cancellation and real max=1 reserved-channel cleanup are hosted gates.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import type { CompleteObservationReportPage } from '@agent-workflow/shared'
-import { sql } from 'drizzle-orm'
+import type {
+  CompleteObservationReportPage,
+  CompleteObservationAllocation,
+} from '@agent-workflow/shared'
+import { eq, sql } from 'drizzle-orm'
+import { observationUsageCurrent } from '@/db/schema'
 import { buildActor } from '@/auth/actor'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { runObservationReportWorker } from '@/platform/background/observationReportWorkerHost'
@@ -12,7 +16,11 @@ import { completeObservationActorScope } from '@/modules/run-observability/infra
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
-import { COMPLETE_NOW } from './helpers/rfc371CompleteTaskFixture'
+import {
+  COMPLETE_NOW,
+  completeTaskRecord,
+  completeFixtureId,
+} from './helpers/rfc371CompleteTaskFixture'
 import {
   originalWorkerFixture,
   type ReportCleanupFault,
@@ -168,6 +176,149 @@ describeEachProvider('RFC-371 original live source through a real report Worker'
       }
     } finally {
       await service.worker.stop()
+      await fixture.close()
+    }
+  }, 120000)
+
+  test('1201 legacy self-total sessions keep all four Token buckets and CNY through the actual max=1 Worker bulk channel', async () => {
+    if (harness.applicationBinding.provider !== 'postgresql') return
+    const fixture = await originalWorkerFixture(harness, { attempts: 1, records: 1201 })
+    const binding = fixture.binding
+    if (binding.provider !== 'postgresql') throw new Error('Original PostgreSQL fixture required')
+    const batches: Array<{ namespace: string; keys: number }> = []
+    let service: ReturnType<typeof reports> | undefined
+    try {
+      for (let n = 0; n < 1201; n++) {
+        const record = completeTaskRecord(n, 1)
+        const document = {
+          ...record,
+          measurement: {
+            ...record.measurement,
+            scope: {
+              root: completeFixtureId('root', 0),
+              session: 'bulk-leaf-' + n,
+              parentSession: completeFixtureId('root', 0),
+              ancestors: [completeFixtureId('root', 0)],
+              turn: 'original-bulk-turn',
+              turnIndex: n,
+              level: 'self-total',
+            },
+          },
+        }
+        const id = sha256Hex(
+          JSON.stringify([
+            record.sourceId,
+            record.measurement.invocationId,
+            record.measurement.recordId,
+          ]),
+        )
+        await fixture.db
+          .update(observationUsageCurrent)
+          .set({ document: JSON.stringify(document) })
+          .where(eq(observationUsageCurrent.id, id))
+          .run()
+      }
+      const bound = observationReportBuild(binding, fixture.appHome)
+      service = composeCompleteObservationReports({
+        db: fixture.db,
+        generation: binding.runtime.generationId,
+        appHome: fixture.appHome,
+        heartbeatDuringRead: bound.heartbeatDuringRead,
+        build: (report, _spool, signal) =>
+          originalReportSnapshotSession(binding).run(
+            (snapshot) =>
+              runObservationReportWorker(
+                {
+                  kind: 'start',
+                  appHome: fixture.appHome,
+                  report,
+                  source: {
+                    kind: 'original-channel',
+                    snapshotId: snapshot.snapshotId,
+                    generationId: snapshot.generationId,
+                    asOf: snapshot.asOf,
+                  },
+                },
+                signal,
+                {
+                  ...snapshot,
+                  workspace: {
+                    ...snapshot.workspace,
+                    async getMany<T>(namespace: string, keys: readonly string[]) {
+                      batches.push({ namespace, keys: keys.length })
+                      const found = await snapshot.workspace.getMany<T>(namespace, keys)
+                      expect(found instanceof Map).toBe(true)
+                      return found
+                    },
+                  },
+                },
+              ),
+            signal,
+            { id: report.id, owner: report.owner, generation: report.generation },
+          ),
+      })
+      const reportId = idOf(await service.queries.request(actor, filters, 'original-bulk-worker'))
+      await service.worker.drain()
+      const result = await service.queries.status(actor, reportId)
+      expect(result.state).toBe('ready')
+      if (result.state !== 'ready') throw new Error(JSON.stringify(result))
+      expect(result.summary.inventory).toEqual({
+        tasks: '1',
+        attempts: '1',
+        invocations: '1',
+        numericRecords: '1201',
+        nativeCaptures: '1',
+      })
+      const metrics = result.summary.metrics
+      expect(metrics.state).toBe('ready')
+      if (metrics.state !== 'ready') throw new Error('Original bulk channel lost complete usage')
+      expect(metrics.tokens).toEqual({
+        input: '721801',
+        cacheRead: '2165403',
+        cacheWrite: '3609005',
+        output: '5052607',
+        total: '11548816',
+      })
+      expect(metrics.cost).toEqual({ currency: 'CNY', state: 'complete', amount: '36.09005' })
+      expect(result.counts.allocations).toBe('1201')
+      let after: string | null = null
+      const seen = new Set<string>()
+      do {
+        const page: CompleteObservationReportPage<CompleteObservationAllocation> =
+          await service.queries.page(actor, reportId, {
+            section: 'allocations',
+            limit: 200,
+            ...(after ? { after } : {}),
+          })
+        expect(page.total).toBe('1201')
+        for (const row of page.items) {
+          const n = Number(row.recordId.slice('meter-'.length)),
+            original = completeTaskRecord(n, 1)
+          expect(seen.has(row.recordId)).toBe(false)
+          expect(row.contribution).toEqual(original.contribution)
+          expect(row.sourceId).toBe(original.sourceId)
+          seen.add(row.recordId)
+        }
+        after = page.nextCursor
+      } while (after !== null)
+      expect(seen.size).toBe(1201)
+      for (let n = 0; n < 1201; n++) expect(seen.has(completeFixtureId('meter', n))).toBe(true)
+      expect(batches.some((batch) => batch.namespace.endsWith('/ancestry') && batch.keys > 1)).toBe(
+        true,
+      )
+      expect(
+        batches.some((batch) => batch.namespace.endsWith('/coverage/roots') && batch.keys > 1),
+      ).toBe(true)
+      expect(batches.every((batch) => batch.keys <= 500)).toBe(true)
+      const original = await binding.runtime
+        .providerPool()
+        .unsafe(
+          "SELECT to_regclass('pg_temp.aw_report_workspace') AS temporary, current_setting('transaction_read_only') AS mode",
+        )
+      expect(original[0]).toEqual({ temporary: null, mode: 'off' })
+      expect(fixture.events).toContain('reader-released')
+    } finally {
+      await service?.worker.stop()
       await fixture.close()
     }
   }, 120000)

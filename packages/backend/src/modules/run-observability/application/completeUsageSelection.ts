@@ -3,6 +3,7 @@ import { TOKEN_BUCKETS, tokenCount, type TokenBucket, type TokenUsage } from '..
 import { coveragePrefixMaximum, insertCoverageInterval } from '../domain/coverageIntervalIndex'
 import type { CompleteUsageWorkspace } from '../ports/completeUsageWorkspace'
 import { isNativeUsageScope } from '../domain/nativeUsageScope'
+import { groupOf, modelPartition, modelAnyProvider, treeKey } from '../domain/completeCoverageKeys'
 
 function depthOf(record: UsageContributionEvidence): bigint {
   const scope = record.measurement.scope
@@ -30,22 +31,6 @@ async function* sessionsOf<T extends UsageContributionEvidence>(
 }
 
 const rank = { 'tree-total': 0, 'self-total': 1, request: 2 }
-const groupOf = (record: UsageContributionEvidence) =>
-  JSON.stringify([
-    record.sourceId,
-    record.measurement.invocationId,
-    record.measurement.scope?.root ?? null,
-  ])
-const modelPartition = (id: string, provider: string | null) =>
-  JSON.stringify(['model', id, provider])
-const modelAnyProvider = (id: string) => JSON.stringify(['model', id])
-const treeKey = (
-  group: string,
-  bucket: TokenBucket,
-  session: string,
-  treeOnly: boolean,
-  model: string,
-) => JSON.stringify([group, bucket, session, treeOnly, model])
 const endOf = (record: UsageContributionEvidence, bucket: TokenBucket) =>
   record.coveredThrough?.[bucket] ??
   record.measurement.coveredThroughTurn ??

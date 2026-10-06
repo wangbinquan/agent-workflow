@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-371 完整统计原 TEMP 批量读取
+
+原同一 snapshot 连接的必需 getMany 已穿过 Task scope 与正式 Worker RPC；ancestry／coverage 有界批读保持每一条原 identity、四桶、估值与 EOF。500 key／100 输入是 IO／内存包，绝非统计条数上限。DESIGN20、补充DESIGN7、SOURCE21 均有效有限 PASS；23原用例／128断言／全部原预算及规模 workflow 逐字保持。新增真实双provider、1201完整选择、522实际native link、cache写后读／淘汰／取消及原Worker Map 回归交新确切SHA hosted CI，本机不运行AW tests／typecheck／build／压测。
+
+一次原完整scoped census 使用全部 committed098 与21冻结owned，原规则不变，sourceDigest sha256:e690ef4dc6ee3ca4764d4d029496e31bfcbb1d6b5ec06f6da275231e6f60a697；13 matching 保留129有序库存／why、345债、214guards、40SPI／69targets、原SCC／Task effects，只登记实际owners27087→27097一次性增长，无新source差额或重复census。并行MCP等WIP保持并排除。
+
+正式页面已查看8任务／14执行，123238四桶Token、¥0.16583已知估值及原缺口；真实任务两Agent泳道／分类Token，390px详情无整页横向溢出，键盘返回和页签切换实际通过。原bun dev按授权使用原库／7456，含共享WIP，不称干净SHA部署。前6e主CI cancelled和更早root/refreshed-link 5000ms超时保留，不称全仓／规模通过。CS139全部6项正式CI成功及3镜像完成，部署与原双规模单独验收。详见 [批量读取实施记录](design/RFC-371-run-observability/batched-temp-lookup-progress.md)。默认producer OFF、CS v2／CLI／自测／托管实际联动与两RFC退出仍开放；以下全部共享旧正文完整保留。
+
 ## 2026-10-06 RFC-370 Runtime hosted CI 测试配套修复
 
 Runtime `2f3807d003c396b344ceddcb0c2278fe86ee90e0` 的主 CI 37420257477 终态 failure（33 success／17 failure），Windows 37420257425 终态 failure，不能冒称整体通过。直接 job 日志定位本批 getter 推断、invalid extraArgs 正向 fixture、Windows canonical fixture 和迁移后的 source reader。只修改三个测试：两个抛错 getter 显式标注 RuntimeRegistryOperations；正向 fixture 使用原 driver 支持的 Claude 及有效 flag／value；回滚路径复用原 canonicalBinaryPath；原 source reader 随实际 local owner。生产实现、原全部测试名／断言／错误与回滚判据／预算不变。

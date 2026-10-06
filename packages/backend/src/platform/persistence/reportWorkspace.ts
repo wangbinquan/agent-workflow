@@ -12,6 +12,7 @@ export interface ReportWorkspace {
   upsert(namespace: string, rows: readonly ReportWorkingRow[]): Promise<void>
   put(namespace: string, row: ReportWorkingRow): Promise<void>
   get<T>(namespace: string, key: string): Promise<T | undefined>
+  getMany<T>(namespace: string, keys: readonly string[]): Promise<ReadonlyMap<string, T>>
   page<T>(namespace: string, after: string | null, size?: number): Promise<ReportWorkingPage<T>>
   clear(namespace: string): Promise<void>
 }
@@ -61,6 +62,26 @@ export function privateReportWorkspace(
         [namespace, key],
       )
       return rows.length ? (JSON.parse(String(rows[0]!.document)) as T) : undefined
+    },
+    async getMany<T>(namespace: string, keys: readonly string[]) {
+      check(namespace)
+      if (keys.length > 500) throw new Error('Report workspace batch is too large')
+      if (keys.some((key) => typeof key !== 'string' || !key))
+        throw new Error('Report workspace key invalid')
+      const wanted = new Set(keys)
+      const found = new Map<string, T>()
+      if (!wanted.size) return found
+      const rows = await statements.all(
+        `SELECT key,document FROM ${REPORT_WORKING_TABLE} WHERE namespace=? AND key IN (${[...wanted].map(() => '?').join(',')})`,
+        [namespace, ...wanted],
+      )
+      check(namespace)
+      for (const row of rows) {
+        if (typeof row.key !== 'string' || !wanted.has(row.key) || found.has(row.key))
+          throw new Error('Report workspace batch key identity changed')
+        found.set(row.key, JSON.parse(String(row.document)) as T)
+      }
+      return found
     },
     async page<T>(
       namespace: string,

@@ -12,6 +12,7 @@ export interface CompleteWorkingRows {
   put(namespace: string, row: CompleteWorkingRow): Promise<void>
   upsert(namespace: string, rows: readonly CompleteWorkingRow[]): Promise<void>
   get<T>(namespace: string, key: string): Promise<T | undefined>
+  getMany<T>(namespace: string, keys: readonly string[]): Promise<ReadonlyMap<string, T>>
   page<T>(
     namespace: string,
     after: string | null,
