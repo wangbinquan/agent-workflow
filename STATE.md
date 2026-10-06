@@ -1,3 +1,19 @@
+## 2026-10-06 RFC-371 原区间回归夹具的确切 CI 类型修复
+
+9fa8 正式主 CI 37465298886／Windows37465298890 在 Typecheck 报告两处新增夹具 TS2769。本片只给两个原根文档 get<T> 补确切类型；完整测试类型擦除后运行输出逐字相同，原断言／样本／预算全部保持，零生产改动、零重复 census。独立有限实现功能门有效稳定 PASS，11项首末实际 EOF 核对；本机仅自有 format/lint 与纯源码证明，没有 AW tests/typecheck/build/service。新确切 SHA CI另验，原规模37465488198继续，不把原失败或部分通过记成整体通过。两 RFC 尚未完成，CS完整检查／部署和原生消费接线继续。
+
+本 STATE 文件包括其他会话在制的 RFC-370 进度，既有全部共享字节逐字保留。详见[类型修复记录](design/RFC-371-run-observability/point-fixture-type-ci-recovery.md)。
+
+## 2026-10-06 RFC-370 Doctor 完整诊断家族
+
+Doctor DESIGN-D1与SOURCE16-R1均有效有限PASS，源码门33项首末稳定，指纹2f488e7a29dbc08493bfa6b87cff7e7caf8a19616e825069bec4e154f5f07ffc。system-operations拥有完整10成员合同、唯一共同顺序和纯结果／格式规则；main真实doctor arm显式选择local工厂，旧公开名／签名／helper identity保持。同一所选配置供原三处消费者使用，opaque runtime引用、receiver、全部ACK和原错误边界保持；31新功能用例、五份完整旧reader AST／136 expect／预算和Windows对称覆盖交hosted CI。
+
+第一次完整committed8aaf加冻结Doctor的原census只生成私有产物；写入前全部共享路径比较发现并行matching已改动，未写任何产物或STATE。并行9fa8正常上库且实际coverage production改变后，保持完整33项源码门不重审；对新的完整committed9fa8与冻结16候选（8 production）原scoped census运行一次，下一批H7 WIP排除并保留。四原规则不变，新sourceDigest sha256:6e608ac1d70d72ef7e76776c49bf9ea42eb56242d255f41524c3bacea83d32d9。原两份不同人口的生成与私有工具错误均留证。349 authored债保留348，唯一消失旧CLI doctorConfiguration边退役；七条真实迁址边保持原分类，合计355。129有序库存／why、214原guard判据、40SPI／69targets、9Task effects和原SCC保持。9fa8已保留903行guard元数据并正常退役e676四许可，本片完整保留并行输出。实际matching增长mutation1920→1923、imports6667→6707、exceptions5869→5906、owners27141→27157，只登记四个真实差额许可，下一普通后继退役。
+
+e676主CI37460301719 cancelled、Windows37460301674 failure、maintenance37460301589 success分别保留。其五处类型和三平台同一MCP callee字面量错误已经独立8aaf修复；8aaf Windows37463365219正式success；主CI37463365139现已终态cancelled（31success／3failure／22cancelled），唯一功能测试失败为macOS2/12的原RFC317 T17：零production的CI修复未同步退役e676四项已消费许可。并行9fa8已正常退役这四项，当前Doctor基于9fa8完整保留该修复；旧取消／失败不改记全仓绿。Static scans仅留状态不读取分析。新exact-SHA CI、有限元数据门与发布各自独立留证。
+
+本机仅owned format/lint、纯AST／字节／JSON及上述原静态生成，无AW tests/typecheck/build/service。共享STATE所有旧正文与9fa8观测／CI／matching输出完整保留。H7启动恢复设计已PASS、其独立实现候选仍在推进；完整执行权／后台效果、全根A-T7／A-G继续，CS adapters尚未开始，AW尚未部署到CS；其后M0先实际部署再逐项M1～M4，RFC不记Done。详见[诊断家族](design/RFC-370-crewstation-hosted-deployment/doctor-diagnostic-family.md)、[发布配套](design/RFC-370-crewstation-hosted-deployment/doctor-diagnostic-family-publication.md)。以下旧共享正文逐字保留。
+
 ## 2026-10-06 RFC-371 原单区间 TEMP 与完整 Ubuntu 32 分片
 
 原45c9cb46的100K任务／10M用量完整报告资格已PASS：所有Task、allocation到实际EOF，输入10M／缓存读30M／缓存写50M／输出70M，总160M，人民币验收估值500不代表供应商账单。同run的self-total仍在原240分钟预算超时，原失败、人口及预算全部保留。本批以原roots的point端点保留单叶，原AVL与完整四桶选择不改；499 full节点混合刷新及原5/2端点两项设计P2已修正，R1失败与R2设计PASS均留证。

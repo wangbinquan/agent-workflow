@@ -154,7 +154,12 @@ describeEachProvider('RFC-371 exact original single-interval TEMP retention', (h
       expect([...retained].map(Number).sort((a, b) => a - b)).toEqual(
         Array.from({ length: 499 }, (_, i) => i + 1),
       )
-      expect(await rows.get(namespace + '/roots', keyOf('new-tree'))).toEqual({
+      expect(
+        await rows.get<{ tree: string; id: string; point: readonly [number, number] }>(
+          namespace + '/roots',
+          keyOf('new-tree'),
+        ),
+      ).toEqual({
         tree: 'new-tree',
         id: '500',
         point: [1000, 1005],
@@ -176,7 +181,12 @@ describeEachProvider('RFC-371 exact original single-interval TEMP retention', (h
       expect(await coveragePrefixMaximum(reader.coverage, 'tree', 4)).toBeNull()
       expect(await coveragePrefixMaximum(reader.coverage, 'tree', 5)).toBe(2)
       expect(await coveragePrefixMaximum(reader.coverage, 'tree', 6)).toBe(2)
-      expect(await rows.get('original-reversed-pair/roots', keyOf('tree'))).toEqual({
+      expect(
+        await rows.get<{ tree: string; id: string; point: readonly [number, number] }>(
+          'original-reversed-pair/roots',
+          keyOf('tree'),
+        ),
+      ).toEqual({
         tree: 'tree',
         id: '1',
         point: [5, 2],
