@@ -312,7 +312,9 @@ describe('repository test entrypoint', () => {
       // 十片只压到 81%（macOS 那次证明 88% 也不够），十二片压到 ~67%。同样照 ci.yml 的规矩：
       // 加 runner，不动预算、不改单条用例超时。
       // RFC-370 CI 修复：run 36404992960 的 5/12 持续执行仍耗尽总预算，扩到十六片。
-      ['ubuntu-latest', 16],
+      // 2026-10-06: 13/16 exhausted the original job budget while the suite advanced.
+      // Thirty-two independent runners retain both providers and every original test.
+      ['ubuntu-latest', 32],
       // RFC-359 W57：macOS 从四片加到六片——四片时最长的一片长期在 15 分钟预算的 75%~90%，
       // 实测有一次跑到 15 分 16 秒被超时杀掉（GitHub 把超时报成 `cancelled`，聚合 job 随之判红）。
       // 处置照 ci.yml 自己立的规矩：加 runner，不动预算、不改单条用例超时。

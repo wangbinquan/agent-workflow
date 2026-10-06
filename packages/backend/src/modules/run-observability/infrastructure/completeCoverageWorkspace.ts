@@ -3,6 +3,8 @@ import type { CoverageIntervalStore, CoverageIntervalNode } from '../domain/cove
 interface Root {
   readonly tree: string
   readonly id: string | null
+  /** A single original interval needs no duplicate TEMP node row. */
+  readonly point?: readonly [number, number]
 }
 async function prefetchRoots(
   input: {
@@ -105,12 +107,45 @@ export function completeCoverageWorkspace(
       originalRootsEmpty = false
       rootWriteRevision++
       const key = keyOf(tree),
-        row = { tree, id }
+        current = roots.get(key) ?? dirtyRoots.get(key),
+        nodeId = nodeKey(tree, id),
+        pending = dirtyNodes.get(nodeId)
+      const leaf =
+        pending &&
+        pending.left === null &&
+        pending.right === null &&
+        pending.height === 1 &&
+        pending.maximum === pending.end
+      const row: Root =
+        current?.id === id && current.point
+          ? current
+          : current?.id == null && leaf
+            ? { tree, id, point: [pending.start, pending.end] }
+            : { tree, id }
+      if (row.point) {
+        dirtyNodes.delete(nodeId)
+        nodes.delete(nodeId)
+      }
       remember(roots, key, row)
       dirtyRoots.set(key, row)
       if (dirtyRoots.size === 500) await flushRows(rootSpace, dirtyRoots)
     },
     async node(tree, id) {
+      await coverage.root(tree)
+      const root = roots.get(keyOf(tree)) ?? dirtyRoots.get(keyOf(tree))
+      if (root?.id === id && root.point) {
+        if (root.point.length !== 2 || !root.point.every(Number.isSafeInteger))
+          throw new Error('Coverage point interval invalid')
+        return {
+          id,
+          start: root.point[0],
+          end: root.point[1],
+          maximum: root.point[1],
+          height: 1,
+          left: null,
+          right: null,
+        }
+      }
       const key = nodeKey(tree, id),
         row =
           nodes.get(key) ??
@@ -121,11 +156,43 @@ export function completeCoverageWorkspace(
       return { ...row }
     },
     async save(tree, node) {
+      await coverage.root(tree)
+      const rootKey = keyOf(tree),
+        root = roots.get(rootKey) ?? dirtyRoots.get(rootKey)
+      if (root?.id === node.id && root.point) {
+        const leaf =
+          node.left === null &&
+          node.right === null &&
+          node.height === 1 &&
+          node.maximum === node.end
+        const row: Root = leaf
+          ? { tree, id: node.id, point: [node.start, node.end] }
+          : { tree, id: node.id }
+        rootWriteRevision++
+        remember(roots, rootKey, row)
+        dirtyRoots.set(rootKey, row)
+        if (leaf) {
+          if (dirtyRoots.size === 500) await flushRows(rootSpace, dirtyRoots)
+          return
+        }
+      }
+      // Preserve the original pending first leaf when the previous full nodes fill a batch.
+      if (
+        dirtyNodes.size === 499 &&
+        root?.id == null &&
+        node.left === null &&
+        node.right === null &&
+        node.height === 1 &&
+        node.maximum === node.end &&
+        !dirtyNodes.has(nodeKey(tree, node.id))
+      )
+        await flushRows(nodeSpace, dirtyNodes)
       const key = nodeKey(tree, node.id),
         copy = { ...node }
       remember(nodes, key, copy)
       dirtyNodes.set(key, copy)
       if (dirtyNodes.size === 500) await flushRows(nodeSpace, dirtyNodes)
+      if (dirtyRoots.size === 500) await flushRows(rootSpace, dirtyRoots)
     },
     async allocateId() {
       return String(++sequence)

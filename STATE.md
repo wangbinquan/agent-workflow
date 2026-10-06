@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-371 原单区间 TEMP 与完整 Ubuntu 32 分片
+
+原45c9cb46的100K任务／10M用量完整报告资格已PASS：所有Task、allocation到实际EOF，输入10M／缓存读30M／缓存写50M／输出70M，总160M，人民币验收估值500不代表供应商账单。同run的self-total仍在原240分钟预算超时，原失败、人口及预算全部保留。本批以原roots的point端点保留单叶，原AVL与完整四桶选择不改；499 full节点混合刷新及原5/2端点两项设计P2已修正，R1失败与R2设计PASS均留证。
+
+Ubuntu13/16持续运行到原15min预算取消；现完整1/32～32/32各一次，macOS12、实际SQLite／PG、全部原测试及预算保持，两个精确matrix守卫同步。独立实现有限SOURCE39 VALID/PASS、0功能P1/P2；20 owned、5原control、14证据首末稳定。仅本片format/lint、原纯AST／字节／JSON及一次官方census；无本机AW tests／typecheck／build／E2E／规模。13 matching产物保留129有序库存、全部原债务／guard／SPI／target／SCC，只按上一已提交说明退役4个过期一次性增长许可，无新许可；继承8aaf的fixture类型后继不影响生产人口或库存。共享旧全文及并行输出完整保留。
+
+正式AW总览现显示8任务／14次执行、123238四桶Token及¥0.16583已记录估值，原13/14采集与8/13定价缺口保留；原页面、有限静态门、旧规模资格不代签本批新exact-SHA CI。新原尺度资格、CS正式部署和开发paged数值消费者继续，producer OFF；原生归属／基线／修订、各调用入口、托管联动与两个RFC其余工作未完成，不记Done。详见[原单区间进展](design/RFC-371-run-observability/single-interval-temp-progress.md)。以下全部共享正文原样保留。
+
 ## 2026-10-06 RFC-370 验证命令 hosted CI 配套修复
 
 e6764009 的主 CI 37460301719 中，功能作业112257911350在新真实 provider 测试五处 FactCell.value 报 TS2339；仅加实际 known 分支的擦除型 Extract 投影，原断言、人口、持久结果和预算不变。同提交 Windows37460301674正式failure，唯一功能失败为 MCP 完整根验证逆向 callee 字面量，应为实际 composeSqliteAppDeps；只改这一准确名称，原三个完整函数摘要及其它所有判据保持。维护压力37460301589已正式success。主CI尚在执行，另一个Static scans failure仅保留状态、不读取分析该作业，不能记全仓绿。

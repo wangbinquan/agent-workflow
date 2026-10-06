@@ -1,6 +1,5 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:c19ee2e5ffa55d42caad7b5da102f34c991768d2ab4b2e56d4ab6e18532abef8",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -9,7 +8,8 @@
       "architecture/facades.json",
       "architecture/public-surfaces.json",
       "architecture/module-symbol-owners.json"
-    ]
+    ],
+    "sourceDigest": "sha256:aa63b6db90a5fe310cefde89187170f9435cb10466a39aefce1a971496e0b850"
   },
   "ledgers": [
     {
@@ -818,124 +818,112 @@
       "why": "RFC-362 已批准的 22 个精确前置 public 合同，仅类型声明及测试 provider；未接生产装配，按 declared-contract-debt 单列。后继 RFC-362-E1-production-cutover 完成某项真实 provider/callsite 后删除该 ID 并同步缩小基线，不领取 W4-E1/W5 完成信用。 RFC-363 reader cutover consumes six exact declarations: 22 -> 16; launch debt remains. RFC-363 Task admission and effects consume 13 exact launch declarations: 16 -> 3. Public URL seal remains open. RFC-363 production URL sealing activates the final three declarations: 3 -> 0. Full RFC-363 acceptance is still separate."
     },
     {
-      "id": "rfc294-mutation-entrypoints",
-      "file": "architecture/mutation-entrypoints.json",
-      "symbol": "entries",
       "baseline": 1920,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 Verification Command SOURCE24-R1: actual original counter 1917 -> 1920 for rfc294-mutation-entrypoints. The complete selected verification command family and opaque program references add only measured owner/address inventory. Native pairing preserves all original resolver/collector/physical execution algorithms and the original receipt/result semantics; the sole verification policy, every original assertion/budget and five complete real root/forwarding bodies remain through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Doctor, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "file": "architecture/mutation-entrypoints.json",
+      "id": "rfc294-mutation-entrypoints",
+      "symbol": "entries",
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
-      "id": "rfc294-node-run-insert-sites",
-      "file": "architecture/mutation-entrypoints.json",
-      "symbol": "nodeRunInsertSites",
       "baseline": 1,
+      "file": "architecture/mutation-entrypoints.json",
+      "id": "rfc294-node-run-insert-sites",
+      "symbol": "nodeRunInsertSites",
       "why": "RFC-294 N1：node_runs INSERT 的 exact single-writer/显式 dispatch 例外分母；任何未登记新写点直接阻断。"
     },
     {
-      "id": "rfc294-transaction-callbacks",
-      "file": "architecture/transaction-external-effects.json",
-      "symbol": "entries",
       "baseline": 267,
+      "file": "architecture/transaction-external-effects.json",
+      "id": "rfc294-transaction-callbacks",
+      "symbol": "entries",
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
-      "id": "rfc294-background-jobs",
-      "file": "architecture/background-jobs.json",
-      "symbol": "entries",
       "baseline": 361,
+      "file": "architecture/background-jobs.json",
+      "id": "rfc294-background-jobs",
+      "symbol": "entries",
       "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
-      "id": "rfc294-ambient-wiring",
-      "file": "architecture/background-jobs.json",
-      "symbol": "ambientWiringEntries",
       "baseline": 504,
+      "file": "architecture/background-jobs.json",
+      "id": "rfc294-ambient-wiring",
+      "symbol": "ambientWiringEntries",
       "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
-      "id": "rfc294-cross-context-observed-imports",
-      "file": "architecture/cross-context-imports.json",
-      "symbol": "observedEdges",
       "baseline": 6667,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 Verification Command SOURCE24-R1: actual original counter 6661 -> 6667 for rfc294-cross-context-observed-imports. The complete selected verification command family and opaque program references add only measured owner/address inventory. Native pairing preserves all original resolver/collector/physical execution algorithms and the original receipt/result semantics; the sole verification policy, every original assertion/budget and five complete real root/forwarding bodies remain through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Doctor, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "file": "architecture/cross-context-imports.json",
+      "id": "rfc294-cross-context-observed-imports",
+      "symbol": "observedEdges",
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
-      "id": "rfc294-target-context-edges",
-      "file": "architecture/cross-context-imports.json",
-      "symbol": "targetEdges",
       "baseline": 69,
+      "file": "architecture/cross-context-imports.json",
+      "id": "rfc294-target-context-edges",
+      "symbol": "targetEdges",
       "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。"
     },
     {
-      "id": "rfc294-required-port-liveness",
-      "file": "architecture/cross-context-imports.json",
-      "symbol": "requiredPorts",
       "baseline": 40,
+      "file": "architecture/cross-context-imports.json",
+      "id": "rfc294-required-port-liveness",
+      "symbol": "requiredPorts",
       "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
-      "id": "rfc294-architecture-exceptions",
-      "file": "architecture/cross-context-imports.json",
-      "symbol": "architectureExceptions",
       "baseline": 5869,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 Verification Command SOURCE24-R1: actual original counter 5863 -> 5869 for rfc294-architecture-exceptions. The complete selected verification command family and opaque program references add only measured owner/address inventory. Native pairing preserves all original resolver/collector/physical execution algorithms and the original receipt/result semantics; the sole verification policy, every original assertion/budget and five complete real root/forwarding bodies remain through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Doctor, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "file": "architecture/cross-context-imports.json",
+      "id": "rfc294-architecture-exceptions",
+      "symbol": "architectureExceptions",
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
-      "id": "rfc294-facades",
-      "file": "architecture/facades.json",
-      "symbol": "entries",
       "baseline": 298,
+      "file": "architecture/facades.json",
+      "id": "rfc294-facades",
+      "symbol": "entries",
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
-      "id": "rfc294-public-surfaces",
-      "file": "architecture/public-surfaces.json",
-      "symbol": "entries",
       "baseline": 1187,
+      "file": "architecture/public-surfaces.json",
+      "id": "rfc294-public-surfaces",
+      "symbol": "entries",
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
-      "id": "rfc294-public-surface-opaque-type-allowlist",
-      "file": "packages/backend/tests/architecture/rfc294Canonical.ts",
-      "symbol": "PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST",
       "baseline": 15,
+      "file": "packages/backend/tests/architecture/rfc294Canonical.ts",
+      "id": "rfc294-public-surface-opaque-type-allowlist",
+      "symbol": "PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST",
       "why": "RFC-294 N1：递归 public surface 仍无法在仓内解析的精确 opaque type reference；每一项必须有意保留且不得静默扩张。"
     },
     {
-      "id": "rfc294-governed-field-surfaces",
-      "file": "architecture/public-surfaces.json",
-      "symbol": "governedFieldSurfaces",
       "baseline": 5,
+      "file": "architecture/public-surfaces.json",
+      "id": "rfc294-governed-field-surfaces",
+      "symbol": "governedFieldSurfaces",
       "why": "RFC-294 N1：TaskCatalog membership 与 DigitalEmployee Case link 两组 edge-neutral field growth 的 owner/writer/consumer/rollback 账本。"
     },
     {
-      "id": "rfc294-module-symbol-owners",
-      "file": "architecture/module-symbol-owners.json",
-      "symbol": "entries",
       "baseline": 27141,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 Verification Command SOURCE24-R1: actual original counter 27130 -> 27141 for rfc294-module-symbol-owners. The complete selected verification command family and opaque program references add only measured owner/address inventory. Native pairing preserves all original resolver/collector/physical execution algorithms and the original receipt/result semantics; the sole verification policy, every original assertion/budget and five complete real root/forwarding bodies remain through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Doctor, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "file": "architecture/module-symbol-owners.json",
+      "id": "rfc294-module-symbol-owners",
+      "symbol": "entries",
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
-  "schemaVersion": 1,
-  "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
-    "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8182aeaa4223a5c5d2cd31d232c61684824b39f0",
-    "contentDigest": "sha256:eb5b91ef9788bebf8c70b8cac3b038617d3582ffee83295082f759167165073e",
+    "contentDigest": "sha256:4746c6ce9bd075caa8236cb6b6f4edb74816ec05603aff4dc511ae30ba24b239",
+    "currentSnapshotSha": "e6764009d86f7c14db25c2fd7059b9e73071ec10",
     "digestAlgorithm": "sha256",
-    "digestScope": "canonical-json-without-provenance"
-  }
+    "digestScope": "canonical-json-without-provenance",
+    "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f"
+  },
+  "schemaVersion": 1,
+  "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e"
 }

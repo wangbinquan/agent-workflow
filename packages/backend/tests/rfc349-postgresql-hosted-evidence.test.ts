@@ -177,8 +177,8 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     // in this workflow or reject the stronger expanded leg.
     const matrix = parse(owners['ci.yml']).jobs['test-backend'].strategy.matrix
     expect(matrix.os).toEqual(['ubuntu-latest'])
-    expect(matrix.shard).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
-    expect(matrix.shards).toEqual([16])
+    expect(matrix.shard).toEqual(Array.from({ length: 32 }, (_, index) => index + 1))
+    expect(matrix.shards).toEqual([32])
     expect(matrix.include).toEqual(
       Array.from({ length: 12 }, (_, index) => ({
         os: 'macos-latest',

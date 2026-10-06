@@ -291,3 +291,9 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 按 CI 既有处置规则，macOS 由六片扩为十二个独立 runner，1/12 至 12/12 各一次；Ubuntu 16 片与实际双 provider 保留。所有原测试文件、discovery、命令、isolate/randomize/seed、作业与单测预算保持，不加过滤、skip 或重试。两份 matrix 精确登记同步为十二片。本机仅做 YAML / 字节保持核对和本次格式、lint；测试、类型与 E2E 等待此次新提交的精确 hosted CI。
 
 正式 AW 页面已复核：8 任务 / 14 次运行，已记录 123,238 Token（输入 96,095、缓存读 21,120、缓存写 0、输出 6,023）和人民币估值 ¥0.16583；保留 13/14 次用量与 8/13 已定价的缺口。真实柱状图可见，顶部汇总与用量质量仅在总览显示。此页面验收不代替原 100K/10M 规模、CS 原生消费者或两个 RFC 的剩余验收；两个 RFC 继续 In Progress。
+
+## 2026-10-06 Ubuntu 完整双 provider 32 分片
+
+原 source `8182aeaa4223a5c5d2cd31d232c61684824b39f0` 的[精确 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/37453467967)终态51 success、4 failure、1 cancelled；Windows平台workflow同SHA success。两个失败功能分片均为原canonical投影缺少已提交的scriptDepsEnv/scriptRun登记，须通过原官方AST产物更新，不删除或放松原断言。Ubuntu13/16持续推进实际双provider测试，但原15分钟job预算耗尽；取消保留，不能算覆盖通过。
+
+Ubuntu改为完整1/32至32/32的独立runner，每一原Bun发现文件仍只执行一次。macOS12、Windows与全部其它jobs不变，原--isolate/--randomize/seed/coverage、实际SQLite+PostgreSQL、PG17服务、所有原测试断言及各自预算、原15minjob预算保持。仅两个精确矩阵守卫同步完整分母/成员要求，无exclude、skip、过滤或--parallel。私有纯YAML与TS AST比对已证明除了此矩阵及其两个期望外结构一致；独立设计门VALID/PASS、0 findings。新源码实现门与精确SHA的真实CI终态仍须留证。
