@@ -1,3 +1,15 @@
+# RFC-370 后台生命周期 hosted CI fixture 兼容修正候选
+
+源码 `5b20b51738c276c4272fc0466b4748d8a2abee2f` 的 Windows run37513420795／job112440144316 已正式 failure：后台功能测试那一组706pass、3skip、0fail，包括新增18个双provider生命周期案例；整仓 typecheck 实际报 TS2345，旧 `rfc359-w12-daemon-bootstrap-composition.test.ts` 的 `TestSession` fixture 缺少新 required `execution` 成员。原精确终态与原始功能日志保留。该 job 的其它类别不分析、不形成结论。
+
+本候选只给该旧 fixture 增加 execution intent state／pause／resume；原 phase、bootstrap、receiver assertions、事件序列、所有 tests 与 budgets 完整保持。完整原正文逆变换证据保留。实际生产 `DaemonProviderRuntimeSession`、中立合同和18案例源码不变，没有新增 census 或本机 AW tests／typecheck／build／service。有限实现复核与精确发布尚待完成，新 exact-SHA hosted CI 尚待终态；5b20 不记整条绿色。
+
+三项已消费 allowGrowth 在普通紧接后继 `fd72004402bd35d703bd63cd824228455793afc8` 精确3路径发布退役，129库存及其余字段、生产、原规则和其它12matching全保持；META3-R1 58项实际42357594bytes有效稳定PASS、0 findings，首末FP `3e3b01d01f3054010d9a49d35f62a01e52092e9648bd05cc37456ae09870dad6`，回执240731bytes／SHA256 `f1de389008d9985d8735e1b91da3fbd6052f5f87fa99f6b6d34885611b36aff3`。main／origin推送后0/0，索引空，下一批真实根设计WIP保留。
+
+诊断3645主run37505158718现已正式failure，真实功能失败仍为5个历史链接502和旧owner增长声明在2个backend shards的RFC317 T17；这些原事实已保留，5b20引用修复及本次退役不倒写旧run。完整H7／真实根／purpose／A-G、CS M0–M4继续，仍未部署CS。
+
+---
+
 ## 2026-10-07 RFC-370 执行后台生命周期上库及一次增长回执退役
 
 25路径已上库 `5b20b51738c276c4272fc0466b4748d8a2abee2f`，共享main/origin精确0/0、索引空；下一批真实根选择设计独立保留。源码SOURCE6-R1与元数据META19-R3有效稳定PASS，源码23项保持；原metadata R1人口缺D1回执INVALID及R2两份provenance摘要FAIL均保留，R3只修2个摘要字段后107项完整绑定PASS。原私有publisher首次在staging前因两种EOF见证schema名不同退出，按实际source/meta完整EOF字段修正再发布，候选/门/原规则不变。

@@ -28,10 +28,25 @@ function session(
   close?: () => void | Promise<void>,
 ): TestSession {
   let phase: DaemonProviderRuntimeSessionPhase = 'frozen'
+  let executionEnabled = true
   const result = Object.freeze<TestSession>({
     provider,
     generationId,
     state: () => ({ phase, activeHandleIds: [] }),
+    // This bootstrap fixture has no handles; the real session suite covers execution control.
+    execution: Object.freeze({
+      async pause() {
+        executionEnabled = false
+      },
+      async resume() {
+        executionEnabled = true
+      },
+      state: () => ({
+        enabled: executionEnabled,
+        running: executionEnabled && phase === 'running',
+        activeHandleIds: [],
+      }),
+    }),
     runtime: Object.freeze({
       fetch: async () => new Response(`${provider}:${generationId}`),
       tryUpgrade: async () => false as const,
