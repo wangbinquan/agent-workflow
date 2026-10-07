@@ -37,10 +37,22 @@ test('successful original baseline and pass snapshots exit naturally after close
         this.observed.actualClose = true
       })
     }
-    override postMessage(...args: Parameters<Worker['postMessage']>) {
-      if (this.observed.closedReply && args[0]?.kind === 'cancel')
+    override postMessage(message: unknown, transfer: Transferable[]): void
+    override postMessage(message: unknown, options?: StructuredSerializeOptions): void
+    override postMessage(
+      message: unknown,
+      options?: Transferable[] | StructuredSerializeOptions,
+    ): void {
+      if (
+        this.observed.closedReply &&
+        typeof message === 'object' &&
+        message !== null &&
+        'kind' in message &&
+        message.kind === 'cancel'
+      )
         this.observed.destructiveAfterAck.push('cancel')
-      return super.postMessage(...args)
+      if (Array.isArray(options)) return super.postMessage(message, options)
+      return super.postMessage(message, options)
     }
     override terminate() {
       if (this.observed.closedReply) this.observed.destructiveAfterAck.push('terminate')

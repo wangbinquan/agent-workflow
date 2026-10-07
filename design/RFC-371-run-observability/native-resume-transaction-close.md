@@ -28,3 +28,11 @@ v4 在上述事务修复之后仍缺实际第二次完成；v5 的临时生命�
 因此本次补充修复仅在 `nativeUsageBaselineWorker`、`nativeUsagePassWorker` 和 `observationReportWorker` 原有关闭位置解除 `scope.onmessage`，让原消息、快照与通道收尾之后自然退出，并删除并未验证的 `close` 类型声明。没有新增主进程退出、计时器或伪造关闭；host 仍等待原真实关闭事件以及启动过的 PG reads。异常/abort 保留原快照回滚、通道拒绝和 host 停止路径。
 
 原真实 Worker 回归保留全部旧断言和 30 秒预算，增加成功关闭后没有失败回复/错误事件的断言。提交前移除本会话临时日志；新的真实续接取消案例必须达到实际两轮 seal 和完整报告，再与原 native 每一条记录核对。三种部署形态、完整人口及原执行预算均不收缩。
+
+## Worker 观察回归的完整 postMessage 类型重载
+
+2026-10-07，原 f0c94c3c CI 的真实功能检查 job 112747931498 报 TS2416 / TS2322：Parameters<Worker['postMessage']> 只保留最后一个 options 重载，无法满足 Worker 仍允许的 Transferable[] 重载。该检查未通过，不能记作主 CI 绿；同批 RFC-370 的独立测试类型失败由其所属工作处理。
+
+本修订只为 ObservedWorker 恢复原 Worker 的两个公开调用形状，实际消息与第二参数按原形状交给 super.postMessage，原 closed ACK 后取消检测保持。没有新增原生消息、改变生产 Worker、缩小 17 个原始 step / 7 行传输页、删除任何断言或放宽 30 秒预算。原实际规模 run 37583020583 的 full-report / self-total 已全部成功，人口保持 100K / 10M；该结果不替代本测试类型修订后的 exact-SHA CI。
+
+本机 AW 不运行测试、typecheck、build 或服务复现。本修订仅做自有文件格式 / lint / 语法检查和有限实现审阅，完整类型与原真实 Worker 回归交远端 CI，既有失败保留。
