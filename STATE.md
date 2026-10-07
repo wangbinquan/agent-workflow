@@ -10670,3 +10670,11 @@ H7 核心 SOURCE7-R2 有效稳定有限 PASS；三根、Task 事务、19 handles
 SOURCE7-R2 有效稳定有限 PASS，原 R1 两项功能失败保留；中立生命周期、借用原 startup lease 的 local factory 和两套回归准备独立发布，实际三个根尚未接线。一次原生成固定 c3857ea5 加3生产/2测试，13输出 sourceDigest sha256:ad9811a0e14eaef3082f488bcd0049568ac1ee62cb445373f7cd022b3bc1e8b9，classic inbound/outbound 0→0；所有旧完整行/129 ledger why与其它opaque字段保持，三项实测 one-commit 计数匹配消费后正常退役。
 
 匹配有限门、exact-path上库/同步、新exact-SHA hosted CI另验。无本机AW tests/typecheck/build/service，三个根/Task事务/19 handles/named admission与Task热配置继续；H7/A-T7/A-G未完成，随后各层独立CS adapters、M0先部署、M1–M4逐项接管，当前AW尚未部署到CS，RFC未完成。详情见 design/RFC-370-crewstation-hosted-deployment/host-execution-authority-core-canonical-publication.md。
+
+## 2026-10-07 RFC-370 H7 核心已发布与三项一次声明退役
+
+执行权核心及完整匹配23路径已推送89cbbe8dc4dd0a3d8fe0287440507a0bbb58369e，main/origin同步0/0、index空，所有并行在制品完整保留。SOURCE7-R2和MATCHING16-R2有效稳定有限PASS；主CI37556821337首次登记queued，正式精确SHA CI终态另验。
+
+本普通后继只退役该提交已消费的三个one-commit声明；完整129行baseline、顺序、why及其它字段保持，使用原payload算法刷新digest。原清单和全部源码不再生成或改动。三个共享文档的旧全文逐字保留，仅追加本段。没有新的census或本机AW执行检查。
+
+实际三个根、Task事务、named admission、19 handles与Task配置接线继续，尚未完成H7/A-T7/A-G，尚无AW在CS部署；随后按各层独立adapter先完成M0部署，再逐步M1–M4。RFC保持In Progress。
