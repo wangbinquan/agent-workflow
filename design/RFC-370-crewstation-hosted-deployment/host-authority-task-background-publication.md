@@ -11,3 +11,11 @@ WF1-R1 只在原 Windows push、PR path filters 与原平台命令三处登记�
 本机只做本批格式/lint、静态 AST/字节/JSON 和上述唯一原生成，没有运行 AW tests、typecheck、build、service 或 E2E。源码、Windows 登记与配套门的完整原回执分别留证；有限 PASS 不等于 hosted CI 通过。
 
 目前尚无真实根消费 startAuthority，也未完成 Task 原事务、命令内部逐 Task 派发或全入口 admission。实际启动根、完整 19 owner、UI、H7/A-G 和 CS M0–M4 仍开放，不声明 Task group ready。AW 尚未部署到 CS。
+
+### 2026-10-07 RFC-370 Task background 发布及普通后继退役
+
+SOURCE4-R2、WF1-R1、MATCHING16-R2 均由独立 reviewer 有效稳定有限 PASS，root 绑定实际完整正文后正常发布21路径：`a7299dec8d17fcf61f6f431be4e47006d9464cc8`。发布后 main/origin 同步0/0、索引为空，未改变任何并行在制品。主 CI `37599930554`、Windows `37599930580` 已按该精确 SHA 登记，首次 queued，正式终态待验。
+
+本次普通紧接后继只退役已消费的一个真实 owner 增长声明；原129有序库存、所有 baseline/why/其它字段和原 source/projection 保持，仅按原五个纯JSON函数更新 ledger contentDigest。生产四路径、测试、Windows登记和其它十二项配套全部不改，不重跑 census。原配置后 module.resume 真实ACK遗漏的首轮 FAIL 和源码修正 PASS 均保留。
+
+本次只是独立 Task background selected lifetime，实际启动根、所有十九 owner、Task 原事务/准入、UI、完整 H7/A-T7/A-G 与各层 CS adapters、M0首次部署至 M4 仍继续。没有本机 AW tests/typecheck/build/service/E2E、没有跨会话消息，AW 尚未部署到 CS，RFC 未完成。普通后继的独立有限门与精确发布仍须分别核验；CI排队和静态检查不算整仓通过。

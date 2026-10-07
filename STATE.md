@@ -10777,3 +10777,11 @@ SOURCE4-R1 与 WF1-R1 独立有效稳定 PASS：捕获原执行权回调/receive
 ### 2026-10-07 RFC-370 Task background selected lifetime 候选
 
 SOURCE4-R2 与 WF1-R1 独立有效稳定 PASS；R1 唯一 module-open P2 原 FAIL 保留并闭合，必需 resume ACK 纳入启动成功、autoResume 原 detached/真实 ACK 保持，新增双 provider sealed gate 回归至二十 case。完整原 native AST、三套旧测试、R1 九个 case、原正文保持。一次原 scoped census 只含一份原 production、一份新 Task port、一份新测试，排除全部非本批 WIP；13 原输出完整保持，仅新增四 owner 至 27415、一个文件与一条 timer 物理标记移动，其他全部 payload/数组/分母和 classic 0/0 保持。129 库存/why 保留，一条 owners 实测声明消费后在普通后继退役，无新 census。配套独立门、精确发布与 hosted CI 待验；实际根、19 owner、Task 原 TX/准入、UI、H7/A-G 和 CS M0–M4 继续，尚未部署 CS。旧共享全文及并行内容完整保留，详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-task-background-publication.md`。
+
+### 2026-10-07 RFC-370 Task background 发布及普通后继退役
+
+SOURCE4-R2、WF1-R1、MATCHING16-R2 均由独立 reviewer 有效稳定有限 PASS，root 绑定实际完整正文后正常发布21路径：`a7299dec8d17fcf61f6f431be4e47006d9464cc8`。发布后 main/origin 同步0/0、索引为空，未改变任何并行在制品。主 CI `37599930554`、Windows `37599930580` 已按该精确 SHA 登记，首次 queued，正式终态待验。
+
+本次普通紧接后继只退役已消费的一个真实 owner 增长声明；原129有序库存、所有 baseline/why/其它字段和原 source/projection 保持，仅按原五个纯JSON函数更新 ledger contentDigest。生产四路径、测试、Windows登记和其它十二项配套全部不改，不重跑 census。原配置后 module.resume 真实ACK遗漏的首轮 FAIL 和源码修正 PASS 均保留。
+
+本次只是独立 Task background selected lifetime，实际启动根、所有十九 owner、Task 原事务/准入、UI、完整 H7/A-T7/A-G 与各层 CS adapters、M0首次部署至 M4 仍继续。没有本机 AW tests/typecheck/build/service/E2E、没有跨会话消息，AW 尚未部署到 CS，RFC 未完成。普通后继的独立有限门与精确发布仍须分别核验；CI排队和静态检查不算整仓通过。
