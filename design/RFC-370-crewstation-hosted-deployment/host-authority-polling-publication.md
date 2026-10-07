@@ -11,3 +11,11 @@ SOURCE3-R1 和 WF1-R1 独立有效稳定 PASS，完整原 native AST 和原整�
 并行 RFC-371 在普通后继 f0c94c3c65e5287940d21bf9be02f2c661bc3cc1 仅退役自己的既有 owner 声明，没有改变任何生产来源；基于该提交保留其当前完整内容，只向前投影本批已核对的清单与 provenance，不重复生成或恢复已退役的声明。STATE／plan 的旧全文及并行内容完整保留，附加本批事实。
 
 本机未运行 AW tests、typecheck、build、service 或 E2E。有限源码、Windows 登记与配套 PASS 不代表 hosted CI 通过。实际 provider roots、19 owner、Task 全入口原事务／admission、UI、H7／A-G 与 CS M0～M4 仍开放，AW 尚未部署 CS。本批只发布 polling helper、测试、CI 登记和配套清单；独立 Task 事务包仍是后续未发布候选。
+
+## 2026-10-07 轮询切面发布与三项一次增长声明退役
+
+轮询20路径已精确发布 `88d0900064538b0c606836419f9e43ebf1ccfe2c`，推送后 main／origin 0／0、index 为空，独立 Task 持久参与者候选完整保留。SOURCE3-R1、WF1-R1 和 corrected MATCHING16-R3 有效稳定 PASS；原配套 R2 的私有摘要 FAIL 及后续 root 实际消费完整保留，R3 只修当前 proof 的 ledger 摘要，不重跑原生成或改 matching 正文。
+
+本普通后继仅退役三条已消费声明：mutation1956、background367、owner27419。129个完整有序库存、baseline、why、预算及其它字段保持，沿原五个纯 JSON 函数刷新 payload digest。完整三文档前缀及并行输出保持，source3原字节不改。没有新的 census 或本机 AW tests／typecheck／build／service／E2E。
+
+该提交主 CI37612138168／Windows37612138153已注册，终态另验，不能记为全仓绿。Task持久参与者 SOURCE18-R2 有限 PASS，原失权窗口 F01 与新增两个真实双 provider 原事务案例已复核；其源码尚未随轮询发布。实际Task调用者／启动根／19owner／UI、H7／A-G及CS M0～M4继续，AW未部署CS，RFC保持进行中。

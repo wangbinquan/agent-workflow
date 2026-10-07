@@ -1093,3 +1093,11 @@ SOURCE4-R2、WF1-R1、MATCHING16-R2 均由独立 reviewer 有效稳定有限 PAS
 ### 2026-10-07 RFC-370 selected polling 有限候选
 
 SOURCE3-R1／WF1-R1 独立稳定 PASS，原 native AST／整套旧测试／Windows 原命令与预算保持，新增双 provider 24 个 selected polling 用例交 hosted 精确 SHA CI。清单实际原生成两次：首轮原生成后私有包装器文件数错误导致未完成，保留失败；修正后的唯一完整成功输出先保存，不再重跑。旧全部 owner／background／opaque mutation 行保持，仅 owner +3 至 27419、background +1 至 367、mutation 分类 +1 至 1956，一条原 timer 106→250；其它 payload、SCC／target 和 classic 0/0 保持。129 有序 ledger／why 保留，三个实测声明在普通后继退役。并行 RFC-371 已在 f0c94c3c 普通退役，只有该 ledger 变化，无生产变更，向前投影本批校验且不恢复其声明；STATE／plan 旧全文完整保持。配套门、精确发布和 hosted CI 待验，实际根／19 owner、Task 原事务全入口／准入、UI、H7／A-G 与 CS M0～M4 继续，尚未部署 CS。详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-polling-publication.md`。
+
+## 2026-10-07 轮询切面发布与三项一次增长声明退役
+
+轮询20路径已精确发布 `88d0900064538b0c606836419f9e43ebf1ccfe2c`，推送后 main／origin 0／0、index 为空，独立 Task 持久参与者候选完整保留。SOURCE3-R1、WF1-R1 和 corrected MATCHING16-R3 有效稳定 PASS；原配套 R2 的私有摘要 FAIL 及后续 root 实际消费完整保留，R3 只修当前 proof 的 ledger 摘要，不重跑原生成或改 matching 正文。
+
+本普通后继仅退役三条已消费声明：mutation1956、background367、owner27419。129个完整有序库存、baseline、why、预算及其它字段保持，沿原五个纯 JSON 函数刷新 payload digest。完整三文档前缀及并行输出保持，source3原字节不改。没有新的 census 或本机 AW tests／typecheck／build／service／E2E。
+
+该提交主 CI37612138168／Windows37612138153已注册，终态另验，不能记为全仓绿。Task持久参与者 SOURCE18-R2 有限 PASS，原失权窗口 F01 与新增两个真实双 provider 原事务案例已复核；其源码尚未随轮询发布。实际Task调用者／启动根／19owner／UI、H7／A-G及CS M0～M4继续，AW未部署CS，RFC保持进行中。
