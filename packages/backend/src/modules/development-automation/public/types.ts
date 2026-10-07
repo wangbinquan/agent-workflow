@@ -1,3 +1,11 @@
+export type {
+  EvidenceStagingFactory,
+  EvidenceStagingLease,
+  EvidenceStagingNamespace,
+  EvidenceStagingReference,
+  PipelineStagingFactories,
+} from '../application/ports/evidenceStaging'
+
 // The external-approval subject codec is a real cross-context contract: the
 // development type package mints the opaque subject, while Integration's
 // observer decodes it before calling the registered approval provider. Keep

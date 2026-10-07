@@ -43,3 +43,20 @@ export interface DigitalEmployeeWorkStartPort {
     readonly origin: EventWorkStartOrigin
   }): Promise<{ readonly caseId: string }>
 }
+
+export type { PipelineEvidenceExecution } from '../infrastructure/local/legacyPipelineAdapter'
+export type { SelectedPipelineEvidenceExecution } from '../application/developmentPipelineAdapter'
+export type {
+  RequirementAdapterBinding,
+  PipelineAdapterBinding,
+  ApprovalAdapterBinding,
+} from '../application/ports/developmentPurposeBinding'
+export type {
+  AdapterConfigurationReference,
+  AdapterProgramReference,
+  AdapterProgramFactory,
+  AdapterProcessObservation,
+  RequirementAdapterEffects,
+  PipelineAdapterEffects,
+  ApprovalAdapterEffects,
+} from '../application/ports/developmentAdapterEffects'

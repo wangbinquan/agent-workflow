@@ -1,3 +1,4 @@
+import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
   composeLocalTaskRunRootSelection,
@@ -91,8 +92,8 @@ import {
   createDevelopmentMissionExecutionTerminalObserver,
   createMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
-import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
-import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
+import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
+import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -132,7 +133,7 @@ import {
   composeIntentQueuedNotifications,
   composeIntentQueuedResumption,
 } from '@/modules/intent/composition/queuedResumption'
-import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
+import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -495,6 +496,7 @@ export interface StartOptions {
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
   taskRunSelection?: TaskRunRootSelection
+  readonly developmentPurposes?: DevelopmentPurposeSelection
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
@@ -660,6 +662,7 @@ async function composePostgresqlProviderSession(
     nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
     portArtifactContentEffects: input.portArtifactContentEffects,
     taskRunSelection: input.taskRunSelection,
+    developmentPurposes: input.developmentPurposes,
     workspaceExcludeProfiles: input.workspaceExcludeProfiles,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     actionWorkspaceEffects: input.actionWorkspaceEffects,
@@ -1251,6 +1254,7 @@ interface DaemonProviderSessionComposeInput {
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
   readonly taskRunSelection?: TaskRunRootSelection
+  readonly developmentPurposes?: DevelopmentPurposeSelection
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
@@ -1698,6 +1702,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
       portArtifactContentEffects: opts.portArtifactContentEffects,
       taskRunSelection: opts.taskRunSelection,
+      developmentPurposes: opts.developmentPurposes,
       workspaceExcludeProfiles: opts.workspaceExcludeProfiles,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
       actionWorkspaceEffects: opts.actionWorkspaceEffects,
@@ -1819,6 +1824,12 @@ async function composeSqliteProviderSession(
     conflictWorkspaceSelected: input.conflictMergeWorkspaceEffects !== undefined,
   })
   const databaseProvider = requireDatabaseProviderRuntime(input.provider, 'sqlite')
+  const developmentPurposeRoot = composeDevelopmentPurposeRoot({
+    appHome: Paths.root,
+    selection: input.developmentPurposes,
+    evidenceArtifacts: input.evidenceArtifacts,
+    evidenceDocumentCommands: input.evidenceDocumentCommands,
+  })
   const selectedTaskRuns = selectTaskRunRootSelection(input.taskRunSelection)
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
     input.workspaceExcludeProfiles,
@@ -1941,7 +1952,7 @@ async function composeSqliteProviderSession(
     db,
     secretBox,
     connections: repositoryMetadataConnections,
-    pipeline: composePipelineEvidenceRunnerFor(db),
+    pipeline: composeSelectedPipelineEvidenceRunnerFor(db, developmentPurposeRoot.pipeline),
   })
   const developmentWorkspaceRepositoryPreparation = createDevelopmentWorkspaceRepositoryPreparation(
     {
@@ -2753,7 +2764,10 @@ async function composeSqliteProviderSession(
       digitalEmployeeWorkStart,
     }),
   })
-  const developmentApprovalGateway = composeApprovalGatewayRunnerFor(db)
+  const developmentApprovalGateway = composeSelectedApprovalGatewayRunnerFor(
+    db,
+    developmentPurposeRoot.approval,
+  )
   const missionEventContinuation = createMissionCodeHostEventContinuation(db)
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
   const employeeWriterState = await employeeWriterCutover.activate()
@@ -2876,12 +2890,16 @@ async function composeSqliteProviderSession(
     repositoryBaselines: input.repositoryBaselines,
     db,
     appHome: Paths.root,
-    evidenceArtifacts: input.evidenceArtifacts,
+    evidenceArtifacts: developmentPurposeRoot.evidenceArtifacts,
     evidenceRead: input.evidenceRead,
-    evidenceDocumentCommands: input.evidenceDocumentCommands,
+    evidenceDocumentCommands: developmentPurposeRoot.requirement.documentCommands,
+    requirementStaging: developmentPurposeRoot.requirement.staging,
     attemptContext: input.attemptContext,
     admissionLookup: developmentAdmissionLookup,
-    requirementSource: composeRequirementSourceRunnerFor(db),
+    requirementSource: composeSelectedRequirementSourceRunnerFor(
+      db,
+      developmentPurposeRoot.requirement,
+    ),
     changeCandidate: bindChangeCandidateParticipant({
       candidateEffects: input.repositoryCandidateEffects,
     }),
@@ -2890,8 +2908,14 @@ async function composeSqliteProviderSession(
       publicationTransport: repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
-    ...buildDevelopmentDeliveryDeps(developmentDeliveryProvider),
-    ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
+    ...buildDevelopmentDeliveryDeps(
+      developmentDeliveryProvider,
+      developmentPurposeRoot.pipeline.staging,
+    ),
+    ...buildDevelopmentPipelineDeps(
+      developmentDeliveryProvider.pipeline,
+      developmentPurposeRoot.pipeline.staging,
+    ),
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       ...hostActionEnvironment,
@@ -3259,6 +3283,8 @@ async function composeSqliteProviderSession(
     nodeRunPrompts,
     portArtifacts,
     taskRunSelection: input.taskRunSelection,
+    developmentPurposes: input.developmentPurposes,
+    developmentPurposeRoot,
     workspaceExcludeProfiles: input.workspaceExcludeProfiles,
     taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
@@ -3609,7 +3635,10 @@ async function composeSqliteProviderSession(
     conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
   })
   const employeeEventCenter = employeeHttpEventCenter
-  const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
+  const employeeDelivery = buildDevelopmentDeliveryDeps(
+    developmentDeliveryProvider,
+    developmentPurposeRoot.pipeline.staging,
+  )
   const employeeOs = composeDigitalEmployee({
     db,
     appHome: Paths.root,

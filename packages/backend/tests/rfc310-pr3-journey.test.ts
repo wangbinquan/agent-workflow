@@ -1,3 +1,4 @@
+import { composeDevelopmentPurposeRoot } from '../src/server'
 // RFC-310 PR-3 —— 收口 journey：HTTP 面 + composition 装配的连接组织。
 //
 // fork 交付的部件测试（materialize/placement/questions/adapter-runner/...）
@@ -56,7 +57,7 @@ import {
   composeDevelopmentAutomation,
   type DevelopmentAutomationModule,
 } from '../src/modules/development-automation/composition'
-import { composeRequirementSourceRunnerFor } from '../src/modules/integration/composition/requirementSource'
+import { composeSelectedRequirementSourceRunnerFor } from '../src/modules/integration/composition/requirementSource'
 import type { MissionRow } from '../src/modules/development-automation/application/ports/missionStore'
 import {
   createUploadSessionPersistence,
@@ -204,7 +205,7 @@ async function waitFor(predicate: () => boolean | Promise<boolean>, rounds = 400
 
 beforeAll(async () => {
   mock = await startRequirementProviderMock()
-  // 路由装配读 AW_REQUIREMENT_MOCK_URL（composeRequirementSourceRunnerFor 在装配点
+  // 路由装配读 AW_REQUIREMENT_MOCK_URL（composeSelectedRequirementSourceRunnerFor 在装配点
   // 读一次 env），因此它必须先于任何 `scope.open()` / composeDevelopmentAutomation 就位。
   process.env.AW_REQUIREMENT_MOCK_URL = mock.url
 
@@ -275,11 +276,15 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
   requirementOnlyPolicyId = requirementOnlyPolicy.id
   // 与应用同一个 app home：evidence 根 = `<appHome>/evidence`，用例最后要 unlink
   // 应用刚经 HTTP 落盘的那个 blob，两个 EvidenceStore 必须指向同一棵目录。
+  const purposeRoot = composeDevelopmentPurposeRoot({ appHome: opened.appHome })
   automation = composeDevelopmentAutomation({
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db,
     appHome: opened.appHome,
-    requirementSource: composeRequirementSourceRunnerFor(db),
+    requirementSource: composeSelectedRequirementSourceRunnerFor(db, purposeRoot.requirement),
+    evidenceArtifacts: purposeRoot.evidenceArtifacts,
+    evidenceDocumentCommands: purposeRoot.requirement.documentCommands,
+    requirementStaging: purposeRoot.requirement.staging,
   })
 }
 

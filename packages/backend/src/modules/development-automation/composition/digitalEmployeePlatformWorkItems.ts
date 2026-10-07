@@ -35,9 +35,8 @@ import {
   businessTreeSnapshot,
   businessTreeSnapshotDigest,
 } from '../infrastructure/workspaceValidator'
-import { EvidenceStore } from '../infrastructure/evidenceStore'
 import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
-import { createPipelineImportAdapter } from '../infrastructure/pipelineEvidenceImport'
+import { createSelectedPipelineImportAdapter } from '../application/pipelineEvidenceImport'
 import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 
 interface DevelopmentReactionPlan {
@@ -683,13 +682,6 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
   const delivery = input.sourceControl
   const workspaceOps = input.sourceControl
   const now = input.now ?? Date.now
-  // Composition must not mutate appHome. EvidenceStore creates directories in
-  // its constructor, so resolve it only when a pipeline snapshot is actually
-  // imported or materialized.
-  let pipelineEvidenceStore: EvidenceStore | undefined
-  const evidenceStore = (): EvidenceArtifactPort =>
-    input.evidenceArtifacts ??
-    (pipelineEvidenceStore ??= new EvidenceStore(factory.resolve(input.appHome, 'evidence')))
   const caseDirectory = (caseId: string) =>
     factory.resolve(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
   const sceneRoot = (caseId: string) => factory.resolve(caseDirectory(caseId), 'scene')
@@ -840,13 +832,14 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
               explanation: 'pipeline-required-gates-missing: 流水线证据未声明任何必需门禁',
             })
           }
-          const store = evidenceStore()
-          const imported = await createPipelineImportAdapter(store, collected.outputBudget).import({
-            stagedRoot: collected.stagedRoot,
-            envelope: collected.envelope,
-            expectedHeadSha: mergeRequest.headSha,
-            expectedTargetSha: targetSha,
-          })
+          const imported = await createSelectedPipelineImportAdapter(collected.outputBudget).import(
+            {
+              staging: collected.staging,
+              envelope: collected.envelope,
+              expectedHeadSha: mergeRequest.headSha,
+              expectedTargetSha: targetSha,
+            },
+          )
           if (!imported.ok) {
             return JSON.stringify({
               outcome: 'blocked',
@@ -925,7 +918,8 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
             checks,
           })
         } finally {
-          collected.cleanup()
+          const closed = collected.cleanup()
+          if (closed !== undefined) await closed
         }
       }
       if (plan.workItemRef === 'classify-feedback') {

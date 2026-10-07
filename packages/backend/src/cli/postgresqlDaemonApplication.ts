@@ -1,3 +1,4 @@
+import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
   composeLocalTaskRunRootSelection,
@@ -273,7 +274,7 @@ import {
   composeMissionInputUploadOperations,
   type MissionInputBlobPersistence,
 } from '@/modules/development-automation/composition/missionInputUploads'
-import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
+import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeForeignResourceAclFor } from '@/modules/resource-catalog/composition/resourceAcl'
@@ -336,7 +337,7 @@ import {
   composeDevelopmentCodeHostEventObserver,
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
+import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import {
   composeEventCenter,
   createEventAutomationWorkIntentStore,
@@ -390,7 +391,7 @@ import { createOidcProvidersService } from '@/services/oidcProviders'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { createRepositoryEndpointDiscovery } from '@/modules/integration/composition'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
-import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
+import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
@@ -490,6 +491,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly portArtifactContentEffects?: PortArtifactContentEffects
   readonly taskRunSelection?: TaskRunRootSelection
+  readonly developmentPurposes?: DevelopmentPurposeSelection
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -636,6 +638,12 @@ export async function composePostgresqlApplication(
   input: PostgresqlApplicationInput,
   phase: PostgresqlApplicationPhase,
 ): Promise<PostgresqlDaemonApplication> {
+  const developmentPurposeRoot = composeDevelopmentPurposeRoot({
+    appHome: input.appHome,
+    selection: input.developmentPurposes,
+    evidenceArtifacts: input.evidenceArtifacts,
+    evidenceDocumentCommands: input.evidenceDocumentCommands,
+  })
   const selectedTaskRuns = selectTaskRunRootSelection(input.taskRunSelection)
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
     input.workspaceExcludeProfiles,
@@ -922,7 +930,7 @@ export async function composePostgresqlApplication(
     db: input.db,
     secretBox: input.secretBox,
     connections: codeHostConnections,
-    pipeline: composePipelineEvidenceRunnerFor(input.db),
+    pipeline: composeSelectedPipelineEvidenceRunnerFor(input.db, developmentPurposeRoot.pipeline),
   })
 
   const codeHistoryQueries = composeCodeHistoryQueries(input.db)
@@ -1547,7 +1555,10 @@ export async function composePostgresqlApplication(
    * provider 上测的不是一回事）。能力不全的桩由下面几处 `supports*` 探测兜住。
    */
   const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
-  const developmentApprovalGateway = composeApprovalGatewayRunnerFor(input.db)
+  const developmentApprovalGateway = composeSelectedApprovalGatewayRunnerFor(
+    input.db,
+    developmentPurposeRoot.approval,
+  )
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composeEventCenter({
     db: input.db,
@@ -1648,7 +1659,10 @@ export async function composePostgresqlApplication(
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
   })
-  const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
+  const employeeDelivery = buildDevelopmentDeliveryDeps(
+    developmentDeliveryProvider,
+    developmentPurposeRoot.pipeline.staging,
+  )
   const employeePlatformWorkItems = composeDevelopmentEmployeePlatformWorkItems({
     automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
@@ -1862,12 +1876,16 @@ export async function composePostgresqlApplication(
     repositoryBaselines: input.repositoryBaselines,
     db: input.db,
     appHome: input.appHome,
-    evidenceArtifacts: input.evidenceArtifacts,
+    evidenceArtifacts: developmentPurposeRoot.evidenceArtifacts,
     evidenceRead: input.evidenceRead,
-    evidenceDocumentCommands: input.evidenceDocumentCommands,
+    evidenceDocumentCommands: developmentPurposeRoot.requirement.documentCommands,
+    requirementStaging: developmentPurposeRoot.requirement.staging,
     attemptContext: input.attemptContext,
     admissionLookup: developmentAdmissionLookup,
-    requirementSource: composeRequirementSourceRunnerFor(input.db),
+    requirementSource: composeSelectedRequirementSourceRunnerFor(
+      input.db,
+      developmentPurposeRoot.requirement,
+    ),
     changeCandidate: bindChangeCandidateParticipant({
       candidateEffects: input.repositoryCandidateEffects,
     }),
@@ -1876,8 +1894,14 @@ export async function composePostgresqlApplication(
       publicationTransport: repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
-    ...buildDevelopmentDeliveryDeps(developmentDeliveryProvider),
-    ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
+    ...buildDevelopmentDeliveryDeps(
+      developmentDeliveryProvider,
+      developmentPurposeRoot.pipeline.staging,
+    ),
+    ...buildDevelopmentPipelineDeps(
+      developmentDeliveryProvider.pipeline,
+      developmentPurposeRoot.pipeline.staging,
+    ),
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     approvalGateway: developmentApprovalGateway,
     agentLauncher: composeAgentActionExecution({

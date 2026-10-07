@@ -42,3 +42,22 @@ export function composePipelineEvidenceRunnerFor(
 }
 
 /** 旧名保留为装配别名，bootstrap 收敛后删除。 */
+
+import {
+  createSelectedPipelineEvidenceAdapter,
+  type SelectedPipelineEvidenceExecution,
+} from '../application/developmentPipelineAdapter'
+import type { PipelineAdapterBinding } from '../application/ports/developmentPurposeBinding'
+
+export function composeSelectedPipelineEvidenceRunnerFor(
+  db: ProviderNeutralDatabase,
+  binding: PipelineAdapterBinding,
+): SelectedPipelineEvidenceExecution {
+  const store = createDevelopmentAdapterStore(db)
+  return createSelectedPipelineEvidenceAdapter({
+    resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
+      store.getRevision(id, revision),
+    ),
+    binding,
+  })
+}

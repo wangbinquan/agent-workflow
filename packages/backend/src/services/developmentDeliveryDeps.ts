@@ -1,10 +1,6 @@
 // RFC-310/RFC-349 — provider-neutral development delivery composition.
 // Database clients, schema objects and query builders live in provider adapters.
 
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import type {
@@ -24,7 +20,16 @@ import {
   type MrEnsureConnectionDeps,
 } from '@/modules/integration/application/mrEnsure'
 import type { DevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
-import type { PipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
+import type {
+  PipelineEvidenceExecution,
+  SelectedPipelineEvidenceExecution,
+} from '@/modules/integration/public/participants'
+import type { PipelineStagingFactories } from '@/modules/development-automation/public/types'
+import {
+  composeSelectedDevelopmentPipelineEvidence,
+  composeLegacyDevelopmentPipelineEvidence,
+  type LegacyPipelineEvidencePort,
+} from '@/modules/development-automation/public/participants'
 import { resolveCachedRepo } from '@/services/gitRepoCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { DomainError, NotFoundError } from '@/util/errors'
@@ -48,7 +53,7 @@ export interface DevelopmentDeliveryProvider {
     readonly missionId: string
     readonly mrClaimId: string
   }): Promise<{ readonly repositoryId: string; readonly mrIid: string } | null>
-  readonly pipeline: PipelineEvidenceExecution
+  readonly pipeline: SelectedPipelineEvidenceExecution
 }
 
 export function assertDevelopmentWorkspaceRepositoryFreshness(input: {
@@ -157,7 +162,7 @@ export function createDevelopmentWorkspaceRepositoryPreparation(input: {
   })
 }
 
-function createDevelopmentMrEffects(
+export function createDevelopmentMrEffects(
   provider: Pick<DevelopmentDeliveryProvider, 'resolveBinding'>,
 ): DevelopmentMrEffects {
   const missing = (repositoryId: string) => ({
@@ -187,7 +192,10 @@ function createDevelopmentMrEffects(
   }
 }
 
-export function buildDevelopmentDeliveryDeps(provider: DevelopmentDeliveryProvider): {
+export function buildDevelopmentDeliveryDeps(
+  provider: DevelopmentDeliveryProvider,
+  staging: PipelineStagingFactories,
+): {
   readonly repoRemote: RepoRemotePort
   readonly mrEffects: DevelopmentMrEffects
   readonly pipelineEvidence: PipelineEvidencePort
@@ -277,7 +285,7 @@ export function buildDevelopmentDeliveryDeps(provider: DevelopmentDeliveryProvid
     repoRemote,
     mrEffects: createDevelopmentMrEffects(provider),
     mrFacts,
-    pipelineEvidence: buildDevelopmentPipelineDeps(provider.pipeline).pipelineEvidence,
+    pipelineEvidence: buildDevelopmentPipelineDeps(provider.pipeline, staging).pipelineEvidence,
   }
 }
 
@@ -348,61 +356,24 @@ export function buildDevelopmentMrFactsDeps(
   }
 }
 
+/** Explicit legacy bridge; actual roots pass a complete neutral staging selection. */
 export function buildDevelopmentPipelineDeps(runner: PipelineEvidenceExecution): {
+  readonly pipelineEvidence: LegacyPipelineEvidencePort
+}
+export function buildDevelopmentPipelineDeps(
+  runner: SelectedPipelineEvidenceExecution,
+  staging: PipelineStagingFactories,
+): {
   readonly pipelineEvidence: PipelineEvidencePort
-} {
-  type RunnerFailure = Extract<
-    Awaited<ReturnType<typeof runner.collect>>,
-    { readonly ok: false }
-  >['failure']
-  const failed = (failure: RunnerFailure) => ({ ok: false as const, failure })
-  return {
-    pipelineEvidence: {
-      async collect(input) {
-        const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-sink-'))
-        const out = await runner.collect({ ...input, sinkPath: parent })
-        if (!out.ok) {
-          rmSync(parent, { recursive: true, force: true })
-          return failed(out.failure)
-        }
-        return {
-          ok: true,
-          envelope: out.envelope,
-          stagedRoot: parent,
-          outputBudget: out.outputBudget,
-          cleanup: () => rmSync(parent, { recursive: true, force: true }),
-        }
-      },
-      async trigger(input) {
-        const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-trigger-'))
-        try {
-          const out = await runner.trigger({ ...input, sinkPath: parent })
-          if (!out.ok) return failed(out.failure)
-          return {
-            ok: true,
-            runRef: out.envelope.runRef,
-            providerReceiptRef: out.envelope.providerReceiptRef,
-            adopted: out.envelope.adopted,
-          }
-        } finally {
-          rmSync(parent, { recursive: true, force: true })
-        }
-      },
-      async rerun(input) {
-        const parent = mkdtempSync(join(tmpdir(), 'aw-pipeline-rerun-'))
-        try {
-          const out = await runner.rerun({ ...input, sinkPath: parent })
-          if (!out.ok) return failed(out.failure)
-          return {
-            ok: true,
-            runRef: out.envelope.runRef,
-            attempt: out.envelope.attempt,
-            providerReceiptRef: out.envelope.providerReceiptRef,
-          }
-        } finally {
-          rmSync(parent, { recursive: true, force: true })
-        }
-      },
-    },
-  }
+}
+export function buildDevelopmentPipelineDeps(
+  runner: PipelineEvidenceExecution | SelectedPipelineEvidenceExecution,
+  staging?: PipelineStagingFactories,
+): { readonly pipelineEvidence: LegacyPipelineEvidencePort | PipelineEvidencePort } {
+  return staging === undefined
+    ? composeLegacyDevelopmentPipelineEvidence(runner as PipelineEvidenceExecution)
+    : composeSelectedDevelopmentPipelineEvidence(
+        runner as SelectedPipelineEvidenceExecution,
+        staging,
+      )
 }

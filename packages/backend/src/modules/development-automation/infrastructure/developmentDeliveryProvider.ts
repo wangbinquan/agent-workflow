@@ -7,7 +7,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos, developmentMissions, developmentMrClaims } from '@/db/schema'
 import { matchRepoProvider } from '@/modules/integration/composition/codeHostEffects'
-import type { PipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
+import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { DevelopmentDeliveryProvider } from '@/services/developmentDeliveryDeps'
@@ -30,7 +30,7 @@ function providerFrom(input: {
   readonly directory: DevelopmentDeliveryDirectory
   readonly secretBox?: SecretBox
   readonly connections: CodeHostConnectionsService
-  readonly pipeline: PipelineEvidenceExecution
+  readonly pipeline: SelectedPipelineEvidenceExecution
   readonly volatileRepositoryUrl?: (row: RepositoryRecord) => string | null
 }): DevelopmentDeliveryProvider {
   const resolveUrl = (row: RepositoryRecord): string | null =>
@@ -115,7 +115,7 @@ export function createDevelopmentDeliveryProvider(input: {
   readonly db: ProviderNeutralDatabase
   readonly secretBox?: SecretBox
   readonly connections: CodeHostConnectionsService
-  readonly pipeline: PipelineEvidenceExecution
+  readonly pipeline: SelectedPipelineEvidenceExecution
 }): DevelopmentDeliveryProvider {
   return providerFrom({
     directory: directoryOf(input.db),

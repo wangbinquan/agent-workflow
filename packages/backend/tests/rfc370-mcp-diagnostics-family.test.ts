@@ -1,3 +1,4 @@
+import { inversePurposeRootBindings } from './helpers/purposeRootInverse'
 // RFC-370: ordinary diagnostics use one selected prototype family and opaque
 // execution identities; explicit native roots preserve original receipt reads.
 import { describe, expect, test } from 'bun:test'
@@ -875,8 +876,34 @@ describe('RFC-370 native MCP root completeness', () => {
           return (node) => ts.visitNode(node, inverse, ts.isBlock)!
         },
       ])
-      expect(hash(transformed.transformed[0]!, source)).toBe(bodyHash)
-      expect(transformed.transformed[0]!.statements.length).toBe(statements)
+      const purposes = inversePurposeRootBindings(source, transformed.transformed[0]!)
+      expect(purposes.counts).toEqual(
+        name === 'composeSqliteApplicationDeps'
+          ? {
+              roots: 1,
+              runners: 0,
+              factories: 0,
+              content: 0,
+              staging: 0,
+              forwards: 0,
+              shared: 1,
+              repository: 1,
+              eventCenter: 1,
+            }
+          : {
+              roots: 1,
+              runners: 3,
+              factories: 3,
+              content: 2,
+              staging: 1,
+              forwards: name === 'composeSqliteProviderSession' ? 1 : 0,
+              shared: name === 'composeSqliteProviderSession' ? 1 : 0,
+              repository: 0,
+              eventCenter: 0,
+            },
+      )
+      expect(hash(purposes.body, source)).toBe(bodyHash)
+      expect(purposes.body.statements.length).toBe(statements)
       expect(scriptSelections).toBe(1)
       expect(bootRecovery.selections).toBe(name === 'composeSqliteApplicationDeps' ? 0 : 1)
       expect(customObservers.selections).toBe(name === 'composeSqliteApplicationDeps' ? 0 : 1)

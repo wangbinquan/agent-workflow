@@ -1,3 +1,11 @@
+export {
+  composeSelectedDevelopmentPipelineEvidence,
+  composeLegacyDevelopmentPipelineEvidence,
+  type LegacyPipelineEvidencePort,
+} from '../composition/pipelineEvidence'
+
+export { assertEvidenceStagingFactory, assertEvidenceStagingLease } from './evidenceStaging'
+
 import type { CreateAgent } from '@agent-workflow/shared'
 
 export const DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2 = [

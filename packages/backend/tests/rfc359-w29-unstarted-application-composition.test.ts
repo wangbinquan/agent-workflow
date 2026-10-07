@@ -1,3 +1,4 @@
+import { inversePurposeRootBindings } from './helpers/purposeRootInverse'
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -1033,7 +1034,7 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
   const result = transformed.transformed[0]
   if (result === undefined) throw new Error('missing normalized composition body')
   transformed.dispose()
-  return oldMcpDiagnosticsFamilyBody(source, name, result)
+  return inversePurposeRootBindings(source, oldMcpDiagnosticsFamilyBody(source, name, result)).body
 }
 
 function oldEventCenterBody(): ts.Block {
@@ -1050,18 +1051,22 @@ function oldEventCenterBody(): ts.Block {
       ),
   )
   const initializer = initialization?.declarationList.declarations[0]?.initializer
-  if (initialization === undefined || initializer === undefined) return body
+  if (initialization === undefined || initializer === undefined)
+    return inversePurposeRootBindings(server, body).body
   const at = body.statements.indexOf(initialization)
-  return ts.factory.updateBlock(body, [
-    ...body.statements.slice(0, at),
-    ts.factory.createReturnStatement(
-      ts.factory.createCallExpression(
-        ts.factory.createIdentifier('deferEventCenterModule'),
-        undefined,
-        [initializer],
+  return inversePurposeRootBindings(
+    server,
+    ts.factory.updateBlock(body, [
+      ...body.statements.slice(0, at),
+      ts.factory.createReturnStatement(
+        ts.factory.createCallExpression(
+          ts.factory.createIdentifier('deferEventCenterModule'),
+          undefined,
+          [initializer],
+        ),
       ),
-    ),
-  ])
+    ]),
+  ).body
 }
 
 function digest(body: ts.Block, source: ts.SourceFile): string {

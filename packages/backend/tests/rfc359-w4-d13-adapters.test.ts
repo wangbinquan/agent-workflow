@@ -16,7 +16,7 @@ import {
   employeeReactionRounds,
   employeeRoundWorkspaceStates,
 } from '@/db/schema'
-import type { PipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
+import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { MissionRow } from '@/modules/development-automation/application/ports/missionStore'
 import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/infrastructure/developmentDeliveryProvider'
@@ -333,7 +333,7 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
       db: harness.db,
       secretBox: box,
       connections: { resolve: async () => null } as unknown as CodeHostConnectionsService,
-      pipeline: {} as PipelineEvidenceExecution,
+      pipeline: {} as SelectedPipelineEvidenceExecution,
     })
     expect(await provider.resolveRepository('missing')).toBeNull()
     const bare = await seedRepo(harness.db)

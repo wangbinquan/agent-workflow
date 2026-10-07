@@ -46,7 +46,7 @@ import type {
   DevelopmentMissionOperations,
 } from '../public/operations'
 import {
-  buildDevelopmentDeliveryDeps,
+  createDevelopmentMrEffects,
   resolveRepoClaimKey,
   type DevelopmentDeliveryProvider,
 } from '@/services/developmentDeliveryDeps'
@@ -215,7 +215,7 @@ function composeDevelopmentMissionOperationsFromPersistence(
     mintId: () => ulid(),
   }
   const adoptPorts = {
-    mrEffects: buildDevelopmentDeliveryDeps(deps.deliveryProvider).mrEffects,
+    mrEffects: createDevelopmentMrEffects(deps.deliveryProvider),
   }
 
   const operations: DevelopmentMissionOperations = {

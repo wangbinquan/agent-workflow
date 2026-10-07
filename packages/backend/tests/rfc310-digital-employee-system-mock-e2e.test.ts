@@ -1,3 +1,5 @@
+import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
+import { createLocalEvidenceStagingNamespace } from '../src/modules/development-automation/composition/evidenceStaging'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import { exampleProgramFixture } from './helpers/executionContractFixture'
 // RFC-310 Digital Employee OS system-mock journey.
@@ -465,7 +467,9 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           return {
             ok: true as const,
             envelope: result.envelope,
-            stagedRoot,
+            staging: createLocalEvidenceStagingNamespace(
+              () => new EvidenceStore(join(appHome, 'evidence')),
+            ).adopt(stagedRoot),
             outputBudget: result.outputBudget,
             cleanup: () => rmSync(stagedRoot, { recursive: true, force: true }),
           }

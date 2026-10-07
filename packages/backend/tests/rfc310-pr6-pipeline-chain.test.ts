@@ -1,3 +1,5 @@
+import type { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
+import { createLocalEvidenceStagingNamespace } from '../src/modules/development-automation/composition/evidenceStaging'
 // RFC-310 PR-6 T68 —— pipeline evidence 编排链（redispatch + collect/trigger/rerun）。
 //
 // 锁：①redispatch 只在「MR 已建 + policy 配 gates + 静止态」接管；进度全绑
@@ -410,11 +412,14 @@ function collectEnvelope(gates: PipelineCollectEnvelopeDto['gates']): PipelineCo
   }
 }
 
-function fakePipeline(script: {
-  readonly envelopes: PipelineCollectEnvelopeDto[]
-  readonly triggers?: unknown[]
-  readonly reruns?: unknown[]
-}): PipelineEvidencePort {
+function fakePipeline(
+  script: {
+    readonly envelopes: PipelineCollectEnvelopeDto[]
+    readonly triggers?: unknown[]
+    readonly reruns?: unknown[]
+  },
+  evidence?: EvidenceStore,
+): PipelineEvidencePort {
   return {
     async collect() {
       const envelope = script.envelopes.shift()
@@ -430,7 +435,10 @@ function fakePipeline(script: {
       return {
         ok: true,
         envelope,
-        stagedRoot: parent,
+        staging: createLocalEvidenceStagingNamespace(() => {
+          if (evidence === undefined) throw new Error('pipeline-fixture-evidence-missing')
+          return evidence
+        }).adopt(parent),
         outputBudget: {
           maxFiles: 100,
           maxFileBytes: 8 * 1024 * 1024,
@@ -488,42 +496,42 @@ describeEachProvider('rfc310 pr6 — pipeline chain through reconcile rounds', (
     const { fx, policyId } = await fixtureWithPipelinePolicy()
     const missionId = await seedWatchingMission(fx, policyId)
     const triggers: unknown[] = []
-    const pipeline = fakePipeline({
-      envelopes: [
-        // 轮 1 collect：required gate 无 run。
-        collectEnvelope([]),
-        // 轮 3 collect（触发后强制 recollect）：全过。
-        collectEnvelope([
-          {
-            gateKey: 'unit',
-            required: true,
-            status: 'pass',
-            runRef: 'run-new',
-            attempt: 1,
-            finishedAt: '2026-08-18T00:00:00+00:00',
-            retryability: 'safe',
-            failureCategories: [],
-            files: [{ fileId: 'log-1', relativePath: 'logs/unit/run.log' }],
-          },
-        ]),
-      ],
-      triggers,
-    })
+    const pipeline = fakePipeline(
+      {
+        envelopes: [
+          // 轮 1 collect：required gate 无 run。
+          collectEnvelope([]),
+          // 轮 3 collect（触发后强制 recollect）：全过。
+          collectEnvelope([
+            {
+              gateKey: 'unit',
+              required: true,
+              status: 'pass',
+              runRef: 'run-new',
+              attempt: 1,
+              finishedAt: '2026-08-18T00:00:00+00:00',
+              retryability: 'safe',
+              failureCategories: [],
+              files: [{ fileId: 'log-1', relativePath: 'logs/unit/run.log' }],
+            },
+          ]),
+        ],
+        triggers,
+      },
+      fx.evidence,
+    )
     const ports: Omit<ReconcilerPorts, 'requirementMaterialize'> = {
       attemptContext: createAttemptContextStore(fx.evidence),
       mrEffects: fakeObserve(),
       pipelineEvidence: pipeline,
       pipelineImport: {
         import: async (input) => {
-          const { importPipelineEvidence } =
-            await import('../src/modules/development-automation/infrastructure/pipelineEvidenceImport')
-          const out = await importPipelineEvidence(
-            { evidence: fx.evidence },
-            {
-              ...input,
-              budget: { maxFiles: 100, maxFileBytes: 1024 * 1024, maxTotalBytes: 4 * 1024 * 1024 },
-            },
-          )
+          const { importPipelineEvidenceWithStaging } =
+            await import('../src/modules/development-automation/application/pipelineEvidenceImport')
+          const out = await importPipelineEvidenceWithStaging({
+            ...input,
+            budget: { maxFiles: 100, maxFileBytes: 1024 * 1024, maxTotalBytes: 4 * 1024 * 1024 },
+          })
           if (!out.ok) return out
           return {
             ok: true,
@@ -608,7 +616,7 @@ describeEachProvider('rfc310 pr6 — pipeline chain through reconcile rounds', (
       fx.deps({
         attemptContext: createAttemptContextStore(fx.evidence),
         mrEffects: racingMr,
-        pipelineEvidence: fakePipeline({ envelopes: [collectEnvelope([])] }),
+        pipelineEvidence: fakePipeline({ envelopes: [collectEnvelope([])] }, fx.evidence),
         pipelineImport: {
           import: async () => {
             throw new Error('must not import a discarded snapshot')

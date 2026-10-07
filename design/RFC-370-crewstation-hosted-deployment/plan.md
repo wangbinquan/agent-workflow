@@ -945,3 +945,10 @@ H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有�
 原四规则在完整 committed 8f294c0c 加冻结 12 TS 上执行一次，13 份产物通过原完整 JSON validator；sourceDigest sha256:3a1df07ad4bbedc70aba97cbda8b2ebe0e2e14068c12ff328c85b1f78fbe05d3。并行 69d03cb9 只退役其已消费许可，六个源码语料 tree 完全相同，复用生成而保留该退役。实际 owner +3（26565→26568），其余库存数量与完整 why、原 SPI/target/SCC 保持；本批匹配许可正常后继退役。
 
 没有运行本机 AW test/typecheck/build/service；scoped format/lint 与纯字节/AST/JSON 证明不代替新 exact-SHA hosted CI。仍在阶段 A，三个 Agent 的中立材料/执行/取证、脚本、执行权/恢复与完整装配继续；A-G 后才开始各 owner 的 CS adapter，M0 首次部署后逐项 M1～M4，当前没有 AW-in-CS 部署。
+
+
+## 2026-10-07 RFC-370 Purpose 九操作与配套清单候选
+
+SOURCE62-R5 独立有限功能 PASS；三组完整目的效果、logical staging 和三根内容配对已接线，原策略／native全文／旧断言与预算保持。原一次 scoped 生成固定 fca334493d 加44生产／15测试，sourceDigest sha256:4499dff7c066845b11d7f348dcb29ed397d0d6e961f00a2fd93c24069a3d8f1a；classic R1 43→42、R2 0→0，仅支付实际旧 type edge，356条剩余债原文保留。13原配套产物、129库存／why、SPI／target／guard／SCC保持；五项实测增长按原协议随匹配发布消费，普通后继退役。源码相关服务完整提交含并行 MR export，未剥离任何共享正文。
+
+配套有限门、exact-path commit／远端同步及新 exact-SHA hosted CI继续分别验收。仅本批format／lint、纯AST／byte／JSON及不同最终候选的一次原静态生成，无本机AW tests／typecheck／build／service。H7 D2设计门已有限PASS，完整执行权／恢复／A-T7／A-G尚未完成；之后各层独立CS adapters，M0先实际部署、M1～M4逐项接管。当前没有AW-in-CS部署，不关闭RFC。详情见 design/RFC-370-crewstation-hosted-deployment/purpose-canonical-publication.md。

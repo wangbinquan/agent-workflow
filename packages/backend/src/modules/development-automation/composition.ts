@@ -1,3 +1,5 @@
+import type { EvidenceStagingFactory } from './application/ports/evidenceStaging'
+import { composeRequirementMaterializerContent } from './composition/evidenceStaging'
 import type { AutomationWorkspaceEffectsFactory } from './application/ports/automationWorkspaceEffects'
 import { join } from 'node:path'
 export type { AutomationWorkspaceEffectsFactory }
@@ -88,10 +90,10 @@ import {
   createRepositoryLocationRead,
 } from './infrastructure/gitBaselineReader'
 import {
-  createRequirementMaterializer,
+  createSelectedRequirementMaterializer,
   type RequirementMaterializer,
   type RequirementSourceRunnerDep,
-} from './infrastructure/requirementMaterializer'
+} from './application/requirementMaterializer'
 import { createAdmissionLookup } from './infrastructure/admissionLookup'
 import {
   createFactSnapshotReader,
@@ -121,7 +123,7 @@ import { readUploadPlan } from './infrastructure/uploadPlanStore'
 import { createUploadMaintenancePersistence } from './infrastructure/missionInputUploadPersistence'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
 import { createUploadPlacementPersistence } from './infrastructure/uploadPlacementPersistence'
-import { createPipelineImportAdapter } from './infrastructure/pipelineEvidenceImport'
+import { createSelectedPipelineImportAdapter } from './application/pipelineEvidenceImport'
 export { createMissionCodeHostEventContinuation } from './infrastructure/missionCodeHostEventContinuation'
 
 export {
@@ -223,6 +225,7 @@ export interface DevelopmentAutomationCompositionOptions {
   readonly evidenceArtifacts?: EvidenceArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
+  readonly requirementStaging?: EvidenceStagingFactory
   readonly attemptContext?: AttemptContextStorePort
   /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
   readonly admissionLookup?: AdmissionLookup
@@ -287,14 +290,18 @@ function composeDevelopmentAutomationFromPersistence(
   const evidence = deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))
   const evidenceContents = deps.evidenceRead?.contents ?? deps.evidenceContents ?? evidence.contents
   const evidenceDownloads = deps.evidenceRead?.downloads ?? evidence.downloads
-  const materializer = createRequirementMaterializer({
+  const materializer = createSelectedRequirementMaterializer({
     documents: deps.evidenceRead?.documents,
-    documentCommands: deps.evidenceDocumentCommands,
+    ...composeRequirementMaterializerContent({
+      evidence,
+      stagingRoot: join(deps.appHome, 'evidence', 'staging'),
+      staging: deps.requirementStaging,
+      documentCommands: deps.evidenceDocumentCommands,
+    }),
     bundleRefs: persistence.bundleRefs,
     store,
     snapshots,
     evidence,
-    stagingRoot: join(deps.appHome, 'evidence', 'staging'),
     ...(deps.requirementSource === undefined ? {} : { source: deps.requirementSource }),
     now,
   })
@@ -392,7 +399,7 @@ function composeDevelopmentAutomationFromPersistence(
               deps.conflictMerge!.discard(input),
           },
         }),
-    pipelineImport: createPipelineImportAdapter(evidence, PIPELINE_IMPORT_BUDGET),
+    pipelineImport: createSelectedPipelineImportAdapter(PIPELINE_IMPORT_BUDGET),
   }
   const reconcileDeps = { store, lookup, snapshots, ports, now }
   missionDrive.bind(reconcileDeps)

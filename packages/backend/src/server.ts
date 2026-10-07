@@ -1,3 +1,20 @@
+import type {
+  ApprovalAdapterBinding,
+  PipelineAdapterBinding,
+  RequirementAdapterBinding,
+} from '@/modules/integration/public/participants'
+import { createLocalDevelopmentAdapterEffects } from '@/modules/integration/composition/developmentAdapterProgram'
+import type {
+  EvidenceStagingFactory,
+  PipelineStagingFactories,
+} from '@/modules/development-automation/public/types'
+import {
+  createLocalEvidenceArtifactPort,
+  createLocalEvidenceStagingFactory,
+  createLocalEvidenceStagingNamespace,
+  createFileEvidenceDocumentCommands,
+} from '@/modules/development-automation/composition/evidenceStaging'
+import { assertEvidenceStagingFactory } from '@/modules/development-automation/public/participants'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
   composeLocalTaskRunRootSelection,
@@ -556,7 +573,7 @@ import {
   composeDevelopmentCodeHostEventObserver,
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
+import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import {
   composeIntegrationTriggerResourceQueries,
   composeScheduledTaskRuntimeFor,
@@ -564,9 +581,9 @@ import {
 import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import { composeWebhookTriggerServiceDependenciesFor } from '@/modules/integration/composition/webhookDispatch'
 import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
-import { composePipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
+import { composeSelectedPipelineEvidenceRunnerFor } from '@/modules/integration/composition/pipelineEvidence'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
-import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
+import { composeSelectedRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import {
   createCodeHostWebhookDeliveryConsumer,
@@ -874,6 +891,8 @@ export interface AppDeps {
   portArtifactContentEffects?: PortArtifactContentEffects
   portArtifacts?: PortArtifactOperations
   taskRunSelection?: TaskRunRootSelection
+  developmentPurposes?: DevelopmentPurposeSelection
+  developmentPurposeRoot?: SelectedDevelopmentPurposeRoot
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1103,6 +1122,7 @@ export interface AppDeps {
 type SqliteAppDeps = AppDeps & { readonly db: DbClient }
 
 type RuntimeComposedAppDeps = SqliteAppDeps & {
+  readonly developmentPurposeRoot: SelectedDevelopmentPurposeRoot
   readonly authRuntime: AuthRuntime
   readonly tokenCallAudit: TokenCallAuditParticipant
   readonly healthDatabase: HealthDatabaseReadModel
@@ -1808,9 +1828,13 @@ function composeApplicationEventCenter(
   developmentDeliveryProvider: DevelopmentDeliveryProvider,
   automation: EventCenterAutomationCapability,
   configuration: ApplicationConfigurationQueries,
+  developmentPurposeRoot: SelectedDevelopmentPurposeRoot,
   unstarted?: UnstartedApplicationScope,
 ): EventCenterModule {
-  const approvalGateway = composeApprovalGatewayRunnerFor(deps.db)
+  const approvalGateway = composeSelectedApprovalGatewayRunnerFor(
+    deps.db,
+    developmentPurposeRoot.approval,
+  )
   const missionContinuation = createMissionCodeHostEventContinuation(deps.db)
   const codeHostDeliveryDispatcher =
     deps.webhookDispatcher !== undefined &&
@@ -1870,6 +1894,7 @@ function composeSqliteUncredentialedDevelopmentDeliveryProvider(input: {
   readonly db: DbClient
   readonly store: RepositoryWorkspaceStore
   readonly secretBox?: SecretBox
+  readonly developmentPurposeRoot: SelectedDevelopmentPurposeRoot
 }): DevelopmentDeliveryProvider {
   return Object.freeze({
     async resolveRepository(
@@ -1906,11 +1931,18 @@ function composeSqliteUncredentialedDevelopmentDeliveryProvider(input: {
           .get() ?? null
       )
     },
-    pipeline: composePipelineEvidenceRunnerFor(input.db),
+    pipeline: composeSelectedPipelineEvidenceRunnerFor(
+      input.db,
+      input.developmentPurposeRoot.pipeline,
+    ),
   })
 }
 
-function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): RepositoryBootstrap {
+function composeRepositoryBootstrap(
+  deps: SqliteAppDeps,
+  appHome: string,
+  developmentPurposeRoot: SelectedDevelopmentPurposeRoot,
+): RepositoryBootstrap {
   const repositoryWorkspaceStore =
     deps.repositoryWorkspaceStore ??
     deps.providerCore?.repositoryWorkspaceStore ??
@@ -1942,13 +1974,17 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
       ? composeSqliteUncredentialedDevelopmentDeliveryProvider({
           db: deps.db,
           store: repositoryWorkspaceStore,
+          developmentPurposeRoot,
           secretBox: deps.secretBox,
         })
       : createDevelopmentDeliveryProvider({
           db: deps.db,
           secretBox: deps.secretBox,
           connections: codeHostConnections,
-          pipeline: composePipelineEvidenceRunnerFor(deps.db),
+          pipeline: composeSelectedPipelineEvidenceRunnerFor(
+            deps.db,
+            developmentPurposeRoot.pipeline,
+          ),
         })
   const repositoryEndpointDiscovery =
     codeHostConnections === null
@@ -2094,12 +2130,16 @@ function composeFallbackDevelopmentAutomation(
     repositoryBaselines: deps.repositoryBaselines,
     db: deps.db,
     appHome,
-    evidenceArtifacts: deps.evidenceArtifacts,
+    evidenceArtifacts: deps.developmentPurposeRoot.evidenceArtifacts,
     evidenceRead: deps.evidenceRead,
-    evidenceDocumentCommands: deps.evidenceDocumentCommands,
+    evidenceDocumentCommands: deps.developmentPurposeRoot.requirement.documentCommands,
+    requirementStaging: deps.developmentPurposeRoot.requirement.staging,
     attemptContext: deps.attemptContext,
     admissionLookup: deps.developmentAdmissionLookup,
-    requirementSource: composeRequirementSourceRunnerFor(deps.db),
+    requirementSource: composeSelectedRequirementSourceRunnerFor(
+      deps.db,
+      deps.developmentPurposeRoot.requirement,
+    ),
     changeCandidate: bindChangeCandidateParticipant({
       candidateEffects: deps.repositoryCandidateEffects,
     }),
@@ -2108,8 +2148,14 @@ function composeFallbackDevelopmentAutomation(
       publicationTransport: deps.repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: deps.conflictMergeWorkspaceEffects }),
-    ...buildDevelopmentDeliveryDeps(deps.developmentDeliveryProvider),
-    ...buildDevelopmentPipelineDeps(deps.developmentDeliveryProvider.pipeline),
+    ...buildDevelopmentDeliveryDeps(
+      deps.developmentDeliveryProvider,
+      deps.developmentPurposeRoot.pipeline.staging,
+    ),
+    ...buildDevelopmentPipelineDeps(
+      deps.developmentDeliveryProvider.pipeline,
+      deps.developmentPurposeRoot.pipeline.staging,
+    ),
     ...buildDevelopmentMrFactsDeps(deps.developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       ...hostActionEnvironment,
@@ -2121,7 +2167,10 @@ function composeFallbackDevelopmentAutomation(
       agents,
       onTerminal: terminalObserver.script,
     }),
-    approvalGateway: composeApprovalGatewayRunnerFor(deps.db),
+    approvalGateway: composeSelectedApprovalGatewayRunnerFor(
+      deps.db,
+      deps.developmentPurposeRoot.approval,
+    ),
   })
   return automation
 }
@@ -2149,6 +2198,14 @@ export function composeSqliteApplicationDeps(
   const isolationWorkspaces = selectIsolationWorkspaceFactory(deps.isolationWorkspaces)
   const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(deps.repositoryGitWorkspaces)
   const workspaceReads = selectRepositoryWorkspaceReadQueries(deps.workspaceReads)
+  const developmentPurposeRoot =
+    deps.developmentPurposeRoot ??
+    composeDevelopmentPurposeRoot({
+      appHome,
+      selection: deps.developmentPurposes,
+      evidenceArtifacts: deps.evidenceArtifacts,
+      evidenceDocumentCommands: deps.evidenceDocumentCommands,
+    })
   const selectedTaskRuns = selectTaskRunRootSelection(deps.taskRunSelection)
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
     deps.workspaceExcludeProfiles,
@@ -2178,7 +2235,7 @@ export function composeSqliteApplicationDeps(
     })
   const configuration = applicationConfiguration.queries
   const workspacePresence = deps.workspacePresence ?? createFileWorkspacePresenceQueries()
-  const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome)
+  const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome, developmentPurposeRoot)
   const identityAccess = withIntegrationTriggerResources(
     deps.db,
     deps.identityAccess ??
@@ -2376,6 +2433,7 @@ export function composeSqliteApplicationDeps(
             repositoryBootstrap.developmentDeliveryProvider,
             eventAutomation,
             configuration,
+            developmentPurposeRoot,
             unstarted,
           ),
         }
@@ -2385,6 +2443,7 @@ export function composeSqliteApplicationDeps(
       automationWorkspaceEffects: deps.automationWorkspaceEffects,
       conflictWorkspaceSelected: deps.conflictMergeWorkspaceEffects !== undefined,
     }),
+    developmentPurposeRoot,
     appHome,
     authRuntime,
     tokenCallAudit,
@@ -2893,7 +2952,10 @@ function composeSqliteApiRouteMounts(
   const inputArtifacts =
     deps.employeeInputArtifacts ??
     createEmployeeInputArtifactStore(join(appHome, 'artifacts', 'employee-inputs'))
-  const developmentDelivery = buildDevelopmentDeliveryDeps(deps.developmentDeliveryProvider)
+  const developmentDelivery = buildDevelopmentDeliveryDeps(
+    deps.developmentDeliveryProvider,
+    deps.developmentPurposeRoot.pipeline.staging,
+  )
   const repositoryTransportModule = deps.repositoryTransport
   const repositoryWorkspaceStore = deps.repositoryWorkspaceStore
   const codeHostConnections = deps.codeHostConnections
@@ -3047,7 +3109,10 @@ function composeSqliteApiRouteMounts(
     },
     collaborationContext: deps.collaborationContext,
   }
-  const approvalGateway = composeApprovalGatewayRunnerFor(deps.db)
+  const approvalGateway = composeSelectedApprovalGatewayRunnerFor(
+    deps.db,
+    deps.developmentPurposeRoot.approval,
+  )
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     automationWorkspaceEffects: deps.automationWorkspaceEffects,
     db: deps.db,
@@ -3073,6 +3138,7 @@ function composeSqliteApiRouteMounts(
       deps.developmentDeliveryProvider,
       eventAutomation,
       configuration,
+      deps.developmentPurposeRoot,
       unstarted,
     )
   const digitalEmployeeAgentTemplates =
@@ -4174,4 +4240,151 @@ export function createApp(deps: AppDeps): Hono
 export function createApp(deps: ComposedAppDeps): Hono
 export function createApp(deps: AppDeps | ComposedAppDeps): Hono {
   return createComposedApp('apiRoutes' in deps ? deps : composeSqliteAppDeps(deps))
+}
+
+export interface RequirementPurposeSelection extends RequirementAdapterBinding {
+  readonly staging: EvidenceStagingFactory
+  readonly documentCommands: EvidenceDocumentCommands
+}
+export interface PipelinePurposeSelection extends PipelineAdapterBinding {
+  readonly staging: PipelineStagingFactories
+}
+export interface DevelopmentPurposeSelection {
+  readonly requirement?: RequirementPurposeSelection
+  readonly pipeline?: PipelinePurposeSelection
+  readonly approval?: ApprovalAdapterBinding
+}
+export interface SelectedDevelopmentPurposeRoot {
+  readonly requirement: RequirementPurposeSelection
+  readonly pipeline: PipelinePurposeSelection
+  readonly approval: ApprovalAdapterBinding
+  readonly evidenceArtifacts: EvidenceArtifactPort
+}
+
+function assertPurposePair(
+  selection: RequirementPurposeSelection | PipelinePurposeSelection | ApprovalAdapterBinding,
+  names: readonly string[],
+  factories: readonly EvidenceStagingFactory[],
+): void {
+  if (typeof selection?.configurationFor !== 'function') {
+    throw new Error('development-purpose-configuration-binding-incomplete')
+  }
+  const effects = selection.effects
+  if (
+    typeof effects?.programs?.bind !== 'function' ||
+    effects.namespace?.kind !== 'evidence-staging-namespace'
+  ) {
+    throw new Error('development-purpose-program-binding-incomplete')
+  }
+  const members = effects as unknown as Record<string, unknown>
+  for (const name of names) {
+    if (typeof members[name] !== 'function') {
+      throw new Error(`development-purpose-effects-incomplete:${name}`)
+    }
+  }
+  for (const factory of factories) {
+    assertEvidenceStagingFactory(factory)
+    if (factory.namespace.reference !== effects.namespace?.reference) {
+      throw new Error('development-purpose-staging-namespace-mismatch')
+    }
+  }
+}
+
+/** Bootstrap selects each whole purpose pair once and forwards it to every subcomposition. */
+export function composeDevelopmentPurposeRoot(input: {
+  readonly appHome: string
+  readonly selection?: DevelopmentPurposeSelection
+  readonly evidenceArtifacts?: EvidenceArtifactPort
+  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
+}): SelectedDevelopmentPurposeRoot {
+  let evidence = input.evidenceArtifacts
+  const artifacts = (): EvidenceArtifactPort =>
+    (evidence ??= createLocalEvidenceArtifactPort(input.appHome))
+  const content = createLocalEvidenceStagingNamespace(artifacts)
+  const native = createLocalDevelopmentAdapterEffects({
+    namespace: content.namespace,
+    resolveStaging: (reference) => content.resolve(reference),
+  })
+  const nativeBinding = (mockKey: string) => {
+    const secretSource = Object.freeze({ ...process.env })
+    const mockUrl = process.env[mockKey]
+    return {
+      configurationFor(content: Parameters<RequirementAdapterBinding['configurationFor']>[0]) {
+        return native.configurationFor({
+          adapterContent: content,
+          secretSource,
+          ...(mockUrl === undefined ? {} : { extraEnv: { [mockKey]: mockUrl } }),
+        })
+      },
+    }
+  }
+  const requirement = input.selection?.requirement ?? {
+    ...nativeBinding('AW_REQUIREMENT_MOCK_URL'),
+    effects: native.requirement,
+    staging: createLocalEvidenceStagingFactory(content, {
+      kind: 'requirement',
+      root: join(input.appHome, 'evidence', 'staging'),
+    }),
+    get documentCommands() {
+      return (
+        input.evidenceDocumentCommands ??
+        createFileEvidenceDocumentCommands({
+          evidence: artifacts(),
+          stagingRoot: join(input.appHome, 'evidence', 'staging'),
+        })
+      )
+    },
+  }
+  const pipeline = input.selection?.pipeline ?? {
+    ...nativeBinding('AW_PIPELINE_MOCK_URL'),
+    effects: native.pipeline,
+    staging: {
+      collect: createLocalEvidenceStagingFactory(content, {
+        kind: 'temporary',
+        prefix: 'aw-pipeline-sink-',
+      }),
+      trigger: createLocalEvidenceStagingFactory(content, {
+        kind: 'temporary',
+        prefix: 'aw-pipeline-trigger-',
+      }),
+      rerun: createLocalEvidenceStagingFactory(content, {
+        kind: 'temporary',
+        prefix: 'aw-pipeline-rerun-',
+      }),
+    },
+  }
+  const approval = input.selection?.approval ?? {
+    ...nativeBinding('AW_APPROVAL_MOCK_URL'),
+    effects: native.approval,
+    staging: createLocalEvidenceStagingFactory(content, {
+      kind: 'temporary',
+      prefix: 'aw-approval-adapter-',
+    }),
+  }
+  assertPurposePair(
+    requirement,
+    ['acquire', 'questionsWriteback', 'answersCollect'],
+    [requirement.staging],
+  )
+  // The selected writer is checked without evaluating the default native writer early.
+  if (
+    input.selection?.requirement !== undefined &&
+    typeof requirement.documentCommands?.writeDocument !== 'function'
+  ) {
+    throw new Error('development-purpose-document-commands-incomplete')
+  }
+  assertPurposePair(
+    pipeline,
+    ['collect', 'trigger', 'rerun'],
+    [pipeline.staging.collect, pipeline.staging.trigger, pipeline.staging.rerun],
+  )
+  assertPurposePair(approval, ['submit', 'lookup', 'observe'], [approval.staging])
+  return {
+    requirement,
+    pipeline,
+    approval,
+    get evidenceArtifacts() {
+      return artifacts()
+    },
+  }
 }

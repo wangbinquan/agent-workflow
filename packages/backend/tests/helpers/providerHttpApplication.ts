@@ -40,6 +40,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'evidenceRead'
   | 'portArtifactContentEffects'
   | 'taskRunSelection'
+  | 'developmentPurposes'
   | 'workspaceExcludeProfiles'
   | 'evidenceArtifacts'
   | 'resourcePackageSkillArtifacts'

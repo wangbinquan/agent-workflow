@@ -1,689 +1,127 @@
-// RFC-310 PR-3 T33 —— development adapter runner（integration 所有）。
-//
-// 以子进程执行已发布 adapter 的外部程序（design §3.3/§5.2）：
-//   - cwd = one-shot staged sink（adapter 只被给这个目录写；close 后由
-//     EvidenceStore safe-walk 重扫，adapter 自报的 file/digest 不作数）；
-//   - env 从**空对象**构造：PATH/HOME/TMPDIR + AW_ADAPTER_SINK/AW_EXTERNAL_ID
-//     + 非秘密 connection ref + 声明的 daemon-boot secret projection + mock 上游 URL（测试注入）——
-//     不继承 daemon 环境（这是 adapter 与 Agent 的关键差异：adapter 是平台
-//     自己拉起的受约束程序，空环境从第一天就成立）；
-//   - stdout 只收一行小 envelope（256KB 上限，zod strict）；大文件走 sink。
-// 失败一律映射 closed OperationFailureReceipt（§4.8）：超时/信号→transient；
-// aw-adapter@1 的保留退出码 2/4/5/6 分别表示 configuration/business/
-// transient/stale-input；其余非零退出→business-failure；envelope 破损→
-// contract-violation。retry 判断只读这些 closed fields，不解析 stderr 文案。
+// Legacy physical input facade. New consumers select complete logical purpose bindings.
+import * as selected from '../application/developmentAdapterRunner'
+import type { AdapterRunInput as SelectedAdapterRunInput } from '../application/developmentAdapterRunner'
+import {
+  createLocalDevelopmentAdapterEffects,
+  type NativeAdapterRunInput,
+} from './local/developmentAdapterProgram'
+export type {
+  AdapterFailureCategory,
+  AdapterFailureReceipt,
+  AdapterRetryability,
+  AdapterRunResult,
+} from '../application/developmentAdapterRunner'
+export type AdapterRunInput = NativeAdapterRunInput
+export {
+  acquireEnvelopeSchema,
+  writebackEnvelopeSchema,
+  collectAnswersEnvelopeSchema,
+  pipelineCollectEnvelopeSchema,
+  pipelineTriggerEnvelopeSchema,
+  pipelineRerunEnvelopeSchema,
+  approvalSubmitEnvelopeSchema,
+  approvalLookupEnvelopeSchema,
+  approvalObserveEnvelopeSchema,
+} from '../application/developmentAdapterRunner'
 
-import type { Subprocess } from 'bun'
-import { z } from 'zod'
-
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { killProcessTree, readStreamCapped, reapDetachedGroup } from '@/util/process'
-
-// 镜像自 modules/development-automation/domain/operationFailure.ts（RFC-284
-// 镜像桥先例，同文件下方 canonicalStringify 的姿势）：integration 不能反向
-// import development-automation 内部（rfc294 preflight 锁），closed 失败面在
-// 此结构性自持；消费侧（materializer）按同形状读取。
-export type AdapterFailureCategory =
-  | 'transient'
-  | 'stale-input'
-  | 'configuration'
-  | 'permission'
-  | 'invalid-user-input'
-  | 'business-failure'
-  | 'contract-violation'
-export type AdapterRetryability = 'same-input' | 'after-refresh' | 'after-configuration' | 'never'
-export interface AdapterFailureReceipt {
-  readonly category: AdapterFailureCategory
-  readonly code: string
-  readonly retryability: AdapterRetryability
-  readonly attemptOrdinal: number
-  readonly remediation: string
-  readonly evidenceRef: string | null
-}
-
-const STDOUT_LIMIT = 256 * 1024
-/** TERM 之后给整组的宽限。 */
-const ADAPTER_KILL_GRACE_MS = 2_000
-/** 超时路径上等整组死透的上限——有界，绝不无限等。 */
-const ADAPTER_REAP_WINDOW_MS = 2_000
-const DAEMON_BOOT_ENV: Readonly<Record<string, string | undefined>> = Object.freeze({
-  ...process.env,
-})
-const SECRET_ENV_KEY = /^[A-Z_][A-Z0-9_]*$/
-
-export const acquireEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('acquire'),
-    sourceRevision: z.string().min(1).max(200),
-    title: z.string().min(1).max(500),
-    files: z
-      .array(
-        z
-          .object({ relativePath: z.string().min(1).max(1024), role: z.string().min(1).max(60) })
-          .strict(),
-      )
-      .max(1000),
+function prepare(
+  input: AdapterRunInput,
+  purpose: 'requirement' | 'pipeline' | 'approval',
+): SelectedAdapterRunInput {
+  const namespace = { kind: 'evidence-staging-namespace' as const, reference: {} }
+  const reference = { kind: 'evidence-staging' as const, namespace, reference: {} }
+  const native = createLocalDevelopmentAdapterEffects({
+    namespace,
+    resolveStaging(staging) {
+      if (staging !== reference) throw new Error('legacy-adapter-staging-unknown')
+      return input.stagedRoot
+    },
   })
-  .strict()
-
-export const writebackEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('questions.writeback'),
-    correlationRef: z.string().min(1).max(200),
-  })
-  .strict()
-
-export const collectAnswersEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('answers.collect'),
-    complete: z.boolean(),
-    answerRevision: z.string().min(1).max(200).nullable(),
-    answers: z
-      .array(z.object({ questionId: z.string().min(1), answer: z.string() }).strict())
-      .max(200),
-  })
-  .strict()
-
-// ---- pipeline 三 op envelope（PR-6 T63；design §6.1/§6.5）----------------
-// gate status/retryability 词表与 development-automation domain/pipelineManifest.ts
-// 的 gateStatusSchema 同词——跨 context 各自持有（rfc294 preflight 禁止反向
-// import；两边由 backend 测试以样本配对锁定）。adapter stdout 只报文件描述符
-// （relativePath/fileId），实体写进 sink；平台 importer 重新 walk sink 算真
-// digest，adapter 自报 digest/bytes 不作数，所以 envelope 不携带它们。
-const pipelineGateStatus = z.enum([
-  'queued',
-  'running',
-  'pass',
-  'fail',
-  'canceled',
-  'skipped',
-  'unknown',
-  'unavailable',
-])
-const sha40 = z.string().regex(/^[0-9a-f]{40}$/)
-
-export const pipelineCollectEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('pipeline.collect'),
-    providerKey: z.string().min(1).max(200),
-    /** provider 无法提供 head 绑定（partial）时为 null——fence 恒不判 pass。 */
-    providerHeadSha: sha40.nullable(),
-    targetSha: sha40.nullable(),
-    completeness: z.enum(['complete', 'partial']),
-    gates: z
-      .array(
-        z
-          .object({
-            gateKey: z.string().min(1).max(200),
-            required: z.boolean(),
-            status: pipelineGateStatus,
-            runRef: z.string().min(1).max(200),
-            attempt: z.number().int().min(1),
-            finishedAt: z.string().datetime({ offset: true }).nullable(),
-            retryability: z.enum(['safe', 'unsafe', 'unknown']),
-            failureCategories: z.array(z.string().min(1).max(100)).max(50),
-            files: z
-              .array(
-                z
-                  .object({
-                    fileId: z.string().min(1).max(200),
-                    relativePath: z.string().min(1).max(1024),
-                  })
-                  .strict(),
-              )
-              .max(1000),
-          })
-          .strict(),
-      )
-      .max(200),
-    redaction: z.enum(['complete', 'failed']),
-  })
-  .strict()
-
-export const pipelineTriggerEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('pipeline.trigger'),
-    providerReceiptRef: z.string().min(1).max(200),
-    runRef: z.string().min(1).max(200),
-    headSha: sha40,
-    /** true = 按 idempotencyKey 查到既有 run 并 adopt（未再造第二个）。 */
-    adopted: z.boolean(),
-  })
-  .strict()
-
-export const pipelineRerunEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('pipeline.rerun'),
-    providerReceiptRef: z.string().min(1).max(200),
-    runRef: z.string().min(1).max(200),
-    attempt: z.number().int().min(1),
-    headSha: sha40,
-  })
-  .strict()
-
-const approvalReceiptFields = {
-  intentDigest: z.string().regex(/^[0-9a-f]{64}$/),
-  correlationRef: z.string().min(1).max(500),
-  externalRequestRef: z.string().min(1).max(500),
-  submittedRevision: z.string().min(1).max(500),
-  submittedAt: z.string().datetime({ offset: true }),
-} as const
-
-export const approvalSubmitEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('approval.submit'),
-    ...approvalReceiptFields,
-  })
-  .strict()
-
-export const approvalLookupEnvelopeSchema = z.discriminatedUnion('found', [
-  z
-    .object({
-      protocol: z.literal('aw-adapter@1'),
-      operation: z.literal('approval.lookup'),
-      found: z.literal(true),
-      ...approvalReceiptFields,
-    })
-    .strict(),
-  z
-    .object({
-      protocol: z.literal('aw-adapter@1'),
-      operation: z.literal('approval.lookup'),
-      found: z.literal(false),
-    })
-    .strict(),
-])
-
-export const approvalObserveEnvelopeSchema = z
-  .object({
-    protocol: z.literal('aw-adapter@1'),
-    operation: z.literal('approval.observe'),
-    correlationRef: z.string().min(1).max(500),
-    observedRevision: z.string().min(1).max(500),
-    status: z.enum(['pending', 'approved', 'rejected', 'expired', 'unavailable']),
-    evidenceRef: z.string().min(1).max(500).nullable(),
-    observedAt: z.string().datetime({ offset: true }),
-  })
-  .strict()
-
-export interface AdapterRunInput {
-  /** published developmentAdapterDefinition 内容（executableRef/timeoutMs/…）。 */
-  readonly adapterContent: {
-    readonly executableRef: string
-    readonly timeoutMs: number
-    readonly connectionRef: string | null
-    readonly secretProjection: readonly string[]
-  }
-  readonly operation:
-    | { readonly kind: 'acquire'; readonly externalId: string }
-    | {
-        readonly kind: 'questions.writeback'
-        readonly externalId: string
-        readonly questionsJson: string
-      }
-    | {
-        readonly kind: 'answers.collect'
-        readonly externalId: string
-        readonly correlationRef: string
-      }
-    | {
-        readonly kind: 'pipeline.collect'
-        readonly headSha: string
-        readonly targetSha: string
-        readonly gateKeysCsv: string
-      }
-    | {
-        readonly kind: 'pipeline.trigger'
-        readonly headSha: string
-        readonly gateKeysCsv: string
-        readonly idempotencyKey: string
-      }
-    | {
-        readonly kind: 'pipeline.rerun'
-        readonly runRef: string
-        readonly gateKey: string
-        readonly headSha: string
-        readonly idempotencyKey: string
-      }
-    | {
-        readonly kind: 'approval.submit'
-        readonly stepRunRef: string
-        readonly draftRef: string
-        readonly deadlineAt: string
-        readonly idempotencyKey: string
-        readonly intentDigest: string
-      }
-    | { readonly kind: 'approval.lookup'; readonly idempotencyKey: string }
-    | { readonly kind: 'approval.observe'; readonly correlationRef: string }
-  readonly stagedRoot: string
-  /** 测试/装配注入的额外 env（如 mock 上游 URL）；不含 daemon 环境。 */
-  readonly extraEnv?: Record<string, string>
-  /** Daemon-boot snapshot; injectable only at the Integration composition/test boundary. */
-  readonly secretSource?: Readonly<Record<string, string | undefined>>
-}
-
-export type AdapterRunResult<T> =
-  | { readonly ok: true; readonly envelope: T }
-  | { readonly ok: false; readonly failure: AdapterFailureReceipt }
-
-function failure(
-  category: AdapterFailureCategory,
-  code: string,
-  retryability: AdapterRetryability,
-  remediation: string,
-): { ok: false; failure: AdapterFailureReceipt } {
   return {
-    ok: false,
-    failure: { category, code, retryability, attemptOrdinal: 0, remediation, evidenceRef: null },
+    configuration: native.configurationFor(input),
+    staging: reference,
+    effects: native[purpose],
+    operation: input.operation,
   }
-}
-
-async function runAdapter(input: AdapterRunInput): Promise<AdapterRunResult<unknown>> {
-  const secretSource = input.secretSource ?? DAEMON_BOOT_ENV
-  const projectedSecrets: Record<string, string> = {}
-  for (const key of input.adapterContent.secretProjection) {
-    if (
-      !SECRET_ENV_KEY.test(key) ||
-      key.startsWith('AW_') ||
-      key === 'PATH' ||
-      key === 'HOME' ||
-      key === 'TMPDIR'
-    ) {
-      return failure(
-        'configuration',
-        'adapter-secret-projection-invalid',
-        'after-configuration',
-        `replace invalid projected environment key ${key}`,
-      )
-    }
-    const value = secretSource[key]
-    if (value === undefined) {
-      return failure(
-        'configuration',
-        'adapter-secret-projection-missing',
-        'after-configuration',
-        `configure declared adapter environment key ${key} before restarting the daemon`,
-      )
-    }
-    projectedSecrets[key] = value
-  }
-  const exec = input.adapterContent.executableRef
-  const scriptLike = /\.(?:ts|js|mjs|cjs)$/.test(exec)
-  const argv: string[] = scriptLike ? [process.execPath, exec] : [exec]
-  switch (input.operation.kind) {
-    case 'acquire':
-      argv.push('--acquire', input.operation.externalId)
-      break
-    case 'questions.writeback':
-      argv.push('--writeback-questions')
-      break
-    case 'answers.collect':
-      argv.push('--collect-answers', input.operation.correlationRef)
-      break
-    case 'pipeline.collect':
-      argv.push('--collect-pipeline', input.operation.headSha)
-      break
-    case 'pipeline.trigger':
-      argv.push('--trigger-pipeline', input.operation.headSha)
-      break
-    case 'pipeline.rerun':
-      argv.push('--rerun-pipeline', input.operation.runRef)
-      break
-    case 'approval.submit':
-      argv.push('--submit-approval', input.operation.stepRunRef)
-      break
-    case 'approval.lookup':
-      argv.push('--lookup-approval', input.operation.idempotencyKey)
-      break
-    case 'approval.observe':
-      argv.push('--observe-approval', input.operation.correlationRef)
-      break
-  }
-  const op = input.operation
-  const env: Record<string, string> = {
-    ...(input.extraEnv ?? {}),
-    // 空环境构造：只给运行所需的最小面。AW_EXTERNAL_ID 是 requirement 三 op
-    // 专属；pipeline 三 op 用 AW_PIPELINE_* 面。
-    PATH: DAEMON_BOOT_ENV.PATH ?? '',
-    HOME: DAEMON_BOOT_ENV.HOME ?? '',
-    TMPDIR: DAEMON_BOOT_ENV.TMPDIR ?? '/tmp',
-    AW_ADAPTER_SINK: input.stagedRoot,
-    ...(input.adapterContent.connectionRef === null
-      ? {}
-      : { AW_ADAPTER_CONNECTION_REF: input.adapterContent.connectionRef }),
-    ...(op.kind === 'acquire' || op.kind === 'questions.writeback' || op.kind === 'answers.collect'
-      ? { AW_EXTERNAL_ID: op.externalId }
-      : {}),
-    ...(op.kind === 'questions.writeback' ? { AW_ADAPTER_QUESTIONS: op.questionsJson } : {}),
-    ...(op.kind === 'pipeline.collect'
-      ? {
-          AW_PIPELINE_HEAD: op.headSha,
-          AW_PIPELINE_TARGET: op.targetSha,
-          AW_PIPELINE_GATES: op.gateKeysCsv,
-        }
-      : {}),
-    ...(op.kind === 'pipeline.trigger'
-      ? {
-          AW_PIPELINE_HEAD: op.headSha,
-          AW_PIPELINE_GATES: op.gateKeysCsv,
-          AW_IDEMPOTENCY_KEY: op.idempotencyKey,
-        }
-      : {}),
-    ...(op.kind === 'pipeline.rerun'
-      ? {
-          AW_PIPELINE_HEAD: op.headSha,
-          AW_PIPELINE_GATE: op.gateKey,
-          AW_IDEMPOTENCY_KEY: op.idempotencyKey,
-        }
-      : {}),
-    ...(op.kind === 'approval.submit'
-      ? {
-          AW_APPROVAL_STEP_RUN: op.stepRunRef,
-          AW_APPROVAL_DRAFT_REF: op.draftRef,
-          AW_APPROVAL_DEADLINE: op.deadlineAt,
-          AW_IDEMPOTENCY_KEY: op.idempotencyKey,
-          AW_APPROVAL_INTENT_DIGEST: op.intentDigest,
-        }
-      : {}),
-    ...(op.kind === 'approval.lookup' ? { AW_IDEMPOTENCY_KEY: op.idempotencyKey } : {}),
-    ...(op.kind === 'approval.observe' ? { AW_APPROVAL_CORRELATION_REF: op.correlationRef } : {}),
-    ...projectedSecrets,
-  }
-
-  let proc: Subprocess<'ignore', 'pipe', 'pipe'>
-  try {
-    proc = Bun.spawn({
-      cmd: argv,
-      cwd: input.stagedRoot,
-      env,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
-      ...platformSpawnOptionsForHost(),
-      // RFC-317 T35（EK-01）—— 自成进程组：这里跑的是**外部适配器可执行文件**，
-      // 它 fork 什么完全不受本仓控制。不 detached 时下面的杀链只能杀到直接子进程。
-      detached: true,
-    })
-  } catch {
-    return failure(
-      'configuration',
-      'adapter-executable-unavailable',
-      'after-configuration',
-      'fix the adapter executableRef',
-    )
-  }
-
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    // 整组杀，且 TERM 先行留一个宽限——改造前是一发裸 SIGKILL 打给直接子进程：
-    // 既没有优雅退出的机会，孙进程也全都活着。
-    killProcessTree(proc.pid, 'SIGTERM')
-    setTimeout(() => killProcessTree(proc.pid, 'SIGKILL'), ADAPTER_KILL_GRACE_MS).unref?.()
-  }, input.adapterContent.timeoutMs)
-  // **边读边限**。改造前是 `new Response(proc.stdout).text()`——完整读进内存之后才去
-  // 判断 `stdout.length > STDOUT_LIMIT`。那条 256 KiB 的「上限」不提供任何内存保护：
-  // 字节早就在堆里了，一个话痨的适配器会在判断跑到之前把 daemon 撑爆。
-  const [stdout, , exitCode] = await Promise.all([
-    readStreamCapped(proc.stdout as ReadableStream<Uint8Array> | undefined, STDOUT_LIMIT + 1),
-    readStreamCapped(proc.stderr as ReadableStream<Uint8Array> | undefined, STDOUT_LIMIT + 1),
-    proc.exited,
-  ])
-  clearTimeout(timer)
-  // 有界收尸：超时路径上组里可能还有孙进程没死透。
-  if (timedOut) await reapDetachedGroup(proc.pid, ADAPTER_REAP_WINDOW_MS)
-
-  if (timedOut) {
-    return failure(
-      'transient',
-      'adapter-timeout',
-      'same-input',
-      'retry with backoff or raise adapter timeout',
-    )
-  }
-  if (stdout.length > STDOUT_LIMIT) {
-    return failure(
-      'contract-violation',
-      'adapter-stdout-overflow',
-      'never',
-      'adapter must keep stdout to one small envelope',
-    )
-  }
-  if (exitCode !== 0) {
-    const mapped =
-      exitCode === 2
-        ? (['configuration', 'after-configuration'] as const)
-        : exitCode === 5
-          ? (['transient', 'same-input'] as const)
-          : exitCode === 6
-            ? (['stale-input', 'after-refresh'] as const)
-            : (['business-failure', 'never'] as const)
-    return failure(
-      mapped[0],
-      `adapter-exit-${exitCode}`,
-      mapped[1],
-      `inspect the Adapter's provider-side diagnostics for exit code ${exitCode}`,
-    )
-  }
-  const lines = stdout.split('\n').filter((l) => l.trim().length > 0)
-  const last = lines[lines.length - 1]
-  if (last === undefined) {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-missing',
-      'never',
-      'adapter printed no envelope',
-    )
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(last)
-  } catch {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-not-json',
-      'never',
-      'adapter envelope must be one JSON line',
-    )
-  }
-  return { ok: true, envelope: parsed }
 }
 
 export async function runRequirementAcquire(
   input: AdapterRunInput & {
-    readonly operation: { readonly kind: 'acquire'; readonly externalId: string }
+    readonly operation: Parameters<typeof selected.runRequirementAcquire>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof acquireEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = acquireEnvelopeSchema.safeParse(raw.envelope)
-  if (!parsed.success) {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-schema',
-      'never',
-      'acquire envelope failed strict schema',
-    )
-  }
-  return { ok: true, envelope: parsed.data }
+): ReturnType<typeof selected.runRequirementAcquire> {
+  return selected.runRequirementAcquire({
+    ...prepare(input, 'requirement'),
+    operation: input.operation,
+  })
 }
 
 export async function runQuestionsWriteback(
   input: AdapterRunInput & {
-    readonly operation: {
-      readonly kind: 'questions.writeback'
-      readonly externalId: string
-      readonly questionsJson: string
-    }
+    readonly operation: Parameters<typeof selected.runQuestionsWriteback>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof writebackEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = writebackEnvelopeSchema.safeParse(raw.envelope)
-  if (!parsed.success) {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-schema',
-      'never',
-      'writeback envelope failed strict schema',
-    )
-  }
-  return { ok: true, envelope: parsed.data }
+): ReturnType<typeof selected.runQuestionsWriteback> {
+  return selected.runQuestionsWriteback({
+    ...prepare(input, 'requirement'),
+    operation: input.operation,
+  })
 }
 
 export async function runAnswersCollect(
   input: AdapterRunInput & {
-    readonly operation: {
-      readonly kind: 'answers.collect'
-      readonly externalId: string
-      readonly correlationRef: string
-    }
+    readonly operation: Parameters<typeof selected.runAnswersCollect>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof collectAnswersEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = collectAnswersEnvelopeSchema.safeParse(raw.envelope)
-  if (!parsed.success) {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-schema',
-      'never',
-      'collect envelope failed strict schema',
-    )
-  }
-  return { ok: true, envelope: parsed.data }
+): ReturnType<typeof selected.runAnswersCollect> {
+  return selected.runAnswersCollect({
+    ...prepare(input, 'requirement'),
+    operation: input.operation,
+  })
 }
 
 export async function runPipelineCollect(
   input: AdapterRunInput & {
-    readonly operation: {
-      readonly kind: 'pipeline.collect'
-      readonly headSha: string
-      readonly targetSha: string
-      readonly gateKeysCsv: string
-    }
+    readonly operation: Parameters<typeof selected.runPipelineCollect>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof pipelineCollectEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = pipelineCollectEnvelopeSchema.safeParse(raw.envelope)
-  if (!parsed.success) {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-schema',
-      'never',
-      'pipeline.collect envelope failed strict schema',
-    )
-  }
-  return { ok: true, envelope: parsed.data }
+): ReturnType<typeof selected.runPipelineCollect> {
+  return selected.runPipelineCollect({ ...prepare(input, 'pipeline'), operation: input.operation })
 }
 
 export async function runPipelineTrigger(
   input: AdapterRunInput & {
-    readonly operation: {
-      readonly kind: 'pipeline.trigger'
-      readonly headSha: string
-      readonly gateKeysCsv: string
-      readonly idempotencyKey: string
-    }
+    readonly operation: Parameters<typeof selected.runPipelineTrigger>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof pipelineTriggerEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = pipelineTriggerEnvelopeSchema.safeParse(raw.envelope)
-  if (!parsed.success) {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-schema',
-      'never',
-      'pipeline.trigger envelope failed strict schema',
-    )
-  }
-  return { ok: true, envelope: parsed.data }
+): ReturnType<typeof selected.runPipelineTrigger> {
+  return selected.runPipelineTrigger({ ...prepare(input, 'pipeline'), operation: input.operation })
 }
 
 export async function runPipelineRerun(
   input: AdapterRunInput & {
-    readonly operation: {
-      readonly kind: 'pipeline.rerun'
-      readonly runRef: string
-      readonly gateKey: string
-      readonly headSha: string
-      readonly idempotencyKey: string
-    }
+    readonly operation: Parameters<typeof selected.runPipelineRerun>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof pipelineRerunEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = pipelineRerunEnvelopeSchema.safeParse(raw.envelope)
-  if (!parsed.success) {
-    return failure(
-      'contract-violation',
-      'adapter-envelope-schema',
-      'never',
-      'pipeline.rerun envelope failed strict schema',
-    )
-  }
-  return { ok: true, envelope: parsed.data }
+): ReturnType<typeof selected.runPipelineRerun> {
+  return selected.runPipelineRerun({ ...prepare(input, 'pipeline'), operation: input.operation })
 }
 
 export async function runApprovalSubmit(
   input: AdapterRunInput & {
-    readonly operation: Extract<AdapterRunInput['operation'], { kind: 'approval.submit' }>
+    readonly operation: Parameters<typeof selected.runApprovalSubmit>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof approvalSubmitEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = approvalSubmitEnvelopeSchema.safeParse(raw.envelope)
-  return parsed.success
-    ? { ok: true, envelope: parsed.data }
-    : failure(
-        'contract-violation',
-        'adapter-envelope-schema',
-        'never',
-        'approval.submit envelope failed strict schema',
-      )
+): ReturnType<typeof selected.runApprovalSubmit> {
+  return selected.runApprovalSubmit({ ...prepare(input, 'approval'), operation: input.operation })
 }
 
 export async function runApprovalLookup(
   input: AdapterRunInput & {
-    readonly operation: Extract<AdapterRunInput['operation'], { kind: 'approval.lookup' }>
+    readonly operation: Parameters<typeof selected.runApprovalLookup>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof approvalLookupEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = approvalLookupEnvelopeSchema.safeParse(raw.envelope)
-  return parsed.success
-    ? { ok: true, envelope: parsed.data }
-    : failure(
-        'contract-violation',
-        'adapter-envelope-schema',
-        'never',
-        'approval.lookup envelope failed strict schema',
-      )
+): ReturnType<typeof selected.runApprovalLookup> {
+  return selected.runApprovalLookup({ ...prepare(input, 'approval'), operation: input.operation })
 }
 
 export async function runApprovalObserve(
   input: AdapterRunInput & {
-    readonly operation: Extract<AdapterRunInput['operation'], { kind: 'approval.observe' }>
+    readonly operation: Parameters<typeof selected.runApprovalObserve>[0]['operation']
   },
-): Promise<AdapterRunResult<z.infer<typeof approvalObserveEnvelopeSchema>>> {
-  const raw = await runAdapter(input)
-  if (!raw.ok) return raw
-  const parsed = approvalObserveEnvelopeSchema.safeParse(raw.envelope)
-  return parsed.success
-    ? { ok: true, envelope: parsed.data }
-    : failure(
-        'contract-violation',
-        'adapter-envelope-schema',
-        'never',
-        'approval.observe envelope failed strict schema',
-      )
+): ReturnType<typeof selected.runApprovalObserve> {
+  return selected.runApprovalObserve({ ...prepare(input, 'approval'), operation: input.operation })
 }

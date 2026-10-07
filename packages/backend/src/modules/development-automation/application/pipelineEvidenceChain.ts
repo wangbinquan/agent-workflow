@@ -309,7 +309,7 @@ export async function handleCollectPipelineEvidence(
     // 时以显式全零哨兵占位（不伪造）。
     const targetShaFallback = /^[0-9a-f]{40}$/.test(t1) ? t1 : '0'.repeat(40)
     const imported = await ports.pipelineImport.import({
-      stagedRoot: collected.stagedRoot,
+      staging: collected.staging,
       envelope: collected.envelope,
       expectedHeadSha: h1,
       expectedTargetSha: targetShaFallback,
@@ -333,7 +333,8 @@ export async function handleCollectPipelineEvidence(
     )
     return 'collected'
   } finally {
-    collected.cleanup()
+    const closed = collected.cleanup()
+    if (closed !== undefined) await closed
   }
 }
 

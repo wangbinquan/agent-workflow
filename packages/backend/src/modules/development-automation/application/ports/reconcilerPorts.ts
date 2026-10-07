@@ -1,3 +1,4 @@
+import type { EvidenceStagingLease } from './evidenceStaging'
 type Completion<T> = T | Promise<T>
 // RFC-310 PR-2 —— reconciler 消费的窄执行端口（T26）。
 //
@@ -524,13 +525,13 @@ export interface PipelineEvidencePort {
     | {
         readonly ok: true
         readonly envelope: PipelineCollectEnvelopeDto
-        readonly stagedRoot: string
+        readonly staging: EvidenceStagingLease
         readonly outputBudget: {
           readonly maxFiles: number
           readonly maxFileBytes: number
           readonly maxTotalBytes: number
         }
-        cleanup(): void
+        cleanup(): void | Promise<void>
       }
     | { readonly ok: false; readonly failure: OperationFailureReceipt }
   >
@@ -568,7 +569,7 @@ export interface PipelineEvidencePort {
 /** PR-6 T65 —— staged sink → manifest 的收编面（infrastructure importer 注入）。 */
 export interface PipelineImportPort {
   import(input: {
-    readonly stagedRoot: string
+    readonly staging: EvidenceStagingLease
     readonly envelope: PipelineCollectEnvelopeDto
     readonly expectedHeadSha: string
     readonly expectedTargetSha: string

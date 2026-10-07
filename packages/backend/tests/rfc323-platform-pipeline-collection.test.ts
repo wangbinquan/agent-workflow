@@ -1,3 +1,5 @@
+import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
+import { createLocalEvidenceStagingNamespace } from '../src/modules/development-automation/composition/evidenceStaging'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   existsSync,
@@ -131,7 +133,9 @@ function harness(input: {
       return {
         ok: true,
         envelope: input.envelope(),
-        stagedRoot,
+        staging: createLocalEvidenceStagingNamespace(
+          () => new EvidenceStore(join(appHome, 'evidence')),
+        ).adopt(stagedRoot),
         outputBudget: input.outputBudget ?? {
           maxFiles: 10,
           maxFileBytes: 1024,

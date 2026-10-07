@@ -43,3 +43,22 @@ export function composeRequirementSourceRunnerFor(
 }
 
 /** 旧名保留为装配别名，bootstrap 收敛后删除。 */
+
+import {
+  createSelectedRequirementSourceAdapter,
+  type SelectedRequirementSourceExecution,
+} from '../application/developmentRequirementSourceAdapter'
+import type { RequirementAdapterBinding } from '../application/ports/developmentPurposeBinding'
+
+export function composeSelectedRequirementSourceRunnerFor(
+  db: ProviderNeutralDatabase,
+  binding: RequirementAdapterBinding,
+): SelectedRequirementSourceExecution {
+  const store = createDevelopmentAdapterStore(db)
+  return createSelectedRequirementSourceAdapter({
+    resolveBinding: createAsyncDbAdapterBindingResolver((id, revision) =>
+      store.getRevision(id, revision),
+    ),
+    binding,
+  })
+}
