@@ -1,5 +1,10 @@
 export type { InstallationSeedCompletionPort } from '../application/ports/installationSeedCompletion'
 export type {
+  HostExecutionWriteContext,
+  HostExecutionWriteReceipt,
+} from '../application/ports/hostExecutionWriteContext'
+export type { HostExecutionWriteContextParticipant } from '../infrastructure/drizzleHostExecutionWriteContext'
+export type {
   HostExecutionAdmission,
   HostExecutionAdmissionLease,
   HostExecutionAuthorityDriver,

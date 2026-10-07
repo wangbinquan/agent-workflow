@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:a7e0ffff653ce56600eb23a6ec850d953e054bed1638c76efe5b248e4b41e49c",
+    "sourceDigest": "sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -821,8 +821,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1956,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1958,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 Task write context SOURCE18-R2: unchanged original rules measured 10 production files (4 existing and 6 new), 25 owner declarations, two original-generator mutation rows, four SO transaction callback rows, 16 observed import edges with 12 exact original-classifier exceptions, and three offered types. Preserve every old row and every ordered ledger reason; only two platform transaction physical line anchors and two existing public type-consumer arrays change. The first implementation gate exposed lost original-current state before durable drain; the original FAIL is retained, and SOURCE18-R2 retains the original callback/receiver and appends two real dual-provider transaction cases. The original 10 cases and all old test assertions remain. SQLite and PostgreSQL use original migration generators with preserved historical artifacts. One actual original scoped census completed and its full 13 outputs were saved before projection; original rules and full classic 0/0 arrays are unchanged. No local AW tests/typecheck/build/service/E2E ran. Consume these six measured growth declarations once and retire them in an ordinary successor without another census. Actual Task callers/admission, roots, 19 owner/UI, H7/A-G and CS M0-M4 remain open."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -835,8 +838,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 267,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 271,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-370 Task write context SOURCE18-R2: unchanged original rules measured 10 production files (4 existing and 6 new), 25 owner declarations, two original-generator mutation rows, four SO transaction callback rows, 16 observed import edges with 12 exact original-classifier exceptions, and three offered types. Preserve every old row and every ordered ledger reason; only two platform transaction physical line anchors and two existing public type-consumer arrays change. The first implementation gate exposed lost original-current state before durable drain; the original FAIL is retained, and SOURCE18-R2 retains the original callback/receiver and appends two real dual-provider transaction cases. The original 10 cases and all old test assertions remain. SQLite and PostgreSQL use original migration generators with preserved historical artifacts. One actual original scoped census completed and its full 13 outputs were saved before projection; original rules and full classic 0/0 arrays are unchanged. No local AW tests/typecheck/build/service/E2E ran. Consume these six measured growth declarations once and retire them in an ordinary successor without another census. Actual Task callers/admission, roots, 19 owner/UI, H7/A-G and CS M0-M4 remain open."
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -856,8 +862,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6798,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6814,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 Task write context SOURCE18-R2: unchanged original rules measured 10 production files (4 existing and 6 new), 25 owner declarations, two original-generator mutation rows, four SO transaction callback rows, 16 observed import edges with 12 exact original-classifier exceptions, and three offered types. Preserve every old row and every ordered ledger reason; only two platform transaction physical line anchors and two existing public type-consumer arrays change. The first implementation gate exposed lost original-current state before durable drain; the original FAIL is retained, and SOURCE18-R2 retains the original callback/receiver and appends two real dual-provider transaction cases. The original 10 cases and all old test assertions remain. SQLite and PostgreSQL use original migration generators with preserved historical artifacts. One actual original scoped census completed and its full 13 outputs were saved before projection; original rules and full classic 0/0 arrays are unchanged. No local AW tests/typecheck/build/service/E2E ran. Consume these six measured growth declarations once and retire them in an ordinary successor without another census. Actual Task callers/admission, roots, 19 owner/UI, H7/A-G and CS M0-M4 remain open."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -877,8 +886,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5969,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5981,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 Task write context SOURCE18-R2: unchanged original rules measured 10 production files (4 existing and 6 new), 25 owner declarations, two original-generator mutation rows, four SO transaction callback rows, 16 observed import edges with 12 exact original-classifier exceptions, and three offered types. Preserve every old row and every ordered ledger reason; only two platform transaction physical line anchors and two existing public type-consumer arrays change. The first implementation gate exposed lost original-current state before durable drain; the original FAIL is retained, and SOURCE18-R2 retains the original callback/receiver and appends two real dual-provider transaction cases. The original 10 cases and all old test assertions remain. SQLite and PostgreSQL use original migration generators with preserved historical artifacts. One actual original scoped census completed and its full 13 outputs were saved before projection; original rules and full classic 0/0 arrays are unchanged. No local AW tests/typecheck/build/service/E2E ran. Consume these six measured growth declarations once and retire them in an ordinary successor without another census. Actual Task callers/admission, roots, 19 owner/UI, H7/A-G and CS M0-M4 remain open."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -891,8 +903,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1235,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1238,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 Task write context SOURCE18-R2: unchanged original rules measured 10 production files (4 existing and 6 new), 25 owner declarations, two original-generator mutation rows, four SO transaction callback rows, 16 observed import edges with 12 exact original-classifier exceptions, and three offered types. Preserve every old row and every ordered ledger reason; only two platform transaction physical line anchors and two existing public type-consumer arrays change. The first implementation gate exposed lost original-current state before durable drain; the original FAIL is retained, and SOURCE18-R2 retains the original callback/receiver and appends two real dual-provider transaction cases. The original 10 cases and all old test assertions remain. SQLite and PostgreSQL use original migration generators with preserved historical artifacts. One actual original scoped census completed and its full 13 outputs were saved before projection; original rules and full classic 0/0 arrays are unchanged. No local AW tests/typecheck/build/service/E2E ran. Consume these six measured growth declarations once and retire them in an ordinary successor without another census. Actual Task callers/admission, roots, 19 owner/UI, H7/A-G and CS M0-M4 remain open."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -912,8 +927,11 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27419,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 27444,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 Task write context SOURCE18-R2: unchanged original rules measured 10 production files (4 existing and 6 new), 25 owner declarations, two original-generator mutation rows, four SO transaction callback rows, 16 observed import edges with 12 exact original-classifier exceptions, and three offered types. Preserve every old row and every ordered ledger reason; only two platform transaction physical line anchors and two existing public type-consumer arrays change. The first implementation gate exposed lost original-current state before durable drain; the original FAIL is retained, and SOURCE18-R2 retains the original callback/receiver and appends two real dual-provider transaction cases. The original 10 cases and all old test assertions remain. SQLite and PostgreSQL use original migration generators with preserved historical artifacts. One actual original scoped census completed and its full 13 outputs were saved before projection; original rules and full classic 0/0 arrays are unchanged. No local AW tests/typecheck/build/service/E2E ran. Consume these six measured growth declarations once and retire them in an ordinary successor without another census. Actual Task callers/admission, roots, 19 owner/UI, H7/A-G and CS M0-M4 remain open."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -921,8 +939,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f0c94c3c65e5287940d21bf9be02f2c661bc3cc1",
-    "contentDigest": "sha256:7f921716444ffe9344a5a2ea7ffba3eacd58dce66c66a4d58afc78c64752dba6",
+    "currentSnapshotSha": "98bf31c77f6ff2e324290c2c1a402347684d1737",
+    "contentDigest": "sha256:c27065cc845ed83db012de2b14654ea1c6a22f153c967dcb8ea2e621ffa3c8c8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

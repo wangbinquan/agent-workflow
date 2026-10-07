@@ -50,6 +50,8 @@ import { createNativeUsageTables } from './observationNative'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
+export { hostExecutionWriteContexts } from './hostExecutionContext'
+
 export {
   observationReports,
   observationReportPages,

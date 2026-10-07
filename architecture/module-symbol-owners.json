@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2363,
+    "backendFiles": 2369,
     "frontendFiles": 655,
-    "legacyFiles": 596,
-    "moduleFiles": 1767,
-    "productionFiles": 3188,
+    "legacyFiles": 597,
+    "moduleFiles": 1772,
+    "productionFiles": 3194,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27419
+    "symbolsIncludingFileRoots": 27444
   },
   "entries": [
     {
@@ -4953,6 +4953,42 @@
       "symbol": "transactionObservers",
       "targetContext": "platform",
       "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": false,
+      "file": "packages/backend/src/db/hostExecutionContext.ts",
+      "id": "owner:packages/backend/src/db/hostExecutionContext.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/hostExecutionContext.ts",
+      "id": "owner:packages/backend/src/db/hostExecutionContext.ts#hostExecutionWriteContexts",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "hostExecutionWriteContexts",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": false,
+      "file": "packages/backend/src/db/hostExecutionContext.ts",
+      "id": "owner:packages/backend/src/db/hostExecutionContext.ts#table",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "table",
+      "targetContext": "platform",
+      "targetLayer": "application"
     },
     {
       "currentContext": "legacy",
@@ -128053,6 +128089,54 @@
       "currentContext": "system-operations",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts#HostExecutionWriteContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts#HostExecutionWriteReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostExecutionWriteReceipt",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts#hostExecutionWriteReceiptBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "hostExecutionWriteReceiptBrand",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/application/ports/installationSeedCompletion.ts",
       "id": "owner:packages/backend/src/modules/system-operations/application/ports/installationSeedCompletion.ts#$file",
       "removeAfterWave": null,
@@ -129006,6 +129090,30 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "requireHostExecutionAuthorityBinding",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionWriteContext.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionWriteContext.ts#composeHostExecutionWriteContext",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "composeHostExecutionWriteContext",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -130458,6 +130566,90 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "prepareDatabaseSchemaUpgrade",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#assertExpiry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertExpiry",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#createDrizzleHostExecutionWriteContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createDrizzleHostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#HostExecutionWriteContextParticipant",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostExecutionWriteContextParticipant",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#installationId",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "installationId",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#ReceiptIdentity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReceiptIdentity",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#unavailable",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "unavailable",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -139510,6 +139702,78 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskExecutionTopologyLogger",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts#TaskHostWriteContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostWriteContext",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts#TaskHostWriteReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostWriteReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts#taskHostWriteReceiptBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskHostWriteReceiptBrand",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts#TaskHostWriteTransaction",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostWriteTransaction",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskHostWriteContext.ts#taskHostWriteTransactionBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskHostWriteTransactionBrand",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -154546,6 +154810,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DrizzleGateContinuationPreDrivePersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts#createTaskHostWriteContextAdapter",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createTaskHostWriteContextAdapter",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -174937,6 +175225,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DatabaseTransaction",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseTransactionBelongsToClient",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "databaseTransactionBelongsToClient",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -329768,5 +330068,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a7e0ffff653ce56600eb23a6ec850d953e054bed1638c76efe5b248e4b41e49c"
+  "sourceDigest": "sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed"
 }

@@ -10798,3 +10798,12 @@ SOURCE3-R1／WF1-R1 独立稳定 PASS，原 native AST／整套旧测试／Windo
 本普通后继仅退役三条已消费声明：mutation1956、background367、owner27419。129个完整有序库存、baseline、why、预算及其它字段保持，沿原五个纯 JSON 函数刷新 payload digest。完整三文档前缀及并行输出保持，source3原字节不改。没有新的 census 或本机 AW tests／typecheck／build／service／E2E。
 
 该提交主 CI37612138168／Windows37612138153已注册，终态另验，不能记为全仓绿。Task持久参与者 SOURCE18-R2 有限 PASS，原失权窗口 F01 与新增两个真实双 provider 原事务案例已复核；其源码尚未随轮询发布。实际Task调用者／启动根／19owner／UI、H7／A-G及CS M0～M4继续，AW未部署CS，RFC保持进行中。
+
+
+### 2026-10-07 RFC-370 Task 宿主写上下文持久参与者候选
+
+SOURCE18-R2 与 WF1-R1 独立有效稳定有限 PASS，root 已实际消费完整正文。原失权到 durable drain 的窗口 F01 FAIL 保留并修复，原 current 方法／receiver 和实际同一事务回滚保持；原十个双 provider 案例保持，追加两个真实案例。新的 SO 生命周期、持久参与者及 Task 独立 adapter 尚未接入实际 claim／heartbeat／runner／业务 caller 或 roots。SQLite 0242、PostgreSQL 0018 沿原安装生成链，全部历史 artifact／旧表／journal 前缀保持。
+
+唯一原 scoped census 固定98bf31c77，十生产（一批四原／六新）加一测试，全部非本批读 committed blob，13原输出先保存；sourceDigest sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed，classic完整0／0相等。原owner／opaque mutation／import／exception行保持，仅新增25 owner、2 mutation、4 transaction、16 import／12原classifier exception、3 offered type；两条platform transaction物理行号与两个原public consumer数组作原派生更新。129有序ledger／why／预算完整保持，六条实测一次声明随发布消费后普通退役，不重跑census。私有投影的两次顺序比较错误和正确R3投影留证，原生成仅一次成功。
+
+配套独立门、精确发布／远端同步与新exact-SHA hosted CI分别验收，无本机AW tests／typecheck／build／service／E2E，无跨会话消息。实际Task调用链／所有事务与named admission、三个roots／19 owner／UI、H7／A-G及CS M0首次部署至M4继续，AW尚未部署CS，RFC未完成。旧共享全文及并行输出保持，详见design/RFC-370-crewstation-hosted-deployment/host-authority-task-write-context-publication.md。

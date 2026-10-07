@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 29,
-    "transactionCallbacks": 267
+    "transactionCallbacks": 271
   },
   "entries": [
     {
@@ -2916,6 +2916,54 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#transaction:166",
+      "line": 166,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#createDrizzleHostExecutionWriteContext",
+      "status": "clear",
+      "symbol": "createDrizzleHostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#transaction:184",
+      "line": 184,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#createDrizzleHostExecutionWriteContext",
+      "status": "clear",
+      "symbol": "createDrizzleHostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#transaction:202",
+      "line": 202,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#createDrizzleHostExecutionWriteContext",
+      "status": "clear",
+      "symbol": "createDrizzleHostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#transaction:214",
+      "line": 214,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#createDrizzleHostExecutionWriteContext",
+      "status": "clear",
+      "symbol": "createDrizzleHostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:540",
@@ -3102,18 +3150,6 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:264",
-      "line": 264,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
-      "status": "clear",
-      "symbol": "createPostgresqlDatabaseSession",
-      "targetContext": "platform",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
-      "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:272",
       "line": 272,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
@@ -3126,8 +3162,20 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:285",
-      "line": 285,
+      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:280",
+      "line": 280,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
+      "status": "clear",
+      "symbol": "createPostgresqlDatabaseSession",
+      "targetContext": "platform",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:293",
+      "line": 293,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
       "status": "clear",
       "symbol": "createPostgresqlDatabaseSession",
@@ -3272,7 +3320,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a7e0ffff653ce56600eb23a6ec850d953e054bed1638c76efe5b248e4b41e49c",
+  "sourceDigest": "sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

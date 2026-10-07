@@ -1,0 +1,311 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:012cce37c527334d3a966f13274636baca3d2f5901736cb43b3923acd28d1f50', 217, 6)"
+    },
+    "beforeDigest": "sha256:8a8947f97994869557025e93cc6c0536ebceef795485e0f0b84e4511cd7d085c"
+  },
+  "digest": "sha256:9c123577b74345db6e4979ece00677ee600b1cd2f9fa2b7b7ec11c6be879b716",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "system_host_execution_write_contexts",
+      "sql": "CREATE TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"holder\" TEXT COLLATE \"C\" NOT NULL,\n  \"generation\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"phase\" TEXT COLLATE \"C\" NOT NULL,\n  \"expires_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"system_host_execution_write_contexts_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "system_host_execution_write_contexts:check:host_execution_write_singleton_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" ADD CONSTRAINT \"host_execution_write_singleton_ck\" CHECK (\"id\" = 'installation')"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "system_host_execution_write_contexts:check:host_execution_write_revision_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" ADD CONSTRAINT \"host_execution_write_revision_ck\" CHECK (\"revision\" > 0)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "system_host_execution_write_contexts:check:host_execution_write_phase_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" ADD CONSTRAINT \"host_execution_write_phase_ck\" CHECK (\"phase\" IN ('preparing','active','draining','closed'))"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:012cce37c527334d3a966f13274636baca3d2f5901736cb43b3923acd28d1f50', active_table_count = 217, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:7123a13ba607ab51076656280e9bca40f36369df085f2c017693b8768eb63e11' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:7123a13ba607ab51076656280e9bca40f36369df085f2c017693b8768eb63e11",
+    "planDigest": "sha256:77bfac0ccc8237c511789a08b8a2b2a7b47c386f557c698fddbfa364b8936781"
+  },
+  "id": "0018_rfc370_host_execution_write_context",
+  "indexAdditions": [
+    {
+      "position": 168,
+      "statement": {
+        "kind": "table",
+        "logicalId": "system_host_execution_write_contexts",
+        "sql": "CREATE TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"holder\" TEXT COLLATE \"C\" NOT NULL,\n  \"generation\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"phase\" TEXT COLLATE \"C\" NOT NULL,\n  \"expires_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"system_host_execution_write_contexts_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 831,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "system_host_execution_write_contexts:check:host_execution_write_singleton_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" ADD CONSTRAINT \"host_execution_write_singleton_ck\" CHECK (\"id\" = 'installation')"
+      }
+    },
+    {
+      "position": 832,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "system_host_execution_write_contexts:check:host_execution_write_revision_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" ADD CONSTRAINT \"host_execution_write_revision_ck\" CHECK (\"revision\" > 0)"
+      }
+    },
+    {
+      "position": 833,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "system_host_execution_write_contexts:check:host_execution_write_phase_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"system_host_execution_write_contexts\" ADD CONSTRAINT \"host_execution_write_phase_ck\" CHECK (\"phase\" IN ('preparing','active','draining','closed'))"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 164,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"system_host_execution_write_contexts\".\"id\" = 'installation'",
+            "name": "host_execution_write_singleton_ck"
+          },
+          {
+            "columns": [],
+            "expression": "\"system_host_execution_write_contexts\".\"revision\" > 0",
+            "name": "host_execution_write_revision_ck"
+          },
+          {
+            "columns": [],
+            "expression": "\"system_host_execution_write_contexts\".\"phase\" IN ('preparing','active','draining','closed')",
+            "name": "host_execution_write_phase_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "holder",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "generation",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["preparing", "active", "draining", "closed"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "phase",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "expires_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "system_host_execution_write_contexts",
+        "indexes": [],
+        "migrationKey": ["id"],
+        "ownerContext": "system-operations",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "system_host_execution_write_contexts",
+          "sqlite": "system_host_execution_write_contexts"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "system-operations",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "hostExecutionWriteContexts",
+        "sourceTable": "system_host_execution_write_contexts",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:8438b2dc31c354d64dc9ad2b206fa563e6d419e6d90c8752e4ab94a8ba2479dd",
+  "sequence": 18,
+  "sqlDigest": "sha256:f8c0c17c30cabd40c922f2ac8a4f1449ba926e62badcc0865ec7ce20387e211d",
+  "sqlFile": "0018_rfc370_host_execution_write_context.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791368178003,
+        "hash": "4f16c7765d1dfc70a1366c375f82a80b48fe95d1dc2dc63c288246b4525c8a40",
+        "index": 241,
+        "tag": "0242_rfc370_host_execution_write_context"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:223847aae596ee044f2408f063e64d1cacd69d8739854d5d67d97b731f76b02d",
+      "count": 241,
+      "last": {
+        "folderMillis": 1791261480371,
+        "hash": "51354dc1f147c7bea27218999320d9306c37d4ecd0a8a9131dd2dc07aab4b77d",
+        "index": 240,
+        "tag": "0241_rfc371_retained_output_revision"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:cddc093031a7508a3446ffb1df5e9f7d8fa7afc7525f8fb00671f36b4c1521eb",
+      "count": 242,
+      "last": {
+        "folderMillis": 1791368178003,
+        "hash": "4f16c7765d1dfc70a1366c375f82a80b48fe95d1dc2dc63c288246b4525c8a40",
+        "index": 241,
+        "tag": "0242_rfc370_host_execution_write_context"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:012cce37c527334d3a966f13274636baca3d2f5901736cb43b3923acd28d1f50",
+    "planDigest": "sha256:c25d292b9f1f43611dff7a6e2442b5386b10de964a67d763a3074c360887a6eb"
+  },
+  "version": 2
+}

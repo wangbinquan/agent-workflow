@@ -1688,6 +1688,13 @@
       "when": 1791261480371,
       "tag": "0241_rfc371_retained_output_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 241,
+      "version": "6",
+      "when": 1791368178003,
+      "tag": "0242_rfc370_host_execution_write_context",
+      "breakpoints": true
     }
   ]
 }

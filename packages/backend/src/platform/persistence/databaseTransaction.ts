@@ -165,6 +165,14 @@ export function databaseTransactionIsActive(handle: DatabaseTransaction): boolea
   return frames.getStore()?.some((frame) => frame.client === handle || frame.tx === handle) ?? false
 }
 
+/** A named participant uses the exact original client/transaction pair. */
+export function databaseTransactionBelongsToClient(
+  client: ProviderNeutralDatabase,
+  tx: DatabaseTransaction,
+): boolean {
+  return frames.getStore()?.some((frame) => frame.client === client && frame.tx === tx) ?? false
+}
+
 function withFrame<T>(client: object, tx: DatabaseTransaction, run: () => Promise<T>): Promise<T> {
   const next: readonly TransactionFrame[] = [...(frames.getStore() ?? []), { client, tx }]
   // 同时登记进 `db/transactionScope`：`dbTxSync` 据此判断「有事务开着且我不在它的上下文里」，

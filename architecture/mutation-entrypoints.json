@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1956,
+    "entries": 1958,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -26211,6 +26211,27 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#createDrizzleHostExecutionWriteContext",
+      "missingControls": [
+        "audit",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/drizzleHostExecutionWriteContext.ts#createDrizzleHostExecutionWriteContext",
+      "symbol": "createDrizzleHostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -31871,6 +31892,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#createSqliteFusionEngineTaskOperations",
       "symbol": "createSqliteFusionEngineTaskOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts#createTaskHostWriteContextAdapter",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts#createTaskHostWriteContextAdapter",
+      "symbol": "createTaskHostWriteContextAdapter",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46821,7 +46865,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a7e0ffff653ce56600eb23a6ec850d953e054bed1638c76efe5b248e4b41e49c",
+  "sourceDigest": "sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
