@@ -3,7 +3,7 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
-import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
+import type { MrTerminalControlRuntime } from '../application/ports/mrTerminalControlRuntime'
 import type {
   MrLaunchGuardPersistencePort,
   MrTerminalEffectPersistencePort,
@@ -30,16 +30,19 @@ export interface MrTerminalControlTaskTermination {
 export function composeMrTerminalControlWithPorts(input: {
   readonly persistence: MrTerminalControlPersistence
   readonly taskTermination: MrTerminalControlTaskTermination
-}): MrTerminalControl {
+  readonly canDispatch?: () => boolean
+}): MrTerminalControlRuntime {
   const launchGuards = new MrLaunchGuardCoordinator(
     input.persistence.launchGuards,
     new InMemoryWebhookLaunchSupervisor(),
+    input.canDispatch,
   )
   const worker = new MrTerminalControlWorker(
     input.persistence.terminalEffects,
     launchGuards,
     input.taskTermination.participant,
     input.taskTermination.mintCapability,
+    input.canDispatch,
   )
   return {
     reserveLaunch: (input) => launchGuards.reserve(input),
@@ -47,6 +50,8 @@ export function composeMrTerminalControlWithPorts(input: {
     reconcileOnBoot: () => worker.reconcileOnBoot(),
     stop: () => worker.stop(),
     resume: () => worker.resume(),
+    quiesceAuthorityLoss: () => worker.quiesceAuthorityLoss(),
+    drainAuthorityLoss: () => worker.drainAuthorityLoss(),
   }
 }
 
@@ -68,12 +73,14 @@ export function composeMrTerminalControlWithPorts(input: {
 export function composeMrTerminalControl(input: {
   readonly db: ProviderNeutralDatabase
   readonly taskTermination: MrTerminalControlTaskTermination
-}): MrTerminalControl {
+  readonly canDispatch?: () => boolean
+}): MrTerminalControlRuntime {
   return composeMrTerminalControlWithPorts({
     persistence: {
       launchGuards: createMrLaunchGuardPersistence(input.db),
       terminalEffects: createMrTerminalEffectPersistence(input.db),
     },
     taskTermination: input.taskTermination,
+    ...(input.canDispatch === undefined ? {} : { canDispatch: input.canDispatch }),
   })
 }

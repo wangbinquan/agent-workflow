@@ -1053,3 +1053,12 @@ WF1-R1 有效稳定有限 PASS，四组执行权回归补入原 Windows 触发�
 本普通后继仅退役已经消费的 imports/exceptions/public/owners 四条 allowGrowth，129 个原有有序库存项、why、实测 baseline 6793／5964／1234／27399 及全部其余字段保持，按原五个纯 JSON 函数刷新 ledger payload 摘要。原十三配套与唯一原 census 不重跑；三份文档完整旧前缀及每条原声明的完整理由保持在实际发布证据中。
 
 实际 bootstrap、提前恢复、十九 handles、Task 同事务上下文与执行 admission、其他 owner/UI、H7/A-T7/A-G、CS 独立 adapters 和 M0～M4 部署继续开放。AW 尚未部署 CS。运行会话后续源码与回归另行开发，不包含在这四路径退役提交。
+
+
+## 2026-10-07 RFC-370 Runtime/Webhook 执行权切面与配套候选
+
+SOURCE11-R3 有效稳定有限 PASS，原 R1/R2 功能失败完整保留。RuntimeSession 的同 generation handle selection、真实停止/排空模式 ACK 和 Integration 自有失权切面已准备发布；两 provider 回归与实际 Webhook worker 联合回归加入原 Windows 路径/命令。实际 bootstrap 十九 handles 尚未接线。
+
+唯一原 scoped census 固定 6825e230，叠加六生产/两测试，Intent 在制品排除，其余 6701 源码读取原 blob。十三配套沿原四条规则，sourceDigest sha256:c73b8ce0d63e535c56fdd7e17701ac289f0ce2e0ab1076b3864496203b82eb4e；经典完整数组相等，本批 scoped 1/0。所有旧完整行、public 形状及 129 库存 why/顺序保持，五项实测增长消费后普通退役，不重跑 census。
+
+配套独立门、精确路径上库/同步与新 exact-SHA hosted CI 分别验收，无本机 AW tests/typecheck/build/service/E2E。真实启动根、提前恢复、Task 原事务/admission、其余 owner/UI、H7/A-T7/A-G 继续，然后独立 CS adapters，先 M0 部署再 M1–M4。AW 尚未部署 CS，RFC 未完成。详情见 design/RFC-370-crewstation-hosted-deployment/host-authority-runtime-webhook-publication.md。共享 STATE/plan 的完整原前缀与并行输出保持，仅追加此段。

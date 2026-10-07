@@ -16,6 +16,7 @@ export class MrLaunchGuardCoordinator {
   constructor(
     private readonly persistence: MrLaunchGuardPersistencePort,
     readonly supervisor: MrLaunchSupervisorPort,
+    private readonly canDispatch: () => boolean = () => true,
   ) {}
 
   async reserve(input: ProtectedMrLaunchGuardInput): Promise<ProtectedMrLaunchGuard> {
@@ -74,10 +75,13 @@ export class MrLaunchGuardCoordinator {
     }
   }
 
-  async abortRevoked(): Promise<number> {
+  async abortRevoked(canDispatch: () => boolean = this.canDispatch): Promise<number> {
     const guardIds = await this.persistence.listRevokingGuardIds()
     let aborted = 0
-    for (const guardId of guardIds) if (this.supervisor.abort(guardId)) aborted++
+    for (const guardId of guardIds) {
+      if (!canDispatch()) break
+      if (this.supervisor.abort(guardId)) aborted++
+    }
     return aborted
   }
 

@@ -31791,6 +31791,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#$file",
+      "fromPath": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4f09caa5385b1eac2bf1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "toSymbol": "HostExecutionRuntimeFamily",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts#$file",
@@ -57497,6 +57514,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#$file",
+      "fromPath": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:93aacdc7cd3111da4c22",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "toSymbol": "HostExecutionGrantContext",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/nativeUsagePassWorker.ts#$file",
       "fromPath": "packages/backend/src/platform/background/nativeUsagePassWorker.ts",
       "fromSymbol": "$file",
@@ -72623,6 +72657,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "resourceGrants",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#$file",
+      "fromPath": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ba3322f1ba9ff0654f99",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "toSymbol": "HostExecutionGroup",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -101424,9 +101475,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5966,
+    "architectureExceptions": 5969,
     "implementationSccs": 0,
-    "observedEdges": 6795,
+    "observedEdges": 6798,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -135275,6 +135326,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#getRuntimeDriver"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#$file",
+      "id": "import:4f09caa5385b1eac2bf1",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HostExecutionRuntimeFamily",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts",
@@ -163213,6 +163280,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#$file",
+      "id": "import:93aacdc7cd3111da4c22",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HostExecutionGrantContext",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/background/nativeUsagePassWorker.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/nativeUsagePassWorker.ts#$file",
       "id": "import:93ab485c04028e559782",
@@ -179689,6 +179772,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#resourceGrants"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#$file",
+      "id": "import:ba3322f1ba9ff0654f99",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HostExecutionGroup",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -211046,7 +211145,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51b29e9939352d9404b9889b628f5a6a36afcd913224de8c0d10bf5dfea323ca",
+  "sourceDigest": "sha256:c73b8ce0d63e535c56fdd7e17701ac289f0ce2e0ab1076b3864496203b82eb4e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

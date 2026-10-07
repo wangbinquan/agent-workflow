@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2361,
+    "backendFiles": 2362,
     "frontendFiles": 655,
     "legacyFiles": 596,
-    "moduleFiles": 1765,
-    "productionFiles": 3186,
+    "moduleFiles": 1766,
+    "productionFiles": 3187,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27405
+    "symbolsIncludingFileRoots": 27411
   },
   "entries": [
     {
@@ -3003,6 +3003,30 @@
       "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#DaemonProviderHostExecutionHandleBinding",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderHostExecutionHandleBinding",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#DaemonProviderHostExecutionRuntimeSelection",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderHostExecutionRuntimeSelection",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
       "id": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#DaemonProviderRuntimeAdmission",
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
@@ -3111,6 +3135,18 @@
       "currentLayer": "cli",
       "exported": false,
       "file": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#drainedForCurrentMode",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "drainedForCurrentMode",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
       "id": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#lifecycleFailure",
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
@@ -3127,6 +3163,18 @@
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
       "symbol": "MaybePromise",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#stoppedForCurrentMode",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "stoppedForCurrentMode",
       "targetContext": "runtime-management",
       "targetLayer": "inbound"
     },
@@ -60491,6 +60539,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "MrTerminalEffectPersistencePort",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/integration/application/ports/mrTerminalControlRuntime.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/ports/mrTerminalControlRuntime.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/ports/mrTerminalControlRuntime.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/ports/mrTerminalControlRuntime.ts#MrTerminalControlRuntime",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "MrTerminalControlRuntime",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -329600,5 +329672,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51b29e9939352d9404b9889b628f5a6a36afcd913224de8c0d10bf5dfea323ca"
+  "sourceDigest": "sha256:c73b8ce0d63e535c56fdd7e17701ac289f0ce2e0ab1076b3864496203b82eb4e"
 }

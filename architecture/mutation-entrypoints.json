@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1954,
+    "entries": 1955,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -660,7 +660,7 @@
         "audit": false,
         "authority": "system",
         "authorization": true,
-        "event": false,
+        "event": true,
         "fenceOrOcc": true,
         "transaction": false
       },
@@ -669,7 +669,6 @@
       "id": "mutation:packages/backend/src/cli/daemonProviderRuntimeSession.ts#createDaemonProviderRuntimeSession",
       "missingControls": [
         "audit",
-        "event",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#createDaemonProviderRuntimeSession",
@@ -698,6 +697,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#CreateDaemonProviderRuntimeSessionInput",
       "symbol": "CreateDaemonProviderRuntimeSessionInput",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/cli/daemonProviderRuntimeSession.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/daemonProviderRuntimeSession.ts#stoppedForCurrentMode",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeSession.ts#stoppedForCurrentMode",
+      "symbol": "stoppedForCurrentMode",
       "targetContext": "runtime-management",
       "targetLayer": "inbound"
     },
@@ -46774,7 +46798,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51b29e9939352d9404b9889b628f5a6a36afcd913224de8c0d10bf5dfea323ca",
+  "sourceDigest": "sha256:c73b8ce0d63e535c56fdd7e17701ac289f0ce2e0ab1076b3864496203b82eb4e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

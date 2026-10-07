@@ -6603,7 +6603,7 @@
       ],
       "file": "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$setInterval:49",
+      "id": "background:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$setInterval:59",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6617,7 +6617,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:49",
+      "symbol": "$setInterval:59",
       "targetContext": "integration"
     },
     {
@@ -6626,7 +6626,7 @@
       ],
       "file": "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$setTimeout:210",
+      "id": "background:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$setTimeout:277",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6640,7 +6640,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:210",
+      "symbol": "$setTimeout:277",
       "targetContext": "integration"
     },
     {
@@ -13609,5 +13609,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51b29e9939352d9404b9889b628f5a6a36afcd913224de8c0d10bf5dfea323ca"
+  "sourceDigest": "sha256:c73b8ce0d63e535c56fdd7e17701ac289f0ce2e0ab1076b3864496203b82eb4e"
 }
