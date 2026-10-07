@@ -12,8 +12,11 @@ import type {
 declare const AW_COMPILED_BUILD: boolean | undefined
 const entry =
   typeof AW_COMPILED_BUILD === 'boolean' && AW_COMPILED_BUILD
-    ? './platform/background/nativeUsageBaselineWorker.ts'
-    : new URL('./nativeUsageBaselineWorker.ts', import.meta.url).href
+    ? './modules/task-execution/infrastructure/nativeUsageBaselineWorker.ts'
+    : new URL(
+        '../../modules/task-execution/infrastructure/nativeUsageBaselineWorker.ts',
+        import.meta.url,
+      ).href
 
 /** Original SQLite reads stay in the Worker; original PG reads drain before lease release. */
 export async function withNativeUsageBaselineWorker<T>(

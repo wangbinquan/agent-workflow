@@ -4,11 +4,7 @@ import type {
   RuntimeKind,
 } from '@/modules/runtime-management/public/types'
 
-/** Frozen installation selection; it never selects a report population. */
-export interface NativeUsageAdmission {
-  readonly registrationId: string
-  readonly configurationRevision: number
-}
+export type { NativeUsageAdmission } from './nativeUsageAdmission'
 
 /** Resolve the actual original Task context at the invocation call point. */
 export interface NativeUsageInvocationPersistence {

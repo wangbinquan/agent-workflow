@@ -1,7 +1,5 @@
 export { readPortArtifact } from '../composition/portArtifacts'
 export type { PortArtifactReader } from '../application/ports/portArtifactContent'
-/** Read-only original baseline verification shared with the platform worker. */
-export { withNativeUsageBaselineSnapshot } from '../composition/nativeUsageBaseline'
 export {
   encodePortSegment,
   repoRelForcedPaths,

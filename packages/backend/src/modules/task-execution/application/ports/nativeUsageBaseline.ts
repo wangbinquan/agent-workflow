@@ -1,5 +1,5 @@
 import type { ObservationNativePassCompletion } from '@agent-workflow/shared'
-import type { NativeUsageReadBinding } from './nativeUsagePersistence'
+import type { NativeUsageReadBinding } from './nativeUsageReadBinding'
 
 /** Membership from one completely verified original DB read snapshot, live only inside run(). */
 export interface NativeUsageBaselineReadView {

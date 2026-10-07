@@ -192,8 +192,8 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 | 工作流                    | 实际触发          | 精确运行                                                                              | 成功作业 |
 | ------------------------- | ----------------- | ------------------------------------------------------------------------------------- | -------- |
-| CI                        | push              | 36862619605 | 50 / 50  |
-| e2e-full-nightly          | workflow_dispatch | 36862922051 | 5 / 5    |
+| CI                        | push              | 36862619605                                                                           | 50 / 50  |
+| e2e-full-nightly          | workflow_dispatch | 36862922051                                                                           | 5 / 5    |
 | e2e-webkit-nightly        | workflow_dispatch | [36862927689](https://github.com/wangbinquan/agent-workflow/actions/runs/36862927689) | 8 / 8    |
 | evidence-soak-nightly     | workflow_dispatch | [36862938467](https://github.com/wangbinquan/agent-workflow/actions/runs/36862938467) | 1 / 1    |
 | git-protocols-e2e         | workflow_dispatch | [36862932820](https://github.com/wangbinquan/agent-workflow/actions/runs/36862932820) | 1 / 1    |
@@ -233,10 +233,10 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 | 工作流                        | Run                                                                                   | 成功作业 |
 | ----------------------------- | ------------------------------------------------------------------------------------- | -------- |
-| CI                            | 36969850886 | 50/50    |
+| CI                            | 36969850886                                                                           | 50/50    |
 | maintenance-soak-nightly.yml  | [36970414480](https://github.com/wangbinquan/agent-workflow/actions/runs/36970414480) | 1/1      |
 | e2e-full-nightly.yml          | [36970420107](https://github.com/wangbinquan/agent-workflow/actions/runs/36970420107) | 5/5      |
-| windows-platform.yml          | 36970559143 | 1/1      |
+| windows-platform.yml          | 36970559143                                                                           | 1/1      |
 | e2e-webkit-nightly.yml        | [36970432899](https://github.com/wangbinquan/agent-workflow/actions/runs/36970432899) | 8/8      |
 | integration-opencode.yml      | [36970439090](https://github.com/wangbinquan/agent-workflow/actions/runs/36970439090) | 2/2      |
 | git-protocols-e2e.yml         | [36970445195](https://github.com/wangbinquan/agent-workflow/actions/runs/36970445195) | 1/1      |
@@ -306,7 +306,6 @@ Ubuntu改为完整1/32至32/32的独立runner，每一原Bun发现文件仍只�
 
 本片精确格式/lint/AST 与新 source SHA hosted CI继续核验，不把已有失败或本次 API读证据记为全仓通过。AW-R03～12、CS 生产采集/原规模和两个 RFC继续，全部共享现有正文及其他会话在制品保留，无跨会话消息。
 
-
 ## 2026-10-07 Windows 重启与归属名称异步时序
 
 `d400121b052e59db6e72aba2aa25f99aa7d18f40` 的 [CI 37530803324](https://github.com/wangbinquan/agent-workflow/actions/runs/37530803324) 已终态。原 Markdown、历史恢复回归、SQLite/PostgreSQL、全部 Ubuntu/macOS/Windows 功能作业均 success；整体仍 failure，其他阻断只保留作业状态。Windows E2E 两条原用例首次失败而重试成功，不能据此把时序问题记为闭合：crash-recovery 同库重启看到了旧 daemon PID 锁，WF-03 在独立归属名称查询返回前取到了 UUID。
@@ -315,7 +314,6 @@ Ubuntu改为完整1/32至32/32的独立runner，每一原Bun发现文件仍只�
 
 WF-03 保留私有/公开卡片的完整 chip 数组与原用户名期望，改为等待独立名称查询后的真实 UI；节点数、版本、可见集合及其余原断言不变。没有新增用例重试、skip、排除文件或降低人口。仅本批格式/lint和无断言 AST 在本机执行，全部测试与类型仍交精确 hosted SHA。两 RFC 及原生产/规模/真实用途验收保持 In Progress。
 
-
 ### 2026-10-07 受控关闭用例的预算声明
 
 `15265ef2b1d435741e4e98e8c0b11c0ccf35d9e6` 的 Ubuntu 28/32 和 macOS 4/12 分片报出同一个实际功能错误：本会话新增的“已经 close 的 child 不需要额外 signal”用例调用 `waitForChildExit(..., 5000)`，却隐含使用 Bun 的 5000ms 用例预算。仓库要求用例预算严格大于内部等待上限。只为这一条新增的受控用例显式声明 10000ms，保留内部 5000ms、全部断言、其他五条受控用例，以及原有 E2E 和生产关闭等待常量。
@@ -323,7 +321,6 @@ WF-03 保留私有/公开卡片的完整 chip 数组与原用户名期望，改�
 该 SHA 的 Windows 四个 E2E 分片均完成；原有单次和多次 SIGKILL 后同 home 恢复用例，以及 WF-03 全部芯片与独立归属查询，首次尝试通过。Windows 3/4 另有一条非本次关闭恢复用例被标记 flaky，因此不将整条流水线记为干净通过。8 个后端失败分片对应 4 个失败用例，其中另外三处旧架构调用关系已由独立提交 `865fc0458301a4532fb21f685f323eb9130ee069` 更新，本补丁保留该提交并继续等待最终候选的准确 SHA CI。
 
 本地仅做静态 AST、精确格式与 lint 检查；没有启动 AW 测试、构建、E2E 或新服务。正式后端仍由原 `bun dev` watcher 提供，统计页面的已记录 Token 与人民币估值保持可见，缺口继续明确标为不完整。
-
 
 ## 2026-10-07 Bun Worker 类型与固定历史迁移回归
 
@@ -344,3 +341,13 @@ Worker 夹具现从原 `Worker.postMessage` 的声明推导两种参数类型，
 同源 Ubuntu 9/32 还报出两个平台文件直接 import Task composition。原调用工厂从既有 `public/participants.ts` 提供，原只读基线快照函数从既有 `public/queries.ts` 提供，两个实际调用处使用各自公共入口。原实现、参数、Worker 协议、原页和事务不改变；不登记新 R1 例外。
 
 Ubuntu 6/32 的实际高水守卫确认原生夹具登记已由 330 增至 333，但对应 `architecture/ledger-baselines.json` 的计数尚未同步。本片只同步前述三份外部 OpenCode SQLite 夹具的实际条目数与具名理由；原分类规则、四个实际调用和 AW 双 provider 行为保持，其他条目不由本片裁定。
+
+## 2026-10-08 内部原生工厂与 Worker 装配修正
+
+`33769f07e0594f0426fd2e5de1a2db0d02873e7e` 的 [CI 37664814630](https://github.com/wangbinquan/agent-workflow/actions/runs/37664814630) 在 Ubuntu 17/32 继续报出实际功能边界问题：公共导出的原生工厂含原数据库、快照和回调，公共快照函数也含内部回调；`NativeUsageAdmission` 经同一 port 文件仍连到执行 owner。因此前述公共再导出不足以修复原规则，原失败记录保留。
+
+本片将纯值配置拆成独立无 import 的 port；原执行参与者类型继续从 participants 导出，两个内部 value 工厂不再从 public 导出。原 selected 工厂迁入 Task composition，由已允许的两个原 bootstrap 直接装配；其参数、空选择行为、原冻结 admissions、baselineRead 及返回的原参与者保持。原基线 Worker 迁入 Task infrastructure，直接使用模块内部快照函数；Worker 全部可执行语句、原 SQLite/PG 通道、成员请求、release/cancel、原快照关闭和 EOF 语义保持。源运行 URL 与单二进制显式入口同时指向该文件，禁止掉回主线程或改成内存总体。原选项测试只同步 import 地址，所有实际双 provider 用例、断言、10001 配置总体与预算逐字保持。
+
+没有扩大 BOOTSTRAP_FILES、公共合同规则、类型白名单或任何债务许可；当前共有 ledger/census 在制配套由原负责会话保留。本机仅限自有格式/lint 与纯 AST/字节核对，所有功能测试、类型和三平台编译交本片新准确 SHA 的 hosted CI。原 33769f07 和更早失败不改记成功，两个 RFC 仍 In Progress。
+
+同一依赖闭环还将原 `NativeUsageReadBinding = Pick<NativeUsageOwnerBinding, ...>` 拆成三个原 readonly 字符串的无 import 独立接口。公开读面和基线 port 直接引用该纯定义，内部 owner port 保留原名再导出；原 owner、执行上下文和所有值级语句保持，读面不再经整个 owner 类型文件连回执行权。

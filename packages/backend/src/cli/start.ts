@@ -46,7 +46,7 @@ import { composeCompleteObservationReports } from '@/modules/run-observability/c
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
 import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
-import { selectedNativeUsageInvocationPersistence } from '@/platform/persistence/nativeUsageInvocationBinding'
+import { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,

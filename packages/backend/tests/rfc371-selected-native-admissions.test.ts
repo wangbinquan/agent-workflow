@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
-import { selectedNativeUsageInvocationPersistence } from '@/platform/persistence/nativeUsageInvocationBinding'
+import { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'
 import { nativeUsageBaselineRead } from '@/platform/persistence/nativeUsageBaselineRead'
 import { createNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/nativeUsageInvocation'
 import { isRuntimeNativeUsageCaptureEligible } from '@/modules/runtime-management/public/queries'

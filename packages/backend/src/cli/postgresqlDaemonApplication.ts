@@ -53,7 +53,7 @@ import { composeCompleteObservationReports } from '@/modules/run-observability/c
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
 import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
-import { selectedNativeUsageInvocationPersistence } from '@/platform/persistence/nativeUsageInvocationBinding'
+import { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'
 import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'

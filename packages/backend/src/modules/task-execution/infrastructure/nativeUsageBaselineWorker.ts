@@ -1,15 +1,15 @@
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { withNativeUsageBaselineSnapshot } from '@/modules/task-execution/public/queries'
-import type { NativeUsageBaselineReadView } from '@/modules/task-execution/public/types'
-import { originalSqliteFileReportSnapshot } from '../persistence/reportSqliteSnapshot'
-import { reportReadonlyChannelClient } from '../persistence/reportReadonlyChannelClient'
-import type { OriginalReportSnapshot } from '../persistence/reportSnapshotTypes'
-import { observationReportChannel } from './observationReportChannel'
+import { withNativeUsageBaselineSnapshot } from './nativeUsageBaselineSnapshot'
+import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
+import { originalSqliteFileReportSnapshot } from '@/platform/persistence/reportSqliteSnapshot'
+import { reportReadonlyChannelClient } from '@/platform/persistence/reportReadonlyChannelClient'
+import type { OriginalReportSnapshot } from '@/platform/persistence/reportSnapshotTypes'
+import { observationReportChannel } from '@/platform/background/observationReportChannel'
 import type {
   NativeUsageBaselineWorkerEvent,
   NativeUsageBaselineWorkerInput,
   NativeUsageBaselineWorkerStart,
-} from './nativeUsageBaselineProtocol'
+} from '@/platform/background/nativeUsageBaselineProtocol'
 
 const scope = globalThis as unknown as {
   onmessage: ((event: MessageEvent<NativeUsageBaselineWorkerInput>) => void) | null

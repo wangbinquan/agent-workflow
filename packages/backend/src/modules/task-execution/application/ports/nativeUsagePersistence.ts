@@ -26,10 +26,7 @@ export interface NativeUsageOwnerBinding {
 }
 export type NativeUsageFinalizationRef = object
 /** Read-only original identity; it grants no execution claim or write capability. */
-export type NativeUsageReadBinding = Pick<
-  NativeUsageOwnerBinding,
-  'taskId' | 'nodeRunId' | 'invocationId'
->
+export type { NativeUsageReadBinding } from './nativeUsageReadBinding'
 export type NativeUsageSourceAck = ObservationNativeSourceAck
 export type NativeUsageEvidence = Omit<ObservationCapturedUsage, 'measurements' | 'capture'> & {
   readonly measurements: readonly (ObservationMeasurement | ObservationNativeMeasurement)[]

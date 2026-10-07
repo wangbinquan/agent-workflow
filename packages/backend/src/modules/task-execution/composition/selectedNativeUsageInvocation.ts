@@ -1,9 +1,9 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { createNativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'
-import type { NativeUsageAdmission } from '@/modules/task-execution/public/types'
-import type { NativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'
-import type { OriginalReportDatabaseBinding } from './reportSnapshot'
-import { nativeUsageBaselineRead } from './nativeUsageBaselineRead'
+import { createNativeUsageInvocationPersistence } from './nativeUsageInvocation'
+import type { NativeUsageAdmission } from '../application/ports/nativeUsageAdmission'
+import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
+import type { OriginalReportDatabaseBinding } from '@/platform/persistence/reportSnapshot'
+import { nativeUsageBaselineRead } from '@/platform/persistence/nativeUsageBaselineRead'
 
 /** Selection never changes the original authority, execution claim, price or source database. */
 export function selectedNativeUsageInvocationPersistence(
