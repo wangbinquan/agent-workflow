@@ -16,6 +16,7 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import ts from 'typescript'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createUser } from '../src/services/users'
@@ -106,7 +107,32 @@ describe('RFC-349 digital employee platform tool wiring', () => {
     expect(source).toMatch(
       /const digitalEmployeePlatformTools = await composeDigitalEmployeeBuiltinToolCatalog\(/,
     )
-    expect(source).toMatch(/composeSqliteAppDeps\(\{[\s\S]{0,600}digitalEmployeePlatformTools,/)
+    // RFC-370 adds required composition fields before this catalog. Bind the
+    // exact argument member instead of relying on its character distance.
+    const parsed = ts.createSourceFile('start.ts', source, ts.ScriptTarget.Latest, true)
+    const calls: ts.CallExpression[] = []
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'composeSqliteAppDeps'
+      ) {
+        calls.push(node)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(parsed)
+    expect(calls).toHaveLength(1)
+    const argument = calls[0]!.arguments[0]!
+    expect(ts.isObjectLiteralExpression(argument)).toBe(true)
+    if (!ts.isObjectLiteralExpression(argument)) throw new Error('expected app dependency object')
+    const catalogMembers = argument.properties.filter(
+      (member) =>
+        !ts.isSpreadAssignment(member) &&
+        member.name.getText(parsed) === 'digitalEmployeePlatformTools',
+    )
+    expect(catalogMembers).toHaveLength(1)
+    expect(ts.isShorthandPropertyAssignment(catalogMembers[0]!)).toBe(true)
     expect(source).toContain('platformTools: digitalEmployeePlatformTools,')
     // 单一实例：不允许再出现第二次组装（两份目录 = 两种真值）。
     expect(source.split('composeDigitalEmployeeBuiltinToolCatalog(').length - 1).toBe(1)

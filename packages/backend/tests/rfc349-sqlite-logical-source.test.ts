@@ -30,13 +30,13 @@ afterEach(() => {
 })
 
 describe('RFC-349 SQLite logical source', () => {
-  test('preflights all 217 tables and paginates with lossless migration keys', async () => {
+  test('preflights all 223 tables and paginates with lossless migration keys', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
     const source = openSqliteLogicalSource({ path, contract })
     try {
       const snapshot = await source.preflight()
-      expect(Object.keys(snapshot.tableRows)).toHaveLength(222)
+      expect(Object.keys(snapshot.tableRows)).toHaveLength(223)
       expect(snapshot.tableRows.task_execution_native_usage_store_bindings).toBe(0)
       expect(snapshot.tableRows.users).toBeGreaterThanOrEqual(2)
       const table = contract.tables.find((candidate) => candidate.id === 'users')!
@@ -100,13 +100,13 @@ describe('RFC-349 SQLite logical source', () => {
     }
   })
 
-  test('runs the production 217-table source scan and chunk reads through a Worker', async () => {
+  test('runs the production 223-table source scan and chunk reads through a Worker', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
     const source = await openSqliteLogicalSourceWorker({ path, contract })
     try {
       const snapshot = await source.preflight()
-      expect(Object.keys(snapshot.tableRows)).toHaveLength(222)
+      expect(Object.keys(snapshot.tableRows)).toHaveLength(223)
       expect(snapshot.tableRows.task_execution_native_usage_store_bindings).toBe(0)
       const table = contract.tables.find((candidate) => candidate.id === 'users')!
       const rows = await source.readChunk(table, null, 1)

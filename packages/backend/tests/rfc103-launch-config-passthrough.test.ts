@@ -192,7 +192,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     expect(routeOperations).toContain('retry: (input) =>\n      retryNodeProjection(')
     expect(routeOperations).toContain('resumeTaskAs,')
     expect(routeOperations).toContain('await dependencies.children.resume(')
-    expect(routeOperations).toContain('runtime: dependencies.resumeRuntimeFor(actor, taskId)')
+    // RFC-370 permits a selected asynchronous reader; the original runtime is
+    // awaited before children.resume receives it, including the native value.
+    expect(routeOperations).toContain('runtime: await dependencies.resumeRuntimeFor(actor, taskId)')
     const serverSrc = readFileSync(join(import.meta.dir, '../src/server.ts'), 'utf8')
     // RFC-359 AC-1（第 13 刀）改锚：`/api/tasks` 合成一个中立工厂之后，这条**不装配完整
     // runtime** 的回退路改成自己装一份子任务生命周期参与者 + 一个 `resumeRuntimeFor`。
@@ -203,6 +205,8 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     const boundResumeBlock = serverSrc.slice(boundChildren, boundChildren + 1400)
     expect(boundResumeBlock).toContain('createDatabaseTaskDriverLifecyclePort({')
     expect(boundResumeBlock).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
+    expect(boundResumeBlock).toContain('const fresh = await taskLaunchConfiguration.drive()')
+    expect(boundResumeBlock).toContain('...runtimeConfigOpts(fresh)')
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {
