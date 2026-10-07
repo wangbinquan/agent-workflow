@@ -13,3 +13,10 @@ SOURCE62-R5 独立有限功能门有效、稳定 PASS；134项首末完整正文
 本机只做本批格式／lint、纯 AST／byte／JSON及上述一次原静态生成，未运行 AW tests／typecheck／build／service。源码门、配套清单门、提交／远端同步和新 exact-SHA hosted CI 分别留证；本文件冻结时配套门与发布／CI仍待验收。新真实效果／内容／三根／双provider回归随源码，未把未运行用例记为通过。
 
 完整 H7 的执行权／恢复／全部执行入口、A-T7／A-G仍继续；H7 D2 设计门仅说明迟到租约结果的可追踪收尾合同通过，不代表实现。完成阶段 A后编写各 owner 的独立 CS adapter，M0首先实际部署并验证资源编辑耐久，再逐项 M1～M4接管能力。当前 AW 尚未部署到 CS，本片不关闭 RFC。
+
+
+## 2026-10-07 Purpose 已发布与一次许可退役候选
+
+完整78个相关文件已提交推送 3afffac07455e86118390432359676707f2063c8；发布后main／origin 0/0、index为空，未提交H7在制源码，全部共享MR export及STATE／plan正文保持。SOURCE62-R5与MATCHING16-R5均独立有限PASS。新精确SHA主CI37550317708、Windows37550317792已注册，另有maintenance-soak37550317684；冻结此段时前两项queued、soak in_progress，未宣称正式CI通过。
+
+本次普通后继只退役该提交已消费的五条one-commit增长说明；原129行baseline／顺序／why和其它字段逐字对应完整原JSON，按原payload算法重算ledger digest。原13项source projection、R1 43→42／R2 0→0、356条完整旧债、所有SPI／target／guard／SCC及Task库存不改，不重新census。不改原SOURCE或旧失败，不联系其它会话。退役有限复核、发布及后继exact-SHA hosted CI另验。完整H7／A-T7／A-G和独立CS adapters／M0～M4继续，当前AW尚未部署到CS，RFC未完成。

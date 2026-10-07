@@ -952,3 +952,10 @@ H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有�
 SOURCE62-R5 独立有限功能 PASS；三组完整目的效果、logical staging 和三根内容配对已接线，原策略／native全文／旧断言与预算保持。原一次 scoped 生成固定 fca334493d 加44生产／15测试，sourceDigest sha256:4499dff7c066845b11d7f348dcb29ed397d0d6e961f00a2fd93c24069a3d8f1a；classic R1 43→42、R2 0→0，仅支付实际旧 type edge，356条剩余债原文保留。13原配套产物、129库存／why、SPI／target／guard／SCC保持；五项实测增长按原协议随匹配发布消费，普通后继退役。源码相关服务完整提交含并行 MR export，未剥离任何共享正文。
 
 配套有限门、exact-path commit／远端同步及新 exact-SHA hosted CI继续分别验收。仅本批format／lint、纯AST／byte／JSON及不同最终候选的一次原静态生成，无本机AW tests／typecheck／build／service。H7 D2设计门已有限PASS，完整执行权／恢复／A-T7／A-G尚未完成；之后各层独立CS adapters，M0先实际部署、M1～M4逐项接管。当前没有AW-in-CS部署，不关闭RFC。详情见 design/RFC-370-crewstation-hosted-deployment/purpose-canonical-publication.md。
+
+
+## 2026-10-07 Purpose 已发布与一次许可退役候选
+
+完整78个相关文件已提交推送 3afffac07455e86118390432359676707f2063c8；发布后main／origin 0/0、index为空，未提交H7在制源码，全部共享MR export及STATE／plan正文保持。SOURCE62-R5与MATCHING16-R5均独立有限PASS。新精确SHA主CI37550317708、Windows37550317792已注册，另有maintenance-soak37550317684；冻结此段时前两项queued、soak in_progress，未宣称正式CI通过。
+
+本次普通后继只退役该提交已消费的五条one-commit增长说明；原129行baseline／顺序／why和其它字段逐字对应完整原JSON，按原payload算法重算ledger digest。原13项source projection、R1 43→42／R2 0→0、356条完整旧债、所有SPI／target／guard／SCC及Task库存不改，不重新census。不改原SOURCE或旧失败，不联系其它会话。退役有限复核、发布及后继exact-SHA hosted CI另验。完整H7／A-T7／A-G和独立CS adapters／M0～M4继续，当前AW尚未部署到CS，RFC未完成。
