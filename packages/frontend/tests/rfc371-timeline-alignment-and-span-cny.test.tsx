@@ -45,7 +45,7 @@ const report: ReadyObservationReport = {
       nativeCaptures: '0',
     },
     statuses: {},
-    timing: { p50Ms: null, p95Ms: null, wallMs: null, runningMs: null, unknown: '0' },
+    timing: { p50Ms: '20000', p95Ms: '20000', wallMs: '40000', runningMs: '40000', unknown: '0' },
     rootTask: null,
   },
   counts: { attempts: '3', 'span-facts': '1', 'span-statuses': '1' },

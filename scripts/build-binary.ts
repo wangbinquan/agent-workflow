@@ -55,6 +55,7 @@ const WORKER_ENTRIES = [
   join(backendSrc, 'platform', 'background', 'maintenanceWorker.ts'),
   join(backendSrc, 'platform', 'background', 'observationReportWorker.ts'),
   join(backendSrc, 'platform', 'background', 'nativeUsagePassWorker.ts'),
+  join(backendSrc, 'platform', 'background', 'nativeUsageBaselineWorker.ts'),
   join(backendSrc, 'platform', 'persistence', 'sqliteLogicalSourceWorker.ts'),
 ]
 // Test-only external executables are owned by the unified system mock package.

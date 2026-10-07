@@ -9,7 +9,10 @@ import { nativeUsageStepMembers, nativeUsagePassHeads, nativeUsagePasses } from 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ReportSnapshotSession } from '@/platform/persistence/reportSnapshotTypes'
 import { chunkedAll } from '@/util/sqlChunk'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type {
+  NativeUsageOwnerBinding,
+  NativeUsageReadBinding,
+} from '../application/ports/nativeUsagePersistence'
 import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
 import { verifyNativeUsagePass } from './nativeUsagePassVerification'
 
@@ -66,7 +69,7 @@ export async function originalNativeUsageBaseline(input: {
  */
 export async function withNativeUsageBaselineSnapshot<T>(input: {
   readonly snapshots: ReportSnapshotSession
-  readonly binding: NativeUsageOwnerBinding
+  readonly binding: NativeUsageReadBinding
   readonly original: ObservationNativePassCompletion
   readonly signal?: AbortSignal
   readonly run: (baseline: NativeUsageBaselineReadView | null) => Promise<T>

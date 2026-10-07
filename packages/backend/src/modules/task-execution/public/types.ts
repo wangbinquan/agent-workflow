@@ -326,3 +326,13 @@ export type {
   WorkspaceUploadPlan,
   WorkspaceUploadResult,
 } from '../application/ports/workspaceUploads'
+/** Read-only original baseline participants supplied by the platform bootstrap. */
+export type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
+export type {
+  NativeUsageBaselineReadView,
+  NativeUsageBaselineReadSession,
+} from '../application/ports/nativeUsageBaseline'
+export type {
+  NativeUsageAdmission,
+  NativeUsageInvocationPersistence,
+} from '../application/ports/nativeUsageInvocation'

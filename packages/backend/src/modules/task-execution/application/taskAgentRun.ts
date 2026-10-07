@@ -193,6 +193,11 @@ export async function runNode(
     invocationId,
     taskId: opts.taskId,
     nodeRunId: opts.nodeRunId,
+    ...(opts.runtimeObservationIdentity
+      ? {
+          runtime: { ...opts.runtimeObservationIdentity, protocol: opts.runtime ?? 'opencode' },
+        }
+      : {}),
   })
   const materialWorkspace = purpose.workspace
   const gitControlObservation: AgentWorkspaceGitControlObservation = purpose.gitControlObservation

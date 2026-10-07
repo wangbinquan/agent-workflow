@@ -5564,9 +5564,9 @@
   "denominator": {
     "ambientWiring": 504,
     "disabled": 9,
-    "entries": 365,
+    "entries": 366,
     "executionLocal": 43,
-    "longRunning": 100,
+    "longRunning": 101,
     "managed": 11,
     "periodic": 213
   },
@@ -10509,6 +10509,27 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts#withNativeUsageBaselineWorker",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts#withNativeUsageBaselineWorker",
+      "phase": "before-ready",
+      "symbol": "withNativeUsageBaselineWorker",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts#openNativeUsagePassWorker",
@@ -13588,5 +13609,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:678e9adf510a0e9df3f2445433cdaa987b33d5419be0aa67dcecd837b8dad2e7"
+  "sourceDigest": "sha256:86f2b12bb107c55c960fbec11c44a0f007b78aa1ea60e6b49757df439f495c32"
 }

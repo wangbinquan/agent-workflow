@@ -1,7 +1,11 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { sha256Hex } from '@/util/hash'
 import { currentTaskExecutionContext } from '../application/taskExecutionContext'
-import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
+import type {
+  NativeUsageAdmission,
+  NativeUsageInvocationPersistence,
+} from '../application/ports/nativeUsageInvocation'
+import type { NativeUsageBaselineReadSession } from '../application/ports/nativeUsageBaseline'
 import { DrizzleNativeUsagePages } from '../infrastructure/drizzleNativeUsagePages'
 import { DrizzleNativeUsageEmission } from '../infrastructure/drizzleNativeUsageEmission'
 import { DrizzleNativeUsageCompletion } from '../infrastructure/drizzleNativeUsageCompletion'
@@ -24,13 +28,34 @@ import type {
 /** No caller-created claim or alternate usage ledger: all callbacks retain this exact owner. */
 export function createNativeUsageInvocationPersistence(
   db: ProviderNeutralDatabase,
-  options: { readonly baselineSnapshots?: ReportSnapshotSession; readonly rootSets?: boolean } = {},
+  options: {
+    readonly baselineSnapshots?: ReportSnapshotSession
+    readonly baselineRead?: NativeUsageBaselineReadSession
+    readonly rootSets?: boolean
+    readonly admissions?: readonly NativeUsageAdmission[]
+  } = {},
 ): NativeUsageInvocationPersistence {
+  const admissions = options.admissions?.map((item) => Object.freeze({ ...item }))
   return {
     forInvocation(input) {
+      if (
+        admissions !== undefined &&
+        (input.runtime?.protocol !== 'opencode' ||
+          !admissions.some(
+            (admission) =>
+              admission.registrationId === input.runtime?.registrationId &&
+              admission.configurationRevision === input.runtime?.configurationRevision,
+          ))
+      )
+        return undefined
       const executionContext = currentTaskExecutionContext(input.taskId)
       if (!executionContext) return undefined
-      const binding = { ...input, executionContext }
+      const binding = {
+        taskId: input.taskId,
+        nodeRunId: input.nodeRunId,
+        invocationId: input.invocationId,
+        executionContext,
+      }
       const pages = new DrizzleNativeUsagePages(db, true)
       const emissions = new DrizzleNativeUsageEmission(db)
       const completion = options.rootSets
@@ -73,11 +98,25 @@ export function createNativeUsageInvocationPersistence(
         async withFinalOwner(before, read) {
           // Only the platform can supply an independent original read channel.
           // The original single-connection memory/PG path keeps its per-page verification.
-          if (!options.baselineSnapshots || before.mode !== 'resume') return read(passOwner(before))
+          if ((!options.baselineSnapshots && !options.baselineRead) || before.mode !== 'resume')
+            return read(passOwner(before))
           const original = await originalNativeUsageBaseline({ db, binding, before })
           if (!original) return read(passOwner(before, new DrizzleNativeUsagePages(db, true, null)))
+          if (options.baselineRead)
+            return options.baselineRead.run(
+              {
+                binding: {
+                  taskId: binding.taskId,
+                  nodeRunId: binding.nodeRunId,
+                  invocationId: binding.invocationId,
+                },
+                original,
+              },
+              (baseline) =>
+                read(passOwner(before, new DrizzleNativeUsagePages(db, true, baseline))),
+            )
           return withNativeUsageBaselineSnapshot({
-            snapshots: options.baselineSnapshots,
+            snapshots: options.baselineSnapshots!,
             binding,
             original,
             run: (baseline) =>

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1283,
+    "consumers": 1292,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1648,
+    "methods": 1652,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 28898,
-    "symbols": 1212
+    "recursiveFields": 28927,
+    "symbols": 1217
   },
   "entries": [
     {
@@ -155308,6 +155308,7 @@
         "import:6e620faab363cdcb5605",
         "import:a2b50384b7bb21ab2616",
         "import:a3ea8a05247a8c94cfc7",
+        "import:c3c56e064dcfe791c46e",
         "import:f09724530003a5bb99a0"
       ],
       "context": "runtime-management",
@@ -155370,6 +155371,12 @@
         },
         {
           "context": "task-execution",
+          "edgeId": "import:c3c56e064dcfe791c46e",
+          "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts#$file"
+        },
+        {
+          "context": "task-execution",
           "edgeId": "import:f09724530003a5bb99a0",
           "file": "packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#$file"
@@ -155397,7 +155404,8 @@
         "public:task-execution:participants:RuntimeSmokeRunFamily",
         "public:task-execution:participants:RuntimeSmokeRunRequest",
         "public:task-execution:participants:SystemAgentRunFamily",
-        "public:task-execution:participants:SystemAgentRunRequest"
+        "public:task-execution:participants:SystemAgentRunRequest",
+        "public:task-execution:types:NativeUsageInvocationPersistence"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -155475,6 +155483,7 @@
       "consumerEdgeIds": [
         "import:16ef026d3e4e277e7a04",
         "import:284b58780efdf6d1c34a",
+        "import:285c1fa65b9854fa29ed",
         "import:a5262c30ddde11b5716c",
         "import:c16b8a9635c61acf650f"
       ],
@@ -155492,6 +155501,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:285c1fa65b9854fa29ed",
             "import:a5262c30ddde11b5716c"
           ],
           "fieldPath": "configurationRevision",
@@ -155499,6 +155509,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:285c1fa65b9854fa29ed",
             "import:a5262c30ddde11b5716c"
           ],
           "fieldPath": "registrationId",
@@ -155528,6 +155539,12 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#$file"
         },
         {
+          "context": "task-execution",
+          "edgeId": "import:285c1fa65b9854fa29ed",
+          "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts#$file"
+        },
+        {
           "context": "legacy",
           "edgeId": "import:a5262c30ddde11b5716c",
           "file": "packages/backend/src/services/nodeRunMint.ts",
@@ -155544,7 +155561,8 @@
         "public:runtime-management:participants:FrozenTaskAgentRuntime",
         "public:runtime-management:participants:TaskAgentRuntimeBindings",
         "public:runtime-management:queries:RuntimeExecutionQueries",
-        "public:runtime-management:types:ResolvedRuntimeProfile"
+        "public:runtime-management:types:ResolvedRuntimeProfile",
+        "public:task-execution:types:NativeUsageInvocationPersistence"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -214420,6 +214438,427 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:2671adc383dabd8d99a5",
+        "import:993de674ac273771897d"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:2671adc383dabd8d99a5"
+          ],
+          "fieldPath": "configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2671adc383dabd8d99a5"
+          ],
+          "fieldPath": "registrationId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:NativeUsageAdmission",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:2671adc383dabd8d99a5",
+          "file": "packages/backend/src/platform/persistence/nativeUsageAdmissions.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/nativeUsageAdmissions.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:993de674ac273771897d",
+          "file": "packages/backend/src/platform/persistence/nativeUsageInvocationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/nativeUsageInvocationBinding.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:13d4ef4151b2f6e141dcd918849b15346e5a25098e2a68e9058c7253d7288271",
+      "status": "target-context-current-surface",
+      "symbol": "NativeUsageAdmission",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:ca3d0fabee0c64497d07"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:ca3d0fabee0c64497d07"
+          ],
+          "fieldPath": "$method:run.$parameter:input.binding",
+          "type": "Pick<\n  NativeUsageOwnerBinding,\n  'taskId' | 'nodeRunId' | 'invocationId'\n>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ca3d0fabee0c64497d07"
+          ],
+          "fieldPath": "$method:run.$parameter:input.original",
+          "type": "z.infer<typeof ObservationNativePassCompletionSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ca3d0fabee0c64497d07"
+          ],
+          "fieldPath": "$method:run.$parameter:input.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:work.$parameter:baseline.$variant:0.$method:members.$parameter:stepIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:work.$parameter:baseline.$variant:0.$method:members.$return[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:work.$parameter:baseline.$variant:0.databaseGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ca3d0fabee0c64497d07"
+          ],
+          "fieldPath": "$method:run.$parameter:work.$parameter:baseline.$variant:0.original",
+          "type": "z.infer<typeof ObservationNativePassCompletionSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ca3d0fabee0c64497d07"
+          ],
+          "fieldPath": "$method:run.$parameter:work.$parameter:baseline.$variant:0.snapshotId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:work.$parameter:baseline.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:work.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$return",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:NativeUsageBaselineReadSession",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "members",
+          "signatureDigest": "sha256:097d07cb1e254451b55ce34d7b8c6a92e94798d95c8aed9f1b03033e51095f92"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ca3d0fabee0c64497d07"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:fa447405a634ff2df33d6f1347a94a44aa07285d8fa42897c51333498e941c97"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:ca3d0fabee0c64497d07",
+          "file": "packages/backend/src/platform/persistence/nativeUsageBaselineRead.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/nativeUsageBaselineRead.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:913c27198808f98dfad19a9eccdf0e162175cdd20e71ff20376e32676e1a0ffa",
+      "status": "target-context-current-surface",
+      "symbol": "NativeUsageBaselineReadSession",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Pick",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:8adaffb434b6aaeefb2f",
+        "import:f3e884cb87dc3f049e34"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:members.$parameter:stepIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:members.$return[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f3e884cb87dc3f049e34"
+          ],
+          "fieldPath": "databaseGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8adaffb434b6aaeefb2f",
+            "import:f3e884cb87dc3f049e34"
+          ],
+          "fieldPath": "original",
+          "type": "z.infer<typeof ObservationNativePassCompletionSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8adaffb434b6aaeefb2f",
+            "import:f3e884cb87dc3f049e34"
+          ],
+          "fieldPath": "snapshotId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:NativeUsageBaselineReadView",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:8adaffb434b6aaeefb2f",
+            "import:f3e884cb87dc3f049e34"
+          ],
+          "name": "members",
+          "signatureDigest": "sha256:097d07cb1e254451b55ce34d7b8c6a92e94798d95c8aed9f1b03033e51095f92"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:8adaffb434b6aaeefb2f",
+          "file": "packages/backend/src/platform/background/nativeUsageBaselineWorker.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineWorker.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f3e884cb87dc3f049e34",
+          "file": "packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:types:NativeUsageBaselineReadSession"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:77059db5b0bcfda8539d00bf9201e165141bacd34856339509584415108aac38",
+      "status": "target-context-current-surface",
+      "symbol": "NativeUsageBaselineReadView",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:9165117bdc85f2824756"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.runtime.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.runtime.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.runtime.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.runtime.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.runtime.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$parameter:input.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$return.$variant:0",
+          "type": "NativeUsageCaptureIdentity['durableOwner']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forInvocation.$return.$variant:1",
+          "type": "undefined"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:NativeUsageInvocationPersistence",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "forInvocation",
+          "signatureDigest": "sha256:bfeb0e5e6c59f6338ec1332a7ea34fb04011632bf5dab3645c29d53c2388b147"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:9165117bdc85f2824756",
+          "file": "packages/backend/src/platform/persistence/nativeUsageInvocationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/nativeUsageInvocationBinding.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:d64a2e2fcdab6f5fa4bdd237d0867ed59f581a73ea7fd512e3a6dc1a0d15b697",
+      "status": "target-context-current-surface",
+      "symbol": "NativeUsageInvocationPersistence",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:fb06f2aaaae4aeb5936b"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "Pick<\n  NativeUsageOwnerBinding,\n  'taskId' | 'nodeRunId' | 'invocationId'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:NativeUsageReadBinding",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:fb06f2aaaae4aeb5936b",
+          "file": "packages/backend/src/platform/background/nativeUsageBaselineProtocol.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineProtocol.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:types:NativeUsageBaselineReadSession"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:05f1b28db0c0095dcb6b5deec7bb84ab835599b4e62e68d40d482d0d64e3d263",
+      "status": "target-context-current-surface",
+      "symbol": "NativeUsageReadBinding",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:8b33fbd69340a4f92fb2",
         "import:de870a83e5276a77a63c",
         "import:e2148117905c3cc275fa"
@@ -221801,7 +222240,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:678e9adf510a0e9df3f2445433cdaa987b33d5419be0aa67dcecd837b8dad2e7",
+  "sourceDigest": "sha256:86f2b12bb107c55c960fbec11c44a0f007b78aa1ea60e6b49757df439f495c32",
   "targetContexts": [
     "collaboration",
     "development-automation",

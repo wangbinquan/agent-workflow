@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1950,
+    "entries": 1953,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -29521,7 +29521,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
@@ -29530,7 +29530,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#createNativeUsageInvocationPersistence",
@@ -35781,6 +35780,80 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#startMaintenanceWorkerSupervisor",
       "symbol": "startMaintenanceWorkerSupervisor",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/nativeUsageBaselineWorker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/nativeUsageBaselineWorker.ts#run",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineWorker.ts#run",
+      "symbol": "run",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/nativeUsageBaselineWorker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/nativeUsageBaselineWorker.ts#started",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineWorker.ts#started",
+      "symbol": "started",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/nativeUsageBaselineWorker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/nativeUsageBaselineWorker.ts#stop",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineWorker.ts#stop",
+      "symbol": "stop",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -46678,7 +46751,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:678e9adf510a0e9df3f2445433cdaa987b33d5419be0aa67dcecd837b8dad2e7",
+  "sourceDigest": "sha256:86f2b12bb107c55c960fbec11c44a0f007b78aa1ea60e6b49757df439f495c32",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

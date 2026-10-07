@@ -1,6 +1,7 @@
 import {
   ObservationNativeBeforeSpawnAckSchema,
   type ObservationNativeBeforeSpawnAck,
+  type ObservationNativePassAck,
 } from '@agent-workflow/shared'
 import type { NativeUsageCapture, NativeUsageCaptureIdentity } from './ports/nativeUsageCapture'
 import type { AsyncNativeUsagePassReader } from './ports/nativeUsageOwner'
@@ -23,7 +24,11 @@ export function createNativePageCapture(
   let final: Promise<void> | undefined
   let baselineReady = false
   const roots = input.durableOwner.rootCollection
-  const read = async (phase: 'baseline' | 'final', rootSessionId: string) => {
+  const read = async (
+    phase: 'baseline' | 'final',
+    rootSessionId: string,
+    finalOwner?: ReturnType<typeof input.durableOwner.passOwner>,
+  ) => {
     if (!before) throw new Error('Original native before-spawn receipt is unavailable')
     const sourceGeneration = await input.generation()
     if (
@@ -46,9 +51,10 @@ export function createNativePageCapture(
       const reader = await input.open(identity)
       return persistNativeUsagePass(reader, owner)
     }
+    if (finalOwner) return persist(finalOwner)
     if (phase === 'final' && input.durableOwner.withFinalOwner)
-      await input.durableOwner.withFinalOwner(receipt, persist)
-    else await persist(input.durableOwner.passOwner(receipt))
+      return input.durableOwner.withFinalOwner(receipt, persist)
+    return persist(input.durableOwner.passOwner(receipt))
   }
   return {
     contract: roots ? 'opencode-child-root-pages-v3' : 'opencode-child-pages-v2',
@@ -87,27 +93,37 @@ export function createNativePageCapture(
         try {
           if (roots) {
             await roots.freeze()
-            let after: string | null = null,
-              firstFailure: unknown
-            let examined = 0n
-            for (;;) {
-              const packet = await roots.page(after)
-              if (packet.length === 0) break
-              for (const root of packet) {
-                try {
-                  await read('final', root)
-                } catch (error) {
-                  firstFailure ??= error
+            const traverse = async (owner: ReturnType<typeof input.durableOwner.passOwner>) => {
+              let after: string | null = null,
+                firstFailure: unknown
+              let lastAck: ObservationNativePassAck | undefined
+              let examined = 0n
+              for (;;) {
+                const packet = await roots.page(after)
+                if (packet.length === 0) break
+                for (const root of packet) {
+                  try {
+                    lastAck = await read('final', root, owner)
+                  } catch (error) {
+                    firstFailure ??= error
+                  }
+                  examined++
                 }
-                examined++
+                const next = packet.at(-1)!
+                if (next === after)
+                  throw new Error('Original native root source did not advance to EOF')
+                after = next
               }
-              const next = packet.at(-1)!
-              if (next === after)
-                throw new Error('Original native root source did not advance to EOF')
-              after = next
+              if (examined === 0n) throw new Error('Original native root collection is unavailable')
+              if (firstFailure !== undefined) throw firstFailure
+              if (!lastAck)
+                throw new Error('Original native root collection has no successful pass ACK')
+              // This callback value is an actual pass ACK, never a root-set completion proof.
+              return lastAck
             }
-            if (examined === 0n) throw new Error('Original native root collection is unavailable')
-            if (firstFailure !== undefined) throw firstFailure
+            if (input.durableOwner.withFinalOwner)
+              await input.durableOwner.withFinalOwner(before, traverse)
+            else await traverse(input.durableOwner.passOwner(before))
             return
           }
           if (rootSessionId === null) throw new Error('Original native root is unavailable')
