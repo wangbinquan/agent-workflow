@@ -25,3 +25,11 @@ background 总数仍为 366，仅原 Task restartable-loop 的 setTimeout 标记
 前批 698feafd 的 Windows 实际为 719 pass、3 skip、1 fail，唯一失败为 W29 PostgreSQL 原完整启动体对照。独立两路径候选让 boot/verification 旧逆变换识别同文件的新解析对象；新回归经过真实 Task 严格逆变换，旧 176 条语句、全部原 case/assert/budget 和完整旧摘要保持。纯 AST 对照复现实际旧失败并恢复原摘要，不等于 hosted CI 通过。
 
 本机只做本批格式/lint、原生成与纯 AST/字节/JSON 检查，没有 AW tests/typecheck/build/service/E2E。配套有限功能门、精确提交/远端和新精确 SHA 双 OS CI 分别留证。完成本批后继续实际 H7 与 A-G，再写各层独立 CS adapter；先完成 M0 首次部署，再逐步接入 M1–M4。
+
+## 2026-10-07 H7 binding/quiesce 发布及四条增长声明退役
+
+四个独立有限功能门均通过并由根会话绑定实际完整正文；二十六路径已正常提交上库 2826955a61651cb4b5fdce48fcb1256c9b8c8653，main/origin 精确同步、索引为空，当前后继与并行 WIP 保持。main CI 37578776948 和 Windows 37578776914 已按该精确 SHA 登记，终态待验；不把门通过记作 CI 绿。
+
+本普通后继仅退役已经消费的 imports/exceptions/public/owners 四条 allowGrowth，129 个原有有序库存项、why、实测 baseline 6793／5964／1234／27399 及全部其余字段保持，按原五个纯 JSON 函数刷新 ledger payload 摘要。原十三配套与唯一原 census 不重跑；三份文档完整旧前缀及每条原声明的完整理由保持在实际发布证据中。
+
+实际 bootstrap、提前恢复、十九 handles、Task 同事务上下文与执行 admission、其他 owner/UI、H7/A-T7/A-G、CS 独立 adapters 和 M0～M4 部署继续开放。AW 尚未部署 CS。运行会话后续源码与回归另行开发，不包含在这四路径退役提交。

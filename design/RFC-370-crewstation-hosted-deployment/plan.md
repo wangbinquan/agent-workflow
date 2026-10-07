@@ -1045,3 +1045,11 @@ SOURCE7-R2 有效稳定有限 PASS，完整 SO provider/generation 配对及 Tas
 WF1-R1 有效稳定有限 PASS，四组执行权回归补入原 Windows 触发路径与平台命令，原完整 YAML 和全部旧用例/预算保持。698feafd Windows 已终态 719 pass/3 skip/1 fail；PG 完整体断言的两处旧对象身份比较由独立两路径候选修复，原语句数与旧摘要保持。源码对照、配套门、上库与精确 CI 分别验收，不把纯 AST 当 CI 通过。详情见 RFC-370 host-authority-binding-publication.md。
 
 实际提前恢复、十九 handles、Task 同事务上下文/执行 admission、其他 owner/UI、完整 H7/A-T7/A-G 与 CS M0–M4 均继续开放。AW 尚未部署 CS；完成当前原切面后先部署 M0，再逐步适配。以下旧完整 STATE/plan 前缀及并行输出保持，本批只追加登记。
+
+## 2026-10-07 H7 binding/quiesce 发布及四条增长声明退役
+
+四个独立有限功能门均通过并由根会话绑定实际完整正文；二十六路径已正常提交上库 2826955a61651cb4b5fdce48fcb1256c9b8c8653，main/origin 精确同步、索引为空，当前后继与并行 WIP 保持。main CI 37578776948 和 Windows 37578776914 已按该精确 SHA 登记，终态待验；不把门通过记作 CI 绿。
+
+本普通后继仅退役已经消费的 imports/exceptions/public/owners 四条 allowGrowth，129 个原有有序库存项、why、实测 baseline 6793／5964／1234／27399 及全部其余字段保持，按原五个纯 JSON 函数刷新 ledger payload 摘要。原十三配套与唯一原 census 不重跑；三份文档完整旧前缀及每条原声明的完整理由保持在实际发布证据中。
+
+实际 bootstrap、提前恢复、十九 handles、Task 同事务上下文与执行 admission、其他 owner/UI、H7/A-T7/A-G、CS 独立 adapters 和 M0～M4 部署继续开放。AW 尚未部署 CS。运行会话后续源码与回归另行开发，不包含在这四路径退役提交。
