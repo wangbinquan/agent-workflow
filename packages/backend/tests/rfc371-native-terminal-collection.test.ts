@@ -12,6 +12,10 @@ import {
   taskExecutionObservationSources,
   taskExecutionOwners,
 } from '@/db/schema'
+import {
+  fenceTaskWrite,
+  withTaskExecutionWrite,
+} from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { createNativeUsageFinalizationAuthority } from '@/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority'
 import { DrizzleNativeUsageEmission } from '@/modules/task-execution/infrastructure/drizzleNativeUsageEmission'
 import { openOpencodeUsagePass } from '@/modules/runtime-management/infrastructure/opencodeUsagePass'
@@ -68,6 +72,51 @@ describeEachProvider('RFC-371 terminal native evidence original binding', (harne
       })
     return { ...f, authority, binding, spawned, settled, revoke, emit }
   }
+
+  // CI a443cba8: actual EOF may precede actual reap. Preserve the original clocks,
+  // and the canceled Task fence, instead of discarding this complete settlement.
+  for (const order of ['drain-first', 'reap-first'] as const)
+    test(`${order} preserves original canceled native evidence without a new Task claim`, async () => {
+      const f = await fixture()
+      f.settled.reapedAt = f.before.preparedAt + (order === 'drain-first' ? 2 : 1)
+      f.settled.drainedAt = f.before.preparedAt + (order === 'drain-first' ? 1 : 2)
+      f.authority.prepared(f.before)
+      f.authority.observe(f.spawned)
+      f.authority.observe(f.settled)
+      await f.revoke()
+      const ack = await f.emit()
+      expect(ack.invocationId).toBe(f.binding.invocationId)
+      const sources = await harness.db
+        .select()
+        .from(taskExecutionObservationSources)
+        .where(eq(taskExecutionObservationSources.nodeRunId, f.binding.nodeRunId))
+      expect(sources).toHaveLength(1)
+      expect(JSON.parse(sources[0]!.evidenceJson).nativeProcess).toEqual(f.settled)
+      expect(
+        (
+          await harness.db
+            .select()
+            .from(taskExecutionOwners)
+            .where(eq(taskExecutionOwners.taskId, f.binding.taskId))
+        )[0]?.state,
+      ).toBe('revoked')
+      await expect(
+        withTaskExecutionWrite(harness.db, (tx) =>
+          fenceTaskWrite(tx, {
+            taskId: f.binding.taskId,
+            context: f.binding.executionContext,
+          }),
+        ),
+      ).rejects.toThrow('mutation was fenced')
+      expect(await f.emit()).toEqual(ack)
+      expect(
+        await harness.db
+          .select()
+          .from(taskExecutionObservationSources)
+          .where(eq(taskExecutionObservationSources.nodeRunId, f.binding.nodeRunId)),
+      ).toEqual(sources)
+    })
+
   type Fixture = Awaited<ReturnType<typeof fixture>>
   const invalid: ReadonlyArray<readonly [string, (f: Fixture) => void]> = [
     [
@@ -164,11 +213,11 @@ describeEachProvider('RFC-371 terminal native evidence original binding', (harne
       },
     ],
     [
-      'drain before reap',
+      'drain before spawn',
       (f) => {
         f.authority.prepared(f.before)
         f.authority.observe(f.spawned)
-        f.authority.observe({ ...f.settled, drainedAt: f.before.preparedAt })
+        f.authority.observe({ ...f.settled, drainedAt: f.before.preparedAt - 1 })
       },
     ],
     [

@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:3d9363a4dce2c5109b6f7dea3a60c65568c52e57146ea63c888b450a8f11bf3a",
+    "sourceDigest": "sha256:a642d6ab67aff06ec259980b0b0de4c52d092ffebf469747caf6234256adfad3",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -136,20 +136,14 @@
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-off-dag-offered-edges",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。 RFC-370 C2-W1：已复核的 Task composition/hostExecutionAdmission.ts 实际消费 system-operations exact public HostExecutionAdmission，原 OFF_DAG_OFFERED_EDGE_DEBT 的47个完整条目和字段保持，新增这一条已具名登记的真实 offered 边，47 → 48。原 DAG、分类器、集合断言及清偿策略不改，随 W9-D Task/SO owner contract convergence 收敛。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1：已复核的 Task composition/hostExecutionAdmission.ts 实际消费 system-operations exact public HostExecutionAdmission，原 OFF_DAG_OFFERED_EDGE_DEBT 的47个完整条目和字段保持，新增这一条已具名登记的真实 offered 边，47 → 48。原 DAG、分类器、集合断言及清偿策略不改，随 W9-D Task/SO owner contract convergence 收敛。 本批 SOURCE23-R2 已实际消费稳定有限 PASS；一次原 census 与最终十五份并行生产差额的原助手依赖投影保持，纯原 TypeScript AST 计数为47→48，原129项库存顺序及 why 前缀保持。此声明只消费一次，普通不增长后继立即退役；无需新增 census。"
-      }
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。 RFC-370 C2-W1：已复核的 Task composition/hostExecutionAdmission.ts 实际消费 system-operations exact public HostExecutionAdmission，原 OFF_DAG_OFFERED_EDGE_DEBT 的47个完整条目和字段保持，新增这一条已具名登记的真实 offered 边，47 → 48。原 DAG、分类器、集合断言及清偿策略不改，随 W9-D Task/SO owner contract convergence 收敛。"
     },
     {
       "baseline": 141,
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "id": "rfc294-review-unconsumed-public-symbols",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。** RFC-362：四个 SC offered seam 显式作为 W4-E1/W5 合同前置入账，136 → 140，生产接入后逐项删除。 RFC-363 consumes WorkspaceContentParticipant: 140 -> 139. RFC-363 deferred production binding consumes snapshot and preparation participants: 139 -> 137. RFC-363 public URL launch consumes the source seal port: 137 -> 136. RFC-370 Task Run：WorkspaceExcludeParticipant 已由三个完整 publicTypeConsumerIds 消费，按原 unconsumedPublicSymbols 规则销账，136 → 135；其余 public 和 required-port 条目保持。 RFC-370 C2-W1 配套：完整原 UNCONSUMED_PUBLIC_SYMBOL_DEBT 数组、原 public 清单以及合入已发布原生公共入口修复后的清单实际均141项且集合相等；旧 baseline135滞后，按既有库存修为141。原数组、判据、清偿波次不改，没有新增六个未消费合同。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 配套：完整原 UNCONSUMED_PUBLIC_SYMBOL_DEBT 数组、原 public 清单以及合入已发布原生公共入口修复后的清单实际均141项且集合相等；旧 baseline135滞后，按既有库存修为141。原数组、判据、清偿波次不改，没有新增六个未消费合同。 RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。** RFC-362：四个 SC offered seam 显式作为 W4-E1/W5 合同前置入账，136 → 140，生产接入后逐项删除。 RFC-363 consumes WorkspaceContentParticipant: 140 -> 139. RFC-363 deferred production binding consumes snapshot and preparation participants: 139 -> 137. RFC-363 public URL launch consumes the source seal port: 137 -> 136. RFC-370 Task Run：WorkspaceExcludeParticipant 已由三个完整 publicTypeConsumerIds 消费，按原 unconsumedPublicSymbols 规则销账，136 → 135；其余 public 和 required-port 条目保持。 RFC-370 C2-W1 配套：完整原 UNCONSUMED_PUBLIC_SYMBOL_DEBT 数组、原 public 清单以及合入已发布原生公共入口修复后的清单实际均141项且集合相等；旧 baseline135滞后，按既有库存修为141。原数组、判据、清偿波次不改，没有新增六个未消费合同。"
     },
     {
       "baseline": 7,
@@ -828,10 +822,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1964,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -845,40 +836,28 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 274,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 374,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 505,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6831,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -899,10 +878,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5997,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -937,10 +913,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27559,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 C2-W1 SOURCE23-R2 稳定有限实现 PASS 已实际消费，82份实际候选仍一致，唯一原 scoped census 的13完整输出保留。最终并行接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库且实际有限 SOURCE PASS及35项原文/absence绑定已核验；旧33769f07的剩余server依赖由原R3 imports/exports-only全文证据保留。本批仅按原助手对15份真实生产差额做依赖补投影（4新增、2删除），完整逆向复现原生成8 canonical对象；其余Task写入/节点/effect账本完整保持。不再次调用architecture-census或buildCanonicalArtifacts。实测增长精确入账，135→141保留原已声明141完整库存。原129项有序行、why前缀及并行333整行保留，若既有allowGrowth已消费则仅普通后继退役。原失败/INVALID回执全部保留。无本机AW tests/typecheck/build/service/E2E；每条声明只消费一次，普通后继退役，无须重复census。H7其余业务写入/19句柄/三个roots/UI/A-G/CS M0-M4仍未完成。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -948,8 +921,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a443cba8776add749087e3524d50a34b6b776692",
-    "contentDigest": "sha256:885ad765435d18e201260f75dba2d72d2544a9b3c3d2e4f96d457a706bc85d83",
+    "currentSnapshotSha": "290f4d26a26385818edc4ed227c37dab92ad3991",
+    "contentDigest": "sha256:e4084bf13a8c9b80d1548c6e0bd4985dcf6c85aea113f234b24f9efc1779e18d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

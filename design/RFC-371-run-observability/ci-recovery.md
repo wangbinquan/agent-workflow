@@ -351,3 +351,10 @@ Ubuntu 6/32 的实际高水守卫确认原生夹具登记已由 330 增至 333�
 没有扩大 BOOTSTRAP_FILES、公共合同规则、类型白名单或任何债务许可；当前共有 ledger/census 在制配套由原负责会话保留。本机仅限自有格式/lint 与纯 AST/字节核对，所有功能测试、类型和三平台编译交本片新准确 SHA 的 hosted CI。原 33769f07 和更早失败不改记成功，两个 RFC 仍 In Progress。
 
 同一依赖闭环还将原 `NativeUsageReadBinding = Pick<NativeUsageOwnerBinding, ...>` 拆成三个原 readonly 字符串的无 import 独立接口。公开读面和基线 port 直接引用该纯定义，内部 owner port 保留原名再导出；原 owner、执行上下文和所有值级语句保持，读面不再经整个 owner 类型文件连回执行权。
+
+
+### 实际 EOF 与回收的独立顺序（2026-10-08）
+
+a443cba8 的 Ubuntu shard19 原真实子进程取消用例失败；不是删失数字或延长预算可以修复的问题。原 managedProcess 在实际 EOF Promise 完成时记录 drainedAt，随后独立观察 child.exited 的 reapedAt。既有 process-facts schema 与完整用量合同都只要求二者不早于真实 spawn；原完整合同用例明确包含 reapedAt=29、drainedAt=28。finalization 额外要求 drain 不早于 reap，会误拒绝合法完整原事件，从而使 revoked Task 的原生收尾数字无法提交。
+
+只去掉该额外顺序假设，保留原原子绑定、准备、PID、nonce、原 spawn 时间、真实两个完成时间、pump/timeout/unreaped 和所有 Task owner 围栏；不改执行器、不补造或重排实际时间。原负例的 `drain before reap` 数据本来合法，改为真正合同非法的 `drain before spawn`，其拒绝及零写入断言逐字保持；其他原负例、真实子进程四桶/CNY/取消状态及预算保持。新增两个 provider 的两种实际时序回归，检查保留原事实、owner 仍 revoked、普通 Task 写仍拒绝以及原源 ACK 重放不重复。新源码复核、匹配配套投影与 hosted CI 仍待，旧失败保留。

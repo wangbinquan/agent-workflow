@@ -69,7 +69,7 @@ export function createNativeUsageFinalizationAuthority(binding: NativeUsageOwner
         fact.spawnedAt !== spawned.spawnedAt ||
         fact.reapedAt === null ||
         fact.drainedAt === null ||
-        fact.drainedAt < fact.reapedAt ||
+        // EOF and reap settle independently; the schema binds both to actual spawn.
         fact.outcome === 'unreaped' ||
         fact.drainTimedOut ||
         fact.pumpError ||
