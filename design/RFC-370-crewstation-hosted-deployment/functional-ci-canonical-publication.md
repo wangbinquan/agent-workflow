@@ -34,3 +34,11 @@ W29 与 MCP 原完整函数摘要、语句数、运行用例和预算保持。�
 首个私有 JSON projection 比较遗漏了原 provenance 的 `currentSnapshotSha` 更新，错误日志保留；修正只允许该值等于固定生成 base，原其它 provenance 字段保持，复用同一次完整原生成。独立配套门、精确路径提交/推送、远端同步和新 exact-SHA hosted CI 分别验收。
 
 Stage A 继续完成 H7 三根、Task 原事务、早期恢复、十九 handles、named admission 与 UI；A-G 通过后编写各层独立 CS adapters，先 M0 实际部署，再 M1–M4 逐项接管。AW 尚未部署到 CS，RFC 继续 In Progress。
+
+## 2026-10-07 RFC-370 功能 CI 修复发布与两项一次声明退役
+
+SOURCE16-R2 与 MATCHING16-R2 有效稳定有限 PASS 后，源码/回归和配套32路径已精确发布698feafd0b83bbcb6cc6fd52c53807624d44003c，main/origin同步0/0、索引空，全部H7/RFC-371并行在制字节保持。原SOURCE16-R1唯一P2的FAIL、私有provenance比较错误和rename暂存展示校验停止均保留；rename展开两端后全32条暂存内容实际核验，无历史改写。
+
+该SHA主CI37576174673、Windows37576174682已注册，首次均queued，正式终态继续验收，不据有限门宣称CI绿。本普通后继仅退役本次已消费的imports6791/exceptions5962两条one-commit声明，原129库存baseline/why/顺序/其它字段以及source projection保持，只按原五个纯JSON函数更新ledger digest。三份共享文档完整前缀保留，仅追加此段；没有新生产改动、census或AW本机执行门。
+
+完整H7三根、Task原事务、十九handles、早期恢复、named admission/UI及A-T7/A-G继续；随后各层独立CS adapters，先M0实际部署再逐项M1–M4。AW尚未部署CS，RFC保持In Progress，无跨会话消息。

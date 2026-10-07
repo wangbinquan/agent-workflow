@@ -10725,3 +10725,11 @@ SOURCE16-R1 有效稳定 FAIL 的唯一旧 materializer callee P2 已闭合并�
 原唯一静态生成固定25da3dd4叠加七生产路径（六个存在）与八测试/数据路径，13输出sourceDigest sha256:999f5b299f78863f1ab21c416f1969ea0047deaae920f14c2628da8d7308c779；classic完整数组0/0相等。只新增一条DatabaseProvider类型边及其原exact exception，三个staging owner物理迁移而总数不变；全部其它payload与129原库存why/顺序保持。前继三项已消费临时声明按原协议退役并完整留证；本批两项实测增长6790→6791／5961→5962随匹配发布消费后普通退役，不重跑census。私有provenance比较错误及修正分别保留。
 
 配套独立门、精确上库/远端同步与新exact-SHA hosted CI另验，无本机AW tests/typecheck/build/service/E2E，无跨会话消息。全部H7/RFC-371未发布输出保持。完整H7/A-T7/A-G、各层CS adapters及M0先部署至M4仍开放，AW尚未部署CS，RFC未完成。详见 design/RFC-370-crewstation-hosted-deployment/functional-ci-canonical-publication.md。以下原内容及所有并行输出保持，仅追加此段。
+
+## 2026-10-07 RFC-370 功能 CI 修复发布与两项一次声明退役
+
+SOURCE16-R2 与 MATCHING16-R2 有效稳定有限 PASS 后，源码/回归和配套32路径已精确发布698feafd0b83bbcb6cc6fd52c53807624d44003c，main/origin同步0/0、索引空，全部H7/RFC-371并行在制字节保持。原SOURCE16-R1唯一P2的FAIL、私有provenance比较错误和rename暂存展示校验停止均保留；rename展开两端后全32条暂存内容实际核验，无历史改写。
+
+该SHA主CI37576174673、Windows37576174682已注册，首次均queued，正式终态继续验收，不据有限门宣称CI绿。本普通后继仅退役本次已消费的imports6791/exceptions5962两条one-commit声明，原129库存baseline/why/顺序/其它字段以及source projection保持，只按原五个纯JSON函数更新ledger digest。三份共享文档完整前缀保留，仅追加此段；没有新生产改动、census或AW本机执行门。
+
+完整H7三根、Task原事务、十九handles、早期恢复、named admission/UI及A-T7/A-G继续；随后各层独立CS adapters，先M0实际部署再逐项M1–M4。AW尚未部署CS，RFC保持In Progress，无跨会话消息。
