@@ -311,7 +311,7 @@ Ubuntu改为完整1/32至32/32的独立runner，每一原Bun发现文件仍只�
 
 `d400121b052e59db6e72aba2aa25f99aa7d18f40` 的 [CI 37530803324](https://github.com/wangbinquan/agent-workflow/actions/runs/37530803324) 已终态。原 Markdown、历史恢复回归、SQLite/PostgreSQL、全部 Ubuntu/macOS/Windows 功能作业均 success；整体仍 failure，其他阻断只保留作业状态。Windows E2E 两条原用例首次失败而重试成功，不能据此把时序问题记为闭合：crash-recovery 同库重启看到了旧 daemon PID 锁，WF-03 在独立归属名称查询返回前取到了 UUID。
 
-按 [Node ChildProcess close 契约](https://nodejs.org/api/child_process.html#event-close)，harness 在 spawn 后登记 close，停进程/控制关闭直到 close 后才允许调用方重启或移除其 home；已 exit 且管道未关仍等待。原 fallback/grace 预算不变，超时或 signal 错误明确失败，不当作已退出，不删除锁绕过真实重启。新增六条独立控制 exit/close 顺序的功能回归，锁住仅 exit、已经 exit、已经 close、控制超时、KILL fallback 及 signal 失败。该契约修正尚需原 Windows 真实进程用例核验，本文不把它当作 Windows 已通过。
+按 [Node ChildProcess close 契约](https://nodejs.org/download/release/v22.19.0/docs/api/child_process.html#event-close)，harness 在 spawn 后登记 close，停进程/控制关闭直到 close 后才允许调用方重启或移除其 home；已 exit 且管道未关仍等待。原 fallback/grace 预算不变，超时或 signal 错误明确失败，不当作已退出，不删除锁绕过真实重启。新增六条独立控制 exit/close 顺序的功能回归，锁住仅 exit、已经 exit、已经 close、控制超时、KILL fallback 及 signal 失败。该契约修正尚需原 Windows 真实进程用例核验，本文不把它当作 Windows 已通过。
 
 WF-03 保留私有/公开卡片的完整 chip 数组与原用户名期望，改为等待独立名称查询后的真实 UI；节点数、版本、可见集合及其余原断言不变。没有新增用例重试、skip、排除文件或降低人口。仅本批格式/lint和无断言 AST 在本机执行，全部测试与类型仍交精确 hosted SHA。两 RFC 及原生产/规模/真实用途验收保持 In Progress。
 
