@@ -9,11 +9,14 @@ import type { DatabaseConfigurationPort } from '../application/ports/databaseCon
 import { createFileApplicationConfiguration } from '../infrastructure/local/fileApplicationConfiguration'
 import type { ApplicationConfigurationCommands } from '../public/commands'
 import type { ApplicationConfigurationQueries } from '../public/queries'
+import type { Config } from '@agent-workflow/shared'
 import { notifyConfigApplied } from '@/services/configAppliedListeners'
 import { configureLogger } from '@/util/log'
 
 export interface ApplicationConfigurationBinding {
   readonly queries: ApplicationConfigurationQueries
+  /** Present only for the original default file source. Selected readers may be async. */
+  readonly synchronousQueries?: Readonly<{ read(): Config }>
   readonly databaseConfiguration: DatabaseConfigurationPort
   readonly notificationKey: string
   composeCommands(
@@ -35,10 +38,19 @@ export function composeApplicationConfigurationBinding(
         readonly queries?: ApplicationConfigurationQueries
       },
 ): ApplicationConfigurationBinding {
-  const persistence =
+  const source =
     input.kind === 'selected'
-      ? input.persistence
-      : createFileApplicationConfiguration(input.configPath)
+      ? { persistence: input.persistence }
+      : (() => {
+          const persistence = createFileApplicationConfiguration(input.configPath)
+          return {
+            persistence,
+            ...(input.queries === undefined
+              ? { synchronousQueries: Object.freeze({ read: () => persistence.load() }) }
+              : {}),
+          }
+        })()
+  const { persistence } = source
   const notificationKey = input.kind === 'selected' ? input.notificationKey : input.configPath
   const queries =
     input.kind === 'file' && input.queries !== undefined
@@ -46,6 +58,7 @@ export function composeApplicationConfigurationBinding(
       : Object.freeze({ read: () => persistence.load() })
   return Object.freeze({
     queries,
+    ...('synchronousQueries' in source ? { synchronousQueries: source.synchronousQueries } : {}),
     databaseConfiguration: Object.freeze({
       async read() {
         return (await persistence.load()).database

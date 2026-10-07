@@ -219,7 +219,10 @@ export interface TaskRouteOperationsDependencies {
   readonly activity: ActiveTaskExecutionParticipant
   readonly effects?: TaskDeletionEffects
   readonly topology: SchedulerRuntimeTopology
-  readonly resumeRuntimeFor: (actor: Actor, taskId: string) => ChildResumeRuntime
+  readonly resumeRuntimeFor: (
+    actor: Actor,
+    taskId: string,
+  ) => ChildResumeRuntime | Promise<ChildResumeRuntime>
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
   readonly owners: OwnerIdentityQueries
   /** Closed Collaboration facts used by the TaskExecution-owned repair engine. */
@@ -2410,7 +2413,7 @@ export function createTaskRouteOperations(
   )
   const resumeTaskAs = async (actor: Actor, taskId: string): Promise<void> => {
     await dependencies.children.resume(
-      { taskId, runtime: dependencies.resumeRuntimeFor(actor, taskId) },
+      { taskId, runtime: await dependencies.resumeRuntimeFor(actor, taskId) },
       dependencies.topology,
     )
   }

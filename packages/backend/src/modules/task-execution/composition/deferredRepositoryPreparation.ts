@@ -6,6 +6,7 @@ import { type WorkspaceCleanupHookEvent } from '../application/ports/preparedWor
 
 import { loadFrozenSpaceLayout } from '../infrastructure/frozenWorkspaceLayout'
 import type { PersistedRepositoryPreparationStep } from '../application/drive/repositoryPreparationStep'
+import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
 
 /**
  * RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）—— 组合根取**延后仓库准备**步骤的唯一入口。
@@ -23,6 +24,7 @@ export function composeDeferredRepositoryPreparation(input: {
   readonly secretBox?: SecretBox
   readonly cloneTimeoutMs?: number
   readonly gitBaselineSyncWindowMs?: number
+  readonly launchConfiguration?: TaskLaunchConfigurationQueries
   readonly workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
 }): PersistedRepositoryPreparationStep {
   return composeDeferredRepositoryPreparationStep({
@@ -35,6 +37,9 @@ export function composeDeferredRepositoryPreparation(input: {
       ...(input.gitBaselineSyncWindowMs === undefined
         ? {}
         : { gitBaselineSyncWindowMs: input.gitBaselineSyncWindowMs }),
+      ...(input.launchConfiguration === undefined
+        ? {}
+        : { launchConfiguration: input.launchConfiguration }),
       ...(input.workspaceCleanupHook === undefined
         ? {}
         : { workspaceCleanupHook: input.workspaceCleanupHook }),

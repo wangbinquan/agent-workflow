@@ -63,6 +63,24 @@ export function createSqliteFusionEngineTaskOperations(input: {
           ...(command.defaultRuntime === undefined
             ? {}
             : { defaultRuntime: command.defaultRuntime }),
+          ...(input.startDeps?.launchConfiguration === undefined
+            ? {}
+            : {
+                launchConfigurationOverrides: {
+                  ...(command.defaultPerNodeTimeoutMs === undefined
+                    ? {}
+                    : { defaultPerNodeTimeoutMs: command.defaultPerNodeTimeoutMs }),
+                  ...(command.defaultNodeRetries === undefined
+                    ? {}
+                    : { defaultNodeRetries: command.defaultNodeRetries }),
+                  ...(command.sessionRestartBudget === undefined
+                    ? {}
+                    : { sessionRestartBudget: command.sessionRestartBudget }),
+                  ...(command.defaultRuntime === undefined
+                    ? {}
+                    : { defaultRuntime: command.defaultRuntime }),
+                },
+              }),
         },
       )
     },

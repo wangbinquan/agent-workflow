@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1292,
+    "consumers": 1296,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1652,
+    "methods": 1654,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 28927,
-    "symbols": 1217
+    "recursiveFields": 28956,
+    "symbols": 1218
   },
   "entries": [
     {
@@ -162422,6 +162422,7 @@
           "consumerEdgeIds": [
             "import:300224cb7bd5b2cfb4d7",
             "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
             "import:baa4367c7a8c8c97002e"
           ],
           "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$parameter:options.env",
@@ -162525,6 +162526,7 @@
           "consumerEdgeIds": [
             "import:300224cb7bd5b2cfb4d7",
             "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
             "import:baa4367c7a8c8c97002e"
           ],
           "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:options.env",
@@ -162700,6 +162702,7 @@
           "consumerEdgeIds": [
             "import:300224cb7bd5b2cfb4d7",
             "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
             "import:baa4367c7a8c8c97002e"
           ],
           "fieldPath": "$call.$return.$method:bind.$return.$method:run.$parameter:options.env",
@@ -162803,6 +162806,7 @@
           "consumerEdgeIds": [
             "import:300224cb7bd5b2cfb4d7",
             "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
             "import:baa4367c7a8c8c97002e"
           ],
           "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:options.env",
@@ -164941,7 +164945,8 @@
         {
           "consumerEdgeIds": [
             "import:420f362388c2b12863d5",
-            "import:a899cd9240c2918f5769"
+            "import:a899cd9240c2918f5769",
+            "import:f50902fa9db8e4981243"
           ],
           "fieldPath": "$method:run.$parameter:options.env",
           "type": "Record<string, string | undefined>"
@@ -168643,6 +168648,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:58bb93550b353a6a6830",
             "import:880337bfbd0ecfb25957",
             "import:c5eded8973c81ed8c8ee",
             "import:fa5468eabd0357ee196e"
@@ -168745,6 +168751,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:58bb93550b353a6a6830",
             "import:880337bfbd0ecfb25957",
             "import:c5eded8973c81ed8c8ee",
             "import:fa5468eabd0357ee196e"
@@ -211868,6 +211875,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:141e4538ac1b31191c45",
         "import:7fa9fc4f023202cada4a"
       ],
       "context": "task-execution",
@@ -211943,6 +211951,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "fieldPath": "$call.$return.commitPush.runtime",
@@ -211950,6 +211959,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "fieldPath": "$call.$return.defaultNodeRetries",
@@ -211957,6 +211967,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "fieldPath": "$call.$return.defaultPerNodeTimeoutMs",
@@ -211964,6 +211975,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "fieldPath": "$call.$return.defaultRuntime",
@@ -212020,6 +212032,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "fieldPath": "$call.$return.mergeAgent.runtime",
@@ -212046,6 +212059,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "fieldPath": "$call.$return.scriptInterpreters.node",
@@ -212058,6 +212072,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "fieldPath": "$call.$return.sessionRestartBudget",
@@ -212075,6 +212090,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:141e4538ac1b31191c45",
             "import:7fa9fc4f023202cada4a"
           ],
           "name": "read",
@@ -212083,6 +212099,12 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
       "productionConsumers": [
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:141e4538ac1b31191c45",
+          "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:7fa9fc4f023202cada4a",
@@ -212284,6 +212306,257 @@
       "signatureDigest": "sha256:50cf54bdc645025d3bc59bf438e3a8c92cafd79e6e044808bb92920700f416f3",
       "status": "target-context-current-surface",
       "symbol": "resolveTaskLaunchRuntimeFromReader",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 29,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:a7327ab4c1f4e71d5a93"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$method:read.$return.$variant:0",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$method:read.$return.$variant:1",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.cloneTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.codeHostRequestTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.codeHostResponseMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.commitPush.diffMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.commitPush.excludePatterns",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.commitPush.lang",
+          "type": "z.infer<typeof LanguageSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.commitPush.maxRepairRetries",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.commitPush.model",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.commitPush.runtime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.defaultNodeRetries",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.defaultPerNodeTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.defaultRuntime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.gitBaselineSyncWindowMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.maxActiveChildTasks",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.maxConcurrentCodeHostCalls",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.maxConcurrentNodes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.maxConcurrentScriptNodes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.maxInvocationDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.mergeAgent.model",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.mergeAgent.runtime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.multiProcessSubprocessConcurrency",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.scriptDepsInstallTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptInterpreters.bash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.scriptInterpreters.node",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptInterpreters.python",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.sessionRestartBudget",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "fieldPath": "$call.$return.subagentLiveCapture",
+          "type": "TaskLaunchConfigurationSnapshot['subagentLiveCapture']"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveTaskStartLaunchConfiguration",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:3c3d35015c33ad61be45edb5a9029ff7593097e86b931c115116e11b490a1f60"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7327ab4c1f4e71d5a93"
+          ],
+          "name": "read",
+          "signatureDigest": "sha256:89c162749644c1e03c6f7290336d28c08ac1805bc09aa0ae244894122aecf8b7"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a7327ab4c1f4e71d5a93",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:60f2da387df587f879f23387b80e7dbccb28b2d55f697af85cdf8439c0838114",
+      "status": "target-context-current-surface",
+      "symbol": "resolveTaskStartLaunchConfiguration",
       "transaction": "none",
       "unresolvedTypeRefs": [
         "Pick",
@@ -212771,7 +213044,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:6b8e88f3dd0afdcc4a69"
+        "import:6b8e88f3dd0afdcc4a69",
+        "import:af17350dec2bc6290dea"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -212795,7 +213069,8 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:6b8e88f3dd0afdcc4a69"
+            "import:6b8e88f3dd0afdcc4a69",
+            "import:af17350dec2bc6290dea"
           ],
           "name": "read",
           "signatureDigest": "sha256:89c162749644c1e03c6f7290336d28c08ac1805bc09aa0ae244894122aecf8b7"
@@ -212808,10 +213083,17 @@
           "edgeId": "import:6b8e88f3dd0afdcc4a69",
           "file": "packages/backend/src/services/task.ts",
           "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        },
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:af17350dec2bc6290dea",
+          "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
         "public:task-execution:queries:resolveTaskLaunchRuntimeConfiguration",
+        "public:task-execution:queries:resolveTaskStartLaunchConfiguration",
         "public:task-execution:queries:resolveTaskSubagentLiveCapture"
       ],
       "removeAfterWave": null,
@@ -214714,7 +214996,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:9165117bdc85f2824756"
+        "import:9165117bdc85f2824756",
+        "import:94b2d2b66044fbd8d4e4"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -214757,7 +215040,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:94b2d2b66044fbd8d4e4"
+          ],
           "fieldPath": "$method:forInvocation.$parameter:input.taskId",
           "type": "string"
         },
@@ -214789,6 +215074,12 @@
           "edgeId": "import:9165117bdc85f2824756",
           "file": "packages/backend/src/platform/persistence/nativeUsageInvocationBinding.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/nativeUsageInvocationBinding.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:94b2d2b66044fbd8d4e4",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -222240,7 +222531,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:86f2b12bb107c55c960fbec11c44a0f007b78aa1ea60e6b49757df439f495c32",
+  "sourceDigest": "sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca",
   "targetContexts": [
     "collaboration",
     "development-automation",

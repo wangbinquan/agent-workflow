@@ -1,3 +1,5 @@
+import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
@@ -43,6 +45,8 @@ import { composeLocalInvocationObservations } from '@/modules/run-observability/
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
+import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
+import { selectedNativeUsageInvocationPersistence } from '@/platform/persistence/nativeUsageInvocationBinding'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -672,6 +676,7 @@ async function composePostgresqlProviderSession(
     config: input.config,
     configuration: input.configuration,
     applicationConfiguration: input.applicationConfiguration,
+    taskLaunchConfiguration: input.taskLaunchConfiguration,
     taskArchive: input.taskArchive,
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
@@ -1225,6 +1230,7 @@ interface DaemonProviderSessionComposeInput {
   readonly config: ReturnType<typeof loadConfig>
   readonly configuration: ApplicationConfigurationQueries
   readonly applicationConfiguration: ApplicationConfigurationBinding
+  readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
   readonly runtimeLegacyConfiguration: RuntimeLegacyConfigurationPort
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
@@ -1563,6 +1569,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         ...(opts.configuration === undefined ? {} : { queries: opts.configuration }),
       })
     const configuration = applicationConfiguration.queries
+    const taskLaunchConfiguration = composeTaskLaunchConfiguration(
+      opts.applicationConfiguration !== undefined ||
+        applicationConfiguration.synchronousQueries === undefined
+        ? { kind: 'selected', queries: configuration }
+        : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
+    )
     const runtimeLegacyConfiguration =
       opts.runtimeLegacyConfiguration ?? composeFileRuntimeLegacyConfiguration(Paths.config)
     let config = await configuration.read()
@@ -1710,6 +1722,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       config,
       configuration,
       applicationConfiguration,
+      taskLaunchConfiguration,
       runtimeLegacyConfiguration,
       taskArchive: opts.taskArchive,
       skillContent: opts.skillContent,
@@ -1862,6 +1875,7 @@ async function composeSqliteProviderSession(
     digitalEmployeeTypePackageDriftPolicy,
     lifecycle,
   } = input
+  const taskLaunchConfiguration = input.taskLaunchConfiguration
   // Boot preparation already applied and verified migrations on this exact client.
   const db = databaseProvider.openClient({ migrationsFolder })
 
@@ -2052,34 +2066,61 @@ async function composeSqliteProviderSession(
     isTaskActive: (taskId) => taskExecutionProvider.runtime.schedulerDriver.isTaskActive(taskId),
   })
   const taskStartDepsFor = (actorUserId: string) => ({
-    ...buildStartTaskDeps(
-      db,
-      schedulerDriver,
-      Paths.config,
-      actorUserId,
-      secretBox,
-      identityAccess,
-    ),
+    ...(taskLaunchConfiguration.selectedQueries === undefined
+      ? buildStartTaskDeps(
+          db,
+          schedulerDriver,
+          Paths.config,
+          actorUserId,
+          secretBox,
+          identityAccess,
+        )
+      : {
+          db,
+          schedulerDriver,
+          repositoryWorkspace: providerCore.repositoryWorkspaceStore,
+          runtimeSessionLeases,
+          actorUserId,
+          secretBox,
+          identityAccess,
+          configPath: Paths.config,
+          launchConfiguration: taskLaunchConfiguration.selectedQueries,
+        }),
     agentLaunchResources: Object.freeze({
       resources: composeAgentLaunchResourceOperations({ db }),
       integrity: agentResourceIntegrity.launch,
     }),
   })
   const fusionStartDeps = Object.freeze({
+    ...(taskLaunchConfiguration.selectedQueries === undefined
+      ? {}
+      : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
     actorUserId: SYSTEM_USER_ID,
     secretBox,
     identityAccess,
     repositoryWorkspace: providerCore.repositoryWorkspaceStore,
     runtimeSessionLeases,
     configPath: Paths.config,
-    ...(config.subagentLiveCapture === undefined
+    ...(taskLaunchConfiguration.selectedQueries !== undefined ||
+    config.subagentLiveCapture === undefined
       ? {}
       : { subagentLiveCapture: config.subagentLiveCapture }),
-    ...resolveLaunchRuntimeConfig(Paths.config),
+    ...(taskLaunchConfiguration.selectedQueries === undefined
+      ? resolveLaunchRuntimeConfig(Paths.config)
+      : {}),
   })
   const workspacePresence = createFileWorkspacePresenceQueries()
+  const nativeUsage = selectedNativeUsageInvocationPersistence(db, {
+    binding: {
+      provider: 'sqlite',
+      db,
+      generationId: databaseProvider.generation.payload.generationId,
+    },
+    admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),
+  })
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
+      nativeUsage,
       archive: input.taskArchive,
       workspaceReads: input.workspaceReads,
       runtime: {
@@ -2142,10 +2183,16 @@ async function composeSqliteProviderSession(
           appHome: Paths.root,
           secretBox,
           repositoryPreparation: composeRepositoryPreparation({
+            ...(taskLaunchConfiguration.preparationConfiguration === undefined
+              ? {}
+              : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
             db,
             appHome: Paths.root,
             secretBox,
-            cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+            cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
+              ? resolveLaunchRuntimeConfig(Paths.config)
+              : {}
+            ).cloneTimeoutMs,
           }),
         },
         resourceAuthorityFor: (actor) =>
@@ -2205,15 +2252,30 @@ async function composeSqliteProviderSession(
         appHome: Paths.root,
         startDeps: fusionStartDeps,
       },
-      rootResumeRuntime: () => ({
-        runConfig: {
-          appHome: Paths.root,
-          ...(config.subagentLiveCapture === undefined
-            ? {}
-            : { subagentLiveCapture: config.subagentLiveCapture }),
-          ...resolveLaunchRuntimeConfig(Paths.config),
-        },
-      }),
+      rootResumeRuntime: () =>
+        taskLaunchConfiguration.selectedQueries === undefined
+          ? {
+              runConfig: {
+                appHome: Paths.root,
+                ...(taskLaunchConfiguration.selectedQueries !== undefined ||
+                config.subagentLiveCapture === undefined
+                  ? {}
+                  : { subagentLiveCapture: config.subagentLiveCapture }),
+                ...(taskLaunchConfiguration.selectedQueries === undefined
+                  ? resolveLaunchRuntimeConfig(Paths.config)
+                  : {}),
+              },
+            }
+          : (async () => {
+              const fresh = await taskLaunchConfiguration.drive()
+              return {
+                runConfig: {
+                  appHome: Paths.root,
+                  subagentLiveCapture: fresh.subagentLiveCapture,
+                  ...runtimeConfigOpts(fresh),
+                },
+              }
+            })(),
       repositoryPreparationRetry: Object.freeze({
         // 2026-09-19：**发起人必须原样传下去**。`continuationSource` 只有在
         // `actorUserId !== SYSTEM_USER_ID` 时才返回 `'rest'`，而 `mayAuthorizeReplay` 只授权
@@ -2225,11 +2287,20 @@ async function composeSqliteProviderSession(
         async retry(taskId: string, authorization?: { readonly actorUserId: string }) {
           await retryRepositoryPreparation(db, taskId, {
             ...taskStartDepsFor(authorization?.actorUserId ?? SYSTEM_USER_ID),
+            ...(taskLaunchConfiguration.selectedQueries === undefined
+              ? {}
+              : await taskLaunchConfiguration.start()),
             repositoryPreparation: composeRepositoryPreparation({
+              ...(taskLaunchConfiguration.preparationConfiguration === undefined
+                ? {}
+                : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
               db,
               appHome: Paths.root,
               secretBox,
-              cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+              cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
+                ? resolveLaunchRuntimeConfig(Paths.config)
+                : {}
+              ).cloneTimeoutMs,
             }),
           })
         },
@@ -2240,8 +2311,14 @@ async function composeSqliteProviderSession(
   // RFC-359 AC-1（plan §5hn 批次一）：单代理启动内核用的真协调器。上面 `routeLaunch.coordinator`
   // 那个转发面闭包引用它——环打在词法作用域上，删掉这一行 tsc 立刻报「Cannot find name」，
   // 而不是留下一个编译通过、运行期才炸的空槽（同 PostgreSQL daemon 的 `boundTaskDriveCoordinator`）。
-  const launchRuntimeConfig = resolveLaunchRuntimeConfig(Paths.config)
+  const launchRuntimeConfig =
+    taskLaunchConfiguration.selectedQueries === undefined
+      ? resolveLaunchRuntimeConfig(Paths.config)
+      : {}
   const routeLaunchDriveCoordinator = createTaskDriveCoordinator({
+    ...(taskLaunchConfiguration.selectedQueries === undefined
+      ? {}
+      : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
     persistence: taskExecutionPersistence,
     deps: {
       db,
@@ -2266,18 +2343,30 @@ async function composeSqliteProviderSession(
     // 2026-09-19：这台协调器**长驻**（boot 建好、之后服务每一次 `POST /api/tasks`），所以那
     // 17 个旋钮不能冻在 boot 那一刻——设置页把默认运行时改到另一行之后，新任务必须按新那一行
     // 派发（e2e CFG-45）。给了 refresher 之后配置在每次 submit 现读一次。
-    refreshLaunchConfig: () => resolveLaunchRuntimeConfig(Paths.config),
+    refreshLaunchConfig: () =>
+      taskLaunchConfiguration.selectedQueries === undefined
+        ? resolveLaunchRuntimeConfig(Paths.config)
+        : {},
     appHome: Paths.root,
     // RFC-287 G7 / RFC-359 AC-1（plan §5hn 批次二 ①）：这台协调器同时驱动**定时 / webhook
     // 触发**（触发器参与者收的就是它），所以必须带上延后仓库准备的第 0 步——缺了它，
     // 占位行会永远停在 `pending`。直启路由不延后，那一步只会看到 `worktreePath !== ''`
     // 并直接返回 ready。两个旋钮从配置取（此前经 `buildStartTaskDeps` 隐式带过来）。
     repositoryPreparation: composeDeferredRepositoryPreparation({
+      ...(taskLaunchConfiguration.selectedQueries === undefined
+        ? {}
+        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
       repositoryPreparation: composeRepositoryPreparation({
+        ...(taskLaunchConfiguration.preparationConfiguration === undefined
+          ? {}
+          : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
         db: db,
         appHome: Paths.root,
         secretBox: secretBox,
-        cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+        cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
+          ? resolveLaunchRuntimeConfig(Paths.config)
+          : {}
+        ).cloneTimeoutMs,
       }),
       db,
       appHome: Paths.root,
@@ -2807,33 +2896,58 @@ async function composeSqliteProviderSession(
   // `boundTaskDriveCoordinator.failureReporter`）：驱动崩了要把任务落成 failed 并终结意图，
   // 否则失败会表现成「动作卡住不失败」。
   const hostActionEnvironment = (() => {
-    const hostLaunchStartDeps = buildStartTaskDeps(
-      db,
-      taskExecutionRuntime.schedulerDriver,
-      Paths.config,
-      SYSTEM_USER_ID,
-      secretBox,
-      identityAccess,
-    )
+    const hostLaunchStartDeps =
+      taskLaunchConfiguration.selectedQueries === undefined
+        ? buildStartTaskDeps(
+            db,
+            taskExecutionRuntime.schedulerDriver,
+            Paths.config,
+            SYSTEM_USER_ID,
+            secretBox,
+            identityAccess,
+          )
+        : {
+            db,
+            schedulerDriver: taskExecutionRuntime.schedulerDriver,
+            repositoryWorkspace: providerCore.repositoryWorkspaceStore,
+            runtimeSessionLeases,
+            actorUserId: SYSTEM_USER_ID,
+            secretBox,
+            identityAccess,
+            configPath: Paths.config,
+            launchConfiguration: taskLaunchConfiguration.selectedQueries,
+          }
     const hostTaskLaunch = composeHostTaskLaunchKernel({
       sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
+        ...(taskLaunchConfiguration.preparationConfiguration === undefined
+          ? {}
+          : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
         db: db,
         appHome: Paths.root,
         secretBox: secretBox,
-        cloneTimeoutMs: resolveLaunchRuntimeConfig(Paths.config).cloneTimeoutMs,
+        cloneTimeoutMs: (taskLaunchConfiguration.selectedQueries === undefined
+          ? resolveLaunchRuntimeConfig(Paths.config)
+          : {}
+        ).cloneTimeoutMs,
       }),
       db,
       appHome: Paths.root,
       secretBox,
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       coordinator: createTaskDriveCoordinator({
+        ...(taskLaunchConfiguration.selectedQueries === undefined
+          ? {}
+          : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
         deps: hostLaunchStartDeps,
         persistence: taskExecutionPersistence,
         // 2026-09-19：组合根装配一次、之后长驻——17 个运行期旋钮必须每次 drive 现读，
         // 否则设置页改完配置对新任务不生效（e2e CFG-45 实撞，判据在
         // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。
-        refreshLaunchConfig: () => resolveLaunchRuntimeConfig(Paths.config),
+        refreshLaunchConfig: () =>
+          taskLaunchConfiguration.selectedQueries === undefined
+            ? resolveLaunchRuntimeConfig(Paths.config)
+            : {},
         appHome: Paths.root,
         engineFailureMessage: 'digital employee host task drive threw',
         failureReporter: {
@@ -2992,6 +3106,9 @@ async function composeSqliteProviderSession(
   )
 
   const gateContinuationDeps = {
+    ...(taskLaunchConfiguration.selectedQueries === undefined
+      ? {}
+      : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
     db,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     appHome: Paths.root,
@@ -3000,7 +3117,9 @@ async function composeSqliteProviderSession(
     ...(config.subagentLiveCapture !== undefined
       ? { subagentLiveCapture: config.subagentLiveCapture }
       : {}),
-    ...resolveLaunchRuntimeConfig(Paths.config),
+    ...(taskLaunchConfiguration.selectedQueries === undefined
+      ? resolveLaunchRuntimeConfig(Paths.config)
+      : {}),
   }
   const humanGateContinuationRecovery = createSqliteHumanGateContinuationRecoveryQueries(db)
 
@@ -3279,6 +3398,7 @@ async function composeSqliteProviderSession(
     },
   })
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    nativeUsage,
     completeObservationReports: observationReports.queries,
     nodeRunPrompts,
     portArtifacts,

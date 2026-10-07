@@ -1,3 +1,4 @@
+import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
@@ -51,6 +52,8 @@ import { composeObservationPricing } from '@/modules/run-observability/compositi
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
+import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
+import { selectedNativeUsageInvocationPersistence } from '@/platform/persistence/nativeUsageInvocationBinding'
 import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
@@ -464,6 +467,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly configPath: string
   readonly configuration?: ApplicationConfigurationQueries
   readonly applicationConfiguration?: ApplicationConfigurationBinding
+  readonly taskLaunchConfiguration?: ReturnType<typeof composeTaskLaunchConfiguration>
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
@@ -681,6 +685,14 @@ export async function composePostgresqlApplication(
       ...(input.configuration === undefined ? {} : { queries: input.configuration }),
     })
   const configuration = applicationConfiguration.queries
+  const taskLaunchConfiguration =
+    input.taskLaunchConfiguration ??
+    composeTaskLaunchConfiguration(
+      input.applicationConfiguration !== undefined ||
+        applicationConfiguration.synchronousQueries === undefined
+        ? { kind: 'selected', queries: configuration }
+        : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
+    )
   const realtimePolicy = composeDaemonRealtimePolicy({
     resourceVisibility: {
       canViewResource: (actor, type, row) =>
@@ -1056,7 +1068,15 @@ export async function composePostgresqlApplication(
     input.db,
     taskExecutionResourceSnapshots,
   )
-  const taskExecutionPersistence = createTaskExecutionPersistence(input.db, { workspacePresence })
+  const nativeUsage = selectedNativeUsageInvocationPersistence(input.db, {
+    binding: { provider: 'postgresql', runtime: input.provider.runtime },
+    admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),
+    postgresqlPoolMax: input.config.database.poolMax,
+  })
+  const taskExecutionPersistence = createTaskExecutionPersistence(input.db, {
+    workspacePresence,
+    nativeUsage,
+  })
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
   const collaborationRuntime = createCollaborationRuntimeMechanics(input.db, {
@@ -1138,7 +1158,7 @@ export async function composePostgresqlApplication(
       return await boundTaskDriveCoordinator.submit(request)
     },
   })
-  const launchRuntime = resolveLaunchRuntimeConfig(input.configPath)
+  const launchRuntime = taskLaunchConfiguration.initialRuntime()
   // 2026-09-19：运行期配置**每次取用时现读**，不再冻在 boot 那一刻的快照里。
   // 长驻的 `boundTaskDriveCoordinator` 服务每一次 `POST /api/tasks`；冻结快照会让用户在设置页
   // 把默认运行时改到另一行之后，新任务照旧按老档案派发——「设为默认」只改了界面
@@ -1151,7 +1171,20 @@ export async function composePostgresqlApplication(
       daemonGeneration: input.provider.runtime.generationId,
       ...runtimeConfigOpts(resolveLaunchRuntimeConfig(input.configPath)),
     })
+  const selectedRunConfig = async () => {
+    const fresh = await taskLaunchConfiguration.drive()
+    return Object.freeze({
+      appHome: input.appHome,
+      configPath: input.configPath,
+      daemonGeneration: input.provider.runtime.generationId,
+      ...('subagentLiveCapture' in fresh && fresh.subagentLiveCapture !== undefined
+        ? { subagentLiveCapture: fresh.subagentLiveCapture }
+        : {}),
+      ...runtimeConfigOpts(fresh),
+    })
+  }
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
+    nativeUsage,
     archive: input.taskArchive,
     workspaceReads,
     runtime: {
@@ -1191,10 +1224,16 @@ export async function composePostgresqlApplication(
       log,
       persistence: taskExecutionPersistence,
     },
-    rootResumeRuntime: () => ({ runConfig: currentRunConfig() }),
+    rootResumeRuntime: () =>
+      taskLaunchConfiguration.selectedQueries === undefined
+        ? { runConfig: currentRunConfig() }
+        : (async () => ({ runConfig: await selectedRunConfig() }))(),
     routeWorkspace: {
       sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
+        ...(taskLaunchConfiguration.preparationConfiguration === undefined
+          ? {}
+          : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
         db: input.db,
         appHome: input.appHome,
         secretBox: input.secretBox,
@@ -1245,7 +1284,12 @@ export async function composePostgresqlApplication(
         })
       },
     },
-    fusion: { appHome: input.appHome },
+    fusion: {
+      appHome: input.appHome,
+      ...(taskLaunchConfiguration.selectedQueries === undefined
+        ? {}
+        : { runConfiguration: selectedRunConfig }),
+    },
     workgroupTaskRoom: { collaboration: workgroupClarify },
   })
   // RFC-359 AC-1（plan §5hm）：驱动生命周期端口两个引擎共用一份。认领方式由这里绑定——
@@ -1261,6 +1305,9 @@ export async function composePostgresqlApplication(
   const boundTaskDriveCoordinator = new DefaultTaskDriveCoordinator({
     // getter：`contextFor` 每次 drive 读一次，于是每次派发拿到的是当下的配置。
     get runtime() {
+      if (taskLaunchConfiguration.selectedQueries !== undefined) {
+        return selectedRunConfig().then(resolveTaskDriveConfig)
+      }
       return resolveTaskDriveConfig(currentRunConfig())
     },
     lifecycle: taskDriverLifecycle,
@@ -1268,7 +1315,13 @@ export async function composePostgresqlApplication(
     // 此前这里是 `skipRepositoryPreparation`——于是 G7 在 PostgreSQL 上等于没实现：
     // 远端拉不动时同步抛错、一行任务都不留，用户既看不到也无从重试。
     repositoryPreparation: composeDeferredRepositoryPreparation({
+      ...(taskLaunchConfiguration.selectedQueries === undefined
+        ? {}
+        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
       repositoryPreparation: composeRepositoryPreparation({
+        ...(taskLaunchConfiguration.preparationConfiguration === undefined
+          ? {}
+          : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
         db: input.db,
         appHome: input.appHome,
         secretBox: input.secretBox,
@@ -2387,6 +2440,9 @@ export async function composePostgresqlApplication(
   const memoryRoutes: PostgresqlAppCompositionInput['memory'] = Object.freeze({
     fusion: Object.freeze({
       operations: fusionOperations,
+      ...(taskLaunchConfiguration.selectedQueries === undefined
+        ? {}
+        : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
       configPath: input.configPath,
       directAuthority: identityAccess.directAuthority,
     }),

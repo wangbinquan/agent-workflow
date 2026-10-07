@@ -139,6 +139,7 @@ export {
   resolveTaskCommitPushFromReader,
   resolveTaskLaunchRuntimeFromReader,
   resolveTaskLaunchRuntimeConfiguration,
+  resolveTaskStartLaunchConfiguration,
   resolveTaskSubagentLiveCapture,
   resolveTaskSubagentLiveCaptureFromReader,
   resolveTaskUploadLimitsFromReader,

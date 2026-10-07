@@ -23,6 +23,7 @@ import { assertWorktreePresentForResume } from '@/modules/task-execution/public/
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import {
   resolveTaskLaunchRuntimeConfiguration,
+  resolveTaskStartLaunchConfiguration,
   resolveTaskSubagentLiveCapture,
   type TaskLaunchConfigurationQueries,
 } from '@/modules/task-execution/public/queries'
@@ -432,6 +433,13 @@ export async function finalizeCanceledTaskWithoutDriver(
 }
 
 export interface StartTaskDeps {
+  /** The selected live configuration follows short-lived drive and continuation paths. */
+  launchConfiguration?: TaskLaunchConfigurationQueries
+  /** Explicit launch command knobs retain precedence over live defaults. */
+  launchConfigurationOverrides?: Pick<
+    StartTaskDeps,
+    'defaultPerNodeTimeoutMs' | 'defaultNodeRetries' | 'sessionRestartBudget' | 'defaultRuntime'
+  >
   /** Required by bootstrap when recovering a journaled preparation; absent only for legacy tasks. */
   repositoryPreparation?: taskDriveComposition.TaskRepositoryPreparationBinding
   /** RFC-332: required instance-level TaskEngine application surface. */
@@ -798,6 +806,7 @@ export interface DeferredRepositoryPreparationDependencies extends Pick<
   | 'secretBox'
   | 'cloneTimeoutMs'
   | 'gitBaselineSyncWindowMs'
+  | 'launchConfiguration'
   | 'workspaceCleanupHook'
   // 准备时才知道的那一格：占位行上冻结的提交身份由 descriptor 带回来。
   | 'gitCommitIdentity'
@@ -1210,6 +1219,8 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
     | 'subagentLiveCapture'
     | 'memoryDistillEnqueuer'
     | 'workspacePresence'
+    | 'launchConfiguration'
+    | 'launchConfigurationOverrides'
   > & {
     /**
      * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `StartTaskDeps` Pick 来的
@@ -1277,19 +1288,24 @@ export function createTaskDriveCoordinator(input: {
   const currentRuntime = ():
     | taskDriveComposition.ResolvedTaskDriveConfig
     | Promise<taskDriveComposition.ResolvedTaskDriveConfig> => {
-    if (input.launchConfiguration !== undefined) {
-      const source = input.launchConfiguration
+    const source = input.launchConfiguration ?? input.deps.launchConfiguration
+    if (source !== undefined) {
       return (async () => {
         const fresh = await resolveTaskLaunchRuntimeConfiguration(source)
         const subagentLiveCapture = await resolveTaskSubagentLiveCapture(source)
-        return resolveRuntime({ ...fresh, subagentLiveCapture }, true)
+        return resolveRuntime(
+          { ...fresh, subagentLiveCapture, ...input.deps.launchConfigurationOverrides },
+          true,
+        )
       })()
     }
     const fresh = input.refreshLaunchConfig?.()
     return fresh instanceof Promise ? fresh.then(resolveRuntime) : resolveRuntime(fresh)
   }
   const frozen =
-    input.refreshLaunchConfig === undefined && input.launchConfiguration === undefined
+    input.refreshLaunchConfig === undefined &&
+    input.launchConfiguration === undefined &&
+    input.deps.launchConfiguration === undefined
       ? resolveRuntime()
       : null
   return new DefaultTaskDriveCoordinator({
@@ -1460,6 +1476,13 @@ function createPersistedRepositoryPreparationStep(input: {
       const result = await runDeferredRepoPreparation({
         deps: {
           ...input.deps,
+          ...(input.deps.launchConfiguration === undefined
+            ? {}
+            : {
+                cloneTimeoutMs: undefined,
+                gitBaselineSyncWindowMs: undefined,
+                ...(await resolveTaskLaunchRuntimeConfiguration(input.deps.launchConfiguration)),
+              }),
           gitCommitIdentity: descriptor.gitCommitIdentity,
         },
         input: preparationInput,
@@ -1727,7 +1750,15 @@ export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<
   }
   try {
     const gitCommitIdentity = await resolveTaskGitCommitIdentity(deps)
-    return await startTaskImpl(input, { ...deps, gitCommitIdentity }, ownership)
+    const launchConfiguration =
+      deps.launchConfiguration === undefined
+        ? {}
+        : await resolveTaskStartLaunchConfiguration(deps.launchConfiguration)
+    return await startTaskImpl(
+      input,
+      { ...deps, ...launchConfiguration, ...deps.launchConfigurationOverrides, gitCommitIdentity },
+      ownership,
+    )
   } catch (error) {
     if (!ownership.taskRowCommitted && ownership.cleanup !== null) {
       const report = await cleanupMaterializedSpaceLease(
@@ -3173,6 +3204,7 @@ export function composeWorkgroupTaskRoomContinuationDriver(input: {
   readonly schedulerDriver: StartTaskDeps['schedulerDriver']
   readonly taskRecoveryOperations: TaskRecoveryOperations
   readonly workspacePresence?: WorkspacePresenceQueries
+  readonly launchConfiguration?: TaskLaunchConfigurationQueries
 }): Readonly<{
   assertResumable: (taskId: string, verb: string) => Promise<void>
   driveAfterCommit: (continuation: Readonly<{ taskId: string; intentId: string }>) => Promise<void>
@@ -3200,7 +3232,20 @@ export function composeWorkgroupTaskRoomContinuationDriver(input: {
       // 与合一前同一条路：意图已在房间事务里准入，这里只认领并驱动它，不做第二次生命周期转移、
       // 不落第二条意图（`wakeHumanGateContinuation` 的契约）。等它是有意的——合一前 confirm 也是
       // 等 `resumeTaskWithAtomicSideEffects` 整个跑完才应答，`awaitScheduler` 的确定性依赖这一点。
-      await wakeHumanGateContinuation(continuation.taskId, continuation.intentId, resumeDeps())
+      const deps =
+        input.launchConfiguration === undefined
+          ? resumeDeps()
+          : {
+              db: input.db,
+              schedulerDriver: input.schedulerDriver,
+              taskRecoveryOperations: input.taskRecoveryOperations,
+              workspacePresence,
+              appHome: Paths.root,
+              configPath: input.configPath,
+              launchConfiguration: input.launchConfiguration,
+              ...(await resolveTaskStartLaunchConfiguration(input.launchConfiguration)),
+            }
+      await wakeHumanGateContinuation(continuation.taskId, continuation.intentId, deps)
     },
   })
 }

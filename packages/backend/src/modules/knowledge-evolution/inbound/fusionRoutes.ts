@@ -37,6 +37,10 @@ import {
   type FusionViewer,
 } from '../application/fusionViews'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import {
+  resolveTaskLaunchRuntimeConfiguration,
+  type TaskLaunchConfigurationQueries,
+} from '@/modules/task-execution/public/queries'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
@@ -49,6 +53,7 @@ import { directRequestAuthority } from '@/routes/operationAuthority'
 export interface FusionRouteDependencies {
   readonly operations: FusionOperations
   readonly configPath: string
+  readonly launchConfiguration?: TaskLaunchConfigurationQueries
   readonly directAuthority: DirectAuthorityBinding
 }
 
@@ -59,12 +64,14 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     return { userId: actor.user.id, aclBypass: hasResourceAclBypass(actor) }
   }
 
-  function fusionDeps(): FusionDeps {
+  async function fusionDeps(): Promise<FusionDeps> {
     // RFC-108 T4 (Codex impl gate P2): thread the per-node timeout floor so a
     // hung fusion agent is bounded like any other node. RFC-115: also thread
     // the global retry budget + default runtime (Codex F3) into the fusion task.
     const { defaultPerNodeTimeoutMs, defaultNodeRetries, sessionRestartBudget, defaultRuntime } =
-      resolveLaunchRuntimeConfig(deps.configPath)
+      deps.launchConfiguration === undefined
+        ? resolveLaunchRuntimeConfig(deps.configPath)
+        : await resolveTaskLaunchRuntimeConfiguration(deps.launchConfiguration)
     return {
       operations: deps.operations,
       appHome: Paths.root,
@@ -99,7 +106,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       })
       const fusion = await createFusion(
         parsed.data,
-        fusionDeps(),
+        await fusionDeps(),
         scopeAuthority,
         directTaskInitiatorFromActorSource(actor.source),
       )
@@ -127,7 +134,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       // listFusionSummaries pushes status/skillId into SQL and never reads the
       // proposedDiff, so the inbox's 15s poll stays cheap. Full diff: /:id.
       return c.json(
-        await listVisibleFusionSummaries(fusionDeps(), viewerOf(c), {
+        await listVisibleFusionSummaries(await fusionDeps(), viewerOf(c), {
           ...(skillId ? { skillId } : {}),
           ...(status ? { status } : {}),
         }),
@@ -150,7 +157,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     },
     async (c) => {
       return c.json({
-        count: await countVisibleAwaitingApprovalFusions(fusionDeps(), viewerOf(c)),
+        count: await countVisibleAwaitingApprovalFusions(await fusionDeps(), viewerOf(c)),
       })
     },
   )
@@ -166,7 +173,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     },
     async (c) => {
       // RFC-099-style existence isolation：不可见与不存在同形，判据在 application。
-      const fusion = await getVisibleFusion(fusionDeps(), viewerOf(c), c.req.param('id'))
+      const fusion = await getVisibleFusion(await fusionDeps(), viewerOf(c), c.req.param('id'))
       if (fusion === null) {
         throw new NotFoundError('fusion-not-found', `fusion '${c.req.param('id')}' not found`)
       }
@@ -184,7 +191,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       summary: 'Approve a fusion (bumps the skill version and fuses memory)',
     },
     async (c) => {
-      return c.json(await approveFusion(fusionDeps(), c.req.param('id'), actorOf(c)))
+      return c.json(await approveFusion(await fusionDeps(), c.req.param('id'), actorOf(c)))
     },
   )
 
@@ -207,7 +214,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       const actor = actorOf(c)
       return c.json(
         await rejectFusion(
-          fusionDeps(),
+          await fusionDeps(),
           c.req.param('id'),
           parsed.data.feedback,
           actor,
@@ -227,7 +234,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       summary: 'Cancel a fusion',
     },
     async (c) => {
-      return c.json(await cancelFusion(fusionDeps(), c.req.param('id'), actorOf(c)))
+      return c.json(await cancelFusion(await fusionDeps(), c.req.param('id'), actorOf(c)))
     },
   )
 }

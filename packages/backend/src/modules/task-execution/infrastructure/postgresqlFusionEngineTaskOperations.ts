@@ -28,6 +28,7 @@ import { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type {
   SchedulerDriverPort,
+  TaskDriveRuntimeOptions,
   TaskExecutionTopologyLogger,
 } from '../application/ports/taskExecutionTopology'
 import type { ProviderTaskExecutionModule } from '../composition'
@@ -51,6 +52,8 @@ export interface PostgresqlFusionEngineTaskDependencies {
   readonly executionModule: ProviderTaskExecutionModule
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly log: TaskExecutionTopologyLogger
+  /** Bootstrap projects the same selected Task query; invoked only at actual launch. */
+  readonly runConfiguration?: () => TaskDriveRuntimeOptions | Promise<TaskDriveRuntimeOptions>
 }
 
 function taskSlotPath(taskId: string, workflowVersion: number): string {
@@ -329,6 +332,9 @@ export function createPostgresqlFusionEngineTaskOperations(
     async launch(command: FusionEngineTaskLaunch) {
       const intentId = await insertFusionTask(dependencies, command)
       const runtime = resolveTaskDriveConfig({
+        ...(dependencies.runConfiguration === undefined
+          ? {}
+          : await dependencies.runConfiguration()),
         appHome: dependencies.appHome,
         ensureWorkspaceProfiles: true,
         ...(command.binaryOverride === undefined ? {} : { binaryOverride: command.binaryOverride }),

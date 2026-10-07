@@ -46,6 +46,9 @@ export function composeRepositoryPreparation(input: {
   secretBox?: SecretBox | undefined
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
   cloneTimeoutMs?: number | undefined
+  preparationConfiguration?: Readonly<{
+    read(): { readonly cloneTimeoutMs?: number } | Promise<{ readonly cloneTimeoutMs?: number }>
+  }>
   preparationEffects?: RepositoryPreparationEffectFactory
   scratchEffects?: ScratchWorkspaceEffects
 }) {
@@ -55,12 +58,16 @@ export function composeRepositoryPreparation(input: {
     input.scratchEffects ?? createFileScratchWorkspaceEffects(input)
   const preparationEffects: RepositoryPreparationEffectFactory = input.preparationEffects ?? {
     create(request) {
+      const cloneTimeoutMs =
+        input.preparationConfiguration === undefined
+          ? (request.cloneTimeoutMs ?? input.cloneTimeoutMs)
+          : request.cloneTimeoutMs
       return createFileRepositoryPreparationEffects({
         taskId: request.taskId,
         appHome: input.appHome,
         repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
         ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
-        ...(input.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: input.cloneTimeoutMs }),
+        ...(cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs }),
         ...(request.workingBranch === undefined ? {} : { workingBranch: request.workingBranch }),
         gitCommitIdentity: request.gitCommitIdentity,
         signal: request.signal,
@@ -96,6 +103,10 @@ export function composeRepositoryPreparation(input: {
         workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
         loadFrozenSpaceLayout(sourceTaskId: string): Promise<PlannedSpaceLayout>
       }): Promise<MaterializedSpace> {
+        const configuration =
+          input.preparationConfiguration === undefined
+            ? { cloneTimeoutMs: input.cloneTimeoutMs }
+            : await input.preparationConfiguration.read()
         return await materializeSpaceWithProvider(
           request.task,
           {
@@ -104,7 +115,9 @@ export function composeRepositoryPreparation(input: {
             loadFrozenSpaceLayout: request.loadFrozenSpaceLayout,
             gitCommitIdentity: request.gitCommitIdentity,
             ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
-            ...(input.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: input.cloneTimeoutMs }),
+            ...(configuration.cloneTimeoutMs === undefined
+              ? {}
+              : { cloneTimeoutMs: configuration.cloneTimeoutMs }),
             ...(input.workspaceCleanupHook === undefined
               ? {}
               : { workspaceCleanupHook: input.workspaceCleanupHook }),
@@ -243,9 +256,14 @@ export function composeRepositoryPreparation(input: {
           'preparation operation not found',
         )
       const source = decodeRepositoryLaunchRef('preparation', record.snapshotRef)
+      const configuration =
+        input.preparationConfiguration === undefined
+          ? undefined
+          : await input.preparationConfiguration.read()
       const effects = await preparationEffects.create({
         taskId: request.taskId,
         operationRef: operation,
+        ...(configuration === undefined ? {} : { cloneTimeoutMs: configuration.cloneTimeoutMs }),
         ...(request.workingBranch === undefined ? {} : { workingBranch: request.workingBranch }),
         gitCommitIdentity: request.gitCommitIdentity,
         signal: request.signal,

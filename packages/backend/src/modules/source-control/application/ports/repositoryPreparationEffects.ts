@@ -38,6 +38,7 @@ export interface RepositoryPreparationEffectFactory {
     readonly taskId: string
     readonly operationRef: RepositoryPreparationOperationRef
     readonly workingBranch?: string
+    readonly cloneTimeoutMs?: number
     readonly gitCommitIdentity: GitCommitIdentity | null
     readonly signal: AbortSignal
     readonly assertCurrent: () => Promise<void>

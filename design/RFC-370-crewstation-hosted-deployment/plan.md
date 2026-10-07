@@ -1002,3 +1002,12 @@ SOURCE7-R2 有效稳定有限 PASS，原 R1 两项功能失败保留；中立生
 原 job112582243341 的步骤5（RFC-363恢复）、6（RFC-254平台）及原共享测试已success；步骤15 Typecheck failure，之后的build/doctor未执行。此前将整作业功能测试记为“尚未执行”不准确，本次只更正这句记录；完整原候选、误记、所有复核和正式failure证据保留。新增Purpose回归不在旧Windows原命令中，不能据旧平台步骤success宣称它已在Windows执行。
 
 生产/测试修正与13匹配输出已通过有限SOURCE5-R2/MATCHING16-R2并精确21路径上库e4bd62318e12848d730b1c52f2dd29706e9da5e1；main/origin当时0/0、index空、全部Task/RFC371并行WIP保持。该SHA主CI37561996355与确切同SHA Windows37562206818已启动，终态待验；后者仅沿原平台列表运行，不包含新增Purpose测试。本文更正无生产/测试/架构规则/匹配变化，无新census或本机AW运行，不重签旧历史门，Stage A/H7/A-G及CS部署仍开放。
+
+
+## 2026-10-07 RFC-370 Task 配置真实入口接线与配套候选
+
+SOURCE19-R3 有效稳定有限 PASS，R1 的显式 file source 与 defaults 类型两项 P2、R2 新回归清理成员名 P2 全部闭合且原失败保留。16 个生产/两回归覆盖 CLI、SQLite HTTP、PG、继续/retry、SC 与 Fusion 的同一所选 query、热读取/ACK、原 cleanup/事务/短 coordinator；四份相关共享 bootstrap 保留完整并行 RFC-371 Native 接线。
+
+一次原静态生成 fixed fcb05bae 加本批 16生产/2测试，13产物 sourceDigest sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca；classic 全数组相等 50/0，原 import/exception/owner 行和129 ledger why/顺序保持，仅原派生 public 与 physical line 锚点更新。四项实测 one-commit 声明 imports6782→6789/exceptions5956→5961/public1217→1218/owners27387→27389 随匹配发布消费后普通退役。首次私有投影的 line-derived symbol 比较错误保留，不重跑 census。
+
+独立匹配门、精确上库/同步、新 exact-SHA hosted CI 分别验收。H7/其它并行 WIP 不纳入；无本机 AW tests/typecheck/build/service。三个根的执行权、Task原事务、19 handles与A-T7/A-G继续，之后各层独立CS adapters，先M0实际部署再M1～M4；AW尚未部署CS，RFC未完成。详见 design/RFC-370-crewstation-hosted-deployment/task-launch-configuration-canonical-publication.md。原共享全文和并行输出保持，仅追加此段。

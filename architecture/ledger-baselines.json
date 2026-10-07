@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:86f2b12bb107c55c960fbec11c44a0f007b78aa1ea60e6b49757df439f495c32",
+    "sourceDigest": "sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -856,8 +856,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6782,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6789,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 Task Launch Configuration SOURCE19-R3: one original scoped census at fcb05baef62ddfe16fc2fe572a85b3c1e6cd6543 plus 16 frozen production files and two new regression files. Whole shared bootstrap files preserve concurrent RFC-371 Native wiring. Original complete import/exception/owner rows and all 129 ordered ledger explanations are preserved; exact additions are seven imports, five exceptions, two owners and one public export. Existing public contract projections and physical call-line anchors follow the same original generator; no rules, predicates, SPI classifications or effect policies change. Classic exact inbound/outbound remain 50/0. H7 and all other tracked/untracked WIP are excluded. Consume these four measured one-commit declarations with this matching publication, then retire in a normal successor without another census. Source R1/R2 failures remain recorded; SOURCE19-R3 is a finite PASS, not hosted CI or full H7/A-T7/A-G/CS deployment completion."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -877,8 +880,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5956,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5961,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 Task Launch Configuration SOURCE19-R3: one original scoped census at fcb05baef62ddfe16fc2fe572a85b3c1e6cd6543 plus 16 frozen production files and two new regression files. Whole shared bootstrap files preserve concurrent RFC-371 Native wiring. Original complete import/exception/owner rows and all 129 ordered ledger explanations are preserved; exact additions are seven imports, five exceptions, two owners and one public export. Existing public contract projections and physical call-line anchors follow the same original generator; no rules, predicates, SPI classifications or effect policies change. Classic exact inbound/outbound remain 50/0. H7 and all other tracked/untracked WIP are excluded. Consume these four measured one-commit declarations with this matching publication, then retire in a normal successor without another census. Source R1/R2 failures remain recorded; SOURCE19-R3 is a finite PASS, not hosted CI or full H7/A-T7/A-G/CS deployment completion."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -891,8 +897,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1217,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1218,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 Task Launch Configuration SOURCE19-R3: one original scoped census at fcb05baef62ddfe16fc2fe572a85b3c1e6cd6543 plus 16 frozen production files and two new regression files. Whole shared bootstrap files preserve concurrent RFC-371 Native wiring. Original complete import/exception/owner rows and all 129 ordered ledger explanations are preserved; exact additions are seven imports, five exceptions, two owners and one public export. Existing public contract projections and physical call-line anchors follow the same original generator; no rules, predicates, SPI classifications or effect policies change. Classic exact inbound/outbound remain 50/0. H7 and all other tracked/untracked WIP are excluded. Consume these four measured one-commit declarations with this matching publication, then retire in a normal successor without another census. Source R1/R2 failures remain recorded; SOURCE19-R3 is a finite PASS, not hosted CI or full H7/A-T7/A-G/CS deployment completion."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -912,8 +921,11 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27387,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 27389,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 Task Launch Configuration SOURCE19-R3: one original scoped census at fcb05baef62ddfe16fc2fe572a85b3c1e6cd6543 plus 16 frozen production files and two new regression files. Whole shared bootstrap files preserve concurrent RFC-371 Native wiring. Original complete import/exception/owner rows and all 129 ordered ledger explanations are preserved; exact additions are seven imports, five exceptions, two owners and one public export. Existing public contract projections and physical call-line anchors follow the same original generator; no rules, predicates, SPI classifications or effect policies change. Classic exact inbound/outbound remain 50/0. H7 and all other tracked/untracked WIP are excluded. Consume these four measured one-commit declarations with this matching publication, then retire in a normal successor without another census. Source R1/R2 failures remain recorded; SOURCE19-R3 is a finite PASS, not hosted CI or full H7/A-T7/A-G/CS deployment completion."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -921,8 +933,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "86c28e48624b7c0e23803bf92b825c282b2d1c81",
-    "contentDigest": "sha256:0b3e95f0c5f245714b3237654dad7f648151a94a23d618e2804f6a0851d6b0f9",
+    "currentSnapshotSha": "fcb05baef62ddfe16fc2fe572a85b3c1e6cd6543",
+    "contentDigest": "sha256:11ad1eed728cf5360129a2b5210fd484740b3e35db90fc62e8ce0d974e8f03f4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

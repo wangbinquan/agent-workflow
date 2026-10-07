@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:86f2b12bb107c55c960fbec11c44a0f007b78aa1ea60e6b49757df439f495c32`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5956 |
+| `architectureExceptions` | 5961 |
 | `backgroundJobs` | 366 |
-| `crossContextImports` | 6782 |
+| `crossContextImports` | 6789 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27387 |
+| `moduleSymbolOwners` | 27389 |
 | `mutationEntrypoints` | 1953 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1217 |
+| `publicSurfaces` | 1218 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -209,8 +209,8 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3790 |
-| legacy-inbound | 1946 |
-| offered-consumption | 350 |
+| legacy-inbound | 1951 |
+| offered-consumption | 352 |
 | infrastructure-external | 324 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 96 |
@@ -224,7 +224,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3790 |
-| legacy-inbound | 1946 |
+| legacy-inbound | 1951 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 96 |
 | no-circular | 6 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3172 |
+| W9 | 3173 |
 | W9-D | 1080 |
-| W4-E1 | 817 |
+| W4-E1 | 821 |
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -255,7 +255,7 @@
 
 | context | 数量 |
 | --- | --- |
-| task-execution | 292 |
+| task-execution | 293 |
 | resource-catalog | 242 |
 | collaboration | 122 |
 | source-control | 104 |
@@ -274,7 +274,7 @@
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 135 / 1217）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 135 / 1218）
 
 | context | 数量 |
 | --- | --- |

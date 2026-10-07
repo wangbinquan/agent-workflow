@@ -6,7 +6,7 @@
     "moduleFiles": 1763,
     "productionFiles": 3184,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27387
+    "symbolsIncludingFileRoots": 27389
   },
   "entries": [
     {
@@ -134574,6 +134574,18 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/application/launchConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/launchConfiguration.ts#resolveTaskStartLaunchConfiguration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "resolveTaskStartLaunchConfiguration",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/launchConfiguration.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/launchConfiguration.ts#resolveTaskSubagentLiveCapture",
       "removeAfterWave": null,
       "status": "current-module",
@@ -143614,6 +143626,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/launchConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/launchConfiguration.ts#composeTaskLaunchConfiguration",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeTaskLaunchConfiguration",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -329384,5 +329408,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:86f2b12bb107c55c960fbec11c44a0f007b78aa1ea60e6b49757df439f495c32"
+  "sourceDigest": "sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca"
 }

@@ -23,6 +23,7 @@ import type {
   TaskAutoResumeCommand,
 } from '../application/ports/taskAutoResumeCommand'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
+import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
 import type { TaskExecutionRuntimeParticipants } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskLifecycleAutoRepairCommand } from '../application/ports/taskLifecycleAutoRepairCommand'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
@@ -245,6 +246,7 @@ type SqliteRuntimeParticipantsAssembled =
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
+  readonly nativeUsage?: NativeUsageInvocationPersistence
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<
@@ -270,7 +272,7 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     Parameters<typeof createSqliteFusionEngineTaskOperations>[0],
     'db' | 'schedulerDriver'
   >
-  readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
+  readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
 }
 
@@ -284,6 +286,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: dependencies.runtime.workspacePresence,
+    nativeUsage: dependencies.nativeUsage,
   })
   const log = createLogger('task')
   const participants = createTaskExecutionRuntimeParticipants(
@@ -363,7 +366,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
   const resume = Object.freeze({
     async resume(taskId: string) {
       await participants.children.resume(
-        { taskId, runtime: dependencies.rootResumeRuntime(taskId) },
+        { taskId, runtime: await dependencies.rootResumeRuntime(taskId) },
         runtime.topology,
       )
     },
@@ -465,17 +468,23 @@ type ProviderRuntimeWithoutChildLaunch<Runtime> = Runtime extends unknown
   : never
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
+  readonly nativeUsage?: NativeUsageInvocationPersistence
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: ProviderRuntimeWithoutChildLaunch<PostgresqlTaskExecutionRuntimeDependencies>
-  readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
+  readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>
   readonly routeLaunch: Omit<TaskRouteLaunchDependencies, 'db' | 'workspace'>
   readonly routeWorkspace: Omit<TaskRouteWorkspaceDependencies, 'db'>
   readonly routes: (
     context: TaskExecutionProviderRouteContext,
   ) => Omit<TaskRouteOperationsDependencies, ProviderRouteOperationsAssembled>
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
-  readonly fusion: Readonly<{ appHome: string }>
+  readonly fusion: Readonly<{
+    appHome: string
+    runConfiguration?: Parameters<
+      typeof createPostgresqlFusionEngineTaskOperations
+    >[0]['runConfiguration']
+  }>
   readonly workgroupTaskRoom: Readonly<{
     readonly collaboration: WorkgroupTaskRoomClarifyParticipantFactory
   }>
@@ -495,6 +504,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     dependencies.runtime.persistence ??
     createTaskExecutionPersistence(db, {
       workspacePresence: dependencies.runtime.workspacePresence,
+      nativeUsage: dependencies.nativeUsage,
     })
   const executionModule =
     dependencies.runtime.executionModule ??
@@ -599,7 +609,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   const resume = Object.freeze({
     async resume(taskId: string) {
       await participants.children.resume(
-        { taskId, runtime: dependencies.rootResumeRuntime(taskId) },
+        { taskId, runtime: await dependencies.rootResumeRuntime(taskId) },
         runtime.topology,
       )
     },
@@ -644,6 +654,9 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     fusion: createPostgresqlFusionEngineTaskOperations({
       db,
       appHome: dependencies.fusion.appHome,
+      ...(dependencies.fusion.runConfiguration === undefined
+        ? {}
+        : { runConfiguration: dependencies.fusion.runConfiguration }),
       schedulerDriver: runtime.schedulerDriver,
       persistence,
       executionModule,

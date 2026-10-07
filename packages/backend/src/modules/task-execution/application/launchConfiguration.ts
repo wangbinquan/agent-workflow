@@ -199,6 +199,43 @@ export async function resolveTaskSubagentLiveCapture(queries: TaskLaunchConfigur
   }
 }
 
+/** Start dependencies retain the original subagent, commit, runtime, child read order. */
+export async function resolveTaskStartLaunchConfiguration(
+  queries: TaskLaunchConfigurationQueries,
+): Promise<
+  TaskLaunchRuntimeConfiguration & {
+    subagentLiveCapture?: TaskLaunchConfigurationSnapshot['subagentLiveCapture']
+  }
+> {
+  const subagentLiveCapture = await resolveTaskSubagentLiveCapture(queries)
+  const runtime = await resolveTaskLaunchRuntimeConfiguration(queries)
+  const defaults: Record<keyof TaskLaunchRuntimeConfiguration, undefined> = {
+    commitPush: undefined,
+    maxConcurrentNodes: undefined,
+    maxConcurrentScriptNodes: undefined,
+    multiProcessSubprocessConcurrency: undefined,
+    defaultPerNodeTimeoutMs: undefined,
+    defaultRuntime: undefined,
+    defaultNodeRetries: undefined,
+    sessionRestartBudget: undefined,
+    mergeAgent: undefined,
+    maxActiveChildTasks: undefined,
+    maxInvocationDepth: undefined,
+    scriptInterpreters: undefined,
+    scriptDepsInstallTimeoutMs: undefined,
+    maxConcurrentCodeHostCalls: undefined,
+    codeHostRequestTimeoutMs: undefined,
+    codeHostResponseMaxBytes: undefined,
+    cloneTimeoutMs: undefined,
+    gitBaselineSyncWindowMs: undefined,
+  }
+  return {
+    ...defaults,
+    subagentLiveCapture,
+    ...runtime,
+  }
+}
+
 export type TaskLaunchUploadLimits = NonNullable<TaskLaunchConfigurationSnapshot['uploadLimits']>
 
 function projectUploadLimits(
