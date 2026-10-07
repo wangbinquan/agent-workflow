@@ -1,7 +1,10 @@
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'
 import type { PipelineEvidencePort } from '../application/ports/reconcilerPorts'
 import type { PipelineStagingFactories } from '../application/ports/evidenceStaging'
-import { assertEvidenceStagingFactory, assertEvidenceStagingLease } from '../public/evidenceStaging'
+import {
+  assertEvidenceStagingFactory,
+  assertEvidenceStagingLease,
+} from '../application/evidenceStaging'
 export {
   composeLegacyDevelopmentPipelineEvidence,
   type LegacyPipelineEvidencePort,

@@ -1,4 +1,5 @@
 import { inversePurposeRootBindings } from './helpers/purposeRootInverse'
+import { inverseTaskLaunchRootStatements } from './helpers/taskLaunchRootStatementInverse'
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -236,8 +237,8 @@ function oldRuntimeDiagnosticsFamilyBody(
   name: string,
   body: ts.Block,
 ): ts.Block {
-  const sqlite = source === server && name === 'composeSqliteApiRouteMounts'
-  const postgres = source === pg && name === 'composePostgresqlApplication'
+  const sqlite = source.fileName === server.fileName && name === 'composeSqliteApiRouteMounts'
+  const postgres = source.fileName === pg.fileName && name === 'composePostgresqlApplication'
   if (!sqlite && !postgres) return body
   const calls = namedCalls(body, source, 'composeLocalRuntimeManagement')
   const call = calls[0]
@@ -291,9 +292,9 @@ function oldRuntimeDiagnosticsFamilyBody(
 
 // RFC-370: reverse only the selected System roots, preserving all old body locks.
 function oldSystemFamilyBody(source: ts.SourceFile, name: string, body: ts.Block): ts.Block {
-  const sqliteCore = source === server && name === 'composeSqliteApplicationDeps'
-  const sqliteApi = source === server && name === 'composeSqliteApiRouteMounts'
-  const pgCore = source === pg && name === 'composePostgresqlApplication'
+  const sqliteCore = source.fileName === server.fileName && name === 'composeSqliteApplicationDeps'
+  const sqliteApi = source.fileName === server.fileName && name === 'composeSqliteApiRouteMounts'
+  const pgCore = source.fileName === pg.fileName && name === 'composePostgresqlApplication'
   if (!sqliteCore && !sqliteApi && !pgCore) return body
   const roots: Record<string, string> = sqliteCore
     ? { memorySystemAgentBinding: 'systemAgentAppHome' }
@@ -533,12 +534,12 @@ function oldMcpDiagnosticsFamilyBody(
   body: ts.Block,
 ): ts.Block {
   const expected =
-    source === server && name === 'composeSqliteApplicationDeps'
+    source.fileName === server.fileName && name === 'composeSqliteApplicationDeps'
       ? {
           expression: '(unstarted?.createMcpRuntimeTests??composeLocalMcpDiagnostics)',
           digest: '78bb7b9deea9d89cc1f40b14a1cef2584bb084a748a644969286b43371028e67',
         }
-      : source === pg && name === 'composePostgresqlApplication'
+      : source.fileName === pg.fileName && name === 'composePostgresqlApplication'
         ? {
             expression:
               "(phase.kind==='daemon'?composeLocalMcpDiagnostics:phase.scope.createMcpRuntimeTests)",
@@ -606,9 +607,9 @@ function oldCustomObserverProgramsBody(
   body: ts.Block,
 ): ts.Block {
   const variable =
-    source === pg && name === 'composePostgresqlApplication'
+    source.fileName === pg.fileName && name === 'composePostgresqlApplication'
       ? 'input'
-      : source === server && name === 'composeApplicationEventCenter'
+      : source.fileName === server.fileName && name === 'composeApplicationEventCenter'
         ? 'deps'
         : null
   if (variable === null) return body
@@ -766,6 +767,7 @@ function oldVerificationCommandsBody(
 
 /** Only the approved composition seams are removed; every original subtree remains. */
 function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
+  source = inverseTaskLaunchRootStatements(source, name)
   const body = oldSystemFamilyBody(
     source,
     name,
@@ -784,10 +786,10 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
     ),
   )
   if (
-    (source === pg && name === 'composePostgresqlApplication') ||
-    (source === server && name === 'composeSqliteApplicationDeps')
+    (source.fileName === pg.fileName && name === 'composePostgresqlApplication') ||
+    (source.fileName === server.fileName && name === 'composeSqliteApplicationDeps')
   ) {
-    const receiver = source === pg ? 'input' : 'deps'
+    const receiver = source.fileName === pg.fileName ? 'input' : 'deps'
     const bindings = descendants(
       body,
       (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'taskRunBinding',
@@ -811,7 +813,7 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
       throw new Error('the actual root must bind one complete Task selection and profile factory')
   }
   const original =
-    source === server && name === 'composeSqliteApplicationDeps'
+    source.fileName === server.fileName && name === 'composeSqliteApplicationDeps'
       ? oldRuntimeRegistryFactory(source, oldSqliteStoreReturn(source, body))
       : body
   const transformed = ts.transform(original, [
@@ -958,11 +960,11 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
               const expected = new Map([
                 [
                   'selectedTaskRuns',
-                  `selectTaskRunRootSelection(${source === pg ? 'input' : 'deps'}.taskRunSelection)`,
+                  `selectTaskRunRootSelection(${source.fileName === pg.fileName ? 'input' : 'deps'}.taskRunSelection)`,
                 ],
                 [
                   'workspaceExcludeProfilesFor',
-                  `composeTaskWorkspaceExcludeProfilesFor(${source === pg ? 'input' : 'deps'}.workspaceExcludeProfiles)`,
+                  `composeTaskWorkspaceExcludeProfilesFor(${source.fileName === pg.fileName ? 'input' : 'deps'}.workspaceExcludeProfiles)`,
                 ],
                 [
                   'taskRunRoot',
@@ -975,7 +977,7 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
                   ![
                     expected.get(declaration.name.text),
                     declaration.name.text === 'workspaceExcludeProfilesFor'
-                      ? `composeTaskWorkspaceExcludeProfilesFor(${source === pg ? 'input' : 'deps'}.workspaceExcludeProfiles,)`
+                      ? `composeTaskWorkspaceExcludeProfilesFor(${source.fileName === pg.fileName ? 'input' : 'deps'}.workspaceExcludeProfiles,)`
                       : undefined,
                   ].includes(compact(declaration.initializer, source))
                 )
@@ -1070,8 +1072,11 @@ function oldEventCenterBody(): ts.Block {
 }
 
 function digest(body: ts.Block, source: ts.SourceFile): string {
+  const originalSource = ts.getOriginalNode(body).getSourceFile()
+  if (originalSource === undefined || originalSource.fileName !== source.fileName)
+    throw new Error('complete-body digest requires the original parsed source metadata')
   return createHash('sha256')
-    .update(printer.printNode(ts.EmitHint.Unspecified, body, source))
+    .update(printer.printNode(ts.EmitHint.Unspecified, body, originalSource))
     .digest('hex')
 }
 
@@ -1242,9 +1247,10 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       'composeSqliteApiRouteMounts',
     )
     expect(sqliteApi).toHaveLength(1)
-    expect(sqliteApi[0]!.arguments.slice(-3).map((argument) => compact(argument, server))).toEqual([
+    expect(sqliteApi[0]!.arguments.slice(-4).map((argument) => compact(argument, server))).toEqual([
       'applicationConfiguration',
       'configuration',
+      'taskLaunchConfiguration',
       'unstarted',
     ])
   })

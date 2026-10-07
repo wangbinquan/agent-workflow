@@ -346,6 +346,24 @@ export function offDagOfferedEdges(
  */
 export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   {
+    from: 'packages/backend/src/modules/development-automation/composition/pipelineEvidence.ts',
+    to: 'integration',
+    why: 'RFC-370 Purpose 完整效果家族的 DA 装配消费 Integration exact public 的所选 pipeline 执行合同。现有收集/触发/重跑语义仍由原 owner 负责；精确登记实际 offered type 边，在 A-T7 收敛 required SPI 归属，不改变目标 DAG、分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts',
+    to: 'integration',
+    why: 'RFC-370 Purpose 完整效果家族的 delivery provider 持有所选 pipeline 执行合同，由 Integration exact public 提供。该实际 offered type 边随 provider 接线显式登记，在 A-T7 收敛 required SPI 归属，不改变原效果、目标 DAG、分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/development-automation/infrastructure/local/legacyPipelineEvidence.ts',
+    to: 'integration',
+    why: 'RFC-370 Purpose 独立 native pipeline 配对消费 Integration exact public 的原 pipeline 执行合同。原完整 native 调用和行为保持；精确登记迁入 local 包后的实际 offered type 边，在 A-T7 收敛 required SPI 归属，不改变目标 DAG、分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
     from: 'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts',
     to: 'runtime-management',
     why: 'RFC-370 Task family 的资源材料合同使用 runtime-management public 的逻辑内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',

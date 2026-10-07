@@ -1,3 +1,5 @@
+import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
+
 export type HostExecutionResult<T> = T | Promise<T>
 
 /** Named execution groups; resource reads and edits do not acquire these. */
@@ -52,7 +54,7 @@ export interface HostExecutionAuthorityDriver {
 
 export interface HostExecutionAuthorityFactory {
   create(input: {
-    readonly provider: 'sqlite' | 'postgresql'
+    readonly provider: DatabaseProvider
     readonly generation: string
   }): HostExecutionResult<HostExecutionAuthorityDriver>
 }

@@ -19,7 +19,7 @@ import {
   createLocalEvidenceStagingNamespace,
 } from '../infrastructure/local/evidenceStaging'
 import { createFileEvidenceDocumentCommands } from '../infrastructure/local/fileEvidenceDocumentCommands'
-import { assertEvidenceStagingFactory } from '../public/evidenceStaging'
+import { assertEvidenceStagingFactory } from '../application/evidenceStaging'
 
 /** Owner composition selects the writer, artifact receiver and staging together. */
 export function composeRequirementMaterializerContent(input: {

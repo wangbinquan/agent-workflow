@@ -4,7 +4,10 @@ export {
   type LegacyPipelineEvidencePort,
 } from '../composition/pipelineEvidence'
 
-export { assertEvidenceStagingFactory, assertEvidenceStagingLease } from './evidenceStaging'
+export {
+  assertEvidenceStagingFactory,
+  assertEvidenceStagingLease,
+} from '../application/evidenceStaging'
 
 import type { CreateAgent } from '@agent-workflow/shared'
 

@@ -1,5 +1,5 @@
 import type { EvidenceStagingFactory, EvidenceStagingReference } from './ports/evidenceStaging'
-import { assertEvidenceStagingFactory, assertEvidenceStagingLease } from '../public/evidenceStaging'
+import { assertEvidenceStagingFactory, assertEvidenceStagingLease } from './evidenceStaging'
 // RFC-310 PR-3 T33/T35/T38/T38a —— RequirementMaterializePort 的生产实现。
 //
 // 分工（design §5.2/§5.3）：外部程序只把文件落进 one-shot sink 并转述

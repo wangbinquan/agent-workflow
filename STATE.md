@@ -10716,3 +10716,12 @@ Task 源码及配套完整35路径已发布53be4913a91aad4385cdf52ee4c195abc0ba0
 本普通后继只退役已随53be4913消费的四个one-commit增长声明。完整129行baseline、顺序、why及其它字段保留，仅按原payload算法刷新ledger digest。源码和13原产物不重生，三份共享文档完整旧前缀保持，仅追加本段；没有新census或本机AW执行门。
 
 旧H7核心后继79d31c96主CI37557367648已terminal failure，72作业55success/17failure；已发布Purpose类型/receiver修复覆盖其对应错误，剩余功能源码reader/公共入口等按实际日志继续处理，旧失败保留。H7 binding及Task失权quiesce有限SOURCE7-R1已PASS，但实际三根、Task事务、19handles和named admission/A-T7/A-G继续；随后独立CS adapters，先M0实际部署再M1～M4。AW尚未部署到CS，RFC未完成。
+
+
+## 2026-10-07 RFC-370 功能 CI 公开入口与完整根配套候选
+
+SOURCE16-R1 有效稳定 FAIL 的唯一旧 materializer callee P2 已闭合并保留原回执；SOURCE16-R2 有效稳定有限 PASS，16 自有路径修正 canonical provider alias、exact public 位置、旧 physical reader、完整 Purpose receiver、三条既有 type edge 及 Task/Native 根的原完整判据兼容。根会话实际消费65项与三个wrapper，原双provider用例/预算与完整旧根摘要保持。
+
+原唯一静态生成固定25da3dd4叠加七生产路径（六个存在）与八测试/数据路径，13输出sourceDigest sha256:999f5b299f78863f1ab21c416f1969ea0047deaae920f14c2628da8d7308c779；classic完整数组0/0相等。只新增一条DatabaseProvider类型边及其原exact exception，三个staging owner物理迁移而总数不变；全部其它payload与129原库存why/顺序保持。前继三项已消费临时声明按原协议退役并完整留证；本批两项实测增长6790→6791／5961→5962随匹配发布消费后普通退役，不重跑census。私有provenance比较错误及修正分别保留。
+
+配套独立门、精确上库/远端同步与新exact-SHA hosted CI另验，无本机AW tests/typecheck/build/service/E2E，无跨会话消息。全部H7/RFC-371未发布输出保持。完整H7/A-T7/A-G、各层CS adapters及M0先部署至M4仍开放，AW尚未部署CS，RFC未完成。详见 design/RFC-370-crewstation-hosted-deployment/functional-ci-canonical-publication.md。以下原内容及所有并行输出保持，仅追加此段。

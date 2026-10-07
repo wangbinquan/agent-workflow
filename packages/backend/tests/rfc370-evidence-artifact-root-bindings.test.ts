@@ -52,12 +52,13 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
   const start = load('cli/start.ts'),
     pg = load('cli/postgresqlDaemonApplication.ts'),
     server = load('server.ts')
-  for (const [source, receiver] of [
-    [start, 'input'],
-    [pg, 'input'],
-    [server, 'deps'],
+  for (const [source, receiver, purposeReceiver] of [
+    [start, 'input', 'developmentPurposeRoot'],
+    [pg, 'input', 'developmentPurposeRoot'],
+    [server, 'deps', 'deps.developmentPurposeRoot'],
   ] as const) {
-    bind(source, 'composeDevelopmentAutomation', 'evidenceArtifacts', receiver)
+    bind(source, 'composeDevelopmentPurposeRoot', 'evidenceArtifacts', receiver)
+    bind(source, 'composeDevelopmentAutomation', 'evidenceArtifacts', purposeReceiver)
     bind(source, 'composeDevelopmentEmployeePlatformWorkItems', 'evidenceArtifacts', receiver)
     expect(source.text).toContain('evidenceArtifacts?: EvidenceArtifactPort')
   }
@@ -78,7 +79,7 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
     ['application/actionWorkspace.ts', 'deps.evidence.materializeBundle', 2],
     ['infrastructure/uploadPlacement.ts', 'deps.evidence.materializeBlob', 1],
     ['application/agentActionOrchestrator.ts', 'ports.actionWorkspace!.adopt', 1],
-    ['composition/digitalEmployeePlatformWorkItems.ts', 'store.materializeBundle', 1],
+    ['composition/digitalEmployeePlatformWorkItems.ts', 'evidenceStore().materializeBundle', 1],
   ] as const) {
     const source = load('modules/development-automation/' + path),
       selected = calls(source, expression)

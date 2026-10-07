@@ -1,4 +1,5 @@
 import { inversePurposeRootBindings } from './helpers/purposeRootInverse'
+import { inverseTaskLaunchRootStatements } from './helpers/taskLaunchRootStatementInverse'
 // RFC-370: ordinary diagnostics use one selected prototype family and opaque
 // execution identities; explicit native roots preserve original receipt reads.
 import { describe, expect, test } from 'bun:test'
@@ -797,11 +798,13 @@ describe('RFC-370 native MCP root completeness', () => {
         180,
       ],
     ] as const) {
-      const source = ts.createSourceFile(
-        path,
-        readFileSync(resolve(root, path), 'utf8'),
-        ts.ScriptTarget.Latest,
-        true,
+      const source = inverseTaskLaunchRootStatements(
+        ts.createSourceFile(
+          path,
+          readFileSync(resolve(root, path), 'utf8'),
+          ts.ScriptTarget.Latest,
+          true,
+        ),
       )
       const fn = source.statements.find(
         (n): n is ts.FunctionDeclaration => ts.isFunctionDeclaration(n) && n.name?.text === name,

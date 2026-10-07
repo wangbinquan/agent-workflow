@@ -2,7 +2,7 @@ import type {
   EvidenceStagingFactory,
   EvidenceStagingLease,
   EvidenceStagingNamespace,
-} from '../application/ports/evidenceStaging'
+} from './ports/evidenceStaging'
 
 /** A selected content face is complete; composition never fills individual members. */
 export function assertEvidenceStagingFactory(factory: EvidenceStagingFactory): void {

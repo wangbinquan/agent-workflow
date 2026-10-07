@@ -28136,6 +28136,42 @@
       "currentContext": "development-automation",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceStaging.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceStaging.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceStaging.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceStaging.ts#assertEvidenceStagingFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertEvidenceStagingFactory",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceStaging.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceStaging.ts#assertEvidenceStagingLease",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertEvidenceStagingLease",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/application/migrationAnalyzer.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/migrationAnalyzer.ts#$file",
       "removeAfterWave": null,
@@ -44931,42 +44967,6 @@
       "signatureDigest": "sha256:1a38d070d9fea9267d664cad0a14d1a5e533a80b0213ffcaf65a60d82e0138e7",
       "status": "current-module",
       "symbol": "DevelopmentRetentionSweepResult",
-      "targetContext": "development-automation",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "public",
-      "exported": false,
-      "file": "packages/backend/src/modules/development-automation/public/evidenceStaging.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/public/evidenceStaging.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "development-automation",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/public/evidenceStaging.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/public/evidenceStaging.ts#assertEvidenceStagingFactory",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertEvidenceStagingFactory",
-      "targetContext": "development-automation",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/public/evidenceStaging.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/public/evidenceStaging.ts#assertEvidenceStagingLease",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertEvidenceStagingLease",
       "targetContext": "development-automation",
       "targetLayer": "public"
     },
@@ -329420,5 +329420,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b1361bf27b9549e835dad21734dcc5a9ceae02de49a9511973ea60080b969cae"
+  "sourceDigest": "sha256:999f5b299f78863f1ab21c416f1969ea0047deaae920f14c2628da8d7308c779"
 }

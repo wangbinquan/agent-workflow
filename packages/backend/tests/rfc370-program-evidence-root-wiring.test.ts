@@ -85,7 +85,19 @@ test('both daemon owners consume the same program and evidence read selection', 
       root,
       file,
       'composeDevelopmentAutomation',
+      'evidenceDocumentCommands:developmentPurposeRoot.requirement.documentCommands,',
+    )
+    selected(
+      root,
+      file,
+      'composeDevelopmentPurposeRoot',
       `evidenceDocumentCommands:${receiver}.evidenceDocumentCommands,`,
+    )
+    selected(
+      root,
+      file,
+      'composeDevelopmentPurposeRoot',
+      `selection:${receiver}.developmentPurposes,`,
     )
   }
 })
@@ -107,6 +119,18 @@ test('standalone HTTP consumers preserve the selected receiver through fallback 
     declaration(server, 'composeFallbackDevelopmentAutomation'),
     server,
     'composeDevelopmentAutomation',
+    'evidenceDocumentCommands:deps.developmentPurposeRoot.requirement.documentCommands,',
+  )
+  selected(
+    declaration(server, 'composeSqliteApplicationDeps'),
+    server,
+    'composeDevelopmentPurposeRoot',
     'evidenceDocumentCommands:deps.evidenceDocumentCommands,',
+  )
+  selected(
+    declaration(server, 'composeSqliteApplicationDeps'),
+    server,
+    'composeDevelopmentPurposeRoot',
+    'selection:deps.developmentPurposes,',
   )
 })

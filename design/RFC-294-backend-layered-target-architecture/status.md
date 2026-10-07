@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b1361bf27b9549e835dad21734dcc5a9ceae02de49a9511973ea60080b969cae`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:999f5b299f78863f1ab21c416f1969ea0047deaae920f14c2628da8d7308c779`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,9 +30,9 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5961 |
+| `architectureExceptions` | 5962 |
 | `backgroundJobs` | 366 |
-| `crossContextImports` | 6790 |
+| `crossContextImports` | 6791 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
 | `moduleSymbolOwners` | 27390 |
@@ -52,7 +52,7 @@
 | resource-catalog / infrastructure | 131 |
 | task-execution / composition | 91 |
 | resource-catalog / application | 78 |
-| development-automation / application | 66 |
+| development-automation / application | 67 |
 | development-automation / infrastructure | 48 |
 | collaboration / infrastructure | 47 |
 | resource-catalog / composition | 39 |
@@ -107,7 +107,6 @@
 | identity-access / public | 6 |
 | memory / public | 6 |
 | collaboration / public | 5 |
-| development-automation / public | 5 |
 | digital-employee / public | 5 |
 | event-center / public | 5 |
 | integration / public | 5 |
@@ -116,6 +115,7 @@
 | system-operations / domain | 5 |
 | system-operations / public | 5 |
 | code-capability / composition | 4 |
+| development-automation / public | 4 |
 | event-center / composition | 4 |
 | event-center / domain | 4 |
 | integration / domain | 4 |
@@ -208,7 +208,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3790 |
+| legacy-outbound | 3791 |
 | legacy-inbound | 1951 |
 | offered-consumption | 353 |
 | infrastructure-external | 324 |
@@ -223,7 +223,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3790 |
+| legacy-outbound | 3791 |
 | legacy-inbound | 1951 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 96 |
@@ -235,7 +235,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3173 |
+| W9 | 3174 |
 | W9-D | 1080 |
 | W4-E1 | 821 |
 | W5 | 203 |

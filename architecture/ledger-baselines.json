@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:b1361bf27b9549e835dad21734dcc5a9ceae02de49a9511973ea60080b969cae",
+    "sourceDigest": "sha256:999f5b299f78863f1ab21c416f1969ea0047deaae920f14c2628da8d7308c779",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -856,10 +856,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6790,
+      "baseline": 6791,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-371 capability repair: one exact public capability query consumed by Task native invocation composition; original canonical count 6789 -> 6790. Measured committed dce3d3c6cbf686eab1fa5f682ee0be0b70da8f7c plus frozen own capability repair5 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
+        "why": "RFC-370 functional CI SOURCE16-R2: one original scoped census at 25da3dd426215aeb6873c19d575f1ec413e9f5fd plus seven frozen production path entries (six existing files) and eight frozen test/data entries. Only one canonical DatabaseProvider type edge and its original exact exception are added. Three EvidenceStaging owner rows move from the nonexact public file to the application file; their symbols, policy and count are preserved. All original complete import/exception rows, public contracts, 129 inventory reasons and other opaque payloads remain. Classic complete inbound/outbound arrays stay 0/0; four original generator rules stay unchanged. Previously consumed RFC-371 temporary declarations retire by their published one-commit protocol and remain fully recorded in the publication evidence. Consume only these two newly measured declarations with this publication, then retire them in an ordinary successor without another census. Original SOURCE16-R1 FAIL remains recorded; SOURCE16-R2 finite PASS does not close hosted CI, full H7/A-G, CS adapters or deployment."
       }
     },
     {
@@ -880,8 +880,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5961,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5962,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 functional CI SOURCE16-R2: one original scoped census at 25da3dd426215aeb6873c19d575f1ec413e9f5fd plus seven frozen production path entries (six existing files) and eight frozen test/data entries. Only one canonical DatabaseProvider type edge and its original exact exception are added. Three EvidenceStaging owner rows move from the nonexact public file to the application file; their symbols, policy and count are preserved. All original complete import/exception rows, public contracts, 129 inventory reasons and other opaque payloads remain. Classic complete inbound/outbound arrays stay 0/0; four original generator rules stay unchanged. Previously consumed RFC-371 temporary declarations retire by their published one-commit protocol and remain fully recorded in the publication evidence. Consume only these two newly measured declarations with this publication, then retire them in an ordinary successor without another census. Original SOURCE16-R1 FAIL remains recorded; SOURCE16-R2 finite PASS does not close hosted CI, full H7/A-G, CS adapters or deployment."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -895,10 +898,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1219,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371 capability repair: one driver-owned native capture eligibility query; original canonical count 1218 -> 1219. Measured committed dce3d3c6cbf686eab1fa5f682ee0be0b70da8f7c plus frozen own capability repair5 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -919,10 +919,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27390,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 capability repair: one new driver-owned eligibility function; original canonical count 27389 -> 27390. Measured committed dce3d3c6cbf686eab1fa5f682ee0be0b70da8f7c plus frozen own capability repair5 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -930,8 +927,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "dce3d3c6cbf686eab1fa5f682ee0be0b70da8f7c",
-    "contentDigest": "sha256:e74e616fee728fad60c3538067f31963994f1c56940ca6dcf5845087f2f7e2bd",
+    "currentSnapshotSha": "25da3dd426215aeb6873c19d575f1ec413e9f5fd",
+    "contentDigest": "sha256:e3f000155a2d9c918975fec6479b82128774c4ad8d9fe28d2d21f2df7831b72f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -151,7 +151,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       'RFC-323 legacy program 升级只生成一次性 Node 兼容包装器；包装器同步执行一笔已冻结程序，' +
       '以 120 秒 timeout 和 5 MiB maxBuffer 双重封顶，不把 spawn 能力导出给平台调用方。',
   },
-  'modules/integration/infrastructure/developmentAdapterRunner.ts': {
+  'modules/integration/infrastructure/local/developmentAdapterProgram.ts': {
     governance: 'process-group',
     count: 1,
     why:
