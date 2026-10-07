@@ -21,3 +21,11 @@ Windows 只在原三个位置追加这一套件，原78个命令 token 内容／
 五项实测 baseline 变化附一次声明：transaction 271→273，background 367→369，imports 6814→6815，exceptions 5981→5982，owners 27444→27465。沿原五个纯 JSON 函数刷新 ledger payload 摘要；本批消费后由普通后继删除五条声明，无须再次 census。状态 Markdown 保留原生成全文，STATE／plan 的完整旧前缀及全部并行输出保持。配套独立功能门、精确提交／远端同步和正式 CI 各自验收。
 
 私有修正证明的两次失败和缺少有效证明而停止的 freeze 包装均保留；成功证明使用原 TypeScript AST，显式允许上述两处 fixture 输入差异，完整核对其他用例与断言。原失败回执、源码候选和唯一原生成输出不改写，不以证明失败触发新 census。
+
+## 2026-10-07 Task 传递层发布与五条一次声明退役
+
+SOURCE6-R2 与 MATCHING16-R1 独立有效稳定有限 PASS，root 实际消费完整正文后精确发布22路径；发布记录保存实际 commit、远端0／0、空 index 和全部并行 WIP 保留的字节证据。新精确 SHA 的主 CI／Windows 分别登记，正式终态另验，有限门不等于全仓绿。
+
+本普通后继仅删除五条已消费 allowGrowth。129项原有完整有序库存、baseline、why、预算和其他字段不变，沿原五个纯 JSON 函数重算 ledger payload 摘要；原13项配套及唯一完整成功 census 不重跑，6个发布源文件和全部原12个 case／75 expect 保持。三文档的完整旧前缀及所有并行输出保留，没有本机 AW tests／typecheck／build／services／E2E。
+
+C2-W1 原 D1／D2 有效 FAIL 已真实消费，D3 原 driver 寿命屏障与锁内复核设计有效稳定 PASS，实际 claim／heartbeat／finalization 接线继续实施。原业务分类、三个 roots／19 owner／UI、完整 H7／A-T7／A-G、各层独立 CS adapter、M0先部署至M4仍开放；AW 尚未部署CS，RFC保持In Progress。

@@ -10837,3 +10837,11 @@ C1的首轮两项测试配置P2、原FAIL/root消费及修正保留，修正后�
 一次原 scoped census 固定3dc43c13，四原规则不变、13 raw 输出先保存；3个 production／1个测试，完整 classic 0／0相等，新增21 owner／2 execution-local／2 transaction／1 type-only import及原 classifier exception。129有序账本和 why 保持，只给五项实测增长一次许可并在普通后继退役。无本机 AW tests／typecheck／build／services／E2E；独立 matching 门、上库同步和新精确 SHA CI 另验。
 
 实际 Task claim／heartbeat／driver／业务分类／finalization 重试尚待 C2。三 roots／19 owner／UI、H7／A-T7／A-G 及各层独立 CS adapter、M0 首部署至 M4 继续；AW 尚未部署 CS。详见 [Task 捕获与具名事务发布](design/RFC-370-crewstation-hosted-deployment/host-authority-task-write-capture-publication.md)。以下旧文档及全部并行输出完整保留。
+
+## 2026-10-07 Task 传递层发布与五条一次声明退役
+
+SOURCE6-R2 与 MATCHING16-R1 独立有效稳定有限 PASS，root 实际消费完整正文后精确发布22路径；发布记录保存实际 commit、远端0／0、空 index 和全部并行 WIP 保留的字节证据。新精确 SHA 的主 CI／Windows 分别登记，正式终态另验，有限门不等于全仓绿。
+
+本普通后继仅删除五条已消费 allowGrowth。129项原有完整有序库存、baseline、why、预算和其他字段不变，沿原五个纯 JSON 函数重算 ledger payload 摘要；原13项配套及唯一完整成功 census 不重跑，6个发布源文件和全部原12个 case／75 expect 保持。三文档的完整旧前缀及所有并行输出保留，没有本机 AW tests／typecheck／build／services／E2E。
+
+C2-W1 原 D1／D2 有效 FAIL 已真实消费，D3 原 driver 寿命屏障与锁内复核设计有效稳定 PASS，实际 claim／heartbeat／finalization 接线继续实施。原业务分类、三个 roots／19 owner／UI、完整 H7／A-T7／A-G、各层独立 CS adapter、M0先部署至M4仍开放；AW 尚未部署CS，RFC保持In Progress。
