@@ -18,6 +18,7 @@
 | `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts`       | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
 | `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts` | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值  |
 | `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`  | `backend/src/platform/background/maintenanceService.ts` | 事件循环停顿记 WARN 的门槛毫秒（默认 1000，夹在 [采样周期×2, 60000]）；调低用于归因  |
+| `AW_NATIVE_OBSERVATION_ADMISSIONS`        | `backend/src/cli/start.ts`、`backend/src/cli/postgresqlDaemonApplication.ts` → `backend/src/platform/persistence/nativeUsageAdmissions.ts` | 原生采集准入的 JSON 数组；每项为已注册运行时的 `registrationId` 与正整数 `configurationRevision`，只允许这两个字段，重复身份或无效 JSON 会拒绝启动。未设置或空字符串按空数组处理。它选择安装配置，不限制任务或用量统计总量，也不配置费率。 |
 
 ## 框架 ↔ 子进程契约（daemon 写入、child 读取）
 

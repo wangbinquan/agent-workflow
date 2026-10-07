@@ -330,3 +330,9 @@ WF-03 保留私有/公开卡片的完整 chip 数组与原用户名期望，改�
 [CI 37644567999](https://github.com/wangbinquan/agent-workflow/actions/runs/37644567999) 实际报出本会话两项问题：后端未加载 DOM 库时，Worker 观察夹具引用了不存在的全局 `Transferable`／`StructuredSerializeOptions`；历史迁移回归把最新步骤误当作固定的 `0017_rfc371_retained_output_revision`，追加 RFC-370 的 0018 后选错了验证对象。
 
 Worker 夹具现从原 `Worker.postMessage` 的声明推导两种参数类型，两个重载及实际转发分支不变，不增加 DOM 库或类型抑制。迁移回归按原 0017 的唯一 ID 和其 from／to contract digest 选择真实历史版本，保留原所有表、语句、原生投影、十二触发器和迁移字节断言，并明确核验唯一步骤及两个版本均存在。生产代码、生产迁移、原人口和 30／60 秒用例预算均不改。本机只做精确格式、lint 和静态 AST 核对；类型与功能结果继续以新精确 SHA 的 GitHub CI 为准，本文不把候选修订记为全仓通过。
+
+## 2026-10-08 原生文件测试登记与提前拒绝回归
+
+同一轮 CI 的 Ubuntu 17/32 分片实际报出三份原生 SQLite 夹具未进入 `TEST_ENGINE_HARDCODING_DEBT`：Worker 基线 helper 一处、所有根 final owner 两处、终态采集一处。这四个调用均操作 OpenCode 外部固定 SQLite 文件；原 AW Task／账本行为已有真实双 provider 回归。现按路径顺序登记实际调用数并说明来源，原扫描、分类规则、高水精确比较及 open 待办不变，不将外部原生格式改造成另一种数据库。
+
+该分片还实际报出 RFC-323 提前拒绝回归在 SQLite 与 PostgreSQL 两侧读取尚未创建的 `evidence/bundles`，抛出 ENOENT；拒绝结果和原因断言已通过。原生产导入在拒绝后不会调用 `importTree`，证据存储按需创建。夹具现同时允许目录不存在或存在且为空，继续断言零文件、原 blocked／原因和 cleanupCount=1；不会为断言创建目录，也不吞掉已存在目录的读取错误。生产行为、原用例预算、原统计人口均不改，新精确 SHA 的 hosted CI 仍待完成。

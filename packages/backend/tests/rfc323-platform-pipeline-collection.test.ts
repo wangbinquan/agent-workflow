@@ -341,7 +341,10 @@ describeEachProvider('RFC-323 平台流水线采集（双引擎）', (providerHa
         outcome: 'blocked',
         explanation: expect.stringContaining('pipeline-evidence-redaction-incomplete'),
       })
-      expect(readdirSync(join(fixture.appHome, 'evidence', 'bundles'))).toHaveLength(0)
+      // Rejection precedes import, so the lazy evidence store may never exist.
+      // A missing directory and an existing empty directory both retain zero files.
+      const bundles = join(fixture.appHome, 'evidence', 'bundles')
+      expect(existsSync(bundles) ? readdirSync(bundles) : []).toHaveLength(0)
       expect(fixture.cleanupCount()).toBe(1)
     })
 

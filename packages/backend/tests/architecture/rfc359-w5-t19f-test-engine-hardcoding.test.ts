@@ -94,6 +94,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   //（t109 全旅程 / pr5 java 端到端 / pr4 工作区旅程 / pr7b 冲突收敛 / pr3 外部适配器）
   // 全部迁到 `describeEachProvider`，回退随之消失。
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2',
+  // RFC-371：OpenCode 原生磁盘 SQLite/WAL 文件的 Worker 基线夹具；
+  // 原 Task/账本/基线由 rfc371-native-baseline-worker-provider 的双 provider 用例验证。
+  'helpers/rfc371NativeBaselineWorkerFixture.ts: 1',
   'input-port-contract.test.ts: 1',
   'integration-chaos/chaos-scenarios.integration.test.ts: 2',
   'memory-distiller-source-context.test.ts: 1',
@@ -405,9 +408,15 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc371-native-pages-provider.test.ts: 2',
   // RFC-371：原外部 OpenCode SQLite 的建库与实际子进程各一处；AW 根、数字与恢复全部走双 provider。
   'rfc371-native-root-collection.test.ts: 2',
+  // RFC-371：实际子进程及本地建库各一处，均操作外部 OpenCode 固定 SQLite 文件；
+  // 原 Task final owner/来源封存仍在 describeEachProvider 内验证两个持久 provider。
+  'rfc371-native-root-final-owner.test.ts: 2',
   // RFC-371（Codex）：OpenCode 原生文件格式的元数据夹具，机械归类 real-file-database；
   // AW 来源存储、分页与投影仍由 rfc371-span-source-provider 的双 provider 回归验证。
   'rfc371-native-span-capture.test.ts: 1',
+  // RFC-371：唯一建库用于外部 OpenCode 的真实基线文件；
+  // 原执行 owner/终态/页回执/封存使用 describeEachProvider 的真实双 provider。
+  'rfc371-native-terminal-collection.test.ts: 1',
   // RFC-371：OpenCode 原生固定 SQLite 文件完整 EOF/Worker 夹具，归类 real-file-database；
   // AW 原始持久来源、完整投影与人民币关联在 complete-spans-provider 等双 provider 用例验证。
   'rfc371-native-usage-pass.test.ts: 1',
