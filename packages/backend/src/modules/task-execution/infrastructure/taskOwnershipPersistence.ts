@@ -328,7 +328,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
             }),
         }),
       )
-      registerTaskHostClaimFailures(this, db, hostWrites)
+      registerTaskHostClaimFailures(this, db, hostWrites, createOwnershipToken)
     }
   }
 

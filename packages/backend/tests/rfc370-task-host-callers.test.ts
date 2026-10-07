@@ -90,11 +90,17 @@ describeEachProvider('RFC-370 real Task host claim and original ACK callers', (h
         await expect(h.claim()).rejects.toThrow('host-execution-write-context-unavailable')
         expect(
           recording.statements.some(({ sql }) =>
-            /insert into ["`]?task_execution_owners/i.test(sql),
+            /insert into (?:(?:"agent_workflow"|agent_workflow)\.)?["`]?task_execution_owners["`]?\b/i.test(
+              sql,
+            ),
           ),
         ).toBe(true)
         expect(
-          recording.statements.some(({ sql }) => /update ["`]?task_execution_intents/i.test(sql)),
+          recording.statements.some(({ sql }) =>
+            /update (?:(?:"agent_workflow"|agent_workflow)\.)?["`]?task_execution_intents["`]?\b/i.test(
+              sql,
+            ),
+          ),
         ).toBe(true)
         expect(recording.statements.some(({ sql }) => /rollback/i.test(sql))).toBe(true)
       } finally {

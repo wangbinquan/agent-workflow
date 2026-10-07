@@ -1,3 +1,7 @@
+## 2026-10-08 RFC-370 Task effect写入与原CI功能修复
+
+W2-E六原effect方法区分新准备/已发回执，SOURCE4有效PASS；Task精确CI类型/原factory装配/PG schema匹配及两原Driver探针登记SOURCE7有效PASS，原SQL、全部断言/预算和原 .db identity保持。一次原census及并行e28原源码的3文件有限投影保留完整13产物、129有序库存/why与全部并行输出，仅补漏记W5原人口68→70一项许可，普通后继退役。原290f主CI failure/Windowscancelled保留，不代签新exact-SHA。本文与RFC plan全部旧正文/并行内容保留。H7/A-T7/A-G、runtime lease实现、CS adapters与M0～M4部署仍待推进，RFC仍阶段A，AW尚未部署CS。详见[effect记录](design/RFC-370-crewstation-hosted-deployment/host-authority-task-effect-writes.md)、[CI修复](design/RFC-370-crewstation-hosted-deployment/task-host-callers-ci-repair.md)。
+
 ## 2026-10-07 RFC-371 原生基线采集准备与原后端启动修复
 
 本会话 35 路径已提交并推送 `86c28e48624b7c0e23803bf92b825c282b2d1c81`，main/origin 精确同步、索引为空。SOURCE v3 与 META13-v2 独立有效 PASS；原 ready 后无 pending 的采集失败不再被成功回调吞掉，正常 ACK 关闭与真实 Worker/SQL 回收保持。显式修订选择、整个根集合的一次原 baseline、原只读 Worker 与回归已上库；四共享启动/provider 文件及并行 Task 配置依赖由其 owner 接续，独立根接线回归暂未上库，不能记正式原生采集已启用。

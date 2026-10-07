@@ -1119,3 +1119,7 @@ SOURCE23-R2 实际稳定有限 PASS 已由 root 消费，23 owned／33 control�
 配套功能门、精确提交／远端同步和新 SHA hosted CI 尚待验收；详见 RFC-370 的 `host-authority-task-callers-publication.md`。C2-W2 业务写入／effect、19句柄、三个 roots、状态 UI、A-T7／A-G 与 CS M0～M4 仍开放，AW 尚未部署 CS。继续完成 RFC，不以本有限切面收尾。
 
 - RFC-370 C2-W1 配套 R2：并行 AW 接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库，其实际 SOURCE PASS 和35材料绑定已核对；Task SOURCE23-R2 的82原项全部不变。旧 MATCHING16-R1 因5 control 漂移（2删除）实际 INVALID，原回执保留。沿唯一原 census 对15物理生产差额仅用原助手补依赖，完整逆向复现8 canonical对象，3205输入，最终9一次性声明；129库存/why及并行333保留，47→48 offered只加原具名边，无新增 whole census。本候选待 R2 独立配套门、exact39 发布和精确 SHA hosted CI；W2-E／W2-R 设计已分别获实际稳定有限 PASS，源码尚未实施，H7／A-G／CS部署继续开放。
+
+## 2026-10-08 W2-E与精确Task CI修复有限进度
+
+SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文件有限投影，13 matching及旧库存/并行输出保留，仅补两原Driver probe人口68→70一项许可。原290f主CI failure、Windowscancelled保持。此处只登记本片功能门/配套候选，实际精确发布与新exact-SHA CI另留证；不勾选H7或A-G，不记CS部署，runtime lease仅设计/私有草稿。继续Task/Node写入与恢复/owners/三个roots收口，M0先实际部署再M1～M4。详见[effect记录](host-authority-task-effect-writes.md)、[CI修复](task-host-callers-ci-repair.md)。

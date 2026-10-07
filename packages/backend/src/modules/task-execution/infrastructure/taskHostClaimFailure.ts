@@ -15,7 +15,7 @@ import {
 } from '../application/taskHostAdmission'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import { canonicalJson } from '../domain/executionIntent'
-import { createOwnershipToken, type WorkerIdentity } from '../domain/ownership'
+import type { OwnershipToken, WorkerIdentity } from '../domain/ownership'
 import { withTaskHostIssuedAck, type TaskHostWriteBinding } from './hostExecutionWriteTransaction'
 
 type OwnerRow = typeof taskExecutionOwners.$inferSelect
@@ -143,6 +143,13 @@ export function registerTaskHostClaimFailures(
   ownership: TaskOwnershipPersistence,
   db: ProviderNeutralDatabase,
   writes: TaskHostWriteBinding,
+  createOriginalClaimToken: (input: {
+    readonly taskId: string
+    readonly identity: WorkerIdentity
+    readonly epoch: number
+    readonly ownerRevision: number
+    readonly leaseUntil: number
+  }) => OwnershipToken,
 ): void {
   const facts: TaskHostClaimFailureFactQueries = {
     async read(tx, input) {
@@ -200,7 +207,7 @@ export function registerTaskHostClaimFailures(
       const transactionFor = writes.transactionFor
       const binding: TaskHostWriteBinding = Object.freeze({
         port: writes.port,
-        transactionFor: (tx) => transactionFor.call(writes, tx),
+        transactionFor: (tx: DatabaseTransaction) => transactionFor.call(writes, tx),
       })
       let scope: string | undefined
       let marked: Parameters<TaskOwnershipPersistence['markRecoveryRequired']>[0] | undefined
@@ -269,7 +276,7 @@ export function registerTaskHostClaimFailures(
           const tuple = completedTuple(observation, fact)
           if (tuple !== undefined) {
             if (marked === undefined) {
-              const token = createOwnershipToken({
+              const token = createOriginalClaimToken({
                 taskId: tuple.taskId,
                 identity,
                 epoch: tuple.epoch,

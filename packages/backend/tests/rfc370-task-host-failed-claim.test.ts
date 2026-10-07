@@ -75,7 +75,7 @@ describeEachProvider('RFC-370 original failed claim acknowledgement', (harness) 
         DrizzleTaskOwnershipPersistence.prototype,
         'markRecoveryRequired',
       ).mockImplementation(async function (this: DrizzleTaskOwnershipPersistence, input) {
-        expect(this).toBe(captured.receiver)
+        expect(this).toBe(captured.receiver!)
         expect(taskHostWorkForToken(input.token)).toBe(captured.work)
         marks++
         if (marks === 1) throw ackError

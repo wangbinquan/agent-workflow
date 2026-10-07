@@ -133,6 +133,11 @@ export const FAKE_POSTGRESQL_RUNTIME_LITERALS: readonly string[] = [
   'rfc359-w27-task-prefix-lookup-conformance.test.ts: 1',
   'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
   'rfc359-w8-system-operations-recovery-conformance.test.ts: 2',
+  // RFC-370: real provider pools with delayed COMMIT/ROLLBACK responses.
+  // Both wrappers delegate every successful query and row to the original PG
+  // connection. These are driver completion probes, never canned SQL rows.
+  'rfc370-task-host-failed-claim.test.ts: 1',
+  'rfc370-task-host-finalization.test.ts: 1',
 ]
 
 function walk(root: string, dir: string, out: string[]): string[] {

@@ -30,6 +30,7 @@ import {
   taskHostWorkForToken,
   taskHostWorkCapture,
 } from '@/modules/task-execution/application/taskHostAdmission'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
 import {
@@ -59,11 +60,11 @@ async function attach(h: Awaited<ReturnType<typeof taskHostFixture>>) {
     result.attachment.execution,
     () => currentTaskExecutionContext()!,
   )
-  expect(execution).toBe(result.attachment.execution)
+  expect<TaskExecutionContextRef>(execution).toBe(result.attachment.execution)
   expect(taskExecutionHostWriteCapture(execution)).toBe(
     taskHostWorkCapture(taskHostWorkForToken(execution.token)!),
   )
-  expect(execution.db).toBe(h.db)
+  expect((execution as typeof execution & { readonly db: typeof h.db }).db).toBe(h.db)
   expect(Object.isFrozen(execution)).toBe(true)
   expect(h.module.host!.finalizations.snapshot()).toEqual([
     { taskId: h.taskId, phase: 'active', error: undefined },
