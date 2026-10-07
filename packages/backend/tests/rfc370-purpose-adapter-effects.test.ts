@@ -225,7 +225,7 @@ describe('RFC-370 selected nine operation effects', () => {
           bindAck.resolve()
           executeAck.resolve()
         }
-        expect(await pending).toEqual({ ok: true, envelope: sample.envelope })
+        expect<object>(await pending).toEqual({ ok: true, envelope: sample.envelope })
       })
     }
   }
@@ -354,7 +354,9 @@ describe('RFC-370 legacy native adapter input behavior', () => {
   }
 
   test('all nine existing APIs return a rejected Promise when reading operation fails', async () => {
-    for (const run of [
+    const runs: readonly ((
+      input: legacy.AdapterRunInput & { readonly operation: never },
+    ) => Promise<unknown>)[] = [
       legacy.runRequirementAcquire,
       legacy.runQuestionsWriteback,
       legacy.runAnswersCollect,
@@ -364,7 +366,8 @@ describe('RFC-370 legacy native adapter input behavior', () => {
       legacy.runApprovalSubmit,
       legacy.runApprovalLookup,
       legacy.runApprovalObserve,
-    ]) {
+    ]
+    for (const run of runs) {
       const failure = new Error('legacy-operation-getter')
       const input = {
         adapterContent,

@@ -365,15 +365,16 @@ describeEachProvider('RFC-370 published purpose programs and coherent staging', 
         }),
       ).toEqual({ ok: true, runRef: 'run1', providerReceiptRef: 'rerun:r2', attempt: 2 })
       const gateway = composeSelectedApprovalGatewayRunnerFor(harness.db, root.approval)
-      expect(
-        await gateway.submit({
-          adapterRef: approvalRef,
-          stepRunRef: 'step',
-          validatedDraftRef: 'draft',
-          deadlineAt: '2026-10-08T00:00:00+00:00',
-          idempotencyKey: 'approval',
-        }),
-      ).toEqual({ ok: true, receipt: submitted })
+      const submission = await gateway.submit({
+        adapterRef: approvalRef,
+        stepRunRef: 'step',
+        validatedDraftRef: 'draft',
+        deadlineAt: '2026-10-08T00:00:00+00:00',
+        idempotencyKey: 'approval',
+      })
+      expect(submitted).toBeDefined()
+      if (submitted === undefined) throw new Error('selected approval was not submitted')
+      expect(submission).toEqual({ ok: true, receipt: submitted })
       const reconstructed = composeSelectedApprovalGatewayRunnerFor(harness.db, root.approval)
       expect(
         await reconstructed.lookupByIdempotencyKey({

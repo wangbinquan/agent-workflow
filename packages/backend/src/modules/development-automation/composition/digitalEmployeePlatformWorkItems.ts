@@ -36,6 +36,7 @@ import {
   businessTreeSnapshotDigest,
 } from '../infrastructure/workspaceValidator'
 import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
+import { EvidenceStore } from '../infrastructure/evidenceStore'
 import { createSelectedPipelineImportAdapter } from '../application/pipelineEvidenceImport'
 import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 
@@ -682,6 +683,10 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
   const delivery = input.sourceControl
   const workspaceOps = input.sourceControl
   const now = input.now ?? Date.now
+  let pipelineEvidenceStore: EvidenceStore | undefined
+  const evidenceStore = (): EvidenceArtifactPort =>
+    input.evidenceArtifacts ??
+    (pipelineEvidenceStore ??= new EvidenceStore(factory.resolve(input.appHome, 'evidence')))
   const caseDirectory = (caseId: string) =>
     factory.resolve(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
   const sceneRoot = (caseId: string) => factory.resolve(caseDirectory(caseId), 'scene')
@@ -870,7 +875,7 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
           // failed attempt. A later green/pending snapshot must not erase that
           // audit material; materialize only the current immutable bundle and
           // leave unrelated prior files in the platform-owned directory.
-          await store.materializeBundle(manifest.bundleId, destination)
+          await evidenceStore().materializeBundle(manifest.bundleId, destination)
           const fileById = new Map(manifest.files.map((file) => [file.fileId, file] as const))
           const checks = required.map((gate) => {
             const status =
