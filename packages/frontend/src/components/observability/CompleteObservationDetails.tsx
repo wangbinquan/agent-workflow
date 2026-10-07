@@ -11,6 +11,7 @@ import type {
 import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
 import { Dialog } from '@/components/Dialog'
+import { Segmented } from '@/components/Segmented'
 import { ExecutionSwimlane } from '@/components/ExecutionSwimlane'
 import { TableViewport } from '@/components/TableViewport'
 import { CompleteMetrics } from './CompleteObservationMetrics'
@@ -20,6 +21,10 @@ import { useCompleteObservationPage, type ReadableObservationReport } from './co
 import { ObservationNativeCapture } from './ObservationNativeCapture'
 import { ObservationPlatformCapture } from './ObservationPlatformCapture'
 import { CompleteObservationTrace } from './CompleteObservationTrace'
+import {
+  projectCompleteAttemptTimeline,
+  type CompleteTimelineAlignment,
+} from './completeAttemptTimeline'
 
 type Attempt = CompleteObservationAttempt & { readonly taskId: string; readonly taskName: string }
 type NativeCapture = ObservationUsageCaptureCommit & {
@@ -119,55 +124,85 @@ export function CompleteObservationTimeline({
     query = useCompleteObservationPage<Attempt>(report, 'attempts', parent)
   const [selected, setSelected] = useState<{ reportId: string; attempt: Attempt } | null>(null)
   const attemptTrigger = useRef<HTMLButtonElement | null>(null)
+  const [alignment, setAlignment] = useState<CompleteTimelineAlignment>('task-relative')
+  const crossTask = report.header.taskId === null
   const date = (time: number) => new Date(time).toLocaleString(i18n.language)
   return (
     <div className="stack--md">
       <CompleteObservationPage query={query}>
         {(rows) => {
-          const starts = rows.flatMap((row) => (row.startedAt === null ? [] : [row.startedAt]))
-          const ends = rows.flatMap((row) =>
-            row.finishedAt === null ? (row.open ? [report.header.asOf] : []) : [row.finishedAt],
+          const display = projectCompleteAttemptTimeline(
+            rows,
+            report.header.asOf,
+            crossTask ? alignment : 'absolute',
           )
-          const from = starts.length ? Math.min(...starts) : report.header.asOf,
-            to = ends.length ? Math.max(from + 1, ...ends) : report.header.asOf + 1
           return (
-            <ExecutionSwimlane
-              label={t('runObservability.timeline')}
-              rowHeading={t('runObservability.attempt')}
-              timeHeading={t('runObservability.pageExecutionRange')}
-              unknownLabel={t('runObservability.unknownInterval')}
-              from={from}
-              to={to}
-              onSelect={(id, trigger) => {
-                const attempt = rows.find((row) => row.id === id)
-                if (attempt) {
-                  attemptTrigger.current = trigger
-                  setSelected({ reportId: report.header.reportId, attempt })
-                }
-              }}
-              rows={rows.map((row) => ({
-                id: row.id,
-                label: (
-                  <>
-                    {row.nodeId}
-                    <div className="muted">{row.taskName}</div>
-                  </>
-                ),
-                start: row.startedAt,
-                end: row.finishedAt ?? (row.open ? report.header.asOf : null),
-                open: row.open,
-                description: t('runObservability.detail') + ' · ' + row.nodeId,
-                detail:
-                  row.startedAt === null || row.durationMs === null
-                    ? t('runObservability.unknownInterval')
-                    : date(row.startedAt) +
-                      ' → ' +
-                      date(row.finishedAt ?? report.header.asOf) +
-                      ' · ' +
-                      BigInt(row.durationMs).toLocaleString(i18n.language) +
-                      ' ms',
-              }))}
-            />
+            <div className="stack--md">
+              {crossTask && (
+                <>
+                  <div className="action-row">
+                    <Segmented
+                      value={alignment}
+                      onChange={setAlignment}
+                      ariaLabel={t('runObservability.timelineAlignment')}
+                      options={[
+                        { value: 'task-relative', label: t('runObservability.timelineAlignTasks') },
+                        { value: 'absolute', label: t('runObservability.timelineActualTime') },
+                      ]}
+                    />
+                  </div>
+                  <p className="muted">
+                    {alignment === 'task-relative'
+                      ? t('runObservability.timelineAlignedHint')
+                      : t('runObservability.timelineActualTimeHint', {
+                          from: date(display.from),
+                          to: date(display.to),
+                        })}
+                  </p>
+                </>
+              )}
+              <ExecutionSwimlane
+                label={t('runObservability.timeline')}
+                rowHeading={t('runObservability.attempt')}
+                timeHeading={t(
+                  crossTask && alignment === 'task-relative'
+                    ? 'runObservability.pageAlignedExecutionRange'
+                    : 'runObservability.pageExecutionRange',
+                )}
+                unknownLabel={t('runObservability.unknownInterval')}
+                from={display.from}
+                to={display.to}
+                onSelect={(id, trigger) => {
+                  const attempt = rows.find((row) => row.id === id)
+                  if (attempt) {
+                    attemptTrigger.current = trigger
+                    setSelected({ reportId: report.header.reportId, attempt })
+                  }
+                }}
+                rows={rows.map((row, index) => ({
+                  id: row.id,
+                  label: (
+                    <>
+                      {row.nodeId}
+                      <div className="muted">{row.taskName}</div>
+                    </>
+                  ),
+                  start: display.intervals[index]!.start,
+                  end: display.intervals[index]!.end,
+                  open: row.open,
+                  description: t('runObservability.detail') + ' · ' + row.nodeId,
+                  detail:
+                    row.startedAt === null || row.durationMs === null
+                      ? t('runObservability.unknownInterval')
+                      : date(row.startedAt) +
+                        ' → ' +
+                        date(row.finishedAt ?? report.header.asOf) +
+                        ' · ' +
+                        BigInt(row.durationMs).toLocaleString(i18n.language) +
+                        ' ms',
+                }))}
+              />
+            </div>
           )
         }}
       </CompleteObservationPage>

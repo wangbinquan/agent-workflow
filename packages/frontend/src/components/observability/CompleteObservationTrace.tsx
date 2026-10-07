@@ -166,10 +166,11 @@ export function CompleteObservationTrace({
                 <div>
                   <dt>{t('runObservability.cost')}</dt>
                   <dd>
-                    {selected.cost?.completeness === 'complete' &&
-                    selected.cost.amountDecimal !== null
-                      ? formatObservationCny(selected.cost.amountDecimal, true)
-                      : '—'}
+                    {selected.cost?.amountDecimal === null || !selected.cost
+                      ? '—'
+                      : formatObservationCny(selected.cost.amountDecimal, true)}
+                    {selected.cost?.completeness === 'partial' &&
+                      ` · ${t('runObservability.partial')}`}
                   </dd>
                 </div>
               </dl>
