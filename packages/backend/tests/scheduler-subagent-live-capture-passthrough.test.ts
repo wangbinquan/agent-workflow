@@ -80,7 +80,9 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     expect(src.match(/const resolveRuntime = \(/g)).toHaveLength(1)
     expect(src.match(/return resolveTaskDriveConfig\(\{/g)).toHaveLength(1)
     expect(src).toContain('return frozen ?? currentRuntime()')
-    expect(src).toContain('return resolveRuntime({ ...fresh, subagentLiveCapture }, true)')
+    expect(src).toMatch(
+      /return resolveRuntime\(\s*\{ \.\.\.fresh, subagentLiveCapture, \.\.\.input\.deps\.launchConfigurationOverrides \},\s*true,\s*\)/,
+    )
     expect(src).toContain('fresh.then(resolveRuntime) : resolveRuntime(fresh)')
     // 构造时解析一次的旧形状不许回来。
     expect(src).not.toContain('const runtime = resolveTaskDriveConfig({')

@@ -114,7 +114,7 @@ function fixture(
         events.push('abort-one')
         return true
       },
-      release: () => {},
+      release: () => true,
       abortAll() {
         events.push('abort-all')
       },

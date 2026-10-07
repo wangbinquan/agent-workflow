@@ -19,6 +19,7 @@ import { tasks, workflows, taskExecutionIntents } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { submitTaskContinuation } from '@/modules/task-execution/application/submitTaskContinuation'
+import { humanGateNodeProjectionFence } from '@/modules/task-execution/domain/humanGateContinuation'
 import { awaitTaskDriverIdle } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import type { TaskDriveRequest } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { DefaultTaskDriveCoordinatorOptions } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
@@ -141,8 +142,8 @@ for (const failureIndex of [0, 1, 2, 3]) {
     expect(value.defaultRuntime).toBe(failureIndex === 2 ? undefined : 'selected')
     expect(value.maxActiveChildTasks).toBe(failureIndex === 3 ? undefined : 8)
     const mixed = { defaultRuntime: 'stale', cloneTimeoutMs: 999, ...value }
-    expect(mixed.defaultRuntime).toBe(value.defaultRuntime)
-    expect(mixed.cloneTimeoutMs).toBe(value.cloneTimeoutMs)
+    expect<string | undefined>(mixed.defaultRuntime).toBe(value.defaultRuntime)
+    expect<number | undefined>(mixed.cloneTimeoutMs).toBe(value.cloneTimeoutMs)
   })
 }
 
@@ -208,7 +209,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       },
     }
     const pending = startTask(
-      { workflowId: `missing-${ulid()}`, name: 'transferred configuration wait' },
+      { workflowId: `missing-${ulid()}`, name: 'transferred configuration wait', inputs: {} },
       {
         db: harness.db,
         appHome,
@@ -442,7 +443,13 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       kind: 'gate-continuation',
       source: 'internal',
       actorUserId: null,
-      payload: {},
+      payload: {
+        v: 1,
+        gate: { kind: 'clarify', ref: `clarify:${taskId}:0` },
+        operationId: `configuration-continuation:${intentId}`,
+        expectedNodeProjection: humanGateNodeProjectionFence([]),
+        continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds: [] },
+      },
       now: Date.now(),
       advanceOperationGeneration: false,
     })

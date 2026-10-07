@@ -1118,3 +1118,8 @@ SOURCE18-R2／WF1-R1／MATCHING16-R1 有效稳定有限 PASS，root 核对完整
 本普通后继只删除六条已消费allowGrowth；129个原有完整有序库存、baseline、why、预算及其它字段不变，沿原五个纯JSON函数刷新ledger payload摘要。原十三输出和唯一成功census不重跑，三文档旧完整前缀与全部并行输出保持，十八个已发布源文件不改。没有本机AW tests／typecheck／build／service／E2E。
 
 实际Task claim／heartbeat／runner、业务事务分类与named admission、三个roots／19owner／UI、完整H7／A-T7／A-G及CS M0先部署至M4继续。AW尚未部署CS，RFC保持In Progress；CI夹具的独立修复另行验收，不包含在这次普通退役提交。
+
+
+### 2026-10-07 RFC-370 功能 CI 夹具与登记修正候选
+
+修复原4c4ecbc14afa80982298c47a2ac57761bb1ac74c主CI37592876200实际 failure 的六处类型错误、scratch/email 启动输入、恢复续接 v1 payload 和 selected runtime reader；所有原 case、timeout、expect 输入和业务判据保留。Task insert 四站点/三列齐全不变，只更新两个 AST 物理位置；Off-DAG 原46行保留，新增真实Task→SO adapter边一条，原43基线如实纠正到47，一条实测许可普通后继退役。129 ledger全文/why/预算保持，使用原payload digest，无新whole census。有限实现门、精确上库和新exact-SHA hosted CI另验，无本机AW tests/typecheck/build/services/E2E，无跨会话消息。C1在制工作保留；H7/A-G、各层CS adapter和M0先部署至M4仍继续，AW未部署CS。详见design/RFC-370-crewstation-hosted-deployment/functional-ci-fixtures.md。

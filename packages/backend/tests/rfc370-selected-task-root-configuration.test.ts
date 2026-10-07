@@ -94,6 +94,7 @@ describeEachProviderHttpApplication(
       const user = await createUser(scope.harness.db, {
         username: `task-live-${ulid().toLowerCase()}`,
         displayName: 'Live Task Configuration',
+        email: 'task-config@fixtures.invalid',
         role: 'admin',
         password: 'rfc370-selected-task-fixture',
       })
@@ -204,7 +205,7 @@ describeEachProviderHttpApplication(
           const response = await f.request('/api/tasks', {
             workflowId: f.workflowId,
             name: `explicit file ${index}`,
-            spaceKind: 'scratch',
+            scratch: true,
           })
           expect(response.status, await response.clone().text()).toBe(201)
           await f.waitTask(((await response.json()) as { id: string }).id, 'done')
@@ -233,7 +234,7 @@ describeEachProviderHttpApplication(
         .request('/api/tasks', {
           workflowId: f.workflowId,
           name: 'live manual',
-          spaceKind: 'scratch',
+          scratch: true,
         })
         .then((response) => {
           settled = true
@@ -254,7 +255,7 @@ describeEachProviderHttpApplication(
         const second = await f.request('/api/tasks', {
           workflowId: f.workflowId,
           name: 'live manual after',
-          spaceKind: 'scratch',
+          scratch: true,
         })
         expect(second.status, await second.clone().text()).toBe(201)
         await f.waitTask(((await second.json()) as { id: string }).id, 'done')
@@ -310,7 +311,7 @@ describeEachProviderHttpApplication(
         launchPayload: {
           workflowId: f.workflowId,
           name: 'live scheduled task',
-          spaceKind: 'scratch',
+          scratch: true,
         },
         scheduleSpec: { kind: 'daily', at: '09:00', timezone: 'UTC' },
         enabled: false,
@@ -415,7 +416,7 @@ describeEachProviderHttpApplication(
       const response = await f.request('/api/tasks', {
         workflowId: f.workflowId,
         name: 'resume live',
-        spaceKind: 'scratch',
+        scratch: true,
       })
       expect(response.status, await response.clone().text()).toBe(201)
       const task = (await response.json()) as { id: string }

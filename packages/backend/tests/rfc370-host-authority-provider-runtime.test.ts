@@ -274,7 +274,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
       })
       expect(f.session.execution.state().enabled).toBe(false)
       await quiesced
-      const draining = f.session.hostExecutionRuntime!.drain(g.context)
+      const draining = Promise.resolve(f.session.hostExecutionRuntime!.drain(g.context))
       let drained = false
       void draining.then(() => {
         drained = true

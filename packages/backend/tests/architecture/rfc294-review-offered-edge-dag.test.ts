@@ -623,6 +623,12 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts',
+    to: 'system-operations',
+    why: 'RFC-370 Task write context 独立 adapter 在 Task infrastructure 消费 SO exact public 事务参与者类型，原 Task application 端口仍不含 SO 或数据库形状；同原事务桥接暂未进入 §3.1 offered DAG，按真实文件 × context 精确登记，随 W9-D bootstrap 装配与 Task/SO owner 合同收敛销账。',
+    removeAfterWave: 'W9-D（RFC-294 Task/SO owner contract convergence）',
+  },
 ]
 
 const PAIRS = offeredPairs(TARGET_CONTEXT_EDGES)

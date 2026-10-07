@@ -55,7 +55,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
     const events: string[] = []
     let pidReleases = 0
     const lease: DaemonStartupLease = {
-      get diagnostics() {
+      get diagnostics(): Readonly<Record<string, unknown>> {
         throw new Error('runtime must not read startup diagnostics')
       },
       recoveryAuthority() {
