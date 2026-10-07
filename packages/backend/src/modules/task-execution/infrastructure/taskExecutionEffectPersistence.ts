@@ -54,6 +54,7 @@ import type {
   WorkspacePreparationSettlementProjection,
 } from '../application/ports/taskExecutionEffectStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
+import type { TaskHostWriteBinding } from './hostExecutionWriteTransaction'
 import {
   aggregateEffectOutcome,
   assertAttemptTransition,
@@ -208,8 +209,25 @@ async function applyGateRollbackProjection(
   }
 }
 
+const hostBindings = new WeakMap<TaskExecutionEffectPersistence, TaskHostWriteBinding>()
+
+export function taskEffectHostBinding(
+  effects: TaskExecutionEffectPersistence,
+): TaskHostWriteBinding | undefined {
+  return hostBindings.get(effects)
+}
+
 export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffectPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(
+    private readonly db: ProviderNeutralDatabase,
+    private readonly hostWrites?: TaskHostWriteBinding,
+  ) {
+    if (hostWrites !== undefined) {
+      if (hostWrites.port === undefined || typeof hostWrites.transactionFor !== 'function')
+        throw new Error('task-host-write-selection-incomplete')
+      hostBindings.set(this, hostWrites)
+    }
+  }
 
   async readLineage(input: Parameters<TaskExecutionEffectPersistence['readLineage']>[0]) {
     const taskRows = await this.db
@@ -982,12 +1000,12 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async resolveQuiescedManagedProcesses(
     input: Parameters<TaskExecutionEffectPersistence['resolveQuiescedManagedProcesses']>[0],
   ) {
-    return await resolveQuiescedManagedProcesses(this.db, input)
+    return await resolveQuiescedManagedProcesses(this.db, input, this.hostWrites)
   }
 
   async closeOutcomeUnknownAndRelease(
     input: Parameters<TaskExecutionEffectPersistence['closeOutcomeUnknownAndRelease']>[0],
   ) {
-    return await closeOutcomeUnknownAndRelease(this.db, input)
+    return await closeOutcomeUnknownAndRelease(this.db, input, this.hostWrites)
   }
 }

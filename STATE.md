@@ -261,6 +261,7 @@ Runtime DESIGN-D1 有效 PASS；SOURCE23-R1 的 hook receiver 与 Bun matcher �
 前批 System／Intent 2da744867c6391ea127b764c76987bdeeb23a75e：main 37414736815 已终态 failure，48 jobs success，failure 为 Static scans 及 CI required；Windows 37414736809 终态 success。功能作业通过不冒称整体CI绿色。本批正式验证交新确切SHA的GitHub CI，元数据有限门与发布分别留证。
 
 本机仅 owned format／lint、纯 AST／字节／JSON及一次静态清单生成，未运行 AW tests／typecheck／build／services。完整保留已提交 RFC371 观测输出和共享 STATE 旧全文。仍在阶段A：MCP／command／doctor／脚本、H7执行权／恢复／后台生命周期、全根与A-T7／A-G继续；CS独立 adapters、M0首次部署及M1～M4未完成。AW尚未部署到CS，RFC保持In Progress。以下共享旧正文完整保留。
+
 ## 2026-10-06 RFC-371 完整报告暖读与原启动复验
 
 完整报告 SOURCE23／CONTROL7 的有限功能门 V2 PASS；保留 V1 首屏空游标 FAIL，仅补真实 after:null／parent:null 与 Task／total／EOF 断言。新增不透明 retained revision 派生关系、双 provider 原生触发器和当前父 snapshot 资格复用；冷态完整 COUNT 与每次 Actor／Task／费用可见性保持，显式刷新重建全部原来源，无统计人口上限。原 SQLite 0241／PostgreSQL V2 0017 追加与实际逻辑导入 finalize 接线保留旧关系／历史字节。仅定向 format／lint 与一次原 scoped AST，hosted 新确切 CI、原规模资格和两个 RFC 关闭继续。
@@ -284,6 +285,7 @@ SYSTEM-SOURCE49-R1 的五项 P2 有效 FAIL、R2 的 HTTP persistence fixture �
 一次原 scoped census 使用完整已提交 1ab715e1 人口与49冻结候选（24 production），四原规则逐字不变，未提交并行内容保留并排除。sourceDigest sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9；350原债保留345，只有五条真实已消失的 Intent/Memory legacy System 导入退役，零新增债。129有序库存和 why、40 SPI/69 targets、9 Task effects、原 SCC 及全部 guard 注册保持。原 counter 实测 native bridge26→28、mutation1904→1907、imports6603→6619、exceptions5821→5824、public1174→1183、owners27022→27046，六项实际匹配增长具名登记，由下一普通后继退役；status 保持原 renderer 字节。完整保留并行已提交 1ab715e1 观测源码及匹配内容，不重复 SOURCE 或 census。
 
 0348d707 的 Windows37404140132 已 success；原5f主CI的架构计数4vs2已由e884e930单独修正。e884主CI37407334758终态cancelled（18 success、31 cancelled、1聚合 failure）完整保留；包含修正的后继1ab715e1及新System确切SHA CI分别验收，不把取消/有限门算作全仓通过。MCP diagnostics、runtime smoke/专用命令与脚本、执行权和恢复、最终 A-T7/A-G、CS adapters、M0首次实际部署及M1～M4继续；当前AW未部署到CS，RFC不记Done。以下共享原正文与并行输出完整保留。
+
 ## 2026-10-06 RFC-370 Windows 库存计数 CI 补正
 
 0348d707d05c12ea60c240bcfe170e8c93b9b448 的 Windows37404140132已 completed/success；主CI37404140116 cancelled，原终态不改。包含它的5f767443主CI37404415211中，macOS shard2与Ubuntu shard6均只在RFC317原账本计数断言报同一差额：rfc143-kind-discrimination-allowlist源码4、基线2。保留完整原classifier、表项、断言和预算，使用原ledgerEntryCount只清点该一个已提交常量，机械同步实际4条及具名why；129条顺序、其他128条全文和sourceDigest不动，provenance用原withArtifactProvenance刷新。未跑完整census或本机AW tests/typecheck/build/service。Static scans另有正式failure，此片没有分析、修改或掩盖该作业；新exact-SHA CI继续，不能记整套通过。
@@ -10643,20 +10645,17 @@ CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d749
 
 自有补登记已直接推送4ff95e5e2，post-fetch远端同步，没有联系或提交其他会话源码。1d287eddf确切CI暴露中文运行时弹窗返回焦点被共享Dialog后发初始焦点覆盖；原完整中英文oracle与预算保持，在真实返回行使用既有data-dialog-autofocus合同，使两个事件都定位原行，延迟portal等待和滚动恢复保持。新增原resolver后发回归，目标format/lint通过，无本机AW tests/types/build/service。当前正式页面8Task/14受理/四桶123238/人民币0.16583逐项核对，实际贡献→任务整体→返回同Task行和位置已验证留证，不把旧数据回读当新模型验收；完整producer/CS v2/规模及两RFC仍开放。
 
-
 ## 2026-10-07 RFC-370 Purpose 九操作与配套清单候选
 
 SOURCE62-R5 独立有限功能 PASS；三组完整目的效果、logical staging 和三根内容配对已接线，原策略／native全文／旧断言与预算保持。原一次 scoped 生成固定 fca334493d 加44生产／15测试，sourceDigest sha256:4499dff7c066845b11d7f348dcb29ed397d0d6e961f00a2fd93c24069a3d8f1a；classic R1 43→42、R2 0→0，仅支付实际旧 type edge，356条剩余债原文保留。13原配套产物、129库存／why、SPI／target／guard／SCC保持；五项实测增长按原协议随匹配发布消费，普通后继退役。源码相关服务完整提交含并行 MR export，未剥离任何共享正文。
 
 配套有限门、exact-path commit／远端同步及新 exact-SHA hosted CI继续分别验收。仅本批format／lint、纯AST／byte／JSON及不同最终候选的一次原静态生成，无本机AW tests／typecheck／build／service。H7 D2设计门已有限PASS，完整执行权／恢复／A-T7／A-G尚未完成；之后各层独立CS adapters，M0先实际部署、M1～M4逐项接管。当前没有AW-in-CS部署，不关闭RFC。详情见 design/RFC-370-crewstation-hosted-deployment/purpose-canonical-publication.md。
 
-
 ## 2026-10-07 Purpose 已发布与一次许可退役候选
 
 完整78个相关文件已提交推送 3afffac07455e86118390432359676707f2063c8；发布后main／origin 0/0、index为空，未提交H7在制源码，全部共享MR export及STATE／plan正文保持。SOURCE62-R5与MATCHING16-R5均独立有限PASS。新精确SHA主CI37550317708、Windows37550317792已注册，另有maintenance-soak37550317684；冻结此段时前两项queued、soak in_progress，未宣称正式CI通过。
 
 本次普通后继只退役该提交已消费的五条one-commit增长说明；原129行baseline／顺序／why和其它字段逐字对应完整原JSON，按原payload算法重算ledger digest。原13项source projection、R1 43→42／R2 0→0、356条完整旧债、所有SPI／target／guard／SCC及Task库存不改，不重新census。不改原SOURCE或旧失败，不联系其它会话。退役有限复核、发布及后继exact-SHA hosted CI另验。完整H7／A-T7／A-G和独立CS adapters／M0～M4继续，当前AW尚未部署到CS，RFC未完成。
-
 
 ## 2026-10-07 RFC-370 Purpose Windows 平台选项与匹配清单候选
 
@@ -10672,7 +10671,6 @@ SOURCE62-R5 独立有限功能 PASS；三组完整目的效果、logical staging
 
 H7 核心 SOURCE7-R2 有效稳定有限 PASS；三根、Task 事务、19 handles/named admission 与 Task 热配置入口仍须接线，完整 A-T7/A-G 未通过。之后按已批准顺序编写各层独立 CS adapter，先 M0 实际部署，再逐项 M1-M4。当前 AW 尚未部署到 CS，RFC 未完成。
 
-
 ## 2026-10-07 RFC-370 H7 执行权核心有限匹配候选
 
 SOURCE7-R2 有效稳定有限 PASS，原 R1 两项功能失败保留；中立生命周期、借用原 startup lease 的 local factory 和两套回归准备独立发布，实际三个根尚未接线。一次原生成固定 c3857ea5 加3生产/2测试，13输出 sourceDigest sha256:ad9811a0e14eaef3082f488bcd0049568ac1ee62cb445373f7cd022b3bc1e8b9，classic inbound/outbound 0→0；所有旧完整行/129 ledger why与其它opaque字段保持，三项实测 one-commit 计数匹配消费后正常退役。
@@ -10687,7 +10685,6 @@ SOURCE7-R2 有效稳定有限 PASS，原 R1 两项功能失败保留；中立生
 
 实际三个根、Task事务、named admission、19 handles与Task配置接线继续，尚未完成H7/A-T7/A-G，尚无AW在CS部署；随后按各层独立adapter先完成M0部署，再逐步M1–M4。RFC保持In Progress。
 
-
 ## 2026-10-07 RFC-370 Purpose CI 类型修复配套候选
 
 原 c3857ea5 Windows37555994724正式 failure于Typecheck；之前的平台测试已success，后续构建与doctor skipped。恢复 pipeline 的原 lazy evidence receiver与所选 materialization ACK；两个既有回归仅类型修正，旧断言/顺序/预算/native回归保持，新增真实 pipeline ACK 回归。原 SOURCE5-R1误报PASS和补充FAIL完整保留且不用于发布，fixture可变数组补正后的 SOURCE5-R2有效稳定PASS，26项/FP 5f5fbd4cc624c86b9b059a03021f0a1d1b9598f4e6301391a72f3ad6042c713c。
@@ -10699,7 +10696,6 @@ SOURCE7-R2 有效稳定有限 PASS，原 R1 两项功能失败保留；中立生
 原 job112582243341 的步骤5（RFC-363恢复）、6（RFC-254平台）及原共享测试已success；步骤15 Typecheck failure，之后的build/doctor未执行。此前将整作业功能测试记为“尚未执行”不准确，本次只更正这句记录；完整原候选、误记、所有复核和正式failure证据保留。新增Purpose回归不在旧Windows原命令中，不能据旧平台步骤success宣称它已在Windows执行。
 
 生产/测试修正与13匹配输出已通过有限SOURCE5-R2/MATCHING16-R2并精确21路径上库e4bd62318e12848d730b1c52f2dd29706e9da5e1；main/origin当时0/0、index空、全部Task/RFC371并行WIP保持。该SHA主CI37561996355与确切同SHA Windows37562206818已启动，终态待验；后者仅沿原平台列表运行，不包含新增Purpose测试。本文更正无生产/测试/架构规则/匹配变化，无新census或本机AW运行，不重签旧历史门，Stage A/H7/A-G及CS部署仍开放。
-
 
 ## 2026-10-07 RFC-370 Task 配置真实入口接线与配套候选
 
@@ -10717,7 +10713,6 @@ Task 源码及配套完整35路径已发布53be4913a91aad4385cdf52ee4c195abc0ba0
 
 旧H7核心后继79d31c96主CI37557367648已terminal failure，72作业55success/17failure；已发布Purpose类型/receiver修复覆盖其对应错误，剩余功能源码reader/公共入口等按实际日志继续处理，旧失败保留。H7 binding及Task失权quiesce有限SOURCE7-R1已PASS，但实际三根、Task事务、19handles和named admission/A-T7/A-G继续；随后独立CS adapters，先M0实际部署再M1～M4。AW尚未部署到CS，RFC未完成。
 
-
 ## 2026-10-07 RFC-370 功能 CI 公开入口与完整根配套候选
 
 SOURCE16-R1 有效稳定 FAIL 的唯一旧 materializer callee P2 已闭合并保留原回执；SOURCE16-R2 有效稳定有限 PASS，16 自有路径修正 canonical provider alias、exact public 位置、旧 physical reader、完整 Purpose receiver、三条既有 type edge 及 Task/Native 根的原完整判据兼容。根会话实际消费65项与三个wrapper，原双provider用例/预算与完整旧根摘要保持。
@@ -10733,7 +10728,6 @@ SOURCE16-R2 与 MATCHING16-R2 有效稳定有限 PASS 后，源码/回归和配�
 该SHA主CI37576174673、Windows37576174682已注册，首次均queued，正式终态继续验收，不据有限门宣称CI绿。本普通后继仅退役本次已消费的imports6791/exceptions5962两条one-commit声明，原129库存baseline/why/顺序/其它字段以及source projection保持，只按原五个纯JSON函数更新ledger digest。三份共享文档完整前缀保留，仅追加此段；没有新生产改动、census或AW本机执行门。
 
 完整H7三根、Task原事务、十九handles、早期恢复、named admission/UI及A-T7/A-G继续；随后各层独立CS adapters，先M0实际部署再逐项M1–M4。AW尚未部署CS，RFC保持In Progress，无跨会话消息。
-
 
 ## 2026-10-07 RFC-370 H7 binding/quiesce 与 Windows 回归发布候选
 
@@ -10751,7 +10745,6 @@ WF1-R1 有效稳定有限 PASS，四组执行权回归补入原 Windows 触发�
 
 实际 bootstrap、提前恢复、十九 handles、Task 同事务上下文与执行 admission、其他 owner/UI、H7/A-T7/A-G、CS 独立 adapters 和 M0～M4 部署继续开放。AW 尚未部署 CS。运行会话后续源码与回归另行开发，不包含在这四路径退役提交。
 
-
 ## 2026-10-07 RFC-370 Runtime/Webhook 执行权切面与配套候选
 
 SOURCE11-R3 有效稳定有限 PASS，原 R1/R2 功能失败完整保留。RuntimeSession 的同 generation handle selection、真实停止/排空模式 ACK 和 Integration 自有失权切面已准备发布；两 provider 回归与实际 Webhook worker 联合回归加入原 Windows 路径/命令。实际 bootstrap 十九 handles 尚未接线。
@@ -10768,11 +10761,9 @@ SOURCE11-R3 有效稳定有限 PASS，原 R1/R2 功能失败完整保留。Runti
 
 真实启动根、提前恢复、十九 handles、Task 原事务/admission、其他 owner/UI 与完整 H7/A-T7/A-G 继续，之后独立 CS adapters，先 M0 实际部署，再逐步 M1–M4。AW 尚未部署 CS，RFC 未完成。后台 Task 新设计和源码仍在独立实施，不包含在本退役提交。
 
-
 ### 2026-10-07 RFC-370 Intent selected 排队恢复候选
 
 SOURCE4-R1 与 WF1-R1 独立有效稳定 PASS：捕获原执行权回调/receiver，配置前后失权不恢复，原待处理集合及真实 ACK 保留，native 零参入口与旧行为完整保持。两份生产加一份新测试进行一次原 scoped census；13 原输出、12 JSON 业务 payload/完整数组/分母及 129 有序 ledger/why 不变，只更新原快照摘要；classic 前后完整相等、无增长声明。匹配清单独立门及源码/清单/Windows 的精确发布与 hosted CI 待闭合。本机不跑 AW tests/typecheck/build/service/E2E；实际启动根、19 owner、Task 原事务/准入、UI、H7/A-G 和 CS M0–M4 继续，尚未部署 CS。旧共享正文及并行内容完整保留。详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-intent-publication.md`。
-
 
 ### 2026-10-07 RFC-370 Task background selected lifetime 候选
 
@@ -10786,7 +10777,6 @@ SOURCE4-R2、WF1-R1、MATCHING16-R2 均由独立 reviewer 有效稳定有限 PAS
 
 本次只是独立 Task background selected lifetime，实际启动根、所有十九 owner、Task 原事务/准入、UI、完整 H7/A-T7/A-G 与各层 CS adapters、M0首次部署至 M4 仍继续。没有本机 AW tests/typecheck/build/service/E2E、没有跨会话消息，AW 尚未部署到 CS，RFC 未完成。普通后继的独立有限门与精确发布仍须分别核验；CI排队和静态检查不算整仓通过。
 
-
 ### 2026-10-07 RFC-370 selected polling 有限候选
 
 SOURCE3-R1／WF1-R1 独立稳定 PASS，原 native AST／整套旧测试／Windows 原命令与预算保持，新增双 provider 24 个 selected polling 用例交 hosted 精确 SHA CI。清单实际原生成两次：首轮原生成后私有包装器文件数错误导致未完成，保留失败；修正后的唯一完整成功输出先保存，不再重跑。旧全部 owner／background／opaque mutation 行保持，仅 owner +3 至 27419、background +1 至 367、mutation 分类 +1 至 1956，一条原 timer 106→250；其它 payload、SCC／target 和 classic 0/0 保持。129 有序 ledger／why 保留，三个实测声明在普通后继退役。并行 RFC-371 已在 f0c94c3c 普通退役，只有该 ledger 变化，无生产变更，向前投影本批校验且不恢复其声明；STATE／plan 旧全文完整保持。配套门、精确发布和 hosted CI 待验，实际根／19 owner、Task 原事务全入口／准入、UI、H7／A-G 与 CS M0～M4 继续，尚未部署 CS。详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-polling-publication.md`。
@@ -10798,7 +10788,6 @@ SOURCE3-R1／WF1-R1 独立稳定 PASS，原 native AST／整套旧测试／Windo
 本普通后继仅退役三条已消费声明：mutation1956、background367、owner27419。129个完整有序库存、baseline、why、预算及其它字段保持，沿原五个纯 JSON 函数刷新 payload digest。完整三文档前缀及并行输出保持，source3原字节不改。没有新的 census 或本机 AW tests／typecheck／build／service／E2E。
 
 该提交主 CI37612138168／Windows37612138153已注册，终态另验，不能记为全仓绿。Task持久参与者 SOURCE18-R2 有限 PASS，原失权窗口 F01 与新增两个真实双 provider 原事务案例已复核；其源码尚未随轮询发布。实际Task调用者／启动根／19owner／UI、H7／A-G及CS M0～M4继续，AW未部署CS，RFC保持进行中。
-
 
 ### 2026-10-07 RFC-370 Task 宿主写上下文持久参与者候选
 
@@ -10816,7 +10805,6 @@ SOURCE18-R2／WF1-R1／MATCHING16-R1 有效稳定有限 PASS，root 核对完整
 
 实际Task claim／heartbeat／runner、业务事务分类与named admission、三个roots／19owner／UI、完整H7／A-T7／A-G及CS M0先部署至M4继续。AW尚未部署CS，RFC保持In Progress；CI夹具的独立修复另行验收，不包含在这次普通退役提交。
 
-
 ### 2026-10-07 RFC-370 功能 CI 夹具与登记修正候选
 
 修复原4c4ecbc14afa80982298c47a2ac57761bb1ac74c主CI37592876200实际 failure 的六处类型错误、scratch/email 启动输入、恢复续接 v1 payload 和 selected runtime reader；所有原 case、timeout、expect 输入和业务判据保留。Task insert 四站点/三列齐全不变，只更新两个 AST 物理位置；Off-DAG 原46行保留，新增真实Task→SO adapter边一条，原43基线如实纠正到47，一条实测许可普通后继退役。129 ledger全文/why/预算保持，使用原payload digest，无新whole census。有限实现门、精确上库和新exact-SHA hosted CI另验，无本机AW tests/typecheck/build/services/E2E，无跨会话消息。C1在制工作保留；H7/A-G、各层CS adapter和M0先部署至M4仍继续，AW未部署CS。详见design/RFC-370-crewstation-hosted-deployment/functional-ci-fixtures.md。
@@ -10828,7 +10816,6 @@ SOURCE12-R1 有效稳定有限 PASS，root 实际消费完整41项及3wrappers�
 本普通后继只退役已经消费的 rfc294-review-off-dag-offered-edges 一条实测许可；47完整声明及原129有序ledger/baseline/why/预算保持，使用原五个纯JSON函数重算payload digest。原八份测试和所有源码／架构快照不动，无新census或本机AW运行。原source有限门、精确发布、普通后继有限门和正式CI分别留证。
 
 C1的首轮两项测试配置P2、原FAIL/root消费及修正保留，修正后的SOURCE6-R2继续复核，不包含在这四路径提交。实际Task调用者、原退场ACK、19owner/roots/UI、完整H7/A-G及独立CS adapters/M0先部署至M4继续，AW尚未部署CS，RFC未完成。旧共享正文与并行内容完整保持。
-
 
 ## 2026-10-07 RFC-370 Task 原写上下文传递与具名事务候选
 
@@ -10845,3 +10832,13 @@ SOURCE6-R2 与 MATCHING16-R1 独立有效稳定有限 PASS，root 实际消费�
 本普通后继仅删除五条已消费 allowGrowth。129项原有完整有序库存、baseline、why、预算和其他字段不变，沿原五个纯 JSON 函数重算 ledger payload 摘要；原13项配套及唯一完整成功 census 不重跑，6个发布源文件和全部原12个 case／75 expect 保持。三文档的完整旧前缀及所有并行输出保留，没有本机 AW tests／typecheck／build／services／E2E。
 
 C2-W1 原 D1／D2 有效 FAIL 已真实消费，D3 原 driver 寿命屏障与锁内复核设计有效稳定 PASS，实际 claim／heartbeat／finalization 接线继续实施。原业务分类、三个 roots／19 owner／UI、完整 H7／A-T7／A-G、各层独立 CS adapter、M0先部署至M4仍开放；AW 尚未部署CS，RFC保持In Progress。
+
+### RFC-370 C2-W1 Task 原受理、心跳与收尾配套候选（2026-10-08）
+
+SOURCE23-R2 实际稳定有限 PASS 已由 root 消费，23 owned／33 control／26 evidence 共82项；原 SOURCE23-R1 FAIL 与 D3／D5／D6 设计回执保留。选定 Task 原工作贯穿 claim、heartbeat、driver、失败受理与原回执清理；D6 等待原 heartbeat Promise 和真实 owner writer 事务确认后才缓存 revision，保留同步失败的原工作重试。完整原32个 provider case 与 native 分支保持，追加四个真实双 provider 回归；Windows 配对注册保持。本机只做自有格式／lint、纯 AST／字节核对，没有 AW tests／typecheck／build／service／E2E。
+
+唯一原 scoped census 固定 `0b9358fc5878bc7cbf52f46def98b45daa746cd1`，输入16个 production（9既有／7新增）、5测试及6714个非本批基线完整源 blob，原四规则保持，13原始输出保留，完整 classic 数组0／0相等。实测92 owner、6 mutation、净增5 background、1 ambient、8 import／7 classifier exception、净增1 transaction；39个旧 Task 写入行仅移动实际物理锚点，原 authored debt／129有序 ledger why 保持，public 仅增加既有 HostExecutionAdmission 的实际消费者。七项实测声明、并行公共入口 public-surfaces1238→1240、既有 public-consumer baseline135→141 和本批 Task→SO offered-edge47→48，共十项，由普通后继退役，无须再次 census；原债务数组和原／后清单实际均141项。原47条 offered-edge记录逐条完整保留，新增唯一具名实际 Task composition受理桥，原判据及W9-D清偿保持。同一 shared ledger 中 RFC-371 先行33769f07的333全行与why追加保留，仅按原规则退役已消费的一次声明。六个已发布入口文件的原运行语句保持；原助手和原九个汇总式补齐依赖投影，完整逆向复现原八个canonical对象，没有新增整仓census。综合sourceDigest为 `sha256:f1463af4ff160e4180faabea06b35698062cba2c4201d896408ec81186fcd8c5`。配套投影第一轮真实失败及修正后的 PASS 保留，STATE／plan 只追加。
+
+配套功能门、精确提交／远端同步和新 SHA hosted CI 尚待验收；详见 RFC-370 的 `host-authority-task-callers-publication.md`。C2-W2 业务写入／effect、19句柄、三个 roots、状态 UI、A-T7／A-G 与 CS M0～M4 仍开放，AW 尚未部署 CS。继续完成 RFC，不以本有限切面收尾。
+
+- RFC-370 C2-W1 配套 R2：并行 AW 接口修复 a443cba8776add749087e3524d50a34b6b776692 exact18 已上库，其实际 SOURCE PASS 和35材料绑定已核对；Task SOURCE23-R2 的82原项全部不变。旧 MATCHING16-R1 因5 control 漂移（2删除）实际 INVALID，原回执保留。沿唯一原 census 对15物理生产差额仅用原助手补依赖，完整逆向复现8 canonical对象，3205输入，最终9一次性声明；129库存/why及并行333保留，47→48 offered只加原具名边，无新增 whole census。本候选待 R2 独立配套门、exact39 发布和精确 SHA hosted CI；W2-E／W2-R 设计已分别获实际稳定有限 PASS，源码尚未实施，H7／A-G／CS部署继续开放。

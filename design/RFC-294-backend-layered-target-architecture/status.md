@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:27dc496dc8e2e0c0f8cf303d1d98146b62f088aa06808a2eddd4a9fff39d536b`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:3d9363a4dce2c5109b6f7dea3a60c65568c52e57146ea63c888b450a8f11bf3a`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,18 +10,18 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2371 |
+| backend production TS 文件 | 2380 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1774 / 18 |
+| `modules/**` 文件 / 非空 context | 1785 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
-| production ambient wiring seam | 504 |
-| background work entries | 369 |
-| direct native `setInterval`（call / files） | 22 / 19 |
-| direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 311 / 47 |
+| production ambient wiring seam | 505 |
+| background work entries | 374 |
+| direct native `setInterval`（call / files） | 23 / 19 |
+| direct native timers（全部） | 79 |
+| RFC-317 boundary census（inbound / outbound） | 309 / 47 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -29,17 +29,17 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 504 |
-| `architectureExceptions` | 5982 |
-| `backgroundJobs` | 369 |
-| `crossContextImports` | 6815 |
+| `ambientWiring` | 505 |
+| `architectureExceptions` | 5997 |
+| `backgroundJobs` | 374 |
+| `crossContextImports` | 6831 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27465 |
-| `mutationEntrypoints` | 1958 |
+| `moduleSymbolOwners` | 27559 |
+| `mutationEntrypoints` | 1964 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1238 |
-| `transactionExternalEffects` | 273 |
+| `transactionExternalEffects` | 274 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -47,10 +47,10 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 160 |
-| task-execution / application | 141 |
+| task-execution / infrastructure | 163 |
+| task-execution / application | 147 |
 | resource-catalog / infrastructure | 131 |
-| task-execution / composition | 91 |
+| task-execution / composition | 93 |
 | resource-catalog / application | 78 |
 | development-automation / application | 67 |
 | development-automation / infrastructure | 48 |
@@ -148,7 +148,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| platform | 223 |
+| platform | 221 |
 | task-execution | 74 |
 | resource-catalog | 51 |
 | runtime-management | 48 |
@@ -208,12 +208,12 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3805 |
-| legacy-inbound | 1954 |
+| legacy-outbound | 3822 |
+| legacy-inbound | 1951 |
 | offered-consumption | 353 |
-| infrastructure-external | 325 |
+| infrastructure-external | 326 |
 | temporary-internal-debt | 112 |
-| off-dag-offered | 99 |
+| off-dag-offered | 100 |
 | required-implementation | 83 |
 | authority-type-only | 78 |
 | external-layer-debt | 4 |
@@ -223,10 +223,10 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3805 |
-| legacy-inbound | 1954 |
+| legacy-outbound | 3822 |
+| legacy-inbound | 1951 |
 | temporary-internal-debt | 112 |
-| off-dag-offered | 99 |
+| off-dag-offered | 100 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
 | no-util-to-upper | 2 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3188 |
-| W9-D | 1086 |
+| W9 | 3202 |
+| W9-D | 1087 |
 | W4-E1 | 821 |
 | W5 | 203 |
 | W4 | 201 |

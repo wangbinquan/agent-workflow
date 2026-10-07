@@ -18,6 +18,11 @@
 // 全部持久化动作走 `TaskExecutionPersistence` 的命名端口，provider 只在 bootstrap 选。
 
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
+import type { TaskDriverFinalizations } from '../application/ports/taskDriverFinalization'
+import {
+  releaseTaskDriverFinalization,
+  type TaskDriverOwnerTransferPersistence,
+} from './taskDriverFinalization'
 import { sha256Hex } from '../domain/digest'
 import { canonicalJson } from '../domain/executionIntent'
 import {
@@ -29,10 +34,13 @@ import {
 import type { InMemoryTaskRuntimeRegistry, RuntimeStopResult } from './inMemoryTaskRuntimeRegistry'
 
 export interface TaskDriverReleaseDependencies {
+  readonly finalizations?: TaskDriverFinalizations
   readonly registry: InMemoryTaskRuntimeRegistry
   readonly persistence: Pick<TaskExecutionPersistence, 'ownership' | 'effects'>
   /** 释放 token 对应的心跳定时器；两个 lifecycle 各自持有定时器表。 */
   readonly stopHeartbeat: (tokenKey: string) => void
+  /** Selected drivers retain and await every already-issued original heartbeat. */
+  readonly awaitHeartbeatAcks?: (tokenKey: string) => Promise<void>
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
 }
 
@@ -43,6 +51,9 @@ export async function releaseTaskDriverAndFinalize(
     readonly controller: AbortController
   },
 ): Promise<void> {
+  if (deps.finalizations !== undefined) {
+    return releaseTaskDriverFinalization(deps.finalizations, deps, input, transferOwnerRow)
+  }
   const { registry, persistence } = deps
   // 先验 process-local 归属，再碰库：过期 / 重复的 driver finally 不得替现任 owner 读写。
   const token = registry.tokenForTask(input.taskId)
@@ -68,7 +79,7 @@ export async function releaseTaskDriverAndFinalize(
 
 /** 库里的 owner 行转移：清算本 epoch 的 effect，再按停机结果释放或标记待恢复。 */
 async function transferOwnerRow(
-  persistence: TaskDriverReleaseDependencies['persistence'],
+  persistence: TaskDriverOwnerTransferPersistence,
   input: {
     readonly taskId: string
     readonly token: OwnershipToken

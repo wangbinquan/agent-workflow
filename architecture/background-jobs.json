@@ -782,6 +782,17 @@
       "targetContext": "task-execution"
     },
     {
+      "callee": "registerTaskHostClaimFailures",
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts",
+      "id": "ambient:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#registerTaskHostClaimFailures:331",
+      "kind": "register-call",
+      "line": 331,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#DrizzleTaskOwnershipPersistence",
+      "removeAfterWave": "W6/W9",
+      "symbol": "DrizzleTaskOwnershipPersistence",
+      "targetContext": "task-execution"
+    },
+    {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "id": "ambient:packages/backend/src/platform/background/maintenanceService.ts#registerConfigAppliedListener:583",
@@ -5562,13 +5573,13 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 504,
+    "ambientWiring": 505,
     "disabled": 9,
-    "entries": 369,
-    "executionLocal": 45,
-    "longRunning": 101,
+    "entries": 374,
+    "executionLocal": 47,
+    "longRunning": 102,
     "managed": 11,
-    "periodic": 214
+    "periodic": 216
   },
   "entries": [
     {
@@ -8957,7 +8968,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:134",
+      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:138",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8971,7 +8982,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:134",
+      "symbol": "$setTimeout:138",
       "targetContext": "task-execution"
     },
     {
@@ -9514,12 +9525,33 @@
       "targetContext": "task-execution"
     },
     {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverFinalization.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverFinalization.ts#recoveryReply",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverFinalization.ts#recoveryReply",
+      "phase": "execution",
+      "symbol": "recoveryReply",
+      "targetContext": "task-execution"
+    },
+    {
       "dependencies": [
         "timer"
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:137",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:279",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9533,7 +9565,51 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:137",
+      "symbol": "$setInterval:279",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:75",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setInterval:75",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#awaitSelectedOwnerHeartbeatAcks",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#awaitSelectedOwnerHeartbeatAcks",
+      "phase": "execution",
+      "symbol": "awaitSelectedOwnerHeartbeatAcks",
       "targetContext": "task-execution"
     },
     {
@@ -9558,6 +9634,27 @@
       "targetContext": "task-execution"
     },
     {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#selectedOwnerHeartbeats",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#selectedOwnerHeartbeats",
+      "phase": "unknown",
+      "symbol": "selectedOwnerHeartbeats",
+      "targetContext": "task-execution"
+    },
+    {
       "dependencies": [
         "db",
         "timer"
@@ -9579,6 +9676,29 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat",
       "phase": "unknown",
       "symbol": "startOwnerHeartbeat",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startSelectedOwnerHeartbeat",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": false,
+        "run": false,
+        "start": true,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startSelectedOwnerHeartbeat",
+      "phase": "unknown",
+      "symbol": "startSelectedOwnerHeartbeat",
       "targetContext": "task-execution"
     },
     {
@@ -13674,5 +13794,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:27dc496dc8e2e0c0f8cf303d1d98146b62f088aa06808a2eddd4a9fff39d536b"
+  "sourceDigest": "sha256:3d9363a4dce2c5109b6f7dea3a60c65568c52e57146ea63c888b450a8f11bf3a"
 }

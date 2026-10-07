@@ -40,6 +40,8 @@ import type {
   RecoveredManagedProcessResolution,
 } from '../application/ports/taskExecutionEffectStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
+import { taskHostWorkForToken, taskHostWorkCapture } from '../application/taskHostAdmission'
+import { withTaskHostIssuedAck, type TaskHostWriteBinding } from './hostExecutionWriteTransaction'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
 import {
   codeHostRecoveryClass,
@@ -70,6 +72,27 @@ export const MANAGED_PROCESS_RECOVERY_CLASS = 'managed-process-preactivation'
 
 /** Attempt states that still hold the effect open (and its resource fences). */
 export const UNRESOLVED_ATTEMPT_STATES = ['prepared', 'acting', 'recovery-required'] as const
+
+/** Only the two original driver-finalization writes use the admitted Task ACK. */
+function withTaskDriverIssuedAck<T>(
+  db: ProviderNeutralDatabase,
+  hostWrites: TaskHostWriteBinding | undefined,
+  token: OwnershipToken | undefined,
+  body: (transaction: DatabaseTransaction) => Promise<T>,
+): Promise<T> {
+  if (token === undefined) return databaseSessionFor(db).transaction(body)
+  const work = taskHostWorkForToken(token)
+  if (hostWrites === undefined) {
+    if (work !== undefined) throw new Error('task-host-write-selection-incomplete')
+    return databaseSessionFor(db).transaction(body)
+  }
+  if (work === undefined) throw new Error('task-host-admitted-work-required')
+  return withTaskHostIssuedAck({
+    db,
+    selection: { kind: 'selected', capture: taskHostWorkCapture(work), binding: hostWrites },
+    body,
+  })
+}
 
 type OwnerRow = typeof taskExecutionOwners.$inferSelect
 type EffectRow = typeof taskExecutionEffects.$inferSelect
@@ -531,27 +554,33 @@ async function resolveManagedProcessesTx(input: {
 export async function resolveQuiescedManagedProcesses(
   db: ProviderNeutralDatabase,
   input: ManagedProcessQuiescenceInput,
+  hostWrites?: TaskHostWriteBinding,
 ): Promise<RecoveredManagedProcessResolution> {
   if (input.quiescenceEvidenceDigest.length === 0) {
     throw new Error('managed-process recovery requires quiescence evidence')
   }
   const authority = resolveQuiescenceAuthority(input)
   const now = input.now ?? Date.now()
-  return await databaseSessionFor(db).transaction(async (tx) => {
-    await lockAndAssertOwnerTx(
-      tx,
-      authority.owner,
-      authority.expectedRevision,
-      authority.allowedOwnerStates,
-      `task '${authority.owner.taskId}' managed-process recovery was fenced`,
-    )
-    return await resolveManagedProcessesTx({
-      tx,
-      owner: authority.owner,
-      quiescenceEvidenceDigest: input.quiescenceEvidenceDigest,
-      now,
-    })
-  })
+  return await withTaskDriverIssuedAck(
+    db,
+    hostWrites,
+    input.authority === 'exact-stop' ? input.token : undefined,
+    async (tx) => {
+      await lockAndAssertOwnerTx(
+        tx,
+        authority.owner,
+        authority.expectedRevision,
+        authority.allowedOwnerStates,
+        `task '${authority.owner.taskId}' managed-process recovery was fenced`,
+      )
+      return await resolveManagedProcessesTx({
+        tx,
+        owner: authority.owner,
+        quiescenceEvidenceDigest: input.quiescenceEvidenceDigest,
+        now,
+      })
+    },
+  )
 }
 
 /**
@@ -725,6 +754,7 @@ export async function closeOutcomeUnknownAndRelease(
     readonly proof: VerifiedOutcomeUnknownClosure
     readonly now?: number
   },
+  hostWrites?: TaskHostWriteBinding,
 ): Promise<OwnerSnapshot> {
   assertOwnershipToken(input.token)
   assertVerifiedOutcomeUnknownClosure(input.proof)
@@ -733,7 +763,7 @@ export async function closeOutcomeUnknownAndRelease(
   }
   const allowedOwnerStates: readonly TaskOwnerState[] = ['claimed', 'revoked', 'recovery-required']
   const now = input.now ?? Date.now()
-  return await databaseSessionFor(db).transaction(async (tx) => {
+  return await withTaskDriverIssuedAck(db, hostWrites, input.token, async (tx) => {
     const owner = await lockAndAssertOwnerTx(
       tx,
       ownershipTuple(input.token),

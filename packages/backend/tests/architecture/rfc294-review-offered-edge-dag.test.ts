@@ -629,6 +629,12 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-370 Task write context 独立 adapter 在 Task infrastructure 消费 SO exact public 事务参与者类型，原 Task application 端口仍不含 SO 或数据库形状；同原事务桥接暂未进入 §3.1 offered DAG，按真实文件 × context 精确登记，随 W9-D bootstrap 装配与 Task/SO owner 合同收敛销账。',
     removeAfterWave: 'W9-D（RFC-294 Task/SO owner contract convergence）',
   },
+  {
+    from: 'packages/backend/src/modules/task-execution/composition/hostExecutionAdmission.ts',
+    to: 'system-operations',
+    why: 'RFC-370 C2 Task composition 独立 adapter 消费 SO exact public 受理类型，Task application 只持自己的原工作事实；这是新增的具名跨 owner 桥，按真实文件与原 offered 分类登记，随 W9-D Task/SO 合同装配收敛销账。',
+    removeAfterWave: 'W9-D（RFC-294 Task/SO owner contract convergence）',
+  },
 ]
 
 const PAIRS = offeredPairs(TARGET_CONTEXT_EDGES)

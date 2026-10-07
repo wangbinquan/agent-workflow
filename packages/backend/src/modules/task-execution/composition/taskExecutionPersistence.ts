@@ -33,6 +33,7 @@ import {
 import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from '../infrastructure/runtimeSessionLeaseOperations'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
+import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -123,6 +124,7 @@ function createRecoveryAdministration(
  * 第三个 provider 在这里什么都不用加。
  */
 export interface TaskExecutionPersistenceDependencies {
+  readonly hostWrites?: TaskHostWriteBinding
   readonly workspacePresence?: WorkspacePresenceQueries
   /** Selected by the original owner only after all runtime entrypoints pass acceptance. */
   readonly nativeUsage?: NativeUsageInvocationPersistence
@@ -142,12 +144,12 @@ export function createTaskExecutionPersistence(
   db: ProviderNeutralDatabase,
   dependencies: TaskExecutionPersistenceDependencies = {},
 ): TaskExecutionPersistence {
-  const effects = new DrizzleTaskExecutionEffectPersistence(db)
+  const effects = new DrizzleTaskExecutionEffectPersistence(db, dependencies.hostWrites)
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
   return Object.freeze({
     ...(dependencies.nativeUsage ? { nativeUsage: dependencies.nativeUsage } : {}),
     drive: new DrizzleTaskEngineApplicationPersistence(db),
-    ownership: new DrizzleTaskOwnershipPersistence(db),
+    ownership: new DrizzleTaskOwnershipPersistence(db, dependencies.hostWrites),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),

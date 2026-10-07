@@ -22,12 +22,90 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import {
+  taskHostWorkForToken,
+  taskHostWorkCapture,
+  type TaskHostAdmittedWork,
+} from '../application/taskHostAdmission'
+import { retreatUnattachedTaskDriver } from './taskDriverFinalization'
+import { taskOwnershipHostBinding } from './taskOwnershipPersistence'
+import { taskEffectHostBinding } from './taskExecutionEffectPersistence'
+import {
   releaseTaskDriverAndFinalize,
   type TaskDriverReleaseDependencies,
 } from './taskDriverRelease'
 
 const DRIVER_ATTACHABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(['pending', 'running'])
 const ownerHeartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
+
+interface SelectedOwnerHeartbeat {
+  readonly token: OwnershipToken
+  readonly work: TaskHostAdmittedWork
+  readonly ownership: TaskExecutionPersistence['ownership']
+  readonly heartbeat: TaskExecutionPersistence['ownership']['heartbeat']
+  readonly timer: ReturnType<typeof setInterval>
+  readonly inFlight: Set<Promise<OwnershipToken>>
+  accepting: boolean
+}
+const selectedOwnerHeartbeats = new Map<string, SelectedOwnerHeartbeat>()
+
+function startSelectedOwnerHeartbeat(
+  persistence: TaskExecutionPersistence,
+  token: OwnershipToken,
+  work: TaskHostAdmittedWork,
+  controller: AbortController,
+  log: TaskExecutionTopologyLogger,
+): void {
+  const key = ownershipTokenKey(token)
+  if (selectedOwnerHeartbeats.has(key)) throw new Error('task-owner-heartbeat-drain-pending')
+  const onError = (error: unknown): void => {
+    controller.abort('task-execution-stale-owner')
+    log.warn('durable task owner heartbeat was fenced', {
+      taskId: token.taskId,
+      epoch: token.epoch,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  const record: SelectedOwnerHeartbeat = {
+    token,
+    work,
+    ownership: persistence.ownership,
+    heartbeat: persistence.ownership.heartbeat,
+    accepting: true,
+    inFlight: new Set(),
+    timer: setInterval(() => {
+      if (!record.accepting) return
+      let reply: Promise<OwnershipToken>
+      try {
+        reply = record.heartbeat.call(record.ownership, {
+          token: record.token,
+          now: Date.now(),
+          leaseMs: DEFAULT_OWNERSHIP_LEASE_MS,
+        })
+      } catch (error) {
+        onError(error)
+        return
+      }
+      record.inFlight.add(reply)
+      void reply.then(
+        () => record.inFlight.delete(reply),
+        (error: unknown) => {
+          onError(error)
+          record.inFlight.delete(reply)
+        },
+      )
+    }, DEFAULT_OWNERSHIP_HEARTBEAT_MS),
+  }
+  record.timer.unref?.()
+  selectedOwnerHeartbeats.set(key, record)
+}
+
+async function awaitSelectedOwnerHeartbeatAcks(tokenKey: string): Promise<void> {
+  const record = selectedOwnerHeartbeats.get(tokenKey)
+  if (record === undefined) return
+  if (record.accepting) throw new Error('task-owner-heartbeat-not-stopped')
+  while (record.inFlight.size > 0) await Promise.allSettled([...record.inFlight])
+  if (selectedOwnerHeartbeats.get(tokenKey) === record) selectedOwnerHeartbeats.delete(tokenKey)
+}
 
 /**
  * RFC-359 AC-1（plan §5hm）—— 驱动生命周期端口**一份实现，两个引擎共用**。
@@ -66,59 +144,118 @@ export async function attachTaskDriver(
   },
   deps: Omit<TaskDriverLifecycleDependencies, 'finalizeWorkspace'>,
 ): Promise<TaskDriveAttachOutcome> {
-  return withTaskReviewMutationLock(input.taskId, async () => {
-    // 中立读法：`await` 在 SQLite 上拿到的是同步结果、在 PostgreSQL 上是 Promise，
-    // 两边都成立；`.all()` 那种「一边是数组、一边是 Promise」的写法只服务一个引擎。
-    const row = (
-      await deps.db
-        .select({ status: tasks.status, sourceTerminationFence: tasks.sourceTerminationFence })
-        .from(tasks)
-        .where(eq(tasks.id, input.taskId))
-        .limit(1)
-    )[0]
-    if (
-      row === undefined ||
-      !DRIVER_ATTACHABLE_STATUSES.has(row.status) ||
-      row.sourceTerminationFence !== null
-    ) {
-      return { kind: 'not-attached' }
+  const host = deps.module.host
+  if (
+    host !== undefined &&
+    (taskOwnershipHostBinding(deps.persistence.ownership) !== host.writes ||
+      taskEffectHostBinding(deps.persistence.effects) !== host.writes)
+  ) {
+    throw new Error('task-host-write-selection-incomplete')
+  }
+  for (;;) {
+    if (host !== undefined) {
+      const previous = host.finalizations.pendingForTask(input.taskId)
+      if (previous !== undefined) await previous
     }
+    const outcome:
+      | TaskDriveAttachOutcome
+      | { readonly kind: 'retry-after'; readonly completed: Promise<void> } =
+      await withTaskReviewMutationLock(input.taskId, async () => {
+        // 中立读法：`await` 在 SQLite 上拿到的是同步结果、在 PostgreSQL 上是 Promise，
+        // 两边都成立；`.all()` 那种「一边是数组、一边是 Promise」的写法只服务一个引擎。
+        const row = (
+          await deps.db
+            .select({ status: tasks.status, sourceTerminationFence: tasks.sourceTerminationFence })
+            .from(tasks)
+            .where(eq(tasks.id, input.taskId))
+            .limit(1)
+        )[0]
+        if (
+          row === undefined ||
+          !DRIVER_ATTACHABLE_STATUSES.has(row.status) ||
+          row.sourceTerminationFence !== null
+        ) {
+          return { kind: 'not-attached' }
+        }
 
-    // 两阶段停机（RFC-359 T7b 修订）：上一任 driver 已停但库里 owner 行还在转移时，等它 settle
-    // 再认领——否则这里的 claim 会撞上仍是 'claimed' 的 owner 行。
-    await deps.module.runtimeRegistry.awaitReleasedSettled(input.taskId)
-    const claimed = await deps.claim(input.intentId)
-    let attached: ReturnType<typeof deps.module.runtimeRegistry.tryAttach>
-    try {
-      attached = deps.module.runtimeRegistry.tryAttach({
-        token: claimed.token,
-        intentId: input.intentId,
-        permit: claimed.permit,
-        controller: input.controller,
+        // 两阶段停机（RFC-359 T7b 修订）：上一任 driver 已停但库里 owner 行还在转移时，等它 settle
+        // 再认领——否则这里的 claim 会撞上仍是 'claimed' 的 owner 行。
+        await deps.module.runtimeRegistry.awaitReleasedSettled(input.taskId)
+        if (host !== undefined) {
+          const previous = host.finalizations.pendingForTask(input.taskId)
+          if (previous !== undefined) return { kind: 'retry-after' as const, completed: previous }
+        }
+        const claimed = await deps.claim(input.intentId)
+        const work = taskHostWorkForToken(claimed.token)
+        let attached: ReturnType<typeof deps.module.runtimeRegistry.tryAttach>
+        try {
+          if (host !== undefined && work === undefined)
+            throw new Error('task-host-admitted-work-required')
+          attached = deps.module.runtimeRegistry.tryAttach({
+            token: claimed.token,
+            intentId: input.intentId,
+            permit: claimed.permit,
+            controller: input.controller,
+          })
+        } catch (error) {
+          if (host !== undefined && work !== undefined) {
+            await retreatUnattachedTaskDriver(host.finalizations, {
+              taskId: input.taskId,
+              intentId: input.intentId,
+              token: claimed.token,
+              controller: input.controller,
+              work,
+              persistence: deps.persistence.ownership,
+            }).catch(() => undefined) // The retained progress exposes its retry error; preserve the original attach error.
+          }
+          throw error
+        } finally {
+          deps.module.claimGate.leave(claimed.permit)
+        }
+        if (attached !== 'attached') {
+          if (host !== undefined && work !== undefined) {
+            await retreatUnattachedTaskDriver(host.finalizations, {
+              taskId: input.taskId,
+              intentId: input.intentId,
+              token: claimed.token,
+              controller: input.controller,
+              work,
+              persistence: deps.persistence.ownership,
+            })
+          }
+          return { kind: 'not-attached' }
+        }
+        if (host !== undefined && work !== undefined) {
+          host.finalizations.attached({
+            taskId: input.taskId,
+            token: claimed.token,
+            controller: input.controller,
+            work,
+          })
+        }
+
+        startOwnerHeartbeat(deps.persistence, claimed.token, input.controller, deps.log)
+        return {
+          kind: 'attached',
+          attachment: {
+            execution: createTaskExecutionContext({
+              intentId: input.intentId,
+              token: claimed.token,
+              persistence: deps.persistence,
+              ...(work === undefined ? {} : { hostWriteCapture: taskHostWorkCapture(work) }),
+              ...(deps.legacyConnection === undefined
+                ? {}
+                : {
+                    legacyConnection: deps.legacyConnection,
+                    compatibility: { db: deps.legacyConnection },
+                  }),
+            }),
+          },
+        }
       })
-    } finally {
-      deps.module.claimGate.leave(claimed.permit)
-    }
-    if (attached !== 'attached') return { kind: 'not-attached' }
-
-    startOwnerHeartbeat(deps.persistence, claimed.token, input.controller, deps.log)
-    return {
-      kind: 'attached',
-      attachment: {
-        execution: createTaskExecutionContext({
-          intentId: input.intentId,
-          token: claimed.token,
-          persistence: deps.persistence,
-          ...(deps.legacyConnection === undefined
-            ? {}
-            : {
-                legacyConnection: deps.legacyConnection,
-                compatibility: { db: deps.legacyConnection },
-              }),
-        }),
-      },
-    }
-  })
+    if (outcome.kind !== 'retry-after') return outcome
+    await outcome.completed
+  }
 }
 
 function startOwnerHeartbeat(
@@ -127,6 +264,11 @@ function startOwnerHeartbeat(
   controller: AbortController,
   log: TaskExecutionTopologyLogger,
 ): void {
+  const work = taskHostWorkForToken(token)
+  if (work !== undefined) {
+    startSelectedOwnerHeartbeat(persistence, token, work, controller, log)
+    return
+  }
   const key = ownershipTokenKey(token)
   const existing = ownerHeartbeatTimers.get(key)
   if (existing !== undefined) clearInterval(existing)
@@ -155,9 +297,21 @@ function releaseDependencies(
   deps: Pick<TaskDriverLifecycleDependencies, 'module' | 'persistence' | 'finalizeWorkspace'>,
 ): TaskDriverReleaseDependencies {
   return {
+    ...(deps.module.host === undefined
+      ? {}
+      : {
+          finalizations: deps.module.host.finalizations,
+          awaitHeartbeatAcks: awaitSelectedOwnerHeartbeatAcks,
+        }),
     registry: deps.module.runtimeRegistry,
     persistence: deps.persistence,
     stopHeartbeat: (tokenKey) => {
+      const selected = selectedOwnerHeartbeats.get(tokenKey)
+      if (selected !== undefined) {
+        selected.accepting = false
+        clearInterval(selected.timer)
+        return
+      }
       const timer = ownerHeartbeatTimers.get(tokenKey)
       if (timer !== undefined) clearInterval(timer)
       ownerHeartbeatTimers.delete(tokenKey)
@@ -197,6 +351,11 @@ export async function awaitTaskDriverIdle(taskId: string): Promise<void> {
 
 /** Test isolation for the module-owned heartbeat/runtime handles. */
 export function clearTaskDriverLifecycleForTesting(): void {
+  for (const record of selectedOwnerHeartbeats.values()) {
+    record.accepting = false
+    clearInterval(record.timer)
+  }
+  selectedOwnerHeartbeats.clear()
   for (const timer of ownerHeartbeatTimers.values()) clearInterval(timer)
   ownerHeartbeatTimers.clear()
   taskExecutionModule.runtimeRegistry.clearForTesting()

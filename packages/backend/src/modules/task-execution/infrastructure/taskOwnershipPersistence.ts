@@ -31,6 +31,7 @@ import {
 } from '@/db/schema'
 import {
   databaseSessionFor,
+  engineOf,
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type { TaskOwnershipPersistence } from '../application/ports/taskOwnershipPersistence'
@@ -50,6 +51,24 @@ import {
   type OwnershipToken,
 } from '../domain/ownership'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
+import {
+  associateTaskHostWork,
+  inheritTaskHostWork,
+  taskHostAdmissionResult,
+  taskHostWorkCapture,
+  taskHostWorkForToken,
+  type TaskHostAdmissionAttempt,
+} from '../application/taskHostAdmission'
+import {
+  withTaskHostNewWork,
+  withTaskHostIssuedAck,
+  type TaskHostWriteBinding,
+} from './hostExecutionWriteTransaction'
+import {
+  registerTaskHostClaimFailures,
+  taskHostClaimObservation,
+  observeTaskHostClaimBody,
+} from './taskHostClaimFailure'
 
 type OwnerRow = typeof taskExecutionOwners.$inferSelect
 
@@ -202,8 +221,167 @@ export async function revokeExactOwnerInTx(
 }
 
 /** provider 中立的归属 / CAS / 租约边界：原子迁移各有其名，库句柄与事务作用域都不外泄。 */
+const hostBindings = new WeakMap<TaskOwnershipPersistence, TaskHostWriteBinding>()
+
+export interface TaskDriverFinalizationFact {
+  readonly owner: OwnerRow | null
+  readonly intent: typeof taskExecutionIntents.$inferSelect | null
+  readonly effects: readonly {
+    readonly effect: typeof taskExecutionEffects.$inferSelect
+    readonly attempt: typeof taskExecutionEffectAttempts.$inferSelect
+  }[]
+  readonly fences: readonly (typeof taskExecutionEffectFences.$inferSelect)[]
+}
+
+export interface TaskDriverFinalizationFactQueries {
+  read(taskId: string, intentId: string): Promise<TaskDriverFinalizationFact>
+  awaitHeartbeatWrites(token: OwnershipToken): Promise<void>
+}
+
+const finalizationFacts = new WeakMap<TaskOwnershipPersistence, TaskDriverFinalizationFactQueries>()
+
+/** Named finalization facts and writer synchronization retain the original work. */
+export function taskDriverFinalizationFactQueries(
+  ownership: TaskOwnershipPersistence,
+): TaskDriverFinalizationFactQueries | undefined {
+  return finalizationFacts.get(ownership)
+}
+
+async function readTaskDriverFinalizationFact(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  intentId: string,
+): Promise<TaskDriverFinalizationFact> {
+  return databaseSessionFor(db).transaction(async (tx) => {
+    const owner =
+      (
+        await tx
+          .select()
+          .from(taskExecutionOwners)
+          .where(eq(taskExecutionOwners.taskId, taskId))
+          .limit(1)
+      )[0] ?? null
+    const intent =
+      (
+        await tx
+          .select()
+          .from(taskExecutionIntents)
+          .where(
+            and(eq(taskExecutionIntents.id, intentId), eq(taskExecutionIntents.taskId, taskId)),
+          )
+          .limit(1)
+      )[0] ?? null
+    const effects = await tx
+      .select({ effect: taskExecutionEffects, attempt: taskExecutionEffectAttempts })
+      .from(taskExecutionEffects)
+      .innerJoin(
+        taskExecutionEffectAttempts,
+        eq(taskExecutionEffectAttempts.effectId, taskExecutionEffects.id),
+      )
+      .where(eq(taskExecutionEffects.taskId, taskId))
+    const fences = await tx
+      .select({ fence: taskExecutionEffectFences })
+      .from(taskExecutionEffectFences)
+      .innerJoin(
+        taskExecutionEffectAttempts,
+        eq(taskExecutionEffectAttempts.id, taskExecutionEffectFences.effectAttemptId),
+      )
+      .innerJoin(
+        taskExecutionEffects,
+        eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
+      )
+      .where(eq(taskExecutionEffects.taskId, taskId))
+    return { owner, intent, effects, fences: fences.map(({ fence }) => fence) }
+  })
+}
+
+/** Composition verifies that a selected module actually owns selected persistence. */
+export function taskOwnershipHostBinding(
+  ownership: TaskOwnershipPersistence,
+): TaskHostWriteBinding | undefined {
+  return hostBindings.get(ownership)
+}
+
 export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(
+    private readonly db: ProviderNeutralDatabase,
+    private readonly hostWrites?: TaskHostWriteBinding,
+  ) {
+    if (hostWrites !== undefined) {
+      if (hostWrites.port === undefined || typeof hostWrites.transactionFor !== 'function') {
+        throw new Error('task-host-write-selection-incomplete')
+      }
+      hostBindings.set(this, hostWrites)
+      finalizationFacts.set(
+        this,
+        Object.freeze({
+          read: (taskId: string, intentId: string) =>
+            readTaskDriverFinalizationFact(db, taskId, intentId),
+          awaitHeartbeatWrites: (token: OwnershipToken) =>
+            this.issuedAckTransaction(token, async (tx) => {
+              await engineOf(tx).lockAggregateRoot(
+                tx,
+                taskExecutionOwners,
+                taskExecutionOwners.taskId,
+                token.taskId,
+              )
+            }),
+        }),
+      )
+      registerTaskHostClaimFailures(this, db, hostWrites)
+    }
+  }
+
+  private claimTransaction<T>(
+    attempt: TaskHostAdmissionAttempt | undefined,
+    body: (tx: DatabaseTransaction) => Promise<T>,
+  ): Promise<T> {
+    if (this.hostWrites === undefined) {
+      if (attempt !== undefined) throw new Error('task-host-write-selection-incomplete')
+      return databaseSessionFor(this.db).serializable(body)
+    }
+    if (attempt === undefined) throw new Error('task-host-admission-required')
+    const original = taskHostAdmissionResult(attempt)
+    if (original.kind === 'unavailable') {
+      return databaseSessionFor(this.db).serializable(async (tx) => {
+        await body(tx)
+        throw original.error
+      })
+    }
+    return withTaskHostNewWork({
+      db: this.db,
+      isolation: 'serializable',
+      selection: {
+        kind: 'selected',
+        capture: taskHostWorkCapture(original.work),
+        binding: this.hostWrites,
+      },
+      body,
+    })
+  }
+
+  private issuedAckTransaction<T>(
+    token: OwnershipToken,
+    body: (tx: DatabaseTransaction) => Promise<T>,
+    serializable = false,
+  ): Promise<T> {
+    const work = taskHostWorkForToken(token)
+    if (this.hostWrites === undefined) {
+      if (work !== undefined) throw new Error('task-host-write-selection-incomplete')
+      return serializable ? databaseSessionFor(this.db).serializable(body) : body(this.db)
+    }
+    if (work === undefined) throw new Error('task-host-admitted-work-required')
+    return withTaskHostIssuedAck({
+      db: this.db,
+      isolation: serializable ? 'serializable' : 'write',
+      selection: {
+        kind: 'selected',
+        capture: taskHostWorkCapture(work),
+        binding: this.hostWrites,
+      },
+      body,
+    })
+  }
 
   async claimPendingIntent(input: Parameters<TaskOwnershipPersistence['claimPendingIntent']>[0]) {
     assertWorkerIdentity(input.identity)
@@ -211,160 +389,180 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
       throw new Error('ownership lease must be positive')
     }
     // 每任务至多一个活跃 owner / 每任务至多一条 pending·claimed intent 都是跨行谓词，沿用 SERIALIZABLE。
-    const claimed = await databaseSessionFor(this.db).serializable(async (tx) => {
-      const intent = (
-        await tx
-          .select({
-            id: taskExecutionIntents.id,
-            taskId: taskExecutionIntents.taskId,
-            state: taskExecutionIntents.state,
-          })
-          .from(taskExecutionIntents)
-          .where(eq(taskExecutionIntents.id, input.intentId))
-          .limit(1)
-      )[0]
-      if (intent === undefined || intent.state !== 'pending') {
-        throw new TaskExecutionError(
-          'task-execution-owner-conflict',
-          `intent '${input.intentId}' is not pending`,
-        )
-      }
-      const maintenance = (
-        await tx
-          .select({ claimId: taskExecutionMaintenanceMembers.claimId })
-          .from(taskExecutionMaintenanceMembers)
-          .where(
-            and(
-              eq(taskExecutionMaintenanceMembers.taskId, intent.taskId),
-              isNull(taskExecutionMaintenanceMembers.releasedAt),
-            ),
+    const observation = taskHostClaimObservation(this, input)
+    const claimed = await this.claimTransaction(
+      input.hostAdmission,
+      observeTaskHostClaimBody(observation, async (tx) => {
+        const intent = (
+          await tx
+            .select({
+              id: taskExecutionIntents.id,
+              taskId: taskExecutionIntents.taskId,
+              state: taskExecutionIntents.state,
+            })
+            .from(taskExecutionIntents)
+            .where(eq(taskExecutionIntents.id, input.intentId))
+            .limit(1)
+        )[0]
+        observation?.scope(intent?.taskId)
+        if (intent === undefined || intent.state !== 'pending') {
+          throw new TaskExecutionError(
+            'task-execution-owner-conflict',
+            `intent '${input.intentId}' is not pending`,
           )
-          .limit(1)
-      )[0]
-      if (maintenance !== undefined) {
-        throw new TaskExecutionError(
-          'task-terminal-maintenance-conflict',
-          `task '${intent.taskId}' is claimed by terminal maintenance`,
-          { claimRef: maintenance.claimId },
-        )
-      }
+        }
+        const maintenance = (
+          await tx
+            .select({ claimId: taskExecutionMaintenanceMembers.claimId })
+            .from(taskExecutionMaintenanceMembers)
+            .where(
+              and(
+                eq(taskExecutionMaintenanceMembers.taskId, intent.taskId),
+                isNull(taskExecutionMaintenanceMembers.releasedAt),
+              ),
+            )
+            .limit(1)
+        )[0]
+        if (maintenance !== undefined) {
+          throw new TaskExecutionError(
+            'task-terminal-maintenance-conflict',
+            `task '${intent.taskId}' is claimed by terminal maintenance`,
+            { claimRef: maintenance.claimId },
+          )
+        }
 
-      const old = (
-        await tx
-          .select()
-          .from(taskExecutionOwners)
-          .where(eq(taskExecutionOwners.taskId, intent.taskId))
-          .limit(1)
-      )[0]
-      if (
-        decideOwnerTransition({ current: old?.state ?? 'absent', operation: 'initial-claim' }) ===
-        null
-      ) {
-        throw new TaskExecutionError(
-          old?.state === 'recovery-required'
-            ? 'task-execution-recovery-required'
-            : 'task-execution-owner-conflict',
-          `task '${intent.taskId}' already has owner state '${old?.state ?? 'unknown'}'`,
-        )
-      }
-      const epoch = (old?.epoch ?? 0) + 1
-      const revision = (old?.revision ?? 0) + 1
-      const leaseUntil = input.now + input.leaseMs
-      if (old === undefined) {
-        await tx
-          .insert(taskExecutionOwners)
-          .values({
-            taskId: intent.taskId,
-            ownerId: input.identity.ownerId,
-            daemonGeneration: input.identity.daemonGeneration,
-            epoch,
-            state: 'claimed',
-            leaseUntil,
-            revision,
-            lastHeartbeatAt: input.now,
-            recoveryCode: null,
-            recoveryProofDigest: null,
-            updatedAt: input.now,
-          })
-          .run()
-      } else {
-        const updated = await tx
-          .update(taskExecutionOwners)
+        const old = (
+          await tx
+            .select()
+            .from(taskExecutionOwners)
+            .where(eq(taskExecutionOwners.taskId, intent.taskId))
+            .limit(1)
+        )[0]
+        observation?.beforeOwner(old ?? null)
+        if (
+          decideOwnerTransition({ current: old?.state ?? 'absent', operation: 'initial-claim' }) ===
+          null
+        ) {
+          throw new TaskExecutionError(
+            old?.state === 'recovery-required'
+              ? 'task-execution-recovery-required'
+              : 'task-execution-owner-conflict',
+            `task '${intent.taskId}' already has owner state '${old?.state ?? 'unknown'}'`,
+          )
+        }
+        const epoch = (old?.epoch ?? 0) + 1
+        const revision = (old?.revision ?? 0) + 1
+        const leaseUntil = input.now + input.leaseMs
+        if (old === undefined) {
+          await tx
+            .insert(taskExecutionOwners)
+            .values({
+              taskId: intent.taskId,
+              ownerId: input.identity.ownerId,
+              daemonGeneration: input.identity.daemonGeneration,
+              epoch,
+              state: 'claimed',
+              leaseUntil,
+              revision,
+              lastHeartbeatAt: input.now,
+              recoveryCode: null,
+              recoveryProofDigest: null,
+              updatedAt: input.now,
+            })
+            .run()
+        } else {
+          const updated = await tx
+            .update(taskExecutionOwners)
+            .set({
+              ownerId: input.identity.ownerId,
+              daemonGeneration: input.identity.daemonGeneration,
+              epoch,
+              state: 'claimed',
+              leaseUntil,
+              revision,
+              lastHeartbeatAt: input.now,
+              recoveryCode: null,
+              recoveryProofDigest: null,
+              updatedAt: input.now,
+            })
+            .where(
+              and(
+                eq(taskExecutionOwners.taskId, intent.taskId),
+                eq(taskExecutionOwners.state, 'released'),
+                eq(taskExecutionOwners.revision, old.revision),
+              ),
+            )
+            .returning({ revision: taskExecutionOwners.revision })
+          if (updated[0] === undefined) throw stale(`task '${intent.taskId}' owner claim lost`)
+        }
+        const intentClaim = await tx
+          .update(taskExecutionIntents)
           .set({
-            ownerId: input.identity.ownerId,
-            daemonGeneration: input.identity.daemonGeneration,
-            epoch,
             state: 'claimed',
-            leaseUntil,
-            revision,
-            lastHeartbeatAt: input.now,
-            recoveryCode: null,
-            recoveryProofDigest: null,
+            claimedEpoch: epoch,
+            claimedAt: input.now,
             updatedAt: input.now,
           })
           .where(
             and(
-              eq(taskExecutionOwners.taskId, intent.taskId),
-              eq(taskExecutionOwners.state, 'released'),
-              eq(taskExecutionOwners.revision, old.revision),
+              eq(taskExecutionIntents.id, input.intentId),
+              eq(taskExecutionIntents.state, 'pending'),
             ),
           )
-          .returning({ revision: taskExecutionOwners.revision })
-        if (updated[0] === undefined) throw stale(`task '${intent.taskId}' owner claim lost`)
-      }
-      const intentClaim = await tx
-        .update(taskExecutionIntents)
-        .set({ state: 'claimed', claimedEpoch: epoch, claimedAt: input.now, updatedAt: input.now })
-        .where(
-          and(
-            eq(taskExecutionIntents.id, input.intentId),
-            eq(taskExecutionIntents.state, 'pending'),
-          ),
-        )
-        .returning({ id: taskExecutionIntents.id })
-      if (intentClaim[0] === undefined) throw stale(`intent '${input.intentId}' claim lost`)
-      return { taskId: intent.taskId, epoch, leaseUntil, revision }
-    })
-    return createOwnershipToken({
+          .returning({ id: taskExecutionIntents.id })
+        if (intentClaim[0] === undefined) throw stale(`intent '${input.intentId}' claim lost`)
+        return { taskId: intent.taskId, epoch, leaseUntil, revision }
+      }),
+    )
+    const token = createOwnershipToken({
       taskId: claimed.taskId,
       identity: input.identity,
       epoch: claimed.epoch,
       leaseUntil: claimed.leaseUntil,
       ownerRevision: claimed.revision,
     })
+    if (input.hostAdmission !== undefined) {
+      const original = taskHostAdmissionResult(input.hostAdmission)
+      if (original.kind === 'admitted') associateTaskHostWork(token, original.work)
+    }
+    return token
   }
 
   async heartbeat(input: Parameters<TaskOwnershipPersistence['heartbeat']>[0]) {
     assertOwnershipToken(input.token)
-    const row = (
-      await this.db
-        .update(taskExecutionOwners)
-        .set({
-          revision: sql`${taskExecutionOwners.revision} + 1`,
-          leaseUntil: input.now + input.leaseMs,
-          lastHeartbeatAt: input.now,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, input.token.taskId),
-            eq(taskExecutionOwners.ownerId, input.token.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
-            eq(taskExecutionOwners.epoch, input.token.epoch),
-            eq(taskExecutionOwners.state, 'claimed'),
-          ),
-        )
-        .returning({
-          revision: taskExecutionOwners.revision,
-          leaseUntil: taskExecutionOwners.leaseUntil,
-        })
-    )[0]
-    if (row === undefined) throw stale(`task '${input.token.taskId}' heartbeat was fenced`)
-    // 心跳返回一份新的不可变 token 快照：归属身份 / epoch 不变，调用方可以原子替换自己那份。
-    return refreshOwnershipToken({
-      token: input.token,
-      leaseUntil: row.leaseUntil,
-      ownerRevision: row.revision,
+    return await this.issuedAckTransaction(input.token, async (tx) => {
+      const row = (
+        await tx
+          .update(taskExecutionOwners)
+          .set({
+            revision: sql`${taskExecutionOwners.revision} + 1`,
+            leaseUntil: input.now + input.leaseMs,
+            lastHeartbeatAt: input.now,
+            updatedAt: input.now,
+          })
+          .where(
+            and(
+              eq(taskExecutionOwners.taskId, input.token.taskId),
+              eq(taskExecutionOwners.ownerId, input.token.ownerId),
+              eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
+              eq(taskExecutionOwners.epoch, input.token.epoch),
+              eq(taskExecutionOwners.state, 'claimed'),
+            ),
+          )
+          .returning({
+            revision: taskExecutionOwners.revision,
+            leaseUntil: taskExecutionOwners.leaseUntil,
+          })
+      )[0]
+      if (row === undefined) throw stale(`task '${input.token.taskId}' heartbeat was fenced`)
+      // 心跳返回一份新的不可变 token 快照：归属身份 / epoch 不变，调用方可以原子替换自己那份。
+      const refreshed = refreshOwnershipToken({
+        token: input.token,
+        leaseUntil: row.leaseUntil,
+        ownerRevision: row.revision,
+      })
+      inheritTaskHostWork(input.token, refreshed)
+      return refreshed
     })
   }
 
@@ -390,58 +588,15 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
     input: Parameters<TaskOwnershipPersistence['markRecoveryRequired']>[0],
   ) {
     assertOwnershipToken(input.token)
-    const row = (
-      await this.db
-        .update(taskExecutionOwners)
-        .set({
-          state: 'recovery-required',
-          revision: input.expectedRevision + 1,
-          recoveryCode: input.code,
-          recoveryProofDigest: input.evidenceDigest ?? null,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionOwners.taskId, input.token.taskId),
-            eq(taskExecutionOwners.ownerId, input.token.ownerId),
-            eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
-            eq(taskExecutionOwners.epoch, input.token.epoch),
-            eq(taskExecutionOwners.revision, input.expectedRevision),
-            inArray(taskExecutionOwners.state, ['claimed', 'revoked']),
-          ),
-        )
-        .returning()
-    )[0]
-    if (row === undefined) {
-      throw stale(`task '${input.token.taskId}' recovery transition was fenced`)
-    }
-    return snapshot(row)
-  }
-
-  async releaseAfterStop(input: Parameters<TaskOwnershipPersistence['releaseAfterStop']>[0]) {
-    assertOwnershipToken(input.token)
-    assertVerifiedStopProof(input.proof)
-    if (input.proof.taskId !== input.token.taskId || input.proof.epoch !== input.token.epoch) {
-      throw new Error('stop proof does not match ownership token')
-    }
-    return await databaseSessionFor(this.db).serializable(async (tx) => {
-      // 已被授权重试的 open effect 是持久续跑点、不是还在动作的写者：它的资源占用在同一笔结算
-      // 事务里已经释放。owner 可以让出，下一次合法续跑再做那次已授权的同代重试。
-      // prepared / acting / recovery-required 的 attempt 与任何幸存的占用仍然挡住释放。
-      if (await hasUnresolvedEffects(tx, input.token.taskId)) {
-        throw new TaskExecutionError(
-          'task-execution-recovery-required',
-          `task '${input.token.taskId}' still has unresolved effects or resource holds`,
-        )
-      }
+    return await this.issuedAckTransaction(input.token, async (tx) => {
       const row = (
         await tx
           .update(taskExecutionOwners)
           .set({
-            state: 'released',
-            revision: sql`${taskExecutionOwners.revision} + 1`,
-            recoveryCode: null,
-            recoveryProofDigest: input.proof.evidenceDigest,
+            state: 'recovery-required',
+            revision: input.expectedRevision + 1,
+            recoveryCode: input.code,
+            recoveryProofDigest: input.evidenceDigest ?? null,
             updatedAt: input.now,
           })
           .where(
@@ -450,26 +605,75 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
               eq(taskExecutionOwners.ownerId, input.token.ownerId),
               eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
               eq(taskExecutionOwners.epoch, input.token.epoch),
-              eq(taskExecutionOwners.revision, input.proof.ownerRevision),
-              inArray(taskExecutionOwners.state, ['claimed', 'revoked', 'recovery-required']),
+              eq(taskExecutionOwners.revision, input.expectedRevision),
+              inArray(taskExecutionOwners.state, ['claimed', 'revoked']),
             ),
           )
           .returning()
       )[0]
-      if (row === undefined) throw stale(`task '${input.token.taskId}' release was fenced`)
-      await tx
-        .update(taskExecutionIntents)
-        .set({ state: 'completed', completedAt: input.now, updatedAt: input.now })
-        .where(
-          and(
-            eq(taskExecutionIntents.id, input.intentId),
-            eq(taskExecutionIntents.claimedEpoch, input.token.epoch),
-            eq(taskExecutionIntents.state, 'claimed'),
-          ),
-        )
-        .run()
+      if (row === undefined) {
+        throw stale(`task '${input.token.taskId}' recovery transition was fenced`)
+      }
       return snapshot(row)
     })
+  }
+
+  async releaseAfterStop(input: Parameters<TaskOwnershipPersistence['releaseAfterStop']>[0]) {
+    assertOwnershipToken(input.token)
+    assertVerifiedStopProof(input.proof)
+    if (input.proof.taskId !== input.token.taskId || input.proof.epoch !== input.token.epoch) {
+      throw new Error('stop proof does not match ownership token')
+    }
+    return await this.issuedAckTransaction(
+      input.token,
+      async (tx) => {
+        // 已被授权重试的 open effect 是持久续跑点、不是还在动作的写者：它的资源占用在同一笔结算
+        // 事务里已经释放。owner 可以让出，下一次合法续跑再做那次已授权的同代重试。
+        // prepared / acting / recovery-required 的 attempt 与任何幸存的占用仍然挡住释放。
+        if (await hasUnresolvedEffects(tx, input.token.taskId)) {
+          throw new TaskExecutionError(
+            'task-execution-recovery-required',
+            `task '${input.token.taskId}' still has unresolved effects or resource holds`,
+          )
+        }
+        const row = (
+          await tx
+            .update(taskExecutionOwners)
+            .set({
+              state: 'released',
+              revision: sql`${taskExecutionOwners.revision} + 1`,
+              recoveryCode: null,
+              recoveryProofDigest: input.proof.evidenceDigest,
+              updatedAt: input.now,
+            })
+            .where(
+              and(
+                eq(taskExecutionOwners.taskId, input.token.taskId),
+                eq(taskExecutionOwners.ownerId, input.token.ownerId),
+                eq(taskExecutionOwners.daemonGeneration, input.token.daemonGeneration),
+                eq(taskExecutionOwners.epoch, input.token.epoch),
+                eq(taskExecutionOwners.revision, input.proof.ownerRevision),
+                inArray(taskExecutionOwners.state, ['claimed', 'revoked', 'recovery-required']),
+              ),
+            )
+            .returning()
+        )[0]
+        if (row === undefined) throw stale(`task '${input.token.taskId}' release was fenced`)
+        await tx
+          .update(taskExecutionIntents)
+          .set({ state: 'completed', completedAt: input.now, updatedAt: input.now })
+          .where(
+            and(
+              eq(taskExecutionIntents.id, input.intentId),
+              eq(taskExecutionIntents.claimedEpoch, input.token.epoch),
+              eq(taskExecutionIntents.state, 'claimed'),
+            ),
+          )
+          .run()
+        return snapshot(row)
+      },
+      true,
+    )
   }
 
   async releaseRecovered(input: Parameters<TaskOwnershipPersistence['releaseRecovered']>[0]) {

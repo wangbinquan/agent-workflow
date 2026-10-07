@@ -88,6 +88,10 @@ interface TaskProviderAuthorityLifetime {
   readonly isDrained: () => boolean
 }
 
+type TaskProviderAuthoritySelection =
+  | { readonly kind: 'unselected' }
+  | { readonly kind: 'selected'; readonly lifetime: TaskProviderAuthorityLifetime }
+
 /**
  * Is a periodic sweep due right now?
  *
@@ -323,8 +327,11 @@ export function composeTaskExecutionProviderBackground(
   let authorityQuiesced = false
   let authorityQuiesceVersion = 0
   let mode: 'native' | 'selected' | undefined
-  let selectedLifetime: TaskProviderAuthorityLifetime | null = null
+  let authoritySelection: TaskProviderAuthoritySelection = { kind: 'unselected' }
   let selectedBootResumePending = true
+
+  const ownsLifetime = (lifetime: TaskProviderAuthorityLifetime): boolean =>
+    authoritySelection.kind === 'selected' && authoritySelection.lifetime === lifetime
 
   async function drainTickets(
     tickets: Awaited<ReturnType<TaskExecutionModule['pause']>>,
@@ -359,7 +366,7 @@ export function composeTaskExecutionProviderBackground(
     if (!current()) throw new Error('task-provider-execution-authority-not-current')
     if (mode === 'native') throw new Error('task-provider-execution-authority-mode-mismatch')
     if (stopped) throw new Error('task-execution-provider-background-stopped')
-    if (selectedLifetime !== null && !selectedLifetime.isDrained()) {
+    if (authoritySelection.kind === 'selected' && !authoritySelection.lifetime.isDrained()) {
       throw new Error('task-provider-execution-authority-drain-pending')
     }
     const configuration =
@@ -368,6 +375,20 @@ export function composeTaskExecutionProviderBackground(
         ? undefined
         : createFileTaskBackgroundConfigurationQuery(dependencies.configPath))
     if (configuration === undefined) throw new Error('task-background-configuration-required')
+
+    // This old-work ACK loop belongs to the selected Task lifetime, separately
+    // from dispatch loops; loss/pause cannot stop actual cleanup retries.
+    const finalizations = runtime.module.host?.finalizations
+    const retryFinalizations = finalizations?.retryPending
+    const drainFinalizations = finalizations?.drain
+    const finalizationLoop =
+      finalizations === undefined
+        ? undefined
+        : createRestartableLoop({
+            name: 'task-driver-finalization',
+            delayMs: () => 1_000,
+            run: () => retryFinalizations!.call(finalizations),
+          })
 
     let retired = false
     let drained = false
@@ -386,16 +407,16 @@ export function composeTaskExecutionProviderBackground(
     let normalTickets: Awaited<ReturnType<TaskExecutionModule['pause']>> | null = null
     let closeTickets: Awaited<ReturnType<TaskExecutionModule['dispose']>> | null = null
     let closeReason: string | undefined
-    const canDispatch = (): boolean =>
-      selectedLifetime === lifetime && !retired && !stopped && current()
+    const canDispatch = (): boolean => ownsLifetime(lifetime) && !retired && !stopped && current()
     const pauseLoops = (): Promise<void[]> => Promise.all(ownedLoops.map((loop) => loop.pause()))
     const waitOwnedWork = async (): Promise<void> => {
       await Promise.all(ownedLoops.map((loop) => loop.awaitIdle()))
       if (ownedStartup !== null) await ownedStartup
     }
     const gateDrain = (): Promise<void> => {
-      const pending =
-        selectedLifetime === lifetime ? runtime.module.quiesceAuthorityLoss() : Promise.resolve()
+      const pending = ownsLifetime(lifetime)
+        ? runtime.module.quiesceAuthorityLoss()
+        : Promise.resolve()
       // This ACK may reject while a startup read still occupies the owner.
       // Preserve the rejection for its awaited caller without an unhandled gap.
       void pending.catch(() => undefined)
@@ -431,14 +452,14 @@ export function composeTaskExecutionProviderBackground(
       retired = true
       normalRequested = true
       if (normalPause !== null) return normalPause
-      const cancelNormally = !lossRequested && selectedLifetime === lifetime
+      const cancelNormally = !lossRequested && ownsLifetime(lifetime)
       const claims = gateDrain()
       const loops = pauseLoops()
       const attempt = queue(async () => {
         await loops
         await waitOwnedWork()
         await claims
-        if (normalTickets === null && cancelNormally && selectedLifetime === lifetime) {
+        if (normalTickets === null && cancelNormally && ownsLifetime(lifetime)) {
           normalTickets = await runtime.module.pause(PROVIDER_SESSION_PAUSE_ABORT_REASON)
         }
         if (normalTickets !== null) await drainTickets(normalTickets)
@@ -461,7 +482,7 @@ export function composeTaskExecutionProviderBackground(
         await loops
         await waitOwnedWork()
         await claims
-        if (selectedLifetime !== lifetime) {
+        if (!ownsLifetime(lifetime)) {
           closeAcknowledged = true
           return Object.freeze([])
         }
@@ -497,6 +518,8 @@ export function composeTaskExecutionProviderBackground(
           if (normalTickets !== null) await drainTickets(normalTickets)
         }
         if (normal === normalPause && loss === lossQuiesce && closing === terminalClose) {
+          if (finalizations !== undefined) await drainFinalizations!.call(finalizations)
+          await finalizationLoop?.stop()
           drained = true
           return
         }
@@ -506,11 +529,14 @@ export function composeTaskExecutionProviderBackground(
     const lifetime: TaskProviderAuthorityLifetime = Object.freeze({
       handle,
       close,
-      awaitIdle: waitOwnedWork,
+      awaitIdle: async () => {
+        await waitOwnedWork()
+        await finalizationLoop?.awaitIdle()
+      },
       isDrained: () => drained,
     })
     mode = 'selected'
-    selectedLifetime = lifetime
+    authoritySelection = { kind: 'selected', lifetime }
     try {
       const claims = gateDrain()
       await claims
@@ -604,9 +630,10 @@ export function composeTaskExecutionProviderBackground(
     },
     async pause() {
       if (mode === 'selected') {
-        if (selectedLifetime !== null) {
-          await selectedLifetime.handle.pause()
-          await selectedLifetime.handle.drain()
+        const selected = authoritySelection
+        if (selected.kind === 'selected') {
+          await selected.lifetime.handle.pause()
+          await selected.lifetime.handle.drain()
         }
         return
       }
@@ -618,9 +645,10 @@ export function composeTaskExecutionProviderBackground(
     },
     async quiesceAuthorityLoss() {
       if (mode === 'selected') {
-        if (selectedLifetime !== null) {
-          await selectedLifetime.handle.quiesceAuthorityLoss()
-          await selectedLifetime.handle.drain()
+        const selected = authoritySelection
+        if (selected.kind === 'selected') {
+          await selected.lifetime.handle.quiesceAuthorityLoss()
+          await selected.lifetime.handle.drain()
         }
         return
       }
@@ -649,9 +677,10 @@ export function composeTaskExecutionProviderBackground(
     async stop() {
       if (mode === 'selected') {
         stopped = true
-        if (selectedLifetime !== null) {
-          await selectedLifetime.close(PROVIDER_SESSION_CLOSE_ABORT_REASON)
-          await selectedLifetime.handle.drain()
+        const selected = authoritySelection
+        if (selected.kind === 'selected') {
+          await selected.lifetime.close(PROVIDER_SESSION_CLOSE_ABORT_REASON)
+          await selected.lifetime.handle.drain()
         }
         return
       }
@@ -666,9 +695,10 @@ export function composeTaskExecutionProviderBackground(
     async close(reason: string) {
       if (mode === 'selected') {
         stopped = true
-        if (selectedLifetime === null) return Object.freeze([])
-        const ids = await selectedLifetime.close(reason)
-        await selectedLifetime.handle.drain()
+        const selected = authoritySelection
+        if (selected.kind === 'unselected') return Object.freeze([])
+        const ids = await selected.lifetime.close(reason)
+        await selected.lifetime.handle.drain()
         return ids
       }
       return await queue(async () => {
@@ -683,7 +713,8 @@ export function composeTaskExecutionProviderBackground(
     async awaitIdle() {
       if (mode === 'selected') {
         await serialized
-        if (selectedLifetime !== null) await selectedLifetime.awaitIdle()
+        const selected = authoritySelection
+        if (selected.kind === 'selected') await selected.lifetime.awaitIdle()
         await runtime.module.awaitIdle()
         return
       }

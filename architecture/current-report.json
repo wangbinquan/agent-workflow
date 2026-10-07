@@ -1,22 +1,22 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 504,
-    "architectureExceptions": 5982,
-    "backgroundJobs": 369,
-    "crossContextImports": 6815,
+    "ambientWiring": 505,
+    "architectureExceptions": 5997,
+    "backgroundJobs": 374,
+    "crossContextImports": 6831,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27465,
-    "mutationEntrypoints": 1958,
+    "moduleSymbolOwners": 27559,
+    "mutationEntrypoints": 1964,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1238,
-    "transactionExternalEffects": 273
+    "transactionExternalEffects": 274
   },
   "metrics": {
-    "ambientWiringEntries": 504,
+    "ambientWiringEntries": 505,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2371,
+    "backendProductionFiles": 2380,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 369,
+    "backgroundEntries": 374,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -47,9 +47,9 @@
       "packages/backend/src/services/scheduledTaskScheduler.ts",
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
-    "directNativeIntervals": 22,
-    "directNativeTimers": 78,
-    "inboundBoundaryEdges": 311,
+    "directNativeIntervals": 23,
+    "directNativeTimers": 79,
+    "inboundBoundaryEdges": 309,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 455
+        "files": 466
       }
     ],
-    "moduleFiles": 1774,
+    "moduleFiles": 1785,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:27dc496dc8e2e0c0f8cf303d1d98146b62f088aa06808a2eddd4a9fff39d536b"
+  "sourceDigest": "sha256:3d9363a4dce2c5109b6f7dea3a60c65568c52e57146ea63c888b450a8f11bf3a"
 }

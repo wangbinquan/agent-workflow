@@ -14,13 +14,31 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { TaskClaimGate } from './application/taskClaimGate'
-import { DrizzleTaskOwnershipPersistence } from './infrastructure/taskOwnershipPersistence'
+import {
+  DrizzleTaskOwnershipPersistence,
+  taskOwnershipHostBinding,
+  taskDriverFinalizationFactQueries,
+} from './infrastructure/taskOwnershipPersistence'
+import type { TaskHostNewWorkAdmission } from './application/ports/taskHostAdmission'
+import type { TaskDriverFinalizations } from './application/ports/taskDriverFinalization'
+import type { TaskHostWriteBinding } from './infrastructure/hostExecutionWriteTransaction'
+import { createTaskDriverFinalizations } from './infrastructure/taskDriverFinalization'
+import { taskEffectHostBinding } from './infrastructure/taskExecutionEffectPersistence'
+import {
+  captureTaskHostAdmission,
+  taskHostAdmissionResult,
+  completeTaskHostWork,
+  type TaskHostAdmissionAttempt,
+} from './application/taskHostAdmission'
+import type { TaskHostFailedClaim } from './application/ports/taskHostClaimFailure'
+import { taskHostClaimFailures } from './infrastructure/taskHostClaimFailure'
 import { InMemoryTaskRuntimeRegistry } from './infrastructure/inMemoryTaskRuntimeRegistry'
 import type { RuntimeStopTicket } from './infrastructure/inMemoryTaskRuntimeRegistry'
 import {
   createWorkerIdentity,
   type ClaimAttachPermit,
   type OwnershipToken,
+  type WorkerIdentity,
 } from './domain/ownership'
 import type { TaskExecutionPersistence } from './application/ports/taskExecutionPersistence'
 import type { TaskOwnershipPersistence } from './application/ports/taskOwnershipPersistence'
@@ -34,10 +52,34 @@ export interface ClaimedTaskExecution {
   readonly permit: ClaimAttachPermit
 }
 
+export interface TaskExecutionHostSelection {
+  readonly admission: TaskHostNewWorkAdmission
+  readonly writes: TaskHostWriteBinding
+}
+
+function captureFailedClaim(
+  ownership: TaskOwnershipPersistence,
+  intentId: string,
+  identity: WorkerIdentity,
+  admission: TaskHostAdmissionAttempt | undefined,
+): TaskHostFailedClaim | undefined {
+  if (admission === undefined) return undefined
+  const original = taskHostAdmissionResult(admission)
+  if (original.kind !== 'admitted') return undefined
+  const failures = taskHostClaimFailures(ownership)
+  const capture = failures?.capture
+  if (failures === undefined || typeof capture !== 'function')
+    throw new Error('task-host-write-selection-incomplete')
+  return capture.call(failures, { intentId, identity, work: original.work })
+}
+
 export class TaskExecutionModule {
   readonly moduleId = ulid()
   readonly claimGate: TaskClaimGate
   readonly runtimeRegistry: InMemoryTaskRuntimeRegistry
+  readonly host:
+    | (TaskExecutionHostSelection & { readonly finalizations: TaskDriverFinalizations })
+    | undefined
   // RFC-359 W7：终态维护认领不再挂在这里。删除 / 归档 / workspace-GC 三条路径与两个 provider
   // 的组合根共用 `DrizzleTerminalMaintenancePersistence`（`createTerminalMaintenanceStore(db)`），
   // 因此这个进程级单例不再需要一个 bun:sqlite 专属的同步 store 成员。
@@ -50,10 +92,27 @@ export class TaskExecutionModule {
    * 要消灭的形态；现在统一从这里按库取中立那份（PG 侧的驱动生命周期本来就是这个形状）。
    */
   ownershipFor(db: ProviderNeutralDatabase): TaskOwnershipPersistence {
-    return new DrizzleTaskOwnershipPersistence(db)
+    return new DrizzleTaskOwnershipPersistence(db, this.host?.writes)
   }
 
-  constructor(readonly daemonGeneration: string) {
+  constructor(
+    readonly daemonGeneration: string,
+    host?: TaskExecutionHostSelection,
+  ) {
+    if (host !== undefined) {
+      if (
+        typeof host.admission?.acquire !== 'function' ||
+        host.writes?.port === undefined ||
+        typeof host.writes.transactionFor !== 'function'
+      ) {
+        throw new Error('task-host-write-selection-incomplete')
+      }
+      this.host = Object.freeze({
+        admission: host.admission,
+        writes: host.writes,
+        finalizations: createTaskDriverFinalizations(),
+      })
+    }
     this.claimGate = new TaskClaimGate(daemonGeneration)
     this.runtimeRegistry = new InMemoryTaskRuntimeRegistry(this.claimGate)
   }
@@ -75,20 +134,40 @@ export class TaskExecutionModule {
     leaseMs?: number
   }): Promise<ClaimedTaskExecution> {
     const permit = this.claimGate.enter()
+    const finalizations = this.host?.finalizations
+    const handoffFailedClaim = finalizations?.failedClaim
+    let hostAdmission: TaskHostAdmissionAttempt | undefined
+    let failedClaim: TaskHostFailedClaim | undefined
     try {
-      const token = await this.ownershipFor(input.db).claimPendingIntent({
+      if (
+        this.host !== undefined &&
+        (finalizations === undefined || typeof handoffFailedClaim !== 'function')
+      )
+        throw new Error('task-host-write-selection-incomplete')
+      if (this.host !== undefined) hostAdmission = captureTaskHostAdmission(this.host.admission)
+      const ownership = this.ownershipFor(input.db)
+      const identity = createWorkerIdentity({
+        ownerId: ulid(),
+        daemonGeneration: this.daemonGeneration,
+      })
+      failedClaim = captureFailedClaim(ownership, input.intentId, identity, hostAdmission)
+      const token = await ownership.claimPendingIntent({
         intentId: input.intentId,
-        identity: createWorkerIdentity({
-          ownerId: ulid(),
-          daemonGeneration: this.daemonGeneration,
-        }),
+        identity,
         now: input.now ?? Date.now(),
         leaseMs: input.leaseMs ?? DEFAULT_OWNERSHIP_LEASE_MS,
+        ...(hostAdmission === undefined ? {} : { hostAdmission }),
       })
       this.claimGate.bind(permit, token)
       return { intentId: input.intentId, token, permit }
     } catch (error) {
       this.claimGate.leave(permit)
+      if (failedClaim !== undefined) {
+        await handoffFailedClaim!.call(finalizations!, failedClaim).catch(() => undefined)
+      } else if (hostAdmission !== undefined) {
+        const original = taskHostAdmissionResult(hostAdmission)
+        if (original.kind === 'admitted') completeTaskHostWork(original.work)
+      }
       throw error
     }
   }
@@ -153,8 +232,18 @@ export class ProviderTaskExecutionModule extends TaskExecutionModule {
   constructor(
     daemonGeneration: string,
     readonly persistence: TaskExecutionPersistence,
+    host?: TaskExecutionHostSelection,
   ) {
-    super(daemonGeneration)
+    super(daemonGeneration, host)
+    if (
+      host !== undefined &&
+      (taskOwnershipHostBinding(persistence.ownership) !== host.writes ||
+        taskEffectHostBinding(persistence.effects) !== host.writes ||
+        taskDriverFinalizationFactQueries(persistence.ownership) === undefined ||
+        taskHostClaimFailures(persistence.ownership) === undefined)
+    ) {
+      throw new Error('task-host-write-selection-incomplete')
+    }
   }
 
   async claimPersisted(input: {
@@ -163,20 +252,44 @@ export class ProviderTaskExecutionModule extends TaskExecutionModule {
     leaseMs?: number
   }): Promise<ClaimedTaskExecution> {
     const permit = this.claimGate.enter()
+    const finalizations = this.host?.finalizations
+    const handoffFailedClaim = finalizations?.failedClaim
+    let hostAdmission: TaskHostAdmissionAttempt | undefined
+    let failedClaim: TaskHostFailedClaim | undefined
     try {
+      if (
+        this.host !== undefined &&
+        (finalizations === undefined || typeof handoffFailedClaim !== 'function')
+      )
+        throw new Error('task-host-write-selection-incomplete')
+      if (this.host !== undefined) hostAdmission = captureTaskHostAdmission(this.host.admission)
+      const identity = createWorkerIdentity({
+        ownerId: ulid(),
+        daemonGeneration: this.daemonGeneration,
+      })
+      failedClaim = captureFailedClaim(
+        this.persistence.ownership,
+        input.intentId,
+        identity,
+        hostAdmission,
+      )
       const token = await this.persistence.ownership.claimPendingIntent({
         intentId: input.intentId,
-        identity: createWorkerIdentity({
-          ownerId: ulid(),
-          daemonGeneration: this.daemonGeneration,
-        }),
+        identity,
         now: input.now ?? Date.now(),
         leaseMs: input.leaseMs ?? DEFAULT_OWNERSHIP_LEASE_MS,
+        ...(hostAdmission === undefined ? {} : { hostAdmission }),
       })
       this.claimGate.bind(permit, token)
       return { intentId: input.intentId, token, permit }
     } catch (error) {
       this.claimGate.leave(permit)
+      if (failedClaim !== undefined) {
+        await handoffFailedClaim!.call(finalizations!, failedClaim).catch(() => undefined)
+      } else if (hostAdmission !== undefined) {
+        const original = taskHostAdmissionResult(hostAdmission)
+        if (original.kind === 'admitted') completeTaskHostWork(original.work)
+      }
       throw error
     }
   }
@@ -189,15 +302,17 @@ export const taskExecutionModule = new TaskExecutionModule(DAEMON_GENERATION)
 
 export function createTaskExecutionTestModule(
   daemonGeneration: string = `test-${ulid()}`,
+  host?: TaskExecutionHostSelection,
 ): TaskExecutionModule {
-  return new TaskExecutionModule(daemonGeneration)
+  return new TaskExecutionModule(daemonGeneration, host)
 }
 
 export function createProviderTaskExecutionModule(input: {
   readonly daemonGeneration: string
   readonly persistence: TaskExecutionPersistence
+  readonly host?: TaskExecutionHostSelection
 }): ProviderTaskExecutionModule {
-  return new ProviderTaskExecutionModule(input.daemonGeneration, input.persistence)
+  return new ProviderTaskExecutionModule(input.daemonGeneration, input.persistence, input.host)
 }
 
 // RFC-363: the Task query root binds the required port for one admitted read.
