@@ -966,3 +966,11 @@ SOURCE62-R5 独立有限功能 PASS；三组完整目的效果、logical staging
 3afffac0 的 Windows37550317792 已 failure：同一 native 平台选项在较长 cwd 表达式后超出原匹配窗口。SOURCE2-R1 有效稳定 PASS，仅移动纯 spread，完整原规则/断言/预算保持，原 pattern 1→0。一次原 scoped 生成固定 a7c221e6 加该一个生产文件，排除 H7 WIP；13 原产物 sourceDigest sha256:c9cffe87aa91c7f178bdb0b6cc6e4ed63dfbcf0ad447e8859e6cbb280909d4e6，classic inbound/outbound 0→0。
 
 匹配清单如实补已提交 caea61fe 的四条观测 frontend owner，旧 27325 条全文/顺序与129 ledger/why 保持，owner 27325→27329 的一条原协议声明随匹配提交消费后正常退役。不改并行源码；源码/配套有限门、远端同步和新精确 SHA CI 分别验收。无本机 AW tests/typecheck/build/service，H7/R2、所有根/事务/后台执行与 A-T7/A-G 继续，尚无 AW-in-CS 部署，RFC 未完成。详情见 design/RFC-370-crewstation-hosted-deployment/purpose-platform-canonical-publication.md。
+
+## 2026-10-07 Purpose Windows 修正已发布与一次许可退役候选
+
+完整18个相关文件已提交推送 e56198b39737cf83a2c158a13abb60af539e09b3；发布后 main/origin 0/0、index 为空、H7 在制7路径逐字保留。SOURCE2-R1 与 MATCHING16-R1 均有效稳定有限 PASS，原 Windows 失败、前次主 CI 失败及准备错误完整保留。新精确 SHA 主 CI37554447584 已注册；首次登记 queued，未据此记 CI 通过。
+
+本普通后继只退役该提交已经消费的一个 owner 增长声明。全部129行原 baseline/顺序/why/字段与其它 provenance 保持，只按原 payload 算法重算 ledger digest；另三份完整文档仅追加此段。原13投影、27329完整 owner 行与原规则均不再生成或改动，原 native 修正保持。无本机 AW tests/typecheck/build/service，也无新 census。
+
+H7 核心 SOURCE7-R2 有效稳定有限 PASS；三根、Task 事务、19 handles/named admission 与 Task 热配置入口仍须接线，完整 A-T7/A-G 未通过。之后按已批准顺序编写各层独立 CS adapter，先 M0 实际部署，再逐项 M1-M4。当前 AW 尚未部署到 CS，RFC 未完成。

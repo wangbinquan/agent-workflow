@@ -11,3 +11,11 @@ SOURCE2 源码门、这批 16 路径 matching 门、exact-path 提交/推送/远
 本机仅目标格式/lint、纯 AST/byte/JSON与上述一次原库存生成；未运行 AW tests/typecheck/build/service。architecture 目录为原 .prettierignore 的机器产物排除目录，按原生成格式保留，不声称该目录通过实际 Prettier/lint。matching 与发布/CI 在本文件冻结时仍待验收。
 
 H7 生命周期核心 R1 两项功能失败已保留，R2 六项回归候选正在复核；实际三根、Task 事务、19 handles/named admission、H1 热配置调用者及 A-T7/A-G 继续。阶段 A 完整验收后，实施各层独立 CS adapter，先 M0 实际部署，再逐项 M1–M4。本批不关闭完整 RFC，当前没有 AW-in-CS 实际部署。
+
+## 2026-10-07 Purpose Windows 修正已发布与一次许可退役候选
+
+完整18个相关文件已提交推送 e56198b39737cf83a2c158a13abb60af539e09b3；发布后 main/origin 0/0、index 为空、H7 在制7路径逐字保留。SOURCE2-R1 与 MATCHING16-R1 均有效稳定有限 PASS，原 Windows 失败、前次主 CI 失败及准备错误完整保留。新精确 SHA 主 CI37554447584 已注册；首次登记 queued，未据此记 CI 通过。
+
+本普通后继只退役该提交已经消费的一个 owner 增长声明。全部129行原 baseline/顺序/why/字段与其它 provenance 保持，只按原 payload 算法重算 ledger digest；另三份完整文档仅追加此段。原13投影、27329完整 owner 行与原规则均不再生成或改动，原 native 修正保持。无本机 AW tests/typecheck/build/service，也无新 census。
+
+H7 核心 SOURCE7-R2 有效稳定有限 PASS；三根、Task 事务、19 handles/named admission 与 Task 热配置入口仍须接线，完整 A-T7/A-G 未通过。之后按已批准顺序编写各层独立 CS adapter，先 M0 实际部署，再逐项 M1-M4。当前 AW 尚未部署到 CS，RFC 未完成。
