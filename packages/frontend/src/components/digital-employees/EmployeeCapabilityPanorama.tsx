@@ -254,6 +254,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
     pointerId: number
     sourceLaneId: string
     grabOffsetY: number
+    clientY: number
     laneHeight: number
     mapTop: number
     slotTops: number[]
@@ -295,6 +296,27 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
       previousLaneTops.current = nextTops
     }
     animateLaneReorder()
+  }, [draggedLaneId, lanePrioritySignature])
+  useLayoutEffect(() => {
+    if (draggedLaneId === null) return
+    const followCapturedPointer = () => {
+      const session = pointerDrag.current
+      const source = laneElements.current.get(draggedLaneId)
+      if (session === null || session.sourceLaneId !== draggedLaneId || source === undefined) return
+      // Scroll anchoring can run after the last pointermove. Read the actual
+      // keyed lane position so its original grab point stays under that pointer.
+      const appliedOffset = Number.parseFloat(
+        source.style.getPropertyValue('--employee-lane-drag-offset') || '0',
+      )
+      const layoutTop = source.getBoundingClientRect().top - appliedOffset
+      const offset = session.clientY - session.grabOffsetY - layoutTop
+      if (Math.abs(offset - dragTranslateYRef.current) < 0.01) return
+      dragTranslateYRef.current = offset
+      setDragTranslateY(offset)
+    }
+    followCapturedPointer()
+    window.addEventListener('scroll', followCapturedPointer, true)
+    return () => window.removeEventListener('scroll', followCapturedPointer, true)
   }, [draggedLaneId, lanePrioritySignature])
   const capabilityToolState = (item: WorkItem) => props.toolState?.(item) ?? props.cardState?.(item)
   const capabilityReviewState = (gate: ResponsibilityReviewGate) =>
@@ -404,6 +426,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
   const updatePointerDrag = (sourceLaneId: string, clientY: number) => {
     const session = pointerDrag.current
     if (session === null || session.sourceLaneId !== sourceLaneId) return
+    session.clientY = clientY
     // Reordering tall lanes can make the browser's scroll anchoring move the
     // containing page between pointer events. Slot geometry was captured in
     // viewport coordinates, so carry the map's viewport shift into those
@@ -1018,6 +1041,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                                 pointerId: event.pointerId,
                                 sourceLaneId: lane.laneId,
                                 grabOffsetY: event.clientY - sourceRect.top,
+                                clientY: event.clientY,
                                 laneHeight: sourceRect.height,
                                 mapTop: mapElement.current?.getBoundingClientRect().top ?? 0,
                                 slotTops: slotRects.map((rect) => rect.top),

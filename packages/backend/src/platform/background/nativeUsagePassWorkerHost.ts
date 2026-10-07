@@ -36,23 +36,25 @@ export async function openNativeUsagePassWorker(
   })
   let requestId = 0n,
     closed = false,
+    closeAcknowledged = false,
     closePromise: Promise<void> | undefined,
     active: Promise<NativeUsagePassWorkerResult> | undefined,
     pending:
       | {
           id: string
+          requestKind: NativeUsagePassRequest['kind']
           resolve: (value: NativeUsagePassWorkerResult) => void
           reject: (error: unknown) => void
         }
       | undefined
-  const stop = (reason: unknown) => {
+  const stop = (reason: unknown, planned = false) => {
     if (closed) return
     closed = true
     signal.removeEventListener('abort', cancel)
     const waiting = pending
     pending = undefined
     waiting?.reject(reason)
-    worker.terminate()
+    if (!planned || !closeAcknowledged) worker.terminate()
   }
   const cancel = () => stop(signal.reason ?? new Error('Native owner pass cancelled'))
   worker.onmessage = (event: MessageEvent<NativeUsagePassWorkerEvent>) => {
@@ -63,8 +65,11 @@ export async function openNativeUsagePassWorker(
       return
     }
     pending = undefined
-    if (message.ok) waiting.resolve(message.result)
-    else {
+    if (message.ok) {
+      if (waiting.requestKind === 'close' && message.result.kind === 'closed')
+        closeAcknowledged = true
+      waiting.resolve(message.result)
+    } else {
       waiting.reject(new Error(message.error))
       stop(new Error(message.error))
     }
@@ -75,7 +80,7 @@ export async function openNativeUsagePassWorker(
   }
   worker.addEventListener('close', () => {
     exited()
-    stop(new Error('Native pass worker exited before owner ACK'))
+    stop(new Error('Native pass worker exited before owner ACK'), closeAcknowledged)
   })
   signal.addEventListener('abort', cancel, { once: true })
   const request = (value: NativeUsagePassRequest): Promise<NativeUsagePassWorkerResult> => {
@@ -83,7 +88,7 @@ export async function openNativeUsagePassWorker(
     if (pending) return Promise.reject(new Error('Native owner request awaits reply'))
     active = new Promise((resolve, reject) => {
       const id = (++requestId).toString()
-      pending = { id, resolve, reject }
+      pending = { id, requestKind: value.kind, resolve, reject }
       try {
         worker.postMessage({ id, request: value })
       } catch (error) {
@@ -134,7 +139,7 @@ export async function openNativeUsagePassWorker(
             const result = await request({ kind: 'close' })
             if (result.kind !== 'closed') throw new Error('Native worker did not close snapshot')
           } finally {
-            stop(new Error('Native owner pass closed'))
+            stop(new Error('Native owner pass closed'), closeAcknowledged)
             await exit
           }
         })())

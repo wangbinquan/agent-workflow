@@ -6,7 +6,7 @@
     "moduleFiles": 1767,
     "productionFiles": 3188,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27415
+    "symbolsIncludingFileRoots": 27416
   },
   "entries": [
     {
@@ -156874,6 +156874,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "emitNativeUsagePage",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePageEmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsagePageEmission.ts#NativeUsagePageBaselineMembers",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeUsagePageBaselineMembers",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -329720,5 +329732,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eb45eac5a34be59f5f1ab0f4ffaaad36fe8b6c1ff1b7a7f8451b83d0b4f66372"
+  "sourceDigest": "sha256:809ca2c728c412395ac3314832e29e8df64a98e7c2bc04462fecc26016d3716f"
 }

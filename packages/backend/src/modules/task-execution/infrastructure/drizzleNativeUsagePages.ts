@@ -35,7 +35,7 @@ import {
   withNativeUsageOwner,
   type NativeUsageOwnerFacts,
 } from './nativeUsageOwnerTransaction'
-import { emitNativeUsagePage } from './nativeUsagePageEmission'
+import { emitNativeUsagePage, type NativeUsagePageBaselineMembers } from './nativeUsagePageEmission'
 import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
 import { bindOriginalNativeUsageStore } from './nativeUsageStoreBinding'
 import { originalNativeRootHead } from './nativeUsageRootSource'
@@ -335,6 +335,20 @@ export class DrizzleNativeUsagePages implements PagesPort {
       sha256Hex(JSON.stringify([page.previousDigest, payload])) !== page.cumulativeDigest
     )
       throw new Error('Original native page digest changed')
+    // A Worker/independent PG read may yield; it must finish before the original write lease.
+    // Copy its membership while the verified snapshot is still live. The write below retains
+    // the original preparation/fence checks and atomically commits pages, numbers and ACK.
+    const originalBeforeIndex: NativeUsagePageBaselineMembers | null | undefined =
+      this.originalBeforeIndex == null
+        ? this.originalBeforeIndex
+        : {
+            original: this.originalBeforeIndex.original,
+            members: new Set(
+              this.numericPages && page.identity.phase === 'final' && page.steps.length > 0
+                ? await this.originalBeforeIndex.members(page.steps.map((step) => step.stepId))
+                : [],
+            ),
+          }
     return withNativeUsageOwner(
       this.db,
       input.binding,
@@ -467,7 +481,7 @@ export class DrizzleNativeUsagePages implements PagesPort {
             page,
             ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document)),
             pass.ownerReceiptId,
-            this.originalBeforeIndex,
+            originalBeforeIndex,
           )
           ack = ObservationNativePassAckSchema.parse({
             ...ack,

@@ -2,7 +2,7 @@
 // unselected human-review branch, then fixed-width cards covered each other.
 // The public panorama must crop every employee type from generic active flags.
 
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest'
 
 import {
@@ -325,5 +325,87 @@ describe('public employee capability panorama active projection', () => {
       1,
     )
     expect(mergedItem?.classList.contains('employee-toolbox-card--running')).toBe(true)
+  })
+})
+
+// RFC-371 CI 37583015939: WebKit can scroll after the final pointermove,
+// leaving the captured lane 103.84375 px from the pointer. Keep the old real
+// browser 1 px geometry/release/keyboard assertions as the physical oracle.
+describe('priority drag follows late viewport scroll without another pointermove', () => {
+  test('window and nested scroll retain the original grab point and committed priority', () => {
+    let viewportScroll = 0
+    const rect = (top: number, height = 180) => new DOMRect(0, top, 600, height)
+    const geometry = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains('employee-toolbox-map')) return rect(100 - viewportScroll)
+        if (!this.classList.contains('employee-toolbox-lane')) return rect(0)
+        const lanes = Array.from(
+          this.closest('.employee-toolbox-map')!.querySelectorAll('.employee-toolbox-lane'),
+        )
+        const appliedOffset = Number.parseFloat(
+          this.style.getPropertyValue('--employee-lane-drag-offset') || '0',
+        )
+        return rect(100 + lanes.indexOf(this) * 200 - viewportScroll + appliedOffset)
+      })
+    try {
+      const commit = vi.fn()
+      const { container } = render(
+        <EmployeeCapabilityPanorama
+          type={fixtureType()}
+          selectedWorkItemRef={null}
+          language="zh-CN"
+          onSelect={vi.fn()}
+          lanePriorityOrder={['main', 'optional']}
+          onLanePriorityOrderChange={commit}
+        />,
+      )
+      const map = container.querySelector<HTMLElement>('.employee-toolbox-map')!
+      const source = container.querySelector<HTMLElement>('[data-lane-id="optional"]')!
+      const handle = source.querySelector<HTMLButtonElement>('.employee-toolbox-lane__drag-handle')!
+      Object.defineProperties(map, {
+        setPointerCapture: { configurable: true, value: vi.fn() },
+        hasPointerCapture: { configurable: true, value: () => true },
+        releasePointerCapture: { configurable: true, value: vi.fn() },
+      })
+      const pointer = (target: HTMLElement, type: string, clientY: number) => {
+        const event = new MouseEvent(type, { bubbles: true, button: 0, clientY })
+        Object.defineProperty(event, 'pointerId', { value: 1 })
+        fireEvent(target, event)
+      }
+      pointer(handle, 'pointerdown', 350)
+      pointer(map, 'pointermove', 150)
+      expect(source.querySelector('.employee-toolbox-lane__priority')?.textContent).toBe('P1')
+      expect(source.getBoundingClientRect().top + 50).toBe(150)
+
+      act(() => {
+        viewportScroll = 64
+        window.dispatchEvent(new Event('scroll'))
+      })
+      expect(source.getBoundingClientRect().top + 50).toBe(150)
+      act(() => {
+        viewportScroll = 84
+        map.dispatchEvent(new Event('scroll', { bubbles: false }))
+      })
+      expect(source.getBoundingClientRect().top + 50).toBe(150)
+      expect(commit).not.toHaveBeenCalled()
+
+      // React batches both events: the ref can change before the DOM transform.
+      // The final visible grab point must still match the unchanged pointer.
+      act(() => {
+        viewportScroll = 64
+        window.dispatchEvent(new Event('scroll'))
+        viewportScroll = 84
+        map.dispatchEvent(new Event('scroll', { bubbles: false }))
+      })
+      expect(source.getBoundingClientRect().top + 50).toBe(150)
+
+      pointer(map, 'pointerup', 150)
+      expect(commit).toHaveBeenCalledTimes(1)
+      expect(commit).toHaveBeenCalledWith(['optional', 'main'])
+      expect(source.classList.contains('employee-toolbox-lane--dragging')).toBe(false)
+    } finally {
+      geometry.mockRestore()
+    }
   })
 })

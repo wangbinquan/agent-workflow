@@ -9,6 +9,7 @@ import { createUsageLedgerStore } from '@/modules/run-observability/infrastructu
 import { createObservationInvocationStore } from '@/modules/run-observability/infrastructure/invocationPersistence'
 import { createUsageSourceProjection } from '@/modules/run-observability/application/usageSourceProjection'
 import { nativeUsageBaselineRead } from '@/platform/persistence/nativeUsageBaselineRead'
+import { databaseTransactionIsActive } from '@/platform/persistence/databaseTransaction'
 import { originalBaselineWorkerFixture } from './helpers/rfc371NativeBaselineWorkerFixture'
 
 test('changed real Worker ready generation or request identity rejects before callback and physically closes', async () => {
@@ -70,6 +71,88 @@ test('changed real Worker ready generation or request identity rejects before ca
     }
   } finally {
     globalThis.Worker = OriginalWorker
+    fixture.close()
+  }
+}, 30_000)
+
+test('actual baseline IPC finishes outside the original write and only the two new steps enter its numeric ACK', async () => {
+  const fixture = await originalBaselineWorkerFixture(17),
+    { f, original, step } = fixture
+  let memberCalls = 0
+  try {
+    fixture.add(17, 19)
+    const read = nativeUsageBaselineRead({
+      provider: 'sqlite',
+      db: fixture.ledger!,
+      generationId: 'actual-file-worker',
+    })!
+    await read.run({ binding: fixture.readBinding, original }, async (view) => {
+      expect(view).not.toBeNull()
+      const originalView = view!
+      const pages = new DrizzleNativeUsagePages(f.db, true, {
+        ...originalView,
+        async members(ids) {
+          memberCalls++
+          expect(databaseTransactionIsActive(f.db)).toBe(false)
+          // This actual event-loop crossing must not run within the SQLite write lease.
+          await new Promise<void>((resolve) => setImmediate(resolve))
+          expect(databaseTransactionIsActive(f.db)).toBe(false)
+          return originalView.members(ids)
+        },
+      })
+      await persistNativeUsagePass(f.open(fixture.path, f.identity('final'), 7), {
+        admit: (identity, initialCursor, rootCreatedAt) =>
+          pages.admit({
+            binding: f.binding,
+            identity,
+            initialCursor,
+            rootCreatedAt,
+            beforeSpawnReceiptId: f.before.ownerReceiptId,
+          }),
+        persist: (page) =>
+          pages.persist({
+            binding: f.binding,
+            page: {
+              ...page,
+              sessions: [...page.sessions],
+              steps: [...page.steps],
+              issues: [...page.issues],
+            },
+          }),
+        interrupt: (identity, reason) => pages.interrupt({ binding: f.binding, identity, reason }),
+      })
+    })
+    expect(memberCalls).toBeGreaterThan(1)
+    const ledger = createUsageLedgerStore(f.db),
+      project = createUsageSourceProjection({
+        source: createObservationUsageSource(f.db),
+        store: ledger,
+        invocations: createObservationInvocationStore(f.db),
+      })
+    while (await project(f.binding.nodeRunId)) {
+      /* Original source EOF. */
+    }
+    const records = await ledger.records(f.binding.taskId, { limit: 1 })
+    expect(records.items).toHaveLength(1)
+    expect(records.nextCursor).toBeDefined()
+    const last = await ledger.records(f.binding.taskId, { limit: 1, after: records.nextCursor })
+    expect(last.items).toHaveLength(1)
+    expect(last.nextCursor).toBeUndefined()
+    expect(
+      [...records.items, ...last.items]
+        .sort((a, b) => a.measurement.recordId.localeCompare(b.measurement.recordId))
+        .map((r) => ({ id: r.measurement.recordId, bins: r.contribution })),
+    ).toEqual([
+      {
+        id: 'opencode:step:' + step(17),
+        bins: { input: '18', output: '5', cacheRead: '7', cacheWrite: '11' },
+      },
+      {
+        id: 'opencode:step:' + step(18),
+        bins: { input: '19', output: '5', cacheRead: '7', cacheWrite: '11' },
+      },
+    ])
+  } finally {
     fixture.close()
   }
 }, 30_000)

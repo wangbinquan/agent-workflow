@@ -14,7 +14,6 @@ import type {
 const scope = globalThis as unknown as {
   onmessage: ((event: MessageEvent<NativeUsageBaselineWorkerInput>) => void) | null
   postMessage(value: NativeUsageBaselineWorkerEvent): void
-  close(): void
 }
 const stop = new AbortController()
 const channel = observationReportChannel((event) => {
@@ -84,7 +83,8 @@ async function run(id: string, input: NativeUsageBaselineWorkerStart) {
     })
   } finally {
     channel.close()
-    scope.close()
+    // Bun exits naturally after the original channel closes and its message keepalive is released.
+    scope.onmessage = null
   }
 }
 async function members(id: string, stepIds: readonly string[]) {
@@ -103,7 +103,7 @@ function failed(error: unknown) {
   stop.abort(error)
   channel.close()
   release?.()
-  if (!started) scope.close()
+  if (!started) scope.onmessage = null
 }
 scope.onmessage = (event) => {
   try {

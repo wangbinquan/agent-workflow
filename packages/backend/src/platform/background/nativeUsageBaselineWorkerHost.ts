@@ -59,6 +59,9 @@ export async function withNativeUsageBaselineWorker<T>(
     const waiting = pending
     pending = undefined
     waiting?.reject(error)
+    // The Worker has already closed its original snapshot and will exit naturally.
+    // Do not race that actual close event with another cancel/terminate operation.
+    if (planned && closeAcknowledged) return
     if (terminate) worker.terminate()
     else
       try {

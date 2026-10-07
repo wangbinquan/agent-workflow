@@ -17,7 +17,6 @@ import type {
 const scope = globalThis as unknown as {
   onmessage: ((event: MessageEvent<ObservationReportWorkerInput>) => void) | null
   postMessage(value: ObservationReportWorkerEvent): void
-  close(): void
 }
 const stop = new AbortController()
 const channel = observationReportChannel((event) => scope.postMessage(event), stop.signal)
@@ -63,7 +62,8 @@ async function run(input: OriginalObservationWorkerStart) {
     })
   } finally {
     channel.close()
-    scope.close()
+    // Bun exits naturally after the original channel closes and its message keepalive is released.
+    scope.onmessage = null
   }
 }
 scope.onmessage = (event) => {
@@ -89,7 +89,7 @@ scope.onmessage = (event) => {
           kind: 'failed',
           error: error instanceof Error ? error.message : String(error),
         })
-        scope.close()
+        scope.onmessage = null
       } catch {
         // If the channel already closed, the host's close handler rejects the pending build.
       }

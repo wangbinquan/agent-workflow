@@ -24,6 +24,12 @@ import { verifyNativeUsagePass } from './nativeUsagePassVerification'
 import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
 import { verifyNativeUsageEmissions } from './nativeUsageEmissionVerification'
 
+/** Already resolved in the same original frozen read view, before the owner write begins. */
+export interface NativeUsagePageBaselineMembers {
+  readonly original: NativeUsageBaselineReadView['original']
+  readonly members: ReadonlySet<string>
+}
+
 /** Emit only this invocation's new original steps, in the page owner's same transaction. */
 export async function emitNativeUsagePage(
   tx: TaskExecutionTransaction,
@@ -32,7 +38,7 @@ export async function emitNativeUsagePage(
   page: ObservationNativePassPage,
   before: ObservationNativeBeforeSpawnAck,
   ownerReceiptId: string,
-  originalBeforeIndex?: NativeUsageBaselineReadView | null,
+  originalBeforeIndex?: NativeUsagePageBaselineMembers | null,
 ): Promise<void> {
   if (page.identity.phase !== 'final' || page.steps.length === 0) return
   if (
@@ -78,7 +84,7 @@ export async function emitNativeUsagePage(
         original.phase !== 'baseline'
       )
         throw new Error('Original native before index changed its accepted invocation')
-      prior = new Set(await originalBeforeIndex.members(page.steps.map((step) => step.stepId)))
+      prior = new Set(originalBeforeIndex.members)
     } else {
       const key = JSON.stringify([
         page.identity.invocationId,

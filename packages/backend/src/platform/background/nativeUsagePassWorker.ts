@@ -10,7 +10,6 @@ import type {
 const scope = globalThis as unknown as {
   onmessage: ((event: MessageEvent<NativeUsagePassWorkerInput>) => void) | null
   postMessage(value: NativeUsagePassWorkerEvent): void
-  close(): void
 }
 let reader: NativeUsagePassReader | undefined,
   started = false
@@ -48,7 +47,8 @@ scope.onmessage = (event) => {
         case 'close':
           reader.close()
           scope.postMessage({ id, ok: true, result: { kind: 'closed' } })
-          scope.close()
+          // Release the message keepalive after the original snapshot has closed.
+          scope.onmessage = null
           break
       }
     }
@@ -61,7 +61,7 @@ scope.onmessage = (event) => {
         error: error instanceof Error ? error.message : String(error),
       })
     } finally {
-      scope.close()
+      scope.onmessage = null
     }
   }
 }
