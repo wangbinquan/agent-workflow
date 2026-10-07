@@ -1070,3 +1070,8 @@ SOURCE11-R3 有效稳定有限 PASS，原 R1/R2 功能失败完整保留。Runti
 本普通后继仅退役这次已消费的五个 allowGrowth。原 129 个有序库存项、why、实测 baseline 1955／6798／5969／1235／27411 与全部其它字段保持，只按原五个纯 JSON 函数更新 ledger digest。原唯一 census、十三配套生成和生产源码不重跑、不改写；三个共享文档保留原全文，仅追加本段。
 
 真实启动根、提前恢复、十九 handles、Task 原事务/admission、其他 owner/UI 与完整 H7/A-T7/A-G 继续，之后独立 CS adapters，先 M0 实际部署，再逐步 M1–M4。AW 尚未部署 CS，RFC 未完成。后台 Task 新设计和源码仍在独立实施，不包含在本退役提交。
+
+
+### 2026-10-07 RFC-370 Intent selected 排队恢复候选
+
+SOURCE4-R1 与 WF1-R1 独立有效稳定 PASS：捕获原执行权回调/receiver，配置前后失权不恢复，原待处理集合及真实 ACK 保留，native 零参入口与旧行为完整保持。两份生产加一份新测试进行一次原 scoped census；13 原输出、12 JSON 业务 payload/完整数组/分母及 129 有序 ledger/why 不变，只更新原快照摘要；classic 前后完整相等、无增长声明。匹配清单独立门及源码/清单/Windows 的精确发布与 hosted CI 待闭合。本机不跑 AW tests/typecheck/build/service/E2E；实际启动根、19 owner、Task 原事务/准入、UI、H7/A-G 和 CS M0–M4 继续，尚未部署 CS。旧共享正文及并行内容完整保留。详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-intent-publication.md`。

@@ -29,6 +29,7 @@ export function composeIntentQueuedResumption(
     runtimeFactory: Object.freeze({
       id: 'intent-queued-resumption',
       start: resumption.start,
+      startAuthority: resumption.startAuthority,
     }),
   })
 }
