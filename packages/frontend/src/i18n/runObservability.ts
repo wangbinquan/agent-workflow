@@ -137,12 +137,15 @@ export const runObservabilityZh = {
   nativeRevisionUnresolved: '原调用尚未确定',
   nativeCaptureTitle: '原生子 Agent 采集',
   nativeCaptureHint:
-    'OpenCode 子会话在进程结束并回收后补采。完整表示本轮有界扫描已投影；采集待完成、恢复基线缺失或历史修订未归属时，总量只显示已知下界。',
+    'OpenCode 原生会话在进程结束并回收后采集。完整表示原始来源已读到结束并投影；采集待完成、恢复基线缺失或历史修订未归属时，仍显示已采集用量并标记缺口。',
   nativeState_pending: '等待最终子树采集',
   nativeState_partial: '子树采集不完整',
   nativeState_complete: '最终扫描已投影',
   nativeState_unobserved: '历史调用未观测子树',
   nativeScanSize: '扫描会话 / 步骤数',
+  nativeCaptureIdentity: '任务 / 执行',
+  nativeCapturedScope: '采集范围',
+  nativeRootsAndRecords: '根会话 {{roots}} · 用量记录 {{records}}',
   nativeRevisionDetails: '查看历史步骤修订',
   nativeStep: '原生会话 / 步骤',
   nativePriorRevision:
@@ -484,12 +487,15 @@ export const runObservabilityEn: RunObservabilityMessages = {
   nativeRevisionUnresolved: 'Original invocation unresolved',
   nativeCaptureTitle: 'Native child agent capture',
   nativeCaptureHint:
-    'OpenCode child sessions are collected after process exit and reap. Complete means the bounded final scan has been projected. Pending capture, missing resume baselines and unattributed historical revisions keep totals as known lower bounds.',
+    'OpenCode native sessions are collected after process exit and reap. Complete means the original source was read through EOF and projected. Pending capture, missing resume baselines and unattributed historical revisions retain recorded usage with explicit gaps.',
   nativeState_pending: 'Awaiting final subtree capture',
   nativeState_partial: 'Partial subtree capture',
   nativeState_complete: 'Final scan projected',
   nativeState_unobserved: 'Historical subtree not observed',
   nativeScanSize: 'Scanned sessions / steps',
+  nativeCaptureIdentity: 'Task / attempt',
+  nativeCapturedScope: 'Capture scope',
+  nativeRootsAndRecords: 'Roots {{roots}} · Usage records {{records}}',
   nativeRevisionDetails: 'Inspect historical step revisions',
   nativeStep: 'Native session / step',
   nativePriorRevision:

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2360,
+    "backendFiles": 2361,
     "frontendFiles": 655,
     "legacyFiles": 596,
-    "moduleFiles": 1764,
-    "productionFiles": 3185,
+    "moduleFiles": 1765,
+    "productionFiles": 3186,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27399
+    "symbolsIncludingFileRoots": 27405
   },
   "entries": [
     {
@@ -136482,6 +136482,18 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsagePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsagePersistence.ts#NativeUsageFinalizationRef",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeUsageFinalizationRef",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsagePersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsagePersistence.ts#NativeUsageOwnerBinding",
       "removeAfterWave": null,
       "status": "current-module",
@@ -156526,6 +156538,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "verifyNativeUsageEmissions",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts#createNativeUsageFinalizationAuthority",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createNativeUsageFinalizationAuthority",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts#Finalization",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Finalization",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts#nativeUsageFinalizationReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "nativeUsageFinalizationReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts#originals",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "originals",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -329528,5 +329600,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25e5c4d9a7a1285763db0bd1a223b301e66bfca51bd6c26a980b3f968043d220"
+  "sourceDigest": "sha256:51b29e9939352d9404b9889b628f5a6a36afcd913224de8c0d10bf5dfea323ca"
 }

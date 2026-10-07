@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:25e5c4d9a7a1285763db0bd1a223b301e66bfca51bd6c26a980b3f968043d220`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:51b29e9939352d9404b9889b628f5a6a36afcd913224de8c0d10bf5dfea323ca`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2360 |
+| backend production TS 文件 | 2361 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1764 / 18 |
+| `modules/**` 文件 / 非空 context | 1765 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5964 |
+| `architectureExceptions` | 5966 |
 | `backgroundJobs` | 366 |
-| `crossContextImports` | 6793 |
+| `crossContextImports` | 6795 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27399 |
-| `mutationEntrypoints` | 1953 |
+| `moduleSymbolOwners` | 27405 |
+| `mutationEntrypoints` | 1954 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1234 |
 | `transactionExternalEffects` | 267 |
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 157 |
+| task-execution / infrastructure | 158 |
 | task-execution / application | 138 |
 | resource-catalog / infrastructure | 131 |
 | task-execution / composition | 91 |
@@ -208,7 +208,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3793 |
+| legacy-outbound | 3795 |
 | legacy-inbound | 1951 |
 | offered-consumption | 353 |
 | infrastructure-external | 324 |
@@ -223,7 +223,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3793 |
+| legacy-outbound | 3795 |
 | legacy-inbound | 1951 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 96 |
@@ -235,7 +235,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3176 |
+| W9 | 3178 |
 | W9-D | 1080 |
 | W4-E1 | 821 |
 | W5 | 203 |

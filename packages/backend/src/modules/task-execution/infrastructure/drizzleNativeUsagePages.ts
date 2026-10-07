@@ -103,67 +103,72 @@ export class DrizzleNativeUsagePages implements PagesPort {
   ) {}
 
   async prepare(input: Parameters<PagesPort['prepare']>[0]) {
-    return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
-      if (input.nativeSource !== facts.nativeSource)
-        throw new Error('Original native preparation changed its accepted source')
-      const preparedAt = Date.now()
-      const absent =
-        input.sourceAbsentAt === undefined ? {} : { sourceAbsentAt: input.sourceAbsentAt }
-      const receiptFields = [
-        'prepare',
-        input.binding.taskId,
-        input.binding.nodeRunId,
-        input.binding.invocationId,
-        facts.fence,
-        input.sourceGeneration,
-        input.resumeRootSessionId,
-        ...(input.sourceGeneration === null ? ['absent', input.sourceAbsentAt] : []),
-      ]
-      const candidate = ObservationNativeBeforeSpawnAckSchema.parse({
-        contract: 'native-usage-before-spawn-v2',
-        invocationId: input.binding.invocationId,
-        nativeSource: facts.nativeSource,
-        sourceGeneration: input.sourceGeneration,
-        ...absent,
-        lineage: facts.lineage,
-        epoch: facts.epoch,
-        ownerReceiptId: sha256Hex(JSON.stringify(receiptFields)),
-        preparedAt,
-        mode: input.resumeRootSessionId === null ? 'fresh' : 'resume',
-        rootSessionId: input.resumeRootSessionId,
-      })
-      const existing = (
-        await tx
-          .select()
-          .from(nativeUsagePreparations)
-          .where(eq(nativeUsagePreparations.invocationId, input.binding.invocationId))
-          .limit(1)
-      )[0]
-      if (existing) {
-        await preparation(tx, input.binding, facts)
-        const ack = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(existing.document))
-        if (
-          ack.nativeSource !== input.nativeSource ||
-          ack.sourceGeneration !== input.sourceGeneration ||
-          ack.rootSessionId !== input.resumeRootSessionId
-        )
-          throw new Error('Original native before-spawn operation changed on replay')
+    return withNativeUsageOwner(
+      this.db,
+      input.binding,
+      async (tx, facts) => {
+        if (input.nativeSource !== facts.nativeSource)
+          throw new Error('Original native preparation changed its accepted source')
+        const preparedAt = Date.now()
+        const absent =
+          input.sourceAbsentAt === undefined ? {} : { sourceAbsentAt: input.sourceAbsentAt }
+        const receiptFields = [
+          'prepare',
+          input.binding.taskId,
+          input.binding.nodeRunId,
+          input.binding.invocationId,
+          facts.fence,
+          input.sourceGeneration,
+          input.resumeRootSessionId,
+          ...(input.sourceGeneration === null ? ['absent', input.sourceAbsentAt] : []),
+        ]
+        const candidate = ObservationNativeBeforeSpawnAckSchema.parse({
+          contract: 'native-usage-before-spawn-v2',
+          invocationId: input.binding.invocationId,
+          nativeSource: facts.nativeSource,
+          sourceGeneration: input.sourceGeneration,
+          ...absent,
+          lineage: facts.lineage,
+          epoch: facts.epoch,
+          ownerReceiptId: sha256Hex(JSON.stringify(receiptFields)),
+          preparedAt,
+          mode: input.resumeRootSessionId === null ? 'fresh' : 'resume',
+          rootSessionId: input.resumeRootSessionId,
+        })
+        const existing = (
+          await tx
+            .select()
+            .from(nativeUsagePreparations)
+            .where(eq(nativeUsagePreparations.invocationId, input.binding.invocationId))
+            .limit(1)
+        )[0]
+        if (existing) {
+          await preparation(tx, input.binding, facts)
+          const ack = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(existing.document))
+          if (
+            ack.nativeSource !== input.nativeSource ||
+            ack.sourceGeneration !== input.sourceGeneration ||
+            ack.rootSessionId !== input.resumeRootSessionId
+          )
+            throw new Error('Original native before-spawn operation changed on replay')
+          return ack
+        }
+        const ack = candidate
+        await tx.insert(nativeUsagePreparations).values({
+          invocationId: input.binding.invocationId,
+          taskId: input.binding.taskId,
+          nodeRunId: input.binding.nodeRunId,
+          ownerReceiptId: ack.ownerReceiptId,
+          fence: facts.fence,
+          document: JSON.stringify(ack),
+          state: 'open',
+        })
+        if (ack.sourceGeneration !== null)
+          await bindOriginalNativeUsageStore(tx, ack, ack.sourceGeneration)
         return ack
-      }
-      const ack = candidate
-      await tx.insert(nativeUsagePreparations).values({
-        invocationId: input.binding.invocationId,
-        taskId: input.binding.taskId,
-        nodeRunId: input.binding.nodeRunId,
-        ownerReceiptId: ack.ownerReceiptId,
-        fence: facts.fence,
-        document: JSON.stringify(ack),
-        state: 'open',
-      })
-      if (ack.sourceGeneration !== null)
-        await bindOriginalNativeUsageStore(tx, ack, ack.sourceGeneration)
-      return ack
-    })
+      },
+      { allowFinalization: false },
+    )
   }
 
   async admit(input: Parameters<PagesPort['admit']>[0]) {
@@ -173,129 +178,137 @@ export class DrizzleNativeUsagePages implements PagesPort {
       (!Number.isSafeInteger(input.rootCreatedAt) || input.rootCreatedAt < 0)
     )
       throw new Error('Original native root creation time is not exact')
-    return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
-      const prepared = await preparation(tx, input.binding, facts)
-      const before = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document))
-      const identity = input.identity
-      const seed = sha256Hex(JSON.stringify(identity))
-      if (
-        prepared.state !== 'open' ||
-        input.beforeSpawnReceiptId !== before.ownerReceiptId ||
-        identity.invocationId !== input.binding.invocationId ||
-        identity.nativeSource !== before.nativeSource ||
-        (before.sourceGeneration !== null &&
-          identity.sourceGeneration !== before.sourceGeneration) ||
-        identity.lineage !== facts.lineage ||
-        identity.epoch !== facts.epoch ||
-        (before.mode === 'resume' &&
-          identity.rootSessionId !== before.rootSessionId &&
-          (facts.contract !== 'opencode-child-root-pages-v3' || identity.phase === 'baseline')) ||
-        (before.mode === 'fresh' && identity.phase !== 'final') ||
-        input.initialCursor !== JSON.stringify([identity.passId, '0', seed])
-      )
-        throw new Error('Original native admission changed the before-spawn binding')
-      if (facts.contract === 'opencode-child-root-pages-v3' && identity.phase === 'final') {
-        const frozen = (
+    return withNativeUsageOwner(
+      this.db,
+      input.binding,
+      async (tx, facts) => {
+        const prepared = await preparation(tx, input.binding, facts)
+        const before = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document))
+        const identity = input.identity
+        const seed = sha256Hex(JSON.stringify(identity))
+        if (
+          prepared.state !== 'open' ||
+          input.beforeSpawnReceiptId !== before.ownerReceiptId ||
+          identity.invocationId !== input.binding.invocationId ||
+          identity.nativeSource !== before.nativeSource ||
+          (before.sourceGeneration !== null &&
+            identity.sourceGeneration !== before.sourceGeneration) ||
+          identity.lineage !== facts.lineage ||
+          identity.epoch !== facts.epoch ||
+          (before.mode === 'resume' &&
+            identity.rootSessionId !== before.rootSessionId &&
+            (facts.contract !== 'opencode-child-root-pages-v3' || identity.phase === 'baseline')) ||
+          (before.mode === 'fresh' && identity.phase !== 'final') ||
+          input.initialCursor !== JSON.stringify([identity.passId, '0', seed])
+        )
+          throw new Error('Original native admission changed the before-spawn binding')
+        if (facts.contract === 'opencode-child-root-pages-v3' && identity.phase === 'final') {
+          const frozen = (
+            await tx
+              .select()
+              .from(nativeUsageRootSets)
+              .where(eq(nativeUsageRootSets.invocationId, input.binding.invocationId))
+              .limit(1)
+          )[0]
+          const source = await originalNativeRootHead(tx, input.binding, facts)
+          const member = (
+            await tx
+              .select({ key: nativeUsageRootTransitions.ordinalKey })
+              .from(nativeUsageRootTransitions)
+              .where(
+                and(
+                  eq(nativeUsageRootTransitions.invocationId, input.binding.invocationId),
+                  eq(nativeUsageRootTransitions.rootSessionId, identity.rootSessionId),
+                ),
+              )
+              .limit(1)
+          )[0]
+          if (
+            !frozen ||
+            !source ||
+            !member ||
+            frozen.nextOrdinal !== source.nextOrdinal ||
+            frozen.rootDigest !== source.digest
+          )
+            throw new Error('Native final root is absent from its original frozen lease population')
+        }
+        await bindOriginalNativeUsageStore(tx, before, identity.sourceGeneration)
+        const existing = (
           await tx
             .select()
-            .from(nativeUsageRootSets)
-            .where(eq(nativeUsageRootSets.invocationId, input.binding.invocationId))
+            .from(nativeUsagePasses)
+            .where(eq(nativeUsagePasses.passId, identity.passId))
             .limit(1)
         )[0]
-        const source = await originalNativeRootHead(tx, input.binding, facts)
-        const member = (
+        if (existing) {
+          if (
+            existing.identity !== JSON.stringify(identity) ||
+            existing.initialCursor !== input.initialCursor ||
+            existing.rootCreatedAt !== input.rootCreatedAt ||
+            !['open', 'eof'].includes(existing.state)
+          )
+            throw new Error('Original native pass cannot reopen a lost snapshot')
+          return ObservationNativePassAdmissionSchema.parse(JSON.parse(existing.admission))
+        }
+        const headKey = JSON.stringify([
+          identity.invocationId,
+          identity.nativeSource,
+          identity.sourceGeneration,
+          identity.rootSessionId,
+          identity.lineage,
+          identity.epoch,
+          identity.phase,
+        ])
+        const head = (
           await tx
-            .select({ key: nativeUsageRootTransitions.ordinalKey })
-            .from(nativeUsageRootTransitions)
-            .where(
-              and(
-                eq(nativeUsageRootTransitions.invocationId, input.binding.invocationId),
-                eq(nativeUsageRootTransitions.rootSessionId, identity.rootSessionId),
-              ),
-            )
+            .select()
+            .from(nativeUsagePassHeads)
+            .where(eq(nativeUsagePassHeads.key, headKey))
             .limit(1)
         )[0]
-        if (
-          !frozen ||
-          !source ||
-          !member ||
-          frozen.nextOrdinal !== source.nextOrdinal ||
-          frozen.rootDigest !== source.digest
-        )
-          throw new Error('Native final root is absent from its original frozen lease population')
-      }
-      await bindOriginalNativeUsageStore(tx, before, identity.sourceGeneration)
-      const existing = (
+        if (head) {
+          const previous = await passFor(tx, input.binding, head.passId)
+          if (input.supersedes !== head.passId || previous.state === 'eof')
+            throw new Error('A lost native snapshot requires explicit new-pass supersession')
+          await tx
+            .update(nativeUsagePasses)
+            .set({ state: 'superseded' })
+            .where(eq(nativeUsagePasses.passId, head.passId))
+        } else if (input.supersedes !== undefined)
+          throw new Error('Original native superseded pass is absent')
+        const admission = ObservationNativePassAdmissionSchema.parse({
+          identity,
+          initialCursor: input.initialCursor,
+          ownerReceiptId: sha256Hex(JSON.stringify([before.ownerReceiptId, identity, headKey])),
+          sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
+        })
+        await tx.insert(nativeUsagePasses).values({
+          passId: identity.passId,
+          invocationId: input.binding.invocationId,
+          headKey,
+          ownerReceiptId: admission.ownerReceiptId,
+          identity: JSON.stringify(identity),
+          initialCursor: input.initialCursor,
+          admission: JSON.stringify(admission),
+          rootCreatedAt: input.rootCreatedAt,
+          state: 'open',
+          nextOrdinal: '0',
+          nextCursor: input.initialCursor,
+          digest: seed,
+          position: '0',
+          counts: JSON.stringify({ sessions: '0', parts: '0', steps: '0' }),
+        })
         await tx
-          .select()
-          .from(nativeUsagePasses)
-          .where(eq(nativeUsagePasses.passId, identity.passId))
-          .limit(1)
-      )[0]
-      if (existing) {
-        if (
-          existing.identity !== JSON.stringify(identity) ||
-          existing.initialCursor !== input.initialCursor ||
-          existing.rootCreatedAt !== input.rootCreatedAt ||
-          !['open', 'eof'].includes(existing.state)
-        )
-          throw new Error('Original native pass cannot reopen a lost snapshot')
-        return ObservationNativePassAdmissionSchema.parse(JSON.parse(existing.admission))
-      }
-      const headKey = JSON.stringify([
-        identity.invocationId,
-        identity.nativeSource,
-        identity.sourceGeneration,
-        identity.rootSessionId,
-        identity.lineage,
-        identity.epoch,
-        identity.phase,
-      ])
-      const head = (
-        await tx
-          .select()
-          .from(nativeUsagePassHeads)
-          .where(eq(nativeUsagePassHeads.key, headKey))
-          .limit(1)
-      )[0]
-      if (head) {
-        const previous = await passFor(tx, input.binding, head.passId)
-        if (input.supersedes !== head.passId || previous.state === 'eof')
-          throw new Error('A lost native snapshot requires explicit new-pass supersession')
-        await tx
-          .update(nativeUsagePasses)
-          .set({ state: 'superseded' })
-          .where(eq(nativeUsagePasses.passId, head.passId))
-      } else if (input.supersedes !== undefined)
-        throw new Error('Original native superseded pass is absent')
-      const admission = ObservationNativePassAdmissionSchema.parse({
-        identity,
-        initialCursor: input.initialCursor,
-        ownerReceiptId: sha256Hex(JSON.stringify([before.ownerReceiptId, identity, headKey])),
-        sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
-      })
-      await tx.insert(nativeUsagePasses).values({
-        passId: identity.passId,
-        invocationId: input.binding.invocationId,
-        headKey,
-        ownerReceiptId: admission.ownerReceiptId,
-        identity: JSON.stringify(identity),
-        initialCursor: input.initialCursor,
-        admission: JSON.stringify(admission),
-        rootCreatedAt: input.rootCreatedAt,
-        state: 'open',
-        nextOrdinal: '0',
-        nextCursor: input.initialCursor,
-        digest: seed,
-        position: '0',
-        counts: JSON.stringify({ sessions: '0', parts: '0', steps: '0' }),
-      })
-      await tx
-        .insert(nativeUsagePassHeads)
-        .values({ key: headKey, passId: identity.passId })
-        .onConflictDoUpdate({ target: nativeUsagePassHeads.key, set: { passId: identity.passId } })
-      return admission
-    })
+          .insert(nativeUsagePassHeads)
+          .values({ key: headKey, passId: identity.passId })
+          .onConflictDoUpdate({
+            target: nativeUsagePassHeads.key,
+            set: { passId: identity.passId },
+          })
+        return admission
+      },
+      { allowFinalization: input.identity.phase === 'final' },
+    )
   }
 
   async persist(input: Parameters<PagesPort['persist']>[0]) {
@@ -322,179 +335,189 @@ export class DrizzleNativeUsagePages implements PagesPort {
       sha256Hex(JSON.stringify([page.previousDigest, payload])) !== page.cumulativeDigest
     )
       throw new Error('Original native page digest changed')
-    return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
-      const prepared = await preparation(tx, input.binding, facts)
-      const pass = await passFor(tx, input.binding, page.identity.passId)
-      const original = (
-        await tx
-          .select()
-          .from(nativeUsagePassPages)
-          .where(
-            and(
-              eq(nativeUsagePassPages.passId, pass.passId),
-              eq(nativeUsagePassPages.ordinal, page.ordinal),
-            ),
-          )
-          .limit(1)
-      )[0]
-      if (original) {
-        if (original.document !== document)
-          throw new Error('Original native persisted page changed on replay')
-        return ObservationNativePassAckSchema.parse(JSON.parse(original.ack))
-      }
-      const oldCounts = ObservationNativePassCountsSchema.parse(JSON.parse(pass.counts))
-      const parts = BigInt(page.counts.parts) - BigInt(oldCounts.parts)
-      const steps = BigInt(page.counts.steps) - BigInt(oldCounts.steps)
-      if (
-        prepared.state !== 'open' ||
-        pass.state !== 'open' ||
-        !isDeepStrictEqual(page.identity, JSON.parse(pass.identity)) ||
-        page.ordinal !== pass.nextOrdinal ||
-        page.cursor !== pass.nextCursor ||
-        page.previousDigest !== pass.digest ||
-        page.scanPositionBefore !== pass.position ||
-        BigInt(page.counts.sessions) - BigInt(oldCounts.sessions) !==
-          BigInt(page.sessions.length) ||
-        parts < 0n ||
-        steps < BigInt(page.steps.length) ||
-        steps > parts ||
-        (steps !== BigInt(page.steps.length) && !page.issues.includes('native-step-identity')) ||
-        parts + BigInt(page.sessions.length) > BigInt(page.scannedRawRows)
-      )
-        throw new Error('Original native page skipped, repeated or changed scan progress')
-      const ids = [
-        ...new Set([
-          ...page.sessions.flatMap((row) => (row.parentSessionId ? [row.parentSessionId] : [])),
-          ...page.steps.map((row) => row.id),
-        ]),
-      ]
-      const parents = new Map(
-        (
-          await chunkedAll(ids, (chunk) =>
-            tx
-              .select()
-              .from(nativeUsageSessionParents)
-              .where(
-                and(
-                  eq(nativeUsageSessionParents.passId, pass.passId),
-                  inArray(nativeUsageSessionParents.sessionId, chunk),
-                ),
+    return withNativeUsageOwner(
+      this.db,
+      input.binding,
+      async (tx, facts) => {
+        const prepared = await preparation(tx, input.binding, facts)
+        const pass = await passFor(tx, input.binding, page.identity.passId)
+        const original = (
+          await tx
+            .select()
+            .from(nativeUsagePassPages)
+            .where(
+              and(
+                eq(nativeUsagePassPages.passId, pass.passId),
+                eq(nativeUsagePassPages.ordinal, page.ordinal),
               ),
-          )
-        ).map((row) => [row.sessionId, row]),
-      )
-      const additions: (typeof nativeUsageSessionParents.$inferInsert)[] = []
-      for (const session of page.sessions) {
-        const parent =
-          session.parentSessionId === null ? null : parents.get(session.parentSessionId)
-        if (parents.has(session.id) || (session.parentSessionId !== null && !parent))
-          throw new Error('Original native parent index is missing, cyclic or repeated')
-        const row = {
-          passId: pass.passId,
-          sessionId: session.id,
-          parentSessionId: session.parentSessionId,
-          ordinal: page.ordinal,
-          pathDigest: sha256Hex(JSON.stringify([parent?.pathDigest ?? null, session.id])),
-          depth: parent ? (BigInt(parent.depth) + 1n).toString() : '0',
+            )
+            .limit(1)
+        )[0]
+        if (original) {
+          if (original.document !== document)
+            throw new Error('Original native persisted page changed on replay')
+          return ObservationNativePassAckSchema.parse(JSON.parse(original.ack))
         }
-        parents.set(session.id, row)
-        additions.push(row)
-      }
-      for (const step of page.steps) {
-        const parent = parents.get(step.id)
-        if (!parent || parent.parentSessionId !== step.parentSessionId)
-          throw new Error('Original native step changed its persisted parent')
-      }
-      if (additions.length)
-        await insertInBatches(tx, nativeUsageSessionParents, additions, (batch) =>
-          tx.insert(nativeUsageSessionParents).values([...batch]),
+        const oldCounts = ObservationNativePassCountsSchema.parse(JSON.parse(pass.counts))
+        const parts = BigInt(page.counts.parts) - BigInt(oldCounts.parts)
+        const steps = BigInt(page.counts.steps) - BigInt(oldCounts.steps)
+        if (
+          prepared.state !== 'open' ||
+          pass.state !== 'open' ||
+          !isDeepStrictEqual(page.identity, JSON.parse(pass.identity)) ||
+          page.ordinal !== pass.nextOrdinal ||
+          page.cursor !== pass.nextCursor ||
+          page.previousDigest !== pass.digest ||
+          page.scanPositionBefore !== pass.position ||
+          BigInt(page.counts.sessions) - BigInt(oldCounts.sessions) !==
+            BigInt(page.sessions.length) ||
+          parts < 0n ||
+          steps < BigInt(page.steps.length) ||
+          steps > parts ||
+          (steps !== BigInt(page.steps.length) && !page.issues.includes('native-step-identity')) ||
+          parts + BigInt(page.sessions.length) > BigInt(page.scannedRawRows)
         )
-      if (page.steps.length)
-        await insertInBatches(
-          tx,
-          nativeUsageStepMembers,
-          page.steps.map((step) => ({
+          throw new Error('Original native page skipped, repeated or changed scan progress')
+        const ids = [
+          ...new Set([
+            ...page.sessions.flatMap((row) => (row.parentSessionId ? [row.parentSessionId] : [])),
+            ...page.steps.map((row) => row.id),
+          ]),
+        ]
+        const parents = new Map(
+          (
+            await chunkedAll(ids, (chunk) =>
+              tx
+                .select()
+                .from(nativeUsageSessionParents)
+                .where(
+                  and(
+                    eq(nativeUsageSessionParents.passId, pass.passId),
+                    inArray(nativeUsageSessionParents.sessionId, chunk),
+                  ),
+                ),
+            )
+          ).map((row) => [row.sessionId, row]),
+        )
+        const additions: (typeof nativeUsageSessionParents.$inferInsert)[] = []
+        for (const session of page.sessions) {
+          const parent =
+            session.parentSessionId === null ? null : parents.get(session.parentSessionId)
+          if (parents.has(session.id) || (session.parentSessionId !== null && !parent))
+            throw new Error('Original native parent index is missing, cyclic or repeated')
+          const row = {
             passId: pass.passId,
-            stepId: step.stepId,
-            sessionId: step.id,
+            sessionId: session.id,
+            parentSessionId: session.parentSessionId,
             ordinal: page.ordinal,
-            document: JSON.stringify(step),
-          })),
-          (batch) => tx.insert(nativeUsageStepMembers).values([...batch]),
-        )
-      let ack = ObservationNativePassAckSchema.parse({
-        contract: 'native-usage-page-ack-v2',
-        identity: page.identity,
-        ownerReceiptId: pass.ownerReceiptId,
-        ordinal: page.ordinal,
-        payloadDigest: page.payloadDigest,
-        cumulativeDigest: page.cumulativeDigest,
-        scanPositionAfter: page.scanPositionAfter,
-        counts: page.counts,
-        nextCursor: page.nextCursor,
-        sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
-        eof: page.eof,
-      })
-      await tx.insert(nativeUsagePassPages).values({
-        passId: pass.passId,
-        ordinal: page.ordinal,
-        payloadDigest: payload,
-        cumulativeDigest: page.cumulativeDigest,
-        document,
-        ack: JSON.stringify(ack),
-      })
-      if (this.numericPages) {
-        await emitNativeUsagePage(
-          tx,
-          facts,
-          input.binding,
-          page,
-          ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document)),
-          pass.ownerReceiptId,
-          this.originalBeforeIndex,
-        )
-        ack = ObservationNativePassAckSchema.parse({
-          ...ack,
-          sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
-        })
-        await tx
-          .update(nativeUsagePassPages)
-          .set({ ack: JSON.stringify(ack) })
-          .where(
-            and(
-              eq(nativeUsagePassPages.passId, pass.passId),
-              eq(nativeUsagePassPages.ordinal, page.ordinal),
-            ),
+            pathDigest: sha256Hex(JSON.stringify([parent?.pathDigest ?? null, session.id])),
+            depth: parent ? (BigInt(parent.depth) + 1n).toString() : '0',
+          }
+          parents.set(session.id, row)
+          additions.push(row)
+        }
+        for (const step of page.steps) {
+          const parent = parents.get(step.id)
+          if (!parent || parent.parentSessionId !== step.parentSessionId)
+            throw new Error('Original native step changed its persisted parent')
+        }
+        if (additions.length)
+          await insertInBatches(tx, nativeUsageSessionParents, additions, (batch) =>
+            tx.insert(nativeUsageSessionParents).values([...batch]),
           )
-      }
-      await tx
-        .update(nativeUsagePasses)
-        .set({
-          nextOrdinal: (BigInt(page.ordinal) + 1n).toString(),
+        if (page.steps.length)
+          await insertInBatches(
+            tx,
+            nativeUsageStepMembers,
+            page.steps.map((step) => ({
+              passId: pass.passId,
+              stepId: step.stepId,
+              sessionId: step.id,
+              ordinal: page.ordinal,
+              document: JSON.stringify(step),
+            })),
+            (batch) => tx.insert(nativeUsageStepMembers).values([...batch]),
+          )
+        let ack = ObservationNativePassAckSchema.parse({
+          contract: 'native-usage-page-ack-v2',
+          identity: page.identity,
+          ownerReceiptId: pass.ownerReceiptId,
+          ordinal: page.ordinal,
+          payloadDigest: page.payloadDigest,
+          cumulativeDigest: page.cumulativeDigest,
+          scanPositionAfter: page.scanPositionAfter,
+          counts: page.counts,
           nextCursor: page.nextCursor,
-          digest: page.cumulativeDigest,
-          position: page.scanPositionAfter,
-          counts: JSON.stringify(page.counts),
-          lastAck: JSON.stringify(ack),
-          state: page.eof === null ? 'open' : 'eof',
+          sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
+          eof: page.eof,
         })
-        .where(eq(nativeUsagePasses.passId, pass.passId))
-      return ack
-    })
+        await tx.insert(nativeUsagePassPages).values({
+          passId: pass.passId,
+          ordinal: page.ordinal,
+          payloadDigest: payload,
+          cumulativeDigest: page.cumulativeDigest,
+          document,
+          ack: JSON.stringify(ack),
+        })
+        if (this.numericPages) {
+          await emitNativeUsagePage(
+            tx,
+            facts,
+            input.binding,
+            page,
+            ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document)),
+            pass.ownerReceiptId,
+            this.originalBeforeIndex,
+          )
+          ack = ObservationNativePassAckSchema.parse({
+            ...ack,
+            sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
+          })
+          await tx
+            .update(nativeUsagePassPages)
+            .set({ ack: JSON.stringify(ack) })
+            .where(
+              and(
+                eq(nativeUsagePassPages.passId, pass.passId),
+                eq(nativeUsagePassPages.ordinal, page.ordinal),
+              ),
+            )
+        }
+        await tx
+          .update(nativeUsagePasses)
+          .set({
+            nextOrdinal: (BigInt(page.ordinal) + 1n).toString(),
+            nextCursor: page.nextCursor,
+            digest: page.cumulativeDigest,
+            position: page.scanPositionAfter,
+            counts: JSON.stringify(page.counts),
+            lastAck: JSON.stringify(ack),
+            state: page.eof === null ? 'open' : 'eof',
+          })
+          .where(eq(nativeUsagePasses.passId, pass.passId))
+        return ack
+      },
+      { allowFinalization: page.identity.phase === 'final' },
+    )
   }
 
   async interrupt(input: Parameters<PagesPort['interrupt']>[0]) {
-    return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
-      await preparation(tx, input.binding, facts)
-      const pass = await passFor(tx, input.binding, input.identity.passId)
-      if (!isDeepStrictEqual(JSON.parse(pass.identity), input.identity))
-        throw new Error('Original native interruption changed its pass')
-      if (pass.state === 'open' || pass.state === 'eof')
-        await tx
-          .update(nativeUsagePasses)
-          .set({ state: 'interrupted', interruption: input.reason })
-          .where(eq(nativeUsagePasses.passId, pass.passId))
-    })
+    return withNativeUsageOwner(
+      this.db,
+      input.binding,
+      async (tx, facts) => {
+        await preparation(tx, input.binding, facts)
+        const pass = await passFor(tx, input.binding, input.identity.passId)
+        if (!isDeepStrictEqual(JSON.parse(pass.identity), input.identity))
+          throw new Error('Original native interruption changed its pass')
+        if (pass.state === 'open' || pass.state === 'eof')
+          await tx
+            .update(nativeUsagePasses)
+            .set({ state: 'interrupted', interruption: input.reason })
+            .where(eq(nativeUsagePasses.passId, pass.passId))
+      },
+      { allowFinalization: input.identity.phase === 'final' },
+    )
   }
 
   async baselineMember(input: Parameters<PagesPort['baselineMember']>[0]) {

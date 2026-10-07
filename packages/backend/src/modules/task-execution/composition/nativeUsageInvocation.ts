@@ -10,6 +10,7 @@ import type { NativeUsageBaselineReadSession } from '../application/ports/native
 import { DrizzleNativeUsagePages } from '../infrastructure/drizzleNativeUsagePages'
 import { DrizzleNativeUsageEmission } from '../infrastructure/drizzleNativeUsageEmission'
 import { DrizzleNativeUsageCompletion } from '../infrastructure/drizzleNativeUsageCompletion'
+import { createNativeUsageFinalizationAuthority } from '../infrastructure/nativeUsageFinalizationAuthority'
 import {
   DrizzleNativeUsageRootCompletion,
   NativeRootCompletionCandidateChanged,
@@ -52,12 +53,18 @@ export function createNativeUsageInvocationPersistence(
         return undefined
       const executionContext = currentTaskExecutionContext(input.taskId)
       if (!executionContext) return undefined
-      const binding = {
+      const originalBinding = {
         taskId: input.taskId,
         nodeRunId: input.nodeRunId,
         invocationId: input.invocationId,
         executionContext,
       }
+      const finalization = options.rootSets
+        ? createNativeUsageFinalizationAuthority(originalBinding)
+        : undefined
+      const binding = finalization
+        ? { ...originalBinding, finalization: finalization.reference }
+        : originalBinding
       const pages = new DrizzleNativeUsagePages(db, true)
       const emissions = new DrizzleNativeUsageEmission(db)
       const completion = options.rootSets
@@ -95,7 +102,11 @@ export function createNativeUsageInvocationPersistence(
         ...(options.rootSets
           ? { rootCollection: createNativeUsageRootCollection(db, binding) }
           : {}),
-        prepare: (request) => pages.prepare({ binding, ...request }),
+        async prepare(request) {
+          const before = await pages.prepare({ binding, ...request })
+          finalization?.prepared(before)
+          return before
+        },
         passOwner,
         async withFinalOwner(before, read) {
           // Only the platform can supply an independent original read channel.
@@ -125,8 +136,9 @@ export function createNativeUsageInvocationPersistence(
               read(passOwner(before, new DrizzleNativeUsagePages(db, true, baseline))),
           })
         },
-        recordProcess: (nativeProcess) =>
-          emissions.emit({
+        recordProcess(nativeProcess) {
+          finalization?.observe(nativeProcess)
+          return emissions.emit({
             binding,
             eventId: 'native-process:' + sha256Hex(JSON.stringify(nativeProcess)),
             evidence: {
@@ -135,7 +147,8 @@ export function createNativeUsageInvocationPersistence(
               diagnostics: [],
               nativeProcess,
             },
-          }),
+          })
+        },
         async seal(observedAt) {
           if (completeAck) return completeAck
           const proof = retryProof ?? (await completion.describeCompletion({ binding, observedAt }))

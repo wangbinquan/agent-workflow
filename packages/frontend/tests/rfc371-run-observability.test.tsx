@@ -1315,7 +1315,7 @@ test('page-based native capture displays exact committed progress beyond legacy 
   }
 })
 
-test('root-based native completion keeps scan counts unknown rather than borrowing emission records', async () => {
+test('root-based native completion labels original roots and usage records without inventing scan counts or duplicating call IDs', async () => {
   const digest = 'a'.repeat(64)
   const proof = ObservationNativeRootCompletionSchema.parse({
     contract: 'opencode-child-root-pages-v3',
@@ -1352,25 +1352,35 @@ test('root-based native completion keeps scan counts unknown rather than borrowi
   })
   for (const language of ['zh', 'en']) {
     await i18n.changeLanguage(language)
-    const mounted = render(
-      <ObservationNativeCapture
-        rows={[
-          {
-            invocationId: 'original-call',
-            nodeRunId: 'original-run',
-            state: 'partial',
-            priorRevisionGap: false,
-            proof,
-          },
-        ]}
-      />,
-    )
-    const unknown = i18n.t('runObservability.unknown')
-    expect(screen.getByText(`${unknown} / ${unknown}`)).toBeTruthy()
-    expect(screen.queryByText('41 / 10,000,001')).toBeNull()
-    expect(screen.queryByText('0 / 0')).toBeNull()
-    expect(screen.queryByText('undefined / undefined')).toBeNull()
-    expect(screen.getByText('original-call')).toBeTruthy()
-    mounted.unmount()
+    for (const taskName of ['原生验证任务', undefined]) {
+      const mounted = render(
+        <ObservationNativeCapture
+          rows={[
+            {
+              invocationId: 'original-call',
+              nodeRunId: null,
+              taskName,
+              state: 'partial',
+              priorRevisionGap: false,
+              proof,
+            },
+          ]}
+        />,
+      )
+      expect(
+        screen.getByText(
+          i18n.t('runObservability.nativeRootsAndRecords', { roots: '41', records: '10,000,001' }),
+        ),
+      ).toBeTruthy()
+      expect(
+        screen.getByRole('columnheader', { name: i18n.t('runObservability.nativeCapturedScope') }),
+      ).toBeTruthy()
+      expect(screen.queryByText('41 / 10,000,001')).toBeNull()
+      expect(screen.queryByText('0 / 0')).toBeNull()
+      expect(screen.queryByText('undefined / undefined')).toBeNull()
+      expect(screen.getAllByText('original-call')).toHaveLength(1)
+      if (taskName) expect(screen.getByText(taskName)).toBeTruthy()
+      mounted.unmount()
+    }
   }
 })

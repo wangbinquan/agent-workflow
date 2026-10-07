@@ -1,14 +1,22 @@
 import { eq, max } from 'drizzle-orm'
-import { AcceptedObservationInvocationSchema } from '@agent-workflow/shared'
+import { isDeepStrictEqual } from 'node:util'
+import {
+  AcceptedObservationInvocationSchema,
+  ObservationNativeBeforeSpawnAckSchema,
+} from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   nodeRuns,
   observationInvocations,
   taskExecutionIntents,
   taskExecutionObservationSources,
+  taskExecutionOwners,
+  nativeUsagePreparations,
 } from '@/db/schema'
 import { databaseTransactionIsActive, engineOf } from '@/platform/persistence/databaseTransaction'
 import { assertTaskExecutionContext } from '../application/taskExecutionContext'
+import { TaskExecutionError } from '../application/taskExecutionError'
+import { nativeUsageFinalizationReceipt } from './nativeUsageFinalizationAuthority'
 import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import {
   fenceTaskWrite,
@@ -29,6 +37,7 @@ export async function withNativeUsageOwner<T>(
   db: ProviderNeutralDatabase,
   binding: NativeUsageOwnerBinding,
   run: (tx: TaskExecutionTransaction, facts: NativeUsageOwnerFacts) => Promise<T>,
+  options: { readonly allowFinalization?: boolean } = {},
 ): Promise<T> {
   assertTaskExecutionContext(binding.executionContext, binding.taskId)
   if (databaseTransactionIsActive(db))
@@ -43,7 +52,45 @@ export async function withNativeUsageOwner<T>(
     )[0]
     if (!node || node.taskId !== binding.taskId)
       throw new Error('Original native node owner is absent')
-    await fenceTaskWrite(tx, { taskId: binding.taskId, context: binding.executionContext })
+    let finalizationBefore: ReturnType<typeof nativeUsageFinalizationReceipt>
+    let originalFenceError: TaskExecutionError | undefined
+    try {
+      await fenceTaskWrite(tx, { taskId: binding.taskId, context: binding.executionContext })
+    } catch (error) {
+      if (
+        !(error instanceof TaskExecutionError) ||
+        error.code !== 'task-execution-stale-owner' ||
+        options.allowFinalization === false
+      )
+        throw error
+      finalizationBefore = nativeUsageFinalizationReceipt(binding)
+      if (!finalizationBefore) throw error
+      // The same owner row stays locked before the original node lock. No Task claim is renewed.
+      await engineOf(tx).lockAggregateRoot(
+        tx,
+        taskExecutionOwners,
+        taskExecutionOwners.taskId,
+        binding.taskId,
+      )
+      const owner = (
+        await tx
+          .select()
+          .from(taskExecutionOwners)
+          .where(eq(taskExecutionOwners.taskId, binding.taskId))
+          .limit(1)
+      )[0]
+      const token = binding.executionContext.token
+      if (
+        !owner ||
+        (owner.state !== 'revoked' && owner.state !== 'released') ||
+        owner.taskId !== token.taskId ||
+        owner.ownerId !== token.ownerId ||
+        owner.daemonGeneration !== token.daemonGeneration ||
+        owner.epoch !== token.epoch
+      )
+        throw error
+      originalFenceError = error
+    }
     await engineOf(tx).lockAggregateRoot(tx, nodeRuns, nodeRuns.id, binding.nodeRunId)
     const row = (
       await tx
@@ -89,6 +136,31 @@ export async function withNativeUsageOwner<T>(
         token.daemonGeneration,
         token.epoch,
       ]),
+    }
+    if (finalizationBefore) {
+      const prepared = (
+        await tx
+          .select()
+          .from(nativeUsagePreparations)
+          .where(eq(nativeUsagePreparations.invocationId, binding.invocationId))
+          .limit(1)
+      )[0]
+      if (
+        facts.contract !== 'opencode-child-root-pages-v3' ||
+        !prepared ||
+        prepared.taskId !== binding.taskId ||
+        prepared.nodeRunId !== binding.nodeRunId ||
+        prepared.fence !== facts.fence ||
+        prepared.ownerReceiptId !== finalizationBefore.ownerReceiptId ||
+        finalizationBefore.nativeSource !== facts.nativeSource ||
+        finalizationBefore.lineage !== facts.lineage ||
+        finalizationBefore.epoch !== facts.epoch ||
+        !isDeepStrictEqual(
+          ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document)),
+          finalizationBefore,
+        )
+      )
+        throw originalFenceError
     }
     return run(tx, facts)
   })

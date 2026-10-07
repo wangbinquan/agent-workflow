@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1953,
+    "entries": 1954,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -32434,6 +32434,30 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts#createNativeUsageFinalizationAuthority",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageFinalizationAuthority.ts#createNativeUsageFinalizationAuthority",
+      "symbol": "createNativeUsageFinalizationAuthority",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
         "transaction": true
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageRootCollection.ts",
@@ -46750,7 +46774,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25e5c4d9a7a1285763db0bd1a223b301e66bfca51bd6c26a980b3f968043d220",
+  "sourceDigest": "sha256:51b29e9939352d9404b9889b628f5a6a36afcd913224de8c0d10bf5dfea323ca",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

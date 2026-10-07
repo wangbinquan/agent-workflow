@@ -21,7 +21,10 @@ export interface NativeUsageOwnerBinding {
   readonly nodeRunId: string
   readonly invocationId: string
   readonly executionContext: TaskExecutionContextRef
+  /** Module-local final evidence reference; never an execution claim or serialized receipt. */
+  readonly finalization?: NativeUsageFinalizationRef
 }
+export type NativeUsageFinalizationRef = object
 /** Read-only original identity; it grants no execution claim or write capability. */
 export type NativeUsageReadBinding = Pick<
   NativeUsageOwnerBinding,

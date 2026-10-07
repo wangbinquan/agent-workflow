@@ -28,6 +28,7 @@ import {
 
 type Attempt = CompleteObservationAttempt & { readonly taskId: string; readonly taskName: string }
 type NativeCapture = ObservationUsageCaptureCommit & {
+  readonly taskName?: string
   readonly priorRevisionGap: boolean
   readonly resolutions: readonly ObservationNativeRevisionResolution[]
 }
@@ -243,6 +244,7 @@ export function CompleteObservationCaptures({ report }: { report: ReadableObserv
                 embedded
                 rows={rows.map((row) => ({
                   invocationId: row.invocationId,
+                  taskName: row.taskName,
                   nodeRunId: null,
                   state: row.capture.state,
                   priorRevisionGap: row.priorRevisionGap,

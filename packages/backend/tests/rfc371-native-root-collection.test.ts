@@ -15,6 +15,8 @@ import {
 import type { NativeUsageDurableOwner } from '@/modules/runtime-management/application/ports/nativeUsageCapture'
 import {
   nodeRuns,
+  tasks,
+  taskExecutionOwners,
   nativeUsagePreparations,
   nativeUsageRootHeads,
   nativeUsageRootTransitions,
@@ -41,6 +43,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { originalNativeLedgerFixture } from './helpers/rfc371NativeLedgerFixture'
 import { originalNativeObservationParticipant } from './helpers/rfc371NativeObservationParticipant'
 import { NATIVE_USAGE_ARCHIVE } from '@/modules/task-execution/infrastructure/nativeUsageArchive'
+import {
+  fenceTaskWrite,
+  withTaskExecutionWrite,
+} from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 
 const cleanup: Array<() => void> = []
 afterEach(() => {
@@ -145,6 +151,7 @@ describeEachProvider('RFC-371 original multi-root Task native collection', (harn
       lateSettled?: boolean
       loseCompletionAck?: boolean
       returnToFirst?: boolean
+      terminalOwnerState?: 'revoked' | 'released'
     } = {},
   ) {
     const mode = options.mode ?? 'fresh',
@@ -281,7 +288,8 @@ describeEachProvider('RFC-371 original multi-root Task native collection', (harn
         cwd: native.directory,
         resourceKeys: [],
         observeNativeProcess: async (fact) => {
-          if (fact.phase === 'settled' && options.lateSettled) deferredSettled = fact
+          if (fact.phase === 'settled' && (options.lateSettled || options.terminalOwnerState))
+            deferredSettled = fact
           else if (!options.missingSettled || fact.phase !== 'settled')
             await capture.recordProcess!(fact)
         },
@@ -322,6 +330,22 @@ describeEachProvider('RFC-371 original multi-root Task native collection', (harn
       }
       return token
     })
+    if (options.terminalOwnerState) {
+      await harness.db
+        .update(tasks)
+        .set({ status: 'canceled' })
+        .where(eq(tasks.id, f.binding.taskId))
+      await harness.db
+        .update(nodeRuns)
+        .set({ status: 'canceled' })
+        .where(eq(nodeRuns.id, f.binding.nodeRunId))
+      await harness.db
+        .update(taskExecutionOwners)
+        .set({ state: options.terminalOwnerState })
+        .where(eq(taskExecutionOwners.taskId, f.binding.taskId))
+      if (!deferredSettled) throw new Error('Original reaped child settlement unavailable')
+      await capture.recordProcess!(deferredSettled)
+    }
     if (options.lateSettled) {
       await original.rootCollection.freeze()
       if (!deferredSettled) throw new Error('Actual deferred child settlement unavailable')
@@ -346,7 +370,15 @@ describeEachProvider('RFC-371 original multi-root Task native collection', (harn
     if (receipt.capture.contract !== 'opencode-child-root-pages-v3')
       throw new Error('Original root contract changed')
     const value = ObservationNativeRootCompletionSchema.parse(receipt.capture)
-    return { f, capture, lease, receipt, value, rows: await records(f.binding.taskId) }
+    return {
+      f,
+      capture,
+      lease,
+      receipt,
+      value,
+      rows: await records(f.binding.taskId),
+      owner: original,
+    }
   }
   const sum = (rows: Awaited<ReturnType<typeof records>>) =>
     rows.reduce(
@@ -374,6 +406,53 @@ describeEachProvider('RFC-371 original multi-root Task native collection', (harn
       millionths += BigInt(whole!) * 1000000n + BigInt(part.padEnd(6, '0'))
     }
     return millionths
+  }
+  for (const terminalOwnerState of ['revoked', 'released'] as const) {
+    test(`real reaped native final usage survives ${terminalOwnerState} without restoring canceled Task writes`, async () => {
+      const result = await execute(nativeStore(), { roots: 2, steps: 3, terminalOwnerState })
+      expect(result.value.state).toBe('complete')
+      expect(result.value.roots.count).toBe('2')
+      expect(result.rows).toHaveLength(6)
+      expect(sum(result.rows)).toEqual({ input: 6n, cacheRead: 18n, cacheWrite: 30n, output: 108n })
+      expect(await value(result.rows)).toBe(564n)
+      expect(await createObservationNativeScopes(harness.db).qualify(result.receipt)).toEqual({
+        records: '6',
+        complete: true,
+      })
+      expect(
+        (await harness.db.select().from(tasks).where(eq(tasks.id, result.f.binding.taskId)))[0]
+          ?.status,
+      ).toBe('canceled')
+      expect(
+        (
+          await harness.db
+            .select()
+            .from(taskExecutionOwners)
+            .where(eq(taskExecutionOwners.taskId, result.f.binding.taskId))
+        )[0]?.state,
+      ).toBe(terminalOwnerState)
+      await expect(
+        withTaskExecutionWrite(harness.db, (tx) =>
+          fenceTaskWrite(tx, {
+            taskId: result.f.binding.taskId,
+            context: result.f.binding.executionContext,
+          }),
+        ),
+      ).rejects.toThrow('mutation was fenced')
+      const sources = await harness.db
+        .select()
+        .from(taskExecutionObservationSources)
+        .where(eq(taskExecutionObservationSources.nodeRunId, result.f.binding.nodeRunId))
+      await result.owner.seal(Date.now())
+      await result.owner.seal(Date.now())
+      expect(
+        await harness.db
+          .select()
+          .from(taskExecutionObservationSources)
+          .where(eq(taskExecutionObservationSources.nodeRunId, result.f.binding.nodeRunId)),
+      ).toEqual(sources)
+      expect(await records(result.f.binding.taskId)).toEqual(result.rows)
+    }, 30000)
   }
   test('two actual roots exceed native page packets, retain one invocation and all four buckets/CNY without span collection', async () => {
     const result = await execute(nativeStore())

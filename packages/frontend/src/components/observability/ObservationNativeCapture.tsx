@@ -6,7 +6,9 @@ import { Dialog } from '@/components/Dialog'
 import { TableViewport } from '@/components/TableViewport'
 import { observationReasonKey } from './ObservationMetrics'
 
-type CaptureRow = NonNullable<ObservationTaskDetail['nativeCaptures']>[number]
+type CaptureRow = NonNullable<ObservationTaskDetail['nativeCaptures']>[number] & {
+  readonly taskName?: string
+}
 function revisions(row: CaptureRow) {
   const proof = row.proof?.contract === 'opencode-child-steps-v1' ? row.proof : null
   const entries = new Map(
@@ -37,7 +39,7 @@ export function ObservationNativeCapture({
   rows,
   embedded = false,
 }: {
-  rows: NonNullable<ObservationTaskDetail['nativeCaptures']>
+  rows: readonly CaptureRow[]
   embedded?: boolean
 }) {
   const { t, i18n } = useTranslation(),
@@ -46,12 +48,17 @@ export function ObservationNativeCapture({
   if (!rows.length) return null
   const count = (value: string | null | undefined) =>
     value == null ? t('runObservability.unknown') : BigInt(value).toLocaleString(i18n.language)
+  const identity = (row: CaptureRow) => row.taskName?.trim() || row.nodeRunId || row.invocationId
   const scanSize = (row: CaptureRow) => {
     const proof = row.proof
     if (!proof) return '—'
     if (proof.contract === 'opencode-child-steps-v1')
       return `${count(String(proof.scannedSessions))} / ${count(String(proof.scannedSteps))}`
-    if (proof.contract === 'opencode-child-root-pages-v3') return `${count(null)} / ${count(null)}`
+    if (proof.contract === 'opencode-child-root-pages-v3')
+      return t('runObservability.nativeRootsAndRecords', {
+        roots: count(proof.roots.count),
+        records: count(proof.emissions.records),
+      })
     const counts = proof.final?.ack.counts ?? proof.finalProgress?.counts
     return `${count(counts?.sessions)} / ${count(counts?.steps)}`
   }
@@ -62,7 +69,13 @@ export function ObservationNativeCapture({
         <table className="data-table data-table--compact">
           <thead>
             <tr>
-              {['attempt', 'state', 'nativeScanSize', 'lastObserved', 'sourceGaps'].map((key) => (
+              {[
+                'nativeCaptureIdentity',
+                'state',
+                'nativeCapturedScope',
+                'lastObserved',
+                'sourceGaps',
+              ].map((key) => (
                 <th key={key} scope="col">
                   {t('runObservability.' + key)}
                 </th>
@@ -73,8 +86,10 @@ export function ObservationNativeCapture({
             {rows.map((row) => (
               <tr key={row.invocationId}>
                 <th scope="row">
-                  {row.nodeRunId ?? row.invocationId}
-                  <div className="muted">{row.invocationId}</div>
+                  {identity(row)}
+                  {identity(row) !== row.invocationId && (
+                    <div className="muted">{row.invocationId}</div>
+                  )}
                 </th>
                 <td>{t('runObservability.nativeState_' + row.state)}</td>
                 <td>{scanSize(row)}</td>
