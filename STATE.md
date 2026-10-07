@@ -10682,6 +10682,12 @@ SOURCE7-R2 有效稳定有限 PASS，原 R1 两项功能失败保留；中立生
 
 ## 2026-10-07 RFC-370 Purpose CI 类型修复配套候选
 
-原 c3857ea5 Windows37555994724正式 failure于Typecheck，功能测试尚未执行。恢复 pipeline 的原 lazy evidence receiver与所选 materialization ACK；两个既有回归仅类型修正，旧断言/顺序/预算/native回归保持，新增真实 pipeline ACK 回归。原 SOURCE5-R1误报PASS和补充FAIL完整保留且不用于发布，fixture可变数组补正后的 SOURCE5-R2有效稳定PASS，26项/FP 5f5fbd4cc624c86b9b059a03021f0a1d1b9598f4e6301391a72f3ad6042c713c。
+原 c3857ea5 Windows37555994724正式 failure于Typecheck；之前的平台测试已success，后续构建与doctor skipped。恢复 pipeline 的原 lazy evidence receiver与所选 materialization ACK；两个既有回归仅类型修正，旧断言/顺序/预算/native回归保持，新增真实 pipeline ACK 回归。原 SOURCE5-R1误报PASS和补充FAIL完整保留且不用于发布，fixture可变数组补正后的 SOURCE5-R2有效稳定PASS，26项/FP 5f5fbd4cc624c86b9b059a03021f0a1d1b9598f4e6301391a72f3ad6042c713c。
 
 一次原静态生成 fixed79d31c96加1生产/3测试，sourceDigest sha256:678e9adf510a0e9df3f2445433cdaa987b33d5419be0aa67dcecd837b8dad2e7；13输出和所有原payload/行/129 ledger why保持，只更新原provenance，classic 0→0，无增长声明。私有projection wrapper准备错误保留，生成不重跑。独立匹配门与新exact-SHA CI另验，没有本机AW tests/typecheck/build/service。Task/RFC371 WIP保留；仍Stage A，完整H7/真实根/Task事务/19 handles/A-G、CS adapters和M0先部署至M4继续，AW尚未部署CS，RFC未完成。详见 design/RFC-370-crewstation-hosted-deployment/purpose-typecheck-canonical-publication.md。以下旧内容及并行输出保持。
+
+### 旧 Windows 作业步骤记录更正
+
+原 job112582243341 的步骤5（RFC-363恢复）、6（RFC-254平台）及原共享测试已success；步骤15 Typecheck failure，之后的build/doctor未执行。此前将整作业功能测试记为“尚未执行”不准确，本次只更正这句记录；完整原候选、误记、所有复核和正式failure证据保留。新增Purpose回归不在旧Windows原命令中，不能据旧平台步骤success宣称它已在Windows执行。
+
+生产/测试修正与13匹配输出已通过有限SOURCE5-R2/MATCHING16-R2并精确21路径上库e4bd62318e12848d730b1c52f2dd29706e9da5e1；main/origin当时0/0、index空、全部Task/RFC371并行WIP保持。该SHA主CI37561996355与确切同SHA Windows37562206818已启动，终态待验；后者仅沿原平台列表运行，不包含新增Purpose测试。本文更正无生产/测试/架构规则/匹配变化，无新census或本机AW运行，不重签旧历史门，Stage A/H7/A-G及CS部署仍开放。

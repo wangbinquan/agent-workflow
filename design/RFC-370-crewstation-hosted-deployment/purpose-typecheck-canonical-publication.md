@@ -1,6 +1,6 @@
 # Purpose CI 类型错误修复的配套发布
 
-原 Windows run37555994724、SHA c3857ea5678fd6474ca3b61d6ca4ff473c2be840 终态 failure，停在 Typecheck，尚未运行该作业的功能回归。仅向前恢复 pipeline evidence 的原 lazy native resolver，并通过所选 evidence receiver 等待 materialization ACK；修复两个既有回归的 erased 类型推断，完整 runtime assertions、九操作顺序、旧 native materialization 回归、预算保持。新增实际 pipeline ACK 回归，不先创建 native evidence 目录。
+原 Windows run37555994724、SHA c3857ea5678fd6474ca3b61d6ca4ff473c2be840 终态 failure，已有平台测试成功，随后 Typecheck 失败，构建与 doctor 步骤 skipped。仅向前恢复 pipeline evidence 的原 lazy native resolver，并通过所选 evidence receiver 等待 materialization ACK；修复两个既有回归的 erased 类型推断，完整 runtime assertions、九操作顺序、旧 native materialization 回归、预算保持。新增实际 pipeline ACK 回归，不先创建 native evidence 目录。
 
 SOURCE5-R1 的原误报 PASS 全文保留并明确不可用于发布；随后独立复核的补充 FAIL 指出新增 fixture 返回 readonly entries。SOURCE5-R2 只复制 entries 为可变数组，完整前三个候选文件不变，范围文档追加失败记录。独立 SOURCE5-R2 有效稳定 PASS，26项首末全文/EOF/metadata/role/path/order，指纹 5f5fbd4cc624c86b9b059a03021f0a1d1b9598f4e6301391a72f3ad6042c713c。Root 已完整消费 PASS及历史 FAIL。
 
@@ -11,3 +11,9 @@ SOURCE5-R1 的原误报 PASS 全文保留并明确不可用于发布；随后独
 配套独立功能门、exact-path commit/push、main/origin 同步、新 exact-SHA hosted CI 分别验收。这里只运行 scoped format/lint、纯 AST/byte/JSON、一次静态生成；没有本机 AW tests/typecheck/build/service。共享 STATE/plan 的全部既有字节与并行内容保留，只追加本候选说明；只核验新文档和追加段的格式，不声称历史大文档格式通过。architecture 按原 .prettierignore 排除，保留机器原输出格式。
 
 不带 Task 配置接线和 RFC-371 native usage WIP。旧前端类型失败交由拥有者处理，原旧 CI failure 保留；不能据本有限 PASS 声称整仓绿色、完整 H7/A-T7/A-G 或 RFC完成。当前仍在 Stage A，三个真实根、Task事务与19 handles的执行权闭包仍需实施；随后各层独立 CS adapters 按 M0 首次部署、M1–M4 逐项接管推进，AW 尚未部署到 CS。
+
+### 旧 Windows 作业步骤记录更正
+
+原 job112582243341 的步骤5（RFC-363恢复）、6（RFC-254平台）及原共享测试已success；步骤15 Typecheck failure，之后的build/doctor未执行。此前将整作业功能测试记为“尚未执行”不准确，本次只更正这句记录；完整原候选、误记、所有复核和正式failure证据保留。新增Purpose回归不在旧Windows原命令中，不能据旧平台步骤success宣称它已在Windows执行。
+
+生产/测试修正与13匹配输出已通过有限SOURCE5-R2/MATCHING16-R2并精确21路径上库e4bd62318e12848d730b1c52f2dd29706e9da5e1；main/origin当时0/0、index空、全部Task/RFC371并行WIP保持。该SHA主CI37561996355与确切同SHA Windows37562206818已启动，终态待验；后者仅沿原平台列表运行，不包含新增Purpose测试。本文更正无生产/测试/架构规则/匹配变化，无新census或本机AW运行，不重签旧历史门，Stage A/H7/A-G及CS部署仍开放。
