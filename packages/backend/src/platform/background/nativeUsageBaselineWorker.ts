@@ -1,5 +1,5 @@
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { withNativeUsageBaselineSnapshot } from '@/modules/task-execution/composition/nativeUsageBaseline'
+import { withNativeUsageBaselineSnapshot } from '@/modules/task-execution/public/queries'
 import type { NativeUsageBaselineReadView } from '@/modules/task-execution/public/types'
 import { originalSqliteFileReportSnapshot } from '../persistence/reportSqliteSnapshot'
 import { reportReadonlyChannelClient } from '../persistence/reportReadonlyChannelClient'

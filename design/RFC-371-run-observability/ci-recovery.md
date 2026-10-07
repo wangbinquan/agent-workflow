@@ -336,3 +336,11 @@ Worker 夹具现从原 `Worker.postMessage` 的声明推导两种参数类型，
 同一轮 CI 的 Ubuntu 17/32 分片实际报出三份原生 SQLite 夹具未进入 `TEST_ENGINE_HARDCODING_DEBT`：Worker 基线 helper 一处、所有根 final owner 两处、终态采集一处。这四个调用均操作 OpenCode 外部固定 SQLite 文件；原 AW Task／账本行为已有真实双 provider 回归。现按路径顺序登记实际调用数并说明来源，原扫描、分类规则、高水精确比较及 open 待办不变，不将外部原生格式改造成另一种数据库。
 
 该分片还实际报出 RFC-323 提前拒绝回归在 SQLite 与 PostgreSQL 两侧读取尚未创建的 `evidence/bundles`，抛出 ENOENT；拒绝结果和原因断言已通过。原生产导入在拒绝后不会调用 `importTree`，证据存储按需创建。夹具现同时允许目录不存在或存在且为空，继续断言零文件、原 blocked／原因和 cleanupCount=1；不会为断言创建目录，也不吞掉已存在目录的读取错误。生产行为、原用例预算、原统计人口均不改，新精确 SHA 的 hosted CI 仍待完成。
+
+## 2026-10-08 原生执行参与者的公共类型边界
+
+[CI 37653634009](https://github.com/wangbinquan/agent-workflow/actions/runs/37653634009) 的 Ubuntu 17/32 功能日志确认：`NativeUsageInvocationPersistence` 返回原执行 owner，经 `public/types.ts` 间接暴露 `OwnershipToken`，违反原架构断言。将该接口的公共导出和两个平台使用处移到既有 `public/participants.ts`；纯值配置 `NativeUsageAdmission` 保留在 `public/types.ts`。原内部接口、owner 构造及事务、运行和采集行为均不改，也不扩充架构例外或债务列表。本机只核对精确格式、lint 与类型导入；实际架构及全仓结果仍由新提交的 hosted CI 验证。
+
+同源 Ubuntu 9/32 还报出两个平台文件直接 import Task composition。原调用工厂从既有 `public/participants.ts` 提供，原只读基线快照函数从既有 `public/queries.ts` 提供，两个实际调用处使用各自公共入口。原实现、参数、Worker 协议、原页和事务不改变；不登记新 R1 例外。
+
+Ubuntu 6/32 的实际高水守卫确认原生夹具登记已由 330 增至 333，但对应 `architecture/ledger-baselines.json` 的计数尚未同步。本片只同步前述三份外部 OpenCode SQLite 夹具的实际条目数与具名理由；原分类规则、四个实际调用和 AW 双 provider 行为保持，其他条目不由本片裁定。

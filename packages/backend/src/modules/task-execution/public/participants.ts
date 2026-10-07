@@ -116,6 +116,9 @@ export type {
   TaskSourceTerminationReceipt,
 } from '../application/applySourceTerminationEffect'
 export type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
+/** Invocation ownership remains on the participant seam, outside public value types. */
+export type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
+export { createNativeUsageInvocationPersistence } from '../composition/nativeUsageInvocation'
 
 /** Retain the exact original EOF finalizer behind the Task participant boundary. */
 export const finalizeNativeUsageInvocation = finalizeNativeUsageInvocationInternal

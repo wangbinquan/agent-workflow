@@ -332,7 +332,4 @@ export type {
   NativeUsageBaselineReadView,
   NativeUsageBaselineReadSession,
 } from '../application/ports/nativeUsageBaseline'
-export type {
-  NativeUsageAdmission,
-  NativeUsageInvocationPersistence,
-} from '../application/ports/nativeUsageInvocation'
+export type { NativeUsageAdmission } from '../application/ports/nativeUsageInvocation'

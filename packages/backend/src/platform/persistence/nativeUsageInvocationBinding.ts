@@ -1,9 +1,7 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { createNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/nativeUsageInvocation'
-import type {
-  NativeUsageAdmission,
-  NativeUsageInvocationPersistence,
-} from '@/modules/task-execution/public/types'
+import { createNativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'
+import type { NativeUsageAdmission } from '@/modules/task-execution/public/types'
+import type { NativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'
 import type { OriginalReportDatabaseBinding } from './reportSnapshot'
 import { nativeUsageBaselineRead } from './nativeUsageBaselineRead'
 

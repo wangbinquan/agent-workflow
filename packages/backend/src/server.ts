@@ -65,7 +65,7 @@ import type {
 import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
-import type { NativeUsageInvocationPersistence } from '@/modules/task-execution/public/types'
+import type { NativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
 import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
