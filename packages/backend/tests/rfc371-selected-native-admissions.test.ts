@@ -3,10 +3,17 @@ import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissi
 import { selectedNativeUsageInvocationPersistence } from '@/platform/persistence/nativeUsageInvocationBinding'
 import { nativeUsageBaselineRead } from '@/platform/persistence/nativeUsageBaselineRead'
 import { createNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/nativeUsageInvocation'
+import { isRuntimeNativeUsageCaptureEligible } from '@/modules/runtime-management/public/queries'
 import { runWithTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import { originalNativeLedgerFixture } from './helpers/rfc371NativeLedgerFixture'
+
+// Locks the RFC-143 capability regression from the original 86c28 Windows CI.
+test('native usage selection reads the original driver capture capability', () => {
+  expect(isRuntimeNativeUsageCaptureEligible('opencode')).toBe(true)
+  expect(isRuntimeNativeUsageCaptureEligible('claude-code')).toBe(false)
+})
 
 test('strict install admissions default OFF and retain all 10001 tuples without a population limit', () => {
   expect(nativeUsageAdmissions(undefined)).toEqual([])

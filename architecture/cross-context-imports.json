@@ -101341,7 +101341,7 @@
   "denominator": {
     "architectureExceptions": 5961,
     "implementationSccs": 0,
-    "observedEdges": 6789,
+    "observedEdges": 6790,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -148708,6 +148708,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/task.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/task.ts#getTask"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#$file",
+      "id": "import:6f1b0c8ce4d179172342",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "isRuntimeNativeUsageCaptureEligible",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -210865,7 +210881,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca",
+  "sourceDigest": "sha256:b1361bf27b9549e835dad21734dcc5a9ceae02de49a9511973ea60080b969cae",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

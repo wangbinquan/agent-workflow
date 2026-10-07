@@ -6,7 +6,7 @@
     "moduleFiles": 1763,
     "productionFiles": 3184,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27389
+    "symbolsIncludingFileRoots": 27390
   },
   "entries": [
     {
@@ -118303,6 +118303,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/localAgentMaterialDefinition.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/localAgentMaterialDefinition.ts#isRuntimeNativeUsageCaptureEligible",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isRuntimeNativeUsageCaptureEligible",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -329408,5 +329420,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca"
+  "sourceDigest": "sha256:b1361bf27b9549e835dad21734dcc5a9ceae02de49a9511973ea60080b969cae"
 }

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b1361bf27b9549e835dad21734dcc5a9ceae02de49a9511973ea60080b969cae`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -32,13 +32,13 @@
 | `ambientWiring` | 504 |
 | `architectureExceptions` | 5961 |
 | `backgroundJobs` | 366 |
-| `crossContextImports` | 6789 |
+| `crossContextImports` | 6790 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27389 |
+| `moduleSymbolOwners` | 27390 |
 | `mutationEntrypoints` | 1953 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1218 |
+| `publicSurfaces` | 1219 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -210,7 +210,7 @@
 | --- | --- |
 | legacy-outbound | 3790 |
 | legacy-inbound | 1951 |
-| offered-consumption | 352 |
+| offered-consumption | 353 |
 | infrastructure-external | 324 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 96 |
@@ -260,8 +260,8 @@
 | collaboration | 122 |
 | source-control | 104 |
 | system-operations | 69 |
+| runtime-management | 66 |
 | identity-access | 65 |
-| runtime-management | 65 |
 | digital-employee | 51 |
 | development-automation | 49 |
 | integration | 26 |
@@ -274,7 +274,7 @@
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 135 / 1218）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 135 / 1219）
 
 | context | 数量 |
 | --- | --- |

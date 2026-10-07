@@ -12,6 +12,11 @@ import { buildOpencodeNativeMaterial } from './opencodeAgentMaterial'
 import { buildClaudeNativeMaterial } from './claudeAgentMaterial'
 import { getRuntimeDriver } from '@/services/runtime'
 
+/** Native capture eligibility belongs to the same driver as the selected material. */
+export function isRuntimeNativeUsageCaptureEligible(kind: RuntimeKind): boolean {
+  return getRuntimeDriver(kind).prepareNativeUsageCapture !== undefined
+}
+
 /** A native bootstrap selects this definition, then opens a compiler for one
  * owner-bound content scope. The compiler calls the existing material body;
  * the legacy buildSpawn compilation facade is never called again. */

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1296,
+    "consumers": 1297,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1654,
+    "methods": 1655,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 28956,
-    "symbols": 1218
+    "recursiveFields": 28959,
+    "symbols": 1219
   },
   "entries": [
     {
@@ -153954,6 +153954,67 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:6f1b0c8ce4d179172342"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:kind.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:kind.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "id": "public:runtime-management:queries:isRuntimeNativeUsageCaptureEligible",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:870da1fe964b8dbd572213da2028cdceac014cf52d8715580de46f121631f773"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:6f1b0c8ce4d179172342",
+          "file": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:e91de483f5c6b0b5cda6c6a76d7480b632fcf68b3f0325d78334e88798c6c1a0",
+      "status": "target-context-current-surface",
+      "symbol": "isRuntimeNativeUsageCaptureEligible",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 84,
         "maxUnionVariants": 63
       },
@@ -155395,6 +155456,7 @@
         "public:runtime-management:participants:TaskAgentRuntimeBindings",
         "public:runtime-management:queries:RuntimeExecutionQueries",
         "public:runtime-management:queries:isRuntimeMcpTestEligible",
+        "public:runtime-management:queries:isRuntimeNativeUsageCaptureEligible",
         "public:runtime-management:types:ResolvedRuntimeProfile",
         "public:runtime-management:types:RuntimeMcpTestEligibilityInput",
         "public:runtime-management:types:RuntimeProtocol",
@@ -222531,7 +222593,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca",
+  "sourceDigest": "sha256:b1361bf27b9549e835dad21734dcc5a9ceae02de49a9511973ea60080b969cae",
   "targetContexts": [
     "collaboration",
     "development-automation",

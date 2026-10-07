@@ -1,5 +1,6 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { sha256Hex } from '@/util/hash'
+import { isRuntimeNativeUsageCaptureEligible } from '@/modules/runtime-management/public/queries'
 import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import type {
   NativeUsageAdmission,
@@ -40,7 +41,8 @@ export function createNativeUsageInvocationPersistence(
     forInvocation(input) {
       if (
         admissions !== undefined &&
-        (input.runtime?.protocol !== 'opencode' ||
+        (!input.runtime ||
+          !isRuntimeNativeUsageCaptureEligible(input.runtime.protocol) ||
           !admissions.some(
             (admission) =>
               admission.registrationId === input.runtime?.registrationId &&

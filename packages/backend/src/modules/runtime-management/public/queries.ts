@@ -80,3 +80,6 @@ export interface RuntimeExecutionQueries {
 }
 
 export { isRuntimeMcpTestEligible } from '../infrastructure/mcpTestEligibility'
+
+/** The original driver declares native capture support; callers do not select by protocol name. */
+export { isRuntimeNativeUsageCaptureEligible } from '../infrastructure/local/localAgentMaterialDefinition'
