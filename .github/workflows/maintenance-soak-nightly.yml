@@ -104,6 +104,10 @@ jobs:
 
       - name: Run RFC-338 control and maintenance windows
         env:
+          # CI 37614922089 failed at 511.7ms; the default 1s log threshold
+          # omits the timestamp needed to attribute a sub-second gate failure.
+          # This only changes diagnostic logging; the original 500ms gate stays.
+          AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS: '250'
           RFC338_TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
           SOAK_CLIENTS: ${{ github.event_name == 'schedule' && '100' || github.event_name == 'workflow_dispatch' && inputs.clients || '50' }}
           SOAK_DURATION: ${{ github.event_name == 'schedule' && '180' || github.event_name == 'workflow_dispatch' && inputs.duration_seconds || '60' }}
