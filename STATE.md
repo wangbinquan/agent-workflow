@@ -1,3 +1,7 @@
+## 2026-10-08 RFC-370 既有代码回顾与 Task CI 观测修复
+
+按用户最新顺序，先回顾既有 RFC 代码的正确性与质量、修绿精确 SHA CI，新的 runtime lease / Node 写点 / CS adapter 实现暂停。当前将两条释放阶段的 null 断言移到原 settle 完成后，新增原 token 与 driver 停止检查；effect 双引擎回滚的两条 INSERT matcher 增加固定可选 schema。原断言、生产 15 秒心跳、60_000 / 15_000 预算、原方法与 receiver、事务和重试保留；无生产或架构 metadata 变化，无新 census / 本机 AW 测试。既有 449 个历史生产路径分组回顾进行中，源码实现门与新 exact-SHA CI 尚待完成；H7 / A-G、完整 CS adapter 与部署仍未完成。以下所有共享旧正文完整保留。详见[修复记录](design/RFC-370-crewstation-hosted-deployment/task-host-ci-phase-oracles.md)。
+
 ## 2026-10-08 RFC-370 Task effect写入与原CI功能修复
 
 W2-E六原effect方法区分新准备/已发回执，SOURCE4有效PASS；Task精确CI类型/原factory装配/PG schema匹配及两原Driver探针登记SOURCE7有效PASS，原SQL、全部断言/预算和原 .db identity保持。一次原census及并行e28原源码的3文件有限投影保留完整13产物、129有序库存/why与全部并行输出，仅补漏记W5原人口68→70一项许可，普通后继退役。原290f主CI failure/Windowscancelled保留，不代签新exact-SHA。本文与RFC plan全部旧正文/并行内容保留。H7/A-T7/A-G、runtime lease实现、CS adapters与M0～M4部署仍待推进，RFC仍阶段A，AW尚未部署CS。详见[effect记录](design/RFC-370-crewstation-hosted-deployment/host-authority-task-effect-writes.md)、[CI修复](design/RFC-370-crewstation-hosted-deployment/task-host-callers-ci-repair.md)。

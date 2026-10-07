@@ -178,7 +178,10 @@ describeEachProvider('RFC-370 original Task driver finalization lifetime', (harn
       expect(finished).toBe(false)
       expect(drained).toBe(false)
       expect(h.completed).toBe(0)
-      expect(registry.tokenForTask(h.taskId)).toBeNull()
+      expect(registry.hasTask(h.taskId)).toBe(false)
+      expect<typeof driver.execution.token | null>(registry.tokenForTask(h.taskId)).toBe(
+        driver.execution.token,
+      )
       await withTaskReviewMutationLock(h.taskId, async () => {
         await h.db
           .update(tasks)
@@ -189,6 +192,7 @@ describeEachProvider('RFC-370 original Task driver finalization lifetime', (harn
       allowHeartbeat.resolve()
       await finalizing
       await draining
+      expect(registry.tokenForTask(h.taskId)).toBeNull()
       expect(reads).toBe(1)
       expect(finished).toBe(true)
       expect(drained).toBe(true)
@@ -233,7 +237,10 @@ describeEachProvider('RFC-370 original Task driver finalization lifetime', (harn
     ).rejects.toBe(error)
     expect(reads).toBe(0)
     expect(ackCalls).toBe(1)
-    expect(h.module.runtimeRegistry.tokenForTask(h.taskId)).toBeNull()
+    expect(h.module.runtimeRegistry.hasTask(h.taskId)).toBe(false)
+    expect<typeof driver.execution.token | null>(
+      h.module.runtimeRegistry.tokenForTask(h.taskId),
+    ).toBe(driver.execution.token)
     let settled = false
     const settling = h.module.runtimeRegistry.awaitReleasedSettled(h.taskId).then(() => {
       settled = true
@@ -254,6 +261,7 @@ describeEachProvider('RFC-370 original Task driver finalization lifetime', (harn
     await h.module.host!.finalizations.retryPending()
     await settling
     await barrier
+    expect(h.module.runtimeRegistry.tokenForTask(h.taskId)).toBeNull()
     expect(reads).toBe(1)
     expect(settled).toBe(true)
     expect(h.completed).toBe(1)

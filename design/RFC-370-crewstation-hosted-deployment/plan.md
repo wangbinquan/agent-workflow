@@ -1123,3 +1123,12 @@ SOURCE23-R2 实际稳定有限 PASS 已由 root 消费，23 owned／33 control�
 ## 2026-10-08 W2-E与精确Task CI修复有限进度
 
 SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文件有限投影，13 matching及旧库存/并行输出保留，仅补两原Driver probe人口68→70一项许可。原290f主CI failure、Windowscancelled保持。此处只登记本片功能门/配套候选，实际精确发布与新exact-SHA CI另留证；不勾选H7或A-G，不记CS部署，runtime lease仅设计/私有草稿。继续Task/Node写入与恢复/owners/三个roots收口，M0先实际部署再M1～M4。详见[effect记录](host-authority-task-effect-writes.md)、[CI修复](task-host-callers-ci-repair.md)。
+
+## 2026-10-08 既有代码回顾优先与 Task CI oracle 修复
+
+- [x] 根据真实 hosted 功能失败，冻结原两阶段 registry、selected finalization / heartbeat 生产实现与两个原测试；设计门已实际消费为有效稳定 PASS。
+- [x] 两条原 null 断言完整移至原 settle 完成后，新增四条释放阶段断言；两条 INSERT matcher 仅补固定可选 agent_workflow schema。原 13 / 14 个直接 test 声明、所有旧断言、真实生产 15 秒心跳、60_000 / 15_000 预算不变；全文逆向还原与 AST 对拍通过。无生产 / metadata 变化，无新 census 或本机 AW 测试。
+- [ ] 完成既有 449 个历史生产路径的正确性与质量回顾，修复可操作功能 findings，并完成本修复实现门与最终精确 SHA CI；在此之前暂停新 runtime lease / Node / CS adapter 实现。
+- [ ] 继续原 H7 / A-T7 / A-G，再按 M0 必须 adapter 先部署、M1～M4 逐项接入；RFC 仍未 Done，AW 尚未部署 CS。
+
+详见[修复记录](task-host-ci-phase-oracles.md)。共享 plan / STATE 的所有旧正文及并行输出完整保留。

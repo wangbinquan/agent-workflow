@@ -240,12 +240,16 @@ describeEachProvider('RFC-370 real Task effect preparation and issued receipt', 
         )
         expect(
           recording.statements.some(({ sql }) =>
-            /insert into ["`]?task_execution_effects/i.test(sql),
+            /insert into (?:(?:"agent_workflow"|agent_workflow)\.)?["`]?task_execution_effects["`]?\b/i.test(
+              sql,
+            ),
           ),
         ).toBe(true)
         expect(
           recording.statements.some(({ sql }) =>
-            /insert into ["`]?task_execution_effect_attempts/i.test(sql),
+            /insert into (?:(?:"agent_workflow"|agent_workflow)\.)?["`]?task_execution_effect_attempts["`]?\b/i.test(
+              sql,
+            ),
           ),
         ).toBe(true)
         expect(recording.statements.some(({ sql }) => /rollback/i.test(sql))).toBe(true)
