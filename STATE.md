@@ -10820,3 +10820,11 @@ SOURCE18-R2／WF1-R1／MATCHING16-R1 有效稳定有限 PASS，root 核对完整
 ### 2026-10-07 RFC-370 功能 CI 夹具与登记修正候选
 
 修复原4c4ecbc14afa80982298c47a2ac57761bb1ac74c主CI37592876200实际 failure 的六处类型错误、scratch/email 启动输入、恢复续接 v1 payload 和 selected runtime reader；所有原 case、timeout、expect 输入和业务判据保留。Task insert 四站点/三列齐全不变，只更新两个 AST 物理位置；Off-DAG 原46行保留，新增真实Task→SO adapter边一条，原43基线如实纠正到47，一条实测许可普通后继退役。129 ledger全文/why/预算保持，使用原payload digest，无新whole census。有限实现门、精确上库和新exact-SHA hosted CI另验，无本机AW tests/typecheck/build/services/E2E，无跨会话消息。C1在制工作保留；H7/A-G、各层CS adapter和M0先部署至M4仍继续，AW未部署CS。详见design/RFC-370-crewstation-hosted-deployment/functional-ci-fixtures.md。
+
+## 2026-10-07 功能 CI 夹具修复发布与一次声明退役
+
+SOURCE12-R1 有效稳定有限 PASS，root 实际消费完整41项及3wrappers后，十二相关路径精确发布8fb6742f7baf70f57fe223c8c7bf06aa29dcb3b7。main／origin同步0／0、index为空，C1及C2的全部在制工作字节保持。主CI37623212828和Windows37623212950已登记，终态待验，未记全仓通过。
+
+本普通后继只退役已经消费的 rfc294-review-off-dag-offered-edges 一条实测许可；47完整声明及原129有序ledger/baseline/why/预算保持，使用原五个纯JSON函数重算payload digest。原八份测试和所有源码／架构快照不动，无新census或本机AW运行。原source有限门、精确发布、普通后继有限门和正式CI分别留证。
+
+C1的首轮两项测试配置P2、原FAIL/root消费及修正保留，修正后的SOURCE6-R2继续复核，不包含在这四路径提交。实际Task调用者、原退场ACK、19owner/roots/UI、完整H7/A-G及独立CS adapters/M0先部署至M4继续，AW尚未部署CS，RFC未完成。旧共享正文与并行内容完整保持。
