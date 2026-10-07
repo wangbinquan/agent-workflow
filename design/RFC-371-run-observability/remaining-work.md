@@ -1,5 +1,13 @@
 # RFC-371 剩余工作与关闭条件
 
+## 2026-10-08 当前收尾与完整范围
+
+原生 drain／reap 合法时序修复 `e28aafe910e6a2d2c866be77b8c2b9bbb57fee1b` 已推送，精确 GitHub 功能作业的原生收尾文件 52 pass／0 fail。完整 CI 与后继 `00ce2fea` 的 CI 仍 failure，Windows cancelled；原 Task 效果／writer finalization 失败已交负责会话，详见[实际 CI 回执](./ci-recovery.md)。旧取消规模 CI 保持停止，不重跑。
+
+AW 原真实续聊取消案例的37580四桶与¥0.059026、正式彩色趋势及泳道保持。CS 最新37路径已经六 CI通过并本机部署；旧已知值恢复、新 fresh／resume 七原调用在两级逐条对拍与正式页面均通过，见[CS实际验收](https://github.com/wangbinquan/CrewStation/blob/main/proposal/rfc/RFC-034-runtime-observability/native-real-validation-20261008.md)。CS 正常清理、新 B 补验和临时验证额度恢复仍阻塞。
+
+上述几项只是当前统计故障的收尾。本文 AW-R01～12 的完整退出清单仍有未完成实现、验收和托管依赖，包括调用入口／驱动覆盖、子树权限、真实时间窗口、细粒度分析、异常／历史维护、规模和完整页面矩阵；不得将“数据已恢复”或“只剩CI”当成整个RFC完成。依赖与历史失败保留，生产边界不放宽。
+
 ## 2026-10-07 当前验收入口
 
 当前发布、实际任务分类 Token / 人民币、CS 部署与新挂载修复，以及未完成的退出条件统一见[原生运行验收记录](./native-real-validation-20261007.md)。两个 RFC 保持 In Progress；已知数字显示并标记缺口，不把不完整证明当作零消耗。下文不同日期和旧 SHA 均保留为历史，不能代签当前 CI、真实任务或页面验收。

@@ -352,9 +352,18 @@ Ubuntu 6/32 的实际高水守卫确认原生夹具登记已由 330 增至 333�
 
 同一依赖闭环还将原 `NativeUsageReadBinding = Pick<NativeUsageOwnerBinding, ...>` 拆成三个原 readonly 字符串的无 import 独立接口。公开读面和基线 port 直接引用该纯定义，内部 owner port 保留原名再导出；原 owner、执行上下文和所有值级语句保持，读面不再经整个 owner 类型文件连回执行权。
 
-
 ### 实际 EOF 与回收的独立顺序（2026-10-08）
 
 a443cba8 的 Ubuntu shard19 原真实子进程取消用例失败；不是删失数字或延长预算可以修复的问题。原 managedProcess 在实际 EOF Promise 完成时记录 drainedAt，随后独立观察 child.exited 的 reapedAt。既有 process-facts schema 与完整用量合同都只要求二者不早于真实 spawn；原完整合同用例明确包含 reapedAt=29、drainedAt=28。finalization 额外要求 drain 不早于 reap，会误拒绝合法完整原事件，从而使 revoked Task 的原生收尾数字无法提交。
 
 只去掉该额外顺序假设，保留原原子绑定、准备、PID、nonce、原 spawn 时间、真实两个完成时间、pump/timeout/unreaped 和所有 Task owner 围栏；不改执行器、不补造或重排实际时间。原负例的 `drain before reap` 数据本来合法，改为真正合同非法的 `drain before spawn`，其拒绝及零写入断言逐字保持；其他原负例、真实子进程四桶/CNY/取消状态及预算保持。新增两个 provider 的两种实际时序回归，检查保留原事实、owner 仍 revoked、普通 Task 写仍拒绝以及原源 ACK 重放不重复。新源码复核、匹配配套投影与 hosted CI 仍待，旧失败保留。
+
+## 2026-10-08 原生 drain／reap 时序修复的精确结果
+
+修复已随观测自有 16 路径提交 `e28aafe910e6a2d2c866be77b8c2b9bbb57fee1b` 精确推送。实际 drain 与 reap 的两个完成时间保持，不人为排序；准备、原进程事实及 Task 失权围栏仍严格核验。独立 SOURCE／匹配配套复核均 VALID/PASS，原一次完整 census 与有限匹配投影保留，没有为 HEAD 漂移重复扫描。
+
+[精确 CI 37690906725](https://github.com/wangbinquan/agent-workflow/actions/runs/37690906725) 的 Ubuntu26 原功能作业 `113030528212` 实际执行 `rfc371-native-terminal-collection.test.ts`：52 pass／0 fail，SQLite 与 PostgreSQL 各 26；两种完成顺序、真实取消后的原生数值、普通写仍失权和 ACK 重放不重计均通过。整体 CI 为 failure：57 success／9 failure／6 cancelled，其他 Task 功能、类型及扫描失败没有改记为通过；扫描只保留元数据。
+
+后继 Task owner 提交 `00ce2fea044e3ed32a02cb7d13f1bcdd6affd6c8` 保留本片输出，其 [CI 37696635364](https://github.com/wangbinquan/agent-workflow/actions/runs/37696635364) 为 completed/failure：61 success／5 failure／6 cancelled；[Windows 37696635417](https://github.com/wangbinquan/agent-workflow/actions/runs/37696635417) cancelled。实际功能失败位于 RFC-370 原 effect prepare 的 PostgreSQL SQL 记录断言及原 finalization heartbeat／writer-ACK 处理，原15秒预算保留，原日志已交负责会话。未读取 Static scans 日志，不以已通过的52项代签整仓或 Windows。
+
+正式桌面原任务仍显示完整 37580=16349+19136+0+2095、验收人民币 ¥0.059026、真实彩色柱与原执行泳道；没有重跑模型或重启 AW 原后端。`observability-scale` 原运行 37611082592 保持 completed/cancelled，工作流只可手动触发，本次未恢复或重跑。最新 CI、原定时矩阵及其余退出条件继续；失败／取消证据保留。
