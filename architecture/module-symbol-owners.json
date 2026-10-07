@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2362,
+    "backendFiles": 2363,
     "frontendFiles": 655,
     "legacyFiles": 596,
-    "moduleFiles": 1766,
-    "productionFiles": 3187,
+    "moduleFiles": 1767,
+    "productionFiles": 3188,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27411
+    "symbolsIncludingFileRoots": 27415
   },
   "entries": [
     {
@@ -139733,6 +139733,42 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskProviderAuthorityRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskProviderAuthorityRuntime.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskProviderAuthorityRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskProviderAuthorityRuntime.ts#TaskProviderAuthorityRuntime",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskProviderAuthorityRuntime",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskProviderAuthorityRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskProviderAuthorityRuntime.ts#TaskProviderExecutionAuthority",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskProviderExecutionAuthority",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#$file",
       "removeAfterWave": null,
@@ -145522,6 +145558,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "TaskExecutionProviderBackgroundStartDependencies",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#TaskProviderAuthorityLifetime",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "TaskProviderAuthorityLifetime",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -329672,5 +329720,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:618eca1e512ef717666c66ad1aeea2e79e10928a59c7136feb035e86419c5da7"
+  "sourceDigest": "sha256:eb45eac5a34be59f5f1ab0f4ffaaad36fe8b6c1ff1b7a7f8451b83d0b4f66372"
 }

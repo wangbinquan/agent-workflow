@@ -10772,3 +10772,8 @@ SOURCE11-R3 有效稳定有限 PASS，原 R1/R2 功能失败完整保留。Runti
 ### 2026-10-07 RFC-370 Intent selected 排队恢复候选
 
 SOURCE4-R1 与 WF1-R1 独立有效稳定 PASS：捕获原执行权回调/receiver，配置前后失权不恢复，原待处理集合及真实 ACK 保留，native 零参入口与旧行为完整保持。两份生产加一份新测试进行一次原 scoped census；13 原输出、12 JSON 业务 payload/完整数组/分母及 129 有序 ledger/why 不变，只更新原快照摘要；classic 前后完整相等、无增长声明。匹配清单独立门及源码/清单/Windows 的精确发布与 hosted CI 待闭合。本机不跑 AW tests/typecheck/build/service/E2E；实际启动根、19 owner、Task 原事务/准入、UI、H7/A-G 和 CS M0–M4 继续，尚未部署 CS。旧共享正文及并行内容完整保留。详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-intent-publication.md`。
+
+
+### 2026-10-07 RFC-370 Task background selected lifetime 候选
+
+SOURCE4-R2 与 WF1-R1 独立有效稳定 PASS；R1 唯一 module-open P2 原 FAIL 保留并闭合，必需 resume ACK 纳入启动成功、autoResume 原 detached/真实 ACK 保持，新增双 provider sealed gate 回归至二十 case。完整原 native AST、三套旧测试、R1 九个 case、原正文保持。一次原 scoped census 只含一份原 production、一份新 Task port、一份新测试，排除全部非本批 WIP；13 原输出完整保持，仅新增四 owner 至 27415、一个文件与一条 timer 物理标记移动，其他全部 payload/数组/分母和 classic 0/0 保持。129 库存/why 保留，一条 owners 实测声明消费后在普通后继退役，无新 census。配套独立门、精确发布与 hosted CI 待验；实际根、19 owner、Task 原 TX/准入、UI、H7/A-G 和 CS M0–M4 继续，尚未部署 CS。旧共享全文及并行内容完整保留，详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-task-background-publication.md`。

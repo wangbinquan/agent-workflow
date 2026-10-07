@@ -25,6 +25,10 @@ import type { TaskExecutionModule } from '../composition'
 import type { TaskAutoResumeCommand } from '../application/ports/taskAutoResumeCommand'
 import type { TaskLifecycleAutoRepairCommand } from '../application/ports/taskLifecycleAutoRepairCommand'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
+import type {
+  TaskProviderAuthorityRuntime,
+  TaskProviderExecutionAuthority,
+} from '../application/ports/taskProviderAuthorityRuntime'
 
 const log = createLogger('task-execution.provider-background')
 
@@ -49,6 +53,11 @@ export interface TaskExecutionProviderBackgroundStartDependencies {
 export interface TaskExecutionProviderBackgroundControl {
   /** Bind and start every TaskExecution-owned provider-session loop exactly once. */
   start(dependencies: TaskExecutionProviderBackgroundStartDependencies): Promise<void>
+  /** Bind an independent handle to one selected authority generation. */
+  startAuthority(
+    dependencies: TaskExecutionProviderBackgroundStartDependencies,
+    authority: TaskProviderExecutionAuthority,
+  ): Promise<TaskProviderAuthorityRuntime>
   /** Reversible admission freeze; waits for loop work and runtime handles to drain. */
   pause(): Promise<void>
   /** Freeze new claims and loop dispatch without aborting the current runtime. */
@@ -70,6 +79,13 @@ interface ProviderBackgroundRuntime {
   readonly taskHasDriver: (taskId: string) => boolean
   readonly buildScheduleLaunch: BuildScheduleLaunch
   readonly reconcileObservationUsage?: () => Promise<number>
+}
+
+interface TaskProviderAuthorityLifetime {
+  readonly handle: TaskProviderAuthorityRuntime
+  readonly close: (reason: string) => Promise<readonly string[]>
+  readonly awaitIdle: () => Promise<void>
+  readonly isDrained: () => boolean
 }
 
 /**
@@ -306,6 +322,9 @@ export function composeTaskExecutionProviderBackground(
   let serialized: Promise<unknown> = Promise.resolve()
   let authorityQuiesced = false
   let authorityQuiesceVersion = 0
+  let mode: 'native' | 'selected' | undefined
+  let selectedLifetime: TaskProviderAuthorityLifetime | null = null
+  let selectedBootResumePending = true
 
   async function drainTickets(
     tickets: Awaited<ReturnType<TaskExecutionModule['pause']>>,
@@ -328,8 +347,220 @@ export function composeTaskExecutionProviderBackground(
     return await result
   }
 
+  const startAuthority = async (
+    dependencies: TaskExecutionProviderBackgroundStartDependencies,
+    authority: TaskProviderExecutionAuthority,
+  ): Promise<TaskProviderAuthorityRuntime> => {
+    const capturedCurrent = authority?.current
+    if (typeof capturedCurrent !== 'function') {
+      throw new Error('task-provider-execution-authority-required')
+    }
+    const current = (): boolean => capturedCurrent.call(authority) === true
+    if (!current()) throw new Error('task-provider-execution-authority-not-current')
+    if (mode === 'native') throw new Error('task-provider-execution-authority-mode-mismatch')
+    if (stopped) throw new Error('task-execution-provider-background-stopped')
+    if (selectedLifetime !== null && !selectedLifetime.isDrained()) {
+      throw new Error('task-provider-execution-authority-drain-pending')
+    }
+    const configuration =
+      dependencies.configuration ??
+      (dependencies.configPath === undefined
+        ? undefined
+        : createFileTaskBackgroundConfigurationQuery(dependencies.configPath))
+    if (configuration === undefined) throw new Error('task-background-configuration-required')
+
+    let retired = false
+    let drained = false
+    let ownedLoops: readonly RestartableLoop[] = []
+    let ownedStartup: Promise<void> | null = null
+    let normalPause: Promise<void> | null = null
+    let lossQuiesce: Promise<void> | null = null
+    let terminalClose: Promise<readonly string[]> | null = null
+    let normalRequested = false
+    let normalAcknowledged = false
+    let lossRequested = false
+    let lossAcknowledged = false
+    let closeRequested = false
+    let closeAcknowledged = false
+    let lossClaims: Promise<void> | null = null
+    let normalTickets: Awaited<ReturnType<TaskExecutionModule['pause']>> | null = null
+    let closeTickets: Awaited<ReturnType<TaskExecutionModule['dispose']>> | null = null
+    let closeReason: string | undefined
+    const canDispatch = (): boolean =>
+      selectedLifetime === lifetime && !retired && !stopped && current()
+    const pauseLoops = (): Promise<void[]> => Promise.all(ownedLoops.map((loop) => loop.pause()))
+    const waitOwnedWork = async (): Promise<void> => {
+      await Promise.all(ownedLoops.map((loop) => loop.awaitIdle()))
+      if (ownedStartup !== null) await ownedStartup
+    }
+    const gateDrain = (): Promise<void> => {
+      const pending =
+        selectedLifetime === lifetime ? runtime.module.quiesceAuthorityLoss() : Promise.resolve()
+      // This ACK may reject while a startup read still occupies the owner.
+      // Preserve the rejection for its awaited caller without an unhandled gap.
+      void pending.catch(() => undefined)
+      return pending
+    }
+
+    const quiesceAuthorityLoss = (): Promise<void> => {
+      retired = true
+      lossRequested = true
+      if (lossQuiesce !== null) return lossQuiesce
+      if (lossClaims === null) {
+        const pending = gateDrain()
+        lossClaims = pending
+        void pending.catch(() => {
+          if (lossClaims === pending) lossClaims = null
+        })
+      }
+      const claims = lossClaims
+      const loops = pauseLoops()
+      const attempt = (async () => {
+        await loops
+        await waitOwnedWork()
+        await claims
+        lossAcknowledged = true
+      })()
+      lossQuiesce = attempt
+      void attempt.catch(() => {
+        if (lossQuiesce === attempt) lossQuiesce = null
+      })
+      return attempt
+    }
+    const pause = (): Promise<void> => {
+      retired = true
+      normalRequested = true
+      if (normalPause !== null) return normalPause
+      const cancelNormally = !lossRequested && selectedLifetime === lifetime
+      const claims = gateDrain()
+      const loops = pauseLoops()
+      const attempt = queue(async () => {
+        await loops
+        await waitOwnedWork()
+        await claims
+        if (normalTickets === null && cancelNormally && selectedLifetime === lifetime) {
+          normalTickets = await runtime.module.pause(PROVIDER_SESSION_PAUSE_ABORT_REASON)
+        }
+        if (normalTickets !== null) await drainTickets(normalTickets)
+        normalAcknowledged = true
+      })
+      normalPause = attempt
+      void attempt.catch(() => {
+        if (normalPause === attempt) normalPause = null
+      })
+      return attempt
+    }
+    const close = (reason: string): Promise<readonly string[]> => {
+      retired = true
+      closeRequested = true
+      if (terminalClose !== null) return terminalClose
+      closeReason ??= reason
+      const claims = gateDrain()
+      const loops = pauseLoops()
+      const attempt = queue(async () => {
+        await loops
+        await waitOwnedWork()
+        await claims
+        if (selectedLifetime !== lifetime) {
+          closeAcknowledged = true
+          return Object.freeze([])
+        }
+        closeTickets ??= await runtime.module.dispose(closeReason!)
+        const ids = await drainTickets(closeTickets)
+        closeAcknowledged = true
+        return ids
+      })
+      terminalClose = attempt
+      void attempt.catch(() => {
+        if (terminalClose === attempt) terminalClose = null
+      })
+      return attempt
+    }
+    const drain = async (): Promise<void> => {
+      if (!retired) throw new Error('task-provider-execution-authority-not-quiesced')
+      for (;;) {
+        const normal = normalPause,
+          loss = lossQuiesce,
+          closing = terminalClose
+        await Promise.all([normal, loss, closing])
+        await waitOwnedWork()
+        if (lossRequested && !lossAcknowledged) {
+          throw new Error('task-provider-execution-authority-loss-ack-pending')
+        }
+        if (closeRequested && !closeAcknowledged) {
+          throw new Error('task-provider-execution-authority-close-ack-pending')
+        }
+        if (normalRequested && !normalAcknowledged) {
+          if (!lossRequested) throw new Error('task-provider-execution-authority-pause-ack-pending')
+          // A loss drain may retry receipt intake for an already-issued normal
+          // stop. It never issues a fresh cancellation after authority loss.
+          if (normalTickets !== null) await drainTickets(normalTickets)
+        }
+        if (normal === normalPause && loss === lossQuiesce && closing === terminalClose) {
+          drained = true
+          return
+        }
+      }
+    }
+    const handle = Object.freeze({ pause, quiesceAuthorityLoss, drain })
+    const lifetime: TaskProviderAuthorityLifetime = Object.freeze({
+      handle,
+      close,
+      awaitIdle: waitOwnedWork,
+      isDrained: () => drained,
+    })
+    mode = 'selected'
+    selectedLifetime = lifetime
+    try {
+      const claims = gateDrain()
+      await claims
+      if (!canDispatch()) return handle
+
+      ownedLoops = createProviderLoops(runtime, dependencies, configuration, canDispatch)
+      const currentRead = (async () => await configuration.read())()
+      const moduleOpen = currentRead.then((settings) => {
+        if (!canDispatch()) return undefined
+        runtime.module.resume()
+        return settings
+      })
+      const run = moduleOpen
+        .then(async (settings) => {
+          if (settings === undefined || !canDispatch()) return
+          if (!selectedBootResumePending || !settings.autoResumeOnBoot) return
+          selectedBootResumePending = false
+          await runtime.autoResume
+            .run({
+              breaker: {
+                maxPerWindow: settings.maxAutoRecoveriesPerWindow,
+                windowMs: settings.autoRecoveryWindowMs,
+              },
+            })
+            .then(() => undefined)
+            .catch((error) => {
+              log.warn('boot auto-resume failed', {
+                error: error instanceof Error ? error.message : String(error),
+              })
+            })
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (ownedStartup === run) ownedStartup = null
+        })
+      ownedStartup = run
+      await moduleOpen
+      return handle
+    } catch (error) {
+      await quiesceAuthorityLoss()
+      await drain()
+      throw error
+    }
+  }
+
   return Object.freeze({
+    startAuthority,
     async start(dependencies: TaskExecutionProviderBackgroundStartDependencies) {
+      if (mode === 'selected') throw new Error('task-provider-execution-authority-mode-mismatch')
+      mode = 'native'
       if (authorityQuiesced) throw new Error('task-execution-provider-authority-quiesced')
       if (started) throw new Error('task-execution-provider-background-already-started')
       if (stopped) throw new Error('task-execution-provider-background-stopped')
@@ -372,6 +603,13 @@ export function composeTaskExecutionProviderBackground(
       await currentRead
     },
     async pause() {
+      if (mode === 'selected') {
+        if (selectedLifetime !== null) {
+          await selectedLifetime.handle.pause()
+          await selectedLifetime.handle.drain()
+        }
+        return
+      }
       await queue(async () => {
         await Promise.all(loops.map((loop) => loop.pause()))
         if (startupRun !== null) await startupRun
@@ -379,6 +617,13 @@ export function composeTaskExecutionProviderBackground(
       })
     },
     async quiesceAuthorityLoss() {
+      if (mode === 'selected') {
+        if (selectedLifetime !== null) {
+          await selectedLifetime.handle.quiesceAuthorityLoss()
+          await selectedLifetime.handle.drain()
+        }
+        return
+      }
       authorityQuiesced = true
       authorityQuiesceVersion++
       const claimDrain = runtime.module.quiesceAuthorityLoss()
@@ -389,6 +634,7 @@ export function composeTaskExecutionProviderBackground(
       })
     },
     async resume() {
+      if (mode === 'selected') throw new Error('task-provider-execution-authority-required')
       const version = authorityQuiesceVersion
       await queue(async () => {
         if (stopped) throw new Error('task-execution-provider-background-stopped')
@@ -401,6 +647,14 @@ export function composeTaskExecutionProviderBackground(
       })
     },
     async stop() {
+      if (mode === 'selected') {
+        stopped = true
+        if (selectedLifetime !== null) {
+          await selectedLifetime.close(PROVIDER_SESSION_CLOSE_ABORT_REASON)
+          await selectedLifetime.handle.drain()
+        }
+        return
+      }
       await queue(async () => {
         if (stopped) return
         stopped = true
@@ -410,6 +664,13 @@ export function composeTaskExecutionProviderBackground(
       })
     },
     async close(reason: string) {
+      if (mode === 'selected') {
+        stopped = true
+        if (selectedLifetime === null) return Object.freeze([])
+        const ids = await selectedLifetime.close(reason)
+        await selectedLifetime.handle.drain()
+        return ids
+      }
       return await queue(async () => {
         if (!stopped) {
           stopped = true
@@ -420,6 +681,12 @@ export function composeTaskExecutionProviderBackground(
       })
     },
     async awaitIdle() {
+      if (mode === 'selected') {
+        await serialized
+        if (selectedLifetime !== null) await selectedLifetime.awaitIdle()
+        await runtime.module.awaitIdle()
+        return
+      }
       await serialized
       await awaitLoopIdle()
       await runtime.module.awaitIdle()
