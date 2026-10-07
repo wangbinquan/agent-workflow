@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2369,
+    "backendFiles": 2371,
     "frontendFiles": 655,
     "legacyFiles": 597,
-    "moduleFiles": 1772,
-    "productionFiles": 3194,
+    "moduleFiles": 1774,
+    "productionFiles": 3196,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27444
+    "symbolsIncludingFileRoots": 27465
   },
   "entries": [
     {
@@ -142264,6 +142264,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskExecutionContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskExecutionContext.ts#hostWriteCaptures",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "hostWriteCaptures",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/application/taskExecutionContext.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/taskExecutionContext.ts#runWithTaskExecutionContext",
@@ -142312,6 +142324,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskExecutionContext.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskExecutionContext.ts#taskExecutionHostWriteCapture",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskExecutionHostWriteCapture",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/taskExecutionContext.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/taskExecutionContext.ts#trustedContexts",
@@ -142342,6 +142366,138 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskExecutionError",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#assertTaskHostWriteCapture",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertTaskHostWriteCapture",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#capturedContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "capturedContext",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#capturedContexts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "capturedContexts",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#CapturedTaskHostWriteContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CapturedTaskHostWriteContext",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#captureTaskHostWriteContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "captureTaskHostWriteContext",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#consumeTaskHostIssuedAck",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "consumeTaskHostIssuedAck",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#consumeTaskHostNewWork",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "consumeTaskHostNewWork",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#consumeTaskHostRecovery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "consumeTaskHostRecovery",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#TaskHostWriteCapture",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostWriteCapture",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#taskHostWriteCaptureBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "taskHostWriteCaptureBrand",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -154834,6 +154990,102 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createTaskHostWriteContextAdapter",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#TaskHostWriteBinding",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostWriteBinding",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#TaskHostWriteInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostWriteInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#TaskHostWriteSelection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostWriteSelection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#withTaskHostIssuedAck",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withTaskHostIssuedAck",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#withTaskHostNewWork",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withTaskHostNewWork",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#withTaskHostRecovery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withTaskHostRecovery",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#write",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "write",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -330068,5 +330320,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed"
+  "sourceDigest": "sha256:27dc496dc8e2e0c0f8cf303d1d98146b62f088aa06808a2eddd4a9fff39d536b"
 }

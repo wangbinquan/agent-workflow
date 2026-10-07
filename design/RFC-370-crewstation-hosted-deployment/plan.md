@@ -1131,3 +1131,12 @@ SOURCE12-R1 有效稳定有限 PASS，root 实际消费完整41项及3wrappers�
 本普通后继只退役已经消费的 rfc294-review-off-dag-offered-edges 一条实测许可；47完整声明及原129有序ledger/baseline/why/预算保持，使用原五个纯JSON函数重算payload digest。原八份测试和所有源码／架构快照不动，无新census或本机AW运行。原source有限门、精确发布、普通后继有限门和正式CI分别留证。
 
 C1的首轮两项测试配置P2、原FAIL/root消费及修正保留，修正后的SOURCE6-R2继续复核，不包含在这四路径提交。实际Task调用者、原退场ACK、19owner/roots/UI、完整H7/A-G及独立CS adapters/M0先部署至M4继续，AW尚未部署CS，RFC未完成。旧共享正文与并行内容完整保持。
+
+
+## 2026-10-07 RFC-370 Task 原写上下文传递与具名事务候选
+
+原 capture／receipt／方法与 receiver 在 Task 自有私有关联中跨 await 保留，new-work／recovery／issued-ACK 三入口等待同原事务的真实消费；原 SQL／owner 判据与错误优先级保持，native 不变。SOURCE6-R1 的两处真实 provider fixture P2 已实际消费 FAIL 后修正；SOURCE6-R2 有效稳定 PASS，原12个 case／75 expect／预算及另外五个 owned 文件保持，Windows 原78命令与三个新套件位置保持。
+
+一次原 scoped census 固定3dc43c13，四原规则不变、13 raw 输出先保存；3个 production／1个测试，完整 classic 0／0相等，新增21 owner／2 execution-local／2 transaction／1 type-only import及原 classifier exception。129有序账本和 why 保持，只给五项实测增长一次许可并在普通后继退役。无本机 AW tests／typecheck／build／services／E2E；独立 matching 门、上库同步和新精确 SHA CI 另验。
+
+实际 Task claim／heartbeat／driver／业务分类／finalization 重试尚待 C2。三 roots／19 owner／UI、H7／A-T7／A-G 及各层独立 CS adapter、M0 首部署至 M4 继续；AW 尚未部署 CS。详见 [Task 捕获与具名事务发布](design/RFC-370-crewstation-hosted-deployment/host-authority-task-write-capture-publication.md)。以下旧文档及全部并行输出完整保留。

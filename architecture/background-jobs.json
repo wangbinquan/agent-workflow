@@ -5564,8 +5564,8 @@
   "denominator": {
     "ambientWiring": 504,
     "disabled": 9,
-    "entries": 367,
-    "executionLocal": 43,
+    "entries": 369,
+    "executionLocal": 45,
     "longRunning": 101,
     "managed": 11,
     "periodic": 214
@@ -8735,6 +8735,27 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#consumeTaskHostRecovery",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskHostWriteCapture.ts#consumeTaskHostRecovery",
+      "phase": "execution",
+      "symbol": "consumeTaskHostRecovery",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts#MAX_TREES_PER_SWEEP",
@@ -9335,6 +9356,27 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#recoveredManagedProcessEvidence",
       "phase": "unknown",
       "symbol": "recoveredManagedProcessEvidence",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#withTaskHostRecovery",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#withTaskHostRecovery",
+      "phase": "execution",
+      "symbol": "withTaskHostRecovery",
       "targetContext": "task-execution"
     },
     {
@@ -13632,5 +13674,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed"
+  "sourceDigest": "sha256:27dc496dc8e2e0c0f8cf303d1d98146b62f088aa06808a2eddd4a9fff39d536b"
 }

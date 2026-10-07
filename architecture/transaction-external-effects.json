@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 29,
-    "transactionCallbacks": 271
+    "transactionCallbacks": 273
   },
   "entries": [
     {
@@ -3026,6 +3026,30 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#transaction:46",
+      "line": 46,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#write",
+      "status": "clear",
+      "symbol": "write",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#transaction:58",
+      "line": 58,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts#write",
+      "status": "clear",
+      "symbol": "write",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts#transaction:35",
@@ -3320,7 +3344,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed",
+  "sourceDigest": "sha256:27dc496dc8e2e0c0f8cf303d1d98146b62f088aa06808a2eddd4a9fff39d536b",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
