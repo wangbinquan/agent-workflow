@@ -323,3 +323,10 @@ WF-03 保留私有/公开卡片的完整 chip 数组与原用户名期望，改�
 该 SHA 的 Windows 四个 E2E 分片均完成；原有单次和多次 SIGKILL 后同 home 恢复用例，以及 WF-03 全部芯片与独立归属查询，首次尝试通过。Windows 3/4 另有一条非本次关闭恢复用例被标记 flaky，因此不将整条流水线记为干净通过。8 个后端失败分片对应 4 个失败用例，其中另外三处旧架构调用关系已由独立提交 `865fc0458301a4532fb21f685f323eb9130ee069` 更新，本补丁保留该提交并继续等待最终候选的准确 SHA CI。
 
 本地仅做静态 AST、精确格式与 lint 检查；没有启动 AW 测试、构建、E2E 或新服务。正式后端仍由原 `bun dev` watcher 提供，统计页面的已记录 Token 与人民币估值保持可见，缺口继续明确标为不完整。
+
+
+## 2026-10-07 Bun Worker 类型与固定历史迁移回归
+
+[CI 37644567999](https://github.com/wangbinquan/agent-workflow/actions/runs/37644567999) 实际报出本会话两项问题：后端未加载 DOM 库时，Worker 观察夹具引用了不存在的全局 `Transferable`／`StructuredSerializeOptions`；历史迁移回归把最新步骤误当作固定的 `0017_rfc371_retained_output_revision`，追加 RFC-370 的 0018 后选错了验证对象。
+
+Worker 夹具现从原 `Worker.postMessage` 的声明推导两种参数类型，两个重载及实际转发分支不变，不增加 DOM 库或类型抑制。迁移回归按原 0017 的唯一 ID 和其 from／to contract digest 选择真实历史版本，保留原所有表、语句、原生投影、十二触发器和迁移字节断言，并明确核验唯一步骤及两个版本均存在。生产代码、生产迁移、原人口和 30／60 秒用例预算均不改。本机只做精确格式、lint 和静态 AST 核对；类型与功能结果继续以新精确 SHA 的 GitHub CI 为准，本文不把候选修订记为全仓通过。

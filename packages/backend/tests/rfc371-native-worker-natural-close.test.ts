@@ -4,6 +4,9 @@ import { openNativeUsagePassWorker } from '@/platform/background/nativeUsagePass
 import { persistNativeUsagePass } from '@/modules/runtime-management/application/persistNativeUsagePass'
 import { originalBaselineWorkerFixture } from './helpers/rfc371NativeBaselineWorkerFixture'
 
+type WorkerSerializeOptions = NonNullable<Parameters<Worker['postMessage']>[1]>
+type WorkerTransferList = NonNullable<WorkerSerializeOptions['transfer']>
+
 test('successful original baseline and pass snapshots exit naturally after closed ACK without a second cancel or terminate', async () => {
   const fixture = await originalBaselineWorkerFixture(17),
     OriginalWorker = globalThis.Worker
@@ -37,11 +40,11 @@ test('successful original baseline and pass snapshots exit naturally after close
         this.observed.actualClose = true
       })
     }
-    override postMessage(message: unknown, transfer: Transferable[]): void
-    override postMessage(message: unknown, options?: StructuredSerializeOptions): void
+    override postMessage(message: unknown, transfer: WorkerTransferList): void
+    override postMessage(message: unknown, options?: WorkerSerializeOptions): void
     override postMessage(
       message: unknown,
-      options?: Transferable[] | StructuredSerializeOptions,
+      options?: WorkerTransferList | WorkerSerializeOptions,
     ): void {
       if (
         this.observed.closedReply &&

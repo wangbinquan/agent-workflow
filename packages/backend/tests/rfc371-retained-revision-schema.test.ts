@@ -14,9 +14,17 @@ import { retainedOutputRevisionStatements } from '@/platform/persistence/retaine
 
 test('the original V2 whole KEEP addition replays native objects without modifying any historical table or statement', async () => {
   const history = await loadPostgresqlMigrationHistory()
-  const previous = history.versions.at(-2)!,
-    current = history.head
-  const step = history.steps.at(-1)!
+  const steps = history.steps.filter((step) => step.id === '0017_rfc371_retained_output_revision')
+  expect(steps).toHaveLength(1)
+  const step = steps[0]!
+  const previous = history.versions.find(
+      (version) => version.contract.digest === step.from.contractDigest,
+    )!,
+    current = history.versions.find(
+      (version) => version.contract.digest === step.to.contractDigest,
+    )!
+  expect(previous).toBeDefined()
+  expect(current).toBeDefined()
   expect(step.id).toBe('0017_rfc371_retained_output_revision')
   expect(step.version).toBe(2)
   expect(current.contract.activeTableCount).toBe(previous.contract.activeTableCount + 1)
