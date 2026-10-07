@@ -822,10 +822,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1954,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371 native terminal collection and presentation: the same original native final-collection transaction now recognizes a real reaped and drained child receipt after its original Task owner is terminal; original canonical count 1953 -> 1954. Measured committed ecb640e9dbc6332c7d5ad077dcf957e811d1d107 plus frozen native SOURCE8/UI SOURCE4 only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -860,10 +857,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6795,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371 native terminal collection and presentation: nativeUsageOwnerTransaction.ts consumes exactly nativeUsagePreparations and taskExecutionOwners from @/db/schema to validate the original preparation and same terminal Task owner tuple; original canonical count 6793 -> 6795. Measured committed ecb640e9dbc6332c7d5ad077dcf957e811d1d107 plus frozen native SOURCE8/UI SOURCE4 only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -884,10 +878,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5966,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371 native terminal collection and presentation: the same two measured nativeUsageOwnerTransaction.ts -> @/db/schema edges, targetSymbol nativeUsagePreparations and taskExecutionOwners; retain original exact owner, target and W9 semantics; original canonical count 5964 -> 5966. Measured committed ecb640e9dbc6332c7d5ad077dcf957e811d1d107 plus frozen native SOURCE8/UI SOURCE4 only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -922,10 +913,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27405,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 native terminal collection and presentation: six backend-only owner entries: NativeUsageFinalizationRef in the existing task port, plus $file, Finalization, originals, createNativeUsageFinalizationAuthority and nativeUsageFinalizationReceipt in the new task infrastructure file; UI owner count does not grow; original canonical count 27399 -> 27405. Measured committed ecb640e9dbc6332c7d5ad077dcf957e811d1d107 plus frozen native SOURCE8/UI SOURCE4 only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -933,8 +921,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ecb640e9dbc6332c7d5ad077dcf957e811d1d107",
-    "contentDigest": "sha256:b3d5a23abd2607fc130d30b39f6603c513e5e577fc94c97b34837c04d79dcb64",
+    "currentSnapshotSha": "2e3b68b2cbd170b557f8b9c2c5f17112f35ca1de",
+    "contentDigest": "sha256:2823f20118fe2d41c8d11f3f30e6e0882040667a38e26c29fa44053e2572d12b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
