@@ -309,6 +309,25 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:task-execution:types:TaskReviewNodeDescriptor', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:types:TaskSessionEventSource', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:types:WrapperExecutionScopeSegment', removeAfterWave: 'W4-E1' },
+  // RFC-370 H7: these additive contracts await production root selection in W9-D.
+  { id: 'public:integration:participants:MrTerminalControlRuntime', removeAfterWave: 'W9-D' },
+  {
+    id: 'public:system-operations:participants:HostExecutionAuthorityDriver',
+    removeAfterWave: 'W9-D',
+  },
+  {
+    id: 'public:system-operations:participants:HostExecutionAuthorityFactory',
+    removeAfterWave: 'W9-D',
+  },
+  {
+    id: 'public:system-operations:participants:HostExecutionAuthorityLifecycle',
+    removeAfterWave: 'W9-D',
+  },
+  { id: 'public:system-operations:participants:HostExecutionPreparation', removeAfterWave: 'W9-D' },
+  {
+    id: 'public:system-operations:participants:HostExecutionRecoveryFamily',
+    removeAfterWave: 'W9-D',
+  },
 ]
 
 /** provider=0 且 consumer=0 的 required SPI：死声明。 */

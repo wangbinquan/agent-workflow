@@ -319,7 +319,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
           beforeEntered.resolve()
           await beforeAck.promise
         },
-        async run(actual: AuthorityPollingDaemonRuntimeRunInput) {
+        async run(actual: AuthorityPollingDaemonRuntimeRunInput): Promise<void> {
           expect(this).toBe(original)
           received.push(actual)
           runEntered.resolve()

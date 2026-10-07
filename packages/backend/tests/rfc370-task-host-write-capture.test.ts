@@ -482,7 +482,7 @@ describeEachProvider(
             selection: h.selection,
             isolation: 'serializable',
             body: async (inner) => {
-              expect(inner).toBe(outerTransaction)
+              expect(inner).toBe(outerTransaction!)
               await writeWorkflow(inner, 'inner-sql')
             },
           })
