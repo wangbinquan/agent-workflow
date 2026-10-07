@@ -23,3 +23,11 @@ Integration 的新中立 application port 由独立 composition 实现。Webhook
 源码有限复核与纯 AST/字节/JSON 检查不等于 CI 绿；配套有限门、精确路径上库、远端同步与精确 SHA 的 GitHub Actions 分别验收。本机未运行 AW tests、typecheck、build、service 或 E2E。
 
 后续继续真实启动根与提前恢复、Task 原事务与 admission、其余 owner 和 UI、完整 A-T7/A-G；完成 Stage A 后编写各层独立 CS adapter，先 M0 实际部署，再逐步 M1–M4。当前 AW 尚未部署 CS，RFC 保持 In Progress。
+
+## 2026-10-07 Runtime/Webhook 发布及五条一次增长声明退役
+
+源码 SOURCE11-R3 与配套 MATCHING16-R3 的独立有限功能门均通过，根会话核对实际完整内容后精确发布 27 路径：4c87db675494ae695f19e535023cc28e6a56736e。main/origin 同步 0/0、索引为空；Intent、Task 及所有并行在制品完整保持。该 SHA 的主 CI 37591451763 和 Windows 37591451754 已登记，首次均 queued，正式终态待验。
+
+本普通后继仅退役这次已消费的五个 allowGrowth。原 129 个有序库存项、why、实测 baseline 1955／6798／5969／1235／27411 与全部其它字段保持，只按原五个纯 JSON 函数更新 ledger digest。原唯一 census、十三配套生成和生产源码不重跑、不改写；三个共享文档保留原全文，仅追加本段。
+
+真实启动根、提前恢复、十九 handles、Task 原事务/admission、其他 owner/UI 与完整 H7/A-T7/A-G 继续，之后独立 CS adapters，先 M0 实际部署，再逐步 M1–M4。AW 尚未部署 CS，RFC 未完成。后台 Task 新设计和源码仍在独立实施，不包含在本退役提交。

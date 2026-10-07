@@ -1062,3 +1062,11 @@ SOURCE11-R3 有效稳定有限 PASS，原 R1/R2 功能失败完整保留。Runti
 唯一原 scoped census 固定 6825e230，叠加六生产/两测试，Intent 在制品排除，其余 6701 源码读取原 blob。十三配套沿原四条规则，sourceDigest sha256:c73b8ce0d63e535c56fdd7e17701ac289f0ce2e0ab1076b3864496203b82eb4e；经典完整数组相等，本批 scoped 1/0。所有旧完整行、public 形状及 129 库存 why/顺序保持，五项实测增长消费后普通退役，不重跑 census。
 
 配套独立门、精确路径上库/同步与新 exact-SHA hosted CI 分别验收，无本机 AW tests/typecheck/build/service/E2E。真实启动根、提前恢复、Task 原事务/admission、其余 owner/UI、H7/A-T7/A-G 继续，然后独立 CS adapters，先 M0 部署再 M1–M4。AW 尚未部署 CS，RFC 未完成。详情见 design/RFC-370-crewstation-hosted-deployment/host-authority-runtime-webhook-publication.md。共享 STATE/plan 的完整原前缀与并行输出保持，仅追加此段。
+
+## 2026-10-07 Runtime/Webhook 发布及五条一次增长声明退役
+
+源码 SOURCE11-R3 与配套 MATCHING16-R3 的独立有限功能门均通过，根会话核对实际完整内容后精确发布 27 路径：4c87db675494ae695f19e535023cc28e6a56736e。main/origin 同步 0/0、索引为空；Intent、Task 及所有并行在制品完整保持。该 SHA 的主 CI 37591451763 和 Windows 37591451754 已登记，首次均 queued，正式终态待验。
+
+本普通后继仅退役这次已消费的五个 allowGrowth。原 129 个有序库存项、why、实测 baseline 1955／6798／5969／1235／27411 与全部其它字段保持，只按原五个纯 JSON 函数更新 ledger digest。原唯一 census、十三配套生成和生产源码不重跑、不改写；三个共享文档保留原全文，仅追加本段。
+
+真实启动根、提前恢复、十九 handles、Task 原事务/admission、其他 owner/UI 与完整 H7/A-T7/A-G 继续，之后独立 CS adapters，先 M0 实际部署，再逐步 M1–M4。AW 尚未部署 CS，RFC 未完成。后台 Task 新设计和源码仍在独立实施，不包含在本退役提交。
