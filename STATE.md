@@ -1,3 +1,11 @@
+## 2026-10-07 RFC-371 原生基线采集准备与原后端启动修复
+
+本会话 35 路径已提交并推送 `86c28e48624b7c0e23803bf92b825c282b2d1c81`，main/origin 精确同步、索引为空。SOURCE v3 与 META13-v2 独立有效 PASS；原 ready 后无 pending 的采集失败不再被成功回调吞掉，正常 ACK 关闭与真实 Worker/SQL 回收保持。显式修订选择、整个根集合的一次原 baseline、原只读 Worker 与回归已上库；四共享启动/provider 文件及并行 Task 配置依赖由其 owner 接续，独立根接线回归暂未上库，不能记正式原生采集已启用。
+
+原 SQLite 后端按用户明确启动授权恢复，正式页实际全时间 425 任务、已知 123238 Token（输入96095、缓存读21120、缓存写0、输出6023）、验收估值 ¥0.16583；历史缺口及部分金额标记保留，不将未采集当零。柱状下钻实际8任务四桶/费用一致。没有本机 AW tests/typecheck/build/E2E；新精确 CI 与真实新原生任务/CS部署/规模分别验收，两个 RFC 仍进行。六项已消费实测增长许可在普通无源码增长接续中退役；129有序库存/why/数值与原四规则保持，无新 census。以下共享旧 STATE 与并行输出完整保留。
+
+---
+
 ## 2026-10-07 RFC-371 Windows CI 时序修复候选
 
 原 d400121b 的 CI 37530803324：Markdown/恢复/双 provider/全部平台功能作业通过，整体仍 failure；扫描只记状态。Windows crash-recovery 和 WF-03 首次失败后重试成功保留，不计根因闭合。本批 harness 改为等待原 child close 并在未关闭/信号错误时失败，原 shutdown/fallback/grace 预算不改；新增六条 close 边界回归，WF-03 等名称查询而保留全部原 chip 期望。仅精确格式/lint/无断言 AST 本机核验，新精确 SHA 的 Windows/整仓 CI待验。AW-R03～12、CS N4/N5/真实 N6及原规模继续，两 RFC保持 In Progress。

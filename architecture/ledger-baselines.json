@@ -822,10 +822,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1953,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371 core22: selected native invocation persistence and worker membership wiring; original canonical count 1950 -> 1953. Measured committed e4bd62318e12848d730b1c52f2dd29706e9da5e1 plus frozen own core22 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,10 +843,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 366,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-371 core22: actual dedicated original-baseline Worker; original canonical count 365 -> 366. Measured committed e4bd62318e12848d730b1c52f2dd29706e9da5e1 plus frozen own core22 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -863,10 +857,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6782,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371 core22: exact Task public type and platform baseline participant edges; original canonical count 6771 -> 6782. Measured committed e4bd62318e12848d730b1c52f2dd29706e9da5e1 plus frozen own core22 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -887,10 +878,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5956,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371 core22: original exact import classification for this selected baseline participant; original canonical count 5947 -> 5956. Measured committed e4bd62318e12848d730b1c52f2dd29706e9da5e1 plus frozen own core22 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -904,10 +892,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1217,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371 core22: five actual original-baseline read type exports; original canonical count 1212 -> 1217. Measured committed e4bd62318e12848d730b1c52f2dd29706e9da5e1 plus frozen own core22 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -928,10 +913,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27387,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 core22: complete native worker and existing frontend timeline symbol ownership; original canonical count 27354 -> 27387. Measured committed e4bd62318e12848d730b1c52f2dd29706e9da5e1 plus frozen own core22 only; rules, original inventory, why and complete population unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -939,8 +921,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e4bd62318e12848d730b1c52f2dd29706e9da5e1",
-    "contentDigest": "sha256:02a95e67a6b12a8d7e8073f983b7b639f8893d1ca48e9514f08964a99aaaa917",
+    "currentSnapshotSha": "86c28e48624b7c0e23803bf92b825c282b2d1c81",
+    "contentDigest": "sha256:0b3e95f0c5f245714b3237654dad7f648151a94a23d618e2804f6a0851d6b0f9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
