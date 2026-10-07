@@ -959,3 +959,10 @@ SOURCE62-R5 独立有限功能 PASS；三组完整目的效果、logical staging
 完整78个相关文件已提交推送 3afffac07455e86118390432359676707f2063c8；发布后main／origin 0/0、index为空，未提交H7在制源码，全部共享MR export及STATE／plan正文保持。SOURCE62-R5与MATCHING16-R5均独立有限PASS。新精确SHA主CI37550317708、Windows37550317792已注册，另有maintenance-soak37550317684；冻结此段时前两项queued、soak in_progress，未宣称正式CI通过。
 
 本次普通后继只退役该提交已消费的五条one-commit增长说明；原129行baseline／顺序／why和其它字段逐字对应完整原JSON，按原payload算法重算ledger digest。原13项source projection、R1 43→42／R2 0→0、356条完整旧债、所有SPI／target／guard／SCC及Task库存不改，不重新census。不改原SOURCE或旧失败，不联系其它会话。退役有限复核、发布及后继exact-SHA hosted CI另验。完整H7／A-T7／A-G和独立CS adapters／M0～M4继续，当前AW尚未部署到CS，RFC未完成。
+
+
+## 2026-10-07 RFC-370 Purpose Windows 平台选项与匹配清单候选
+
+3afffac0 的 Windows37550317792 已 failure：同一 native 平台选项在较长 cwd 表达式后超出原匹配窗口。SOURCE2-R1 有效稳定 PASS，仅移动纯 spread，完整原规则/断言/预算保持，原 pattern 1→0。一次原 scoped 生成固定 a7c221e6 加该一个生产文件，排除 H7 WIP；13 原产物 sourceDigest sha256:c9cffe87aa91c7f178bdb0b6cc6e4ed63dfbcf0ad447e8859e6cbb280909d4e6，classic inbound/outbound 0→0。
+
+匹配清单如实补已提交 caea61fe 的四条观测 frontend owner，旧 27325 条全文/顺序与129 ledger/why 保持，owner 27325→27329 的一条原协议声明随匹配提交消费后正常退役。不改并行源码；源码/配套有限门、远端同步和新精确 SHA CI 分别验收。无本机 AW tests/typecheck/build/service，H7/R2、所有根/事务/后台执行与 A-T7/A-G 继续，尚无 AW-in-CS 部署，RFC 未完成。详情见 design/RFC-370-crewstation-hosted-deployment/purpose-platform-canonical-publication.md。

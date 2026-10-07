@@ -272,13 +272,13 @@ export function createLocalDevelopmentAdapterEffects(deps: {
     let proc: Subprocess<'ignore', 'pipe', 'pipe'>
     try {
       proc = Bun.spawn({
+        ...platformSpawnOptionsForHost(),
         cmd: argv,
         cwd: input.stagedRoot,
         env,
         stdin: 'ignore',
         stdout: 'pipe',
         stderr: 'pipe',
-        ...platformSpawnOptionsForHost(),
         // RFC-317 T35（EK-01）—— 自成进程组：这里跑的是**外部适配器可执行文件**，
         // 它 fork 什么完全不受本仓控制。不 detached 时下面的杀链只能杀到直接子进程。
         detached: true,
