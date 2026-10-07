@@ -5564,11 +5564,11 @@
   "denominator": {
     "ambientWiring": 504,
     "disabled": 9,
-    "entries": 366,
+    "entries": 367,
     "executionLocal": 43,
     "longRunning": 101,
     "managed": 11,
-    "periodic": 213
+    "periodic": 214
   },
   "entries": [
     {
@@ -5619,7 +5619,7 @@
       ],
       "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#$setTimeout:106",
+      "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#$setTimeout:250",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -5633,7 +5633,30 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:106",
+      "symbol": "$setTimeout:250",
+      "targetContext": "runtime-management"
+    },
+    {
+      "dependencies": [
+        "runtime"
+      ],
+      "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#createAuthorityPollingDaemonRuntimeHandleBinding",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#createAuthorityPollingDaemonRuntimeHandleBinding",
+      "phase": "unknown",
+      "symbol": "createAuthorityPollingDaemonRuntimeHandleBinding",
       "targetContext": "runtime-management"
     },
     {
@@ -13609,5 +13632,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:809ca2c728c412395ac3314832e29e8df64a98e7c2bc04462fecc26016d3716f"
+  "sourceDigest": "sha256:a7e0ffff653ce56600eb23a6ec850d953e054bed1638c76efe5b248e4b41e49c"
 }

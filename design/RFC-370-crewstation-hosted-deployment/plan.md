@@ -1088,3 +1088,8 @@ SOURCE4-R2、WF1-R1、MATCHING16-R2 均由独立 reviewer 有效稳定有限 PAS
 本次普通紧接后继只退役已消费的一个真实 owner 增长声明；原129有序库存、所有 baseline/why/其它字段和原 source/projection 保持，仅按原五个纯JSON函数更新 ledger contentDigest。生产四路径、测试、Windows登记和其它十二项配套全部不改，不重跑 census。原配置后 module.resume 真实ACK遗漏的首轮 FAIL 和源码修正 PASS 均保留。
 
 本次只是独立 Task background selected lifetime，实际启动根、所有十九 owner、Task 原事务/准入、UI、完整 H7/A-T7/A-G 与各层 CS adapters、M0首次部署至 M4 仍继续。没有本机 AW tests/typecheck/build/service/E2E、没有跨会话消息，AW 尚未部署到 CS，RFC 未完成。普通后继的独立有限门与精确发布仍须分别核验；CI排队和静态检查不算整仓通过。
+
+
+### 2026-10-07 RFC-370 selected polling 有限候选
+
+SOURCE3-R1／WF1-R1 独立稳定 PASS，原 native AST／整套旧测试／Windows 原命令与预算保持，新增双 provider 24 个 selected polling 用例交 hosted 精确 SHA CI。清单实际原生成两次：首轮原生成后私有包装器文件数错误导致未完成，保留失败；修正后的唯一完整成功输出先保存，不再重跑。旧全部 owner／background／opaque mutation 行保持，仅 owner +3 至 27419、background +1 至 367、mutation 分类 +1 至 1956，一条原 timer 106→250；其它 payload、SCC／target 和 classic 0/0 保持。129 有序 ledger／why 保留，三个实测声明在普通后继退役。并行 RFC-371 已在 f0c94c3c 普通退役，只有该 ledger 变化，无生产变更，向前投影本批校验且不恢复其声明；STATE／plan 旧全文完整保持。配套门、精确发布和 hosted CI 待验，实际根／19 owner、Task 原事务全入口／准入、UI、H7／A-G 与 CS M0～M4 继续，尚未部署 CS。详见 `design/RFC-370-crewstation-hosted-deployment/host-authority-polling-publication.md`。

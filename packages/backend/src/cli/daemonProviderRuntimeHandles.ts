@@ -5,6 +5,7 @@
 import type { DaemonProviderSessionLifecycleInput } from './daemonProviderSession'
 import type {
   DaemonProviderCloseParticipant,
+  DaemonProviderHostExecutionHandleBinding,
   DaemonProviderRuntimeHandle,
   DaemonProviderRuntimeHandleFactory,
 } from './daemonProviderRuntimeSession'
@@ -14,6 +15,149 @@ type MaybePromise<T> = T | Promise<T>
 export interface ManagedWorkerRuntime {
   readonly stop: (reason?: string) => Promise<void>
   readonly done: Promise<void>
+}
+
+export interface AuthorityPollingDaemonRuntimeRunInput {
+  readonly scope: DaemonProviderSessionLifecycleInput
+  readonly context: Parameters<DaemonProviderHostExecutionHandleBinding['start']>[0]['context']
+  /** The original callback and receiver, independent of later property changes. */
+  readonly current: () => boolean
+}
+
+export interface AuthorityPollingDaemonRuntimeHandleBindingInput {
+  readonly id: string
+  readonly group: DaemonProviderHostExecutionHandleBinding['group']
+  readonly intervalMs: number
+  readonly runImmediately?: boolean
+  readonly beforeStart?: (input: AuthorityPollingDaemonRuntimeRunInput) => MaybePromise<void>
+  readonly run: (input: AuthorityPollingDaemonRuntimeRunInput) => Promise<void>
+  readonly onError: (
+    error: unknown,
+    input: AuthorityPollingDaemonRuntimeRunInput,
+  ) => MaybePromise<void>
+}
+
+/** A selected polling lifetime stops its own loop without cancelling owner work. */
+export function createAuthorityPollingDaemonRuntimeHandleBinding(
+  input: AuthorityPollingDaemonRuntimeHandleBindingInput,
+): DaemonProviderHostExecutionHandleBinding {
+  const { id, group, intervalMs, runImmediately } = input
+  const beforeStart = input.beforeStart
+  const run = input.run
+  const onError = input.onError
+  if (
+    typeof id !== 'string' ||
+    id.length === 0 ||
+    typeof group !== 'string' ||
+    group.length === 0
+  ) {
+    throw new Error('daemon-authority-polling-binding-incomplete')
+  }
+  if (!Number.isSafeInteger(intervalMs) || intervalMs <= 0) {
+    throw new Error(`daemon polling runtime ${id} interval must be a positive integer`)
+  }
+  if (
+    (beforeStart !== undefined && typeof beforeStart !== 'function') ||
+    typeof run !== 'function' ||
+    typeof onError !== 'function'
+  ) {
+    throw new Error('daemon-authority-polling-callback-incomplete')
+  }
+  const lifetimes = new WeakMap<
+    DaemonProviderRuntimeHandle,
+    {
+      readonly context: AuthorityPollingDaemonRuntimeRunInput['context']
+      readonly quiesce: () => Promise<void>
+      readonly drain: () => Promise<void>
+    }
+  >()
+  const requireLifetime = (
+    handle: DaemonProviderRuntimeHandle,
+    context: AuthorityPollingDaemonRuntimeRunInput['context'],
+  ) => {
+    const lifetime = lifetimes.get(handle)
+    if (lifetime === undefined || lifetime.context !== context) {
+      throw new Error('daemon-authority-polling-handle-context-mismatch')
+    }
+    return lifetime
+  }
+
+  return Object.freeze({
+    id,
+    group,
+    async start({ scope, context }) {
+      const capturedCurrent = context?.current
+      if (typeof capturedCurrent !== 'function') {
+        throw new Error('daemon-authority-polling-current-missing')
+      }
+      if (context.generation !== scope.generationId) {
+        throw new Error('daemon-authority-polling-generation-mismatch')
+      }
+      const current = (): boolean => capturedCurrent.call(context) === true
+      if (!current()) throw new Error('daemon-authority-polling-not-current')
+      const callbackInput = Object.freeze({ scope, context, current })
+      await beforeStart?.call(input, callbackInput)
+
+      let retired = !current()
+      let lossRequested = false
+      const controller = retired ? null : new AbortController()
+      const stop = (reason: string): void => {
+        retired = true
+        controller?.abort(reason)
+      }
+      const done =
+        controller === null
+          ? Promise.resolve()
+          : (async (): Promise<void> => {
+              if (runImmediately !== true) {
+                await waitForPollingInterval(intervalMs, controller.signal)
+              }
+              while (!retired && !controller.signal.aborted && current()) {
+                try {
+                  await run.call(input, callbackInput)
+                } catch (error) {
+                  await onError.call(input, error, callbackInput)
+                }
+                if (retired || controller.signal.aborted || !current()) break
+                await waitForPollingInterval(intervalMs, controller.signal)
+              }
+            })()
+      // The owner may fail before RuntimeSession has received this handle.
+      // Keep the original rejection for drain while preventing an unhandled gap.
+      void done.catch(() => undefined)
+      const handle = Object.freeze<DaemonProviderRuntimeHandle>({
+        stop: () => stop('daemon-provider-runtime-paused'),
+        drain() {
+          if (!retired) {
+            return Promise.reject(
+              new DaemonProviderRuntimeHandleAdapterError(
+                'daemon-provider-runtime-handle-drain-before-stop',
+                `daemon provider runtime handle ${id} cannot drain before stop`,
+              ),
+            )
+          }
+          return done
+        },
+      })
+      lifetimes.set(handle, {
+        context,
+        quiesce() {
+          lossRequested = true
+          stop('authority-loss')
+          return done
+        },
+        drain() {
+          if (!lossRequested) {
+            return Promise.reject(new Error('daemon-authority-polling-drain-before-quiesce'))
+          }
+          return done
+        },
+      })
+      return handle
+    },
+    quiesceAuthorityLoss: ({ handle, context }) => requireLifetime(handle, context).quiesce(),
+    drainAuthorityLoss: ({ handle, context }) => requireLifetime(handle, context).drain(),
+  } satisfies DaemonProviderHostExecutionHandleBinding)
 }
 
 export interface ManagedWorkerRuntimeHandleFactoryInput {

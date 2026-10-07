@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1955,
+    "entries": 1956,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -509,6 +509,29 @@
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#createDaemonProviderMigrationAdmission",
       "symbol": "createDaemonProviderMigrationAdmission",
       "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#createAuthorityPollingDaemonRuntimeHandleBinding",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#createAuthorityPollingDaemonRuntimeHandleBinding",
+      "symbol": "createAuthorityPollingDaemonRuntimeHandleBinding",
+      "targetContext": "runtime-management",
       "targetLayer": "inbound"
     },
     {
@@ -46798,7 +46821,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:809ca2c728c412395ac3314832e29e8df64a98e7c2bc04462fecc26016d3716f",
+  "sourceDigest": "sha256:a7e0ffff653ce56600eb23a6ec850d953e054bed1638c76efe5b248e4b41e49c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

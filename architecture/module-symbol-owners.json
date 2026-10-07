@@ -6,7 +6,7 @@
     "moduleFiles": 1767,
     "productionFiles": 3188,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27416
+    "symbolsIncludingFileRoots": 27419
   },
   "entries": [
     {
@@ -2611,6 +2611,42 @@
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
       "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#AuthorityPollingDaemonRuntimeHandleBindingInput",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "AuthorityPollingDaemonRuntimeHandleBindingInput",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#AuthorityPollingDaemonRuntimeRunInput",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "AuthorityPollingDaemonRuntimeRunInput",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#createAuthorityPollingDaemonRuntimeHandleBinding",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "createAuthorityPollingDaemonRuntimeHandleBinding",
       "targetContext": "runtime-management",
       "targetLayer": "inbound"
     },
@@ -329732,5 +329768,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:809ca2c728c412395ac3314832e29e8df64a98e7c2bc04462fecc26016d3716f"
+  "sourceDigest": "sha256:a7e0ffff653ce56600eb23a6ec850d953e054bed1638c76efe5b248e4b41e49c"
 }
