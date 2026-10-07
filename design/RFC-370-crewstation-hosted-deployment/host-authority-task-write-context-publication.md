@@ -25,3 +25,11 @@ SQLite 沿原生成器实际生成一次；由于既有 journal idx／tag 差异
 完整 129 项 ledger 的顺序、why、预算和其他字段保持，仅给六项真实增量添加一次声明：mutation 1956→1958，transaction 267→271，imports 6798→6814，exceptions 5969→5981，public 1235→1238，owners 27419→27444。沿原五个纯 JSON 函数更新 ledger payload 摘要。随本批发布消费声明后，在普通后继退役，不再运行 census。
 
 私有投影 R1 对原 manifest 文件顺序作错误排序假设、R2 对物理行号变化后的原 ID 排序作错误假设，失败脚本与记录完整保留；R3 按同一文件集合及每条唯一原 ID 核对完整原行，成功保存投影。源码候选和唯一原生成输出不变，没有重跑 census 或用失败投影改 canonical。STATE／plan 原完整前缀和全部并行输出保留，本片配套由独立 reviewer 审核，精确上库、远端同步和 hosted CI 各自验收。
+
+## 2026-10-07 Task 持久参与者发布及六条一次声明退役
+
+SOURCE18-R2／WF1-R1／MATCHING16-R1 有效稳定有限 PASS，root 核对完整正文后精确35路径发布 `9c7c8992e12b0b3e2969a09aa4578003d98c321b`。main／origin同步0／0，index空，Task C1设计、功能CI修复及全部并行WIP字节保持。新精确SHA主CI与Windows已登记，终态另验，有限门不等于全仓绿。
+
+本普通后继只删除六条已消费allowGrowth；129个原有完整有序库存、baseline、why、预算及其它字段不变，沿原五个纯JSON函数刷新ledger payload摘要。原十三输出和唯一成功census不重跑，三文档旧完整前缀与全部并行输出保持，十八个已发布源文件不改。没有本机AW tests／typecheck／build／service／E2E。
+
+实际Task claim／heartbeat／runner、业务事务分类与named admission、三个roots／19owner／UI、完整H7／A-T7／A-G及CS M0先部署至M4继续。AW尚未部署CS，RFC保持In Progress；CI夹具的独立修复另行验收，不包含在这次普通退役提交。

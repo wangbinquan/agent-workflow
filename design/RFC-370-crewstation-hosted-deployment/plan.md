@@ -1110,3 +1110,11 @@ SOURCE18-R2 与 WF1-R1 独立有效稳定有限 PASS，root 已实际消费完�
 唯一原 scoped census 固定98bf31c77，十生产（一批四原／六新）加一测试，全部非本批读 committed blob，13原输出先保存；sourceDigest sha256:9d91199c3580bd105ba448223d07aa6583ff10cff408014972bbd7a47048aaed，classic完整0／0相等。原owner／opaque mutation／import／exception行保持，仅新增25 owner、2 mutation、4 transaction、16 import／12原classifier exception、3 offered type；两条platform transaction物理行号与两个原public consumer数组作原派生更新。129有序ledger／why／预算完整保持，六条实测一次声明随发布消费后普通退役，不重跑census。私有投影的两次顺序比较错误和正确R3投影留证，原生成仅一次成功。
 
 配套独立门、精确发布／远端同步与新exact-SHA hosted CI分别验收，无本机AW tests／typecheck／build／service／E2E，无跨会话消息。实际Task调用链／所有事务与named admission、三个roots／19 owner／UI、H7／A-G及CS M0首次部署至M4继续，AW尚未部署CS，RFC未完成。旧共享全文及并行输出保持，详见design/RFC-370-crewstation-hosted-deployment/host-authority-task-write-context-publication.md。
+
+## 2026-10-07 Task 持久参与者发布及六条一次声明退役
+
+SOURCE18-R2／WF1-R1／MATCHING16-R1 有效稳定有限 PASS，root 核对完整正文后精确35路径发布 `9c7c8992e12b0b3e2969a09aa4578003d98c321b`。main／origin同步0／0，index空，Task C1设计、功能CI修复及全部并行WIP字节保持。新精确SHA主CI与Windows已登记，终态另验，有限门不等于全仓绿。
+
+本普通后继只删除六条已消费allowGrowth；129个原有完整有序库存、baseline、why、预算及其它字段不变，沿原五个纯JSON函数刷新ledger payload摘要。原十三输出和唯一成功census不重跑，三文档旧完整前缀与全部并行输出保持，十八个已发布源文件不改。没有本机AW tests／typecheck／build／service／E2E。
+
+实际Task claim／heartbeat／runner、业务事务分类与named admission、三个roots／19owner／UI、完整H7／A-T7／A-G及CS M0先部署至M4继续。AW尚未部署CS，RFC保持In Progress；CI夹具的独立修复另行验收，不包含在这次普通退役提交。
