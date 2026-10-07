@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1947,
+    "entries": 1950,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -25908,6 +25908,52 @@
       "controls": {
         "audit": false,
         "authority": "system",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts#createHostExecutionAuthorityLifecycle",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts#createHostExecutionAuthorityLifecycle",
+      "symbol": "createHostExecutionAuthorityLifecycle",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts#CreateHostExecutionAuthorityLifecycleInput",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts#CreateHostExecutionAuthorityLifecycleInput",
+      "symbol": "CreateHostExecutionAuthorityLifecycleInput",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -26524,6 +26570,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#StagePendingRestoreOptions",
       "symbol": "StagePendingRestoreOptions",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts#createLocalHostExecutionAuthorityFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts#createLocalHostExecutionAuthorityFactory",
+      "symbol": "createLocalHostExecutionAuthorityFactory",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -46608,7 +46678,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c9cffe87aa91c7f178bdb0b6cc6e4ed63dfbcf0ad447e8859e6cbb280909d4e6",
+  "sourceDigest": "sha256:ad9811a0e14eaef3082f488bcd0049568ac1ee62cb445373f7cd022b3bc1e8b9",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

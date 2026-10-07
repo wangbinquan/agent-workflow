@@ -101103,7 +101103,7 @@
   "denominator": {
     "architectureExceptions": 5947,
     "implementationSccs": 0,
-    "observedEdges": 6766,
+    "observedEdges": 6771,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -103814,6 +103814,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionEffects"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts#$file",
+      "id": "import:06a87e57b0a977edfb33",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/hostExecutionAuthority",
+      "syntax": "static-import",
+      "targetSymbol": "HostExecutionAuthorityFactory",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts#HostExecutionAuthorityFactory"
     },
     {
       "edgeKind": "value",
@@ -164936,6 +164952,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#runtimeSessionLeases"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts#$file",
+      "id": "import:98eeb2a6c46d205a9c9f",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/daemonStartupLease",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonStartupLease",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts#DaemonStartupLease"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
@@ -166566,6 +166598,22 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#WorkspaceExcludeProfileFactory"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts#$file",
+      "id": "import:9c5301904b815d82ecdb",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/hostExecutionAuthority",
+      "syntax": "static-import",
+      "targetSymbol": "HostExecutionAuthorityReference",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts#HostExecutionAuthorityReference"
     },
     {
       "edgeKind": "value",
@@ -176553,6 +176601,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts#$file",
+      "id": "import:b48d1a0b72464c3ecbab",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/hostExecutionAuthority",
+      "syntax": "static-import",
+      "targetSymbol": "HostExecutionAuthorityDriver",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts#HostExecutionAuthorityDriver"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -184806,6 +184870,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#users"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/hostExecutionAuthority.ts#$file",
+      "id": "import:c7ef6499462c5f8debf6",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/hostExecutionAuthority",
+      "syntax": "static-import",
+      "targetSymbol": "HostExecutionAuthorityObservation",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts#HostExecutionAuthorityObservation"
     },
     {
       "edgeKind": "value",
@@ -210259,7 +210339,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c9cffe87aa91c7f178bdb0b6cc6e4ed63dfbcf0ad447e8859e6cbb280909d4e6",
+  "sourceDigest": "sha256:ad9811a0e14eaef3082f488bcd0049568ac1ee62cb445373f7cd022b3bc1e8b9",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -974,3 +974,10 @@ SOURCE62-R5 独立有限功能 PASS；三组完整目的效果、logical staging
 本普通后继只退役该提交已经消费的一个 owner 增长声明。全部129行原 baseline/顺序/why/字段与其它 provenance 保持，只按原 payload 算法重算 ledger digest；另三份完整文档仅追加此段。原13投影、27329完整 owner 行与原规则均不再生成或改动，原 native 修正保持。无本机 AW tests/typecheck/build/service，也无新 census。
 
 H7 核心 SOURCE7-R2 有效稳定有限 PASS；三根、Task 事务、19 handles/named admission 与 Task 热配置入口仍须接线，完整 A-T7/A-G 未通过。之后按已批准顺序编写各层独立 CS adapter，先 M0 实际部署，再逐项 M1-M4。当前 AW 尚未部署到 CS，RFC 未完成。
+
+
+## 2026-10-07 RFC-370 H7 执行权核心有限匹配候选
+
+SOURCE7-R2 有效稳定有限 PASS，原 R1 两项功能失败保留；中立生命周期、借用原 startup lease 的 local factory 和两套回归准备独立发布，实际三个根尚未接线。一次原生成固定 c3857ea5 加3生产/2测试，13输出 sourceDigest sha256:ad9811a0e14eaef3082f488bcd0049568ac1ee62cb445373f7cd022b3bc1e8b9，classic inbound/outbound 0→0；所有旧完整行/129 ledger why与其它opaque字段保持，三项实测 one-commit 计数匹配消费后正常退役。
+
+匹配有限门、exact-path上库/同步、新exact-SHA hosted CI另验。无本机AW tests/typecheck/build/service，三个根/Task事务/19 handles/named admission与Task热配置继续；H7/A-T7/A-G未完成，随后各层独立CS adapters、M0先部署、M1–M4逐项接管，当前AW尚未部署到CS，RFC未完成。详情见 design/RFC-370-crewstation-hosted-deployment/host-execution-authority-core-canonical-publication.md。
