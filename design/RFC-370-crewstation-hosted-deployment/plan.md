@@ -1139,7 +1139,7 @@ C1的首轮两项测试配置P2、原FAIL/root消费及修正保留，修正后�
 
 一次原 scoped census 固定3dc43c13，四原规则不变、13 raw 输出先保存；3个 production／1个测试，完整 classic 0／0相等，新增21 owner／2 execution-local／2 transaction／1 type-only import及原 classifier exception。129有序账本和 why 保持，只给五项实测增长一次许可并在普通后继退役。无本机 AW tests／typecheck／build／services／E2E；独立 matching 门、上库同步和新精确 SHA CI 另验。
 
-实际 Task claim／heartbeat／driver／业务分类／finalization 重试尚待 C2。三 roots／19 owner／UI、H7／A-T7／A-G 及各层独立 CS adapter、M0 首部署至 M4 继续；AW 尚未部署 CS。详见 [Task 捕获与具名事务发布](design/RFC-370-crewstation-hosted-deployment/host-authority-task-write-capture-publication.md)。以下旧文档及全部并行输出完整保留。
+实际 Task claim／heartbeat／driver／业务分类／finalization 重试尚待 C2。三 roots／19 owner／UI、H7／A-T7／A-G 及各层独立 CS adapter、M0 首部署至 M4 继续；AW 尚未部署 CS。详见 [Task 捕获与具名事务发布](host-authority-task-write-capture-publication.md)。以下旧文档及全部并行输出完整保留。
 
 ## 2026-10-07 Task 传递层发布与五条一次声明退役
 
