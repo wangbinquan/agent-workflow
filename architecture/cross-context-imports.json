@@ -17989,6 +17989,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2b7f1c72020fd6b6a8a4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file",
+      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toSymbol": "DATABASE_PROVIDERS",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportIntegrity.ts#$file",
       "fromPath": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportIntegrity.ts",
       "fromSymbol": "$file",
@@ -34322,6 +34339,23 @@
       "toPath": "packages/backend/src/modules/code-capability/domain/templateLayers.ts",
       "toSymbol": "canWriteFramework",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:565eb9aa84fc0a1c206a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file",
+      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toSymbol": "DatabaseProvider",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -101356,9 +101390,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5962,
+    "architectureExceptions": 5964,
     "implementationSccs": 0,
-    "observedEdges": 6791,
+    "observedEdges": 6793,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -120472,6 +120506,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#$file",
+      "id": "import:2b7f1c72020fd6b6a8a4",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/schemaContract",
+      "syntax": "static-import",
+      "targetSymbol": "DATABASE_PROVIDERS",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "run-observability",
       "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportIntegrity.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportIntegrity.ts#$file",
@@ -137909,6 +137959,22 @@
       "toContext": "code-capability",
       "toFile": "packages/backend/src/modules/code-capability/domain/templateLayers.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/code-capability/domain/templateLayers.ts#canWriteFramework"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#$file",
+      "id": "import:565eb9aa84fc0a1c206a",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/schemaContract",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseProvider",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -210914,7 +210980,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:999f5b299f78863f1ab21c416f1969ea0047deaae920f14c2628da8d7308c779",
+  "sourceDigest": "sha256:25e5c4d9a7a1285763db0bd1a223b301e66bfca51bd6c26a980b3f968043d220",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

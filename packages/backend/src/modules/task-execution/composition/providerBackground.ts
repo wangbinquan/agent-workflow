@@ -51,6 +51,8 @@ export interface TaskExecutionProviderBackgroundControl {
   start(dependencies: TaskExecutionProviderBackgroundStartDependencies): Promise<void>
   /** Reversible admission freeze; waits for loop work and runtime handles to drain. */
   pause(): Promise<void>
+  /** Freeze new claims and loop dispatch without aborting the current runtime. */
+  quiesceAuthorityLoss(): Promise<void>
   /** Re-arm the same provider-bound loops and execution module. */
   resume(): Promise<void>
   /** One-way terminal stop; drains loops before sealing the execution module. */
@@ -97,6 +99,7 @@ function createRestartableLoop(input: {
   readonly name: string
   readonly delayMs: () => number
   readonly run: () => Promise<void>
+  readonly canDispatch?: () => boolean
 }): RestartableLoop {
   let state: 'running' | 'paused' | 'stopped' = 'running'
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -115,6 +118,10 @@ function createRestartableLoop(input: {
     timer = setTimeout(() => {
       timer = null
       if (state !== 'running') return
+      if (input.canDispatch?.() === false) {
+        arm()
+        return
+      }
       const run = input
         .run()
         .catch((error) => {
@@ -161,6 +168,7 @@ function createProviderLoops(
   runtime: ProviderBackgroundRuntime,
   dependencies: TaskExecutionProviderBackgroundStartDependencies,
   configuration: TaskBackgroundConfigurationQuery,
+  canDispatch: () => boolean,
 ): readonly RestartableLoop[] {
   // A selected source supplies every loop. The scheduled-only legacy override
   // remains compatible when the caller has not selected a shared source.
@@ -171,9 +179,11 @@ function createProviderLoops(
 
   const autoRepair = createRestartableLoop({
     name: 'auto-repair',
+    canDispatch,
     delayMs: () => DAEMON_CADENCE.autoRepair,
     async run() {
       const current = await configuration.read()
+      if (!canDispatch()) return
       const enabled = current.autoRepair ?? {}
       if (!Object.values(enabled).some((value) => value === true)) return
       await runtime.lifecycleRepair.run({
@@ -188,9 +198,11 @@ function createProviderLoops(
 
   const heartbeatKill = createRestartableLoop({
     name: 'heartbeat-kill',
+    canDispatch,
     delayMs: () => DAEMON_CADENCE.autoKill,
     async run() {
       const current = await configuration.read()
+      if (!canDispatch()) return
       if (current.autoKillStalledChild !== true) return
       const occurredAt = Date.now()
       await runHeartbeatKillOnce({
@@ -223,6 +235,7 @@ function createProviderLoops(
   let lastReconcileAt = Date.now()
   const orphanReconcile = createRestartableLoop({
     name: 'orphan-reconcile',
+    canDispatch,
     delayMs: () => DAEMON_CADENCE.orphanReconcileSupervisory,
     async run() {
       const now = Date.now()
@@ -231,6 +244,7 @@ function createProviderLoops(
         lastReconcileAt,
         now,
       })
+      if (!canDispatch()) return
       if (!due) return
       lastReconcileAt = now
       await reconcileDeadRunningRuns({
@@ -243,9 +257,11 @@ function createProviderLoops(
 
   const scheduled = createRestartableLoop({
     name: 'scheduled-task',
+    canDispatch,
     delayMs: () => SCHEDULE_TICK_MS,
     async run() {
       const current = await scheduledConfig()
+      if (!canDispatch()) return
       if (current.scheduledTasksEnabled === false) return
       await runDueSchedulesOnce(dependencies.scheduled.operations, {
         buildLaunch: runtime.buildScheduleLaunch,
@@ -266,6 +282,7 @@ function createProviderLoops(
       : [
           createRestartableLoop({
             name: 'observation-usage',
+            canDispatch,
             delayMs: () => DAEMON_CADENCE.observationUsage,
             run: async () => {
               await runtime.reconcileObservationUsage!()
@@ -287,6 +304,8 @@ export function composeTaskExecutionProviderBackground(
   let stopped = false
   let startupRun: Promise<void> | null = null
   let serialized: Promise<unknown> = Promise.resolve()
+  let authorityQuiesced = false
+  let authorityQuiesceVersion = 0
 
   async function drainTickets(
     tickets: Awaited<ReturnType<TaskExecutionModule['pause']>>,
@@ -311,6 +330,7 @@ export function composeTaskExecutionProviderBackground(
 
   return Object.freeze({
     async start(dependencies: TaskExecutionProviderBackgroundStartDependencies) {
+      if (authorityQuiesced) throw new Error('task-execution-provider-authority-quiesced')
       if (started) throw new Error('task-execution-provider-background-already-started')
       if (stopped) throw new Error('task-execution-provider-background-stopped')
       started = true
@@ -320,13 +340,13 @@ export function composeTaskExecutionProviderBackground(
           ? undefined
           : createFileTaskBackgroundConfigurationQuery(dependencies.configPath))
       if (configuration === undefined) throw new Error('task-background-configuration-required')
-      loops = createProviderLoops(runtime, dependencies, configuration)
+      loops = createProviderLoops(runtime, dependencies, configuration, () => !authorityQuiesced)
       // Startup reads are part of the same drain boundary as auto-resume. Pause
       // and stop cannot overtake a pending selected configuration read.
       const currentRead = (async () => await configuration.read())()
       const run = currentRead
         .then(async (current) => {
-          if (!current.autoResumeOnBoot) return
+          if (authorityQuiesced || !current.autoResumeOnBoot) return
           await runtime.autoResume
             .run({
               breaker: {
@@ -358,10 +378,25 @@ export function composeTaskExecutionProviderBackground(
         await drainTickets(await runtime.module.pause(PROVIDER_SESSION_PAUSE_ABORT_REASON))
       })
     },
+    async quiesceAuthorityLoss() {
+      authorityQuiesced = true
+      authorityQuiesceVersion++
+      const claimDrain = runtime.module.quiesceAuthorityLoss()
+      await queue(async () => {
+        await Promise.all(loops.map((loop) => loop.pause()))
+        if (startupRun !== null) await startupRun
+        await claimDrain
+      })
+    },
     async resume() {
+      const version = authorityQuiesceVersion
       await queue(async () => {
         if (stopped) throw new Error('task-execution-provider-background-stopped')
+        if (version !== authorityQuiesceVersion) {
+          throw new Error('task-execution-provider-authority-quiesced')
+        }
         runtime.module.resume()
+        authorityQuiesced = false
         for (const loop of loops) loop.resume()
       })
     },

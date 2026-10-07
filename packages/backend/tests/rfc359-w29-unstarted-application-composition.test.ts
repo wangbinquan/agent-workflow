@@ -665,7 +665,7 @@ function oldBootExecutionRecoveryBody(
   name: string,
   body: ts.Block,
 ): ts.Block {
-  if (source !== pg || name !== 'composePostgresqlApplication') return body
+  if (source.fileName !== pg.fileName || name !== 'composePostgresqlApplication') return body
   let selections = 0
   const transformed = ts.transform(body, [
     (context) => {
@@ -718,7 +718,7 @@ function oldVerificationCommandsBody(
   name: string,
   body: ts.Block,
 ): ts.Block {
-  if (source !== pg || name !== 'composePostgresqlApplication') return body
+  if (source.fileName !== pg.fileName || name !== 'composePostgresqlApplication') return body
   let selections = 0
   const transformed = ts.transform(body, [
     (context) => {
@@ -1098,6 +1098,33 @@ function namedCalls(node: ts.Node, source: ts.SourceFile, name: string): ts.Call
 }
 
 describe('RFC-359 W29 complete unstarted application composition', () => {
+  test('RFC-370 applies both exact inverses to the same-file reparsed PostgreSQL root', () => {
+    const name = 'composePostgresqlApplication'
+    const reparsed = inverseTaskLaunchRootStatements(pg, name)
+    expect(reparsed).not.toBe(pg)
+    expect(reparsed.fileName).toBe(pg.fileName)
+    const boot = oldBootExecutionRecoveryBody(reparsed, name, functionBody(reparsed, name))
+    const recoveries = namedCalls(boot, reparsed, 'runTaskExecutionBootRecovery')
+    expect(recoveries).toHaveLength(1)
+    expect(
+      descendants(
+        recoveries[0]!,
+        (node) =>
+          ts.isPropertyAssignment(node) && node.name.getText(reparsed) === 'recoveryEffects',
+      ),
+    ).toHaveLength(0)
+    const verified = oldVerificationCommandsBody(reparsed, name, boot)
+    const developments = namedCalls(verified, reparsed, 'composeDevelopmentAutomation')
+    expect(developments).toHaveLength(1)
+    expect(
+      descendants(
+        developments[0]!,
+        (node) =>
+          ts.isPropertyAssignment(node) && node.name.getText(reparsed) === 'verificationCommands',
+      ),
+    ).toHaveLength(0)
+  })
+
   test('RFC-370 preserves original parent metadata between real recovery and verification inverses', () => {
     const name = 'composePostgresqlApplication'
     const boot = oldBootExecutionRecoveryBody(pg, name, functionBody(pg, name))

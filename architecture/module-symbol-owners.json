@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2359,
+    "backendFiles": 2360,
     "frontendFiles": 655,
     "legacyFiles": 596,
-    "moduleFiles": 1763,
-    "productionFiles": 3184,
+    "moduleFiles": 1764,
+    "productionFiles": 3185,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27390
+    "symbolsIncludingFileRoots": 27399
   },
   "entries": [
     {
@@ -128790,6 +128790,114 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "DoctorApplication",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#assertOwnerFamilies",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "assertOwnerFamilies",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#bindings",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "bindings",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#composeHostExecutionAuthorityBinding",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "composeHostExecutionAuthorityBinding",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#ComposeHostExecutionAuthorityBindingInput",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "ComposeHostExecutionAuthorityBindingInput",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#HostExecutionAuthorityBinding",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "HostExecutionAuthorityBinding",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#HostExecutionAuthoritySelection",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "HostExecutionAuthoritySelection",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#HostExecutionOwnerFamilies",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "HostExecutionOwnerFamilies",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts#requireHostExecutionAuthorityBinding",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "requireHostExecutionAuthorityBinding",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -329420,5 +329528,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:999f5b299f78863f1ab21c416f1969ea0047deaae920f14c2628da8d7308c779"
+  "sourceDigest": "sha256:25e5c4d9a7a1285763db0bd1a223b301e66bfca51bd6c26a980b3f968043d220"
 }

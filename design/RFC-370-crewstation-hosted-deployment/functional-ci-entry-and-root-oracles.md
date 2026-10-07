@@ -33,3 +33,9 @@ W29 与 MCP 原完整函数摘要、语句数、阶段/生命周期及 MCP 实�
 SOURCE16-R1 独立检视为有效稳定 FAIL，仅一项 P2：DEOS materializer 的实际调用是 `await evidenceStore().materializeBundle(...)`，读者仍精确匹配旧的 `store.materializeBundle`，因此实际计数为零。原 57 项首末全文、两项完整补充控制及原正式失败回执完整保留。根会话已实际消费全部内容和三个 wrapper，未将 FAIL 当作可发布的通过。
 
 R2 仅把该读者字面量改为真实调用地址，原次数 1、直接 await 判据、全部双 provider 运行用例和预算保持。生产 lazy receiver 和 Task/Purpose 根不改；所有旧根完整摘要与语句数仍交原精确逆变换判据。原生采集分支修复随后由并行 `25da3dd426215aeb6873c19d575f1ec413e9f5fd` 正常发布，本文此前 WIP 记录作为当时事实保留。main/origin 当时精确同步，未发送跨会话消息。R2 独立门、原唯一静态生成、配套门与新精确 SHA hosted CI 仍分别验收；完整 H7/A-G、CS adapter 及部署保持开放。
+
+## 2026-10-07 PostgreSQL 重解析后的原完整装配断言
+
+698feafd 的 Windows 平台作业实际为 719 pass、3 skip、1 fail，唯一失败是 W29 PostgreSQL daemon 的原完整打印体摘要。Task 的严格语句逆变换返回同文件名的新 SourceFile；boot recovery 和 verification 两个旧逆变换仍比较旧 SourceFile 对象身份，因而跳过原已登记的两处恢复。现在它们与其余同文件 reader 一样按完整原文件名判定，仍完整验证各自唯一实际调用和原参数后才移除对应增量。
+
+新增回归实际经过 Task 逆变换得到不同对象、相同文件名，证明两处原逆变换都执行，真实恢复与 DA 调用继续各保留一次。原全部 case、预算、176 条语句和 9130fad695ac09680662e30fdd71ed0175a058a27c3c56dc2091ca1fead78e3d 全体摘要保持。纯 AST 诊断先逐字复现该作业的 26d30af8ddb37afed40a2a5ab4054e9f45602d481ec386114b995d527338d8cc，再得到原摘要；没有运行本机 AW 测试、类型、构建、服务或新 census。两路径有限功能门、新精确 SHA CI 分别验收，不能将源码对照结果记为 hosted CI 通过；完整 H7、A-G 与 CS 部署继续开放。

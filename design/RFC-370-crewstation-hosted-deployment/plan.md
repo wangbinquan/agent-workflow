@@ -1036,3 +1036,12 @@ SOURCE16-R2 与 MATCHING16-R2 有效稳定有限 PASS 后，源码/回归和配�
 该SHA主CI37576174673、Windows37576174682已注册，首次均queued，正式终态继续验收，不据有限门宣称CI绿。本普通后继仅退役本次已消费的imports6791/exceptions5962两条one-commit声明，原129库存baseline/why/顺序/其它字段以及source projection保持，只按原五个纯JSON函数更新ledger digest。三份共享文档完整前缀保留，仅追加此段；没有新生产改动、census或AW本机执行门。
 
 完整H7三根、Task原事务、十九handles、早期恢复、named admission/UI及A-T7/A-G继续；随后各层独立CS adapters，先M0实际部署再逐项M1–M4。AW尚未部署CS，RFC保持In Progress，无跨会话消息。
+
+
+## 2026-10-07 RFC-370 H7 binding/quiesce 与 Windows 回归发布候选
+
+SOURCE7-R2 有效稳定有限 PASS，完整 SO provider/generation 配对及 Task authority-loss 停止派发面已备妥；尚无实际 bootstrap 消费者。唯一原 scoped census 在 6bbe50d 加四生产/两测试冻结文件，十三配套输出沿用原规则；原全体数据与 129 有序库存理由保持，仅四项实测增长 6791→6793、5962→5964、1219→1234、27390→27399 待消费后普通退役。经典完整边界仍 0/0，没有重跑 census。
+
+WF1-R1 有效稳定有限 PASS，四组执行权回归补入原 Windows 触发路径与平台命令，原完整 YAML 和全部旧用例/预算保持。698feafd Windows 已终态 719 pass/3 skip/1 fail；PG 完整体断言的两处旧对象身份比较由独立两路径候选修复，原语句数与旧摘要保持。源码对照、配套门、上库与精确 CI 分别验收，不把纯 AST 当 CI 通过。详情见 RFC-370 host-authority-binding-publication.md。
+
+实际提前恢复、十九 handles、Task 同事务上下文/执行 admission、其他 owner/UI、完整 H7/A-T7/A-G 与 CS M0–M4 均继续开放。AW 尚未部署 CS；完成当前原切面后先部署 M0，再逐步适配。以下旧完整 STATE/plan 前缀及并行输出保持，本批只追加登记。

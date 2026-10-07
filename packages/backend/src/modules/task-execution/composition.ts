@@ -101,6 +101,12 @@ export class TaskExecutionModule {
     await this.claimGate.awaitIdle()
   }
 
+  /** Stop new claims after authority loss without cancelling admitted runtimes. */
+  async quiesceAuthorityLoss(): Promise<void> {
+    this.claimGate.pause()
+    await this.awaitIdle()
+  }
+
   /** Reversible provider-session freeze: block claims, drain attach permits,
    * then stop the exact in-process runtimes. The module can be resumed without
    * replacing any HTTP or trigger references that capture it. */
