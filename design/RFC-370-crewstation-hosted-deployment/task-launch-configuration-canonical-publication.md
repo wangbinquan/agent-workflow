@@ -25,3 +25,11 @@ SOURCE19-R1 的两个 P2、R2 新回归误写 close 的 P2 均完整留证；R3 
 本机仅 scoped 格式/lint、纯 AST/字节/JSON 和这一次原静态生成；没有 AW tests/typecheck/build/service。有限源码 PASS 不代表正式 CI 已绿，也不覆盖新 H7 停止派发在制品、完整启动前恢复/19 handles/Task 事务上下文或 CS 部署。提交后分别记录实际 SHA 与原 hosted workflow 终态，旧 failure/cancelled 不替换。
 
 补充格式范围：首次把生成的 status.md 纳入 Prettier 检查产生 warning，原输出和失败日志保留。rfc294-review-status-projection.test.ts 要求它与原 renderer 逐字相等，当前正式 format:check 也不包含 design 目录；因此保留原 status 字节，实际 scoped 格式 PASS 单列于十二份原 JSON、新文档和新增 note，不把原输出改成 formatter 的另一套表格。该边界不更改任何 CI 规则或已有逐字断言。
+
+## 2026-10-07 RFC-370 Task 配置接线发布与四项一次声明退役
+
+Task 源码及配套完整35路径已发布53be4913a91aad4385cdf52ee4c195abc0ba0e11，main/origin同步0/0、index空；四份共享bootstrap包含完整并行RFC-371 Native接线，其余H7/RFC-371在制字节保持。SOURCE19-R3和MATCHING16-R3已独立有限PASS，根会话实际完整消费首末所有源/匹配条目和wrappers。新SHA主CI37569551999、Windows37569551998及两项专项已排队，终态另验；不据有限门声称CI绿。
+
+本普通后继只退役已随53be4913消费的四个one-commit增长声明。完整129行baseline、顺序、why及其它字段保留，仅按原payload算法刷新ledger digest。源码和13原产物不重生，三份共享文档完整旧前缀保持，仅追加本段；没有新census或本机AW执行门。
+
+旧H7核心后继79d31c96主CI37557367648已terminal failure，72作业55success/17failure；已发布Purpose类型/receiver修复覆盖其对应错误，剩余功能源码reader/公共入口等按实际日志继续处理，旧失败保留。H7 binding及Task失权quiesce有限SOURCE7-R1已PASS，但实际三根、Task事务、19handles和named admission/A-T7/A-G继续；随后独立CS adapters，先M0实际部署再M1～M4。AW尚未部署到CS，RFC未完成。

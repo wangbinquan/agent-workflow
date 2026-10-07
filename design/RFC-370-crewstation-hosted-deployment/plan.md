@@ -1011,3 +1011,11 @@ SOURCE19-R3 有效稳定有限 PASS，R1 的显式 file source 与 defaults 类�
 一次原静态生成 fixed fcb05bae 加本批 16生产/2测试，13产物 sourceDigest sha256:ce77a1bc533f324c116be9765456bfcd93e13d4ebe4ee870564e5cd4121c7bca；classic 全数组相等 50/0，原 import/exception/owner 行和129 ledger why/顺序保持，仅原派生 public 与 physical line 锚点更新。四项实测 one-commit 声明 imports6782→6789/exceptions5956→5961/public1217→1218/owners27387→27389 随匹配发布消费后普通退役。首次私有投影的 line-derived symbol 比较错误保留，不重跑 census。
 
 独立匹配门、精确上库/同步、新 exact-SHA hosted CI 分别验收。H7/其它并行 WIP 不纳入；无本机 AW tests/typecheck/build/service。三个根的执行权、Task原事务、19 handles与A-T7/A-G继续，之后各层独立CS adapters，先M0实际部署再M1～M4；AW尚未部署CS，RFC未完成。详见 design/RFC-370-crewstation-hosted-deployment/task-launch-configuration-canonical-publication.md。原共享全文和并行输出保持，仅追加此段。
+
+## 2026-10-07 RFC-370 Task 配置接线发布与四项一次声明退役
+
+Task 源码及配套完整35路径已发布53be4913a91aad4385cdf52ee4c195abc0ba0e11，main/origin同步0/0、index空；四份共享bootstrap包含完整并行RFC-371 Native接线，其余H7/RFC-371在制字节保持。SOURCE19-R3和MATCHING16-R3已独立有限PASS，根会话实际完整消费首末所有源/匹配条目和wrappers。新SHA主CI37569551999、Windows37569551998及两项专项已排队，终态另验；不据有限门声称CI绿。
+
+本普通后继只退役已随53be4913消费的四个one-commit增长声明。完整129行baseline、顺序、why及其它字段保留，仅按原payload算法刷新ledger digest。源码和13原产物不重生，三份共享文档完整旧前缀保持，仅追加本段；没有新census或本机AW执行门。
+
+旧H7核心后继79d31c96主CI37557367648已terminal failure，72作业55success/17failure；已发布Purpose类型/receiver修复覆盖其对应错误，剩余功能源码reader/公共入口等按实际日志继续处理，旧失败保留。H7 binding及Task失权quiesce有限SOURCE7-R1已PASS，但实际三根、Task事务、19handles和named admission/A-T7/A-G继续；随后独立CS adapters，先M0实际部署再M1～M4。AW尚未部署到CS，RFC未完成。
