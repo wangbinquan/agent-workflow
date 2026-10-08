@@ -41,7 +41,7 @@ for(let n=append?211:0;n<(append?214:211);n++)db.run('INSERT INTO part VALUES (?
 for(const root of (append?['root']:['root','reset']))process.stdout.write(JSON.stringify({sessionId:root})+'\\n');`
 
 describeEachProvider('RFC-371 original independent System native execution', (harness) => {
-  async function execute(mode: 'fresh' | 'missing' | 'resume') {
+  async function execute(mode: 'fresh' | 'missing' | 'resume', requireOriginalSpawnReceipt = true) {
     const folder = mkdtempSync(join(tmpdir(), 'aw-system-original-native-'))
     const path = join(folder, 'original.db'),
       script = join(folder, 'child.ts')
@@ -153,7 +153,7 @@ describeEachProvider('RFC-371 original independent System native execution', (ha
           workingDirectory: () => folder,
           environment: () => ({ ...process.env }) as Record<string, string>,
           stdin: () => undefined,
-          requireSpawnReceipt: true,
+          ...(requireOriginalSpawnReceipt ? { requireSpawnReceipt: true as const } : {}),
           observeNativeProcess: async (fact) => {
             await run.process(fact)
             await capture.recordProcess!(fact)
@@ -297,5 +297,25 @@ describeEachProvider('RFC-371 original independent System native execution', (ha
     expect(actual!.proof.state).toBe('partial')
     expect(actual!.rows.filter((row) => row.measurement.usage.output === null)).toHaveLength(2)
     expect(actual!.rows.filter((row) => row.measurement.usage.input === '1')).toHaveLength(422)
+  }, 120000)
+
+  // Smoke and MCP supplied the original process observer without the explicit
+  // flag. A real managed child must still create its original nonce/receipt.
+  test('native observation alone requires the original spawn receipt and retains every System bucket', async () => {
+    const [actual] = await execute('fresh', false)
+    expect(actual!.proof.state).toBe('complete')
+    expect(actual!.proof.roots.transitions).toBe('2')
+    expect(actual!.proof.process.spawnedAt).not.toBeNull()
+    expect(actual!.proof.process.reapedAt).not.toBeNull()
+    expect(actual!.proof.process.drainedAt).not.toBeNull()
+    expect(actual!.rows).toHaveLength(422)
+    expect(new Set(actual!.rows.map((row) => row.measurement.recordId)).size).toBe(422)
+    for (const row of actual!.rows)
+      expect(row.contribution).toEqual({
+        input: '1',
+        cacheRead: '3',
+        cacheWrite: '5',
+        output: '18',
+      })
   }, 120000)
 })

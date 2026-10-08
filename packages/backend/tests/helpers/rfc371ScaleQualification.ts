@@ -103,7 +103,11 @@ export async function qualifyScaleReport(input: {
   const perTask = scalePopulation(input.taskCount, input.records),
     expected = scaleExpected(input.records),
     observations = input.observations ?? {}
-  const cache = completeObservationReportCache(input.db, input.generation)
+  const cache = completeObservationReportCache(
+    input.db,
+    input.generation,
+    createCompleteTaskObservationFacts,
+  )
   const service = completeObservationReportService({
     store: cache,
     spool: completeObservationFileSpool(input.directory),

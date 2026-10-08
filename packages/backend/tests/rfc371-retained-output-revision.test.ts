@@ -1,3 +1,4 @@
+import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 // RFC-371 locks qualification to real native mutations, not a cached manifest or unchanged row count.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
@@ -113,7 +114,11 @@ async function seal(harness: ProviderHarness, pending: CompleteObservationStored
     .run()
 }
 async function fixture(harness: ProviderHarness) {
-  const cache = completeObservationReportCache(harness.db, generation)
+  const cache = completeObservationReportCache(
+    harness.db,
+    generation,
+    createCompleteTaskObservationFacts,
+  )
   const key = randomUUID()
   const pending = await cache.ensure(
     { actor, query, refreshKey: key },
@@ -145,7 +150,11 @@ describeEachProvider('RFC-371 native retained revision and complete warm reads',
   // CI 37429382608: a normal publication between status reads must not become HTTP 425.
   test('a real building status may finish before qualification without hiding changed retained output', async () => {
     await seedCompleteTask(harness, 1, 1)
-    const cache = completeObservationReportCache(harness.db, generation)
+    const cache = completeObservationReportCache(
+      harness.db,
+      generation,
+      createCompleteTaskObservationFacts,
+    )
     const key = randomUUID()
     const pending = await cache.ensure(
       { actor, query, refreshKey: key },
@@ -309,7 +318,11 @@ describeEachProvider('RFC-371 native retained revision and complete warm reads',
         ).length,
       ).toBe(2)
       expect(warm.some((entry) => /observation_report_receipts/i.test(entry.sql))).toBe(true)
-      const restarted = completeObservationReportCache(harness.db, generation)
+      const restarted = completeObservationReportCache(
+        harness.db,
+        generation,
+        createCompleteTaskObservationFacts,
+      )
       const beforeRestart = recording.selects().length
       await restarted.assertReadable(actor, report)
       expect(
@@ -418,7 +431,11 @@ describeEachProvider('RFC-371 native retained revision and complete warm reads',
         ).rejects.toThrow(changed)
         expect((await cache.get(report.id))!.report.state).toBe('ready')
         await expect(
-          completeObservationReportCache(harness.db, generation).assertReadable(actor, report),
+          completeObservationReportCache(
+            harness.db,
+            generation,
+            createCompleteTaskObservationFacts,
+          ).assertReadable(actor, report),
         ).rejects.toThrow(changed)
         const rebuilt = await cache.ensure(
           report.request,

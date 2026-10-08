@@ -150,7 +150,7 @@ export function completeObservationReportService(input: {
         requestKey = input.keyOf(
           JSON.stringify([
             2,
-            'scope-metrics/8',
+            'scope-metrics/9',
             input.store.generation,
             actorScope,
             parsed,

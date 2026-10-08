@@ -90,6 +90,7 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
       cache = completeObservationReportCache(
         harness.db,
         source.provider === 'sqlite' ? source.generationId : source.runtime.generationId,
+        createCompleteTaskObservationFacts,
       )
     const service = completeObservationReportService({
       store: cache,

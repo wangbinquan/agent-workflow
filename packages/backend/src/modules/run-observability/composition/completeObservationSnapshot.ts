@@ -13,12 +13,12 @@ import type {
   CompleteObservationSpool,
   CompleteObservationStoredReport,
 } from '../ports/completeObservationReport'
-import type { ObservationTaskSource } from '../ports/taskObservations'
+import type { CompleteObservationTaskSource } from '../ports/taskObservations'
 
 /** Bootstrap supplies the Task owner's original full-population query on this exact reader. */
 export async function composeCompleteObservationSnapshot(input: {
   readonly snapshot: OriginalReportSnapshot
-  readonly tasks: ObservationTaskSource
+  readonly tasks: CompleteObservationTaskSource
   readonly report: CompleteObservationStoredReport
   readonly spool: CompleteObservationSpool
   readonly signal?: AbortSignal
@@ -27,7 +27,12 @@ export async function composeCompleteObservationSnapshot(input: {
   signal?.throwIfAborted()
   if (snapshot.generationId !== report.generation)
     throw new Error('Original report database generation changed')
-  await assertCompleteReportActor(snapshot.executor, report.request.actor, report.request.taskId)
+  await assertCompleteReportActor(
+    snapshot.executor,
+    report.request.actor,
+    input.tasks,
+    report.request.taskId,
+  )
   const task =
     report.request.taskId === undefined
       ? undefined

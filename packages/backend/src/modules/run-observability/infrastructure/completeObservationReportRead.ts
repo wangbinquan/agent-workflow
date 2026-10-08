@@ -8,7 +8,10 @@ import { completeObservationReportContent } from '@agent-workflow/shared'
 import type { CompleteObservationStoredReport } from '../ports/completeObservationReport'
 import { CompleteObservationError } from '../domain/completeObservationError'
 import { decodeCompleteReport } from './completeObservationReportDocuments'
-import { assertStoredCompleteReport } from './completeObservationReportAdmission'
+import {
+  assertStoredCompleteReport,
+  type CompleteReportTaskSource,
+} from './completeObservationReportAdmission'
 import { assertCompleteReportIntegrity } from './completeObservationReportIntegrity'
 
 const changed = () =>
@@ -18,7 +21,10 @@ const changed = () =>
   )
 
 /** Physical qualification only. Actor, Task population and cost visibility still run on every read. */
-export function completeReportQualifiedReader(generation: string) {
+export function completeReportQualifiedReader(
+  generation: string,
+  taskSource: CompleteReportTaskSource,
+) {
   const qualifications = new Map<string, string>()
   return async (
     db: ProviderNeutralDatabase,
@@ -44,31 +50,37 @@ export function completeReportQualifiedReader(generation: string) {
           !isDeepStrictEqual(current.request, supplied.request)
     )
       throw changed()
-    await assertStoredCompleteReport(db, actor, current, async (snapshot, report) => {
-      const retained = await snapshot
-        .select({ revision: observationReportRetainedRevisions.revision })
-        .from(observationReportRetainedRevisions)
-        .where(eq(observationReportRetainedRevisions.reportId, report.id))
-        .get()
-      const revision = retained?.revision ?? ''
-      if (revision !== '') throw changed()
-      const identity = sha256Hex(
-        JSON.stringify([
-          row.id,
-          row.generation,
-          row.owner,
-          row.requestKey,
-          row.actorScope,
-          row.request,
-          row.state,
-          row.report,
-          row.manifest,
-          revision,
-        ]),
-      )
-      if (qualifications.get(report.id) === identity) return
-      await assertCompleteReportIntegrity(snapshot, report)
-      qualifications.set(report.id, identity)
-    })
+    await assertStoredCompleteReport(
+      db,
+      actor,
+      current,
+      taskSource(db),
+      async (snapshot, report) => {
+        const retained = await snapshot
+          .select({ revision: observationReportRetainedRevisions.revision })
+          .from(observationReportRetainedRevisions)
+          .where(eq(observationReportRetainedRevisions.reportId, report.id))
+          .get()
+        const revision = retained?.revision ?? ''
+        if (revision !== '') throw changed()
+        const identity = sha256Hex(
+          JSON.stringify([
+            row.id,
+            row.generation,
+            row.owner,
+            row.requestKey,
+            row.actorScope,
+            row.request,
+            row.state,
+            row.report,
+            row.manifest,
+            revision,
+          ]),
+        )
+        if (qualifications.get(report.id) === identity) return
+        await assertCompleteReportIntegrity(snapshot, report)
+        qualifications.set(report.id, identity)
+      },
+    )
   }
 }

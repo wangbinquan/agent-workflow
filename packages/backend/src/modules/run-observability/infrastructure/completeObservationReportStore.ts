@@ -31,6 +31,7 @@ import {
 import {
   assertCompleteReportActor,
   ownedCompleteReport,
+  type CompleteReportTaskSource,
 } from './completeObservationReportAdmission'
 import { stageCompleteReportPage, publishCompleteReport } from './completeObservationReportStage'
 import { completeReportQualifiedReader } from './completeObservationReportRead'
@@ -90,11 +91,12 @@ export async function clearCompleteReportRows(tx: DatabaseTransaction, id: strin
 export function completeObservationReportCache(
   db: ProviderNeutralDatabase,
   generation: string,
+  taskSource: CompleteReportTaskSource,
   now = Date.now,
 ): CompleteObservationReportCache {
   if (!generation) throw new Error('Original report database generation missing')
   const session = databaseSessionFor(db)
-  const read = completeReportQualifiedReader(generation)
+  const read = completeReportQualifiedReader(generation, taskSource)
   const dirty = async (tx: DatabaseTransaction, id: string) => {
     const row = await tx
       .select({ revision: observationReportRetainedRevisions.revision })
@@ -169,7 +171,7 @@ export function completeObservationReportCache(
     },
     async ensure(request, requestKey, actorScope, owner, id) {
       return session.transaction(async (tx) => {
-        await assertCompleteReportActor(tx, request.actor, request.taskId)
+        await assertCompleteReportActor(tx, request.actor, taskSource(tx), request.taskId)
         const time = now()
         await tx
           .insert(observationReports)
@@ -264,7 +266,7 @@ export function completeObservationReportCache(
     },
     stage: (id, owner, page) => stageCompleteReportPage(db, id, owner, page, now),
     publish: (id, owner, manifest) =>
-      publishCompleteReport(db, generation, id, owner, manifest, now),
+      publishCompleteReport(db, generation, id, owner, manifest, now, taskSource),
     unavailable: (id, owner, gaps) =>
       terminal(id, owner, { state: 'not-ready', reportId: id, gaps }),
     fail: (id, owner, error) =>

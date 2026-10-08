@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 62
+    "thinFacades": 63
   },
   "entries": [
     {
@@ -4334,32 +4334,30 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:010835eb694fc32a3963",
+        "import:0501d94fdd56bf478a67",
+        "import:0fd2261883806c478773",
+        "import:154f3ffdc0465ed7ac2b",
         "import:24e348f91bc98bf33e1c",
-        "import:6afe79aa42ade1981d9f",
+        "import:33feb34c17e91e225da1",
+        "import:3c87480c758b2bd7c0b7",
+        "import:51fcb372b391bf220b2f",
+        "import:5f5a6a53e4103104f67d",
         "import:73e38b90cec8dc8a7732",
+        "import:7e263a6736599507e23e",
+        "import:839932493ad3aac3bb20",
+        "import:83a7ff35d143708a5830",
+        "import:9ad7dca107ceee6cae4c",
         "import:da19feebd4b9f65a1ce4",
         "import:f5eef367e6cf5c4cb039",
         "import:fb3a89d8731f00d87bf0"
       ],
-      "exportedSymbols": [
-        "JsonObject",
-        "RuntimeUsageContext",
-        "RuntimeUsageFrame",
-        "TOKEN_BUCKETS",
-        "common",
-        "createInvocationUsageCapture",
-        "model",
-        "nativeId",
-        "normalizeUsageFrame",
-        "object",
-        "readUsage",
-        "scope"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/runtime/usage.ts",
       "id": "facade:packages/backend/src/services/runtime/usage.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/usage.ts#$file",
       "removeAfterWave": "W9-D",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -5306,7 +5304,6 @@
     {
       "boundaryEdgeIds": [
         "import:0a46926dea263cfab8d8",
-        "import:172730dbb9129a81976a",
         "import:249d06f167e02a472939",
         "import:37b233e9696dd3e72844",
         "import:57da0f6bd2cd1ce77e1c",
@@ -5319,6 +5316,7 @@
         "import:c08cf01c2854abc69d8f",
         "import:c13c8d8f055c8f38b277",
         "import:d729fc6f9a345a2f20b5",
+        "import:fa3d8fbc725eaab94383",
         "import:fb7d00ee916b1814ca91"
       ],
       "exportedSymbols": [
@@ -6483,5 +6481,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e39527f042076d188c373cbed0d324916e11b21e67e347905ef8c99b033c935a"
+  "sourceDigest": "sha256:60323e46ceae96a77c0d10b6f1efdcc5383e51df6c440dc9f3651ab0a47f313a"
 }

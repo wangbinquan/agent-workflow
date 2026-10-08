@@ -1,7 +1,7 @@
 import type { ObservationNativeProcessFact } from '@agent-workflow/shared'
 import type { AgentInvocationBinding } from './ports/agentInvocation'
 import type { SystemAgentObservationRun } from './ports/systemAgentObservation'
-import { createInvocationUsageCapture } from '@/services/runtime/usage'
+import { createInvocationUsageCapture } from '@/modules/runtime-management/public/participants'
 import type { Logger } from '@/util/log'
 
 /** Numeric capture is independent of text retention and reuses the original full native reader. */

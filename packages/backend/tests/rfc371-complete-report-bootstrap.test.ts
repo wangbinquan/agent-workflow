@@ -1,3 +1,4 @@
+import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 // RFC-371: formal bootstraps use full reports, and their real Worker closes before its provider.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -38,6 +39,7 @@ describeEachProvider('RFC-371 serving report routes and provider lifetime', (har
     const fixture = await originalWorkerFixture(harness)
     const bound = observationReportBuild(fixture.binding, fixture.appHome)
     const reports = composeCompleteObservationReports({
+      taskSource: createCompleteTaskObservationFacts,
       db: fixture.db,
       generation:
         fixture.binding.provider === 'sqlite'
@@ -156,6 +158,8 @@ test('both actual serving roots mount reports and include the worker in pause/dr
     'utf8',
   )
   expect(start).toContain('completeObservationReports: observationReports.queries')
+  expect(start).toContain('taskSource: createCompleteTaskObservationFacts,')
+  expect(postgresql).toContain('taskSource: createCompleteTaskObservationFacts,')
   expect(server).toContain('reports: deps.completeObservationReports')
   expect(postgresql).toContain("phase.kind === 'daemon' ? { reports: observationReports.queries }")
   expect(start.match(/observationReportBindings\.runtimeFactory/g)).toHaveLength(2)

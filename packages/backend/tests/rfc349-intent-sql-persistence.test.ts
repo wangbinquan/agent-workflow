@@ -7,7 +7,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { users } from '@/db/schema'
+import { runtimes, users } from '@/db/schema'
 import type {
   IntentSessionRecord,
   IntentTurnRecord,
@@ -172,6 +172,35 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
 
       await expect(persistence.findSession(SESSION.id)).resolves.toEqual(SESSION)
       await expect(persistence.listTurns(SESSION.id)).resolves.toEqual([USER_TURN])
+    })
+
+    // RFC-371: the SQL mapper used to drop the selected runtime identity, so
+    // actual Intent calls lost native capture and their accepted CNY rate book.
+    test('Intent keeps the selected registration and configuration revision without fabricating a fallback identity', async () => {
+      await harness.db.insert(runtimes).values({
+        id: 'intent-observation-runtime',
+        name: 'Intent observation runtime',
+        protocol: 'opencode',
+        enabled: false,
+        probeFence: 7,
+        model: 'actual-intent-model',
+      })
+      const persistence = createIntentPersistence(harness.db)
+      await expect(
+        persistence.resolveIntentRuntime('Intent observation runtime'),
+      ).resolves.toMatchObject({
+        name: 'Intent observation runtime',
+        protocol: 'opencode',
+        model: 'actual-intent-model',
+        observationIdentity: {
+          registrationId: 'intent-observation-runtime',
+          configurationRevision: 7,
+          acceptedName: 'Intent observation runtime',
+        },
+      })
+      const fallback = await persistence.resolveIntentRuntime('unregistered-intent-runtime')
+      expect(fallback.name).toBe('opencode')
+      expect(fallback.observationIdentity).toBeUndefined()
     })
   })
 

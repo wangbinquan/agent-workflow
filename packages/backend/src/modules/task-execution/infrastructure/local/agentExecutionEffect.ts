@@ -114,7 +114,11 @@ export function bindLocalAgentExecutionEffect(input: {
               },
             }
           : {}),
-        ...(input.requireSpawnReceipt === true ? { requireSpawnReceipt: true } : {}),
+        ...(input.requireSpawnReceipt === true ||
+        input.observeNativeProcess !== undefined ||
+        input.taskEffect?.observeNativeProcess !== undefined
+          ? { requireSpawnReceipt: true }
+          : {}),
         ...(request.capture !== undefined ? { capture: request.capture } : {}),
         ...(request.cleanup !== undefined ? { cleanup: request.cleanup } : {}),
         ...(request.log !== undefined ? { log: request.log } : {}),

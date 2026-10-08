@@ -270,7 +270,9 @@ function applyJournalOf(row: IntentApplyJournalRecord): IntentApplyJournalRecord
 }
 
 interface IntentRuntimeRow {
+  readonly id: string
   readonly name: string
+  readonly probeFence: number
   readonly protocol: IntentResolvedRuntime['protocol']
   readonly binaryPath: string | null
   readonly enabled: boolean
@@ -286,7 +288,9 @@ interface IntentRuntimeRow {
 }
 
 const runtimeColumns = sql`
+  ${runtimes.id} AS "id",
   ${runtimes.name} AS "name",
+  ${runtimes.probeFence} AS "probeFence",
   ${runtimes.protocol} AS "protocol",
   ${runtimes.binaryPath} AS "binaryPath",
   ${runtimes.enabled} AS "enabled",
@@ -323,6 +327,11 @@ function runtimeOf(row: IntentRuntimeRow): IntentResolvedRuntime {
     name: row.name,
     protocol: row.protocol,
     binaryPath: row.binaryPath,
+    observationIdentity: {
+      registrationId: row.id,
+      configurationRevision: numberOf(row.probeFence),
+      acceptedName: row.name,
+    },
     configDir: {
       env: nonEmpty(row.configDirEnv) ?? defaults.env,
       name: nonEmpty(row.configDirName) ?? defaults.name,

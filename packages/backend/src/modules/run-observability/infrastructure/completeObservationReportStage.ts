@@ -30,6 +30,7 @@ import {
   assertCompleteReportActor,
   assertCompleteReportPopulation,
   ownedCompleteReport,
+  type CompleteReportTaskSource,
 } from './completeObservationReportAdmission'
 
 const countScope = (id: string, section: string, parent: string) =>
@@ -191,6 +192,7 @@ export async function publishCompleteReport(
   owner: string,
   manifest: CompleteObservationManifest,
   now: () => number,
+  taskSource: CompleteReportTaskSource,
 ) {
   await databaseSessionFor(db).transaction(async (tx) => {
     const row = await ownedCompleteReport(tx, id, owner),
@@ -205,7 +207,8 @@ export async function publishCompleteReport(
       manifest.header.actorScope !== row.actorScope
     )
       throw new Error('Complete original report seal or authority changed')
-    await assertCompleteReportActor(tx, report.request.actor, report.request.taskId)
+    const tasks = taskSource(tx)
+    await assertCompleteReportActor(tx, report.request.actor, tasks, report.request.taskId)
     const progress = JSON.parse(row.progress) as CompleteReportProgress
     for (const key of ['pages', 'rows', 'counts', 'receipts', 'digest'] as const)
       if (progress[key] !== manifest[key])
@@ -304,6 +307,7 @@ export async function publishCompleteReport(
     await assertCompleteReportPopulation(
       tx,
       report.request.actor,
+      tasks,
       id,
       manifest.summary.inventory.tasks,
     )

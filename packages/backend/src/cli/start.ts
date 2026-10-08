@@ -1,3 +1,4 @@
+import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
@@ -3424,6 +3425,7 @@ async function composeSqliteProviderSession(
     Paths.root,
   )
   const observationReports = composeCompleteObservationReports({
+    taskSource: createCompleteTaskObservationFacts,
     db,
     generation: databaseProvider.generation.payload.generationId,
     appHome: Paths.root,

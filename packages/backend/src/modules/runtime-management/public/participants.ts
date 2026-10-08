@@ -175,3 +175,17 @@ export type {
 
 /** Diagnostic execution retains one selected target identity across effects. */
 export type { RuntimeDiagnosticTarget } from '../application/ports/runtimeManagement'
+
+/** Original usage capture participant and its pure protocol normalization, without IO. */
+export {
+  TOKEN_BUCKETS,
+  object,
+  nativeId,
+  readUsage,
+  common,
+  model,
+  scope,
+  normalizeUsageFrame,
+  createInvocationUsageCapture,
+} from '../domain/runtimeUsage'
+export type { JsonObject, RuntimeUsageContext, RuntimeUsageFrame } from '../domain/runtimeUsage'

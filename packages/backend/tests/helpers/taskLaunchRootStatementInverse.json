@@ -79,6 +79,11 @@
           "name": "intentSystemAgentBinding",
           "introducedSha256": "3cb6670fe5ae34f782d5c1a88be83f6c1fe8e87082306d7be38449081fc6e6aa",
           "previousStatement": "const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({\n    appHome: () => intentDispatchDeps.appHome,\n});"
+        },
+        {
+          "name": "observationReports",
+          "introducedSha256": "553ab56399ce12b6b16fc7e54c3e0f2dba281c8c3707ea8954dfb2e962bd3d54",
+          "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db,\n    generation: databaseProvider.generation.payload.generationId,\n    appHome: Paths.root,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});"
         }
       ]
     },
@@ -162,6 +167,11 @@
           "name": "runtimeManagement",
           "introducedSha256": "fff58d003ff2cce96ab9e7416ccfdc17e05b69ceabb556404e85ae1b337a97bb",
           "previousStatement": "const runtimeManagement = composeLocalRuntimeManagement({\n    configuration: {\n        current: () => configuration.read(),\n        withProbeReceiptFence: composeRuntimeProbeConfigFence(applicationConfiguration.notificationKey),\n    },\n    runtimeRegistry: core.runtimeRegistry,\n    runtimeTests: mcpRuntimeTests.reconciliation,\n    ...(input.runtimeDiagnosticTestDependencies === undefined\n        ? {}\n        : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),\n    appHome: () => Paths.root,\n});"
+        },
+        {
+          "name": "observationReports",
+          "introducedSha256": "db17ce9f28972118a4e950dbfd2c4b62111a77b8af55a95dcb3bb1c5269f8f42",
+          "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db: input.db,\n    generation: input.provider.runtime.generationId,\n    appHome: input.appHome,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});"
         }
       ]
     },
@@ -274,5 +284,7 @@
   ],
   "systemAgentAccountingSourceBase": "7b62be235cf3d983a7bba31d09edf070173ea6f7",
   "systemAgentAccountingScope": "RFC-371 original System observations, exact reviewed statement inverse; original Task/RFC-370 mappings and complete-body assertions preserved.",
-  "systemAgentAccountingHistoryScope": "HTTP System calls retain bootstrap-selected original full history prepare; exact appComposition and two System factory statement hashes, all original previousStatement values preserved."
+  "systemAgentAccountingHistoryScope": "HTTP System calls retain bootstrap-selected original full history prepare; exact appComposition and two System factory statement hashes, all original previousStatement values preserved.",
+  "systemCompleteReportSourceBase": "c48db6129e1f6c8baa0480ca6d811083844e62ac",
+  "systemCompleteReportScope": "RFC-371 exact original Task/System report owner query, same executor for admission, publication and reads; all prior mappings and statement population retained."
 }

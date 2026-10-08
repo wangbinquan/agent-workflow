@@ -1,11 +1,11 @@
-import { and, desc, eq, exists, gte, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, exists, gte, inArray, lt, or, sql } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
 import { taskRepos, tasks } from '@/db/schema'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type { ObservationTaskPageQuery } from '@agent-workflow/shared'
-import type { TaskObservationFactsQuery } from '../public/queries'
+import type { CompleteTaskObservationFactsQuery } from '../public/queries'
 import { createTaskObservationFacts } from './taskObservationFacts'
 import { systemAgentObservationGroups as systemGroups } from '@/db/observationSystem'
 import { createSystemObservationFacts, systemObservationVisibility } from './systemObservationFacts'
@@ -15,7 +15,7 @@ import { createCombinedObservationNativeScopes } from './observationNativeSource
 export function createCompleteTaskObservationFacts(
   db: ProviderNeutralDatabase,
   taskId?: string,
-): TaskObservationFactsQuery {
+): CompleteTaskObservationFactsQuery {
   const original = createTaskObservationFacts(db)
   const system = createSystemObservationFacts(db)
   const visible = (actor: Actor) =>
@@ -87,6 +87,26 @@ export function createCompleteTaskObservationFacts(
   }
   return {
     ...original,
+    async visibleIds(actor, sourceIds) {
+      if (
+        !sourceIds.length ||
+        (!actor.permissions.has('tasks:read:all') && !actor.permissions.has('tasks:read:own'))
+      )
+        return []
+      const taskRows = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(inArray(tasks.id, [...sourceIds]), visible(actor)))
+        .all()
+      const systemRows = await db
+        .select({ id: systemGroups.id })
+        .from(systemGroups)
+        .where(
+          and(inArray(systemGroups.id, [...sourceIds]), systemObservationVisibility(db, actor)),
+        )
+        .all()
+      return [...new Set([...taskRows, ...systemRows].map((row) => row.id))]
+    },
     nativeScopes: createCombinedObservationNativeScopes(db),
     async sourceBacklog(ids) {
       const task = await original.sourceBacklog(ids)

@@ -169,7 +169,26 @@ const SERIALIZING_OPENERS: ReadonlySet<string> = new Set([
   'serializable',
   'withTaskExecutionSerializable',
   'withPostgresqlTaskAggregateTransaction',
+  // RFC-371: the original System owner helper locks its invocation aggregate
+  // before entering the callback. Real double-provider reset serialization is
+  // covered by rfc371-system-root-serialization.test.ts; debt stays unchanged.
+  'withSystemNativeUsageOwner',
 ])
+
+test('the original locked System opener is recognized while an ordinary System callback remains a read-modify-write site', () => {
+  const source = `withSystemNativeUsageOwner(db, binding, async (tx) => {
+    const head = await tx.select().from(heads).where(eq(heads.invocationId, binding.invocationId)).get()
+    await tx.update(heads).set({ nextOrdinal: String(BigInt(head.nextOrdinal) + 1n) })
+      .where(eq(heads.invocationId, binding.invocationId))
+  })`
+  expect(readModifyWriteSites('original-system-root.ts', source)).toEqual([])
+  expect(
+    readModifyWriteSites(
+      'ordinary-system-root.ts',
+      source.replace('withSystemNativeUsageOwner', 'ordinarySystemTransaction'),
+    ).map((site) => `${site.table}<-${site.readVariable}`),
+  ).toEqual(['heads<-head'])
+})
 
 const READ_CALLEES: ReadonlySet<string> = new Set(['select', 'selectDistinct'])
 const DB_CHAIN_CALLEES: ReadonlySet<string> = new Set([

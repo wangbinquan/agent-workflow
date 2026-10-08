@@ -137,6 +137,7 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
     const cache = completeObservationReportCache(
       harness.db,
       source.provider === 'sqlite' ? source.generationId : source.runtime.generationId,
+      createCompleteTaskObservationFacts,
     )
     const folder = mkdtempSync(join(tmpdir(), 'aw-independent-task-scope-')),
       spool = completeObservationFileSpool(folder)
@@ -530,6 +531,7 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
     const cache = completeObservationReportCache(
       harness.db,
       source.provider === 'sqlite' ? source.generationId : source.runtime.generationId,
+      createCompleteTaskObservationFacts,
     )
     const folder = mkdtempSync(join(tmpdir(), 'aw-complete-facts-')),
       spool = completeObservationFileSpool(folder)

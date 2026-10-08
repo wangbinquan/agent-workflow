@@ -67,6 +67,11 @@ export interface TaskObservationFactsQuery {
   }>
 }
 
+/** Original retained Task/System IDs, qualified by their owner on the supplied reader. */
+export interface CompleteTaskObservationFactsQuery extends TaskObservationFactsQuery {
+  visibleIds(actor: Actor, sourceIds: readonly string[]): Promise<readonly string[]>
+}
+
 /** The existing Task visibility gate runs before these bound workspace queries. */
 export interface TaskWorkspaceQueries {
   listDisplay(

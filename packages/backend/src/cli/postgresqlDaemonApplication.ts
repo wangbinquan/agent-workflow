@@ -56,7 +56,10 @@ import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
 import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
 import { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'
 import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
-import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
+import {
+  createCompleteTaskObservationFacts,
+  createTaskObservationFacts,
+} from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
@@ -2316,6 +2319,7 @@ export async function composePostgresqlApplication(
     input.appHome,
   )
   const observationReports = composeCompleteObservationReports({
+    taskSource: createCompleteTaskObservationFacts,
     db: input.db,
     generation: input.provider.runtime.generationId,
     appHome: input.appHome,

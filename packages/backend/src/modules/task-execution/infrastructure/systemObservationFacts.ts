@@ -85,7 +85,9 @@ export function createSystemObservationFacts(db: ProviderNeutralDatabase) {
         .select({
           taskId: sources.taskId,
           retainedRecords: count(),
-          pendingRecords: sql`sum(case when ${sources.pending} then 1 else 0 end)`,
+          pendingRecords: sql`sum(case when ${sources.pending} then 1 else 0 end)`.mapWith(
+            (value) => engineOf(db).numericFromRawRow(value, 'pendingRecords'),
+          ),
         })
         .from(sources)
         .where(inArray(sources.taskId, [...ids]))

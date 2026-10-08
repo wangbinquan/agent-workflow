@@ -32,7 +32,11 @@ const query = { from: COMPLETE_NOW, to: COMPLETE_NOW + 60_000, timezone: 'UTC' }
 describeEachProvider('RFC-371 full report publication and retained pages', (harness) => {
   test('a different worker cannot advance a report phase through the shared cache/staging ownership read', async () => {
     await seedCompleteTask(harness, 1, 2)
-    const cache = completeObservationReportCache(harness.db, 'original-report-generation')
+    const cache = completeObservationReportCache(
+      harness.db,
+      'original-report-generation',
+      createCompleteTaskObservationFacts,
+    )
     const report = await cache.ensure(
       { actor, query, refreshKey: 'original-owner-phase' },
       'original-owner-phase',
@@ -87,7 +91,11 @@ describeEachProvider('RFC-371 full report publication and retained pages', (harn
         : { provider: 'postgresql' as const, runtime: binding.runtime }
     const generation =
       source.provider === 'sqlite' ? source.generationId : source.runtime.generationId
-    const cache = completeObservationReportCache(harness.db, generation),
+    const cache = completeObservationReportCache(
+        harness.db,
+        generation,
+        createCompleteTaskObservationFacts,
+      ),
       appHome = mkdtempSync(join(tmpdir(), 'aw-complete-report-'))
     const spool = completeObservationFileSpool(appHome),
       owner = randomUUID()
@@ -192,7 +200,11 @@ describeEachProvider('RFC-371 full report publication and retained pages', (harn
   }, 120000)
   test('a missing sealed receipt rejects the report before any totals are returned', async () => {
     await seedCompleteTask(harness, 1, 1)
-    const cache = completeObservationReportCache(harness.db, 'original-fixture')
+    const cache = completeObservationReportCache(
+      harness.db,
+      'original-fixture',
+      createCompleteTaskObservationFacts,
+    )
     const report = await cache.ensure(
       { actor, query, refreshKey: 'missing-seal' },
       'missing-seal',

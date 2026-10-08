@@ -383,6 +383,7 @@ export type {
   SystemAgentRunRequest,
 } from '../application/ports/systemAgentRunFamily'
 export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
+export type { SystemAgentObservationRun } from '../application/ports/systemAgentObservation'
 export { classifyMissingEnvelope } from '../application/systemAgentRun'
 export type {
   RuntimeSmokeInvocationFamily,

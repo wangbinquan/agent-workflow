@@ -1,3 +1,4 @@
+import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 // RFC-371: actual Worker success/cancellation and real max=1 reserved-channel cleanup are hosted gates.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
@@ -41,6 +42,7 @@ type Fixture = Awaited<ReturnType<typeof originalWorkerFixture>>
 function reports(fixture: Fixture) {
   const bound = observationReportBuild(fixture.binding, fixture.appHome)
   return composeCompleteObservationReports({
+    taskSource: createCompleteTaskObservationFacts,
     db: fixture.db,
     generation:
       fixture.binding.provider === 'sqlite'
@@ -60,6 +62,7 @@ describeEachProvider('RFC-371 original live source through a real report Worker'
     const bound = observationReportBuild(fixture.binding, fixture.appHome)
     let builds = 0
     const service = composeCompleteObservationReports({
+      taskSource: createCompleteTaskObservationFacts,
       db: fixture.db,
       generation:
         fixture.binding.provider === 'sqlite'
@@ -220,6 +223,7 @@ describeEachProvider('RFC-371 original live source through a real report Worker'
       }
       const bound = observationReportBuild(binding, fixture.appHome)
       service = composeCompleteObservationReports({
+        taskSource: createCompleteTaskObservationFacts,
         db: fixture.db,
         generation: binding.runtime.generationId,
         appHome: fixture.appHome,
@@ -344,7 +348,11 @@ describeEachProvider('RFC-371 original live source through a real report Worker'
             fixture.binding.provider === 'postgresql'
               ? fixture.binding.runtime.generationId
               : fixture.binding.generationId
-          const failed = await completeObservationReportCache(fixture.db, generation).get(first)
+          const failed = await completeObservationReportCache(
+            fixture.db,
+            generation,
+            createCompleteTaskObservationFacts,
+          ).get(first)
           expect(failed?.report.state).toBe('failed')
           expect(fixture.events).toContain('cleanup-fault:' + fault)
           expect(fixture.events.filter((event) => event === 'reader-physical-close')).toHaveLength(
@@ -378,7 +386,11 @@ describeEachProvider('RFC-371 original live source through a real report Worker'
     const fixture = await originalWorkerFixture(harness)
     const binding = fixture.binding
     if (binding.provider !== 'postgresql') throw new Error('Original PostgreSQL fixture required')
-    const cache = completeObservationReportCache(fixture.db, binding.runtime.generationId)
+    const cache = completeObservationReportCache(
+      fixture.db,
+      binding.runtime.generationId,
+      createCompleteTaskObservationFacts,
+    )
     const request = { actor, query: filters, refreshKey: 'cancel-worker' }
     const report = await cache.ensure(
       request,

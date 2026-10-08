@@ -422,6 +422,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc371-native-usage-pass.test.ts: 1',
   // RFC-371：真实原 WAL 文件快照与 TEMP 可写性；通用报告行为另由两个 provider 实际验证。
   'rfc371-report-snapshot-file.test.ts: 1',
+  // RFC-371: this one real file is the external OpenCode SQLite format;
+  // System persistence, EOF, resume and CNY are covered by both AW providers.
+  'rfc371-system-native-provider.test.ts: 1',
   'runner-subagent-live-capture.test.ts: 6',
   // RFC-371：runner 本身仍用 describeEachProvider；唯一 new Database 是原生模型证据夹具。
   'runner.test.ts: 1',

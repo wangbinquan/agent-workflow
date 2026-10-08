@@ -126,10 +126,16 @@ describeEachProvider('RFC-371 original System source federation', (harness) => {
     )
     const taskSource = await db.select().from(taskExecutionObservationSources).get(),
       systemSource = await db.select().from(systemAgentObservationSources).get()
+    expect(await createCompleteTaskObservationFacts(db).sourceBacklog([run.taskId])).toEqual([
+      { taskId: run.taskId, retainedRecords: 211, pendingRecords: 211 },
+    ])
     expect(taskSource!.id).toBe(systemSource!.id)
     expect(await observations.reconcile!(run.nodeRunId)).toBe(100)
     expect((await db.select().from(taskExecutionObservationSources).get())!.pending).toBe(true)
     await run.reconcile()
+    expect(await createCompleteTaskObservationFacts(db).sourceBacklog([run.taskId])).toEqual([
+      { taskId: run.taskId, retainedRecords: 211, pendingRecords: 0 },
+    ])
     await observations.reconcile!('z-original-run')
     expect(
       await db

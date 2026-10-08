@@ -88,6 +88,7 @@ describeEachProvider('RFC-371 known partial CNY original population', (harness) 
     const cache = completeObservationReportCache(
       harness.db,
       source.provider === 'sqlite' ? source.generationId : source.runtime.generationId,
+      createCompleteTaskObservationFacts,
     )
     const folder = mkdtempSync(join(tmpdir(), 'aw-known-partial-cny-')),
       spool = completeObservationFileSpool(folder)

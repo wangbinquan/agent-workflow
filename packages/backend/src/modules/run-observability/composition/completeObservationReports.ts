@@ -11,9 +11,11 @@ import type {
   CompleteObservationStoredReport,
 } from '../ports/completeObservationReport'
 import type { CompleteObservationReportQueries } from '../public/queries'
+import type { CompleteObservationTaskSource } from '../ports/taskObservations'
 
 export function composeCompleteObservationReports(input: {
   readonly db: ProviderNeutralDatabase
+  readonly taskSource: (db: ProviderNeutralDatabase) => CompleteObservationTaskSource
   readonly generation: string
   readonly appHome: string
   readonly heartbeatDuringRead: boolean
@@ -25,7 +27,7 @@ export function composeCompleteObservationReports(input: {
 }) {
   const spool = completeObservationFileSpool(input.appHome)
   const service = completeObservationReportService({
-    store: completeObservationReportCache(input.db, input.generation),
+    store: completeObservationReportCache(input.db, input.generation, input.taskSource),
     spool,
     scopeOf: completeObservationActorScope,
     keyOf: sha256Hex,
