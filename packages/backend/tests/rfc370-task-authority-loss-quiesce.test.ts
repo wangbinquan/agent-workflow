@@ -277,14 +277,13 @@ describeEachProvider('RFC-370 authority-loss Task quiesce', (harness) => {
       await entered.pending
       const pause = f.control.pause()
       const staleResume = f.control.resume()
-      const rejected = expect(staleResume).rejects.toThrow(
-        'task-execution-provider-authority-quiesced',
-      )
+      // The rejection matcher waits synchronously in Bun; do not block the release below.
+      void staleResume.catch(() => undefined)
       const loss = f.control.quiesceAuthorityLoss()
       release.release()
       await start
       await pause
-      await rejected
+      await expect(staleResume).rejects.toThrow('task-execution-provider-authority-quiesced')
       await loss
       expect(() => f.module.claimGate.enter()).toThrow()
       await f.control.resume()

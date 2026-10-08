@@ -1,3 +1,7 @@
+# RFC-370 CI held rejection matcher 时序修复候选
+
+精确05e主CI37705887143正式failure、Windows37705887174正式cancelled；原PG cause与W5退役对应三作业success，但六后端分片及Windows在三套RFC-370手工barrier测试处自锁。四处rejection matcher移到原barrier释放后，提前只观察原Promise拒绝；全部原断言／名称／预算、生产与canonical保持，无新census／本机AW运行。独立实现门与新exact-SHA CI另验，两项回顾P2已通过独立设计并应用，源码门／配套门与CI分别验收；runtime／Node／CS新实现仍暂停。详见[CI时序修复](design/RFC-370-crewstation-hosted-deployment/ci-held-rejection-matchers.md)。以下共享STATE和并行正文完整保留。
+
 # RFC-370 既有实现回顾及原 PG rollback cause 修复候选
 
 449 个历史生产路径的只读功能回顾已全部完成并消费真实稳定回执：H1268 有限 PASS，H345 / H7 分别保留原有效 FAIL 与已确认 H345-P2-001 引用泄漏、H7-P2-001 undefined failure 被吞。两项修复正在独立设计门，不把未完成的 H7 / A-G / CS 能力当作新增缺陷；新 runtime / Node / CS 实现继续暂停，先修复并验精确 SHA CI。

@@ -1138,3 +1138,7 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 - [ ] 继续原 H7 / A-T7 / A-G，再按 M0 必须 adapter 先部署、M1～M4 逐项接入；RFC 仍未 Done，AW 尚未部署 CS。
 
 详见[修复记录](task-host-ci-phase-oracles.md)。共享 plan / STATE 的所有旧正文及并行输出完整保留。
+
+## 2026-10-08 原 CI held rejection matcher 时序候选
+
+精确05e主CI37705887143正式failure、Windows37705887174正式cancelled；原PG cause与W5退役对应三作业success，但六后端分片及Windows在三套RFC-370手工barrier测试处自锁。四处rejection matcher移到原barrier释放后，提前只观察原Promise拒绝；全部原断言／名称／预算、生产与canonical保持，无新census／本机AW运行。独立实现门与新exact-SHA CI另验，两项回顾P2已通过独立设计并应用，源码门／配套门与CI分别验收；runtime／Node／CS新实现仍暂停。详见[CI时序修复](design/RFC-370-crewstation-hosted-deployment/ci-held-rejection-matchers.md)。以下共享STATE和并行正文完整保留。

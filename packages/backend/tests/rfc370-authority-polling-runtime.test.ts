@@ -429,9 +429,10 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
       await errorEntered.promise
       await handle.stop()
       const draining = Promise.resolve(handle.drain())
-      const expected = expect(draining).rejects.toBe(fatal)
+      // Bun evaluates rejection matchers synchronously; release the held ACK first.
+      void draining.catch(() => undefined)
       errorAck.reject(fatal)
-      await expected
+      await expect(draining).rejects.toBe(fatal)
       await expect(
         Promise.resolve(binding.quiesceAuthorityLoss({ handle, context: g.context })),
       ).rejects.toBe(fatal)

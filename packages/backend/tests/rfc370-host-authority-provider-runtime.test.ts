@@ -360,7 +360,8 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
           context: g.context,
           groups: [...new Set(groups)],
         })
-      const failed = expect(starting).rejects.toThrow('grant-lost')
+      // Observe the original promise now; its barrier must be released before matching.
+      void starting.catch(() => undefined)
       await entered.promise
       g.lose()
       const quiesced = f.session.hostExecutionRuntime!.quiesce({
@@ -368,7 +369,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
         reason: 'authority-loss',
       })
       release.resolve()
-      await failed
+      await expect(starting).rejects.toThrow('grant-lost')
       await quiesced
       await f.session.hostExecutionRuntime!.drain(g.context)
       expect(f.events.filter((event) => event.startsWith('start:'))).toEqual(['start:handle-0'])
@@ -539,7 +540,8 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
         context: g.context,
         groups: [...new Set(groups)],
       })
-      const failed = expect(starting).rejects.toThrow('grant-lost')
+      // Observe the original promise now; its barrier must be released before matching.
+      void starting.catch(() => undefined)
       await entered.promise
       g.lose()
       const loss = f.session.hostExecutionRuntime!.quiesce({
@@ -552,7 +554,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
       expect(f.events).not.toContain('provider:close')
       expect(f.events.some((event) => event.startsWith('normal-'))).toBe(false)
       releaseDrain.resolve()
-      await failed
+      await expect(starting).rejects.toThrow('grant-lost')
       await loss
       await closing
       expect(f.events.filter((event) => event.startsWith('start:'))).toEqual(['start:handle-0'])
