@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2391,
+    "backendFiles": 2394,
     "frontendFiles": 655,
     "legacyFiles": 596,
-    "moduleFiles": 1795,
-    "productionFiles": 3216,
+    "moduleFiles": 1798,
+    "productionFiles": 3219,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27615
+    "symbolsIncludingFileRoots": 27623
   },
   "entries": [
     {
@@ -141161,6 +141161,30 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations.ts#TaskRuntimeSessionLeaseExecutionOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskRuntimeSessionLeaseExecutionOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskScriptRunFamily.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskScriptRunFamily.ts#$file",
       "removeAfterWave": null,
@@ -148354,6 +148378,30 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "TaskRunRootSelection",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/taskRuntimeSessionLeaseExecutionOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskRuntimeSessionLeaseExecutionOperations.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/taskRuntimeSessionLeaseExecutionOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskRuntimeSessionLeaseExecutionOperations.ts#createTaskRuntimeSessionLeaseExecutionOperations",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "createTaskRuntimeSessionLeaseExecutionOperations",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -166858,6 +166906,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "writeTaskRuntimeLifecycleInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts#createSelectedTaskRuntimeSessionLeaseOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSelectedTaskRuntimeSessionLeaseOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts#OriginalLeaseWork",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "OriginalLeaseWork",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts#SelectedWrite",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SelectedWrite",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -332121,5 +332217,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f104f5e0a3b51e84799508cc031f55d972e814ad9805d61f561868a763418dd0"
+  "sourceDigest": "sha256:8f8dfe8bb9a7ed2fba18babadbcbd8d7b4980b91e905e7bdcec499c03d4f8576"
 }

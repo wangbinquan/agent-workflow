@@ -324,3 +324,5 @@ export function composeTaskWorkspaceQueries(input: TaskWorkspaceReadDependencies
   }> = (taskId) => bindTaskWorkspaceReadScope(input, taskId)
   return createTaskWorkspaceQueries(bind)
 }
+
+export { createTaskRuntimeSessionLeaseExecutionOperations } from './composition/taskRuntimeSessionLeaseExecutionOperations'

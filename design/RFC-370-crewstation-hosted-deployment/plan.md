@@ -1192,3 +1192,21 @@ GitHub 主流水线 `37746020731` 的作业 `113207582002` 在两个新增原测
 `5b8c7b320d89bb694a872282455e021e8b777463` 主 CI `37761392727` 的共享作业 `113258382764` 在 Typecheck 报告 `rfc371-system-complete-report-provider.test.ts:238` 的 TS7022。本批仅为原调用分页循环的 `page` 添加由现有 `service.page<CompleteObservationInvocation>` 方法推导的显式返回类型；原两个分页循环、游标重置、limit=1、完整 EOF、人口、全部 matcher、名称／Token／费用断言和 60000／120000 ms 预算保留。完整共享测试同时保留并行观测会话已提交的当前输出。
 
 仅做纯解析 AST 等价与定向格式／lint 检查、有限独立功能门和新 exact-SHA hosted CI；不运行本机 AW 产品测试、typecheck、build、服务或 census，不改变生产代码或 CI 检查规则。有限门不能代签 CI 成功。总流水线全绿前继续暂停 runtime／Node／CS 新实施，H7／A-G、M0～M4 与 AW-in-CS 部署仍未完成。详见 [调用分页类型修复](ci-invocation-page-type.md)。
+
+## 2026-10-08 总流水线全绿后恢复 W2-R
+
+确切提交 b8c132497e1845d5268cc6bddf27089374a1c687 的主 CI 37768698721 正式 success：70/70功能、Static scans 与总判定共72/72作业全部成功；同 SHA Windows37768853703 正式 success。用户要求的 GitHub 总绿门槛已满足，两项既有功能回顾修复与后继 CI 修复历史保持。由此恢复已批准 RFC-370 H7 新实现，不以旧局部绿替代本次总绿。
+
+W2-R 所有29原设计材料和六份原生控制在该主干仍一致，独立 R2 设计 PASS 已实际消费；Task-only 执行租约窄port、所选adapter/composition 与八个执行helper类型投影已应用，完整native工厂/SQL/repair/旧测试保持。新增14例/每provider、Windows对称接线保留并行 historical 内容。源门、一次原scoped生成、matching、精确发布与新 SHA CI各自验收；当前不借局部静态检查签运行成功。共享Windows发布要等其引用的并行新测试上库，不收编外任务新文件。
+
+继续Task/Node具名业务写入与恢复、三个实际根/十九handles/状态UI、完整H7/A-T7/A-G；随后各层独立CS adapters，先M0实际部署，再逐项M1～M4。AW尚未部署CS，RFC保持In Progress。详情见 [Task执行会话租约](host-authority-task-runtime-leases.md)。旧共享全文和全部并行输出保留，本机未运行AW tests/typecheck/build/services/E2E。
+
+## 2026-10-08 W2-R 源码门与一次配套生成
+
+SOURCE9-R1 独立正式有效稳定 PASS 已由 root 实际消费：9 owned、19 control、7 evidence 共35项／835583字节，FP `057bf16243206d931363ebdcfe7771afdb407a5ecce7588771dce9d9e6242133`。八项原方法的完整原 context／token／work、实际提交后关联、同一原事务、业务错误及旧 native factory／repair保持；完整旧回归不改。新增14例/每provider由 hosted CI验收，本机只做 scoped格式／lint与纯AST／字节核对。
+
+唯一原scoped census固定已总绿的 `b8c132497e1845d5268cc6bddf27089374a1c687`，覆盖本批7个TypeScript（6生产）和6756个已提交非本批源blob，排除并行源码在制内容；原四规则字节保持，13原始输出完整保留。实测owners27615→27623、mutation1969→1971、observed6853→6855、exceptions6001→6003，登记4项一次声明并由普通后继退役；129项完整有序库存、旧why及全部其余预算保持。原355条 authored debt全文保留，移除实际消失的Task→legacy窄类型边，登记实际新增的facade→Task执行port类型边；总数356，classic inbound309→310／outbound47→46。其余既有所有owner行、公共表面、guard内容保持，原8 canonical与原status输出全文保持，sourceDigest为 `sha256:8f8dfe8bb9a7ed2fba18babadbcbd8d7b4980b91e905e7bdcec499c03d4f8576`。
+
+配套仅调用原纯JSON治理函数及原pretty/ascii格式函数投影；首轮私有presentation断言失败记录保留，修订后复现原4治理对象和原格式字节。未再跑整仓census、canonical采集器或AW tests/typecheck/build/services/E2E。旧共享STATE/plan完整前缀与全部并行输出保持。MATCHING16功能门、精确23路径发布和新 SHA主CI仍需实际验收；共享Windows暂不提交，避免收编其引用的并行未追踪测试。实际roots/provider接线、child/boot恢复、其余Task/Node及19owner/三roots、H7/A-T7/A-G与CS M0～M4继续开放，AW尚未部署CS。
+
+原生成status及新追加文档只作Prettier空白与表格分隔线排版归一，原JSON输出和正文内容保留；配套门按实际最终字节绑定。

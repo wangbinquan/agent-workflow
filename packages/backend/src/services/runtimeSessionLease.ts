@@ -1,3 +1,5 @@
+import type { TaskRuntimeSessionLeaseExecutionOperations } from '@/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations'
+
 // Runtime-native conversation ownership and single-writer leases.
 //
 // Provider clients and transaction mechanisms belong to task-execution
@@ -52,7 +54,7 @@ function validateToken(token: RuntimeSessionLeaseToken): void {
 }
 
 export async function getRuntimeSessionLease(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   protocol: RuntimeSessionLeaseProtocol,
   sessionId: string,
 ): Promise<RuntimeSessionLease | undefined> {
@@ -61,7 +63,7 @@ export async function getRuntimeSessionLease(
 }
 
 export async function claimNewRuntimeSession(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   input: RuntimeSessionLeaseClaimInput,
 ): Promise<RuntimeSessionLeaseToken> {
   validateClaim(input)
@@ -69,7 +71,7 @@ export async function claimNewRuntimeSession(
 }
 
 export async function preclaimRuntimeSessionResume(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   input: RuntimeSessionLeaseClaimInput,
 ): Promise<RuntimeSessionLeaseToken> {
   validateClaim(input)
@@ -77,7 +79,7 @@ export async function preclaimRuntimeSessionResume(
 }
 
 export async function confirmRuntimeSessionResume(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   token: RuntimeSessionLeaseToken,
 ): Promise<boolean> {
   validateToken(token)
@@ -85,7 +87,7 @@ export async function confirmRuntimeSessionResume(
 }
 
 export async function rotateRuntimeSessionLease(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   token: RuntimeSessionLeaseToken,
   nextSessionId: string,
 ): Promise<RuntimeSessionLeaseToken> {
@@ -96,7 +98,7 @@ export async function rotateRuntimeSessionLease(
 }
 
 export async function markRuntimeSessionResetPending(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   token: RuntimeSessionLeaseToken,
 ): Promise<boolean> {
   validateToken(token)
@@ -104,7 +106,7 @@ export async function markRuntimeSessionResetPending(
 }
 
 export async function discardRuntimeSessionLease(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   token: RuntimeSessionLeaseToken,
 ): Promise<boolean> {
   validateToken(token)
@@ -112,7 +114,7 @@ export async function discardRuntimeSessionLease(
 }
 
 export async function releaseRuntimeSessionLease(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseExecutionOperations,
   token: RuntimeSessionLeaseToken,
 ): Promise<boolean> {
   validateToken(token)

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1969,
+    "entries": 1971,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -30674,6 +30674,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/composition/taskRuntimeSessionLeaseExecutionOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/taskRuntimeSessionLeaseExecutionOperations.ts#createTaskRuntimeSessionLeaseExecutionOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRuntimeSessionLeaseExecutionOperations.ts#createTaskRuntimeSessionLeaseExecutionOperations",
+      "symbol": "createTaskRuntimeSessionLeaseExecutionOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/composition/taskScriptRunFamily.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/composition/taskScriptRunFamily.ts#runScriptWithFamily",
@@ -35274,6 +35299,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#createTaskWorkspaceMaterializer",
       "symbol": "createTaskWorkspaceMaterializer",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts#createSelectedTaskRuntimeSessionLeaseOperations",
+      "missingControls": [
+        "audit",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeSessionLeaseOperations.ts#createSelectedTaskRuntimeSessionLeaseOperations",
+      "symbol": "createSelectedTaskRuntimeSessionLeaseOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -47121,7 +47168,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f104f5e0a3b51e84799508cc031f55d972e814ad9805d61f561868a763418dd0",
+  "sourceDigest": "sha256:8f8dfe8bb9a7ed2fba18babadbcbd8d7b4980b91e905e7bdcec499c03d4f8576",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

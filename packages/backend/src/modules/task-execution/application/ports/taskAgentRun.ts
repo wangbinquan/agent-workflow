@@ -84,7 +84,7 @@ import type { FailureCode } from '@agent-workflow/shared'
 
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 
-import { type RuntimeSessionLeaseOperations } from '@/services/runtimeSessionLease'
+import type { TaskRuntimeSessionLeaseExecutionOperations } from './taskRuntimeSessionLeaseExecutionOperations'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
@@ -351,7 +351,7 @@ export interface TaskAgentRunPolicy {
   /** Bootstrap-selected runtime registry operations. */
   runtimeRegistry: Pick<RuntimeExecutionQueries, 'resolveAgentRuntime'>
   /** Bootstrap-selected durable ownership for native runtime conversations. */
-  runtimeSessionLeases: RuntimeSessionLeaseOperations
+  runtimeSessionLeases: TaskRuntimeSessionLeaseExecutionOperations
   log?: Logger
   /** When aborted, runner SIGTERMs the child and returns status='canceled'. */
   signal?: AbortSignal
