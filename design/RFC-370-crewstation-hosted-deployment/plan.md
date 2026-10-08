@@ -1210,3 +1210,9 @@ SOURCE9-R1 独立正式有效稳定 PASS 已由 root 实际消费：9 owned、19
 配套仅调用原纯JSON治理函数及原pretty/ascii格式函数投影；首轮私有presentation断言失败记录保留，修订后复现原4治理对象和原格式字节。未再跑整仓census、canonical采集器或AW tests/typecheck/build/services/E2E。旧共享STATE/plan完整前缀与全部并行输出保持。MATCHING16功能门、精确23路径发布和新 SHA主CI仍需实际验收；共享Windows暂不提交，避免收编其引用的并行未追踪测试。实际roots/provider接线、child/boot恢复、其余Task/Node及19owner/三roots、H7/A-T7/A-G与CS M0～M4继续开放，AW尚未部署CS。
 
 原生成status及新追加文档只作Prettier空白与表格分隔线排版归一，原JSON输出和正文内容保留；配套门按实际最终字节绑定。
+
+## 2026-10-08 W2-R 精确发布与声明退役
+
+源码SOURCE9-R1和配套MATCHING16-R1独立正式有效稳定PASS均已由root实际消费，74正式配套材料及5份另列原源码复用材料均实际EOF核对；exact23发布 fbf85b2710180228f84a7e98b2becf7756ac50ae，远端0/0、空index、50项并行WIP完整不变。共享Windows暂未提交，所引用Task租约新测试已在main，完整Windows新用例接线仍待两方测试均上库。该SHA主CI37782710720与Windows37782710729已登记，正式终态尚待验收，不以功能门代签总绿。
+
+本普通后继只退役4个已消费的allowGrowth；129项有序完整库存、baseline、旧why及其余字段、canonicalProjection/sourceDigest/原provenance锚点保持，只按原五个纯JSON函数更新contentDigest。四原生成规则、全部本批7个源码/测试及其余12架构文件保持；没有新增整仓census、AW tests/typecheck/build/services/E2E。此有限后继功能门、精确提交和新SHA hosted CI各自验收；三个共享/自有文档只追加、全部并行输出保持。W2-P准备/具名结果投影设计继续修正原显式context优先级，实际根、Task/Node其余分类、19owner/三roots、H7/A-T7/A-G与CS M0～M4仍开放，AW尚未部署CS。
