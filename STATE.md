@@ -10960,3 +10960,9 @@ CI 前置已恢复总绿：0319cc77b7e2e46d737b6926725ea90bd4079b36 主流水线
 2675701af71c7905ab75dce1a41e8cefe1c34393 已将通过独立源码及配套门的 22 个文件正常推送 main；远端精确 0/0、共享 index 为空，原完整文档前缀和所有冻结材料保持。新测试源码已在 main，每 provider 21 个用例仍待新 SHA hosted CI 验收。
 
 本普通后继只退役 4 个已随源码消费的 allowGrowth，保留完整 129 项有序库存、实测 baseline、全部 why、canonicalProjection/sourceDigest 和原 provenance 锚点，仅按原 5 个纯 JSON 函数重算 contentDigest；另在 Windows 的 push/PR 两处路径过滤与原平台测试命令各加入一次已上库的新测试。移除这 3 个新引用可整字节还原原完整 workflow，所有并行接线及断言保留。原 6 个 TS 与其余 12 份架构配套保持，无第二次 census 或本机 AW tests/typecheck/build/services/E2E。有限后继独立门、精确发布及新 SHA 主/Windows 总流水线各自验收；H7/A-T7/A-G 和 CS M0～M4 仍开放，AW 尚未部署 CS。
+
+## 2026-10-09 W2-P hosted 类型修复
+
+Windows 37830372844 在 2675701af71c7905ab75dce1a41e8cefe1c34393 的 Typecheck 确认两处 TS2769：matcher 的其他 Task 原始快照和原 selection session 变量可空。仅在原分支中增加显式 undefined 拒绝，保留原快照/对象身份 matcher、14 个定义、21 个用例/provider、全部 107 个 expect 与完整原业务体；5 个生产 TS 及原 13 架构/status 输出保持，没有再次 census 或本机 AW 执行。原失败保留，新 SHA 主/Windows 总绿另验。
+
+d5cc90f476ade1f7bd971918f2ff72da54b834d6 已精确发布四项已消费增长退役和 Windows 两路径过滤/一原命令登记；独立有限门的 41 项完整绑定与分析已实际消费，远端精确同步且共享 index 为空。此次类型修复仍需自己的有限源码门、精确发布与 hosted 运行证据；其余 Task/Node/真实根、H7/A-T7/A-G 和 CS M0～M4 开放，AW 尚未部署 CS。

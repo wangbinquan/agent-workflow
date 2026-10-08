@@ -314,6 +314,7 @@ describeEachProvider('RFC-370 selected native Task execution projections', (harn
               })
         f.h.lose()
         if (other) {
+          if (otherBefore === undefined) throw new Error('missing-other-task-before-state')
           await runWithTaskExecutionContext(other.context, async () => {
             await invoke()
             expect(currentTaskExecutionContext()).toBe(other.context)
@@ -672,6 +673,7 @@ describeEachProvider('RFC-370 selected native Task execution projections', (harn
     const expected = Object.freeze({ selected: true })
     const pending = runWithTaskExecutionContext(f.context, () =>
       selected.withSelection(f.runId, async (session) => {
+        if (originalSession === undefined) throw new Error('missing-original-selection-session')
         expect(session).toBe(originalSession)
         await session.freeze({
           nodeRunId: f.runId,
