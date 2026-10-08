@@ -26,28 +26,45 @@ import {
 
 const spawned: Bun.Subprocess[] = []
 
-function spawnLongLived(): Bun.Subprocess {
+async function spawnLongLived(): Promise<Bun.Subprocess> {
+  // CI 37843148641: all five real-child cases exhausted their original 5s
+  // budget. A fixed 120ms delay is not a child-start receipt; wait for the
+  // actual child's IPC acknowledgement and reap it before the next case.
+  let acceptReady!: () => void
+  let rejectReady!: (error: Error) => void
+  const ready = new Promise<void>((resolve, reject) => {
+    acceptReady = resolve
+    rejectReady = reject
+  })
   // Absolute, known binary path (the test runtime) so `ps command=` contains it.
   const child = Bun.spawn({
-    cmd: [process.execPath, '-e', 'setTimeout(() => {}, 60000)'],
+    cmd: [process.execPath, '-e', "setTimeout(() => {}, 60000); process.send('rfc108-ready')"],
     stdout: 'ignore',
     stderr: 'ignore',
     stdin: 'ignore',
     detached: true,
+    ipc(message) {
+      if (message === 'rfc108-ready') acceptReady()
+    },
+    onExit(_process, exitCode, signalCode, error) {
+      rejectReady(error ?? new Error(`rfc108 child exited before ready: ${exitCode}/${signalCode}`))
+    },
   })
   spawned.push(child)
+  await ready
   return child
 }
 
-afterEach(() => {
-  for (const c of spawned) {
+afterEach(async () => {
+  const children = spawned.splice(0)
+  for (const c of children) {
     try {
       c.kill(9)
     } catch {
       /* already dead */
     }
   }
-  spawned.length = 0
+  await Promise.all(children.map((child) => child.exited))
 })
 
 describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
@@ -74,16 +91,14 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
   })
 
   test('pidCommandContainsBinary matches the spawned binary path, not a foreign one', async () => {
-    const child = spawnLongLived()
-    await Bun.sleep(120)
+    const child = await spawnLongLived()
     const pid = child.pid as number
     expect(pidCommandContainsBinary(pid, process.execPath)).toBe(true)
     expect(pidCommandContainsBinary(pid, '/no/such/opencode-binary')).toBe(false)
   })
 
   test('alive + within window + matching binary → killed', async () => {
-    const child = spawnLongLived()
-    await Bun.sleep(120)
+    const child = await spawnLongLived()
     const pid = child.pid as number
     const outcome = await killStaleRunProcessTree({
       pid,
@@ -95,8 +110,7 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
   })
 
   test('alive + matching binary but OUTSIDE the 48h window → window-expired (Codex T9 P1: identity is NOT unique, the time guard always applies)', async () => {
-    const child = spawnLongLived()
-    await Bun.sleep(120)
+    const child = await spawnLongLived()
     const pid = child.pid as number
     const outcome = await killStaleRunProcessTree({
       pid,
@@ -108,8 +122,7 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
   })
 
   test('alive but binary MISMATCH → command-mismatch (recycled pid, left alone)', async () => {
-    const child = spawnLongLived()
-    await Bun.sleep(120)
+    const child = await spawnLongLived()
     const pid = child.pid as number
     const outcome = await killStaleRunProcessTree({
       pid,
@@ -121,8 +134,7 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
   })
 
   test('legacy (no spawnBinaryPath): the old 48h window gate still applies', async () => {
-    const child = spawnLongLived()
-    await Bun.sleep(120)
+    const child = await spawnLongLived()
     const pid = child.pid as number
     const outcome = await killStaleRunProcessTree({
       pid,
