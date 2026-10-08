@@ -114,6 +114,7 @@ export function composeSystemAgentObservations(input: {
         async root(sessionId, previous) {
           if (!durableOwner) return
           await recordSystemNativeUsageRoot(db, binding, {
+            protocol: request.protocol,
             sessionId,
             ...(previous ? { previous } : {}),
             ...(request.resumeSessionId ? { resumeSessionId: request.resumeSessionId } : {}),

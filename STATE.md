@@ -1,3 +1,7 @@
+## 2026-10-08 RFC-371 System native resume hosted CI follow-up
+
+Windows 37730364448: 957 pass / 2 fail retained. Fresh full422 and missing-output capture passed; resume reconciliation used Task storage for original System baseline. Select original members/parents/scope by source namespace and persist the selected request protocol without a new driver branch. Keep all original provider assertions/budgets and append 211 examined/resolved baseline proof. Original bun dev restoration uses its existing development type-package overlay; immutable development@10 and 13 dependent definitions are preserved. Hosted CI, real System entry acceptance, remaining task kinds and CS deployment continue; both RFCs stay In Progress. Full old STATE and concurrent output are preserved. See [native accounting](design/RFC-371-run-observability/system-agent-native-accounting.md).
+
 # RFC-370 CI：原启动预算接线断言跟进
 
 完整根 fixture／Windows 输入登记五路径已发布 `6c2daf58e956519d3a891ee07eaf95a4ce612ebd`，main／origin 0／0、共享索引空，所有 16 份并行 WIP 保留。SOURCE5-R3 的有限 PASS 已实际消费，原 R2 PASS 和后续单一并行 control 变化分别保留，不代签整仓 CI。

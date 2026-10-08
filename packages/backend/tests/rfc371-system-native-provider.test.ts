@@ -13,6 +13,7 @@ import {
   systemAgentObservationOwners,
   systemAgentObservationSources,
 } from '@/db/schema'
+import { systemAgentNativeUsage } from '@/db/observationSystem'
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import { createNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/nativeUsageInvocation'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
@@ -193,6 +194,12 @@ describeEachProvider('RFC-371 original independent System native execution', (ha
           after = page.nextCursor
         }
         const receipt = (await ledger.captures([run.invocationId]))[0]!
+        const originalRoot = await db
+          .select()
+          .from(systemAgentNativeUsage.nativeUsageRootHeads)
+          .where(eq(systemAgentNativeUsage.nativeUsageRootHeads.invocationId, run.invocationId))
+          .get()
+        expect(originalRoot?.protocol).toBe('opencode')
         runs.push({
           run,
           rows,
@@ -276,6 +283,11 @@ describeEachProvider('RFC-371 original independent System native execution', (ha
     expect(actual[0]!.rows).toHaveLength(422)
     expect(actual[1]!.rows).toHaveLength(3)
     expect(actual[1]!.proof.state).toBe('complete')
+    expect(actual[1]!.proof.reconciliation).toMatchObject({
+      examined: '211',
+      resolved: '211',
+      unresolved: '0',
+    })
     expect(await harness.db.select().from(systemAgentObservationOwners)).toHaveLength(2)
   }, 120000)
 

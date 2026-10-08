@@ -47123,7 +47123,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b1b3c7b9a2f93e5aba751793828c7e5ce4591c6a6626cfcba8f08f0178cc87b1",
+  "sourceDigest": "sha256:bf6b101da2491a0adfc91d4bc9d7a283b73d6bc750108b606132d1bfc4c9fe54",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

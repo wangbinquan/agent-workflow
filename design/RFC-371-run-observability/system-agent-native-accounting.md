@@ -51,3 +51,11 @@ System 与 Task 共用原始完成函数，按 final read、已提交数字投�
 原提交仅加入 SQLite 0243，未加入 PostgreSQL 的 append-only 历史。实际后端启动及 exact-SHA 维护 CI `37730364510` 均被 schema history head 检查拒绝，原失败保留。随后使用原 `db:rfc349-postgresql-schema --append 0019_rfc371_system_agent_native_usage` 生成两份不可变产物；39 份旧 PostgreSQL 历史与原提交逐字一致，只新增 16 张 System 表。原错误不是模型或任务成功，也不能把静态生成成功记作 CI 通过。
 
 后继同时退役本次已消费的四条实际增长声明；129 个有序账本、所有 why、实际统计分母、原生页与完整人口规则保留，仅按原 provenance 函数更新内容摘要。没有重复源码 census，没有本机 AW tests/typecheck/build/E2E。原库已作只读备份，原后端恢复和真实任务验证继续。
+
+## Windows 原生续接与原开发启动接续
+
+Windows exact-SHA run `37730364448` 的原 957 pass / 2 fail 保留：全量 422 step 与缺输出字段两项通过，System 原生 resume 在 baseline 对账处读取了 Task 证据表；另一个原驱动中立守卫识别出 System 根持久化中的 protocol 常量分支。续接修复让 before/final members、parents 和历史 meter 的 scope 均选择各自的原 Task/System 存储；历史 meter 根据其真实 sourceId 选择，不能根据当前调用猜归属。完整页、原历史唯一记录和 EOF 校验保持。根持久化改为保存并比较原 factory 已选定的 `request.protocol`，不新增驱动分支、守卫豁免或测试白名单。
+
+原双 provider 回归保留全部 422/3 条、深度 42、四桶、价格版本及 120 秒预算；追加原协议与 resume baseline 211 examined / 211 resolved / 0 unresolved 断言。没有本机 AW tests/typecheck/build/E2E，新 hosted CI 与真实入口验收继续。
+
+原库 SQLite 迁移已应用，但此前直接 `bun run --watch src/main.ts start` 的启动复现未带仓库 `bun dev` 固有的 `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS=35000` 与 `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY=1`，因此被既存 development@10 摘要差异拒绝。只读核对确认 13 个员工定义依赖该登记；不删除、不追改其原行。恢复采用仓库原开发命令及原草稿层，保持版本登记的不可变约束，不能以本机开发启动通过宣称发布二进制的历史数字员工兼容性已验收。

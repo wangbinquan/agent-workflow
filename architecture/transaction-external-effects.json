@@ -2966,8 +2966,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts#transaction:126",
-      "line": 126,
+      "id": "tx:packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts#transaction:127",
+      "line": 127,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts#composeSystemAgentObservations",
       "status": "clear",
       "symbol": "composeSystemAgentObservations",
@@ -3392,7 +3392,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b1b3c7b9a2f93e5aba751793828c7e5ce4591c6a6626cfcba8f08f0178cc87b1",
+  "sourceDigest": "sha256:bf6b101da2491a0adfc91d4bc9d7a283b73d6bc750108b606132d1bfc4c9fe54",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

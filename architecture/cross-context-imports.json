@@ -59027,23 +59027,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:96e1e5a287df691206cf",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageSessionParents",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "nativeUsageSessionParents",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/operations.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/public/operations.ts",
       "fromSymbol": "$file",
@@ -83250,23 +83233,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d3b1d156ccc09f8500cf",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageStepMembers",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "nativeUsageStepMembers",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/scriptDepsEnv.ts#$file",
@@ -101815,9 +101781,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5989,
+    "architectureExceptions": 5987,
     "implementationSccs": 0,
-    "observedEdges": 6839,
+    "observedEdges": 6838,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -165347,22 +165313,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#$file",
-      "id": "import:96e1e5a287df691206cf",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "nativeUsageSessionParents",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageSessionParents"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/public/operations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/operations.ts#$file",
@@ -175600,6 +175550,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/events/committed/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventRef"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/systemNativeUsageRoot.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/systemNativeUsageRoot.ts#$file",
+      "id": "import:aee97968c5c8b046273d",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "RuntimeKind",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeKind"
     },
     {
       "edgeKind": "value",
@@ -191520,22 +191486,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#transitionNodeRunStatusTx"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#$file",
-      "id": "import:d3b1d156ccc09f8500cf",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "nativeUsageStepMembers",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageStepMembers"
     },
     {
       "edgeKind": "type",
@@ -212141,7 +212091,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b1b3c7b9a2f93e5aba751793828c7e5ce4591c6a6626cfcba8f08f0178cc87b1",
+  "sourceDigest": "sha256:bf6b101da2491a0adfc91d4bc9d7a283b73d6bc750108b606132d1bfc4c9fe54",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

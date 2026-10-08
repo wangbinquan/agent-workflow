@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 1315,
+    "consumers": 1316,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1704,
@@ -155922,6 +155922,7 @@
         "import:6e620faab363cdcb5605",
         "import:a2b50384b7bb21ab2616",
         "import:a3ea8a05247a8c94cfc7",
+        "import:aee97968c5c8b046273d",
         "import:c3c56e064dcfe791c46e",
         "import:cf899df9874f0468e8e1",
         "import:f09724530003a5bb99a0"
@@ -155983,6 +155984,12 @@
           "edgeId": "import:a3ea8a05247a8c94cfc7",
           "file": "packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:aee97968c5c8b046273d",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/systemNativeUsageRoot.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/systemNativeUsageRoot.ts#$file"
         },
         {
           "context": "task-execution",
@@ -225396,7 +225403,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b1b3c7b9a2f93e5aba751793828c7e5ce4591c6a6626cfcba8f08f0178cc87b1",
+  "sourceDigest": "sha256:bf6b101da2491a0adfc91d4bc9d7a283b73d6bc750108b606132d1bfc4c9fe54",
   "targetContexts": [
     "collaboration",
     "development-automation",

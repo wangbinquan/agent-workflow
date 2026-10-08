@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { sha256Hex } from '@/util/hash'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type { SystemNativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { nativeRootOrdinalKey } from './nativeUsageLeaseRoot'
@@ -11,6 +12,7 @@ export async function recordSystemNativeUsageRoot(
   db: ProviderNeutralDatabase,
   binding: SystemNativeUsageOwnerBinding,
   input: {
+    readonly protocol: RuntimeKind
     readonly sessionId: string
     readonly previous?: string
     readonly resumeSessionId?: string
@@ -36,7 +38,7 @@ export async function recordSystemNativeUsageRoot(
       (head.taskId !== binding.taskId ||
         head.nodeRunId !== binding.nodeRunId ||
         head.claimFence !== facts.fence ||
-        head.protocol !== 'opencode')
+        head.protocol !== input.protocol)
     )
       throw new Error('Original System native root owner changed')
     if (
@@ -51,7 +53,7 @@ export async function recordSystemNativeUsageRoot(
       taskId: binding.taskId,
       nodeRunId: binding.nodeRunId,
       claimFence: facts.fence,
-      protocol: 'opencode',
+      protocol: input.protocol,
       leaseNonceDigest: sha256Hex(input.ownerNonce),
       ordinal,
       rootSessionId: input.sessionId,
@@ -80,7 +82,7 @@ export async function recordSystemNativeUsageRoot(
         taskId: binding.taskId,
         nodeRunId: binding.nodeRunId,
         claimFence: facts.fence,
-        protocol: 'opencode',
+        protocol: input.protocol,
         nextOrdinal: '1',
         firstRootSessionId: input.sessionId,
         lastRootSessionId: input.sessionId,

@@ -8,8 +8,6 @@ import {
   type ObservationNativeCompletion,
 } from '@agent-workflow/shared'
 import {
-  nativeUsageStepMembers,
-  nativeUsageSessionParents,
   observationUsageCurrent,
   observationUsageNativeRecords,
   observationUsageCaptures,
@@ -19,6 +17,7 @@ import { sha256Hex } from '@/util/hash'
 import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import { verifyNativeUsageScope } from './nativeUsageScopeReference'
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 
 type Meter = {
   sourceId: string
@@ -32,7 +31,13 @@ async function scopePath(tx: TaskExecutionTransaction, meter: Meter) {
   if (!scope) return null
   if ('ancestry' in scope) {
     if (meter.measurement.nodeRunId === null) return null
-    await verifyNativeUsageScope(tx, { invocationId: meter.measurement.invocationId }, scope)
+    const sourceKind = meter.sourceId.startsWith('system-agent:') ? 'system' : 'task'
+    const { nativeUsageSessionParents } = nativeUsageEvidenceStorage(sourceKind)
+    await verifyNativeUsageScope(
+      tx,
+      { invocationId: meter.measurement.invocationId, sourceKind },
+      scope,
+    )
     const parent = (
       await tx
         .select()
@@ -64,6 +69,9 @@ export async function verifyNativeUsageReconciliation(
   binding: NativeUsageReadBinding,
   proof: ObservationNativeCompletion,
 ): Promise<ObservationNativeCompletion['reconciliation']> {
+  const { nativeUsageStepMembers, nativeUsageSessionParents } = nativeUsageEvidenceStorage(
+    binding.sourceKind,
+  )
   let digest = sha256Hex(JSON.stringify(['native-reconciliation-v2', binding.invocationId]))
   if (proof.baseline.kind === 'fresh')
     return { examined: '0', resolved: '0', unresolved: '0', digest }
