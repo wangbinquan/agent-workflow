@@ -1166,3 +1166,9 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 只修 fixture 单项当前语句摘要并记已提交来源；原 previousStatement、四 root 人口和所有原 MCP 完整 body／argument 断言保持。纯 AST 证明四完整 SourceFile 的 before／after inverse 相同，未知 binding 仍拒绝。Windows push／PR 两过滤器各补原 TS／JSON 输入，全部原 workflow 命令／预算逐字保持。零生产、零 metadata、新 census／本机 AW tests／typecheck／build／services／E2E。
 
 有限功能门、精确发布和新主／Windows hosted CI另验；所有旧共享正文与并行输出保留，新 runtime／Node／CS 实施继续暂停，H7／A-G／M0～M4和RFC Done未勾选，AW尚未部署CS。详见[完整根 CI 跟进](ci-live-continuation-root-inverse.md)。
+
+## 2026-10-08 原 RFC-108 启动预算 oracle 的已提交接线跟进
+
+完整根校验五路径已实际发布 `6c2daf58e956519d3a891ee07eaf95a4ce612ebd`，SOURCE5-R3 有限 PASS 已消费，远端 0／0、共享索引空，16 份并行 WIP 保留。该提交主 CI `37725311240`／Windows `37725311251` 已启动，终态另验，未记整仓绿。
+
+原 e609 主 CI `37720290274` 的 Ubuntu 2／32 作业 `113126139077` 只有 RFC-108 源码接线断言失败，仍要求 `selectedQueries`；已提交 `gateContinuationDeps` 实际传 `continuationQueries`。只改这一处 expected 字符串及对应注释，原同步 floor fallback、全部 7 case／18 expect receiver、matcher／名称／预算保持；`120_000`、30 min 默认与不自动传 per-task 预算的原断言保留。纯 AST 全量逆向及原源码 handoff 核对完成，未运行 AW 测试／typecheck／build／服务／E2E，零生产／metadata／新 census。四自有路径的有限独立功能门、精确发布及新 exact-SHA CI 分别验收；原失败不倒写。所有此前 plan／STATE 与并行正文保持，新 runtime／Node／CS 实现继续暂停，H7／A-G、M0～M4／RFC Done 保持开放。

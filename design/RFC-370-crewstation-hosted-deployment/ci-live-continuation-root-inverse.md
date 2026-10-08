@@ -19,3 +19,15 @@ Windows push／PR 两个路径过滤器各登记该 reader 的 TS 和 JSON 输�
 ## 验收边界
 
 共享 STATE／plan 的所有旧正文与并行内容完整保留，只增加这次实际事实。本机只做自有格式与纯 AST／字节核对，没有 AW tests、typecheck、build、services、E2E。有限独立功能门、精确发布及新 exact-SHA 主／Windows CI 分别验收。回顾修复不重审或冒称已取得新整仓 CI；新的 runtime／Node／CS 实施继续暂停，H7／A-G、M0～M4 与 RFC Done 保持开放，AW 尚未部署 CS。
+
+## 原 RFC-108 启动预算接线断言跟进
+
+上述五路径已实际发布 `6c2daf58e956519d3a891ee07eaf95a4ce612ebd`，正式 SOURCE5-R3 回执与完整当前候选绑定已消费，main／origin 0／0、索引空，16 份并行 WIP 保留。主 CI `37725311240`、Windows `37725311251` 已启动，终态另验。R2 在正式 closing 时有效稳定 PASS；之后仅并行测试 control 变化，R3 只补充该差额，未重签其完整实现或重跑四 root 分析。
+
+原 e609 主 CI `37720290274` 的 Ubuntu 2／32 作业 `113126139077` 正式 failure。该 shard 中 RFC-108 的六项预算／接线 case 通过，只有 continuous human-gate continuation case 仍期望旧文本 `launchConfiguration: taskLaunchConfiguration.selectedQueries`，实际依赖对象已传 `taskLaunchConfiguration.continuationQueries`。这与上面的已提交接线来自同一提交；修测试只对齐这一个精确 expected 字符串及对应注释。
+
+`cli/start.ts:3108` 的同一依赖对象仍保留原 `selectedQueries === undefined ? resolveLaunchRuntimeConfig(Paths.config) : {}` floor fallback。`modules/task-execution/composition/launchConfiguration.ts:50` 的 continuation reader 是原 `input.queries`；`modules/task-execution/application/launchConfiguration.ts:91` 仍传正数 `defaultPerNodeTimeoutMs`，原 `services/task.ts` 的 currentRuntime 从 input 或 deps 的原 reader 解析后交给同一 coordinator，continuation driver 仍沿原 handoff 进入。此片不改这些生产文件或重新签并行生产实现。
+
+纯 AST 逆变换只恢复该 expected literal 后，完整原测试打印源码逐字相同；原注释及 literal 的文本逆变换也恢复整个原文件。7 个 case、18 个 expect receiver、所有名称／matcher／预算保持，本地 floor regex 仍匹配同一 actual dependency object。`120_000` 显式 floor、30 min 默认及 per-task 预算不自动接线的原断言完整保留。这些是静态源码／字节证明，不是本机 AW 测试结果。
+
+本片只提交原测试、本文及共享 STATE／plan 的事实追加，所有旧正文与并行内容保留。生产／架构 metadata 零变化，无新 census。本机仅做精确格式／lint 和纯 AST，有限独立功能门、精确发布、新 hosted 主 CI／Windows 分开验收；新 runtime／Node／CS 实现继续暂停，AW 尚未部署 CS，RFC 未完成。

@@ -1,3 +1,9 @@
+# RFC-370 CI：原启动预算接线断言跟进
+
+完整根 fixture／Windows 输入登记五路径已发布 `6c2daf58e956519d3a891ee07eaf95a4ce612ebd`，main／origin 0／0、共享索引空，所有 16 份并行 WIP 保留。SOURCE5-R3 的有限 PASS 已实际消费，原 R2 PASS 和后续单一并行 control 变化分别保留，不代签整仓 CI。
+
+原后继 e609 主 CI 的 Ubuntu 2／32 作业 `113126139077` 只有 RFC-108 旧接线文本断言失败。本片只将所断言的 reader 名称与已提交 `continuationQueries` 对齐，并更正一条注释；原本地 floor fallback、7 case／18 expect receiver、全部 matcher 与预算保持。零生产／metadata／新 census／本机 AW 产品运行。有限独立功能门、精确发布及新 hosted CI 另验；runtime／Node／CS 新实现继续暂停，RFC 与 AW-in-CS 部署仍未完成。详见[CI 跟进](design/RFC-370-crewstation-hosted-deployment/ci-live-continuation-root-inverse.md)。以下全部共享旧正文与并行输出完整保留。
+
 # RFC-370 完整根 reader 的并行后继 CI 修正
 
 80f59b75 的 Windows 类型／测试步骤通过，但在构建被 e6098f5b 后继取消，不能记全仓绿。后继 Windows37720290354 正式 failure，941 pass／3 skip／1 fail，唯一失败为原 MCP 完整根 reader 仍校验旧 gateContinuationDeps 摘要。此片只更新该 fixture 一项当前摘要及已提交来源，四完整 SourceFile 逆向和原 MCP 全量判据保持；Windows 两过滤器登记 TS／JSON 原 reader 输入，全部命令／预算保持。零生产／metadata／新 census，有限功能门、精确发布和新 hosted CI 另验。旧 State 全文及并行输出保留，新 runtime／Node／CS 实施继续暂停，RFC与部署仍未完成。详见[完整根 CI 跟进](design/RFC-370-crewstation-hosted-deployment/ci-live-continuation-root-inverse.md)。

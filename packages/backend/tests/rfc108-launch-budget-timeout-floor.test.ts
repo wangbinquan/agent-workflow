@@ -70,7 +70,7 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
     // submit collaboration commands and do not construct StartTaskDeps.
     const start = src('cli/start.ts')
     expect(start).toContain('const gateContinuationDeps = {')
-    // RFC-370 keeps the local floor and passes the selected async reader to
+    // RFC-370 keeps the local floor and passes the original live reader to
     // the same continuation driver. Check this exact dependency object so a
     // resolver elsewhere in the daemon cannot conceal a missing handoff here.
     const gateStart = start.indexOf('const gateContinuationDeps = {')
@@ -81,7 +81,7 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
       /\.\.\.\(taskLaunchConfiguration\.selectedQueries === undefined\s*\? resolveLaunchRuntimeConfig\(Paths\.config\)\s*: \{\}\)/,
     )
     expect(gateDependencies).toContain(
-      'launchConfiguration: taskLaunchConfiguration.selectedQueries',
+      'launchConfiguration: taskLaunchConfiguration.continuationQueries',
     )
     expect(start).toContain('drive: composeHumanGateContinuationDriver(gateContinuationDeps)')
     expect(src('routes/clarify.ts')).toContain(
