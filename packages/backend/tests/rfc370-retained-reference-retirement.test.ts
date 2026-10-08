@@ -402,7 +402,9 @@ describeEachProvider('RFC-370 terminal Intent retained-reference retirement', (h
                   get forget(): IntentSystemAgentRunFamily['retainedContents']['forget'] {
                     throw failure
                   },
-                  release(input) {
+                  release(
+                    input: Parameters<IntentSystemAgentRunFamily['retainedContents']['release']>[0],
+                  ) {
                     return selected.family.retainedContents.release(input)
                   },
                 }
@@ -596,7 +598,7 @@ describeEachProvider('RFC-370 Memory retained references across a terminal chain
         expect(statSync(directory).mtimeMs).toBe(mtime)
       }
       expect(releases).toEqual(
-        mode === 'success' || mode === 'release-failure' ? [references[1]] : [],
+        mode === 'success' || mode === 'release-failure' ? [references[1]!] : [],
       )
       if (selectedScope === undefined) throw new Error('missing actual chain scope')
       for (const retainedRef of references) {

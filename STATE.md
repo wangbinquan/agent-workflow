@@ -1,3 +1,7 @@
+# RFC-370 回顾回归测试类型跟进
+
+已审回顾源码与配套及 CI oracle 修复三笔实际发布，最终 de10350b、main/origin 精确同步；新 Windows 37716532745 正式 failure，主 CI 37716532515 的基础检查也因新增引用退役测试的两处 TypeScript 静态类型失败。此片只给原 getter 分支 release 参数补既有窄端口类型，给已断言两项的 references[1] 补非空标注，所有运行语句／断言／名称／预算保持；无生产／metadata 变化或新 census。独立功能门、精确提交和新 hosted CI 另验，旧失败保留，新 runtime／Node／CS 实现继续暂停。详见[CI 跟进](design/RFC-370-crewstation-hosted-deployment/ci-followup-oracles.md)。所有以下共享正文及并行输出保持。
+
 # RFC-370 原 CI 跟进与回顾配套复核
 
 两项回顾 P2 的源码与 matching 均已完成有效稳定有限 PASS 并实际消费；d05 的 Windows 正式 failure 保留，三套原 barrier 测试 24／28／4 case 已通过但 typecheck 失败。跟进只纠正两处同步／异步返回值观察类型、PG rollback wrapper 的原 cause 断言、既有 PG 同步 retry 400／SQLite 后台 200 预期和一处本会话新增的 plan 相对链接，原生产、全部 case／预算与唯一 census 不改。CODE3／DOC3 独立复核、精确上库和新 hosted 主 CI／Windows 分别验收；新 runtime／Node／CS 实现继续暂停。所有原共享 STATE／plan 和并行正文保留，RFC 与 CS 部署仍未完成。详见[CI 跟进](design/RFC-370-crewstation-hosted-deployment/ci-followup-oracles.md)。以下共享正文逐字保留。

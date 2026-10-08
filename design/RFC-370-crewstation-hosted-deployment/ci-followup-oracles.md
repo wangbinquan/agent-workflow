@@ -29,3 +29,11 @@ H345-P2-001／H7-P2-001 的已审 SOURCE18 仍完整保持，本 CI 片不修改
 本机只完成自有格式、lint 和纯 AST／字节核对，没有 AW tests、typecheck、build、services、E2E 或第二次 census。独立功能复核、精确提交与新 exact-SHA 主 CI／Windows 分别验收，静态检查不代签远端结果。
 
 新的 runtime／Node／CS 实现继续暂停至回顾修复与 CI 收口。H7／A-T7／A-G、各层独立 CS adapters 和 M0～M4 仍开放，AW 尚未部署 CS，RFC 未完成。原时序修复见[held matcher 记录](ci-held-rejection-matchers.md)，回顾配套见[发布记录](retrospective-functional-repairs-publication.md)。
+
+## 2026-10-08 新回顾回归的静态类型
+
+上述三笔修复实际发布，源码 `2dc96501010de9c9cd25824f1830efef95b23940`、配套 `e0e9597bc5b665e720b10a052bfa3f1f94baaa2f`、CI `de10350bcf23734e2816795053747706aa4f1dba`，38 路径；远端精确同步、索引空，paused Task runtime 文档保留。原 d05 主／Windows 正式 failure 保持。
+
+新 de103 的 Windows `37716532745` 正式 failure；主 CI `37716532515` 的基础检查及 Windows 相同失败：新引用退役回归的 getter 分支 `release(input)` 无上下文参数类型，原 `references[1]` 在 `noUncheckedIndexedAccess` 下可能 undefined。只给参数补既有窄端口的 `Parameters<...>[0]`，第二项补类型非空标记；其前面的两项长度断言及所有运行行为保持。纯 AST 类型擦除必须对拍整份 before/after JS 完全相同，全部原 case／名称／断言／30_000 等预算不变，实际编译仍由新 hosted CI 签收。
+
+11 生产与13 metadata 不改，零新 census／增长许可。本机不运行 AW tests／typecheck／build／services／E2E；独立功能门、精确发布和新主／Windows CI 分别验收，原失败保持，新适配仍暂停，RFC 未完成。

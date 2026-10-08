@@ -1152,3 +1152,9 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 原 d05 Windows `37711897530` 正式 failure；三套 held-barrier 原测试均完成并通过，不能记全仓绿。主 CI `37711897500` 的功能日志确认两处端口 union 的 `.catch` 类型错误、一处本会话新增的 plan 相对链接，以及 failed-claim 的两个 rollback wrapper 与一个 PG retry HTTP oracle。有限修正使用 `Promise.resolve(starting)` 观察而保留原 matcher 输入；PG 原 rollbackError 在 DrizzleQueryError 的 cause，retry 原同步 DomainError 为 400，SQLite 原后台受理保持 200。全部原名称／用例／业务断言／等待预算保持，无生产或第二次 census。
 
 回顾 SOURCE18 和唯一原 13 metadata 均保持，MATCHING60-R1 有效稳定有限 PASS 已实际消费、129 库存／why／baseline 与零增长许可保持。此处只纠正原一条错误链接并追加实际事实，CODE3／DOC3 门、精确发布与新 exact-SHA 主／Windows CI 另验。H7／A-G／CS／RFC Done 继续开放；详见[CI 跟进](ci-followup-oracles.md)，其余 shared plan／STATE 与并行输出完整保留。
+
+## 2026-10-08 回顾回归的两处静态类型修正
+
+回顾 SOURCE18／MATCHING14 和 CI6 已实际发布三笔，最终 `de10350bcf23734e2816795053747706aa4f1dba`；双方共享全文保持、远端同步、索引空。该 SHA Windows `37716532745` 正式 failure；主 CI `37716532515` 基础检查与 Windows 同时报新退役回归的参数 TS7006、原数组第二项 TS2769。本片只补 getter 分支 release 参数的既有 `IntentSystemAgentRunFamily` 窄类型，以及原 `references[1]` 的非空类型标记（原完整两项长度断言保持）；不修改 JavaScript 行为或任何断言／case／等待预算。原生产11、两个真实公共 forget 合同、13 metadata 与129库存／why／baseline 完整保持，不新增 census或增长许可。
+
+独立功能门、精确提交与新 exact-SHA hosted CI 另验；原 de103 失败不倒写，H7／A-G／CS／RFC 仍未完成，新 runtime／Node／CS 实现继续暂停。详见[CI 跟进](ci-followup-oracles.md)；其余 shared plan／STATE 与并行内容完整保留。
