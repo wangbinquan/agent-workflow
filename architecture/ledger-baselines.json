@@ -857,10 +857,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6853,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371 original system Agent display names. The unchanged original census measures 6851 -> 6853 from committed 00c757fc6b0e9c5281741ccf901012d924736b52 plus the frozen candidate. Both added public framework identity constants are consumed by the actual orchestrator factory; the Task public query is consumed by the actual report worker and the reverse observability import is removed. All 141 existing unconsumed public IDs and all 129 ordered inventory rows and original why fields remain intact. Retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -881,10 +878,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 6001,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371 original system Agent display names. The unchanged original census measures 5999 -> 6001 from committed 00c757fc6b0e9c5281741ccf901012d924736b52 plus the frozen candidate. Both added public framework identity constants are consumed by the actual orchestrator factory; the Task public query is consumed by the actual report worker and the reverse observability import is removed. All 141 existing unconsumed public IDs and all 129 ordered inventory rows and original why fields remain intact. Retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -898,10 +892,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1254,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371 original system Agent display names. The unchanged original census measures 1252 -> 1254 from committed 00c757fc6b0e9c5281741ccf901012d924736b52 plus the frozen candidate. Both added public framework identity constants are consumed by the actual orchestrator factory; the Task public query is consumed by the actual report worker and the reverse observability import is removed. All 141 existing unconsumed public IDs and all 129 ordered inventory rows and original why fields remain intact. Retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -922,10 +913,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27615,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 original system Agent display names. The unchanged original census measures 27614 -> 27615 from committed 00c757fc6b0e9c5281741ccf901012d924736b52 plus the frozen candidate. Both added public framework identity constants are consumed by the actual orchestrator factory; the Task public query is consumed by the actual report worker and the reverse observability import is removed. All 141 existing unconsumed public IDs and all 129 ordered inventory rows and original why fields remain intact. Retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -934,7 +922,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "00c757fc6b0e9c5281741ccf901012d924736b52",
-    "contentDigest": "sha256:4146bce766ef534922437bd09bf690de91e5cbb0eb4cb8c977f112d27b49cc7d",
+    "contentDigest": "sha256:3657f7ef2c78b8828053fb3071e983edd6953ee2f621c806141e6937889ff19c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

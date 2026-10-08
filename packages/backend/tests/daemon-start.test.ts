@@ -393,8 +393,13 @@ printf '%s\\n' 'stub-opencode custom-build'
     // 三条分别写着 30s / 20s / 15s）。CI run 33589653435（macos shard 3/4）咬到 5013ms。
   }, 30_000)
 
+  // CI 37761392727: shutdown was accepted, but the test-only 3s handoff
+  // expired before the prior generation released its lock. Use the package dev
+  // command's 35s handoff. The replacement readiness wait includes that handoff
+  // plus its original 10s boot; the first readiness wait stays at 10s.
+  // The 60s case budget also covers cleanup; original exit/health assertions stay.
   test('dev watcher replacement drains the previous generation before taking its lock', async () => {
-    const devEnv = { ...env, AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS: '3000' }
+    const devEnv = { ...env, AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS: '35000' }
     const first = spawnDaemon(devEnv)
     let second: ReturnType<typeof spawnDaemon> | undefined
     try {
@@ -406,7 +411,7 @@ printf '%s\\n' 'stub-opencode custom-build'
       // normal graceful shutdown itself; waiting for Bun creates a deadlock.
       const [firstExitCode, { url }] = await Promise.all([
         first.exited,
-        waitForReady(second.stdout, 10_000),
+        waitForReady(second.stdout, 45_000),
       ])
       expect(firstExitCode).toBe(0)
       const health = await fetch(`${url}health`)
@@ -427,7 +432,7 @@ printf '%s\\n' 'stub-opencode custom-build'
         await second.exited
       }
     }
-  }, 15_000)
+  }, 60_000)
 })
 
 // --- helpers ---
