@@ -1,3 +1,5 @@
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { createLogger } from '@/util/log'
 import { triggerChangeNarrative as triggerSelectedNarrative } from '@/services/changeNarrative'
 import type {
   SystemAgentRunFamily,
@@ -21,7 +23,15 @@ import {
 //  - extractJsonObject / parseNumstatZ / computeContentDigest unit matrices
 
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -327,6 +337,9 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
         return { ...response, retainedRef: 'remote-narrative-result:17' }
       },
       retainedContents: {
+        forget() {
+          throw new Error('Narrative does not separately forget completed scratch')
+        },
         release() {
           throw new Error('Narrative does not separately release completed scratch')
         },
@@ -497,6 +510,107 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
       ),
     ).rejects.toThrow(/changed no files/)
   })
+
+  for (const mode of [
+    'success-retained',
+    'runtime-failure',
+    'forget-failure',
+    'diagnostic-failure',
+  ] as const) {
+    test(`RFC-370: Narrative ${mode} retires its original reference and preserves physical diagnostics`, async () => {
+      const db = harness.db,
+        world = await seedWorld(db),
+        original = deps(db, undefined)
+      const binding = composeLocalSystemAgentRunFamily({ appHome: () => home })
+      let directory = '',
+        mtime = 0,
+        reference = ''
+      const native = binding.withFixture(async (request) => {
+        directory = join(request.scratchParent, 'narrative-retirement-' + world.task.id)
+        mkdirSync(directory, { recursive: true })
+        writeFileSync(join(directory, 'diagnostic.txt'), 'original retained narrative')
+        mtime = statSync(directory).mtimeMs
+        return {
+          ...okRun(GOOD_OUTPUT),
+          status: mode === 'runtime-failure' ? 'exit-nonzero' : 'ok',
+          exitCode: mode === 'runtime-failure' ? 3 : 0,
+          scratchDir: directory,
+          scratchRetained: true,
+        }
+      })
+      const forgotten: string[] = []
+      let selectedScope:
+        | Parameters<typeof native.family.retainedContents.release>[0]['scope']
+        | undefined
+      const retainedContents: SystemAgentRunFamily['retainedContents'] = {
+        release() {
+          throw new Error('Narrative must keep its original core-only physical cleanup')
+        },
+        forget(request) {
+          expect(this).toBe(retainedContents)
+          forgotten.push(request.retainedRef)
+          native.family.retainedContents.forget(request)
+          if (mode === 'forget-failure' || mode === 'diagnostic-failure')
+            throw new Error('retirement diagnostics failed')
+        },
+      }
+      const selected: SystemAgentRunFamily = {
+        workspaces: native.family.workspaces,
+        retainedContents,
+        async run(request) {
+          selectedScope = request.workspaceScope
+          const result = await native.family.run(request)
+          reference = result.retainedRef
+          retainedContents.forget = () => {
+            throw new Error('replacement retirement must never run')
+          }
+          return result
+        },
+      }
+      const log = createLogger('narrative-retirement-test')
+      if (mode === 'diagnostic-failure')
+        log.warn = () => {
+          throw new Error('original logger failed')
+        }
+      await triggerSelectedNarrative(
+        {
+          workspace: original.workspace,
+          requireMember: original.requireMember,
+          async resolveRuntime(input) {
+            return binding.bindRuntime(await original.resolveRuntime(input))
+          },
+          systemAgents: selected,
+          log,
+        },
+        world.task,
+        world.owner,
+      )
+      await settleNarrative(world.task.id)
+      const state = await getChangeNarrativeStatus(world.task.id)
+      if (mode === 'runtime-failure') {
+        expect(state?.status).toBe('failed')
+        if (state?.status !== 'failed') throw new Error('original Narrative failure was lost')
+        expect(state.message).toBe('narrative agent run failed: exit-nonzero')
+      } else {
+        expect(state?.status).toBe('ready')
+        if (state?.status !== 'ready')
+          throw new Error('Narrative success was replaced by retirement failure')
+        expect(state.narrative.overview).toBe(GOOD_OUTPUT.overview)
+      }
+      expect(forgotten).toEqual([reference])
+      expect(readFileSync(join(directory, 'diagnostic.txt'), 'utf8')).toBe(
+        'original retained narrative',
+      )
+      expect(statSync(directory).mtimeMs).toBe(mtime)
+      if (selectedScope === undefined) throw new Error('missing original Narrative scope')
+      expect(
+        await native.family.retainedContents.release({
+          retainedRef: reference,
+          scope: selectedScope,
+        }),
+      ).toEqual({ removed: false, reason: 'unsafe-path' })
+    }, 30_000)
+  }
 })
 
 describeEachProvider('buildNarrativePrompt', (harness) => {

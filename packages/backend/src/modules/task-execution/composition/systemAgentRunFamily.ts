@@ -19,7 +19,7 @@ export function composeSystemAgentRunFamily(input: {
   readonly retainedContents: SystemAgentRetainedContents
   readonly workspaces: SystemAgentWorkspaceScopes
 }): SystemAgentRunFamily {
-  return Object.freeze<SystemAgentRunFamily>({
+  const family = Object.freeze<SystemAgentRunFamily>({
     workspaces: input.workspaces,
     retainedContents: input.retainedContents,
     async run(request) {
@@ -27,14 +27,41 @@ export function composeSystemAgentRunFamily(input: {
       const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS
       const maxEventTextBytes = request.maxEventTextBytes ?? DEFAULT_MAX_EVENT_TEXT_BYTES
       const startedAt = Date.now()
+      const retainedContents = family.retainedContents
+      const forget = retainedContents.forget
       const invocation = input.invocations.open(request, log)
-      return runSystemAgentCore(request, {
-        log,
-        timeoutMs,
-        maxEventTextBytes,
-        startedAt,
-        invocation,
-      })
+      let forgetInvocation: (() => void) | undefined
+      try {
+        const retainedRef = invocation.workspace.retainedRef
+        forgetInvocation = () => forget.call(retainedContents, { retainedRef })
+        return await runSystemAgentCore(request, {
+          log,
+          timeoutMs,
+          maxEventTextBytes,
+          startedAt,
+          invocation,
+          retainedRef,
+        })
+      } catch (error) {
+        // A rejected invocation transfers no result reference to its caller.
+        try {
+          forgetInvocation?.()
+        } catch (retirementError) {
+          try {
+            log.warn('system-agent-retained-reference-forget-failed', {
+              feature: request.feature,
+              err:
+                retirementError instanceof Error
+                  ? retirementError.message
+                  : String(retirementError),
+            })
+          } catch {
+            // Preserve the original invocation rejection, including raw values.
+          }
+        }
+        throw error
+      }
     },
   })
+  return family
 }

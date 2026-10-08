@@ -1154,6 +1154,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
 
   let sessionId: string | undefined
   let lastResult: SystemAgentRunResult | undefined
+  const forgetRetainedContents: (() => void)[] = []
   let lastFailure: { code: DistillProtocolFailureCode; detail?: string } | undefined
 
   /** 链终止时释放一次。见 RFC-367 design §3.1 的状态表。 */
@@ -1170,6 +1171,8 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   }
 
   try {
+    const retainedContents = systemAgents.retainedContents
+    const forget = retainedContents.forget
     for (let round = 0; round <= DEFAULT_PROTOCOL_RETRY_BUDGET; round += 1) {
       const remainingMs = deadline - Date.now()
       if (remainingMs <= 0) throw new Error(`distiller timeout after ${timeoutMs}ms`)
@@ -1200,6 +1203,8 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
         ...(round > 0 && sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
       })
       lastResult = result
+      const retainedRef = result.retainedRef
+      forgetRetainedContents.push(() => forget.call(retainedContents, { retainedRef }))
       sessionId ??= result.capturedSessionId
 
       // RFC-043: stamp the post-spawn artefacts onto the job row. Failures here
@@ -1270,7 +1275,24 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   } finally {
     // RFC-367: nothing to capture after the fact any more — the sink recorded
     // every round live, from the same normalized stream the parser read.
-    await releaseChainScratch(lastResult)
+    try {
+      await releaseChainScratch(lastResult)
+    } finally {
+      for (const forget of forgetRetainedContents) {
+        try {
+          forget()
+        } catch (error) {
+          try {
+            log.warn('distiller-retained-reference-forget-failed', {
+              jobId: options.job.id,
+              err: error instanceof Error ? error.message : String(error),
+            })
+          } catch {
+            // Reference retirement diagnostics must not replace the chain outcome.
+          }
+        }
+      }
+    }
   }
 }
 

@@ -118,6 +118,7 @@ function selectedFamily(
       return await run(request)
     },
     retainedContents: {
+      forget() {},
       release(request) {
         expect(scopes.has(request.scope)).toBe(true)
         releases.push(request)

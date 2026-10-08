@@ -56,6 +56,14 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
     },
   })
   const contents: SystemAgentRetainedContents = Object.freeze<SystemAgentRetainedContents>({
+    forget(request) {
+      const entry = retained.get(request.retainedRef)
+      if (entry === undefined) return
+      retained.delete(request.retainedRef)
+      const references = referencesByRoot.get(entry.root)
+      references?.delete(request.retainedRef)
+      if (references?.size === 0) referencesByRoot.delete(entry.root)
+    },
     release(request) {
       const entry = retained.get(request.retainedRef)
       if (entry === undefined) return { removed: false, reason: 'unsafe-path' }

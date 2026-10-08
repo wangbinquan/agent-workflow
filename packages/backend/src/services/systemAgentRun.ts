@@ -237,7 +237,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       },
     },
   }) as Logger
-  const result = await runSystemAgentCore(opts, {
+  const coreInput: Omit<Parameters<typeof runSystemAgentCore>[1], 'retainedRef'> = {
     log: coreLog,
     timeoutMs,
     maxEventTextBytes,
@@ -341,6 +341,10 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         }
       },
     },
+  }
+  const result = await runSystemAgentCore(opts, {
+    ...coreInput,
+    retainedRef: coreInput.invocation.workspace.retainedRef,
   })
   // Preserve the legacy field location/order as well as its physical value.
   return Object.fromEntries(

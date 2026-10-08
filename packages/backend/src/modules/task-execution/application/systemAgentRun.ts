@@ -65,10 +65,11 @@ export async function runSystemAgentCore(
     readonly maxEventTextBytes: number
     readonly startedAt: number
     readonly invocation: SystemAgentCoreInvocation
+    readonly retainedRef: string
   },
 ): Promise<PreparedSystemAgentRunResult> {
   const { log, timeoutMs, maxEventTextBytes, startedAt } = input
-  const retainedRef = input.invocation.workspace.retainedRef
+  const retainedRef = input.retainedRef
 
   const outputEvidence = emptySystemAgentOutputEvidence()
   const fail = (

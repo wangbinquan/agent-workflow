@@ -18,7 +18,7 @@ export async function runPreparedSystemAgent(
   const maxEventTextBytes = opts.maxEventTextBytes ?? DEFAULT_MAX_EVENT_TEXT_BYTES
   const startedAt = Date.now()
   const preparation = opts.preparation
-  return runSystemAgentCore(opts, {
+  const coreInput: Omit<Parameters<typeof runSystemAgentCore>[1], 'retainedRef'> = {
     log,
     timeoutMs,
     maxEventTextBytes,
@@ -29,5 +29,9 @@ export async function runPreparedSystemAgent(
       prepareWorkspace: () => preparation.workspace.prepare(opts.seedFiles),
       compile: () => preparation.compile(opts.intent),
     },
+  }
+  return runSystemAgentCore(opts, {
+    ...coreInput,
+    retainedRef: coreInput.invocation.workspace.retainedRef,
   })
 }

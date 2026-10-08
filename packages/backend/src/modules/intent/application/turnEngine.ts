@@ -327,6 +327,7 @@ export async function runIntentTurn(
     return settled
   }
 
+  let forgetRetainedContents: (() => void) | undefined
   try {
     // ── context assembly ──
     const manifestBefore = sessionManifest(minted.session)
@@ -444,6 +445,8 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
     const releaseSlot = await intentSem.acquire()
     let result: SystemAgentRunResult
     try {
+      const retainedContents = systemAgents.retainedContents
+      const forget = retainedContents.forget
       result = await systemAgents.run({
         feature: 'intent-builder',
         agentName: INTENT_BUILDER_AGENT_NAME,
@@ -470,6 +473,8 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         retainScratchOnSuccess: true,
         log,
       })
+      const retainedRef = result.retainedRef
+      forgetRetainedContents = () => forget.call(retainedContents, { retainedRef })
     } finally {
       releaseSlot()
     }
@@ -748,6 +753,19 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       code: 'intent-turn-crashed',
       detail: err instanceof Error ? err.message : String(err),
     })
+  } finally {
+    try {
+      forgetRetainedContents?.()
+    } catch (error) {
+      try {
+        log.warn('intent-retained-reference-forget-failed', {
+          turnId,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      } catch {
+        // Reference retirement diagnostics must not replace the turn outcome.
+      }
+    }
   }
 }
 

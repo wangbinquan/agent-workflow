@@ -390,61 +390,82 @@ async function runGeneration(
     defaultRuntime: deps.defaultRuntime ?? null,
   })
   const systemAgents = deps.systemAgents
-  const result = await systemAgents.run({
-    feature: 'change-narrative',
-    agentName: NARRATIVE_AGENT_NAME,
-    systemPrompt: NARRATIVE_SYSTEM_PROMPT,
-    prompt: buildNarrativePrompt(task, input),
-    protocol: runtime.protocol,
-    runtimeBinding: runtime.runtimeBinding,
-    configDirEnv: runtime.configDir.env,
-    configDirName: runtime.configDir.name,
-    model: runtime.model,
-    isSandbox: runtime.isSandbox,
-    workspaceScope: systemAgents.workspaces.capture({ namespace: 'shared' }),
-    timeoutMs: NARRATIVE_TIMEOUT_MS,
-    log: deps.log,
-  })
-  if (result.status !== 'ok') {
-    throw new Error(
-      `narrative agent run failed: ${result.status}${result.resultError === undefined ? '' : ` (${result.resultError})`}`,
-    )
-  }
-  const raw = extractJsonObject(result.eventText)
-  if (raw === null || typeof raw !== 'object') {
-    throw new Error('narrative agent produced no parsable JSON object')
-  }
-  const candidate = raw as Record<string, unknown>
-  const narrative = changeNarrativeSchema.parse({
-    version: 1,
-    overview: candidate.overview,
-    groups: candidate.groups ?? [],
-    readingOrder: candidate.readingOrder ?? [],
-    generatedAt: (deps.now ?? Date.now)(),
-    inputDigest: input.digest === '' ? 'unknown' : input.digest,
-  })
-  // Drop group sentences whose key no longer exists (schema is lenient; key
-  // drift between generation and render is expected across regenerations).
-  const validKeys = new Set(input.groups.map((g) => g.key))
-  const pruned: ChangeNarrative = {
-    ...narrative,
-    groups: narrative.groups.filter((g) => validKeys.has(g.key)),
-  }
-
-  // Deletion race (design §3.2-5): the task may be deleted while the agent
-  // runs. Check before writing (skip entirely) and after (remove what we just
-  // wrote so the deletion chain's directory removal stays final).
-  if ((await deps.workspace.findTask(task.id)) === null) return
-  const path = narrativePath(task.id)
+  let forgetRetainedContents: (() => void) | undefined
   try {
-    await mkdir(join(appHome(), 'structural-diffs', task.id), { recursive: true })
-    await writeFile(path, JSON.stringify(pruned), 'utf8')
-  } catch {
-    return // best-effort persistence; the trigger's browser still got 'generating'
-  }
-  if ((await deps.workspace.findTask(task.id)) === null) {
-    await rm(join(appHome(), 'structural-diffs', task.id), { recursive: true, force: true }).catch(
-      () => {},
-    )
+    const retainedContents = systemAgents.retainedContents
+    const forget = retainedContents.forget
+    const result = await systemAgents.run({
+      feature: 'change-narrative',
+      agentName: NARRATIVE_AGENT_NAME,
+      systemPrompt: NARRATIVE_SYSTEM_PROMPT,
+      prompt: buildNarrativePrompt(task, input),
+      protocol: runtime.protocol,
+      runtimeBinding: runtime.runtimeBinding,
+      configDirEnv: runtime.configDir.env,
+      configDirName: runtime.configDir.name,
+      model: runtime.model,
+      isSandbox: runtime.isSandbox,
+      workspaceScope: systemAgents.workspaces.capture({ namespace: 'shared' }),
+      timeoutMs: NARRATIVE_TIMEOUT_MS,
+      log: deps.log,
+    })
+    const retainedRef = result.retainedRef
+    forgetRetainedContents = () => forget.call(retainedContents, { retainedRef })
+    if (result.status !== 'ok') {
+      throw new Error(
+        `narrative agent run failed: ${result.status}${result.resultError === undefined ? '' : ` (${result.resultError})`}`,
+      )
+    }
+    const raw = extractJsonObject(result.eventText)
+    if (raw === null || typeof raw !== 'object') {
+      throw new Error('narrative agent produced no parsable JSON object')
+    }
+    const candidate = raw as Record<string, unknown>
+    const narrative = changeNarrativeSchema.parse({
+      version: 1,
+      overview: candidate.overview,
+      groups: candidate.groups ?? [],
+      readingOrder: candidate.readingOrder ?? [],
+      generatedAt: (deps.now ?? Date.now)(),
+      inputDigest: input.digest === '' ? 'unknown' : input.digest,
+    })
+    // Drop group sentences whose key no longer exists (schema is lenient; key
+    // drift between generation and render is expected across regenerations).
+    const validKeys = new Set(input.groups.map((g) => g.key))
+    const pruned: ChangeNarrative = {
+      ...narrative,
+      groups: narrative.groups.filter((g) => validKeys.has(g.key)),
+    }
+
+    // Deletion race (design §3.2-5): the task may be deleted while the agent
+    // runs. Check before writing (skip entirely) and after (remove what we just
+    // wrote so the deletion chain's directory removal stays final).
+    if ((await deps.workspace.findTask(task.id)) === null) return
+    const path = narrativePath(task.id)
+    try {
+      await mkdir(join(appHome(), 'structural-diffs', task.id), { recursive: true })
+      await writeFile(path, JSON.stringify(pruned), 'utf8')
+    } catch {
+      return // best-effort persistence; the trigger's browser still got 'generating'
+    }
+    if ((await deps.workspace.findTask(task.id)) === null) {
+      await rm(join(appHome(), 'structural-diffs', task.id), {
+        recursive: true,
+        force: true,
+      }).catch(() => {})
+    }
+  } finally {
+    try {
+      forgetRetainedContents?.()
+    } catch (error) {
+      try {
+        deps.log?.warn('narrative-retained-reference-forget-failed', {
+          taskId: task.id,
+          err: error instanceof Error ? error.message : String(error),
+        })
+      } catch {
+        // Reference retirement diagnostics must not replace the generation outcome.
+      }
+    }
   }
 }

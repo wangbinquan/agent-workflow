@@ -11,6 +11,8 @@ export interface SystemAgentWorkspaceScopes {
 }
 
 export interface SystemAgentRetainedContents {
+  /** Retire a handed-off process-local reference without deleting its content. */
+  forget(input: { readonly retainedRef: string }): void
   release(input: {
     readonly retainedRef: string
     readonly scope: SystemAgentWorkspaceScope

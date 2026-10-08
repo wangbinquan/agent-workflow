@@ -65,6 +65,7 @@ export interface IntentSystemAgentRunFamily {
   }
   run(request: IntentSystemAgentRunRequest): Promise<IntentSystemAgentRunResult>
   readonly retainedContents: {
+    forget(input: { readonly retainedRef: string }): void
     release(input: {
       readonly retainedRef: string
       readonly scope: IntentSystemWorkspaceScope

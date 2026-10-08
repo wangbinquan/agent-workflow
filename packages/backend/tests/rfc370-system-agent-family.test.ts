@@ -42,6 +42,7 @@ describe('RFC-370 complete System family binding', () => {
       },
     }
     const retainedContents: SystemAgentRetainedContents = {
+      forget() {},
       release() {
         throw new Error('not reached')
       },

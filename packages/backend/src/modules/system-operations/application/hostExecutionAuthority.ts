@@ -88,7 +88,7 @@ export function createHostExecutionAuthorityLifecycle(
   let subscriptionClosed = false
   let subscriptionClose: Promise<void> | undefined
   let tail: Promise<void> = Promise.resolve()
-  let lastFailure: unknown
+  let lastFailure: { readonly error: unknown } | undefined
   const grants = new WeakMap<HostExecutionAuthorityReference, GrantProgress>()
   const ownedGrants = new Set<GrantProgress>()
   const pendingControls = new Set<Promise<unknown>>()
@@ -103,14 +103,13 @@ export function createHostExecutionAuthorityLifecycle(
   }
 
   const notifyFailure = (error: unknown): void => {
-    lastFailure = error
+    lastFailure = { error }
     try {
       input.onFailure(error)
     } catch (listenerError) {
-      lastFailure = new AggregateError(
-        [error, listenerError],
-        'host execution failure listener failed',
-      )
+      lastFailure = {
+        error: new AggregateError([error, listenerError], 'host execution failure listener failed'),
+      }
     }
   }
 
@@ -474,7 +473,7 @@ export function createHostExecutionAuthorityLifecycle(
         awaited = tail
         await awaited
       } while (awaited !== tail)
-      if (lastFailure !== undefined) throw lastFailure
+      if (lastFailure !== undefined) throw lastFailure.error
     },
     close() {
       if (!closing) {
