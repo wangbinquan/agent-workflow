@@ -1,3 +1,7 @@
+# RFC-370 完整根 reader 的并行后继 CI 修正
+
+80f59b75 的 Windows 类型／测试步骤通过，但在构建被 e6098f5b 后继取消，不能记全仓绿。后继 Windows37720290354 正式 failure，941 pass／3 skip／1 fail，唯一失败为原 MCP 完整根 reader 仍校验旧 gateContinuationDeps 摘要。此片只更新该 fixture 一项当前摘要及已提交来源，四完整 SourceFile 逆向和原 MCP 全量判据保持；Windows 两过滤器登记 TS／JSON 原 reader 输入，全部命令／预算保持。零生产／metadata／新 census，有限功能门、精确发布和新 hosted CI 另验。旧 State 全文及并行输出保留，新 runtime／Node／CS 实施继续暂停，RFC与部署仍未完成。详见[完整根 CI 跟进](design/RFC-370-crewstation-hosted-deployment/ci-live-continuation-root-inverse.md)。
+
 # RFC-370 回顾回归测试类型跟进
 
 已审回顾源码与配套及 CI oracle 修复三笔实际发布，最终 de10350b、main/origin 精确同步；新 Windows 37716532745 正式 failure，主 CI 37716532515 的基础检查也因新增引用退役测试的两处 TypeScript 静态类型失败。此片只给原 getter 分支 release 参数补既有窄端口类型，给已断言两项的 references[1] 补非空标注，所有运行语句／断言／名称／预算保持；无生产／metadata 变化或新 census。独立功能门、精确提交和新 hosted CI 另验，旧失败保留，新 runtime／Node／CS 实现继续暂停。详见[CI 跟进](design/RFC-370-crewstation-hosted-deployment/ci-followup-oracles.md)。所有以下共享正文及并行输出保持。

@@ -1158,3 +1158,11 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 回顾 SOURCE18／MATCHING14 和 CI6 已实际发布三笔，最终 `de10350bcf23734e2816795053747706aa4f1dba`；双方共享全文保持、远端同步、索引空。该 SHA Windows `37716532745` 正式 failure；主 CI `37716532515` 基础检查与 Windows 同时报新退役回归的参数 TS7006、原数组第二项 TS2769。本片只补 getter 分支 release 参数的既有 `IntentSystemAgentRunFamily` 窄类型，以及原 `references[1]` 的非空类型标记（原完整两项长度断言保持）；不修改 JavaScript 行为或任何断言／case／等待预算。原生产11、两个真实公共 forget 合同、13 metadata 与129库存／why／baseline 完整保持，不新增 census或增长许可。
 
 独立功能门、精确提交与新 exact-SHA hosted CI 另验；原 de103 失败不倒写，H7／A-G／CS／RFC 仍未完成，新 runtime／Node／CS 实现继续暂停。详见[CI 跟进](ci-followup-oracles.md)；其余 shared plan／STATE 与并行内容完整保留。
+
+## 2026-10-08 澄清续接并行后继的完整根 CI
+
+80f59b75 Windows37719697790 正式 cancelled，类型／平台测试步骤成功、构建未完成；原主37719697713终态另验。完整保留修复的 e6098f5b 后继 Windows37720290354 正式 failure：唯一功能失败是原 MCP 完整根 reader 拒绝已提交的 gateContinuationDeps 新接线。原 de103 主37716532515正式failure保持，不倒写旧结果。
+
+只修 fixture 单项当前语句摘要并记已提交来源；原 previousStatement、四 root 人口和所有原 MCP 完整 body／argument 断言保持。纯 AST 证明四完整 SourceFile 的 before／after inverse 相同，未知 binding 仍拒绝。Windows push／PR 两过滤器各补原 TS／JSON 输入，全部原 workflow 命令／预算逐字保持。零生产、零 metadata、新 census／本机 AW tests／typecheck／build／services／E2E。
+
+有限功能门、精确发布和新主／Windows hosted CI另验；所有旧共享正文与并行输出保留，新 runtime／Node／CS 实施继续暂停，H7／A-G／M0～M4和RFC Done未勾选，AW尚未部署CS。详见[完整根 CI 跟进](ci-live-continuation-root-inverse.md)。

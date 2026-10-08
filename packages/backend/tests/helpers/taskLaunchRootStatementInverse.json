@@ -51,8 +51,9 @@
         },
         {
           "name": "gateContinuationDeps",
-          "introducedSha256": "099a3b158c79b88af5b975507a86da698ba394c747439eb8a30d3f86318356fa",
-          "previousStatement": "const gateContinuationDeps = {\n    db,\n    schedulerDriver: taskExecutionRuntime.schedulerDriver,\n    appHome: Paths.root,\n    configPath: Paths.config,\n    ...(secretBox !== undefined ? { secretBox } : {}),\n    ...(config.subagentLiveCapture !== undefined\n        ? { subagentLiveCapture: config.subagentLiveCapture }\n        : {}),\n    ...resolveLaunchRuntimeConfig(Paths.config),\n};"
+          "introducedSha256": "61e0831ea8fe71e1919782d0ecf7bcaa9426cb85c75ca019d07775aef26c6414",
+          "previousStatement": "const gateContinuationDeps = {\n    db,\n    schedulerDriver: taskExecutionRuntime.schedulerDriver,\n    appHome: Paths.root,\n    configPath: Paths.config,\n    ...(secretBox !== undefined ? { secretBox } : {}),\n    ...(config.subagentLiveCapture !== undefined\n        ? { subagentLiveCapture: config.subagentLiveCapture }\n        : {}),\n    ...resolveLaunchRuntimeConfig(Paths.config),\n};",
+          "reviewedCommit": "e6098f5ba885875013f0af9a6c0831c69084c032"
         },
         {
           "name": "appComposition",
