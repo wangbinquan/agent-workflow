@@ -10940,3 +10940,5 @@ Task、Memory、Intent、Resource Catalog 的原 owner 查询与 Runtime 原生 
 47 个源文件复用独立 SOURCE R2 VALID/PASS 精确字节；原 v1 两个范围/身份 P2 和旧失败均保留。配套原生成纳入已提交 Task lease 的真实依赖差额，保持 129 项有序库存、旧 why、所有既有公开表面及来源治理；前一提交已退役的四项声明保留，仅登记本批实际增长五项并在普通后继退役。原生成 status 保持完整 raw 字节，不格式化机器产物。共享 STATE 保留并行内容，新增 Task 执行投影和共享 Windows 在制品不收编。
 
 独立匹配门、精确发布及 exact-SHA hosted CI 分别登记，源功能/实际 API 不代签 CI。AW 本机没有运行测试、类型检查、构建或启动/替换服务；实际 API 使用原已运行 daemon，正式总览与分类柱形/金额已回归。数字员工各内置入口、Git 与实际成功的定时/事件仍等待既有明确验收配置/工作区答复；CS 本机部署和正式 Token 对账继续。两个 RFC 保持 In Progress。
+
+- 2026-10-08 RFC-371 历史观测修复已发布 `51b209bb058fcb1257900cf68110f3f027372bfa`（47 个实现／测试文件 + 13 个原始生成产物 + 4 个配套文档）；该提交的 CI 仍待终态。后继提交只删除已消费的 5 个 allowGrowth，保留全部 129 条账本、基线、why、原始 provenance 锚点和源摘要，并重算内容摘要；不重跑 source census、不放宽门检视。共享 Windows 文件完整保留 RFC-370 Task runtime lease 与 RFC-371 historical original report 的 6 处并行输出；对应测试均已在 main，不携带后续 Task projection WIP。真实 Git／数字人／计划任务完整覆盖和 CS 本机部署仍未完成。

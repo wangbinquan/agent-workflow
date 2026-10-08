@@ -577,3 +577,7 @@ SOURCE2-META1 有限功能门通过：前端 queryKey 与 retainedIds scope 同�
 见 [历史原始执行恢复](./historical-original-execution-usage.md) 与 [全任务类型真实验收](./all-task-type-acceptance-20261008.md)。原 owner 与 Runtime native EOF 接入同一原报告快照，历史没有调用登记的执行保留独立引用，不创建假 Task 或用当前费率补历史账。系统原 6,843 条记录逐条四桶对账零差异，旧记忆 152 步 2,160,404 Token 已进入已知统计；全量仍保留真实凭据、用量及历史人民币费率缺口。完成 Task 的状态范围和独立详情人口、失败尝试、四桶、人民币完全一致。
 
 源码 SOURCE R2 通过并按精确内容复用；只因已提交 Task lease 真实依赖差额生成新配套，保留原 129 库存、旧 why、公开面、机器 raw 状态和前次四声明退役。五项本批实测声明需普通后继退役。配套功能门、准确提交 CI、CS 部署与剩余内置数字员工/Git/定时/事件入口各自继续验收，不以局部正确关闭 RFC。
+
+### 2026-10-08 历史原始用量发布与后继治理清理
+
+历史原始用量修复已发布 `51b209bb058fcb1257900cf68110f3f027372bfa`。匹配配套复核为 VALID/PASS，47 个实现／测试文件逐字复用 R2；13 个原始生成产物与 4 个文档已精确提交，原始 status.md 未经过格式器重写。该 SHA 的 GitHub Actions 仍待终态，不以页面或静态复核替代 CI。后继清理只退役 5 个已消费的增长声明，全部 129 条账本及原始基线、why、源摘要和 provenance 生成锚点保留，仅通过原始纯函数重算 payload 摘要；不再次 source census。Windows workflow 保留两个贡献者的完整 6 处输出，RFC-370 lease 测试与 RFC-371 原始历史测试在 push／pull_request 路径和 Windows 平台命令中各添加一次；两份测试已在 main，后续 Task projection 在制品排除。后继精确 SHA 的 CI／Windows 仍需终态核验。Git／数字人剩余入口、计划任务与 CS 部署继续保持未完成。
