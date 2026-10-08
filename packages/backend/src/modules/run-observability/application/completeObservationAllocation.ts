@@ -131,15 +131,19 @@ export async function allocateCompleteObservationUsage(
         }
       }
       addCompleteObservationAllocation(entry.fold, contribution, cost, qualified)
-      if (input.sources.historical && entry.invocation.authority.kind === 'local')
+      if (input.sources.historical && entry.invocation.authority.kind === 'local') {
+        const originalUsage = record.measurement.usage
+        if (originalUsage === undefined)
+          throw new Error('Original local numeric usage is missing from retained evidence')
         await input.rows.put(space('original-native-allocations'), {
           key: row.key,
           document: {
-            originalUsage: record.measurement.usage,
+            originalUsage,
             nativeSource: entry.invocation.nativeCaptureSource ?? null,
             scope: record.measurement.scope ?? null,
           },
         })
+      }
       allocations.push({
         key: row.key,
         document: {

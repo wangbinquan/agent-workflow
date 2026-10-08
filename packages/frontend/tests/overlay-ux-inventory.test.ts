@@ -132,6 +132,12 @@ const OVERLAY_CALLSITES = {
   'components/observability/CompleteObservationQuality.tsx': { family: 'task-execution', count: 1 },
   // RFC-371: the trace renders one Dialog; its existing tests cover width, pagination and EOF.
   'components/observability/CompleteObservationTrace.tsx': { family: 'task-execution', count: 1 },
+  // Original execution and numeric-record Dialogs retain rendered scope, EOF and close coverage
+  // in rfc371-historical-observations-ui; shared mobile sizing keeps the same owner.
+  'components/observability/CompleteHistoricalObservations.tsx': {
+    family: 'task-execution',
+    count: 2,
+  },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;
   // rfc269-code-host-settings.test.tsx owns both rendered confirmations.
   'components/settings/CodeHostsSection.tsx': {

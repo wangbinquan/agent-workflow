@@ -12,6 +12,7 @@ import type {
   CompleteHistoricalObservationRecord,
   CompleteHistoricalObservationReference,
   CompleteObservationReportPage,
+  CompleteObservationSection,
   CompleteObservationTask,
   CompleteObservationTrend,
   HistoricalNativeObservationReader,
@@ -215,11 +216,7 @@ function serviceFor(harness: ProviderHarness, path: string, beforeNativeOpen?: (
     if (!content) throw new Error('Original historical report did not retain its known facts')
     return { id, original, content }
   }
-  async function pages<T>(
-    id: string,
-    section: Parameters<typeof service.page>[2]['section'],
-    parent?: string,
-  ) {
+  async function pages<T>(id: string, section: CompleteObservationSection, parent?: string) {
     const items: T[] = []
     let after: string | undefined
     for (;;) {
@@ -270,6 +267,62 @@ async function job(
 describeEachProvider(
   'RFC-371 original historical executions and full native reports',
   (harness) => {
+    test('historical Task and Intent protocol validation retains the saved values without a current runtime lookup', async () => {
+      await seedCompleteTask(harness, 3, 1)
+      await harness.db
+        .update(nodeRuns)
+        .set({ runtime: 'opencode' })
+        .where(eq(nodeRuns.id, completeFixtureId('run', 0)))
+        .run()
+      await harness.db
+        .update(nodeRuns)
+        .set({ runtime: 'claude-code' })
+        .where(eq(nodeRuns.id, completeFixtureId('run', 1)))
+        .run()
+      await harness.db
+        .insert(intentSessions)
+        .values({
+          id: 'saved-protocol-intent',
+          ownerUserId: actor.user.id,
+          createdAt: COMPLETE_NOW,
+          updatedAt: COMPLETE_NOW,
+        })
+        .run()
+      await harness.db
+        .insert(intentTurns)
+        .values(
+          ['opencode', 'claude-code', 'unregistered-protocol', null].map((runtime, n) => ({
+            id: 'saved-protocol-turn-' + n,
+            sessionId: 'saved-protocol-intent',
+            seq: n + 1,
+            role: 'agent' as const,
+            kind: 'message' as const,
+            runMetaJson: JSON.stringify({ runtime }),
+            createdAt: COMPLETE_NOW,
+          })),
+        )
+        .run()
+      const queries = [
+        createHistoricalTaskObservationFacts(harness.db),
+        createHistoricalIntentObservationFacts(harness.db),
+      ]
+      for (const [n, query] of queries.entries()) {
+        const owners = await all((after) =>
+          query.owners({ limit: 2, ...(after === undefined ? {} : { after }) }),
+        )
+        expect(owners.map((owner) => owner.runtime?.protocol ?? null)).toEqual(
+          n === 0 ? ['opencode', 'claude-code', null] : ['opencode', 'claude-code', null, null],
+        )
+        for (const owner of owners)
+          if (owner.runtime)
+            expect(owner.runtime).toEqual({
+              registrationId: null,
+              configurationRevision: null,
+              protocol: owner.runtime.protocol,
+              name: null,
+            })
+      }
+    }, 120_000)
     test('all four owner populations and every attempt event continue beyond 200 without invented runtime/clock facts', async () => {
       await seedCompleteTask(harness, 211, 1)
       await harness.db
@@ -686,7 +739,9 @@ describeEachProvider(
       expect(await service.cache.get(built.id)).toEqual(before)
       const selectedTask = await service.pages<CompleteObservationTask>(selected.id, 'tasks')
       expect(selectedTask).toHaveLength(1)
-      expect(selected.content.summary.timing.wallMs).toBe(selectedTask[0]!.timing.wallMs)
+      expect<string | null>(selected.content.summary.timing.wallMs).toBe(
+        selectedTask[0]!.timing.wallMs,
+      )
     }, 120_000)
 
     test('one original native part shared by two owners is counted once globally, retaining every owner across range filters', async () => {

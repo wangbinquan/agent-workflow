@@ -1,4 +1,4 @@
-// RFC-371: the actual report hook must request partial-CNY capability eight without rewriting retained history.
+// RFC-371: the actual report hook must request current partial-CNY capability without rewriting retained history.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -128,6 +128,6 @@ test('cached capability seven cannot suppress the original partial amount and it
   ).toBeTruthy()
   expect(requests).toEqual([{ path: '/api/observability/reports', method: 'POST' }])
   expect(JSON.stringify(client.getQueryData(oldKey))).toBe(original)
-  const newKey = ['run-observability-complete', 'scope-metrics/8', filters, null, 0] as const
+  const newKey = ['run-observability-complete', 'scope-metrics/11', filters, null, 0] as const
   expect(client.getQueryData(newKey)).toEqual(current)
 })

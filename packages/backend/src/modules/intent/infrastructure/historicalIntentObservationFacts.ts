@@ -1,7 +1,8 @@
 import { and, asc, eq, gt } from 'drizzle-orm'
-import type {
-  HistoricalObservationOwnerQuery,
-  HistoricalObservationEvent,
+import {
+  RuntimeStatusEntrySchema,
+  type HistoricalObservationOwnerQuery,
+  type HistoricalObservationEvent,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { intentSessions, intentTurns, intentTurnEvents } from '@/db/schema'
@@ -47,8 +48,7 @@ export function createHistoricalIntentObservationFacts(
       return {
         items: selected.map((row) => {
           const meta = originalObject(row.runMeta),
-            protocol =
-              meta.runtime === 'opencode' || meta.runtime === 'claude-code' ? meta.runtime : null
+            protocol = RuntimeStatusEntrySchema.shape.protocol.safeParse(meta.runtime)
           return {
             kind: 'historical-observed' as const,
             referenceId: JSON.stringify(['historical-observed', 'intent-turn', row.id]),
@@ -69,10 +69,14 @@ export function createHistoricalIntentObservationFacts(
             agentRevision: null,
             agentName: null,
             purpose: 'system' as const,
-            runtime:
-              protocol === null
-                ? null
-                : { registrationId: null, configurationRevision: null, protocol, name: null },
+            runtime: protocol.success
+              ? {
+                  registrationId: null,
+                  configurationRevision: null,
+                  protocol: protocol.data,
+                  name: null,
+                }
+              : null,
             rootSessionId: row.rootSessionId,
             recordedUsage: null,
           }

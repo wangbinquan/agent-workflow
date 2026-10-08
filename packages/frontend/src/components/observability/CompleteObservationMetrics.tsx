@@ -19,13 +19,20 @@ export function CompleteTokens({
   const { t, i18n } = useTranslation()
   const recorded = value.state === 'not-ready' ? (value.recordedUsage ?? recordedUsage) : undefined
   const tokens = value.state === 'ready' ? value.tokens : recorded?.tokens
+  const historicalReferences =
+    recorded && 'historicalReferences' in recorded ? recorded.historicalReferences : undefined
+  const observedHistoricalReferences =
+    recorded && 'observedHistoricalReferences' in recorded
+      ? recorded.observedHistoricalReferences
+      : undefined
   const historical =
-    recorded && BigInt(recorded.historicalReferences ?? '0') > 0n
+    historicalReferences !== undefined && BigInt(historicalReferences) > 0n
       ? t('runObservability.historicalObservedCoverage', {
-          observed: BigInt(recorded.observedHistoricalReferences ?? '0').toLocaleString(
-            i18n.language,
-          ),
-          references: BigInt(recorded.historicalReferences!).toLocaleString(i18n.language),
+          observed:
+            observedHistoricalReferences === undefined
+              ? t('runObservability.unknown')
+              : BigInt(observedHistoricalReferences).toLocaleString(i18n.language),
+          references: BigInt(historicalReferences).toLocaleString(i18n.language),
         })
       : null
   return (

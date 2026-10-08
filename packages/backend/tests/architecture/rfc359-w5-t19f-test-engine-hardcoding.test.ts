@@ -390,6 +390,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
   'rfc370-workgroup-commit-queue.test.ts: 1',
   // RFC-371：外部 OpenCode SQLite 格式与真实 WAL 快照；baseline/membership 同时走双 provider。
+  // RFC-371：原 OpenCode SQLite 磁盘文件一处构造；历史业务 owner/报告保持 describeEachProvider 双引擎。
+  'rfc371-historical-original-report-provider.test.ts: 1',
   'rfc371-native-baseline-snapshot.test.ts: 1',
   'rfc371-native-child-capture.test.ts: 1',
   // RFC-371：首次创建／替换的外部 OpenCode SQLite 文件一处构造；原 Task owner/回滚/ACK 用双 provider。

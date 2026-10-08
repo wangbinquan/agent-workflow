@@ -14,6 +14,7 @@ import type {
   CompleteObservationInvocation,
   CompleteObservationAttempt,
   CompleteObservationTrend,
+  CompleteHistoricalObservationExecution,
   ObservationOverviewQuery,
   ObservationPriceHistory,
   ObservationPriceVersion,
@@ -424,12 +425,34 @@ test('task, agents and attempt drill-down use real observations and standard car
   const detail = await originalReport(task.id)
   const calls = await originalRows<CompleteObservationInvocation>(detail, 'invocations')
   const agentRows = await originalRows<CompleteObservationDimension>(detail, 'agents')
+  const historicalExecutions = await originalRows<CompleteHistoricalObservationExecution>(
+    detail,
+    'historical-executions',
+  )
   const attempts = await originalRows<CompleteObservationAttempt>(detail, 'attempts')
   expect(detail.summary.inventory.invocations).toBe('2')
   expect(calls).toHaveLength(2)
-  expect(agentRows.map((agent) => agent.selection.agent!.id).sort()).toEqual(
-    agents.map((agent) => agent.id).sort(),
-  )
+  expect(
+    agentRows
+      .filter((agent) => agent.selection.purpose === 'task')
+      .map((agent) => agent.selection.agent!.id)
+      .sort(),
+  ).toEqual(agents.map((agent) => agent.id).sort())
+  for (const row of agentRows.filter((agent) => agent.selection.purpose !== 'task')) {
+    expect(row.selection.purpose).toBe('memory')
+    expect(row.selection.agent).toBeDefined()
+    const originals = historicalExecutions.filter(
+      ({ execution, referenceRole, scopeMatch }) =>
+        execution.parentTaskId === task.id &&
+        execution.sourceKind === 'memory-distill' &&
+        execution.purpose === 'memory' &&
+        referenceRole === 'execution' &&
+        scopeMatch !== 'excluded' &&
+        execution.agentId === row.selection.agent!.id &&
+        execution.agentRevision === row.selection.agent!.revision,
+    )
+    expect(originals.length, JSON.stringify(row.selection)).toBeGreaterThan(0)
+  }
   const calledAttempts = new Set(calls.map((call) => call.nodeRunId))
   expect(attempts.filter((attempt) => calledAttempts.has(attempt.id))).toHaveLength(2)
   expect(detail.summary.metrics.state).toBe('not-ready')
@@ -466,6 +489,25 @@ test('task, agents and attempt drill-down use real observations and standard car
   for (const row of await originalRows<CompleteObservationDimension>(detail, 'runtimes')) {
     const runtime = row.selection.runtime!
     expect(runtime.authority).toBe('local')
+    if (runtime.registrationId === null) {
+      expect(row.metrics).toMatchObject({
+        state: 'not-ready',
+        tokenCoverage: { invocations: '0' },
+      })
+      const originals = historicalExecutions.filter(
+        ({ execution, referenceRole, scopeMatch }) =>
+          execution.parentTaskId === task.id &&
+          execution.sourceKind === 'memory-distill' &&
+          execution.purpose === 'memory' &&
+          referenceRole === 'execution' &&
+          scopeMatch !== 'excluded' &&
+          (execution.runtime?.registrationId ?? null) === runtime.registrationId &&
+          (execution.runtime?.configurationRevision ?? null) === runtime.configurationRevision &&
+          (execution.runtime?.protocol ?? null) === runtime.protocol,
+      )
+      expect(originals.length, JSON.stringify(row.selection)).toBeGreaterThan(0)
+      continue
+    }
     expect(runtime.registrationId).not.toBeNull()
     const original = directory.runtimes.find(
       (entry) => entry.registrationId === runtime.registrationId,
@@ -556,7 +598,9 @@ test('task, agents and attempt drill-down use real observations and standard car
   )
   await expect(page).toHaveURL(/period=custom/)
   await expect(
-    page.getByRole('button', { name: 'Observed parallel task', exact: true }),
+    page
+      .getByRole('button', { name: 'Observed parallel task', exact: true })
+      .and(page.locator(`[data-observation-task="${task.id}"]`)),
   ).toBeVisible()
   await page.setViewportSize({ width: 1280, height: 844 })
   await page.getByRole('tab', { name: 'Agent analysis', exact: true }).click()
@@ -593,7 +637,10 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(page.getByText('Completed task wall time P50', { exact: true })).toBeVisible()
   await expectAnalysisSpacing(page)
   await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
-  await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Observed parallel task', exact: true })
+    .and(page.locator(`[data-observation-task="${task.id}"]`))
+    .click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
   await expectCardSpacing(page)
   const attempt = page.getByRole('button', {
@@ -620,7 +667,9 @@ test('task, agents and attempt drill-down use real observations and standard car
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: '← Back to analysis', exact: true }).click()
   await expect(
-    page.getByRole('button', { name: 'Observed parallel task', exact: true }),
+    page
+      .getByRole('button', { name: 'Observed parallel task', exact: true })
+      .and(page.locator(`[data-observation-task="${task.id}"]`)),
   ).toBeVisible()
 })
 
@@ -1146,7 +1195,9 @@ test('overview omits attention, labels every token column and aligns collection 
   ])
   await expect(page.getByRole('region', { name: 'Tasks needing attention' })).toHaveCount(0)
   await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
-  const name = page.getByRole('button', { name: 'Observed parallel task', exact: true })
+  const name = page
+    .getByRole('button', { name: 'Observed parallel task', exact: true })
+    .and(page.locator(`[data-observation-task="${task.id}"]`))
   await expect(name).toBeVisible()
   expect(
     await name.evaluate((element) => [

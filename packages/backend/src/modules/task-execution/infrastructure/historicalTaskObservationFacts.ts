@@ -1,6 +1,7 @@
 import { and, asc, eq, gt } from 'drizzle-orm'
 import {
   NodeKindSchema,
+  RuntimeStatusEntrySchema,
   type HistoricalObservationOwnerQuery,
   type HistoricalObservationEvent,
 } from '@agent-workflow/shared'
@@ -52,7 +53,8 @@ export function createHistoricalTaskObservationFacts(
             overrideName = text(run.agentOverrideName),
             hasOverride = overrideId !== null || overrideName !== null,
             agentId = hasOverride ? overrideId : text(original.agentId)
-          const kind = NodeKindSchema.safeParse(original.kind),
+          const protocol = RuntimeStatusEntrySchema.shape.protocol.safeParse(run.runtime),
+            kind = NodeKindSchema.safeParse(original.kind),
             computeKind =
               run.spawnBinaryPath !== null || run.opencodeSessionId !== null
                 ? ('agent' as const)
@@ -85,15 +87,14 @@ export function createHistoricalTaskObservationFacts(
             agentRevision: null,
             agentName: hasOverride ? overrideName : text(original.agentName),
             purpose: 'task' as const,
-            runtime:
-              run.runtime === 'opencode' || run.runtime === 'claude-code'
-                ? {
-                    registrationId: null,
-                    configurationRevision: null,
-                    protocol: run.runtime,
-                    name: null,
-                  }
-                : null,
+            runtime: protocol.success
+              ? {
+                  registrationId: null,
+                  configurationRevision: null,
+                  protocol: protocol.data,
+                  name: null,
+                }
+              : null,
             rootSessionId: run.opencodeSessionId,
             recordedUsage: Object.values(recordedUsage).some((value) => value !== null)
               ? recordedUsage

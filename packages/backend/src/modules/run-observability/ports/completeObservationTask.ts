@@ -15,6 +15,9 @@ import type { CompleteSpanProjection } from './completeObservationSpans'
 import type { ObservationNativeScopeSource } from '../public/participants'
 
 export interface CompleteObservationContribution extends UsageContributionEvidence {
+  readonly measurement: UsageContributionEvidence['measurement'] & {
+    readonly usage?: ObservationTokenUsage
+  }
   readonly invocationId: string
   readonly observedAt: number
   readonly localModel: { readonly provider: string | null; readonly id: string } | null

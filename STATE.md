@@ -10942,3 +10942,9 @@ Task、Memory、Intent、Resource Catalog 的原 owner 查询与 Runtime 原生 
 独立匹配门、精确发布及 exact-SHA hosted CI 分别登记，源功能/实际 API 不代签 CI。AW 本机没有运行测试、类型检查、构建或启动/替换服务；实际 API 使用原已运行 daemon，正式总览与分类柱形/金额已回归。数字员工各内置入口、Git 与实际成功的定时/事件仍等待既有明确验收配置/工作区答复；CS 本机部署和正式 Token 对账继续。两个 RFC 保持 In Progress。
 
 - 2026-10-08 RFC-371 历史观测修复已发布 `51b209bb058fcb1257900cf68110f3f027372bfa`（47 个实现／测试文件 + 13 个原始生成产物 + 4 个配套文档）；该提交的 CI 仍待终态。后继提交只删除已消费的 5 个 allowGrowth，保留全部 129 条账本、基线、why、原始 provenance 锚点和源摘要，并重算内容摘要；不重跑 source census、不放宽门检视。共享 Windows 文件完整保留 RFC-370 Task runtime lease 与 RFC-371 historical original report 的 6 处并行输出；对应测试均已在 main，不携带后续 Task projection WIP。真实 Git／数字人／计划任务完整覆盖和 CS 本机部署仍未完成。
+
+## 2026-10-09 RFC-371 原始历史统计 CI 修复
+
+正式原始历史四桶与人民币范围对账保留。本批修复类型收窄、原 measurement 读取、原协议解析、缓存版本回归和统一 Dialog 登记；浏览器保留完整历史人口，只给实际 Task 的页面级同名入口增加原 ID 条件，额外记忆行逐条核对原执行；原 native 文件 fixture 漏登记补一行，业务仍双 provider。所有原断言、人口与预算保持。源码独立有限功能门分别核验，原 CI FAIL 不当成功。
+
+原一次 source census 固定 976f590e，3238 生产文件和 13 原输出完整保留，摘要 sha256:15b742814847f5bed6b938981b594f97016801c29f6bbecff01109b1db4af3dc；后补 E2E 定位不触及生产摘要。只有原测试构造账本按实际原函数从 334 到 335，129 有序库存及旧 why 保留，一次真实增长声明在紧邻正常提交退役；一次 push 最终 SHA 避免两套中间 CI。共享 Task projection WIP 不收编。最终确切 SHA CI、CS 原完整检查/部署及剩余 Git、数字人、成功定时/事件任务继续核验，不 dispatch 已取消的 observability-scale。

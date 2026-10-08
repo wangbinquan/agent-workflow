@@ -581,3 +581,7 @@ SOURCE2-META1 有限功能门通过：前端 queryKey 与 retainedIds scope 同�
 ### 2026-10-08 历史原始用量发布与后继治理清理
 
 历史原始用量修复已发布 `51b209bb058fcb1257900cf68110f3f027372bfa`。匹配配套复核为 VALID/PASS，47 个实现／测试文件逐字复用 R2；13 个原始生成产物与 4 个文档已精确提交，原始 status.md 未经过格式器重写。该 SHA 的 GitHub Actions 仍待终态，不以页面或静态复核替代 CI。后继清理只退役 5 个已消费的增长声明，全部 129 条账本及原始基线、why、源摘要和 provenance 生成锚点保留，仅通过原始纯函数重算 payload 摘要；不再次 source census。Windows workflow 保留两个贡献者的完整 6 处输出，RFC-370 lease 测试与 RFC-371 原始历史测试在 push／pull_request 路径和 Windows 平台命令中各添加一次；两份测试已在 main，后续 Task projection 在制品排除。后继精确 SHA 的 CI／Windows 仍需终态核验。Git／数字人剩余入口、计划任务与 CS 部署继续保持未完成。
+
+### 2026-10-09 原历史统计 CI 修复接续
+
+见 [类型及原协议修复](./historical-functional-ci-repair.md)、[原浏览器断言范围](./historical-browser-ci-scopes.md)、[原 native 文件登记](./historical-native-file-ledger.md) 与 [原投影发布配套](./historical-ci-artifact-matching.md)。原正式四桶/人民币对账保持；SOURCE 有限门与原 hosted CI 分别验收。13 原投影来自唯一完整 3238 文件生成，后续只按既有纯函数固定 provenance 和真实漏登记的 334→335；保留 129 账本及旧 why，并在紧邻正常提交退役本次已消费声明，一次推送最终版本。原 Task 页面入口保留名称/角色且绑定真实 ID，完整历史记忆行仍逐条证明。Git/数字人/成功计划入口、CS 原完整检查与本机部署继续开放，RFC 保持 In Progress。

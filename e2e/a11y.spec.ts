@@ -468,11 +468,13 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
   })
 
   test('/observability task list, swimlanes and attempt dialog pass a11y', async ({ page }) => {
-    await seedTerminalTask('observations')
+    const taskId = await seedTerminalTask('observations')
     await setDaemonTheme('light')
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/observability`)
-    const task = page.getByRole('button', { name: 'A11y task observations', exact: true })
+    const task = page
+      .getByRole('button', { name: 'A11y task observations', exact: true })
+      .and(page.locator(`[data-observation-task="${taskId}"]`))
     await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/observability (overview)')
     for (const tab of [

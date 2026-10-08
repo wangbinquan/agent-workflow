@@ -104,7 +104,8 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
   originalIdentity: I,
   options: { readonly pageRows?: number; readonly pageBytes?: number } = {},
 ): OriginalNativePassReader<I> {
-  const identity = Object.freeze({ ...originalIdentity })
+  const identity: I = { ...originalIdentity }
+  Object.freeze(identity)
   if (Object.values(identity).some((value) => !identifier(value)))
     throw new RangeError('Native pass owner identity unavailable')
   const pageRows = options.pageRows ?? 200,
@@ -371,7 +372,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
           }
         const payloadDigest = sha256Hex(JSON.stringify(body)),
           cumulativeDigest = sha256Hex(JSON.stringify([previousDigest, payloadDigest]))
-        pending = {
+        const page: OriginalNativePassPage<I> = {
           ...body,
           cursor: after,
           previousDigest,
@@ -381,7 +382,8 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             ? null
             : JSON.stringify([identity.passId, (ordinal + 1n).toString(), cumulativeDigest]),
         }
-        return structuredClone(pending)
+        pending = page
+        return structuredClone(page)
       } catch (error) {
         close()
         throw error

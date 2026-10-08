@@ -7,6 +7,7 @@ import type {
   CompleteHistoricalObservationRecord,
   CompleteHistoricalObservationReference,
   CompleteObservationMetrics,
+  CompleteObservationTrend,
 } from '@agent-workflow/shared'
 import {
   CompleteHistoricalRecords,
@@ -21,7 +22,7 @@ import { setBaseUrl, setToken } from '../src/stores/auth'
 import i18n from '../src/i18n'
 
 const NOW = Date.parse('2026-10-08T00:00:00Z')
-const metrics: CompleteObservationMetrics = {
+const metrics: Extract<CompleteObservationMetrics, { state: 'not-ready' }> = {
   state: 'not-ready',
   gaps: ['historical-invocation-unobserved'],
   tokenCoverage: {
@@ -257,4 +258,40 @@ test('historical-only known Token remains visible while CNY clearly says its ori
   expect(screen.getByText('历史费率未观测')).toBeTruthy()
   expect(screen.queryByText('0 / 0')).toBeNull()
   expect(screen.queryByText(/\$/)).toBeNull()
+})
+test('a retained legacy trend shows its known four buckets without fabricating historical reference coverage', async () => {
+  const recordedUsage: CompleteObservationTrend['recordedUsage'] = {
+    invocations: '2',
+    observedInvocations: '1',
+    records: '1',
+    tokens: { input: '123', cacheRead: '45', cacheWrite: '6', output: '7', total: '181' },
+  }
+  render(
+    <CompleteTokens
+      value={{ state: 'not-ready', gaps: ['usage-incomplete'] }}
+      recordedUsage={recordedUsage}
+      compact
+    />,
+  )
+  expect(await screen.findByText('181')).toBeTruthy()
+  for (const value of ['123', '45', '6', '7']) expect(screen.getByText(value)).toBeTruthy()
+  expect(
+    screen.getByText(
+      i18n.t('runObservability.recordedUsageCompact', { observed: '1', calls: '2' }),
+    ),
+  ).toBeTruthy()
+  expect(screen.queryByText(/原历史来源|历史来源覆盖/)).toBeNull()
+})
+test('an absent historical observed count remains unknown instead of becoming a measured zero', async () => {
+  const { observedHistoricalReferences: _absent, ...recordedUsage } = metrics.recordedUsage!
+  render(<CompleteTokens value={{ ...metrics, recordedUsage }} compact />)
+  expect(await screen.findByText('181')).toBeTruthy()
+  expect(
+    screen.getByText(
+      i18n.t('runObservability.historicalObservedCoverage', {
+        observed: i18n.t('runObservability.unknown'),
+        references: '1',
+      }),
+    ),
+  ).toBeTruthy()
 })
