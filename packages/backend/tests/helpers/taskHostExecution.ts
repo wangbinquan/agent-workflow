@@ -58,17 +58,7 @@ export async function seedTaskHostIntent(
   })
 }
 
-/** A real selected write context, original Drizzle persistence and real Task claim/lifecycle. */
-export async function taskHostFixture(
-  db: ProviderNeutralDatabase,
-  taskId: string,
-  options: {
-    readonly mode?: 'direct' | 'provider'
-    readonly beforeNewWork?: () => void
-    readonly beforeIssuedAck?: () => void
-    readonly finalizeWorkspace?: (taskId: string) => Promise<void>
-  } = {},
-) {
+async function seedTaskHostFixtureTask(db: ProviderNeutralDatabase, taskId: string) {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
   const slotPath: readonly LineageSlot[] = [
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
@@ -99,6 +89,21 @@ export async function taskHostFixture(
   })
   const intentId = `intent-${taskId}`
   await seedTaskHostIntent(db, taskId, intentId)
+  return intentId
+}
+
+/** A real selected write context, original Drizzle persistence and real Task claim/lifecycle. */
+export async function taskHostFixture(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  options: {
+    readonly mode?: 'direct' | 'provider'
+    readonly beforeNewWork?: () => void
+    readonly beforeIssuedAck?: () => void
+    readonly finalizeWorkspace?: (taskId: string) => Promise<void>
+  } = {},
+) {
+  const intentId = await seedTaskHostFixtureTask(db, taskId)
   let current = true,
     unavailable: string | undefined,
     completed = 0
@@ -215,5 +220,43 @@ export async function taskHostFixture(
       current = false
       stopped.resolve('authority-loss')
     },
+  }
+}
+
+export type TaskHostWorkFixture = Pick<
+  Awaited<ReturnType<typeof taskHostFixture>>,
+  | 'db'
+  | 'taskId'
+  | 'intentId'
+  | 'binding'
+  | 'persistence'
+  | 'module'
+  | 'claim'
+  | 'completed'
+  | 'leases'
+  | 'lose'
+>
+
+/** Another real Task uses the same installation, host admission and Task module. */
+export async function additionalTaskHostFixture(
+  original: TaskHostWorkFixture,
+  taskId: string,
+): Promise<TaskHostWorkFixture> {
+  const intentId = await seedTaskHostFixtureTask(original.db, taskId)
+  return {
+    db: original.db,
+    taskId,
+    intentId,
+    binding: original.binding,
+    persistence: original.persistence,
+    module: original.module,
+    claim: (id = intentId) => original.claim(id),
+    get completed() {
+      return original.completed
+    },
+    get leases() {
+      return original.leases
+    },
+    lose: () => original.lose(),
   }
 }

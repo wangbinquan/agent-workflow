@@ -21,14 +21,23 @@ import type {
   RuntimeSessionLeaseToken,
 } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
 import { describeEachProvider } from './helpers/eachProvider'
-import { deferred, taskHostFixture } from './helpers/taskHostExecution'
+import {
+  additionalTaskHostFixture,
+  deferred,
+  taskHostFixture,
+  type TaskHostWorkFixture,
+} from './helpers/taskHostExecution'
 
 async function leaseFixture(
   db: ProviderNeutralDatabase,
   tag: string,
   options: Parameters<typeof taskHostFixture>[2] = {},
+  installation?: TaskHostWorkFixture,
 ) {
-  const h = await taskHostFixture(db, `lease-${tag}-${ulid()}`, options)
+  const taskId = `lease-${tag}-${ulid()}`
+  const h = installation
+    ? await additionalTaskHostFixture(installation, taskId)
+    : await taskHostFixture(db, taskId, options)
   const claimed = await h.claim()
   h.module.claimGate.leave(claimed.permit)
   const runId = `run-${h.taskId}`,
@@ -205,11 +214,17 @@ describeEachProvider('RFC-370 original selected Task runtime lease writes', (har
   })
   test('old issued release restores its complete Task context even inside a different Task', async () => {
     const f = await leaseFixture(harness.db, 'original-context'),
-      other = await leaseFixture(harness.db, 'other-context')
+      other = await leaseFixture(harness.db, 'other-context', {}, f.h)
+    expect(other.h.module).toBe(f.h.module)
+    expect(other.h.binding).toBe(f.h.binding)
+    expect(other.context.token).not.toBe(f.context.token)
+    expect(other.context.token.taskId).not.toBe(f.context.token.taskId)
+    expect(f.h.leases).toHaveLength(2)
     const token = await runWithTaskExecutionContext(f.context, () =>
       f.selected.claimNew(f.input('original-' + f.h.taskId)),
     )
     f.h.lose()
+    const otherBefore = await other.rows()
     await runWithTaskExecutionContext(other.context, async () => {
       expect(currentTaskExecutionContext()).toBe(other.context)
       expect(await f.selected.release(token)).toBe(true)
@@ -217,6 +232,8 @@ describeEachProvider('RFC-370 original selected Task runtime lease writes', (har
     })
     expect(f.h.completed).toBe(0)
     expect(other.h.completed).toBe(0)
+    expect(await other.rows()).toEqual(otherBefore)
+    expect((await f.selected.load('opencode', token.sessionId))?.leaseNodeRunId).toBeNull()
   })
   test('reset and rotate keep the exact original successor token and issued cleanup during drain', async () => {
     const f = await leaseFixture(harness.db, 'rotate')
