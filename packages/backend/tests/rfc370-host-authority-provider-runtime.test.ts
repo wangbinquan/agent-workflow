@@ -361,7 +361,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
           groups: [...new Set(groups)],
         })
       // Observe the original promise now; its barrier must be released before matching.
-      void starting.catch(() => undefined)
+      void Promise.resolve(starting).catch(() => undefined)
       await entered.promise
       g.lose()
       const quiesced = f.session.hostExecutionRuntime!.quiesce({
@@ -541,7 +541,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
         groups: [...new Set(groups)],
       })
       // Observe the original promise now; its barrier must be released before matching.
-      void starting.catch(() => undefined)
+      void Promise.resolve(starting).catch(() => undefined)
       await entered.promise
       g.lose()
       const loss = f.session.hostExecutionRuntime!.quiesce({

@@ -469,9 +469,19 @@ describeEachProviderHttpApplication(
       expect(prep?.status).toBe('failed')
       expect(f.storage.receivers.length).toBeGreaterThanOrEqual(6)
       expect(readFileSync(f.file, 'utf8')).toBe(f.fileBefore)
-      // Native retry routes the synthetic prep node into the same original command.
+      // SQLite acknowledges background preparation; the original PostgreSQL retry
+      // records the failed attempt before returning its synchronous clone failure.
       const retry = await f.request(`/api/tasks/${task.id}/nodes/${prep?.id}/retry`)
-      expect(retry.status, await retry.clone().text()).toBe(200)
+      expect(retry.status, await retry.clone().text()).toBe(
+        f.opened.taskExecution.provider === 'postgresql' ? 400 : 200,
+      )
+      if (f.opened.taskExecution.provider === 'postgresql') {
+        expect(await retry.json()).toMatchObject({
+          ok: false,
+          code: 'repo-clone-failed',
+          details: { url: 'http://127.0.0.1:1/configuration-closure.git' },
+        })
+      }
       await f.waitTask(task.id, 'failed')
       const attempts = await scope.harness.db
         .select()

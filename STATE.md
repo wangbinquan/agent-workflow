@@ -1,3 +1,11 @@
+# RFC-370 原 CI 跟进与回顾配套复核
+
+两项回顾 P2 的源码与 matching 均已完成有效稳定有限 PASS 并实际消费；d05 的 Windows 正式 failure 保留，三套原 barrier 测试 24／28／4 case 已通过但 typecheck 失败。跟进只纠正两处同步／异步返回值观察类型、PG rollback wrapper 的原 cause 断言、既有 PG 同步 retry 400／SQLite 后台 200 预期和一处本会话新增的 plan 相对链接，原生产、全部 case／预算与唯一 census 不改。CODE3／DOC3 独立复核、精确上库和新 hosted 主 CI／Windows 分别验收；新 runtime／Node／CS 实现继续暂停。所有原共享 STATE／plan 和并行正文保留，RFC 与 CS 部署仍未完成。详见[CI 跟进](design/RFC-370-crewstation-hosted-deployment/ci-followup-oracles.md)。以下共享正文逐字保留。
+
+# RFC-370 既有功能修复与配套候选
+
+两项原回顾 P2 的完整设计及源码独立有限 PASS 已实际消费：逻辑 ref 在原终端阶段退役，H7 原始 undefined 拒绝值保持；11 production、3 原测试、2 新测试及 Windows 登记准备发布。唯一原 scoped census 的 13 原输出保持，129 ledger 全行／why／baseline 不变、零增长许可；只更新源码摘要、两个真实 public forget 合同及其派生字段／消费者。shared STATE／plan 与并行内容完整保留，无本机 AW 产品运行。独立配套门、精确上库和 hosted CI 尚待验收，新 runtime／Node／CS 实现继续暂停。详见[回顾修复发布](design/RFC-370-crewstation-hosted-deployment/retrospective-functional-repairs-publication.md)。以下所有旧正文完整保留。
+
 # RFC-370 CI held rejection matcher 时序修复候选
 
 精确05e主CI37705887143正式failure、Windows37705887174正式cancelled；原PG cause与W5退役对应三作业success，但六后端分片及Windows在三套RFC-370手工barrier测试处自锁。四处rejection matcher移到原barrier释放后，提前只观察原Promise拒绝；全部原断言／名称／预算、生产与canonical保持，无新census／本机AW运行。独立实现门与新exact-SHA CI另验，两项回顾P2已通过独立设计并应用，源码门／配套门与CI分别验收；runtime／Node／CS新实现仍暂停。详见[CI时序修复](design/RFC-370-crewstation-hosted-deployment/ci-held-rejection-matchers.md)。以下共享STATE和并行正文完整保留。

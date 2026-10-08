@@ -1,6 +1,6 @@
 // RFC-370 C2-W1 D4/D5: a rejected claim promise is not an absent durable claim.
 import { afterEach, expect, spyOn, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { DrizzleQueryError, eq } from 'drizzle-orm'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskExecutionIntents, taskExecutionOwners, tasks } from '@/db/schema'
@@ -606,7 +606,9 @@ describeEachProvider('RFC-370 original failed claim acknowledgement', (harness) 
         await serverCommit
         await claiming
         await draining
-        expect(returned).toBe(rollbackError)
+        expect(returned).toBeInstanceOf(DrizzleQueryError)
+        expect((returned as DrizzleQueryError).query).toBe('rollback')
+        expect((returned as DrizzleQueryError).cause).toBe(rollbackError)
         expect(h.completed).toBe(1)
         expect(drained).toBe(true)
         expect((await h.persistence.ownership.read(h.taskId))?.state).toBe(

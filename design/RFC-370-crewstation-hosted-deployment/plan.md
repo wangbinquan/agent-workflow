@@ -1141,4 +1141,14 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 
 ## 2026-10-08 原 CI held rejection matcher 时序候选
 
-精确05e主CI37705887143正式failure、Windows37705887174正式cancelled；原PG cause与W5退役对应三作业success，但六后端分片及Windows在三套RFC-370手工barrier测试处自锁。四处rejection matcher移到原barrier释放后，提前只观察原Promise拒绝；全部原断言／名称／预算、生产与canonical保持，无新census／本机AW运行。独立实现门与新exact-SHA CI另验，两项回顾P2已通过独立设计并应用，源码门／配套门与CI分别验收；runtime／Node／CS新实现仍暂停。详见[CI时序修复](design/RFC-370-crewstation-hosted-deployment/ci-held-rejection-matchers.md)。以下共享STATE和并行正文完整保留。
+精确05e主CI37705887143正式failure、Windows37705887174正式cancelled；原PG cause与W5退役对应三作业success，但六后端分片及Windows在三套RFC-370手工barrier测试处自锁。四处rejection matcher移到原barrier释放后，提前只观察原Promise拒绝；全部原断言／名称／预算、生产与canonical保持，无新census／本机AW运行。独立实现门与新exact-SHA CI另验，两项回顾P2已通过独立设计并应用，源码门／配套门与CI分别验收；runtime／Node／CS新实现仍暂停。详见[CI时序修复](ci-held-rejection-matchers.md)。以下共享STATE和并行正文完整保留。
+
+## 2026-10-08 既有功能回顾修复与配套候选
+
+完整 DESIGN46-R2／SOURCE51-R1 有效稳定有限 PASS 已实际消费，两项原 H345-P2-001／H7-P2-001 按原目录／错误／ACK 语义补齐终端 ref 退役与 raw undefined failure 保持。唯一原 scoped census 保存 13 原输出，原 129 有序 ledger 全行／why／baseline 保持、无增长许可；两个既有 public 合同加入真实 forget 方法，其余全部 payload／数组／分母保持。独立 matching 门、源码／配套精确发布与新 exact-SHA CI 分别验收。原 d05fc28b CI 正在正式验收，新 runtime／Node／CS 适配暂停至本片和 CI 收口；H7／A-G／M0～M4 及 RFC Done 不勾选，AW 尚未部署 CS。详见[回顾修复发布](retrospective-functional-repairs-publication.md)。原 shared 全文与并行输出完整保留。
+
+## 2026-10-08 原 CI 类型与 PostgreSQL oracle 跟进
+
+原 d05 Windows `37711897530` 正式 failure；三套 held-barrier 原测试均完成并通过，不能记全仓绿。主 CI `37711897500` 的功能日志确认两处端口 union 的 `.catch` 类型错误、一处本会话新增的 plan 相对链接，以及 failed-claim 的两个 rollback wrapper 与一个 PG retry HTTP oracle。有限修正使用 `Promise.resolve(starting)` 观察而保留原 matcher 输入；PG 原 rollbackError 在 DrizzleQueryError 的 cause，retry 原同步 DomainError 为 400，SQLite 原后台受理保持 200。全部原名称／用例／业务断言／等待预算保持，无生产或第二次 census。
+
+回顾 SOURCE18 和唯一原 13 metadata 均保持，MATCHING60-R1 有效稳定有限 PASS 已实际消费、129 库存／why／baseline 与零增长许可保持。此处只纠正原一条错误链接并追加实际事实，CODE3／DOC3 门、精确发布与新 exact-SHA 主／Windows CI 另验。H7／A-G／CS／RFC Done 继续开放；详见[CI 跟进](ci-followup-oracles.md)，其余 shared plan／STATE 与并行输出完整保留。
