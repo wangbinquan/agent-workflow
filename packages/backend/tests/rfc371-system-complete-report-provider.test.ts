@@ -235,11 +235,13 @@ describeEachProvider(
         const calls: CompleteObservationInvocation[] = []
         after = undefined
         for (;;) {
-          const page = await original.service.page<CompleteObservationInvocation>(
-            actor,
-            published.id,
-            { section: 'invocations', limit: 1, ...(after ? { after } : {}) },
-          )
+          const page: Awaited<
+            ReturnType<typeof original.service.page<CompleteObservationInvocation>>
+          > = await original.service.page<CompleteObservationInvocation>(actor, published.id, {
+            section: 'invocations',
+            limit: 1,
+            ...(after ? { after } : {}),
+          })
           expect(page.total).toBe('2')
           calls.push(...page.items)
           if (page.nextCursor === null) break

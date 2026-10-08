@@ -1186,3 +1186,9 @@ identity 清单已发布 c48db612，新主 CI 37736663092 终态另验。4efba2f
 ### 79b63f48 新增 System 测试的类型修复候选
 
 GitHub 主流水线 `37746020731` 的作业 `113207582002` 在两个新增原测试中报三处类型错误：`refreshKey` 的 UUID 默认值推断过窄、索引后的可选值与 Set matcher、可选 root head 与 Array matcher。仅给 helper 参数声明 `string` 并为两个原 matcher 显式声明可选值类型；原运行时表达式、双 provider、三条原用例、所有断言、记录人口及 60000/120000/30000 ms 预算保持不变。完整 parser 运行时 AST 和独立功能复核作为有限源门，最终仍以 hosted exact-SHA CI 为准。总流水线未全绿，新的 runtime/Node/CS 实现继续暂停，RFC、H7/A-G 和 AW 在 CS 的部署均未完成。
+
+### 2026-10-08：调用分页原测试的显式返回类型
+
+`5b8c7b320d89bb694a872282455e021e8b777463` 主 CI `37761392727` 的共享作业 `113258382764` 在 Typecheck 报告 `rfc371-system-complete-report-provider.test.ts:238` 的 TS7022。本批仅为原调用分页循环的 `page` 添加由现有 `service.page<CompleteObservationInvocation>` 方法推导的显式返回类型；原两个分页循环、游标重置、limit=1、完整 EOF、人口、全部 matcher、名称／Token／费用断言和 60000／120000 ms 预算保留。完整共享测试同时保留并行观测会话已提交的当前输出。
+
+仅做纯解析 AST 等价与定向格式／lint 检查、有限独立功能门和新 exact-SHA hosted CI；不运行本机 AW 产品测试、typecheck、build、服务或 census，不改变生产代码或 CI 检查规则。有限门不能代签 CI 成功。总流水线全绿前继续暂停 runtime／Node／CS 新实施，H7／A-G、M0～M4 与 AW-in-CS 部署仍未完成。详见 [调用分页类型修复](ci-invocation-page-type.md)。
