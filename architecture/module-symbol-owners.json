@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2411,
+    "backendFiles": 2414,
     "frontendFiles": 656,
     "legacyFiles": 596,
-    "moduleFiles": 1815,
-    "productionFiles": 3238,
+    "moduleFiles": 1818,
+    "productionFiles": 3241,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27690
+    "symbolsIncludingFileRoots": 27697
   },
   "entries": [
     {
@@ -163582,6 +163582,90 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "unclaimed",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionProjectionPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionProjectionPersistence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionProjectionPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionProjectionPersistence.ts#createSelectedTaskExecutionProjectionPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSelectedTaskExecutionProjectionPersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionWriteSelection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionWriteSelection.ts#captureTaskHostExecutionWrite",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "captureTaskHostExecutionWrite",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostExecutionWriteSelection.ts#TaskHostExecutionWriteSelection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskHostExecutionWriteSelection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeRunRuntimePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeRunRuntimePersistence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeRunRuntimePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeRunRuntimePersistence.ts#createSelectedTaskNodeRunRuntimePersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSelectedTaskNodeRunRuntimePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -333021,5 +333105,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:15b742814847f5bed6b938981b594f97016801c29f6bbecff01109b1db4af3dc"
+  "sourceDigest": "sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9"
 }

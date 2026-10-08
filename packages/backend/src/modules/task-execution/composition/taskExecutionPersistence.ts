@@ -34,6 +34,7 @@ import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperati
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
 import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
+import { createSelectedTaskExecutionProjectionPersistence } from '../infrastructure/taskHostExecutionProjectionPersistence'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -146,9 +147,22 @@ export function createTaskExecutionPersistence(
 ): TaskExecutionPersistence {
   const effects = new DrizzleTaskExecutionEffectPersistence(db, dependencies.hostWrites)
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
+  const nativeProjections = {
+    drive: new DrizzleTaskEngineApplicationPersistence(db),
+    wrapperRuns: new DrizzleWrapperRunPersistence(db),
+    runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
+  }
+  const projections =
+    dependencies.hostWrites === undefined
+      ? nativeProjections
+      : createSelectedTaskExecutionProjectionPersistence({
+          db,
+          hostWrites: dependencies.hostWrites,
+          ...nativeProjections,
+        })
   return Object.freeze({
     ...(dependencies.nativeUsage ? { nativeUsage: dependencies.nativeUsage } : {}),
-    drive: new DrizzleTaskEngineApplicationPersistence(db),
+    drive: projections.drive,
     ownership: new DrizzleTaskOwnershipPersistence(db, dependencies.hostWrites),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
     effects,
@@ -162,7 +176,7 @@ export function createTaskExecutionPersistence(
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
-    wrapperRuns: new DrizzleWrapperRunPersistence(db),
+    wrapperRuns: projections.wrapperRuns,
     runtimeLifecycle,
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
     recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
@@ -171,7 +185,7 @@ export function createTaskExecutionPersistence(
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createRecoveryAdministration(db, runtimeLifecycle),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
-    runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
+    runtimeSessionCapture: projections.runtimeSessionCapture,
   })
 }
 

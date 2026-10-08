@@ -18,13 +18,17 @@ export type BindRuntimeSelection = (
   assertTaskScope: () => void,
 ) => RuntimeSelectionBinding
 import { DrizzleNodeRunRuntimePersistence } from '../infrastructure/nodeRunRuntimePersistence'
+import type { NodeRunRuntimePersistence } from '../application/ports/nodeRunRuntimePersistence'
+import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
+import { createSelectedTaskNodeRunRuntimePersistence } from '../infrastructure/taskHostNodeRunRuntimePersistence'
 
 /** Task adapter consumes RM's offered participant on the exact live owner transaction. */
 export function composeNodeRunRuntimePersistence(
   db: ProviderNeutralDatabase,
   bindSelection: BindRuntimeSelection,
-) {
-  return new DrizzleNodeRunRuntimePersistence(
+  dependencies: { readonly hostWrites?: TaskHostWriteBinding } = {},
+): NodeRunRuntimePersistence {
+  const persistence = new DrizzleNodeRunRuntimePersistence(
     db,
     isKnownRuntimeKind,
     (transaction, assertTaskScope) => {
@@ -53,4 +57,11 @@ export function composeNodeRunRuntimePersistence(
       }
     },
   )
+  return dependencies.hostWrites === undefined
+    ? persistence
+    : createSelectedTaskNodeRunRuntimePersistence({
+        db,
+        hostWrites: dependencies.hostWrites,
+        persistence,
+      })
 }

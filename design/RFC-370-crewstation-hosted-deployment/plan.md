@@ -1216,3 +1216,11 @@ SOURCE9-R1 独立正式有效稳定 PASS 已由 root 实际消费：9 owned、19
 源码SOURCE9-R1和配套MATCHING16-R1独立正式有效稳定PASS均已由root实际消费，74正式配套材料及5份另列原源码复用材料均实际EOF核对；exact23发布 fbf85b2710180228f84a7e98b2becf7756ac50ae，远端0/0、空index、50项并行WIP完整不变。共享Windows暂未提交，所引用Task租约新测试已在main，完整Windows新用例接线仍待两方测试均上库。该SHA主CI37782710720与Windows37782710729已登记，正式终态尚待验收，不以功能门代签总绿。
 
 本普通后继只退役4个已消费的allowGrowth；129项有序完整库存、baseline、旧why及其余字段、canonicalProjection/sourceDigest/原provenance锚点保持，只按原五个纯JSON函数更新contentDigest。四原生成规则、全部本批7个源码/测试及其余12架构文件保持；没有新增整仓census、AW tests/typecheck/build/services/E2E。此有限后继功能门、精确提交和新SHA hosted CI各自验收；三个共享/自有文档只追加、全部并行输出保持。W2-P准备/具名结果投影设计继续修正原显式context优先级，实际根、Task/Node其余分类、19owner/三roots、H7/A-T7/A-G与CS M0～M4仍开放，AW尚未部署CS。
+
+## 2026-10-09 W2-P 原准备与具名结果投影
+
+SOURCE7-R2 独立正式有效稳定 PASS 已消费，45 项首末 EOF 绑定与完整分析保持；共享安装 fixture 使用同一 installation/module 下两真实 Task，原 SQL、断言和预算保留。CI 前置在 0319cc77b7e2e46d737b6926725ea90bd4079b36 完成：主 37815498721 的 72 项和 Windows 37815498722 SUCCESS，旧失败仍保留。本批 5 个生产文件只在显式 composition hostWrites 选择时接入，保留完整原方法、receiver、callback、显式 context 优先级和同笔事务；新投影测试每 provider 21 项尚待 hosted 执行。
+
+一次原 scoped census 固定上述成功基线，完整 13 输出、四原规则及各并行贡献保持，生产摘要 sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9。新增 3 个 Task infrastructure 文件、7 owner、2 factory、2 个 database-adapter erased type imports；classic targeted inbound/outbound 0→0，原 356 条 authored debt 与全部旧 why 保留，没有新 classic debt。129 项有序账本实测四项差额为 1979→1981、6886→6888、6030→6032、27690→27697，在本源码发布消费后以普通后继退役。原 status raw 字节完整保留，历史格式化失败与修复记录均保留。
+
+MATCHING16 独立配套门、精确提交/推送、普通后继退役与新 SHA hosted CI 分别验收；新测试先上 main，再单独登记完整 Windows 三处命令。没有额外全仓生成或本机 AW tests/typecheck/build/services/E2E。实际根、其余 Task/Node、child/boot、19 owner/三 roots、H7/A-T7/A-G 与 CS M0～M4 仍开放；AW 尚未部署 CS。

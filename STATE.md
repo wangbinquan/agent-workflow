@@ -10948,3 +10948,9 @@ Task、Memory、Intent、Resource Catalog 的原 owner 查询与 Runtime 原生 
 正式原始历史四桶与人民币范围对账保留。本批修复类型收窄、原 measurement 读取、原协议解析、缓存版本回归和统一 Dialog 登记；浏览器保留完整历史人口，只给实际 Task 的页面级同名入口增加原 ID 条件，额外记忆行逐条核对原执行；原 native 文件 fixture 漏登记补一行，业务仍双 provider。所有原断言、人口与预算保持。源码独立有限功能门分别核验，原 CI FAIL 不当成功。
 
 原一次 source census 固定 976f590e，3238 生产文件和 13 原输出完整保留，摘要 sha256:15b742814847f5bed6b938981b594f97016801c29f6bbecff01109b1db4af3dc；后补 E2E 定位不触及生产摘要。只有原测试构造账本按实际原函数从 334 到 335，129 有序库存及旧 why 保留，一次真实增长声明在紧邻正常提交退役；一次 push 最终 SHA 避免两套中间 CI。共享 Task projection WIP 不收编。最终确切 SHA CI、CS 原完整检查/部署及剩余 Git、数字人、成功定时/事件任务继续核验，不 dispatch 已取消的 observability-scale。
+
+## 2026-10-09 RFC-370 Task 执行投影切面
+
+CI 前置已恢复总绿：0319cc77b7e2e46d737b6926725ea90bd4079b36 主流水线 37815498721 的 72 项与 Windows 37815498722 全部 SUCCESS，旧失败留证。W2-P SOURCE7-R2 的 45 项完整绑定和分析已实际消费，5 个生产文件保留原完整端口/方法/callback/context/事务，在显式 hostWrites 下选择原 runtime 准备与具名结果投影。新增测试每 provider 21 项等待源码上库后的 hosted 验收。
+
+一次原 scoped census 固定上述基线，四原规则与 13 完整原输出保持，生产摘要 sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9。3 个新 Task infrastructure 文件增加 7 owner、2 factory 和 2 个数据库 adapter 的 erased type imports；classic targeted 0→0，原 356 条债务、全部 why 与 129 项有序库存保留，只有实测四项增长声明随源码消费、普通后继退役。status 使用原始完整渲染输出。配套独立门、精确发布、Windows 三处新测试接线及 exact-SHA CI 分别验收；实际根、其余 Task/Node、child/boot、19 owner/三 roots、H7/A-T7/A-G 和 CS M0～M4 未完成，AW 尚未部署 CS。
