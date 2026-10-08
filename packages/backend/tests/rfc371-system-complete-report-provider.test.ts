@@ -9,6 +9,8 @@ import { join } from 'node:path'
 import type {
   CompleteObservationTask,
   CompleteObservationAttempt,
+  CompleteObservationDimension,
+  CompleteObservationInvocation,
   ObservationMeasurement,
 } from '@agent-workflow/shared'
 import { completeObservationReportContent } from '@agent-workflow/shared'
@@ -206,6 +208,48 @@ describeEachProvider(
           [1, 0],
           [2, 1],
         ])
+        const agents = await original.service.page<CompleteObservationDimension>(
+          actor,
+          published.id,
+          { section: 'agents', limit: 1 },
+        )
+        expect(agents.total).toBe('1')
+        expect(agents.nextCursor).toBeNull()
+        expect(agents.items[0]).toMatchObject({
+          label: 'aw-memory-distiller',
+          selection: { agent: { id: 'system-agent:aw-memory-distiller', revision: null } },
+          metrics: {
+            state: 'not-ready',
+            recordedUsage: {
+              records: '214',
+              tokens: {
+                input: '214',
+                cacheRead: '428',
+                cacheWrite: '642',
+                output: '856',
+                total: '2140',
+              },
+            },
+          },
+        })
+        const calls: CompleteObservationInvocation[] = []
+        after = undefined
+        for (;;) {
+          const page = await original.service.page<CompleteObservationInvocation>(
+            actor,
+            published.id,
+            { section: 'invocations', limit: 1, ...(after ? { after } : {}) },
+          )
+          expect(page.total).toBe('2')
+          calls.push(...page.items)
+          if (page.nextCursor === null) break
+          after = page.nextCursor
+        }
+        expect(calls).toHaveLength(2)
+        for (const call of calls) {
+          expect(call.agentId).toBe('system-agent:aw-memory-distiller')
+          expect(call.agentName).toBe('aw-memory-distiller')
+        }
         expect(await harness.db.select().from(tasks)).toEqual([])
         expect(await harness.db.select().from(taskExecutionOwners)).toEqual([])
       } finally {

@@ -2483,15 +2483,15 @@
       "boundaryEdgeIds": [
         "import:04297269d70f64b7093d",
         "import:2a5b65ac8a01753e4840",
+        "import:42c9a7c134d700905c03",
         "import:48d373e9854cbebc2eca",
         "import:685e672ce99d6e4eec52",
-        "import:c0d63379327c1e3691a3"
+        "import:c0d63379327c1e3691a3",
+        "import:d92941d1e06f8bd9f37a"
       ],
       "exportedSymbols": [
         "DW_ORCHESTRATOR_NODE_ID",
         "DwPoolMember",
-        "ORCHESTRATOR_AGENT_ID",
-        "ORCHESTRATOR_AGENT_NAME",
         "ORCHESTRATOR_WORKFLOW_PORT",
         "buildDwPoolMembers",
         "buildDynamicWorkflowGenerateSnapshot",
@@ -6481,5 +6481,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:60323e46ceae96a77c0d10b6f1efdcc5383e51df6c440dc9f3651ab0a47f313a"
+  "sourceDigest": "sha256:f104f5e0a3b51e84799508cc031f55d972e814ad9805d61f561868a763418dd0"
 }

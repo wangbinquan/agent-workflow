@@ -1,3 +1,7 @@
+## 2026-10-08 RFC-371 系统 Agent 名称与功能 CI 修复
+
+真实 owner 无目录名称与框架编排器名称已由同一原快照的窄 Task 查询提供，普通目录优先、名称冲突/缺失保持未观测；原 ID、四桶、费用和人口不变，新缓存族10保留旧报告。原 Worker 真公共查询消费且移除RO反向类型边。双 provider warm 原Task2/System2、纯usage facade精确名单、W5原334行内实际调用点1→2、趋势原时间桶定位均修复，所有原断言与预算保留。18源候选和13原始架构产物独立功能门VALID/PASS；唯一原census、141未消费ID、129原账本/why/SCC及四个实测增长保留，未跑AW本地测试/类型/构建/E2E。12类新真实任务全14区段/原根/原生part EOF与四桶CNY对账已落[验收记录](design/RFC-371-run-observability/all-task-type-acceptance-20261008.md)，含失败融合297340Token/¥0.592784，失败不抹去。两既有任务名称复验保持32360/¥0.043222与54527/¥0.098998，两个临时默认选择已恢复。精确远端新CI另验，历史Memory2160404Token/历史Task-Intent等恢复、Git/数字员工/定时事件、正式页面与CS部署未完成，RFC保持进行中。以下全部共享旧正文与并行输出保持。
+
 ## 2026-10-08 RFC-371 System 完整报告资格修复候选
 
 真实独立意图报告 404 定位到缓存 admission／publish／retained read 的 Task-only 资格查询。改由 bootstrap 注入原 Task/System owner 工厂，同一 executor 全部 retained IDs 分批到 EOF，再核对完整人口；无任务上限或虚构 Task。新缓存族9保留旧族8终态。新增独立 System 211+3 四桶／重试及203混合来源、已知CNY、旧报告保留回归。原 usage 算法逐字迁入其 owner、窄 public callback与显式数值 mapper补齐；原 System helper串行化实测及守卫负例追加，旧规则／预算／全部四根语句人口和映射保持。源实现门、原13产物、精确上库及 hosted 总CI另验；真实全类型对账、Git/数字员工、页面和CS部署继续，RFC 未完成。详见[报告修复](design/RFC-371-run-observability/system-complete-report-admission.md)。以下旧共享正文与并行输出完整保留。

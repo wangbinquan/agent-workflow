@@ -45,6 +45,15 @@ export function systemObservationVisibility(db: ProviderNeutralDatabase, actor: 
 
 export function createSystemObservationFacts(db: ProviderNeutralDatabase) {
   return {
+    async originalAgentName(id: string) {
+      const rows = await db
+        .selectDistinct({ name: owners.agentName })
+        .from(owners)
+        .where(eq(owners.agentId, id))
+        .all()
+      const name = rows.length === 1 ? rows[0]!.name : null
+      return name !== null && name.trim().length > 0 ? name : null
+    },
     async get(actor: Actor, id: string) {
       const row = await db
         .select(systemObservationFields)

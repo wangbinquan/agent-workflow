@@ -310,11 +310,17 @@ describeEachProvider('RFC-371 native retained revision and complete warm reads',
         ),
       ).toBe(false)
       expect(
-        warm.filter(
-          (entry) =>
-            /count\(\*\)/i.test(entry.sql) &&
-            /\bjoin\b/i.test(entry.sql) &&
-            /tasks/i.test(entry.sql),
+        warm.filter((entry) =>
+          /^select\s+(?:tasks\.)?id\s+from\s+(?:agent_workflow\.)?tasks\s+where\s+(?:agent_workflow\.)?tasks\.id\s+in\s*\(/i.test(
+            entry.sql.replace(/["`]/g, ''),
+          ),
+        ).length,
+      ).toBe(2)
+      expect(
+        warm.filter((entry) =>
+          /^select\s+(?:system_agent_observation_groups\.)?id\s+from\s+(?:agent_workflow\.)?system_agent_observation_groups\s+where\s+(?:agent_workflow\.)?system_agent_observation_groups\.id\s+in\s*\(/i.test(
+            entry.sql.replace(/["`]/g, ''),
+          ),
         ).length,
       ).toBe(2)
       expect(warm.some((entry) => /observation_report_receipts/i.test(entry.sql))).toBe(true)

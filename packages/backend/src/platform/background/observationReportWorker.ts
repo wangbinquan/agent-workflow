@@ -1,4 +1,5 @@
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
+import type { CompleteTaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 import { prepareObservationNativeHistory } from '@/modules/task-execution/composition/observationNativeHistory'
 import { composeCompleteObservationSnapshot } from '@/modules/run-observability/composition/completeObservationSnapshot'
 import { completeObservationFileSpool } from '@/modules/run-observability/composition/completeObservationSpool'
@@ -30,11 +31,15 @@ async function run(input: OriginalObservationWorkerStart) {
         kind: 'native-history-result',
         result: await prepareObservationNativeHistory(snapshot.executor, input.value, snapshot),
       }
+    const tasks: CompleteTaskObservationFactsQuery = createCompleteTaskObservationFacts(
+      snapshot.executor,
+      input.report.request.taskId,
+    )
     return {
       kind: 'result',
       result: await composeCompleteObservationSnapshot({
         snapshot,
-        tasks: createCompleteTaskObservationFacts(snapshot.executor, input.report.request.taskId),
+        tasks,
         report: input.report,
         spool: completeObservationFileSpool(input.appHome),
         signal: stop.signal,

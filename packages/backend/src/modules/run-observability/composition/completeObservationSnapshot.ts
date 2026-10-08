@@ -51,6 +51,7 @@ export async function composeCompleteObservationSnapshot(input: {
     rows: snapshot.workspace,
     namespace: namespace + '/agent-names',
     signal,
+    originalAgentName: input.tasks.originalAgentName?.bind(input.tasks),
   })
   const build = await buildCompleteObservationCohort({
     actor: report.request.actor,

@@ -531,9 +531,20 @@ test('task, agents and attempt drill-down use real observations and standard car
       fullPage: true,
     })
   }
+  const originalMissingBucket = trendRows.find((row) => row.metrics.state === 'not-ready')
+  expect(originalMissingBucket).toBeDefined()
+  // Automatic memory work may join this same original period after the first
+  // report. Identify its stable key, while still checking the actual gap and
+  // every unknown Token bucket on this no-usage fixture.
   const observedBucket = page
     .locator('[data-observation-trend]')
-    .getByRole('button', { name: /1 tasks.*Usage records are incomplete for this scope/ })
+    .getByRole('button')
+    .filter({ has: page.getByText(originalMissingBucket!.key, { exact: true }) })
+  await expect(observedBucket).toHaveCount(1)
+  await expect(observedBucket).toHaveAttribute(
+    'aria-label',
+    /Usage records are incomplete for this scope · Uncached input — · Cache read — · Cache write — · Output —/,
+  )
   await observedBucket.focus()
   await expect(page.getByRole('group', { name: 'Current trend interval' })).toContainText(
     'Not observed',

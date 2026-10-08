@@ -32,10 +32,11 @@ import {
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 
-/** Name of the framework-internal orchestrator agent (never a user `agents` row). */
-export const ORCHESTRATOR_AGENT_NAME = 'aw-workflow-orchestrator'
-/** Stable canonical id for the framework-internal orchestrator agent. */
-export const ORCHESTRATOR_AGENT_ID = '__orchestrator_agent__'
+import {
+  ORCHESTRATOR_AGENT_ID,
+  ORCHESTRATOR_AGENT_NAME,
+} from '@/modules/task-execution/public/queries'
+export { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_AGENT_NAME }
 /** The single output port the orchestrator declares — carries the workflow JSON. */
 export const ORCHESTRATOR_WORKFLOW_PORT = 'workflow'
 /** Node id of the orchestrator node in the synthesized generation-phase snapshot. */

@@ -378,6 +378,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/review.ts',
       'packages/backend/src/services/reviewDecisionComposition.ts',
       'packages/backend/src/services/runner.ts',
+      'packages/backend/src/services/runtime/usage.ts',
       'packages/backend/src/services/scriptDepsEnv.ts',
       'packages/backend/src/services/scriptRun.ts',
       'packages/backend/src/services/sessionEventSink.ts',

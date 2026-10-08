@@ -17,6 +17,7 @@ export {
 export { readNodeRunPrompt } from '../composition/nodeRunPrompts'
 export type { NodeRunPromptReader } from '../application/ports/nodeRunPromptContent'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
+export { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_AGENT_NAME } from '../domain/orchestratorAgentIdentity'
 export type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 export {
   freezeRuntimeBinaryConfiguration,
@@ -70,6 +71,8 @@ export interface TaskObservationFactsQuery {
 /** Original retained Task/System IDs, qualified by their owner on the supplied reader. */
 export interface CompleteTaskObservationFactsQuery extends TaskObservationFactsQuery {
   visibleIds(actor: Actor, sourceIds: readonly string[]): Promise<readonly string[]>
+  /** Original retained owner name, or the exact original framework identity. */
+  originalAgentName(id: string): Promise<string | null>
 }
 
 /** The existing Task visibility gate runs before these bound workspace queries. */

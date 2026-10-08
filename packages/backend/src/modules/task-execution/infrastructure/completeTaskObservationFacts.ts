@@ -10,6 +10,7 @@ import { createTaskObservationFacts } from './taskObservationFacts'
 import { systemAgentObservationGroups as systemGroups } from '@/db/observationSystem'
 import { createSystemObservationFacts, systemObservationVisibility } from './systemObservationFacts'
 import { createCombinedObservationNativeScopes } from './observationNativeSources'
+import { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_AGENT_NAME } from '../domain/orchestratorAgentIdentity'
 
 /** Historical observation retains internal and soft-deleted original rows. Ordinary catalogs are unchanged. */
 export function createCompleteTaskObservationFacts(
@@ -87,6 +88,10 @@ export function createCompleteTaskObservationFacts(
   }
   return {
     ...original,
+    originalAgentName: (id) =>
+      id === ORCHESTRATOR_AGENT_ID
+        ? Promise.resolve(ORCHESTRATOR_AGENT_NAME)
+        : system.originalAgentName(id),
     async visibleIds(actor, sourceIds) {
       if (
         !sourceIds.length ||

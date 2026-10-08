@@ -11,6 +11,7 @@ export function completeObservationAgentNames(input: {
   readonly rows: CompleteWorkingRows
   readonly namespace: string
   readonly signal?: AbortSignal
+  readonly originalAgentName?: (id: string) => Promise<string | null>
 }) {
   const cache = completeWorkingCache<{ name: string | null }>(
     input.rows,
@@ -28,7 +29,7 @@ export function completeObservationAgentNames(input: {
           .from(agents)
           .where(eq(agents.id, id))
           .get()
-        retained = { name: original?.name ?? null }
+        retained = { name: original?.name ?? (await input.originalAgentName?.(id)) ?? null }
         await cache.put(key, retained)
       }
       return retained.name

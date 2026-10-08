@@ -12,7 +12,6 @@ import type { Actor } from '@/auth/actor'
 import type { PlatformObservationStore } from './platformObservationStore'
 import type { UsageLedgerStore } from './usageLedger'
 import type { ObservationNativeScopeSource } from '../public/participants'
-import type { CompleteTaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 
 /** Structurally supplied by the TaskExecution owner, only at bootstrap. */
 export interface ObservationTaskSource {
@@ -43,7 +42,8 @@ export interface ObservationTaskSource {
 }
 /** Full reports retain both original Task and System groups without inventing Task rows. */
 export interface CompleteObservationTaskSource extends ObservationTaskSource {
-  visibleIds: CompleteTaskObservationFactsQuery['visibleIds']
+  visibleIds(actor: Actor, sourceIds: readonly string[]): Promise<readonly string[]>
+  originalAgentName?(id: string): Promise<string | null>
 }
 export interface ObservationSnapshotSources {
   readonly tasks: ObservationTaskSource
