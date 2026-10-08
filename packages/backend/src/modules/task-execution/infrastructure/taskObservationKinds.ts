@@ -1,4 +1,8 @@
-import { NodeKindSchema, type ObservationAttemptFacts } from '@agent-workflow/shared'
+import {
+  isWorkgroupTask,
+  NodeKindSchema,
+  type ObservationAttemptFacts,
+} from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { tasks } from '@/db/schema'
@@ -35,7 +39,8 @@ export async function observationAttemptKinds<
     group = null
   }
   const dynamicWorkgroup =
-    original?.workgroupId != null &&
+    original !== undefined &&
+    isWorkgroupTask(original) &&
     group !== null &&
     typeof group === 'object' &&
     'mode' in group &&
