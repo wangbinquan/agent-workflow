@@ -822,10 +822,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1969,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371 original System native accounting: five actual command/writer entries for independent System owner/source/root persistence; no Task claim or fake Task; original canonical count 1964 -> 1969. Measured committed 7b62be235cf3d983a7bba31d09edf070173ea6f7 plus frozen 76 owned System native paths only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -839,10 +836,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 277,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-371 original System native accounting: three original System owner/source/root transactions using the selected provider; original canonical count 274 -> 277. Measured committed 7b62be235cf3d983a7bba31d09edf070173ea6f7 plus frozen 76 owned System native paths only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -863,10 +857,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6839,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371 original System native accounting: eight net exact edges for original System acceptance, selected runtime identity and full history projection; original canonical count 6831 -> 6839. Measured committed 7b62be235cf3d983a7bba31d09edf070173ea6f7 plus frozen 76 owned System native paths only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -922,10 +913,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27610,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 original System native accounting: 51 net top-level owners for nine production files, original System lifecycle and source federation; original canonical count 27559 -> 27610. Measured committed 7b62be235cf3d983a7bba31d09edf070173ea6f7 plus frozen 76 owned System native paths only. Original 129 ordered inventory entries, why, rules, complete population and budgets unchanged. One-time growth only; retire on the next no-growth commit."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -933,8 +921,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7b62be235cf3d983a7bba31d09edf070173ea6f7",
-    "contentDigest": "sha256:d971253a6874c3a14b2f78790da94d5cd4a621f1d82ed61fe1c1ab3a6aa6bd16",
+    "currentSnapshotSha": "6af844d76d42cdacbbc168e236bf7cf25dfb755d",
+    "contentDigest": "sha256:a934ac5f1b6aab1a77d898f83989443ca0125e97d916a4330bdab217a0de70aa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

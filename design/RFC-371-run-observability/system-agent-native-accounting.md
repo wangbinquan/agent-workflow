@@ -42,6 +42,12 @@ System 与 Task 共用原始完成函数，按 final read、已提交数字投�
 
 ## 未完成判据
 
-当前系统接入仍是未发布、未通过 hosted CI 的候选，不能声称历史漏量已经补入正式统计。完成必须包括双 provider 的原来源/ACK/回滚/重试/进程失败/全部 EOF 回归、实际启动根绑定，再分别真实运行记忆、意图、变更说明、探测、MCP 测试台、技能融合、动态编排、commit/merge 和当前八个数字员工 Agent。CS 托管选定实现另行验收，不能用独立部署通过替代。
+系统接入已发布到 `6af844d76d42cdacbbc168e236bf7cf25dfb755d`；hosted CI 与真实模型对账尚未完成，不能声称历史漏量已经补入正式统计。完成必须包括双 provider 的原来源/ACK/回滚/重试/进程失败/全部 EOF 回归、实际启动根绑定，再分别真实运行记忆、意图、变更说明、探测、MCP 测试台、技能融合、动态编排、commit/merge 和当前八个数字员工 Agent。CS 托管选定实现另行验收，不能用独立部署通过替代。
 
 每个入口都核对原生 part ID、各分类 Token、冻结人民币估值、任务与 Agent 汇总及正式页面。以前失败及已记录漏量保留；不能把费用验证配置当默认供应商配置，也不能把成功启动、数据页 ready 或某一个 CI job 通过当整体验收完成。
+
+## 启动与正式 CI 发现的迁移登记遗漏
+
+原提交仅加入 SQLite 0243，未加入 PostgreSQL 的 append-only 历史。实际后端启动及 exact-SHA 维护 CI `37730364510` 均被 schema history head 检查拒绝，原失败保留。随后使用原 `db:rfc349-postgresql-schema --append 0019_rfc371_system_agent_native_usage` 生成两份不可变产物；39 份旧 PostgreSQL 历史与原提交逐字一致，只新增 16 张 System 表。原错误不是模型或任务成功，也不能把静态生成成功记作 CI 通过。
+
+后继同时退役本次已消费的四条实际增长声明；129 个有序账本、所有 why、实际统计分母、原生页与完整人口规则保留，仅按原 provenance 函数更新内容摘要。没有重复源码 census，没有本机 AW tests/typecheck/build/E2E。原库已作只读备份，原后端恢复和真实任务验证继续。
