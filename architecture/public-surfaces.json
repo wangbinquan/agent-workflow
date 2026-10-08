@@ -3,9 +3,9 @@
     "consumers": 1302,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1701,
+    "methods": 1703,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 29192,
+    "recursiveFields": 29196,
     "symbols": 1238
   },
   "entries": [
@@ -153097,7 +153097,21 @@
       "entrypoint": "participants",
       "fields": [
         {
+          "consumerEdgeIds": [
+            "import:37bfa057fbf80e602056"
+          ],
+          "fieldPath": "$method:forget.$parameter:input.retainedRef",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:forget.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:37bfa057fbf80e602056"
+          ],
           "fieldPath": "$method:release.$parameter:input.retainedRef",
           "type": "string"
         },
@@ -153151,6 +153165,13 @@
       "id": "public:runtime-management:participants:SystemAgentRetainedContents",
       "members": [],
       "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:37bfa057fbf80e602056"
+          ],
+          "name": "forget",
+          "signatureDigest": "sha256:28282cbb40036b15ed4eb6e7837b1098bf81a6641ecabe541ce3475d2108c377"
+        },
         {
           "consumerEdgeIds": [
             "import:289c662c795807189e12"
@@ -206796,9 +206817,9 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 13,
+        "maxMethods": 14,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 144,
+        "maxTransitiveLeafFields": 146,
         "maxUnionVariants": 84
       },
       "consumerEdgeIds": [
@@ -207178,7 +207199,10 @@
           "type": "'runtime-management'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:e10a2637980c47d77ad2",
+            "import:edb76d371bf6d37abd8f"
+          ],
           "fieldPath": "$method:run.$parameter:request.runtimeBinding.$variant:0.reference",
           "type": "string"
         },
@@ -207390,6 +207414,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:e10a2637980c47d77ad2",
             "import:edb76d371bf6d37abd8f"
           ],
           "fieldPath": "$method:run.$return.retainedRef",
@@ -207466,6 +207491,20 @@
         },
         {
           "consumerEdgeIds": [
+            "import:e10a2637980c47d77ad2",
+            "import:edb76d371bf6d37abd8f"
+          ],
+          "fieldPath": "retainedContents.$method:forget.$parameter:input.retainedRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "retainedContents.$method:forget.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e10a2637980c47d77ad2",
             "import:edb76d371bf6d37abd8f"
           ],
           "fieldPath": "retainedContents.$method:release.$parameter:input.retainedRef",
@@ -207637,6 +207676,14 @@
           ],
           "name": "error",
           "signatureDigest": "sha256:8610745686a9cd96a1ccb76a9aa47e9ab44b312b4e14ccda72cb78fe19764d0c"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e10a2637980c47d77ad2",
+            "import:edb76d371bf6d37abd8f"
+          ],
+          "name": "forget",
+          "signatureDigest": "sha256:28282cbb40036b15ed4eb6e7837b1098bf81a6641ecabe541ce3475d2108c377"
         },
         {
           "consumerEdgeIds": [],
@@ -224713,7 +224760,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9ec5258c2f09c3c3b2a9e03c4c5c7911f5722cd0e65adae13a2ad46fa9c5e649",
+  "sourceDigest": "sha256:67b6d66cc0ff1163f62e52dd533d13fa2377e55f47a836d2c7d2f395e258f9bc",
   "targetContexts": [
     "collaboration",
     "development-automation",
