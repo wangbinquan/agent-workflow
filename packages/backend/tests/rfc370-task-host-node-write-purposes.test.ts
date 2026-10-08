@@ -512,7 +512,8 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
       const before = await f.rows(),
         otherBefore = await other.rows()
       const calls: NativeCall[] = []
-      const view = traceNative(f, calls)[purpose]
+      const purposeViews = traceNative(f, calls)
+      const view = purposeViews[purpose]
       if (purpose === 'issuedResults') f.h.lose()
       const first = {
         nodeRunId: f.runId,
@@ -613,7 +614,7 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
               outputs: [{ portName: 'explicit', content: environment }],
               executionContext: f.context,
             }
-            expect(await view.nodeRuns.mint(mint)).toBe(mintId)
+            expect(await purposeViews.preparation.nodeRuns.mint(mint)).toBe(mintId)
             expect(
               calls.find((call) => call.name === 'mint' && call.args[0] === mint)?.args[0],
             ).toBe(mint)

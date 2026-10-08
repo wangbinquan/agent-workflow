@@ -10990,3 +10990,15 @@ SOURCE9-R2 独立有效稳定 PASS、0 findings 已由 root 实际消费全部 5
 129 项有序账本仅配套四项实测增长：rfc294-mutation-entrypoints 1981→1982, rfc294-cross-context-observed-imports 6888→6889, rfc294-architecture-exceptions 6032→6033, rfc294-module-symbol-owners 27697→27702。原四个纯治理/JSON emission 先完整复现原始输出，再给四项一次性声明；源码发布消费后以普通后继退役。全部八份 canonical 和另三份治理的完整原输出保持，status 使用原 renderer 的完整 9215 bytes，不作全文件格式归一；本批真实指标变化同步于原始渲染。
 
 配套 MATCHING16 门、精确 22 路径发布、普通声明退役与已上库测试的 Windows 三处登记、新 exact-SHA main/Windows 全绿逐项验收。没有新增整仓 census 或本机 AW tests/typecheck/build/services/E2E。N2 实际 Node caller、其余 Task/child/boot 分类、十九 owners/三 roots、完整 H7/A-T7/A-G 与 CS M0～M4 继续开放，AW 尚未部署 CS。三个文档只追加，全部共享和并行内容保留。
+
+## 2026-10-09 N1 精确源码发布与 Windows 验证接线
+
+cee3853bffdfafc61d9ea08a3b8f63aa6b59a744 已将独立 SOURCE9-R2 与 MATCHING16-R1 有效稳定 PASS 的22个文件正常推送 main；root完整消费正式材料、全部分析，远端0/0、空index及并行内容保留。新49/provider测试源码已上库，本普通后继后等待新SHA main/Windows总绿及实际案例验收。原R1夹具FAIL和修正继续保留。
+
+本后继只退役随源码消费的四个allowGrowth，完整129有序库存、baseline、所有why、canonicalProjection/sourceDigest及原provenance锚点保持，原五纯JSON函数只重算contentDigest。Windows两处push/PR过滤和原平台命令加入已上库Node新测试（三引用），并在两过滤分别加入本N1三个尚未受监测的生产路径（六引用）；原composition路径已有两处保留。移除九新增引用可全字节还原完整原workflow，所有旧命令、并行接线、断言和预算保持。三个文档只追加，全部旧正文保留；另18已发布路径不变，无新census或本机AW tests/typecheck/build/services/E2E。独立后继功能门、精确发布及新SHA hosted总绿逐项验收；N2实际caller、H7/A-T7/A-G/十九owners/三roots、CS M0～M4继续，AW未部署CS。
+
+## 2026-10-09 N1 hosted TS2339 最小测试修复
+
+cee3853b 原 main run 37854363636 的 Lint + Typecheck 作业、Windows run 37854363696 的 Typecheck 均实际报同一 TS2339：新 Node 目的测试第616行，按 purpose 索引后的 union 别名不能随 purpose 分支缩窄。原错误日志和 failure 历史完整保留；此事实不能签总绿。
+
+此前 RETIREMENT-WINDOWS5-R1 对43项首末真实EOF的独立有效稳定PASS、0 findings已由root完整消费。本次必要修复仅保留原一次 traceNative 返回值为 purposeViews，原八操作继续选择 purposeViews[purpose]，原 preparation 分支的 mint 明确使用同对象的 purposeViews.preparation.nodeRuns。未加 cast、跳过分支、删断言或改预算；移除一条局部绑定及还原 mint 接收对象可全字节恢复原42933-byte测试，15定义/每provider49例/162静态expects/三个新增15000预算保持。四生产和旧原端口、已退休 ledger 与 Windows 九处接线保持，不重复 census 或本机AW执行。测试及三个历史追加文档再经有限独立功能门，与前次5-path门组合为最终6路径普通后继，精确推送后以新SHA main/Windows总绿及实际49例逐项验收。N2/H7/A-T7/A-G/CS M0～M4继续开放，AW未部署CS。
