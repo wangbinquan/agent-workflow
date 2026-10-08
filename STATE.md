@@ -1,3 +1,11 @@
+## 2026-10-08 RFC-371 Narrative identity CI 修复候选
+
+4efba2f9 的 Windows 37733093248 原平台功能 959 pass / 0 fail，原 System native 全量／续接回归通过；后续 typecheck 因 Narrative resolver 显式结果类型遗漏已选定 observationIdentity 而失败。补回原 System request 可选身份类型，原双 provider Narrative 回归追加同一冻结对象透传断言，保留全部已有功能断言。RFC-349 identity 清单由其原会话负责。全类型真实模型验收发现的 System 完整报告资格查询遗漏另行修复；hosted 总 CI、原生逐记录／四桶／人民币对账、页面与 CS 部署继续，RFC 未完成。以下旧共享 STATE 与并行输出完整保留。详见[系统调用验收](design/RFC-371-run-observability/system-agent-native-accounting.md)。
+
+# RFC-370 CI：总流水线门槛与新增 identity 表配套
+
+用户已明确要求 GitHub 总流水线全绿后才继续 RFC 新实施。7b62be23 的主 CI 37727175165 为正式 failure，70 项功能作业全部成功，Windows 37727363630 全部成功；这些部分成功不代签总绿。后继 4efba2f9 的主 CI 37733093270／Windows 37733093248 新增的类型错误由并行 RFC-371 会话修复，本片只补 RFC-349 完整 identity 清单中已新增的 system_agent_observation_sources。原四个 case、完整表遍历、PostgreSQL DEFAULT／SQLite NULL、多行事件判据与预算保留。无生产／架构 metadata 改动或新 census；有限门、精确发布与 hosted 新 SHA 终态分别验收。runtime／Node／CS 新实施继续暂停，AW 尚未部署 CS，RFC 未完成。以下旧共享正文与并行输出完整保留。
+
 ## 2026-10-08 RFC-371 System native resume hosted CI follow-up
 
 Windows 37730364448: 957 pass / 2 fail retained. Fresh full422 and missing-output capture passed; resume reconciliation used Task storage for original System baseline. Select original members/parents/scope by source namespace and persist the selected request protocol without a new driver branch. Keep all original provider assertions/budgets and append 211 examined/resolved baseline proof. Original bun dev restoration uses its existing development type-package overlay; immutable development@10 and 13 dependent definitions are preserved. Hosted CI, real System entry acceptance, remaining task kinds and CS deployment continue; both RFCs stay In Progress. Full old STATE and concurrent output are preserved. See [native accounting](design/RFC-371-run-observability/system-agent-native-accounting.md).

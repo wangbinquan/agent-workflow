@@ -59,3 +59,9 @@ Windows exact-SHA run `37730364448` 的原 957 pass / 2 fail 保留：全量 422
 原双 provider 回归保留全部 422/3 条、深度 42、四桶、价格版本及 120 秒预算；追加原协议与 resume baseline 211 examined / 211 resolved / 0 unresolved 断言。没有本机 AW tests/typecheck/build/E2E，新 hosted CI 与真实入口验收继续。
 
 原库 SQLite 迁移已应用，但此前直接 `bun run --watch src/main.ts start` 的启动复现未带仓库 `bun dev` 固有的 `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS=35000` 与 `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY=1`，因此被既存 development@10 摘要差异拒绝。只读核对确认 13 个员工定义依赖该登记；不删除、不追改其原行。恢复采用仓库原开发命令及原草稿层，保持版本登记的不可变约束，不能以本机开发启动通过宣称发布二进制的历史数字员工兼容性已验收。
+
+## Narrative 已选定运行时身份的类型接续
+
+后继 exact-SHA `4efba2f9a4c2ff753d5cf17c193b204d2d084b97` 的 Windows run `37733093248` 中，原平台功能套件 959 pass / 0 fail，原 System 全量 422、resume baseline 211 与缺字段回归通过；随后 typecheck 在 `changeNarrative.ts:407–408` 报 TS2339。实际 runtime owner 已返回 observationIdentity，Narrative 的显式 resolver 结果类型却漏掉了这个可选字段。补回原 System request 合同的选定身份类型，并在原双 provider Narrative 用例追加同一个不可变身份对象透传断言，原 opaque material、正文解析、生命周期和其余断言保持。
+
+这次只是类型与原功能回归的配套修复，不把 959 项部分成功写成总 CI 通过。另一个真实入口发现的 System 完整报告资格查询遗漏继续修复；真实全类型对账、正式页面和 CS 部署仍未完成。原文与共享并行输出完整保留。

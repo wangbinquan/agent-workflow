@@ -309,6 +309,13 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
       reference: 'remote-narrative-runtime:17',
       version: '17',
     })
+    // RFC-371: the selected identity must survive the explicit Narrative resolver
+    // contract; dropping it made CI fail and left this System call unpriced.
+    const observationIdentity = Object.freeze({
+      registrationId: 'original-narrative-registration',
+      configurationRevision: 17,
+      acceptedName: 'original-narrative-runtime',
+    })
     const requests: SystemAgentRunRequest[] = []
     const selected = Object.freeze<SystemAgentRunFamily>({
       workspaces: {
@@ -322,6 +329,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
       async run(request) {
         expect(this).toBe(selected)
         expect(request.runtimeBinding).toBe(runtimeBinding)
+        expect(request.runtimeObservationIdentity).toBe(observationIdentity)
         expect(request.workspaceScope.namespace).toBe('shared')
         for (const field of [
           'runtimeBinary',
@@ -354,6 +362,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
           return {
             protocol: profile.protocol,
             runtimeBinding,
+            observationIdentity,
             configDir: profile.configDir,
             model: profile.model,
             isSandbox: profile.isSandbox,

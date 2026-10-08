@@ -308,6 +308,9 @@ export interface ChangeNarrativeDeps {
   }): Promise<{
     readonly protocol: Parameters<SystemAgentRunFamily['run']>[0]['protocol']
     readonly runtimeBinding: Parameters<SystemAgentRunFamily['run']>[0]['runtimeBinding']
+    readonly observationIdentity?: Parameters<
+      SystemAgentRunFamily['run']
+    >[0]['runtimeObservationIdentity']
     readonly configDir: { readonly env: string; readonly name: string }
     readonly model: string | null
     readonly isSandbox: boolean
