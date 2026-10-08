@@ -3,7 +3,11 @@ import type {
   RuntimeRegistryOperations,
   RuntimeRow,
 } from '@/modules/runtime-management/application/ports/runtimeRegistry'
-import type { RuntimeKind, RuntimeSmokeResult } from '../../public/types'
+import type {
+  RuntimeKind,
+  RuntimeSmokeResult,
+  RuntimeObservationIdentity,
+} from '../../public/types'
 import type { RuntimeModelList } from '../../public/queries'
 import type { AgentMaterialContentReference } from './agentMaterial'
 
@@ -34,6 +38,7 @@ export interface RuntimeSmokeRequest {
   readonly model?: string
   readonly isSandbox: boolean
   readonly extraArgs?: readonly string[]
+  readonly runtimeObservationIdentity?: RuntimeObservationIdentity
 }
 
 export interface RuntimeDriverManagementPort {

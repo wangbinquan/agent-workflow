@@ -2,6 +2,7 @@ import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composi
 import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import {
   composeLocalTaskRunRootSelection,
   composeTaskWorkspaceExcludeProfilesFor,
@@ -2021,7 +2022,10 @@ async function composeSqliteProviderSession(
   const memoryInjectionQueries = composeSqliteMemoryInjectionQueries(db)
   const runtimeSessionLeases = createRuntimeSessionLeaseOperations(db)
   const runtimeRegistry = providerCore.runtimeRegistry
-  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome })
+  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: systemAgentAppHome,
+    observations: () => systemAgentObservations,
+  })
   const memoryOperations = composeSqliteMemoryOperations({
     systemAgentBinding: memorySystemAgentBinding,
     db,
@@ -2117,6 +2121,21 @@ async function composeSqliteProviderSession(
       generationId: databaseProvider.generation.payload.generationId,
     },
     admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),
+  })
+  const systemAgentObservations = composeSystemAgentObservations({
+    db: db,
+    observations: composeLocalInvocationObservations(
+      db,
+      composeObservationUsageSource(
+        db,
+        nativeHistoryRead({
+          provider: 'sqlite',
+          db,
+          generationId: databaseProvider.generation.payload.generationId,
+        }),
+      ),
+    ),
+    nativeUsage,
   })
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
@@ -2694,6 +2713,31 @@ async function composeSqliteProviderSession(
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes receive this same explicit application-owned instance.
   const mcpRuntimeTests = composeLocalMcpDiagnostics({
+    observe:
+      ({ session, turn, runtime }) =>
+      (startedAt) =>
+        systemAgentObservations.open({
+          feature: 'mcp-runtime-test',
+          agentName: 'aw-mcp-runtime-test',
+          protocol: session.runtimeProtocol,
+          startedAt,
+          runtimeObservationIdentity: {
+            registrationId: runtime.row.id,
+            configurationRevision: runtime.row.probeFence,
+            acceptedName: runtime.row.name,
+          },
+          ...(turn.seq > 1 && session.runtimeSessionId !== null
+            ? { resumeSessionId: session.runtimeSessionId }
+            : {}),
+          demand: {
+            kind: 'mcp-runtime-test',
+            originalId: session.id,
+            originalAttempt: turn.id,
+            name: 'MCP 测试 · ' + session.runtimeName,
+            ownerUserId: session.ownerUserId,
+            purpose: 'playground',
+          },
+        }),
     ...composeMcpRuntimeTestProvider(db),
     isRuntimeEligible: isRuntimeMcpTestEligible,
     coordinator: mcpOperationCoordinator,
@@ -3397,6 +3441,11 @@ async function composeSqliteProviderSession(
   })
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
     nativeUsage,
+    nativeUsageHistory: nativeHistoryRead({
+      provider: 'sqlite',
+      db,
+      generationId: databaseProvider.generation.payload.generationId,
+    }),
     completeObservationReports: observationReports.queries,
     nodeRunPrompts,
     portArtifacts,
@@ -3909,6 +3958,7 @@ async function composeSqliteProviderSession(
     }),
   })
   const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    observations: () => systemAgentObservations,
     appHome: () => intentDispatchDeps.appHome,
   })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({

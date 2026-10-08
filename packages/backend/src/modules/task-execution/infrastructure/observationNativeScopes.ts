@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -7,12 +8,7 @@ import {
   parseObservationCapturedUsage,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nativeUsagePreparations,
-  nativeUsageSessionParents,
-  nativeUsageEmissions,
-  taskExecutionObservationSources,
-} from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
 import type { ObservationNativeScopeSource } from '@/modules/run-observability/public/participants'
 import { verifyNativeUsageScope } from './nativeUsageScopeReference'
@@ -22,7 +18,16 @@ import { originalNativeUsageStoreGeneration } from './nativeUsageStoreBinding'
 /** No second connection or claims are synthesized; bootstrap supplies the original reader. */
 export function createObservationNativeScopes(
   db: ProviderNeutralDatabase,
+  sourceKind: 'task' | 'system' = 'task',
 ): ObservationNativeScopeSource {
+  const {
+    nativeUsageSessionParents,
+    nativeUsagePreparations,
+    taskExecutionObservationSources,
+    nativeUsageEmissions,
+    sourcePrefix,
+  } = nativeUsageEvidenceStorage(sourceKind)
+
   const checked = new Map<string, ReturnType<typeof ObservationNativeScopeReferenceSchema.parse>>()
   const parents = new Map<string, typeof nativeUsageSessionParents.$inferSelect>()
   const retain = <T>(cache: Map<string, T>, key: string, value: T) => {
@@ -49,7 +54,7 @@ export function createObservationNativeScopes(
     if (!original || original.taskId !== binding.taskId || original.nodeRunId !== binding.nodeRunId)
       throw new Error('Original native scope changed its accepted Task or attempt')
     const preparation = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(original.document))
-    const sourceGeneration = await originalNativeUsageStoreGeneration(db, preparation)
+    const sourceGeneration = await originalNativeUsageStoreGeneration(db, preparation, sourceKind)
     if (
       preparation.nativeSource !== scope.ancestry.identity.nativeSource ||
       sourceGeneration === null ||
@@ -58,7 +63,7 @@ export function createObservationNativeScopes(
       preparation.epoch !== scope.ancestry.identity.epoch
     )
       throw new Error('Original native scope changed its accepted source generation')
-    await verifyNativeUsageScope(db, binding, scope)
+    await verifyNativeUsageScope(db, { ...binding, sourceKind }, scope)
     return retain(checked, key, scope)
   }
   const link = async (passId: string, session: string) => {
@@ -84,7 +89,7 @@ export function createObservationNativeScopes(
     onReader: (reader) => {
       if (!('select' in reader) || typeof reader.select !== 'function')
         throw new Error('Original native scope reader is unavailable')
-      return createObservationNativeScopes(reader as ProviderNeutralDatabase)
+      return createObservationNativeScopes(reader as ProviderNeutralDatabase, sourceKind)
     },
     qualify: (value) => qualifyOriginalNativeUsage(db, value),
     async verify(input) {
@@ -112,7 +117,7 @@ export function createObservationNativeScopes(
           .where(eq(taskExecutionObservationSources.id, input.nativeWatermark))
           .limit(1)
       )[0]
-      if (!source || input.sourceId !== 'local-node:' + source.nodeRunId)
+      if (!source || input.sourceId !== sourcePrefix + source.nodeRunId)
         throw new Error('Native ledger page changed its original source owner')
       const evidence = parseObservationCapturedUsage(JSON.parse(source.evidenceJson))
       const frozen = (

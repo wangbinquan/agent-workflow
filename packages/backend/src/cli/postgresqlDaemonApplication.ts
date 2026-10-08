@@ -1,6 +1,7 @@
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import {
   composeLocalTaskRunRootSelection,
   composeTaskWorkspaceExcludeProfilesFor,
@@ -789,7 +790,10 @@ export async function composePostgresqlApplication(
     db: input.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
-  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome })
+  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: systemAgentAppHome,
+    observations: () => systemAgentObservations,
+  })
   const memoryOperations = composePostgresqlMemoryOperations({
     systemAgentBinding: memorySystemAgentBinding,
     db: input.db,
@@ -824,6 +828,31 @@ export async function composePostgresqlApplication(
   const mcpRuntimeTests = (
     phase.kind === 'daemon' ? composeLocalMcpDiagnostics : phase.scope.createMcpRuntimeTests
   )({
+    observe:
+      ({ session, turn, runtime }) =>
+      (startedAt) =>
+        systemAgentObservations.open({
+          feature: 'mcp-runtime-test',
+          agentName: 'aw-mcp-runtime-test',
+          protocol: session.runtimeProtocol,
+          startedAt,
+          runtimeObservationIdentity: {
+            registrationId: runtime.row.id,
+            configurationRevision: runtime.row.probeFence,
+            acceptedName: runtime.row.name,
+          },
+          ...(turn.seq > 1 && session.runtimeSessionId !== null
+            ? { resumeSessionId: session.runtimeSessionId }
+            : {}),
+          demand: {
+            kind: 'mcp-runtime-test',
+            originalId: session.id,
+            originalAttempt: turn.id,
+            name: 'MCP 测试 · ' + session.runtimeName,
+            ownerUserId: session.ownerUserId,
+            purpose: 'playground',
+          },
+        }),
     ...composeMcpRuntimeTestProvider(input.db),
     isRuntimeEligible: isRuntimeMcpTestEligible,
     coordinator: mcpOperationCoordinator,
@@ -1072,6 +1101,17 @@ export async function composePostgresqlApplication(
     binding: { provider: 'postgresql', runtime: input.provider.runtime },
     admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),
     postgresqlPoolMax: input.config.database.poolMax,
+  })
+  const systemAgentObservations = composeSystemAgentObservations({
+    db: input.db,
+    observations: composeLocalInvocationObservations(
+      input.db,
+      composeObservationUsageSource(
+        input.db,
+        nativeHistoryRead({ provider: 'postgresql', runtime: input.provider.runtime }),
+      ),
+    ),
+    nativeUsage,
   })
   const taskExecutionPersistence = createTaskExecutionPersistence(input.db, {
     workspacePresence,
@@ -1381,6 +1421,7 @@ export async function composePostgresqlApplication(
 
   const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
   const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    observations: () => systemAgentObservations,
     appHome: systemAgentAppHome,
   })
   const collaborationTaskAccess = createPostgresqlCollaborationTaskAccessPort(input.db)
@@ -2148,6 +2189,7 @@ export async function composePostgresqlApplication(
   })
   const intentSessionEvents = createIntentSessionWsPublisher()
   const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    observations: () => systemAgentObservations,
     appHome: () => intentDispatchDeps.appHome,
   })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
@@ -2174,6 +2216,7 @@ export async function composePostgresqlApplication(
     activity: intentApplyOperations,
   })
   const intentHttpSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    observations: () => systemAgentObservations,
     appHome: () => intentRouteInputs.appHome,
   })
   const intentRouteInputs: PostgresqlAppCompositionInput['intent'] = {
@@ -2254,6 +2297,7 @@ export async function composePostgresqlApplication(
       tasks: taskExecutionProvider.overview,
     })
   const runtimeManagement = composeLocalRuntimeManagement({
+    observations: () => systemAgentObservations,
     configuration: {
       current: () => configuration.read(),
       withProbeReceiptFence: composeRuntimeProbeConfigFence(

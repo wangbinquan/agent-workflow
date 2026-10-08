@@ -6,15 +6,19 @@ import {
   primaryKey,
   sqliteTable as physicalTable,
   text,
+  type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core'
 import { providerAwareSqliteTable } from './providerSchema'
-import type { tasks } from './schema'
 
 const table = providerAwareSqliteTable(physicalTable)
-/** The original schema root supplies its actual Task table; this leaf has no runtime back edge. */
-export function createNativeUsageTables(taskTable: typeof tasks) {
+/** Each selected execution owner supplies its own actual cohort relation. */
+export function createNativeUsageTables(
+  taskTable: { readonly id: AnySQLiteColumn },
+  prefix = 'task_execution_native_usage',
+  indexPrefix = 'native_usage',
+) {
   /** Original lease claim/rotation identity; these relations contain no numeric totals. */
-  const nativeUsageRootHeads = table('task_execution_native_usage_root_heads', {
+  const nativeUsageRootHeads = table(prefix + '_root_heads', {
     invocationId: text('invocation_id').primaryKey(),
     taskId: text('task_id')
       .notNull()
@@ -28,7 +32,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     digest: text('digest').notNull(),
   })
   const nativeUsageRootTransitions = table(
-    'task_execution_native_usage_root_transitions',
+    prefix + '_root_transitions',
     {
       invocationId: text('invocation_id')
         .notNull()
@@ -40,12 +44,12 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     },
     (t) => [
       primaryKey({ columns: [t.invocationId, t.ordinalKey] }),
-      index('native_usage_root_identity_idx').on(t.invocationId, t.rootSessionId),
+      index(indexPrefix + '_root_identity_idx').on(t.invocationId, t.rootSessionId),
     ],
   )
   /** Original Task owner receipts and native evidence. Numeric authority remains the usage ledger. */
   const nativeUsagePreparations = table(
-    'task_execution_native_usage_preparations',
+    prefix + '_preparations',
     {
       invocationId: text('invocation_id').primaryKey(),
       taskId: text('task_id')
@@ -58,12 +62,12 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
       state: text('state', { enum: ['open', 'sealed'] }).notNull(),
     },
     (t) => [
-      index('native_usage_preparation_task_idx').on(t.taskId, t.invocationId),
-      check('native_usage_preparation_state_ck', sql`${t.state} IN ('open','sealed')`),
+      index(indexPrefix + '_preparation_task_idx').on(t.taskId, t.invocationId),
+      check(indexPrefix + '_preparation_state_ck', sql`${t.state} IN ('open','sealed')`),
     ],
   )
   /** Original owner source identity only, including a store first created after spawn. */
-  const nativeUsageStoreBindings = table('task_execution_native_usage_store_bindings', {
+  const nativeUsageStoreBindings = table(prefix + '_store_bindings', {
     invocationId: text('invocation_id')
       .primaryKey()
       .references(() => nativeUsagePreparations.invocationId, { onDelete: 'cascade' }),
@@ -71,7 +75,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     sourceGeneration: text('source_generation').notNull(),
   })
   /** The original root source watermark is frozen only after the actual process finishes. */
-  const nativeUsageRootSets = table('task_execution_native_usage_root_sets', {
+  const nativeUsageRootSets = table(prefix + '_root_sets', {
     invocationId: text('invocation_id')
       .primaryKey()
       .references(() => nativeUsagePreparations.invocationId, { onDelete: 'cascade' }),
@@ -82,7 +86,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
   })
   /** Original per-root qualification references; numbers remain exclusively in the usage ledger. */
   const nativeUsageRootResults = table(
-    'task_execution_native_usage_root_results',
+    prefix + '_root_results',
     {
       invocationId: text('invocation_id')
         .notNull()
@@ -94,7 +98,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     (t) => [primaryKey({ columns: [t.invocationId, t.resultId, t.rootSessionId] })],
   )
   const nativeUsagePasses = table(
-    'task_execution_native_usage_passes',
+    prefix + '_passes',
     {
       passId: text('pass_id').primaryKey(),
       invocationId: text('invocation_id')
@@ -116,21 +120,21 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
       interruption: text('interruption'),
     },
     (t) => [
-      index('native_usage_pass_invocation_idx').on(t.invocationId, t.passId),
+      index(indexPrefix + '_pass_invocation_idx').on(t.invocationId, t.passId),
       check(
-        'native_usage_pass_state_ck',
+        indexPrefix + '_pass_state_ck',
         sql`${t.state} IN ('open','eof','interrupted','superseded')`,
       ),
     ],
   )
-  const nativeUsagePassHeads = table('task_execution_native_usage_pass_heads', {
+  const nativeUsagePassHeads = table(prefix + '_pass_heads', {
     key: text('key').primaryKey(),
     passId: text('pass_id')
       .notNull()
       .references(() => nativeUsagePasses.passId, { onDelete: 'cascade' }),
   })
   const nativeUsagePassPages = table(
-    'task_execution_native_usage_pass_pages',
+    prefix + '_pass_pages',
     {
       passId: text('pass_id')
         .notNull()
@@ -144,7 +148,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     (t) => [primaryKey({ columns: [t.passId, t.ordinal] })],
   )
   const nativeUsageSessionParents = table(
-    'task_execution_native_usage_session_parents',
+    prefix + '_session_parents',
     {
       passId: text('pass_id')
         .notNull()
@@ -158,7 +162,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     (t) => [primaryKey({ columns: [t.passId, t.sessionId] })],
   )
   const nativeUsageStepMembers = table(
-    'task_execution_native_usage_step_members',
+    prefix + '_step_members',
     {
       passId: text('pass_id')
         .notNull()
@@ -172,7 +176,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
   )
   /** Frozen mappings to the original source rows; these never contribute separate Token totals. */
   const nativeUsageEmissions = table(
-    'task_execution_native_usage_emissions',
+    prefix + '_emissions',
     {
       invocationId: text('invocation_id')
         .notNull()
@@ -185,12 +189,12 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
     },
     (t) => [
       primaryKey({ columns: [t.invocationId, t.eventId] }),
-      index('native_usage_emission_source_idx').on(t.sourceRowId),
+      index(indexPrefix + '_emission_source_idx').on(t.sourceRowId),
     ],
   )
   /** Allocation metadata only; observed and pending original revisions remain inputs to each CAS. */
   const nativeUsageRevisionHeads = table(
-    'task_execution_native_usage_revision_heads',
+    prefix + '_revision_heads',
     {
       invocationId: text('invocation_id')
         .notNull()

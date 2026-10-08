@@ -9,12 +9,14 @@ import type { RuntimeSmokeInvocationFamily } from '../application/ports/runtimeS
 import { createLocalAgentInvocationPreparation } from './localAgentInvocationPreparation'
 import { createRuntimeSmokeMaterialIntent } from './runtimeSmoke'
 import { composeRuntimeSmokeRunFamily } from './runtimeSmokeRunFamily'
+import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
 
 /** The native root pairs the target owner, original material builder and
  * executor. The normal family never receives their physical locations. */
 export function composeLocalRuntimeSmokeRunFamily(input: {
   appHome(): string
   readonly targets: ReturnType<typeof createLocalRuntimeDiagnosticTargets>
+  readonly observations?: () => SystemAgentObservationFactory
 }) {
   const invocations: RuntimeSmokeInvocationFamily = {
     open(request, log) {
@@ -29,6 +31,27 @@ export function composeLocalRuntimeSmokeRunFamily(input: {
           const runDir = selected.locations.runDirectory
           return {
             workspace: selected.workspace,
+            ...(input.observations
+              ? {
+                  observe: (nonce: string, startedAt: number) =>
+                    input.observations!().open({
+                      feature: 'runtime-smoke',
+                      agentName: 'aw-smoke',
+                      protocol: request.protocol,
+                      startedAt,
+                      demand: {
+                        kind: 'runtime-probe',
+                        originalId: nonce,
+                        originalAttempt: nonce,
+                        name: `运行时探测 · ${request.runtimeObservationIdentity?.acceptedName ?? request.protocol}`,
+                        purpose: 'system',
+                      },
+                      ...(request.runtimeObservationIdentity
+                        ? { runtimeObservationIdentity: request.runtimeObservationIdentity }
+                        : {}),
+                    }),
+                }
+              : {}),
             prepareWorkspace: () => selected.workspace.prepare(),
             async compile(prompt) {
               // These request reads retain the native buildSmokePlan argument

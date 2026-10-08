@@ -118,7 +118,8 @@ export interface ObservationUsageSource {
       readonly taskId: string
       readonly nodeRunId: string
       readonly evidence: ObservationCapturedUsage
+      readonly sourceNamespace?: 'system'
     }[]
   >
-  acknowledge(ids: readonly number[]): Promise<void>
+  acknowledge(ids: readonly number[], sourceNamespace?: 'system'): Promise<void>
 }

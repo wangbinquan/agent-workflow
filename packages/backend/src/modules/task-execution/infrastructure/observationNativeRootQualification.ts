@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq, sql } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import { z } from 'zod'
@@ -7,7 +8,7 @@ import {
   type ObservationNativeRootCompletion,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { nativeUsageRootSets, nativeUsageRootResults } from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
 import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import { verifyNativeRootSource, originalNativeRootPage } from './nativeUsageRootSource'
@@ -40,7 +41,10 @@ export async function readRetainedNativeRootResult(
   invocationId: string,
   resultId: string,
   rootSessionId: string,
+  sourceKind: 'task' | 'system' = 'task',
 ) {
+  const { nativeUsageRootResults } = nativeUsageEvidenceStorage(sourceKind)
+
   const row = (
     await db
       .select()
@@ -72,6 +76,10 @@ export async function qualifyOriginalNativeRoots(
     readonly fence: string
   },
 ) {
+  const { nativeUsageRootSets, nativeUsageRootResults } = nativeUsageEvidenceStorage(
+    facts.binding.sourceKind,
+  )
+
   const { proof, binding, before } = facts
   const source = await verifyNativeRootSource(db, binding, facts)
   const frozen = (
@@ -81,7 +89,7 @@ export async function qualifyOriginalNativeRoots(
       .where(eq(nativeUsageRootSets.invocationId, binding.invocationId))
       .limit(1)
   )[0]
-  const generation = await originalNativeUsageStoreGeneration(db, before)
+  const generation = await originalNativeUsageStoreGeneration(db, before, facts.binding.sourceKind)
   if (
     !frozen ||
     frozen.nextOrdinal !== source.nextOrdinal ||
@@ -120,7 +128,12 @@ export async function qualifyOriginalNativeRoots(
     proof.issues.length === 0
   let hasFinal = true
   for (;;) {
-    const roots = await originalNativeRootPage(db, binding.invocationId, after)
+    const roots = await originalNativeRootPage(
+      db,
+      binding.invocationId,
+      after,
+      facts.binding.sourceKind,
+    )
     if (!roots.length) break
     for (const rootSessionId of roots) {
       const retained = await readRetainedNativeRootResult(
@@ -128,6 +141,7 @@ export async function qualifyOriginalNativeRoots(
         binding.invocationId,
         proof.roots.resultId,
         rootSessionId,
+        facts.binding.sourceKind,
       )
       if (!retained) return { records: null, complete: false }
       const single = retained.value.proof

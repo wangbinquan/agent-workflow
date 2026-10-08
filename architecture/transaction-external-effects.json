@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 29,
-    "transactionCallbacks": 274
+    "transactionCallbacks": 277
   },
   "entries": [
     {
@@ -2964,6 +2964,30 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts#transaction:126",
+      "line": 126,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts#composeSystemAgentObservations",
+      "status": "clear",
+      "symbol": "composeSystemAgentObservations",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts#transaction:59",
+      "line": 59,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/systemAgentObservations.ts#composeSystemAgentObservations",
+      "status": "clear",
+      "symbol": "composeSystemAgentObservations",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:807",
@@ -3069,6 +3093,18 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#withPostgresqlTaskAggregateTransaction",
       "status": "clear",
       "symbol": "withPostgresqlTaskAggregateTransaction",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/systemObservationOwner.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/systemObservationOwner.ts#transaction:36",
+      "line": 36,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/systemObservationOwner.ts#withSystemNativeUsageOwner",
+      "status": "clear",
+      "symbol": "withSystemNativeUsageOwner",
       "targetContext": "task-execution",
       "transactionCallee": "transaction"
     },
@@ -3356,7 +3392,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:13eba359271bb2d2b6f414d519d7611b307e89241bc828fb47f2d69a38906327",
+  "sourceDigest": "sha256:b1b3c7b9a2f93e5aba751793828c7e5ce4591c6a6626cfcba8f08f0178cc87b1",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

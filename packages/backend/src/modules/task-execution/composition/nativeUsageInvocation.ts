@@ -20,6 +20,7 @@ import {
   originalNativeUsageBaseline,
   withNativeUsageBaselineSnapshot,
 } from '../infrastructure/nativeUsageBaselineSnapshot'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import type { ReportSnapshotSession } from '@/platform/persistence/reportSnapshotTypes'
 import type {
   ObservationAnyNativeCompletion,
@@ -59,112 +60,140 @@ export function createNativeUsageInvocationPersistence(
         invocationId: input.invocationId,
         executionContext,
       }
-      const finalization = options.rootSets
-        ? createNativeUsageFinalizationAuthority(originalBinding)
-        : undefined
-      const binding = finalization
+      return createBoundNativeUsageInvocation(db, originalBinding, options)
+    },
+    forSystemInvocation(input) {
+      if (
+        admissions !== undefined &&
+        (!input.runtime ||
+          !isRuntimeNativeUsageCaptureEligible(input.runtime.protocol) ||
+          !admissions.some(
+            (admission) =>
+              admission.registrationId === input.runtime?.registrationId &&
+              admission.configurationRevision === input.runtime?.configurationRevision,
+          ))
+      )
+        return undefined
+      return createBoundNativeUsageInvocation(db, input.binding, { ...options, rootSets: true })
+    },
+  }
+}
+
+/** One native paging implementation, explicitly bound to the selected original owner. */
+function createBoundNativeUsageInvocation(
+  db: ProviderNeutralDatabase,
+  originalBinding: NativeUsageOwnerBinding,
+  options: {
+    readonly baselineSnapshots?: ReportSnapshotSession
+    readonly baselineRead?: NativeUsageBaselineReadSession
+    readonly rootSets?: boolean
+  },
+): NonNullable<ReturnType<NativeUsageInvocationPersistence['forInvocation']>> {
+  const finalization =
+    options.rootSets && originalBinding.sourceKind !== 'system'
+      ? createNativeUsageFinalizationAuthority(originalBinding)
+      : undefined
+  const binding: NativeUsageOwnerBinding =
+    originalBinding.sourceKind === 'system'
+      ? originalBinding
+      : finalization
         ? { ...originalBinding, finalization: finalization.reference }
         : originalBinding
-      const pages = new DrizzleNativeUsagePages(db, true)
-      const emissions = new DrizzleNativeUsageEmission(db)
-      const completion = options.rootSets
-        ? new DrizzleNativeUsageRootCompletion(db)
-        : new DrizzleNativeUsageCompletion(db)
-      let retryProof: ObservationAnyNativeCompletion | undefined
-      let completeAck: ObservationNativeSourceAck | undefined
-      const passOwner = (
-        before: ObservationNativeBeforeSpawnAck,
-        writer = pages,
-      ): ReturnType<
-        NonNullable<ReturnType<NativeUsageInvocationPersistence['forInvocation']>>['passOwner']
-      > => ({
-        admit: (identity, initialCursor, rootCreatedAt) =>
-          writer.admit({
-            binding,
-            identity,
-            initialCursor,
-            rootCreatedAt,
-            beforeSpawnReceiptId: before.ownerReceiptId,
-          }),
-        persist: (page) =>
-          writer.persist({
-            binding,
-            page: {
-              ...page,
-              sessions: [...page.sessions],
-              steps: [...page.steps],
-              issues: [...page.issues],
-            },
-          }),
-        interrupt: (identity, reason) => writer.interrupt({ binding, identity, reason }),
-      })
-      return {
-        ...(options.rootSets
-          ? { rootCollection: createNativeUsageRootCollection(db, binding) }
-          : {}),
-        async prepare(request) {
-          const before = await pages.prepare({ binding, ...request })
-          finalization?.prepared(before)
-          return before
+  const pages = new DrizzleNativeUsagePages(db, true)
+  const emissions = new DrizzleNativeUsageEmission(db)
+  const completion = options.rootSets
+    ? new DrizzleNativeUsageRootCompletion(db)
+    : new DrizzleNativeUsageCompletion(db)
+  let retryProof: ObservationAnyNativeCompletion | undefined
+  let completeAck: ObservationNativeSourceAck | undefined
+  const passOwner = (
+    before: ObservationNativeBeforeSpawnAck,
+    writer = pages,
+  ): ReturnType<
+    NonNullable<ReturnType<NativeUsageInvocationPersistence['forInvocation']>>['passOwner']
+  > => ({
+    admit: (identity, initialCursor, rootCreatedAt) =>
+      writer.admit({
+        binding,
+        identity,
+        initialCursor,
+        rootCreatedAt,
+        beforeSpawnReceiptId: before.ownerReceiptId,
+      }),
+    persist: (page) =>
+      writer.persist({
+        binding,
+        page: {
+          ...page,
+          sessions: [...page.sessions],
+          steps: [...page.steps],
+          issues: [...page.issues],
         },
-        passOwner,
-        async withFinalOwner(before, read) {
-          // Only the platform can supply an independent original read channel.
-          // The original single-connection memory/PG path keeps its per-page verification.
-          if ((!options.baselineSnapshots && !options.baselineRead) || before.mode !== 'resume')
-            return read(passOwner(before))
-          const original = await originalNativeUsageBaseline({ db, binding, before })
-          if (!original) return read(passOwner(before, new DrizzleNativeUsagePages(db, true, null)))
-          if (options.baselineRead)
-            return options.baselineRead.run(
-              {
-                binding: {
-                  taskId: binding.taskId,
-                  nodeRunId: binding.nodeRunId,
-                  invocationId: binding.invocationId,
-                },
-                original,
-              },
-              (baseline) =>
-                read(passOwner(before, new DrizzleNativeUsagePages(db, true, baseline))),
-            )
-          return withNativeUsageBaselineSnapshot({
-            snapshots: options.baselineSnapshots!,
-            binding,
-            original,
-            run: (baseline) =>
-              read(passOwner(before, new DrizzleNativeUsagePages(db, true, baseline))),
-          })
-        },
-        recordProcess(nativeProcess) {
-          finalization?.observe(nativeProcess)
-          return emissions.emit({
-            binding,
-            eventId: 'native-process:' + sha256Hex(JSON.stringify(nativeProcess)),
-            evidence: {
+      }),
+    interrupt: (identity, reason) => writer.interrupt({ binding, identity, reason }),
+  })
+  return {
+    ...(options.rootSets ? { rootCollection: createNativeUsageRootCollection(db, binding) } : {}),
+    async prepare(request) {
+      const before = await pages.prepare({ binding, ...request })
+      finalization?.prepared(before)
+      return before
+    },
+    passOwner,
+    async withFinalOwner(before, read) {
+      // Only the platform can supply an independent original read channel.
+      // The original single-connection memory/PG path keeps its per-page verification.
+      if ((!options.baselineSnapshots && !options.baselineRead) || before.mode !== 'resume')
+        return read(passOwner(before))
+      const original = await originalNativeUsageBaseline({ db, binding, before })
+      if (!original) return read(passOwner(before, new DrizzleNativeUsagePages(db, true, null)))
+      if (options.baselineRead)
+        return options.baselineRead.run(
+          {
+            binding: {
+              taskId: binding.taskId,
+              nodeRunId: binding.nodeRunId,
               invocationId: binding.invocationId,
-              measurements: [],
-              diagnostics: [],
-              nativeProcess,
+              ...(binding.sourceKind ? { sourceKind: binding.sourceKind } : {}),
             },
-          })
+            original,
+          },
+          (baseline) => read(passOwner(before, new DrizzleNativeUsagePages(db, true, baseline))),
+        )
+      return withNativeUsageBaselineSnapshot({
+        snapshots: options.baselineSnapshots!,
+        binding,
+        original,
+        run: (baseline) => read(passOwner(before, new DrizzleNativeUsagePages(db, true, baseline))),
+      })
+    },
+    recordProcess(nativeProcess) {
+      finalization?.observe(nativeProcess)
+      return emissions.emit({
+        binding,
+        eventId: 'native-process:' + sha256Hex(JSON.stringify(nativeProcess)),
+        evidence: {
+          invocationId: binding.invocationId,
+          measurements: [],
+          diagnostics: [],
+          nativeProcess,
         },
-        async seal(observedAt) {
-          if (completeAck) return completeAck
-          const proof = retryProof ?? (await completion.describeCompletion({ binding, observedAt }))
-          retryProof = proof
-          let ack: ObservationNativeSourceAck
-          try {
-            ack = await completion.seal({ binding, completion: proof })
-          } catch (error) {
-            if (error instanceof NativeRootCompletionCandidateChanged) retryProof = undefined
-            throw error
-          }
-          retryProof = undefined
-          if (proof.state === 'complete') completeAck = ack
-          return ack
-        },
+      })
+    },
+    async seal(observedAt) {
+      if (completeAck) return completeAck
+      const proof = retryProof ?? (await completion.describeCompletion({ binding, observedAt }))
+      retryProof = proof
+      let ack: ObservationNativeSourceAck
+      try {
+        ack = await completion.seal({ binding, completion: proof })
+      } catch (error) {
+        if (error instanceof NativeRootCompletionCandidateChanged) retryProof = undefined
+        throw error
       }
+      retryProof = undefined
+      if (proof.state === 'complete') completeAck = ack
+      return ack
     },
   }
 }

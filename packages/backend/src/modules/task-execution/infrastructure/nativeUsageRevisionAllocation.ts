@@ -1,17 +1,13 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, asc, eq, gt, inArray, max, sql } from 'drizzle-orm'
-import {
-  nativeUsageRevisionHeads,
-  observationUsageEvents,
-  observationUsageSources,
-  taskExecutionObservationSources,
-} from '@/db/schema'
+import { observationUsageEvents, observationUsageSources } from '@/db/schema'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
 import type {
   NativeUsageEvidence,
-  NativeUsageOwnerBinding,
+  NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding,
 } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 
@@ -24,7 +20,10 @@ async function rememberRevisions(
   tx: TaskExecutionTransaction,
   invocationId: string,
   values: ReadonlyMap<string, number>,
+  sourceKind: 'task' | 'system' = 'task',
 ): Promise<void> {
+  const { nativeUsageRevisionHeads } = nativeUsageEvidenceStorage(sourceKind)
+
   const rows = [...values].map(([recordId, revision]) => {
     if (!Number.isSafeInteger(revision) || revision < 0)
       throw new Error('Original native revision is not exact')
@@ -51,6 +50,7 @@ export async function rememberOriginalNativeSources(
   invocationId: string,
   measurements: NativeUsageEvidence['measurements'],
   sourceRowId: number,
+  sourceKind: 'task' | 'system' = 'task',
 ): Promise<void> {
   if (!Number.isSafeInteger(sourceRowId) || sourceRowId < 1)
     throw new Error('Original native source row is not exact')
@@ -63,6 +63,7 @@ export async function rememberOriginalNativeSources(
         sourceRowId,
       ]),
     ),
+    sourceKind,
   )
 }
 
@@ -70,8 +71,10 @@ export async function rememberOriginalNativeSources(
 export async function lockOriginalNativeUsageSource(
   tx: TaskExecutionTransaction,
   nodeRunId: string,
+  sourceKind: 'task' | 'system' = 'task',
 ): Promise<string> {
-  const sourceId = 'local-node:' + nodeRunId
+  const { sourcePrefix } = nativeUsageEvidenceStorage(sourceKind)
+  const sourceId = sourcePrefix + nodeRunId
   await tx.insert(observationUsageSources).values({ sourceId }).onConflictDoNothing().run()
   await engineOf(tx).lockAggregateRoot(
     tx,
@@ -91,6 +94,10 @@ async function indexOriginalNativeRevisions(
   tx: TaskExecutionTransaction,
   binding: NativeUsageOwnerBinding,
 ): Promise<void> {
+  const { nativeUsageRevisionHeads, taskExecutionObservationSources } = nativeUsageEvidenceStorage(
+    binding.sourceKind,
+  )
+
   const checkpoint = (
     await tx
       .select({ revision: nativeUsageRevisionHeads.revision })
@@ -138,13 +145,24 @@ async function indexOriginalNativeRevisions(
           const key = recordKey(measurement.recordId)
           revisions.set(key, Math.max(revisions.get(key) ?? 0, measurement.revision))
         }
-        await rememberRevisions(tx, binding.invocationId, revisions)
-        await rememberOriginalNativeSources(tx, binding.invocationId, evidence.measurements, row.id)
+        await rememberRevisions(tx, binding.invocationId, revisions, binding.sourceKind)
+        await rememberOriginalNativeSources(
+          tx,
+          binding.invocationId,
+          evidence.measurements,
+          row.id,
+          binding.sourceKind,
+        )
       }
       after = row.id
     }
   }
-  await rememberRevisions(tx, binding.invocationId, new Map([[sourceCheckpoint, after]]))
+  await rememberRevisions(
+    tx,
+    binding.invocationId,
+    new Map([[sourceCheckpoint, after]]),
+    binding.sourceKind,
+  )
 }
 
 /** Caller holds the original source lock; observed, pending and frozen originals all participate. */
@@ -154,7 +172,9 @@ export async function allocateOriginalNativeRevisions(
   sourceId: string,
   measurements: NativeUsageEvidence['measurements'],
 ): Promise<NativeUsageEvidence['measurements']> {
-  if (sourceId !== 'local-node:' + binding.nodeRunId)
+  const { nativeUsageRevisionHeads, sourcePrefix } = nativeUsageEvidenceStorage(binding.sourceKind)
+
+  if (sourceId !== sourcePrefix + binding.nodeRunId)
     throw new Error('Original native revision source changed')
   await indexOriginalNativeRevisions(tx, binding)
   const keys = [...new Set(measurements.map((measurement) => recordKey(measurement.recordId)))]
@@ -217,6 +237,6 @@ export async function allocateOriginalNativeRevisions(
     revisions.set(id, revision)
     allocated.push({ ...measurement, revision })
   }
-  await rememberRevisions(tx, binding.invocationId, revisions)
+  await rememberRevisions(tx, binding.invocationId, revisions, binding.sourceKind)
   return allocated
 }

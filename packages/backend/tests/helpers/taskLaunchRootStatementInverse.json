@@ -6,7 +6,7 @@
     {
       "path": "packages/backend/src/cli/start.ts",
       "rootName": "composeSqliteProviderSession",
-      "expectedCurrentStatementCount": 186,
+      "expectedCurrentStatementCount": 187,
       "expectedPreviousStatementCount": 184,
       "changes": [
         {
@@ -57,15 +57,35 @@
         },
         {
           "name": "appComposition",
-          "introducedSha256": "bcfd1219282a75e5a7dd0d48149b4fc4e5b55fff124911ee235377bedd1e8b98",
+          "introducedSha256": "28d274eb2b968f24e1270fa41077c9c735393a25d22b8d2ab4e53c03576ba14e",
           "previousStatement": "const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({\n    completeObservationReports: observationReports.queries,\n    nodeRunPrompts,\n    portArtifacts,\n    taskRunSelection: input.taskRunSelection,\n    developmentPurposes: input.developmentPurposes,\n    developmentPurposeRoot,\n    workspaceExcludeProfiles: input.workspaceExcludeProfiles,\n    taskDeletionEffects: input.taskDeletionEffects,\n    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,\n    actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,\n    conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,\n    providerCore,\n    token,\n    digitalEmployeePlatformTools,\n    configPath: Paths.config,\n    configuration,\n    applicationConfiguration,\n    daemonInfoPath: Paths.daemonInfo,\n    daemonRuntime: input.daemonRuntime,\n    opencodeVersion: null,\n    dbVersion,\n    db,\n    executionContracts: employeeExecutionContracts,\n    codeHistoryQueries,\n    developmentAdmissionLookup,\n    identityAccess: integrationIdentityAccess,\n    maintenanceStatus: maintenanceService.status,\n    secretBox,\n    repositoryPublicationTransport,\n    developmentAutomation,\n    workspacePresence,\n    schedulerDriver: taskExecutionRuntime.schedulerDriver,\n    taskExecutionReadModels: taskExecutionRuntime.readModels,\n    taskRouteLaunch: taskExecutionProvider.routeLaunch,\n    taskArchiveMaintenance: taskExecutionProvider.archive,\n    skillContent: input.skillContent,\n    employeePrograms: input.employeePrograms,\n    employeeInputArtifacts: input.employeeInputArtifacts,\n    missionInputBlobs: input.missionInputBlobs,\n    pluginInstaller: input.pluginInstaller,\n    evidenceArtifacts: input.evidenceArtifacts,\n    resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,\n    resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,\n    resourcePackageSkillContent: input.resourcePackageSkillContent,\n    workspaceContent: input.workspaceContent,\n    workspaceUploads: input.workspaceUploads,\n    isolationWorkspaces: input.isolationWorkspaces,\n    repositoryGitWorkspaces: input.repositoryGitWorkspaces,\n    repositoryCandidateEffects: input.repositoryCandidateEffects,\n    workspaceReads: input.workspaceReads,\n    employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,\n    repositoryBaselines: input.repositoryBaselines,\n    verificationCommands: input.verificationCommands,\n    evidenceRead: input.evidenceRead,\n    evidenceDocumentCommands: input.evidenceDocumentCommands,\n    attemptContext: input.attemptContext,\n    memoryOperations,\n    databaseMigration: databaseMigration,\n    collaborationContext,\n    mcpRuntimeTests,\n    webhookDispatcher,\n    webhookTerminalControl,\n    digitalEmployeeEventCenter: employeeHttpEventCenter,\n    digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,\n    digitalEmployeeTypePackageDriftPolicy,\n});"
+        },
+        {
+          "name": "memorySystemAgentBinding",
+          "introducedSha256": "a9c1bab838b555f3243eae414722dc2699d7013a964aab3af1f5c5aa9fca0586",
+          "previousStatement": "const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome });"
+        },
+        {
+          "name": "systemAgentObservations",
+          "introducedSha256": "0f5a1fa414e550efcf449b167414ed75a8767d0bc1c5a7e3d5b7675f3984325e",
+          "previousStatement": null
+        },
+        {
+          "name": "mcpRuntimeTests",
+          "introducedSha256": "07b413e80e364947a6df59ebbaec3ebdb966f29a2de1ccfed15bb318f1e50fb1",
+          "previousStatement": "const mcpRuntimeTests = composeLocalMcpDiagnostics({\n    ...composeMcpRuntimeTestProvider(db),\n    isRuntimeEligible: isRuntimeMcpTestEligible,\n    coordinator: mcpOperationCoordinator,\n    requestBinding: {\n        contexts: identityAccess.contexts,\n        directAuthority: identityAccess.directAuthority,\n        loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),\n    },\n    async loadMcp(mcpId) {\n        const identity = await admitDaemonIdentity(identityAccess);\n        if (identity === null)\n            throw new Error('mcp-runtime-test-authority-not-admitted');\n        return mcpCatalog.queries.get(identity.actor, { id: mcpId });\n    },\n    loadRuntime: (name) => runtimeRegistry.getRuntime(name),\n    configuration,\n    appHome: Paths.root,\n});"
+        },
+        {
+          "name": "intentSystemAgentBinding",
+          "introducedSha256": "3cb6670fe5ae34f782d5c1a88be83f6c1fe8e87082306d7be38449081fc6e6aa",
+          "previousStatement": "const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({\n    appHome: () => intentDispatchDeps.appHome,\n});"
         }
       ]
     },
     {
       "path": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "rootName": "composePostgresqlApplication",
-      "expectedCurrentStatementCount": 171,
+      "expectedCurrentStatementCount": 172,
       "expectedPreviousStatementCount": 168,
       "changes": [
         {
@@ -107,13 +127,48 @@
           "name": "memoryRoutes",
           "introducedSha256": "86f083ff763f55eaad1744283f05c8b885186d146985b0e7fa4244d5042d7444",
           "previousStatement": "const memoryRoutes: PostgresqlAppCompositionInput['memory'] = Object.freeze({\n    fusion: Object.freeze({\n        operations: fusionOperations,\n        configPath: input.configPath,\n        directAuthority: identityAccess.directAuthority,\n    }),\n    skillProvenance: Object.freeze({\n        skills: classicCatalogs.skill.queries,\n        versions: classicCatalogs.skill.versionQueries,\n        authorityFor: (actor: Actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n        memoryAuthorityFor: (actor: Actor) => ({\n            actor,\n            authority: directRequestAuthority(identityAccess.directAuthority, actor),\n        }),\n        listFusedInto: (skillId: string) => memoryCatalog.queries.listFusedInto(skillId),\n        filterVisibleMemories: (authority: MemoryScopeAuthority, rows: readonly FusedIntoSkillMemory[]) => memoryCatalog.queries.filterVisible(authority, rows),\n    }),\n    memories: Object.freeze({\n        catalog: memoryCatalog,\n        identityAccess: Object.freeze({\n            contexts: identityAccess.contexts,\n            directAuthority: identityAccess.directAuthority,\n        }),\n    }),\n    distillJobs: Object.freeze({\n        memoryDistillCommands: memoryOperations.distillCommands,\n        memoryDistillQueries: memoryOperations.distillQueries,\n    }),\n});"
+        },
+        {
+          "name": "memorySystemAgentBinding",
+          "introducedSha256": "a9c1bab838b555f3243eae414722dc2699d7013a964aab3af1f5c5aa9fca0586",
+          "previousStatement": "const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome });"
+        },
+        {
+          "name": "mcpRuntimeTests",
+          "introducedSha256": "a4811a8d0d56c8228c1557daebd452b44f12bd034af52885567e44f4626195d3",
+          "previousStatement": "const mcpRuntimeTests = (phase.kind === 'daemon' ? composeLocalMcpDiagnostics : phase.scope.createMcpRuntimeTests)({\n    ...composeMcpRuntimeTestProvider(input.db),\n    isRuntimeEligible: isRuntimeMcpTestEligible,\n    coordinator: mcpOperationCoordinator,\n    requestBinding: {\n        contexts: identityAccess.contexts,\n        directAuthority: identityAccess.directAuthority,\n        loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),\n    },\n    async loadMcp(mcpId) {\n        const identity = await admitDaemonIdentity(identityAccess);\n        if (identity === null)\n            throw new Error('mcp-runtime-test-authority-not-admitted');\n        return await mcpCatalog.queries.get(identity.actor, { id: mcpId });\n    },\n    loadRuntime: (name) => core.runtimeRegistry.getRuntime(name),\n    configuration,\n    appHome: input.appHome,\n    ...(input.mcpRuntimeTestDependencies?.runFn === undefined\n        ? {}\n        : { runFn: input.mcpRuntimeTestDependencies.runFn }),\n    ...(input.mcpRuntimeTestDependencies?.now === undefined\n        ? {}\n        : { now: input.mcpRuntimeTestDependencies.now }),\n    ...(input.mcpRuntimeTestDependencies?.capacity === undefined\n        ? {}\n        : { capacity: input.mcpRuntimeTestDependencies.capacity }),\n});"
+        },
+        {
+          "name": "systemAgentObservations",
+          "introducedSha256": "5e07f1ce29d4407300e1a20361c9d1319b56a3a3423a3fceaac7fa884aeb4d3d",
+          "previousStatement": null
+        },
+        {
+          "name": "narrativeSystemAgentBinding",
+          "introducedSha256": "9f974e1c3a1b21300218343b66f9af94e8a234f183851e6a72aaeb06937e9da8",
+          "previousStatement": "const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({\n    appHome: systemAgentAppHome,\n});"
+        },
+        {
+          "name": "intentSystemAgentBinding",
+          "introducedSha256": "3cb6670fe5ae34f782d5c1a88be83f6c1fe8e87082306d7be38449081fc6e6aa",
+          "previousStatement": "const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({\n    appHome: () => intentDispatchDeps.appHome,\n});"
+        },
+        {
+          "name": "intentHttpSystemAgentBinding",
+          "introducedSha256": "cf0c21b346b0d075616bb3e2ab44578f8f4628b3f0daac44ce855a7c00d505af",
+          "previousStatement": "const intentHttpSystemAgentBinding = composeLocalSystemAgentRunFamily({\n    appHome: () => intentRouteInputs.appHome,\n});"
+        },
+        {
+          "name": "runtimeManagement",
+          "introducedSha256": "fff58d003ff2cce96ab9e7416ccfdc17e05b69ceabb556404e85ae1b337a97bb",
+          "previousStatement": "const runtimeManagement = composeLocalRuntimeManagement({\n    configuration: {\n        current: () => configuration.read(),\n        withProbeReceiptFence: composeRuntimeProbeConfigFence(applicationConfiguration.notificationKey),\n    },\n    runtimeRegistry: core.runtimeRegistry,\n    runtimeTests: mcpRuntimeTests.reconciliation,\n    ...(input.runtimeDiagnosticTestDependencies === undefined\n        ? {}\n        : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),\n    appHome: () => Paths.root,\n});"
         }
       ]
     },
     {
       "path": "packages/backend/src/server.ts",
       "rootName": "composeSqliteApplicationDeps",
-      "expectedCurrentStatementCount": 61,
+      "expectedCurrentStatementCount": 62,
       "expectedPreviousStatementCount": 60,
       "changes": [
         {
@@ -135,13 +190,28 @@
           "name": "apiComposition",
           "introducedSha256": "8fa9f5e13f499113a48d5be301fdf3eba68e46ef04bc9660d5366404694e3014",
           "previousStatement": "const apiComposition = composeSqliteApiRouteMounts(effectiveDeps, identityAccess, identityUserOperations, systemOperations, userRuntimeTests, agentCatalog, mcpCatalog, mcpProbeStore, pluginCatalog, skillCatalog, workflowCatalog, workgroupCatalog, resourcePackageBinding, providerResourceCatalog, memoryCatalog, agentResourceIntegrity, intentApply, taskExecutionPersistence, eventAutomation, applicationConfiguration, configuration, unstarted);"
+        },
+        {
+          "name": "systemAgentObservations",
+          "introducedSha256": "9fcb9719f25dc032f3ba7278c2ed78a9e86c67f40fae3bf886d88a7489cded31",
+          "previousStatement": null
+        },
+        {
+          "name": "memorySystemAgentBinding",
+          "introducedSha256": "a9c1bab838b555f3243eae414722dc2699d7013a964aab3af1f5c5aa9fca0586",
+          "previousStatement": "const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome });"
+        },
+        {
+          "name": "userRuntimeTests",
+          "introducedSha256": "50132dae5918639dcec221bd86350d28628f9547dde3b686da99df675a62f579",
+          "previousStatement": "const userRuntimeTests = effectiveDeps.mcpRuntimeTests ??\n    (unstarted?.createMcpRuntimeTests ?? composeLocalMcpDiagnostics)({\n        ...composeMcpRuntimeTestProvider(effectiveDeps.db),\n        isRuntimeEligible: isRuntimeMcpTestEligible,\n        coordinator: mcpOperationCoordinator,\n        requestBinding: {\n            contexts: identityAccess.contexts,\n            directAuthority: identityAccess.directAuthority,\n            loadVisibleMcp: (authority, id) => mcpCatalog.queries.get(authority, { id }),\n        },\n        async loadMcp(mcpId) {\n            const identity = await admitDaemonIdentity(identityAccess);\n            if (identity === null)\n                throw new Error('mcp-runtime-test-authority-not-admitted');\n            return mcpCatalog.queries.get(identity.actor, { id: mcpId });\n        },\n        loadRuntime: (name) => effectiveDeps.runtimeRegistry.getRuntime(name),\n        configuration,\n        appHome: effectiveDeps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,\n        ...(effectiveDeps.mcpRuntimeTestDependencies?.runFn === undefined\n            ? {}\n            : { runFn: effectiveDeps.mcpRuntimeTestDependencies.runFn }),\n        ...(effectiveDeps.mcpRuntimeTestDependencies?.now === undefined\n            ? {}\n            : { now: effectiveDeps.mcpRuntimeTestDependencies.now }),\n        ...(effectiveDeps.mcpRuntimeTestDependencies?.capacity === undefined\n            ? {}\n            : { capacity: effectiveDeps.mcpRuntimeTestDependencies.capacity }),\n    });"
         }
       ]
     },
     {
       "path": "packages/backend/src/server.ts",
       "rootName": "composeSqliteApiRouteMounts",
-      "expectedCurrentStatementCount": 69,
+      "expectedCurrentStatementCount": 70,
       "expectedPreviousStatementCount": 69,
       "changes": [
         {
@@ -178,8 +248,31 @@
           "name": "apiRoutes",
           "introducedSha256": "1fe410d9118f1fc6468c02f2e7569075cccf88e64d3be8579559b6d81a09b59e",
           "previousStatement": "const apiRoutes = Object.freeze({\n    config: (app) => mountConfigRoutes(app, {\n        configuration: applicationConfiguration.composeCommands({\n            runtimeRegistry: runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,\n            withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(applicationConfiguration.notificationKey),\n            runtimeTests: mcpRuntimeTests.reconciliation,\n            concurrencyHotApply: deps.configConcurrencyHotApply,\n        }),\n    }),\n    observability: (app) => mountObservationRoutes(app, {\n        reports: deps.completeObservationReports,\n        ...composeObservationPricing({ db: deps.db, runtimes: runtimeManagement.observations }),\n        tasks: composeTaskObservations({\n            db: deps.db,\n            taskSource: createTaskObservationFacts satisfies (db: Parameters<typeof createTaskObservationFacts>[0]) => TaskObservationFactsQuery,\n        }) satisfies ObservationTaskQueries,\n    }),\n    maintenance: (app) => mountMaintenanceRoutes(app, {\n        configuration,\n        maintenanceStatus: deps.maintenanceStatus,\n        databaseTelemetry: deps.databaseTelemetry,\n    }),\n    daemon: (app) => mountDaemonRoutes(app, {\n        runtime: selectDaemonRuntimeQueries(deps.daemonRuntime, { infoPath: deps.daemonInfoPath }),\n    }),\n    plantuml: (app) => mountPlantumlRoutes(app, { configuration }),\n    runtime: (app) => mountRuntimeRoutes(app, runtimeManagement.models),\n    runtimes: (app) => mountRuntimesRoutes(app, runtimeManagement.runtimes),\n    overview: (app) => mountOverviewRoutes(app, {\n        directAuthority: identityAccess.directAuthority,\n    }, overviewQuery),\n    agents: (app) => mountAgentRoutes(app, {\n        queries: agentCatalog.queries,\n        referenceQueries: agentCatalog.referenceQueries,\n        dependencyQueries: agentCatalog.dependencyQueries,\n        resourceIntegrityQueries: agentCatalog.resourceIntegrityQueries,\n        importQueries: agentCatalog.importQueries,\n        operations: agentCatalog.operations,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n        listDigitalEmployeeTemplates: () => listDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates),\n        taskLaunch: taskRouteLaunch.agent,\n    }),\n    mcps: (app) => mountMcpRoutes(app, {\n        queries: mcpCatalog.queries,\n        operations: mcpCatalog.operations,\n        aclIdentity: mcpCatalog.participants.aclIdentity,\n        probeStore: mcpProbeStore,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n        runtimeTests: { commands: mcpRuntimeTests.commands, queries: mcpRuntimeTests.queries },\n        runtimeTestCommandContextFor: mcpRuntimeTests.contexts.command,\n        runtimeTestQueryContextFor: mcpRuntimeTests.contexts.query,\n    }),\n    plugins: (app) => mountPluginRoutes(app, {\n        queries: pluginCatalog.queries,\n        operations: pluginCatalog.operations,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n    }),\n    skills: (app) => mountSkillRoutes(app, {\n        fileCommands: skillCatalog.fileCommands,\n        versionCommands: skillCatalog.versionCommands,\n        queries: skillCatalog.queries,\n        fileQueries: skillCatalog.fileQueries,\n        versionQueries: skillCatalog.versionQueries,\n        operations: skillCatalog.operations,\n        zipImport: skillCatalog.zipImport,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n    }),\n    repos: (app) => mountRepoRoutes(app, repositoryWorkspaceStore),\n    cachedRepos: (app) => mountCachedRepoRoutes(app, { configuration, appHome: deps.appHome, secretBox: deps.secretBox }, repositoryWorkspaceStore),\n    repoGroups: (app) => mountRepoGroupRoutes(app, { configuration }, repositoryWorkspaceStore),\n    workflows: (app) => mountWorkflowRoutes(app, deps, {\n        queries: workflowCatalog.queries,\n        validationQueries: workflowCatalog.validationQueries,\n        operations: workflowCatalog.operations,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n    }),\n    workgroups: (app) => mountWorkgroupRoutes(app, {\n        queries: workgroupCatalog.queries,\n        operations: workgroupCatalog.operations,\n        resourceIntegrityQueries: agentResourceIntegrity.queries,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n        taskLaunch: taskRouteLaunch.workgroup,\n    }),\n    resourcePackages: (app) => {\n        if (resourcePackageBinding === null)\n            return;\n        registerResourcePackageRoutes(app, {\n            catalog: resourcePackageBinding.catalog,\n            commandContextFor: resourcePackageBinding.commandContextFor,\n            queryContextFor: (actor) => identityAccess.contexts.queryFromAuthority(directRequestAuthority(identityAccess.directAuthority, actor), 'http'),\n        });\n    },\n    workgroupTasks: (app) => mountWorkgroupTaskRoutes(app, {\n        module: workgroupTaskRoom,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n    }),\n    tasks: (app) => mountTaskRoutes(app, routeDeps),\n    taskCatalog: (app) => mountTaskCatalogRoutes(app, taskCatalog),\n    taskArchive: (app) => mountTaskArchiveRoutes(app, {\n        configuration,\n        taskArchiveMaintenance: deps.taskArchiveMaintenance ??\n            createDrizzleTaskArchiveMaintenanceCommand(deps.db, deps.taskArchive),\n    }),\n    maintenanceDisk: (app) => mountMaintenanceDiskRoutes(app, deps.maintenanceDisk),\n    scheduledTasks: (app) => mountScheduledTaskRoutes(app, {\n        identityAccess: scheduledIdentityAccess,\n        scheduledTaskRuntime,\n        buildScheduleLaunch: scheduledLaunch,\n        getDefaultRuntime: async () => (await configuration.read()).defaultRuntime ?? null,\n    }),\n    webhookEndpoints: (app) => {\n        if (webhookEndpointService === null)\n            return;\n        mountWebhookEndpointRoutes(app, { webhookEndpointService });\n    },\n    codeHosts: (app) => mountCodeHostRoutes(app, deps, codeHostConnections),\n    repositoryTransportCredentials: (app) => {\n        if (repositoryTransportModule === null)\n            return;\n        mountAccountRepositoryTransportCredentialRoutes(app, deps, {\n            credentials: repositoryTransportModule.ownCredentials,\n            currentSubjects: identityAccess.resolveAuthority,\n        });\n    },\n    code: (app) => mountCodeRoutes(app, deps.codeHistoryQueries),\n    capabilityTemplates: (app) => mountCapabilityTemplateRoutes(app, capabilityTemplateRouteDeps),\n    eventCenter: (app) => mountEventCenterRoutes(app, eventCenter),\n    executionContracts: (app) => mountExecutionContractRoutes(app, executionContracts),\n    digitalEmployees: (app) => mountDigitalEmployeeRoutes(app, digitalEmployeePersistence, digitalEmployee, developmentActivityOperations, identityAccess.directAuthority),\n    developmentConfig: (app) => mountDevelopmentConfigRoutes(app, composeSqliteDevelopmentConfigAclRoutes(deps.db, deps.developmentAdapterAclIdentity), developmentConfigOperations, identityAccess.directAuthority),\n    developmentMissions: (app) => mountDevelopmentMissionRoutes(app, developmentMissionOperations, identityAccess.directAuthority),\n    missionInputUploads: (app) => mountMissionInputUploadRoutes(app, missionInputUploads),\n    webhookTriggers: (app) => mountWebhookTriggerRoutes(app, { webhookTriggerService }, scheduledIdentityAccess),\n    webhookDeliveries: (app) => mountWebhookDeliveryRoutes(app, {\n        webhookDeliveryRuntime,\n        ...(deps.digitalEmployeeEventCenter === undefined\n            ? {}\n            : { digitalEmployeeEventCenter: deps.digitalEmployeeEventCenter }),\n        ...(deps.webhookDispatcher === undefined\n            ? {}\n            : { webhookDispatcher: deps.webhookDispatcher }),\n        ...(deps.webhookTerminalControl === undefined\n            ? {}\n            : { webhookTerminalControl: deps.webhookTerminalControl }),\n    }),\n    backup: (app) => mountBackupRoutes(app, systemOperations, identityAccess),\n    restore: (app) => mountRestoreRoutes(app, systemOperations, identityAccess),\n    ...(databaseMigration === undefined\n        ? {}\n        : {\n            databaseMigration: (app: Hono) => mountDatabaseMigrationRoutes(app, databaseMigration.operations, identityAccess),\n        }),\n    worktreeFiles: (app) => mountWorktreeFilesRoutes(app, worktreeFiles),\n    portArtifacts: (app) => mountPortArtifactRoutes(app, deps),\n    reviews: (app) => mountReviewRoutes(app, collaborationRouteOperations, appHome),\n    clarify: (app) => mountClarifyRoutes(app, collaborationRouteOperations),\n    taskQuestions: (app) => mountTaskQuestionRoutes(app, collaborationRouteOperations),\n    taskClarifyDirective: (app) => mountTaskClarifyDirectiveRoutes(app, taskClarifyDirectiveRoutes),\n    fusion: (app) => mountFusionRoutes(app, {\n        operations: fusionOperations,\n        configPath: deps.configPath,\n        directAuthority: identityAccess.directAuthority,\n    }),\n    skillProvenance: (app) => mountSkillProvenanceRoutes(app, {\n        skills: skillCatalog.queries,\n        versions: skillCatalog.versionQueries,\n        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),\n        memoryAuthorityFor: (actor) => ({\n            actor,\n            authority: directRequestAuthority(identityAccess.directAuthority, actor),\n        }),\n        listFusedInto: (skillId) => memoryCatalog.queries.listFusedInto(skillId),\n        filterVisibleMemories: (authority, rows) => memoryCatalog.queries.filterVisible(authority, rows),\n    }),\n    intentSessions: (app) => mountIntentSessionRoutes(app, intentSessionRoutes),\n    memories: (app) => mountMemoryRoutes(app, memoryCatalog, {\n        contexts: identityAccess.contexts,\n        directAuthority: identityAccess.directAuthority,\n    }),\n    memoryDistillJobs: (app) => mountMemoryDistillJobRoutes(app, routeDeps),\n    taskFeedback: (app) => mountTaskFeedbackRoutes(app, deps),\n    auth: (app) => mountAuthRoutes(app, { configuration }, identityAccess, {\n        auth: deps.authRuntime,\n        listIdentitiesForUser: (userId) => oidcIdentities.listIdentitiesForUser(userId),\n        listTokenAuditForUser: (userId) => listTokenAuditForUser(deps.db, userId),\n    }),\n    oidcAuth: (app) => mountOidcAuthRoutes(app, { configuration }, {\n        auth: deps.authRuntime,\n        providers: oidcProviders,\n        identities: oidcIdentities,\n    }),\n    oidc: (app) => mountOidcRoutes(app, { auth: deps.authRuntime, providers: oidcProviders }),\n    users: (app) => mountUserRoutes(app, { auth: deps.authRuntime, listTokenAudit: () => listTokenAudit(deps.db) }, {\n        contexts: identityAccess.contexts,\n        directAuthority: identityAccess.directAuthority,\n        operations: identityUserOperations,\n    }),\n    docs: (app) => mountDocsRoutes(app, { configuration }),\n} satisfies AppApiRouteMounts);"
+        },
+        {
+          "name": "systemAgentObservations",
+          "introducedSha256": "9fcb9719f25dc032f3ba7278c2ed78a9e86c67f40fae3bf886d88a7489cded31",
+          "previousStatement": null
+        },
+        {
+          "name": "narrativeSystemAgentBinding",
+          "introducedSha256": "9f974e1c3a1b21300218343b66f9af94e8a234f183851e6a72aaeb06937e9da8",
+          "previousStatement": "const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({\n    appHome: systemAgentAppHome,\n});"
+        },
+        {
+          "name": "intentSystemAgentBinding",
+          "introducedSha256": "9f7b796444bce72b21b276d904a7b8b09e7402646ba728a66394e4780015ff35",
+          "previousStatement": "const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({\n    appHome: () => intentSessionRouteInputs.appHome,\n});"
+        },
+        {
+          "name": "runtimeManagement",
+          "introducedSha256": "eef85e282c8c023a59edf228c5efae2fc4f12e3401ee7cbea434be28ed01318d",
+          "previousStatement": "const runtimeManagement = composeLocalRuntimeManagement({\n    configuration: {\n        current: () => configuration.read(),\n        withProbeReceiptFence: composeRuntimeProbeConfigFence(applicationConfiguration.notificationKey),\n    },\n    runtimeRegistry: deps.runtimeRegistry,\n    runtimeTests: mcpRuntimeTests.reconciliation,\n    ...(deps.runtimeDiagnosticTestDependencies === undefined\n        ? {}\n        : { runtimeDiagnosticTestDependencies: deps.runtimeDiagnosticTestDependencies }),\n    appHome: () => Paths.root,\n});"
         }
       ]
     }
-  ]
+  ],
+  "systemAgentAccountingSourceBase": "7b62be235cf3d983a7bba31d09edf070173ea6f7",
+  "systemAgentAccountingScope": "RFC-371 original System observations, exact reviewed statement inverse; original Task/RFC-370 mappings and complete-body assertions preserved.",
+  "systemAgentAccountingHistoryScope": "HTTP System calls retain bootstrap-selected original full history prepare; exact appComposition and two System factory statement hashes, all original previousStatement values preserved."
 }

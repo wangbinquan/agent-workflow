@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, asc, eq, gt, inArray } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -6,20 +7,16 @@ import {
   type ObservationNativeCompletion,
   type ObservationNativeEmission,
 } from '@agent-workflow/shared'
-import {
-  nativeUsageStepMembers,
-  nativeUsageRevisionHeads,
-  taskExecutionObservationSources,
-} from '@/db/schema'
+
 import { chunkedAll } from '@/util/sqlChunk'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import { nativeUsageRecordSourceKey } from './nativeUsageRevisionAllocation'
 
 /** Confirm one actual latest original numeric source for every new final step, through EOF. */
 export async function verifyNativeUsageNumericCoverage(
   tx: TaskExecutionTransaction,
-  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'taskId' | 'nodeRunId'>,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'taskId' | 'nodeRunId' | 'sourceKind'>,
   proof: ObservationNativeCompletion,
 ): Promise<{
   readonly records: string
@@ -27,6 +24,9 @@ export async function verifyNativeUsageNumericCoverage(
   readonly unknownTokens: boolean
   readonly incompleteCoverage: boolean
 }> {
+  const { nativeUsageStepMembers, nativeUsageRevisionHeads, taskExecutionObservationSources } =
+    nativeUsageEvidenceStorage(binding.sourceKind)
+
   const final = proof.final?.ack ?? proof.finalProgress
   if (!final)
     return { records: '0', missing: true, unknownTokens: false, incompleteCoverage: false }

@@ -28,8 +28,20 @@
 
 修复保留原配置来源对象为 continuationQueries，并把它交给该 worker。selected 模式继续使用同一个真实 reader，local-sync 模式也在每次原 continuation drive 时读取当前设置；其原方法/receiver、三段配置解析、零值预算与删除配置语义不变。原 Task 意图、准入、失权和 ACK 均不改变。回归同时覆盖同步与异步来源、原 receiver、删除旧预算、真实根绑定；实际融合随后继续同一个澄清任务，不再重复创建任务绕过问题。
 
+## 系统执行接入候选
+
+新增独立的 System group、原始 invocation owner 和来源队列，复用原生采集的十三张证据表结构，并通过新增 0243 迁移建立 System 自己的物理表。原 Task 表、claim、lease、原生证明算法及唯一用量账本保留。来源确认带命名空间，Task 与 System 数字来源即使整数 ID 相同也不会交叉确认。
+
+CLI SQLite、PostgreSQL daemon 和 HTTP SQLite 启动根分别绑定实际选定运行时和原始调用身份。记忆按 job/attempt/round，意图按 session/turn，变更叙述按 task/digest，运行时探测按原 probe，MCP 测试台按 session/turn 接入。MCP 原有续接、spawn 回执、事件 sink 和人工取消流程保持；验收用替身 runFn 不产生虚构模型消耗。
+
+System 与 Task 共用原始完成函数，按 final read、已提交数字投影、history 到实际 EOF、封存、再次投影的顺序执行。文字保留上限不控制数字采集；失败保留已知数字与来源缺口。全量任务事实合并独立系统执行和关联任务下的系统调用；重试保留每次原 invocation，估值绑定启动前冻结的人民币费率版本。
+
+新增双 provider 回归覆盖两根、深度 42 的子会话、超过 128 个会话、422 个原生 step、四类 Token、reasoning 只合入输出一次、原生续接只增量计费、缺字段仍保留全部实际记录、冻结费率，以及 42 个独立 System 作业跨页到实际 EOF。回归由 GitHub CI 执行；测试子进程和真实模型验收分开记载。
+
+四处启动根的变更必须登记逐语句精确 SHA 和原语句，保留原 Task/RFC-370 的完整正文断言、旧映射、continuation `61e0831e` 摘要及原 statement 人口；不得通过归一化、跳过断言或删除并行改动获得通过。
+
 ## 未完成判据
 
-当前系统 owner/独立事实来源尚未实现，不能声称这三处用量已补入正式统计。完成必须包括双 provider 的原来源/ACK/回滚/重试/进程失败/全部 EOF 回归，三启动根绑定、独立与 CS 托管选定实现，再分别真实运行记忆、意图、变更说明、探测、技能融合、动态编排、commit/merge 和当前八个数字员工 Agent。
+当前系统接入仍是未发布、未通过 hosted CI 的候选，不能声称历史漏量已经补入正式统计。完成必须包括双 provider 的原来源/ACK/回滚/重试/进程失败/全部 EOF 回归、实际启动根绑定，再分别真实运行记忆、意图、变更说明、探测、MCP 测试台、技能融合、动态编排、commit/merge 和当前八个数字员工 Agent。CS 托管选定实现另行验收，不能用独立部署通过替代。
 
 每个入口都核对原生 part ID、各分类 Token、冻结人民币估值、任务与 Agent 汇总及正式页面。以前失败及已记录漏量保留；不能把费用验证配置当默认供应商配置，也不能把成功启动、数据页 ready 或某一个 CI job 通过当整体验收完成。

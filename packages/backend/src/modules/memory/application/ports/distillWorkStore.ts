@@ -1,6 +1,9 @@
 import type { Memory, MemoryDistillJob, ResolvedDistillScope } from '@agent-workflow/shared'
 import type { DistillTaskFacts } from '@/modules/memory/domain/distillAdmission'
-import type { RuntimeKind } from '@/modules/runtime-management/public/types'
+import type {
+  RuntimeKind,
+  RuntimeObservationIdentity,
+} from '@/modules/runtime-management/public/types'
 import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
 import type { MemoryDistillJobRecord } from './distillReadStore'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
@@ -229,6 +232,7 @@ export interface ResolvedMemoryDistillRuntime {
   readonly binaryPath: string | null
   readonly model: string | null
   readonly isSandbox: boolean
+  readonly observationIdentity?: RuntimeObservationIdentity
 }
 
 export interface NativeMemoryDistillRuntimeResolver {

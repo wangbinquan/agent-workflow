@@ -43,7 +43,8 @@ export function composeLocalInvocationObservations(
             if (!capture) return undefined
             if (
               capture.taskId !== accepted.taskId ||
-              capture.sourceId !== 'local-node:' + accepted.nodeRunId
+              (capture.sourceId !== 'local-node:' + accepted.nodeRunId &&
+                capture.sourceId !== 'system-agent:' + accepted.nodeRunId)
             )
               throw new Error('Original native history capture changed its accepted owner')
             if (

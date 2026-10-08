@@ -177,6 +177,11 @@ export function createRuntimeManagement(
       assertRuntimeSpawnCapabilities(row.protocol, { extraArgs, isSandbox: row.isSandbox })
       const smoke = await smokeRuntime({
         protocol: row.protocol,
+        runtimeObservationIdentity: {
+          registrationId: row.id,
+          configurationRevision: row.probeFence,
+          acceptedName: row.name,
+        },
         target: diagnosticTarget,
         config: { opencodePath: cfg.opencodePath, claudeCodePath: cfg.claudeCodePath },
         ...(row.model !== null ? { model: row.model } : {}),

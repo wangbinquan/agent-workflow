@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -5,7 +6,7 @@ import {
   ObservationNativeRootCompletionSchema,
   type ObservationNativeRootCompletion,
 } from '@agent-workflow/shared'
-import { nativeUsagePreparations, nativeUsageRootSets, nativeUsageRootResults } from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
 import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import type { NativeUsageOwnerFacts } from './nativeUsageOwnerTransaction'
@@ -24,6 +25,9 @@ export async function describeNativeUsageRootCompletion(
   observedAt: number,
   retainOriginalResultId?: string,
 ): Promise<{ readonly proof: ObservationNativeRootCompletion; readonly records: string }> {
+  const { nativeUsagePreparations, nativeUsageRootSets, nativeUsageRootResults } =
+    nativeUsageEvidenceStorage(binding.sourceKind)
+
   const prepared = (
     await tx
       .select()
@@ -40,7 +44,11 @@ export async function describeNativeUsageRootCompletion(
   )
     throw new Error('Native root completion has no actual original before-spawn owner')
   const beforeSpawn = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document))
-  const sourceGeneration = await originalNativeUsageStoreGeneration(tx, beforeSpawn)
+  const sourceGeneration = await originalNativeUsageStoreGeneration(
+    tx,
+    beforeSpawn,
+    binding.sourceKind,
+  )
   const source = await verifyNativeRootSource(tx, binding, facts)
   const frozen = (
     await tx
@@ -75,7 +83,7 @@ export async function describeNativeUsageRootCompletion(
   )
   let after: string | null = null
   for (;;) {
-    const roots = await originalNativeRootPage(tx, binding.invocationId, after)
+    const roots = await originalNativeRootPage(tx, binding.invocationId, after, binding.sourceKind)
     if (roots.length === 0) break
     for (const rootSessionId of roots) {
       const proof = await describeNativeUsageSingleRoot(tx, facts, binding, observedAt, {

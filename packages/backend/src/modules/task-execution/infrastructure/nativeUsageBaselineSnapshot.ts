@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq, inArray } from 'drizzle-orm'
 import {
   ObservationNativePassCompletionSchema,
@@ -5,12 +6,12 @@ import {
   type ObservationNativeBeforeSpawnAck,
   type ObservationNativePassCompletion,
 } from '@agent-workflow/shared'
-import { nativeUsageStepMembers, nativeUsagePassHeads, nativeUsagePasses } from '@/db/schema'
+
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ReportSnapshotSession } from '@/platform/persistence/reportSnapshotTypes'
 import { chunkedAll } from '@/util/sqlChunk'
 import type {
-  NativeUsageOwnerBinding,
+  NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding,
   NativeUsageReadBinding,
 } from '../application/ports/nativeUsagePersistence'
 import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
@@ -22,6 +23,10 @@ export async function originalNativeUsageBaseline(input: {
   readonly binding: NativeUsageOwnerBinding
   readonly before: ObservationNativeBeforeSpawnAck
 }): Promise<ObservationNativePassCompletion | null> {
+  const { nativeUsagePasses, nativeUsagePassHeads } = nativeUsageEvidenceStorage(
+    input.binding.sourceKind,
+  )
+
   const before = input.before
   if (before.mode !== 'resume') return null
   const key = JSON.stringify([
@@ -74,6 +79,8 @@ export async function withNativeUsageBaselineSnapshot<T>(input: {
   readonly signal?: AbortSignal
   readonly run: (baseline: NativeUsageBaselineReadView | null) => Promise<T>
 }): Promise<T> {
+  const { nativeUsageStepMembers } = nativeUsageEvidenceStorage(input.binding.sourceKind)
+
   const original = ObservationNativePassCompletionSchema.parse(input.original)
   if (original.ack.identity.phase !== 'baseline')
     throw new Error('Native before snapshot requires the original baseline')

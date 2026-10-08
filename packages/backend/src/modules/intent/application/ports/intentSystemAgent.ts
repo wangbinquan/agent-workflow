@@ -23,6 +23,19 @@ export interface IntentSystemAgentRunRequest {
   readonly systemPrompt: string
   readonly prompt: string
   readonly protocol: 'opencode' | 'claude-code'
+  readonly runtimeObservationIdentity?: {
+    readonly registrationId: string
+    readonly configurationRevision: number
+    readonly acceptedName?: string
+  }
+  readonly observationDemand?: {
+    readonly kind: string
+    readonly originalId: string
+    readonly originalAttempt: string
+    readonly name: string
+    readonly ownerUserId?: string
+    readonly purpose?: 'system'
+  }
   readonly runtimeBinding?: IntentSystemRuntimeReference | null
   readonly configDirEnv?: string | null
   readonly configDirName?: string | null

@@ -1,13 +1,20 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { eq } from 'drizzle-orm'
 import type { ObservationNativeBeforeSpawnAck } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { nativeUsageStoreBindings } from '@/db/schema'
+
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 
 type Reader = ProviderNeutralDatabase | DatabaseTransaction
 
-async function originalBinding(reader: Reader, before: ObservationNativeBeforeSpawnAck) {
+async function originalBinding(
+  reader: Reader,
+  before: ObservationNativeBeforeSpawnAck,
+  sourceKind: 'task' | 'system' = 'task',
+) {
+  const { nativeUsageStoreBindings } = nativeUsageEvidenceStorage(sourceKind)
+
   const row = (
     await reader
       .select()
@@ -29,8 +36,11 @@ async function originalBinding(reader: Reader, before: ObservationNativeBeforeSp
 export async function originalNativeUsageStoreGeneration(
   reader: Reader,
   before: ObservationNativeBeforeSpawnAck,
+  sourceKind: 'task' | 'system' = 'task',
 ): Promise<string | null> {
-  return (await originalBinding(reader, before))?.sourceGeneration ?? before.sourceGeneration
+  return (
+    (await originalBinding(reader, before, sourceKind))?.sourceGeneration ?? before.sourceGeneration
+  )
 }
 
 /** Called only in the original fenced Task transaction; a rejected admission rolls it back. */
@@ -38,7 +48,10 @@ export async function bindOriginalNativeUsageStore(
   tx: TaskExecutionTransaction,
   before: ObservationNativeBeforeSpawnAck,
   sourceGeneration: string,
+  sourceKind: 'task' | 'system' = 'task',
 ): Promise<void> {
+  const { nativeUsageStoreBindings } = nativeUsageEvidenceStorage(sourceKind)
+
   if (
     !sourceGeneration ||
     (before.sourceGeneration !== null && sourceGeneration !== before.sourceGeneration)
@@ -52,7 +65,7 @@ export async function bindOriginalNativeUsageStore(
       sourceGeneration,
     })
     .onConflictDoNothing()
-  const actual = await originalBinding(tx, before)
+  const actual = await originalBinding(tx, before, sourceKind)
   if (!actual || actual.sourceGeneration !== sourceGeneration)
     throw new Error('Original native store generation changed after admission')
 }

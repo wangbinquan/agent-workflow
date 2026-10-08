@@ -18,6 +18,7 @@ import {
 } from '@/modules/development-automation/composition/evidenceStaging'
 import { assertEvidenceStagingFactory } from '@/modules/development-automation/public/participants'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
 import {
   composeLocalTaskRunRootSelection,
   composeTaskWorkspaceExcludeProfilesFor,
@@ -65,6 +66,7 @@ import type {
 import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
+import type { ObservationNativeHistorySource } from '@/modules/run-observability/public/participants'
 import type { NativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
@@ -994,6 +996,8 @@ export interface AppDeps {
   completeObservationReports?: CompleteObservationReportQueries
   /** Frozen bootstrap selection; shared by ordinary and host-task original persistence. */
   nativeUsage?: NativeUsageInvocationPersistence
+  /** The original selected provider supplies the same full history reader to HTTP System calls. */
+  nativeUsageHistory?: ObservationNativeHistorySource['prepare']
   /** Daemon-scoped live concurrency mutation composed by bootstrap. */
   configConcurrencyHotApply?: ConfigConcurrencyHotApplyCommand
   /**
@@ -2396,7 +2400,18 @@ export function composeSqliteApplicationDeps(
     })
   const maintenanceDisk =
     deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)
-  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome })
+  const systemAgentObservations = composeSystemAgentObservations({
+    db: deps.db,
+    observations: composeLocalInvocationObservations(
+      deps.db,
+      composeObservationUsageSource(deps.db, deps.nativeUsageHistory),
+    ),
+    nativeUsage: deps.nativeUsage,
+  })
+  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: systemAgentAppHome,
+    observations: () => systemAgentObservations,
+  })
   const memoryOperations =
     deps.memoryOperations ??
     composeSqliteMemoryOperations({
@@ -2575,6 +2590,31 @@ export function composeSqliteApplicationDeps(
   const userRuntimeTests =
     effectiveDeps.mcpRuntimeTests ??
     (unstarted?.createMcpRuntimeTests ?? composeLocalMcpDiagnostics)({
+      observe:
+        ({ session, turn, runtime }) =>
+        (startedAt) =>
+          systemAgentObservations.open({
+            feature: 'mcp-runtime-test',
+            agentName: 'aw-mcp-runtime-test',
+            protocol: session.runtimeProtocol,
+            startedAt,
+            runtimeObservationIdentity: {
+              registrationId: runtime.row.id,
+              configurationRevision: runtime.row.probeFence,
+              acceptedName: runtime.row.name,
+            },
+            ...(turn.seq > 1 && session.runtimeSessionId !== null
+              ? { resumeSessionId: session.runtimeSessionId }
+              : {}),
+            demand: {
+              kind: 'mcp-runtime-test',
+              originalId: session.id,
+              originalAttempt: turn.id,
+              name: 'MCP 测试 · ' + session.runtimeName,
+              ownerUserId: session.ownerUserId,
+              purpose: 'playground',
+            },
+          }),
       ...composeMcpRuntimeTestProvider(effectiveDeps.db),
       isRuntimeEligible: isRuntimeMcpTestEligible,
       coordinator: mcpOperationCoordinator,
@@ -3003,7 +3043,16 @@ function composeSqliteApiRouteMounts(
   const repositoryPublicationTransport = deps.repositoryPublicationTransport
   const schedulerDriver = deps.schedulerDriver
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
+  const systemAgentObservations = composeSystemAgentObservations({
+    db: deps.db,
+    observations: composeLocalInvocationObservations(
+      deps.db,
+      composeObservationUsageSource(deps.db, deps.nativeUsageHistory),
+    ),
+    nativeUsage: deps.nativeUsage,
+  })
   const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    observations: () => systemAgentObservations,
     appHome: systemAgentAppHome,
   })
   const taskRouteOperations = createTaskRouteOperations({
@@ -3734,6 +3783,7 @@ function composeSqliteApiRouteMounts(
     }),
   })
   const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    observations: () => systemAgentObservations,
     appHome: () => intentSessionRouteInputs.appHome,
   })
   const intentSessionRouteInputs: IntentSessionRouteDependencies = {
@@ -3872,6 +3922,7 @@ function composeSqliteApiRouteMounts(
     }),
   })
   const runtimeManagement = composeLocalRuntimeManagement({
+    observations: () => systemAgentObservations,
     configuration: {
       current: () => configuration.read(),
       withProbeReceiptFence: composeRuntimeProbeConfigFence(

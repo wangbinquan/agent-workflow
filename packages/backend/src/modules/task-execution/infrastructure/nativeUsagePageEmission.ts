@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq, inArray } from 'drizzle-orm'
 import {
   AcceptedObservationInvocationSchema,
@@ -7,16 +8,10 @@ import {
   type ObservationNativePassPage,
   type ObservationNativeMeasurement,
 } from '@agent-workflow/shared'
-import {
-  nativeUsagePassHeads,
-  nativeUsagePasses,
-  nativeUsageStepMembers,
-  observationInvocations,
-  nativeUsageRootSets,
-} from '@/db/schema'
+import { observationInvocations } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import type { NativeUsageOwnerFacts } from './nativeUsageOwnerTransaction'
 import { emitNativeUsageEvidence } from './drizzleNativeUsageEmission'
@@ -40,6 +35,9 @@ export async function emitNativeUsagePage(
   ownerReceiptId: string,
   originalBeforeIndex?: NativeUsagePageBaselineMembers | null,
 ): Promise<void> {
+  const { nativeUsageRootSets, nativeUsagePasses, nativeUsagePassHeads, nativeUsageStepMembers } =
+    nativeUsageEvidenceStorage(binding.sourceKind)
+
   if (page.identity.phase !== 'final' || page.steps.length === 0) return
   if (
     facts.contract === 'opencode-child-root-pages-v3' &&

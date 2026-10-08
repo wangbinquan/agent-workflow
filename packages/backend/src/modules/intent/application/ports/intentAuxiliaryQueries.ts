@@ -16,6 +16,11 @@ export interface IntentResolvedRuntime {
   readonly maxSteps: number | null
   readonly isSandbox: boolean
   readonly extraArgs: readonly string[] | null
+  readonly observationIdentity?: {
+    readonly registrationId: string
+    readonly configurationRevision: number
+    readonly acceptedName?: string
+  }
 }
 
 /** Normal turns receive only the selected Runtime Management content identity. */

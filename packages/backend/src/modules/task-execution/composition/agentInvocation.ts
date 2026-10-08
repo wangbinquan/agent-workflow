@@ -83,6 +83,9 @@ export function bindNativeAgentInvocation(input: {
         workingDirectory: input.workingDirectory,
         environment,
         stdin: () => input.plan.stdin,
+        ...(participants?.observeNativeProcess === undefined
+          ? {}
+          : { observeNativeProcess: participants.observeNativeProcess }),
         ...(input.requireSpawnReceipt === undefined
           ? {}
           : { requireSpawnReceipt: input.requireSpawnReceipt }),

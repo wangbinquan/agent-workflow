@@ -41,6 +41,7 @@ export function bindLocalAgentExecutionEffect(input: {
   readonly stdin: () => AgentProcessRequest['stdin']
   readonly requireSpawnReceipt?: true
   readonly nativeStartOwner?: NativeAgentStartReceiptOwner
+  readonly observeNativeProcess?: (fact: ObservationNativeProcessFact) => Promise<void>
   readonly taskEffect?: {
     readonly persistence: TaskExecutionEffectPersistence
     readonly nodeExecution: () => NodeExecutionPersistence
@@ -72,6 +73,7 @@ export function bindLocalAgentExecutionEffect(input: {
       const observe = async (fact: ObservationNativeProcessFact) => {
         try {
           await input.taskEffect?.observeNativeProcess?.(fact)
+          await input.observeNativeProcess?.(fact)
         } catch {
           request.log?.warn('native-process-observation-write-failed')
         }
@@ -85,7 +87,9 @@ export function bindLocalAgentExecutionEffect(input: {
         ...(request.abortSignal !== undefined ? { abortSignal: request.abortSignal } : {}),
         ...(input.stdin()?.mode === 'pipe' ? { stdin: input.stdin() } : {}),
         ...(request.beforeStart !== undefined ? { beforeSpawn: request.beforeStart } : {}),
-        ...(request.onStarted !== undefined || input.taskEffect?.observeNativeProcess !== undefined
+        ...(request.onStarted !== undefined ||
+        input.taskEffect?.observeNativeProcess !== undefined ||
+        input.observeNativeProcess !== undefined
           ? {
               onSpawned: async (native: NativeStartReceipt) => {
                 const receipt: ExecutionStartReceipt = {

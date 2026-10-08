@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq, gt, inArray } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -12,21 +13,12 @@ import {
   ObservationNativeScopeReferenceSchema,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nativeUsagePreparations,
-  nativeUsagePasses,
-  nativeUsagePassHeads,
-  nativeUsagePassPages,
-  nativeUsageSessionParents,
-  nativeUsageStepMembers,
-  nativeUsageRootSets,
-  nativeUsageRootTransitions,
-} from '@/db/schema'
+import type { nativeUsagePreparations, nativeUsagePasses } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type {
-  NativeUsageOwnerBinding,
+  NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding,
   NativeUsagePersistence,
 } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
@@ -52,6 +44,8 @@ async function preparation(
   binding: NativeUsageOwnerBinding,
   facts: NativeUsageOwnerFacts,
 ): Promise<Preparation> {
+  const { nativeUsagePreparations } = nativeUsageEvidenceStorage(binding.sourceKind)
+
   const row = (
     await tx
       .select()
@@ -74,6 +68,8 @@ async function passFor(
   binding: NativeUsageOwnerBinding,
   passId: string,
 ): Promise<Pass> {
+  const { nativeUsagePasses } = nativeUsageEvidenceStorage(binding.sourceKind)
+
   const row = (
     await tx.select().from(nativeUsagePasses).where(eq(nativeUsagePasses.passId, passId)).limit(1)
   )[0]
@@ -103,6 +99,8 @@ export class DrizzleNativeUsagePages implements PagesPort {
   ) {}
 
   async prepare(input: Parameters<PagesPort['prepare']>[0]) {
+    const { nativeUsagePreparations } = nativeUsageEvidenceStorage(input.binding.sourceKind)
+
     return withNativeUsageOwner(
       this.db,
       input.binding,
@@ -164,7 +162,12 @@ export class DrizzleNativeUsagePages implements PagesPort {
           state: 'open',
         })
         if (ack.sourceGeneration !== null)
-          await bindOriginalNativeUsageStore(tx, ack, ack.sourceGeneration)
+          await bindOriginalNativeUsageStore(
+            tx,
+            ack,
+            ack.sourceGeneration,
+            input.binding.sourceKind,
+          )
         return ack
       },
       { allowFinalization: false },
@@ -172,6 +175,13 @@ export class DrizzleNativeUsagePages implements PagesPort {
   }
 
   async admit(input: Parameters<PagesPort['admit']>[0]) {
+    const {
+      nativeUsageRootSets,
+      nativeUsageRootTransitions,
+      nativeUsagePasses,
+      nativeUsagePassHeads,
+    } = nativeUsageEvidenceStorage(input.binding.sourceKind)
+
     ObservationNativePassIdentitySchema.parse(input.identity)
     if (
       input.rootCreatedAt !== null &&
@@ -232,7 +242,12 @@ export class DrizzleNativeUsagePages implements PagesPort {
           )
             throw new Error('Native final root is absent from its original frozen lease population')
         }
-        await bindOriginalNativeUsageStore(tx, before, identity.sourceGeneration)
+        await bindOriginalNativeUsageStore(
+          tx,
+          before,
+          identity.sourceGeneration,
+          input.binding.sourceKind,
+        )
         const existing = (
           await tx
             .select()
@@ -280,7 +295,11 @@ export class DrizzleNativeUsagePages implements PagesPort {
           identity,
           initialCursor: input.initialCursor,
           ownerReceiptId: sha256Hex(JSON.stringify([before.ownerReceiptId, identity, headKey])),
-          sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
+          sourceWatermark: await nativeUsageSourceWatermark(
+            tx,
+            input.binding.nodeRunId,
+            input.binding.sourceKind,
+          ),
         })
         await tx.insert(nativeUsagePasses).values({
           passId: identity.passId,
@@ -312,6 +331,13 @@ export class DrizzleNativeUsagePages implements PagesPort {
   }
 
   async persist(input: Parameters<PagesPort['persist']>[0]) {
+    const {
+      nativeUsagePassPages,
+      nativeUsageSessionParents,
+      nativeUsageStepMembers,
+      nativeUsagePasses,
+    } = nativeUsageEvidenceStorage(input.binding.sourceKind)
+
     // Validate without replacing the original field order used by the native reader's digest.
     ObservationNativePassPageSchema.parse(input.page)
     const page = input.page
@@ -462,7 +488,11 @@ export class DrizzleNativeUsagePages implements PagesPort {
           scanPositionAfter: page.scanPositionAfter,
           counts: page.counts,
           nextCursor: page.nextCursor,
-          sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
+          sourceWatermark: await nativeUsageSourceWatermark(
+            tx,
+            input.binding.nodeRunId,
+            input.binding.sourceKind,
+          ),
           eof: page.eof,
         })
         await tx.insert(nativeUsagePassPages).values({
@@ -485,7 +515,11 @@ export class DrizzleNativeUsagePages implements PagesPort {
           )
           ack = ObservationNativePassAckSchema.parse({
             ...ack,
-            sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
+            sourceWatermark: await nativeUsageSourceWatermark(
+              tx,
+              input.binding.nodeRunId,
+              input.binding.sourceKind,
+            ),
           })
           await tx
             .update(nativeUsagePassPages)
@@ -516,6 +550,8 @@ export class DrizzleNativeUsagePages implements PagesPort {
   }
 
   async interrupt(input: Parameters<PagesPort['interrupt']>[0]) {
+    const { nativeUsagePasses } = nativeUsageEvidenceStorage(input.binding.sourceKind)
+
     return withNativeUsageOwner(
       this.db,
       input.binding,
@@ -535,6 +571,10 @@ export class DrizzleNativeUsagePages implements PagesPort {
   }
 
   async baselineMember(input: Parameters<PagesPort['baselineMember']>[0]) {
+    const { nativeUsagePassPages, nativeUsageStepMembers } = nativeUsageEvidenceStorage(
+      input.binding.sourceKind,
+    )
+
     return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
       await preparation(tx, input.binding, facts)
       const pass = await passFor(tx, input.binding, input.passId)
@@ -579,6 +619,8 @@ export class DrizzleNativeUsagePages implements PagesPort {
   }
 
   async steps(input: Parameters<PagesPort['steps']>[0]) {
+    const { nativeUsageStepMembers } = nativeUsageEvidenceStorage(input.binding.sourceKind)
+
     if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 500)
       throw new RangeError('Invalid native step response size')
     return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
@@ -625,6 +667,10 @@ export class DrizzleNativeUsagePages implements PagesPort {
   }
 
   async parent(input: Parameters<PagesPort['parent']>[0]) {
+    const { nativeUsagePassPages, nativeUsageSessionParents } = nativeUsageEvidenceStorage(
+      input.binding.sourceKind,
+    )
+
     const reference = ObservationNativeScopeReferenceSchema.parse(input.reference)
     return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
       await preparation(tx, input.binding, facts)

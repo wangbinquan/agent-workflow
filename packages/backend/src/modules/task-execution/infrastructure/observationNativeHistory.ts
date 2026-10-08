@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, asc, eq, gt, inArray } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -5,12 +6,7 @@ import {
   ObservationNativePassAckSchema,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nativeUsagePasses,
-  nativeUsagePassPages,
-  nativeUsageSessionParents,
-  nativeUsageStepMembers,
-} from '@/db/schema'
+import type { nativeUsagePasses } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import {
   nativeHistoryFingerprint,
@@ -31,6 +27,10 @@ export async function prepareOriginalNativeHistory(
   value: NativeHistoryPreparation['value'],
   snapshot: { readonly snapshotId: string; readonly generationId: string },
 ): Promise<NativeHistoryPreparation | null> {
+  const { nativeUsagePasses } = nativeUsageEvidenceStorage(
+    value.sourceId.startsWith('system-agent:') ? 'system' : 'task',
+  )
+
   if (
     value.capture.contract !== 'opencode-child-pages-v2' &&
     value.capture.contract !== 'opencode-child-root-pages-v3'
@@ -71,12 +71,20 @@ export async function prepareOriginalNativeHistory(
 export function createObservationNativeHistory(
   db: ProviderNeutralDatabase,
   prepare: ObservationNativeHistorySource['prepare'],
+  sourceKind: 'task' | 'system' = 'task',
 ): ObservationNativeHistorySource {
+  const {
+    nativeUsagePasses,
+    nativeUsageStepMembers,
+    nativeUsageSessionParents,
+    nativeUsagePassPages,
+  } = nativeUsageEvidenceStorage(sourceKind)
+
   return {
     onReader: (reader) => {
       if (!('select' in reader) || typeof reader.select !== 'function')
         throw new Error('Original native history reader is unavailable')
-      return createObservationNativeHistory(reader as ProviderNeutralDatabase, prepare)
+      return createObservationNativeHistory(reader as ProviderNeutralDatabase, prepare, sourceKind)
     },
     prepare,
     async page(raw, after) {

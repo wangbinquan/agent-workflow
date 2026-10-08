@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -8,7 +9,7 @@ import {
   type ObservationAnyNativeCompletion,
   type ObservationNativeProcessFact,
 } from '@agent-workflow/shared'
-import { nativeUsageEmissions, taskExecutionObservationSources } from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
 import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
@@ -27,6 +28,10 @@ export async function verifyNativeUsageEmissions(
   readonly hasProcessIssues: boolean
   readonly observedAtFloor: number
 }> {
+  const { nativeUsageEmissions, taskExecutionObservationSources } = nativeUsageEvidenceStorage(
+    binding.sourceKind,
+  )
+
   const watermark = originalWatermark === undefined ? undefined : Number(originalWatermark)
   if (
     watermark !== undefined &&
@@ -207,7 +212,8 @@ export async function verifyNativeUsageEmissions(
       frames: String(frames),
       digest,
       sourceWatermark:
-        originalWatermark ?? (await nativeUsageSourceWatermark(tx, binding.nodeRunId)),
+        originalWatermark ??
+        (await nativeUsageSourceWatermark(tx, binding.nodeRunId, binding.sourceKind)),
     },
     process: {
       spawnedAt: spawned?.spawnedAt ?? settled?.spawnedAt ?? null,

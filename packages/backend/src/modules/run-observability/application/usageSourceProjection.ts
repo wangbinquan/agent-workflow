@@ -64,7 +64,8 @@ export function createUsageSourceProjection(input: {
               m.agentId !== accepted.agentId
             )
               throw new Error('Observation measurement does not match accepted invocation')
-          const sourceId = 'local-node:' + row.nodeRunId
+          const sourceId =
+            (row.sourceNamespace === 'system' ? 'system-agent:' : 'local-node:') + row.nodeRunId
           const cursor = await ingest.cursor(sourceId)
           if (cursorId(cursor) < row.id)
             await ingest.ingest({
@@ -90,7 +91,7 @@ export function createUsageSourceProjection(input: {
                 : {}),
             })
         }
-        await input.source.acknowledge([row.id])
+        await input.source.acknowledge([row.id], row.sourceNamespace)
         count++
       } catch (error) {
         blocked.add(row.nodeRunId)

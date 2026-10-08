@@ -1,5 +1,6 @@
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { outputTail } from '@/util/spawnDiagnostics'
+import { createSystemAgentUsageCapture } from './systemAgentUsageCapture'
 import type {
   RuntimeSmokeCoreInput,
   RuntimeSmokeCompiledInvocation,
@@ -110,21 +111,57 @@ export async function runRuntimeSmokeCore(
   // (managedProcess adapter): spawn/stdin/timeout/TERM→KILL/reap/drain all live
   // there; this probe only classifies what came back.
   const invocation = compiled.bind()
-  const localExecution = invocation.bindExecution()
+  const observationRun = input.invocation.observe
+    ? await input.invocation.observe(nonce, Date.now())
+    : undefined
+  const usageCapture = observationRun
+    ? createSystemAgentUsageCapture({ run: observationRun, invocation, log })
+    : undefined
+  let usageSessionId: string | null = null
+  let usageReset: { outgoingSessionId: string; newConversationId: string } | undefined
+  const localExecution = invocation.bindExecution(
+    usageCapture ? { observeNativeProcess: usageCapture.process } : undefined,
+  )
   const run = await localExecution.effect.submit({
     executionRef: localExecution.executionRef,
     materialRef: localExecution.materialRef,
     workspaceRef: localExecution.workspaceRef,
     timeoutMs,
     termGraceMs: CHILD_TERM_GRACE_MS,
-    ...(invocation.lifecycle.beforeStart !== undefined
-      ? { beforeStart: invocation.lifecycle.beforeStart }
+    ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
+      ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
       : {}),
     ...(invocation.lifecycle.cleanup !== undefined
       ? { cleanup: invocation.lifecycle.cleanup }
       : {}),
     capture: {
-      onStdoutLine: (line) => {
+      onStdoutLine: async (line) => {
+        // Numeric/session evidence continues after the diagnostic text-retention cap.
+        const numericEvent = usageCapture ? invocation.protocol.parseEvent(line) : null
+        if (numericEvent?.sessionId !== undefined) {
+          if (usageSessionId === null) {
+            usageSessionId = numericEvent.sessionId
+            await usageCapture?.root(usageSessionId)
+          } else if (
+            numericEvent.sessionId !== usageSessionId &&
+            usageReset?.outgoingSessionId === usageSessionId
+          ) {
+            const previous = usageSessionId
+            usageSessionId = numericEvent.sessionId
+            usageReset = undefined
+            await usageCapture?.root(usageSessionId, previous)
+          } else if (numericEvent.sessionId !== usageSessionId) nativeSessionProtocolInvalid = true
+        }
+        if (numericEvent?.conversationReset !== undefined) {
+          if (
+            usageSessionId === null ||
+            numericEvent.conversationReset.outgoingSessionId !== usageSessionId ||
+            usageReset !== undefined
+          )
+            nativeSessionProtocolInvalid = true
+          else usageReset = numericEvent.conversationReset
+        }
+        await usageCapture?.line(line, usageSessionId)
         if (outBytes >= MAX_OUTPUT_BYTES) return
         outBytes += Buffer.byteLength(line, 'utf8') + 1
         // raw line (capped) feeds the auth/model classifier — claude's error is
@@ -133,7 +170,7 @@ export async function runRuntimeSmokeCore(
         if (line.includes('"type":"result"') || line.includes('"is_error":true')) {
           lastResultLine = line
         }
-        const ev = invocation.protocol.parseEvent(line)
+        const ev = usageCapture ? numericEvent : invocation.protocol.parseEvent(line)
         if (ev !== null) {
           sawEvent = true
           if (ev.sessionId !== undefined) {
@@ -169,41 +206,61 @@ export async function runRuntimeSmokeCore(
       onStderrLine: (line) => {
         if (stderrText.length < 8_192) stderrText += line + '\n'
       },
+      onStdoutChunkEnd: async () => {
+        await usageCapture?.flush()
+      },
     },
     log,
   })
+  await usageCapture?.finish(usageSessionId)
+  const settleSmoke = async (result: SmokeResult): Promise<SmokeResult> => {
+    if (observationRun) {
+      try {
+        await observationRun.settle(result.outcome, Date.now())
+      } catch {
+        log.warn('runtime-smoke-observation-settlement-remains-pending', {
+          invocationId: observationRun.invocationId,
+        })
+      }
+    }
+    return result
+  }
+  if (usageCapture) {
+    sessionId = usageSessionId ?? undefined
+    pendingConversationReset = usageReset
+  }
 
   if (run.outcome === 'spawn-failed') {
     await invocation.workspace.discard()
-    return {
+    return settleSmoke({
       outcome: 'spawn-failed',
       conforms: false,
       detail: `binary failed to start: ${run.spawnError ?? 'unknown spawn failure'}`,
       sawNonce: false,
       sawEnvelope: false,
       exitCode: null,
-    }
+    })
   }
   if (run.outcome === 'unreaped') {
     // Child may still own the attempt dir — retain it (reap-then-cleanup barrier).
-    return {
+    return settleSmoke({
       outcome: 'spawn-failed',
       conforms: false,
       detail: 'runtime process could not be reaped after termination',
       sawNonce: false,
       sawEnvelope: false,
       exitCode: null,
-    }
+    })
   }
   if (run.cleanupFailed === true) {
-    return {
+    return settleSmoke({
       outcome: 'spawn-failed',
       conforms: false,
       detail: 'runtime process cleanup did not complete safely',
       sawNonce: false,
       sawEnvelope: false,
       exitCode: null,
-    }
+    })
   }
 
   const timedOut = run.outcome === 'timeout'
@@ -295,17 +352,17 @@ export async function runRuntimeSmokeCore(
   try {
     await invocation.workspace.discard()
   } catch {
-    return {
+    return settleSmoke({
       outcome: 'spawn-failed',
       conforms: false,
       detail: 'runtime process cleanup did not complete safely',
       sawNonce: false,
       sawEnvelope: false,
       exitCode: null,
-    }
+    })
   }
 
-  return {
+  return settleSmoke({
     outcome,
     conforms: outcome === 'conforms',
     detail,
@@ -317,5 +374,5 @@ export async function runRuntimeSmokeCore(
     sawNonce,
     sawEnvelope,
     exitCode,
-  }
+  })
 }

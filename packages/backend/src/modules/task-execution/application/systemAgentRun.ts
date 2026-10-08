@@ -15,6 +15,8 @@ import type {
   SystemAgentOutputEvidence,
 } from '@/modules/runtime-management/public/participants'
 import type { Logger } from '@/util/log'
+import type { SystemAgentObservationRun } from './ports/systemAgentObservation'
+import { createSystemAgentUsageCapture } from './systemAgentUsageCapture'
 
 export const DEFAULT_TIMEOUT_MS = 600_000
 export const DEFAULT_MAX_EVENT_TEXT_BYTES = 8 * 1024 * 1024
@@ -106,6 +108,9 @@ export async function runSystemAgentCore(
   // verification so no consumer re-renders it (§2.1b-2).
   let declaredForResult: DeclaredInjectionManifest | undefined
   let result: PreparedSystemAgentRunResult | undefined
+  let observationRun: SystemAgentObservationRun | undefined
+  let usageCapture: ReturnType<typeof createSystemAgentUsageCapture> | undefined
+  let observedSessionId: string | null = null
   let sinkTerminal = false
   let sinkFailed = false
   let sinkFailureReason: SessionCaptureIncompleteReason | undefined
@@ -208,6 +213,15 @@ export async function runSystemAgentCore(
       invocation = preparedMaterial!.bind()
       const materialEvidence = invocation.evidence
       const protocol = invocation.protocol
+      if (input.invocation.observe) {
+        observationRun = await input.invocation.observe(startedAt)
+        usageCapture = createSystemAgentUsageCapture({
+          run: observationRun,
+          invocation,
+          log,
+          ...(opts.resumeSessionId ? { resumeSessionId: opts.resumeSessionId } : {}),
+        })
+      }
 
       // RFC-280 T4 — the child's whole lifecycle (spawn / stdin / timers /
       // TERM→KILL / reap / bounded drain) lives in the unified agent executor;
@@ -227,7 +241,9 @@ export async function runSystemAgentCore(
       let receiptError: unknown
       let capturedStartupInventory: StartupInventory | null = null
 
-      const localExecution = invocation.bindExecution()
+      const localExecution = invocation.bindExecution(
+        usageCapture ? { observeNativeProcess: usageCapture.process } : undefined,
+      )
       const run = await localExecution.effect.submit({
         executionRef: localExecution.executionRef,
         materialRef: localExecution.materialRef,
@@ -235,8 +251,8 @@ export async function runSystemAgentCore(
         timeoutMs,
         termGraceMs: CHILD_TERM_GRACE_MS,
         ...(opts.abortSignal !== undefined ? { abortSignal: opts.abortSignal } : {}),
-        ...(invocation.lifecycle.beforeStart !== undefined
-          ? { beforeStart: invocation.lifecycle.beforeStart }
+        ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
+          ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
           : {}),
         ...(input.invocation.acknowledgeStart()
           ? {
@@ -293,6 +309,7 @@ export async function runSystemAgentCore(
               }
             }
             if (ev === null) {
+              await usageCapture?.line(line, sessionId ?? null)
               outputEvidence.unparsedStdoutSeen = true
               await appendSink({
                 ts: Date.now(),
@@ -314,6 +331,8 @@ export async function runSystemAgentCore(
                   nativeSessionIntegrityFailed = true
                   throw new Error('runtime native session claim failed')
                 }
+                observedSessionId = ev.sessionId
+                await usageCapture?.root(ev.sessionId)
               } else if (sessionId !== ev.sessionId) {
                 if (
                   pendingConversationReset === undefined ||
@@ -331,6 +350,8 @@ export async function runSystemAgentCore(
                   nativeSessionIntegrityFailed = true
                   throw new Error('runtime native session rotation failed')
                 }
+                observedSessionId = sessionId
+                await usageCapture?.root(sessionId, previousSessionId)
               }
             }
             if (ev.conversationReset !== undefined) {
@@ -350,6 +371,7 @@ export async function runSystemAgentCore(
                 throw new Error('runtime native session reset fence failed')
               }
             }
+            await usageCapture?.line(line, sessionId ?? null)
             if (typeof ev.text === 'string' && ev.text.length > 0) {
               const bytes = Buffer.byteLength(ev.text, 'utf8')
               outputEvidence.assistantTextSeen = true
@@ -390,6 +412,9 @@ export async function runSystemAgentCore(
               parentSessionId: null,
               source: 'stream',
             })
+          },
+          onStdoutChunkEnd: async () => {
+            await usageCapture?.flush()
           },
           // A clipped frame stored as if whole would lie to the session view —
           // mark the capture incomplete exactly like the historical
@@ -503,6 +528,7 @@ export async function runSystemAgentCore(
       return { status: 'ok', ...base }
     })()
   } finally {
+    await usageCapture?.finish(observedSessionId)
     if (!sinkTerminal) {
       await markSinkTerminal(
         sinkFailed || result?.status === 'unreaped' ? 'incomplete' : 'complete',
@@ -561,6 +587,16 @@ export async function runSystemAgentCore(
         }
       }
     }
+    if (observationRun) {
+      try {
+        await observationRun.settle(result?.status ?? 'spawn-failed', Date.now())
+      } catch {
+        log.warn('system-agent-observation-settlement-remains-pending', {
+          invocationId: observationRun.invocationId,
+        })
+      }
+    }
   }
-  return result ?? fail('spawn-failed', { scratchRetained: true })
+  const settled = result ?? fail('spawn-failed', { scratchRetained: true })
+  return settled
 }

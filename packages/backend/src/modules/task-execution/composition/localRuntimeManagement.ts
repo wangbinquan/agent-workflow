@@ -2,6 +2,7 @@ import { createLocalRuntimeDiagnosticTargets } from '@/modules/runtime-managemen
 import { createLocalRuntimeManagementEffects } from '@/modules/runtime-management/infrastructure/local/runtimeManagementEffects'
 import { bindRuntimeManagement } from '@/modules/runtime-management/composition/runtimeManagement'
 import { composeLocalRuntimeSmokeRunFamily } from './localRuntimeSmokeRunFamily'
+import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
 
 /** A native root selects every capability as one family; ordinary management
  * receives required effects and never chooses an implicit native runner. */
@@ -9,12 +10,14 @@ export function composeLocalRuntimeManagement(
   input: Omit<Parameters<typeof createLocalRuntimeManagementEffects>[0], 'targets' | 'smoke'> & {
     readonly runtimeRegistry: Parameters<typeof bindRuntimeManagement>[0]['runtimeRegistry']
     appHome(): string
+    readonly observations?: () => SystemAgentObservationFactory
   },
 ) {
   const targets = createLocalRuntimeDiagnosticTargets()
   const smoke = composeLocalRuntimeSmokeRunFamily({
     targets,
     appHome: () => input.appHome(),
+    ...(input.observations ? { observations: input.observations } : {}),
   })
   const runtimeRegistry = input.runtimeRegistry
   const effects = createLocalRuntimeManagementEffects({

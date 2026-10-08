@@ -1,16 +1,19 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, asc, eq, gt } from 'drizzle-orm'
-import { nativeUsageRootHeads, nativeUsageRootTransitions } from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import type { NativeUsageOwnerFacts } from './nativeUsageOwnerTransaction'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import { nativeRootOrdinalKey } from './nativeUsageLeaseRoot'
 
 export async function originalNativeRootHead(
   tx: TaskExecutionTransaction,
-  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'taskId' | 'nodeRunId'>,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'taskId' | 'nodeRunId' | 'sourceKind'>,
   facts: Pick<NativeUsageOwnerFacts, 'fence'>,
 ) {
+  const { nativeUsageRootHeads } = nativeUsageEvidenceStorage(binding.sourceKind)
+
   const head = (
     await tx
       .select()
@@ -32,9 +35,11 @@ export async function originalNativeRootHead(
 /** Every original successful transition, not just roots whose final scan succeeded. */
 export async function verifyNativeRootSource(
   tx: TaskExecutionTransaction,
-  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'taskId' | 'nodeRunId'>,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'taskId' | 'nodeRunId' | 'sourceKind'>,
   facts: Pick<NativeUsageOwnerFacts, 'fence'>,
 ) {
+  const { nativeUsageRootTransitions } = nativeUsageEvidenceStorage(binding.sourceKind)
+
   const head = await originalNativeRootHead(tx, binding, facts)
   let after: string | undefined,
     count = 0n
@@ -117,7 +122,10 @@ export async function originalNativeRootPage(
   tx: TaskExecutionTransaction,
   invocationId: string,
   after: string | null,
+  sourceKind: 'task' | 'system' = 'task',
 ): Promise<readonly string[]> {
+  const { nativeUsageRootTransitions } = nativeUsageEvidenceStorage(sourceKind)
+
   const rows = await tx
     .selectDistinct({ root: nativeUsageRootTransitions.rootSessionId })
     .from(nativeUsageRootTransitions)

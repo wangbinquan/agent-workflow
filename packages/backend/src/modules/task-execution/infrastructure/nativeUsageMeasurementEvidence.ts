@@ -1,8 +1,9 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq, inArray } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import type { ObservationNativeMeasurement } from '@agent-workflow/shared'
 import { ObservationNativePassPageSchema } from '@agent-workflow/shared'
-import { nativeUsageStepMembers } from '@/db/schema'
+
 import { chunkedAll } from '@/util/sqlChunk'
 import type { NativeUsageReadBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
@@ -14,6 +15,8 @@ export async function verifyNativeUsageMeasurementEvidence(
   binding: NativeUsageReadBinding,
   measurements: readonly ObservationNativeMeasurement[],
 ): Promise<void> {
+  const { nativeUsageStepMembers } = nativeUsageEvidenceStorage(binding.sourceKind)
+
   const prefix = 'opencode:step:'
   // One source packet bounds both caches. A deep shared path is verified once, not per step.
   const scopes = new Map<string, ObservationNativeMeasurement['scope']>()

@@ -44,6 +44,11 @@ import type {
   McpRuntimeTestPersistence,
 } from '../../application/mcps/runtimeTestPersistence'
 export interface McpDiagnosticsEffectDependencies {
+  readonly observe?: (input: {
+    readonly session: SessionRow
+    readonly turn: McpRuntimeTestTurnRecord
+    readonly runtime: ResolvedTestRuntime
+  }) => SystemAgentRunOptions['observe']
   readonly configuration: {
     read():
       | Pick<Config, 'defaultRuntime' | 'opencodePath' | 'claudeCodePath'>
@@ -297,6 +302,14 @@ export function createLocalMcpDiagnosticsEffects(
         eventSink: sink,
         nativeIdentityAuthoritative: true,
         retainScratchOnSuccess: true,
+        ...(deps.runFn !== undefined || deps.observe === undefined
+          ? {}
+          : {
+              observe: deps.observe({ session, turn, runtime }),
+              ...(turn.seq > 1 && session.runtimeSessionId !== null
+                ? { resumeSessionId: session.runtimeSessionId }
+                : {}),
+            }),
         // RFC-282 B1b (§2.1b) — the old `buildPlan` escape hatch could return an
         // arbitrary plan, making the declared manifest a SECOND computation at
         // settle. Narrowed: buildCtx customizes the assembly INPUT (admission

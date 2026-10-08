@@ -3,6 +3,7 @@ import type {
   RuntimeObservationIdentity,
   RuntimeKind,
 } from '@/modules/runtime-management/public/types'
+import type { SystemNativeUsageOwnerBinding } from './nativeUsagePersistence'
 
 export type { NativeUsageAdmission } from './nativeUsageAdmission'
 
@@ -12,6 +13,11 @@ export interface NativeUsageInvocationPersistence {
     readonly invocationId: string
     readonly taskId: string
     readonly nodeRunId: string
+    readonly runtime?: RuntimeObservationIdentity & { readonly protocol: RuntimeKind }
+  }): NonNullable<NativeUsageCaptureIdentity['durableOwner']> | undefined
+  /** Independent original System operation, not a Task execution context. */
+  forSystemInvocation?(input: {
+    readonly binding: SystemNativeUsageOwnerBinding
     readonly runtime?: RuntimeObservationIdentity & { readonly protocol: RuntimeKind }
   }): NonNullable<NativeUsageCaptureIdentity['durableOwner']> | undefined
 }

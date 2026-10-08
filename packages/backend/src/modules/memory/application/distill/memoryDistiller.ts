@@ -137,6 +137,9 @@ export interface RunDistillOptions {
   model?: string | null
   /** RFC-276: opt-in Claude CLI compatibility marker. */
   isSandbox?: boolean
+  runtimeObservationIdentity?: Parameters<
+    SystemAgentRunFamily['run']
+  >[0]['runtimeObservationIdentity']
   /**
    * RFC-044: per-source byte budget for the new transcript / body context
    * blocks. Plumbed by the scheduler from `config.memoryDistillSourceContext`.
@@ -1188,6 +1191,17 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
 
       const result = await systemAgents.run({
         feature: 'memory-distiller',
+        observationDemand: {
+          kind: 'memory-distill',
+          originalId: options.job.id,
+          originalAttempt: `${options.job.attempts}:${round}`,
+          name: `记忆提取 · ${options.job.sourceKind}`,
+          parentTaskId: options.job.taskId,
+          purpose: 'memory',
+        },
+        ...(options.runtimeObservationIdentity
+          ? { runtimeObservationIdentity: options.runtimeObservationIdentity }
+          : {}),
         agentName: DISTILLER_AGENT_NAME,
         systemPrompt: DISTILLER_SYSTEM_PROMPT,
         prompt,

@@ -13,6 +13,9 @@ interface RuntimeProfileRow {
   readonly binaryPath: string | null
   readonly model: string | null
   readonly isSandbox: boolean
+  readonly registrationId: string
+  readonly configurationRevision: number
+  readonly acceptedName: string
 }
 
 function pick(value: string | null | undefined): string | null {
@@ -44,7 +47,13 @@ export class DrizzleMemoryDistillRuntimeResolver implements MemoryDistillRuntime
 
   private async resolveName(name: string): Promise<ResolvedMemoryDistillRuntime> {
     const row = await this.find(name)
-    if (row !== null) return row
+    if (row !== null) {
+      const { registrationId, configurationRevision, acceptedName, ...profile } = row
+      return {
+        ...profile,
+        observationIdentity: { registrationId, configurationRevision, acceptedName },
+      }
+    }
     return RUNTIME_KINDS.includes(name as 'opencode' | 'claude-code')
       ? fallback(name as 'opencode' | 'claude-code')
       : fallback()
@@ -57,6 +66,9 @@ export class DrizzleMemoryDistillRuntimeResolver implements MemoryDistillRuntime
         binaryPath: runtimes.binaryPath,
         model: runtimes.model,
         isSandbox: runtimes.isSandbox,
+        registrationId: runtimes.id,
+        configurationRevision: runtimes.probeFence,
+        acceptedName: runtimes.name,
       })
       .from(runtimes)
       .where(eq(runtimes.name, name))

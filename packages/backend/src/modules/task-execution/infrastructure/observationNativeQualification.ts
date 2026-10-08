@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -6,11 +7,7 @@ import {
   parseObservationCapturedUsage,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nativeUsagePreparations,
-  nativeUsageEmissions,
-  taskExecutionObservationSources,
-} from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
 import type { ObservationNativeScopeSource } from '@/modules/run-observability/public/participants'
 import { verifyNativeUsagePass } from './nativeUsagePassVerification'
@@ -26,6 +23,13 @@ export async function readOriginalNativeCaptureSource(
   db: ProviderNeutralDatabase,
   value: Parameters<ObservationNativeScopeSource['qualify']>[0],
 ) {
+  const {
+    taskExecutionObservationSources,
+    nativeUsagePreparations,
+    nativeUsageEmissions,
+    sourcePrefix,
+  } = nativeUsageEvidenceStorage(value.sourceId.startsWith('system-agent:') ? 'system' : 'task')
+
   const proof = value.capture
   if (
     proof.contract !== 'opencode-child-pages-v2' &&
@@ -56,7 +60,7 @@ export async function readOriginalNativeCaptureSource(
     source.taskId !== value.taskId ||
     prepared.taskId !== value.taskId ||
     source.nodeRunId !== prepared.nodeRunId ||
-    value.sourceId !== 'local-node:' + source.nodeRunId
+    value.sourceId !== sourcePrefix + source.nodeRunId
   )
     throw new Error('Native completion changed its original Task or source owner')
   const evidence = parseObservationCapturedUsage(JSON.parse(source.evidenceJson))
@@ -108,6 +112,9 @@ export async function readOriginalNativeCaptureSource(
     invocationId: value.invocationId,
     taskId: value.taskId,
     nodeRunId: prepared.nodeRunId,
+    sourceKind: value.sourceId.startsWith('system-agent:')
+      ? ('system' as const)
+      : ('task' as const),
   }
   return {
     proof,
@@ -133,6 +140,7 @@ export async function readOriginalNativeCaptureBinding(
     facts.binding.invocationId,
     facts.proof.roots.resultId,
     facts.proof.rootSessionId,
+    value.sourceId.startsWith('system-agent:') ? 'system' : 'task',
   )
   if (!original) throw new Error('Original native root history lost its retained initial result')
   return { ...facts, proof: original.value.proof }
@@ -152,7 +160,11 @@ export async function qualifyOriginalNativeUsage(
   const { proof, binding, before } = await readOriginalNativeCaptureBinding(db, value)
   const final = proof.final
   if (!final) return { records: null, complete: false }
-  const sourceGeneration = await originalNativeUsageStoreGeneration(db, before)
+  const sourceGeneration = await originalNativeUsageStoreGeneration(
+    db,
+    before,
+    value.sourceId.startsWith('system-agent:') ? 'system' : 'task',
+  )
   if (sourceGeneration === null)
     throw new Error('Native completion has no original admitted store generation')
   for (const reference of [final, proof.baseline.kind === 'resume' ? proof.baseline.pass : null]) {

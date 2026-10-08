@@ -396,6 +396,17 @@ async function runGeneration(
     const forget = retainedContents.forget
     const result = await systemAgents.run({
       feature: 'change-narrative',
+      observationDemand: {
+        kind: 'change-narrative',
+        originalId: task.id,
+        originalAttempt: input.digest,
+        name: '变更叙述',
+        parentTaskId: task.id,
+        purpose: 'system',
+      },
+      ...(runtime.observationIdentity
+        ? { runtimeObservationIdentity: runtime.observationIdentity }
+        : {}),
       agentName: NARRATIVE_AGENT_NAME,
       systemPrompt: NARRATIVE_SYSTEM_PROMPT,
       prompt: buildNarrativePrompt(task, input),

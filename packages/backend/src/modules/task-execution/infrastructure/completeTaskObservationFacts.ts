@@ -7,6 +7,9 @@ import { sha256Hex } from '@/util/hash'
 import type { ObservationTaskPageQuery } from '@agent-workflow/shared'
 import type { TaskObservationFactsQuery } from '../public/queries'
 import { createTaskObservationFacts } from './taskObservationFacts'
+import { systemAgentObservationGroups as systemGroups } from '@/db/observationSystem'
+import { createSystemObservationFacts, systemObservationVisibility } from './systemObservationFacts'
+import { createCombinedObservationNativeScopes } from './observationNativeSources'
 
 /** Historical observation retains internal and soft-deleted original rows. Ordinary catalogs are unchanged. */
 export function createCompleteTaskObservationFacts(
@@ -14,6 +17,7 @@ export function createCompleteTaskObservationFacts(
   taskId?: string,
 ): TaskObservationFactsQuery {
   const original = createTaskObservationFacts(db)
+  const system = createSystemObservationFacts(db)
   const visible = (actor: Actor) =>
     taskVisibilityCondition(db, {
       userId: actor.user.id,
@@ -83,6 +87,22 @@ export function createCompleteTaskObservationFacts(
   }
   return {
     ...original,
+    nativeScopes: createCombinedObservationNativeScopes(db),
+    async sourceBacklog(ids) {
+      const task = await original.sourceBacklog(ids)
+      const byId = new Map((await system.backlog(ids)).map((row) => [row.taskId, row]))
+      return task.map((row) => byId.get(row.taskId) ?? row)
+    },
+    async attemptPage(id, page) {
+      return (await system.contains(id))
+        ? system.attemptPage(id, page)
+        : original.attemptPage!(id, page)
+    },
+    async attempts(id, limit) {
+      if (!(await system.contains(id))) return original.attempts(id, limit)
+      const result = await system.attemptPage(id, { limit })
+      return { items: result.items, truncated: result.nextCursor !== null }
+    },
     async list({ actor, query }) {
       if (!actor.permissions.has('tasks:read:all') && !actor.permissions.has('tasks:read:own'))
         return { items: [], positions: [], nextCursor: null }
@@ -141,26 +161,71 @@ export function createCompleteTaskObservationFacts(
         .orderBy(desc(tasks.startedAt), desc(tasks.id))
         .limit(query.limit + 1)
         .all()
-      const items = rows.slice(0, query.limit),
+      const engine = engineOf(db)
+      const search = query.q === undefined ? null : engine.likeEscape(query.q)
+      const systemScope =
+        taskId === undefined
+          ? or(
+              sql`${systemGroups.parentTaskId} IN (${selected})`,
+              query.repository !== undefined || query.workflow !== undefined
+                ? sql`false`
+                : and(
+                    gte(systemGroups.startedAt, query.from),
+                    lt(systemGroups.startedAt, query.to),
+                    query.status === undefined ? undefined : eq(systemGroups.status, query.status),
+                    search === null
+                      ? undefined
+                      : or(
+                          engine.likeCaseInsensitive(
+                            systemGroups.name,
+                            search.pattern,
+                            search.escape,
+                          ),
+                          engine.likeCaseInsensitive(
+                            systemGroups.id,
+                            search.pattern,
+                            search.escape,
+                          ),
+                        ),
+                  ),
+            )
+          : or(eq(systemGroups.id, taskId), sql`${systemGroups.parentTaskId} IN (${selected})`)
+      const systemRows = await system.rows(
+        and(
+          systemObservationVisibility(db, actor),
+          systemScope,
+          after === null
+            ? undefined
+            : or(
+                lt(systemGroups.startedAt, after[0]),
+                and(eq(systemGroups.startedAt, after[0]), lt(systemGroups.id, after[1])),
+              ),
+        ),
+        query.limit + 1,
+      )
+      const combined = [...rows, ...systemRows].sort(
+        (a, b) => b.startedAt - a.startedAt || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+      )
+      const items = combined.slice(0, query.limit),
         last = items.at(-1)
       const cursorOf = (task: { readonly startedAt: number; readonly id: string }) =>
         JSON.stringify([2, scope, task.startedAt, task.id])
       return {
         items,
         positions: items.map((task) => ({ taskId: task.id, cursor: cursorOf(task) })),
-        nextCursor: rows.length > query.limit && last ? cursorOf(last) : null,
+        nextCursor: combined.length > query.limit && last ? cursorOf(last) : null,
       }
     },
     async get(actor, id) {
       if (!actor.permissions.has('tasks:read:all') && !actor.permissions.has('tasks:read:own'))
         return null
-      return (
+      const task =
         (await db
           .select(fields)
           .from(tasks)
           .where(and(eq(tasks.id, id), visible(actor)))
           .get()) ?? null
-      )
+      return task ?? system.get(actor, id)
     },
   }
 }

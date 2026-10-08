@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -7,15 +8,10 @@ import {
   ObservationNativePassPageSchema,
   type ObservationNativePassAck,
 } from '@agent-workflow/shared'
-import {
-  nativeUsagePasses,
-  nativeUsagePassPages,
-  nativeUsageSessionParents,
-  nativeUsageStepMembers,
-} from '@/db/schema'
+
 import { chunkedAll } from '@/util/sqlChunk'
 import { sha256Hex } from '@/util/hash'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 
 type ObservationNativePassCounts = ObservationNativePassAck['counts']
@@ -23,7 +19,7 @@ type ObservationNativePassCounts = ObservationNativePassAck['counts']
 /** Verify every original page and index entry with bounded batches, including partial progress. */
 export async function verifyNativeUsagePass(
   tx: TaskExecutionTransaction,
-  binding: Pick<NativeUsageOwnerBinding, 'invocationId'>,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'sourceKind'>,
   reference: { readonly ack: ObservationNativePassAck; readonly pageCount: string },
   requireEof: boolean,
 ): Promise<{
@@ -32,6 +28,13 @@ export async function verifyNativeUsagePass(
   readonly hasIssues: boolean
   readonly hasPopulationIssues: boolean
 }> {
+  const {
+    nativeUsagePasses,
+    nativeUsagePassPages,
+    nativeUsageSessionParents,
+    nativeUsageStepMembers,
+  } = nativeUsageEvidenceStorage(binding.sourceKind)
+
   const last = ObservationNativePassAckSchema.parse(reference.ack)
   const pass = (
     await tx

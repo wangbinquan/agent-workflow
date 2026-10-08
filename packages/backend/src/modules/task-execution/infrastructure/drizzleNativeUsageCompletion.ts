@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, asc, eq, gt } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -10,16 +11,10 @@ import {
   type ObservationNativePassCompletion,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nativeUsagePreparations,
-  nativeUsagePasses,
-  nativeUsagePassHeads,
-  nativeUsageEmissions,
-  taskExecutionObservationSources,
-} from '@/db/schema'
+import type { nativeUsagePasses } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import type {
-  NativeUsageOwnerBinding,
+  NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding,
   NativeUsagePersistence,
   NativeUsageReadBinding,
 } from '../application/ports/nativeUsagePersistence'
@@ -39,6 +34,8 @@ async function head(
   binding: NativeUsageReadBinding,
   phase: 'baseline' | 'final',
 ): Promise<Pass | undefined> {
+  const { nativeUsagePassHeads, nativeUsagePasses } = nativeUsageEvidenceStorage(binding.sourceKind)
+
   let after: string | undefined
   let found: Pass | undefined
   for (;;) {
@@ -83,6 +80,9 @@ export async function describeNativeUsageSingleRoot(
     readonly emitted: Awaited<ReturnType<typeof verifyNativeUsageEmissions>>
   },
 ): Promise<ObservationNativeCompletion> {
+  const { nativeUsagePreparations, nativeUsagePassHeads, nativeUsagePasses } =
+    nativeUsageEvidenceStorage(binding.sourceKind)
+
   const prepared = (
     await tx
       .select()
@@ -101,7 +101,7 @@ export async function describeNativeUsageSingleRoot(
     ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document))
   const sourceGeneration = context
     ? context.sourceGeneration
-    : await originalNativeUsageStoreGeneration(tx, beforeSpawn)
+    : await originalNativeUsageStoreGeneration(tx, beforeSpawn, binding.sourceKind)
   const issues = new Set<string>()
   const effectiveResume =
     beforeSpawn.mode === 'resume' &&
@@ -255,6 +255,9 @@ export class DrizzleNativeUsageCompletion implements SealPort {
   }
 
   async seal(input: Parameters<SealPort['seal']>[0]) {
+    const { nativeUsageEmissions, taskExecutionObservationSources, nativeUsagePreparations } =
+      nativeUsageEvidenceStorage(input.binding.sourceKind)
+
     const completion = ObservationNativeCompletionSchema.parse(input.completion)
     const evidence = {
       invocationId: input.binding.invocationId,

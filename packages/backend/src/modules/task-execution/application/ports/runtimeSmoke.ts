@@ -1,5 +1,8 @@
 import type { Logger } from '@/util/log'
-import type { RuntimeKind } from '@/modules/runtime-management/public/types'
+import type {
+  RuntimeKind,
+  RuntimeObservationIdentity,
+} from '@/modules/runtime-management/public/types'
 import type {
   AgentMaterialWorkspace,
   AgentMaterialIntent,
@@ -7,6 +10,7 @@ import type {
 import type { AgentInvocationPreparation } from './agentInvocationPreparation'
 import type { AgentInvocationBinding } from './agentInvocation'
 import type { RuntimeDiagnosticTarget } from '@/modules/runtime-management/public/participants'
+import type { SystemAgentObservationRun } from './systemAgentObservation'
 
 export type SmokeOutcome =
   | 'conforms'
@@ -45,6 +49,7 @@ export interface RuntimeSmokeCoreInput {
     readonly workspace: AgentMaterialWorkspace
     prepareWorkspace(): void | Promise<void>
     compile(prompt: string): Promise<RuntimeSmokeCompiledInvocation>
+    observe?(nonce: string, startedAt: number): Promise<SystemAgentObservationRun>
   }
 }
 
@@ -62,6 +67,7 @@ export interface PreparedRuntimeSmokeOptions extends RuntimeSmokeCorePolicy {
  * workspace location. Its family opens before nonce/workspace allocation. */
 export interface RuntimeSmokeRunRequest extends RuntimeSmokeCorePolicy {
   readonly target: RuntimeDiagnosticTarget
+  readonly runtimeObservationIdentity?: RuntimeObservationIdentity
   readonly extraArgs?: readonly string[]
   readonly isSandbox?: boolean
   readonly timeoutMs?: number

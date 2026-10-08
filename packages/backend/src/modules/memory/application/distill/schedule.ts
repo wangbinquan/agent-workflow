@@ -467,6 +467,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         runtimeBinding: rt.runtimeBinding,
         model: rt.model,
         isSandbox: rt.isSandbox,
+        ...(rt.observationIdentity ? { runtimeObservationIdentity: rt.observationIdentity } : {}),
         sourceContextBudget: options.sourceContextBudget,
         timeoutMs: options.timeoutMs,
       })

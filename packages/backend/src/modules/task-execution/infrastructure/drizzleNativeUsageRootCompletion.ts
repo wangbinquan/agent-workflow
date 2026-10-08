@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -6,14 +7,10 @@ import {
   ObservationNativeBeforeSpawnAckSchema,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nativeUsagePreparations,
-  nativeUsageEmissions,
-  taskExecutionObservationSources,
-} from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
 import type {
-  NativeUsageOwnerBinding,
+  NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding,
   NativeUsagePersistence,
 } from '../application/ports/nativeUsagePersistence'
 import { withNativeUsageOwner } from './nativeUsageOwnerTransaction'
@@ -30,6 +27,10 @@ export class DrizzleNativeUsageRootCompletion implements Pick<NativeUsagePersist
     readonly binding: NativeUsageOwnerBinding
     readonly observedAt: number
   }) {
+    const { nativeUsagePreparations, nativeUsageEmissions } = nativeUsageEvidenceStorage(
+      input.binding.sourceKind,
+    )
+
     return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
       const prepared = (
         await tx
@@ -77,6 +78,9 @@ export class DrizzleNativeUsageRootCompletion implements Pick<NativeUsagePersist
     })
   }
   async seal(input: Parameters<NativeUsagePersistence['seal']>[0]) {
+    const { nativeUsageEmissions, taskExecutionObservationSources, nativeUsagePreparations } =
+      nativeUsageEvidenceStorage(input.binding.sourceKind)
+
     const completion = ObservationNativeRootCompletionSchema.parse(input.completion)
     const evidence = {
       invocationId: input.binding.invocationId,

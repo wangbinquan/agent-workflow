@@ -10,6 +10,11 @@ import type {
 import type { Logger } from '@/util/log'
 import type { AgentInvocationBinding } from './agentInvocation'
 import type { AgentInvocationPreparation } from './agentInvocationPreparation'
+import type {
+  SystemAgentObservationDemand,
+  SystemAgentObservationRun,
+} from './systemAgentObservation'
+import type { RuntimeObservationIdentity } from '@/modules/runtime-management/public/types'
 
 export type SystemAgentRunStatus =
   | 'ok'
@@ -62,6 +67,9 @@ export interface SystemAgentRunPolicy {
   readonly eventSink?: SystemAgentEventSinkV1
   readonly nativeIdentityAuthoritative?: boolean
   readonly retainScratchOnSuccess?: boolean
+  readonly observationDemand?: SystemAgentObservationDemand
+  readonly runtimeObservationIdentity?: RuntimeObservationIdentity
+  readonly resumeSessionId?: string
 }
 
 export interface PreparedSystemAgentRunOptions extends SystemAgentRunPolicy {
@@ -86,6 +94,7 @@ export interface SystemAgentCoreInvocation {
   acknowledgeStart(): boolean
   prepareWorkspace(): void | Promise<void>
   compile(): Promise<SystemAgentCompiledInvocation>
+  observe?(startedAt: number): Promise<SystemAgentObservationRun>
 }
 
 export type { SessionCaptureIncompleteReason }

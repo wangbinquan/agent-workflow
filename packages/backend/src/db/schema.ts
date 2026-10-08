@@ -8575,3 +8575,25 @@ export const {
   nativeUsageEmissions,
   nativeUsageRevisionHeads,
 } = createNativeUsageTables(tasks)
+
+export {
+  systemAgentObservationGroups,
+  systemAgentObservationOwners,
+  systemAgentObservationSources,
+} from './observationSystem'
+import { systemAgentNativeUsage } from './observationSystem'
+export const {
+  nativeUsageRootHeads: systemNativeUsageRootHeads,
+  nativeUsageRootTransitions: systemNativeUsageRootTransitions,
+  nativeUsageRootSets: systemNativeUsageRootSets,
+  nativeUsageRootResults: systemNativeUsageRootResults,
+  nativeUsagePreparations: systemNativeUsagePreparations,
+  nativeUsageStoreBindings: systemNativeUsageStoreBindings,
+  nativeUsagePasses: systemNativeUsagePasses,
+  nativeUsagePassHeads: systemNativeUsagePassHeads,
+  nativeUsagePassPages: systemNativeUsagePassPages,
+  nativeUsageSessionParents: systemNativeUsageSessionParents,
+  nativeUsageStepMembers: systemNativeUsageStepMembers,
+  nativeUsageEmissions: systemNativeUsageEmissions,
+  nativeUsageRevisionHeads: systemNativeUsageRevisionHeads,
+} = systemAgentNativeUsage

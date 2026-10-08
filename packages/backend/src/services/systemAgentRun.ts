@@ -39,6 +39,7 @@ import type {
 import { createLogger, type Logger } from '@/util/log'
 import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
+import type { SystemAgentCoreInvocation } from '@/modules/task-execution/application/ports/systemAgentRun'
 
 export interface SystemAgentSeedFile {
   /** Relative path under the scratch worktree; `..` and absolute are rejected. */
@@ -47,6 +48,8 @@ export interface SystemAgentSeedFile {
 }
 
 export interface SystemAgentRunOptions {
+  /** The selected root binds original System ownership before its process starts. */
+  readonly observe?: SystemAgentCoreInvocation['observe']
   /** Log/scratch prefix, e.g. 'intent-builder'. */
   feature: string
   agentName: string
@@ -244,6 +247,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     startedAt,
     invocation: {
       workspace: materialWorkspace.workspace,
+      ...(opts.observe === undefined ? {} : { observe: opts.observe }),
       acknowledgeStart: () => opts.onSpawned !== undefined,
       prepareWorkspace: () => materialWorkspace.workspace.prepare(),
       async compile() {

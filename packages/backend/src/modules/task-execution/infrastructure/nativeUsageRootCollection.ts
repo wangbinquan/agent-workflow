@@ -1,7 +1,8 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { eq } from 'drizzle-orm'
-import { nativeUsagePreparations, nativeUsageRootSets } from '@/db/schema'
+
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import { withNativeUsageOwner } from './nativeUsageOwnerTransaction'
 import { verifyNativeUsageEmissions } from './nativeUsageEmissionVerification'
 import {
@@ -15,6 +16,10 @@ export function createNativeUsageRootCollection(
   db: ProviderNeutralDatabase,
   binding: NativeUsageOwnerBinding,
 ) {
+  const { nativeUsagePreparations, nativeUsageRootSets } = nativeUsageEvidenceStorage(
+    binding.sourceKind,
+  )
+
   return {
     async freeze(): Promise<void> {
       await withNativeUsageOwner(db, binding, async (tx, facts) => {
@@ -68,7 +73,7 @@ export function createNativeUsageRootCollection(
           (head && head.digest !== frozen.rootDigest)
         )
           throw new Error('Native root population changed during its final scan')
-        return originalNativeRootPage(tx, binding.invocationId, after)
+        return originalNativeRootPage(tx, binding.invocationId, after, binding.sourceKind)
       })
     },
   }

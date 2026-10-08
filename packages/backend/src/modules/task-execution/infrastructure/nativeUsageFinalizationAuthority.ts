@@ -7,11 +7,11 @@ import {
 } from '@agent-workflow/shared'
 import type {
   NativeUsageFinalizationRef,
-  NativeUsageOwnerBinding,
+  TaskNativeUsageOwnerBinding,
 } from '../application/ports/nativeUsagePersistence'
 
 interface Finalization {
-  readonly binding: NativeUsageOwnerBinding
+  readonly binding: TaskNativeUsageOwnerBinding
   before?: ObservationNativeBeforeSpawnAck
   spawned?: ObservationNativeProcessFact
   settled?: ObservationNativeProcessFact
@@ -20,7 +20,7 @@ interface Finalization {
 const originals = new WeakMap<NativeUsageFinalizationRef, Finalization>()
 
 /** Only original prepare and kernel callbacks can activate this invocation's final evidence. */
-export function createNativeUsageFinalizationAuthority(binding: NativeUsageOwnerBinding) {
+export function createNativeUsageFinalizationAuthority(binding: TaskNativeUsageOwnerBinding) {
   const reference: NativeUsageFinalizationRef = Object.freeze({})
   const original: Finalization = { binding, invalid: false }
   originals.set(reference, original)
@@ -85,7 +85,7 @@ export function createNativeUsageFinalizationAuthority(binding: NativeUsageOwner
 
 /** A copied object or another invocation/context cannot borrow an original finalization. */
 export function nativeUsageFinalizationReceipt(
-  binding: NativeUsageOwnerBinding,
+  binding: TaskNativeUsageOwnerBinding,
 ): ObservationNativeBeforeSpawnAck | undefined {
   if (!binding.finalization) return undefined
   const original = originals.get(binding.finalization)

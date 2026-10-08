@@ -14,10 +14,12 @@ import type {
 import type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
 import { createLocalAgentInvocationPreparation } from './localAgentInvocationPreparation'
 import { composeSystemAgentRunFamily } from './systemAgentRunFamily'
+import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
 
 /** Native facts and fake-run projection are selected only by an explicit root. */
 export function composeLocalSystemAgentRunFamily(input: {
   appHome(): string
+  readonly observations?: () => SystemAgentObservationFactory
   readonly fixture?: {
     readonly runFn: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   }
@@ -68,6 +70,22 @@ export function composeLocalSystemAgentRunFamily(input: {
       })
       return {
         workspace: selected.workspace,
+        ...(input.observations
+          ? {
+              observe: (startedAt: number) =>
+                input.observations!().open({
+                  feature: request.feature,
+                  agentName: request.agentName,
+                  protocol: request.protocol,
+                  startedAt,
+                  ...(request.observationDemand ? { demand: request.observationDemand } : {}),
+                  ...(request.runtimeObservationIdentity
+                    ? { runtimeObservationIdentity: request.runtimeObservationIdentity }
+                    : {}),
+                  ...(request.resumeSessionId ? { resumeSessionId: request.resumeSessionId } : {}),
+                }),
+            }
+          : {}),
         acknowledgeStart: () => true,
         prepareWorkspace: () => selected.workspace.prepare(),
         compile() {

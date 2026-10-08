@@ -1,3 +1,4 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { eq, max } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import {
@@ -9,7 +10,6 @@ import {
   nodeRuns,
   observationInvocations,
   taskExecutionIntents,
-  taskExecutionObservationSources,
   taskExecutionOwners,
   nativeUsagePreparations,
 } from '@/db/schema'
@@ -17,12 +17,13 @@ import { databaseTransactionIsActive, engineOf } from '@/platform/persistence/da
 import { assertTaskExecutionContext } from '../application/taskExecutionContext'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import { nativeUsageFinalizationReceipt } from './nativeUsageFinalizationAuthority'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import {
   fenceTaskWrite,
   withTaskExecutionWrite,
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
+import { withSystemNativeUsageOwner } from './systemObservationOwner'
 
 export interface NativeUsageOwnerFacts {
   readonly contract: 'opencode-child-pages-v2' | 'opencode-child-root-pages-v3'
@@ -39,6 +40,7 @@ export async function withNativeUsageOwner<T>(
   run: (tx: TaskExecutionTransaction, facts: NativeUsageOwnerFacts) => Promise<T>,
   options: { readonly allowFinalization?: boolean } = {},
 ): Promise<T> {
+  if (binding.sourceKind === 'system') return withSystemNativeUsageOwner(db, binding, run)
   assertTaskExecutionContext(binding.executionContext, binding.taskId)
   if (databaseTransactionIsActive(db))
     throw new Error('Native owner receipt requires its original transaction commit')
@@ -170,7 +172,10 @@ export async function withNativeUsageOwner<T>(
 export async function nativeUsageSourceWatermark(
   tx: TaskExecutionTransaction,
   nodeRunId: string,
+  sourceKind: 'task' | 'system' = 'task',
 ): Promise<string> {
+  const { taskExecutionObservationSources } = nativeUsageEvidenceStorage(sourceKind)
+
   const row = (
     await tx
       .select({ id: max(taskExecutionObservationSources.id) })

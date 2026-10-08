@@ -1,18 +1,22 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import { ObservationNativeScopeReferenceSchema } from '@agent-workflow/shared'
 import type { ObservationNativeScopeReference } from '@agent-workflow/shared'
-import { nativeUsagePasses, nativeUsagePassPages, nativeUsageSessionParents } from '@/db/schema'
+
 import { sha256Hex } from '@/util/hash'
-import type { NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
+import type { NativeUsageExecutionOwnerBinding as NativeUsageOwnerBinding } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
 
 /** Verify the entire original parent chain without materializing a population-sized path. */
 export async function verifyNativeUsageScope(
   tx: TaskExecutionTransaction,
-  binding: Pick<NativeUsageOwnerBinding, 'invocationId'>,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'sourceKind'>,
   value: ObservationNativeScopeReference,
 ): Promise<string> {
+  const { nativeUsagePasses, nativeUsagePassPages, nativeUsageSessionParents } =
+    nativeUsageEvidenceStorage(binding.sourceKind)
+
   const reference = ObservationNativeScopeReferenceSchema.parse(value)
   const proof = reference.ancestry
   const pass = (

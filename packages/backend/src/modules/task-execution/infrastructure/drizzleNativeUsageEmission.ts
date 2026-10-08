@@ -1,15 +1,11 @@
+import { nativeUsageEvidenceStorage } from './nativeUsageEvidenceStorage'
 import { and, eq } from 'drizzle-orm'
 import { ObservationNativeEmissionSchema } from '@agent-workflow/shared'
 import { ObservationNativeSourceAckSchema } from '@agent-workflow/shared'
 import { AcceptedObservationInvocationSchema } from '@agent-workflow/shared'
 import { ObservationNativeMeasurementSchema } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nativeUsageEmissions,
-  nativeUsagePreparations,
-  observationInvocations,
-  taskExecutionObservationSources,
-} from '@/db/schema'
+import { observationInvocations } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import type { NativeUsagePersistence } from '../application/ports/nativeUsagePersistence'
 import type { TaskExecutionTransaction } from './ownedTaskExecution'
@@ -40,6 +36,9 @@ export async function emitNativeUsageEvidence(
   facts: NativeUsageOwnerFacts,
   input: Parameters<EmissionPort['emit']>[0],
 ) {
+  const { nativeUsagePreparations, nativeUsageEmissions, taskExecutionObservationSources } =
+    nativeUsageEvidenceStorage(input.binding.sourceKind)
+
   if (!input.eventId || input.eventId.length > 512)
     throw new RangeError('Invalid original native emission identity')
   ObservationNativeEmissionSchema.parse(input.evidence)
@@ -111,7 +110,11 @@ export async function emitNativeUsageEvidence(
       native.push(ObservationNativeMeasurementSchema.parse(measurement))
   }
   await verifyNativeUsageMeasurementEvidence(tx, input.binding, native)
-  const sourceId = await lockOriginalNativeUsageSource(tx, input.binding.nodeRunId)
+  const sourceId = await lockOriginalNativeUsageSource(
+    tx,
+    input.binding.nodeRunId,
+    input.binding.sourceKind,
+  )
   const measurements = await allocateOriginalNativeRevisions(
     tx,
     input.binding,
@@ -132,7 +135,13 @@ export async function emitNativeUsageEvidence(
   )[0]
   if (!original || !Number.isSafeInteger(original.id) || original.id < 1)
     throw new Error('Original native emission did not return its actual source row')
-  await rememberOriginalNativeSources(tx, input.binding.invocationId, measurements, original.id)
+  await rememberOriginalNativeSources(
+    tx,
+    input.binding.invocationId,
+    measurements,
+    original.id,
+    input.binding.sourceKind,
+  )
   const ack = ObservationNativeSourceAckSchema.parse({
     contract: 'native-usage-source-ack-v2',
     invocationId: input.binding.invocationId,

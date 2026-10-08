@@ -449,6 +449,17 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       const forget = retainedContents.forget
       result = await systemAgents.run({
         feature: 'intent-builder',
+        observationDemand: {
+          kind: 'intent-turn',
+          originalId: input.sessionId,
+          originalAttempt: turnId,
+          name: '意图分析',
+          ownerUserId: input.actor.user.id,
+          purpose: 'system',
+        },
+        ...(deps.config.runtime.observationIdentity
+          ? { runtimeObservationIdentity: deps.config.runtime.observationIdentity }
+          : {}),
         agentName: INTENT_BUILDER_AGENT_NAME,
         systemPrompt,
         prompt,
