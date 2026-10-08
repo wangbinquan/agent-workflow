@@ -6,6 +6,9 @@ import {
   type CompleteObservationReportSummary,
   type CompleteObservationTrend,
   type ObservationSpanDetail,
+  type CompleteHistoricalObservationRecord,
+  type CompleteHistoricalObservationExecution,
+  type CompleteHistoricalObservationReference,
 } from '@agent-workflow/shared'
 import type { CompleteObservationReportRow } from '../ports/completeObservationReport'
 import { completeMetricsFold } from './completeMetricsFold'
@@ -22,6 +25,16 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
       value.partiallyPricedRecords === undefined
         ? {}
         : { partiallyPricedRecords: value.partiallyPricedRecords }
+    const historicalFields = (value: {
+      readonly historicalReferences?: string
+      readonly observedHistoricalReferences?: string
+    }) =>
+      value.historicalReferences === undefined
+        ? {}
+        : {
+            historicalReferences: value.historicalReferences,
+            observedHistoricalReferences: value.observedHistoricalReferences,
+          }
     const qualifiedPopulation = (value: {
       readonly records: string
       readonly pricedRecords: string
@@ -46,13 +59,23 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
           canonicalCount,
         ) ||
         BigInt(coverage.observedInvocations) > BigInt(coverage.invocations) ||
-        (BigInt(coverage.records) > 0n && coverage.invocations === '0') ||
+        (BigInt(coverage.records) > 0n &&
+          coverage.invocations === '0' &&
+          BigInt(coverage.observedHistoricalReferences ?? '0') === 0n) ||
+        ((coverage.historicalReferences !== undefined ||
+          coverage.observedHistoricalReferences !== undefined) &&
+          (!canonicalCount(coverage.historicalReferences) ||
+            !canonicalCount(coverage.observedHistoricalReferences) ||
+            BigInt(coverage.historicalReferences ?? '0') === 0n ||
+            BigInt(coverage.observedHistoricalReferences ?? '0') >
+              BigInt(coverage.historicalReferences ?? '0'))) ||
         !TOKEN_BUCKETS.every(
           (bucket) =>
             canonicalCount(coverage.bucketRecords[bucket]) &&
             BigInt(coverage.bucketRecords[bucket]) <= BigInt(coverage.records),
         ) ||
         !isDeepStrictEqual(coverage, {
+          ...historicalFields(coverage),
           invocations: coverage.invocations,
           observedInvocations: coverage.observedInvocations,
           records: coverage.records,
@@ -163,7 +186,8 @@ function qualifiedRecordedUsage(value: unknown, metrics: CompleteObservationMetr
         canonicalCount(recorded.tokens[bucket as keyof typeof recorded.tokens]),
       ) &&
       BigInt(recorded.records) > 0n &&
-      BigInt(recorded.observedInvocations) > 0n &&
+      (BigInt(recorded.observedInvocations) > 0n ||
+        BigInt(metrics.tokenCoverage?.observedHistoricalReferences ?? '0') > 0n) &&
       BigInt(recorded.observedInvocations) <= BigInt(recorded.invocations) &&
       (metrics.recordedUsage === undefined ||
         (recorded.invocations === metrics.recordedUsage.invocations &&
@@ -221,6 +245,8 @@ export function completeReportFactSummary(
     throw new Error('Original recorded summary usage is not qualified')
   if (
     !qualifiedCostEvidence(summary.metrics) ||
+    summary.metrics.tokenCoverage?.historicalReferences !==
+      summary.inventory.historicalReferences ||
     (summary.metrics.tokenCoverage &&
       (summary.metrics.tokenCoverage.invocations !== invocations ||
         ('numericRecords' in summary.inventory &&
@@ -230,7 +256,14 @@ export function completeReportFactSummary(
     throw new Error('Original recorded summary Token population is not qualified')
   return {
     ...summary,
-    inventory: { tasks, attempts, invocations },
+    inventory: {
+      tasks,
+      attempts,
+      invocations,
+      ...(summary.inventory.historicalReferences === undefined
+        ? {}
+        : { historicalReferences: summary.inventory.historicalReferences }),
+    },
     metrics: summary.metrics,
     rootTask: summary.rootTask ? { ...summary.rootTask, metrics: summary.metrics } : null,
   }
@@ -241,13 +274,54 @@ export function completeReportFactRow(
 ): CompleteObservationReportRow | null {
   if (!COMPLETE_OBSERVATION_FACT_SECTIONS.includes(row.section)) return null
   const document = row.document as Record<string, unknown>
+  if (row.section === 'historical-records' || row.section === 'historical-record-versions') {
+    const record = row.document as CompleteHistoricalObservationRecord
+    const fold = completeMetricsFold(record.metrics)
+    const numeric = fold.records !== '0'
+    if (
+      record.kind !== 'historical-observed' ||
+      !/^(0|[1-9]\d*)$/.test(record.candidateCount) ||
+      !['matched', 'excluded', 'unresolved'].includes(record.scopeMatch) ||
+      !TOKEN_BUCKETS.every(
+        (bucket) =>
+          record.originalUsage[bucket] === null ||
+          (typeof record.originalUsage[bucket] === 'string' &&
+            /^(0|[1-9]\d*)$/.test(record.originalUsage[bucket]!)),
+      ) ||
+      record.includedInTotals !== numeric ||
+      (numeric &&
+        (record.scopeMatch !== 'matched' ||
+          record.coveredByAcceptedRecords ||
+          record.issues.includes('historical-native-record-conflict') ||
+          fold.records !== '1' ||
+          !TOKEN_BUCKETS.every(
+            (bucket) => fold.tokens[bucket] === (record.originalUsage[bucket] ?? '0'),
+          )))
+    )
+      throw new Error('Original historical numeric scope is not qualified')
+  }
+  if (row.section === 'historical-executions' || row.section === 'historical-record-references') {
+    const reference = row.document as
+      | CompleteHistoricalObservationExecution
+      | CompleteHistoricalObservationReference
+    if (
+      reference.execution.kind !== 'historical-observed' ||
+      !['matched', 'excluded', 'unresolved'].includes(reference.scopeMatch)
+    )
+      throw new Error('Original historical execution scope is not qualified')
+  }
   if ('recordedUsage' in document && row.section !== 'trends')
     throw new Error('Original recorded trend usage is not qualified')
   if (row.section === 'span-facts') {
     const span = row.document as ObservationSpanDetail
     return { ...row, document: { ...span, usage: null, cost: null } }
   }
-  if (row.section !== 'quality' && row.section !== 'span-statuses' && !('metrics' in document))
+  if (
+    row.section !== 'quality' &&
+    row.section !== 'span-statuses' &&
+    row.section !== 'historical-record-references' &&
+    !('metrics' in document)
+  )
     throw new Error('Original scope metrics are not qualified: missing metrics')
   if ('metrics' in document) {
     const metrics = document.metrics as CompleteObservationMetrics

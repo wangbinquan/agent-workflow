@@ -77,6 +77,8 @@ export function isKnownRuntimeKind(v: string | null | undefined): v is RuntimeKi
 // (resolveOpencodeCmd 已于 RFC-284 T19 删除——生产消费方自 RFC-282 C1 起为零，
 // config.opencodePath 的头解析只活在 mint 冻结链 scheduler.freezeBinaryConfig。)
 export { probeOpencode } from './opencode/util'
+// The original native artifact path under a supplied child/daemon environment.
+export { opencodeUsageDatabasePath } from './opencode/nativeUsage'
 // Platform-owned claude flags (registry extraArgs validation).
 export { CLAUDE_PLATFORM_OWNED_FLAGS } from './claudeCode/spawn'
 // Startup-inventory run-root projection (the provider-neutral task read model

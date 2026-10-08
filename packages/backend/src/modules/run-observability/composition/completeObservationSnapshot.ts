@@ -14,11 +14,13 @@ import type {
   CompleteObservationStoredReport,
 } from '../ports/completeObservationReport'
 import type { CompleteObservationTaskSource } from '../ports/taskObservations'
+import type { HistoricalObservationSources } from '../ports/historicalObservationSources'
 
 /** Bootstrap supplies the Task owner's original full-population query on this exact reader. */
 export async function composeCompleteObservationSnapshot(input: {
   readonly snapshot: OriginalReportSnapshot
   readonly tasks: CompleteObservationTaskSource
+  readonly historical?: HistoricalObservationSources
   readonly report: CompleteObservationStoredReport
   readonly spool: CompleteObservationSpool
   readonly signal?: AbortSignal
@@ -57,11 +59,14 @@ export async function composeCompleteObservationSnapshot(input: {
     actor: report.request.actor,
     query: report.request.query,
     ...(task ? { task } : {}),
-    sources: createCompleteObservationSources({
-      db: snapshot.executor,
-      tasks: input.tasks,
-      snapshotId: snapshot.snapshotId,
-    }),
+    sources: {
+      ...createCompleteObservationSources({
+        db: snapshot.executor,
+        tasks: input.tasks,
+        snapshotId: snapshot.snapshotId,
+      }),
+      ...(input.historical ? { historical: input.historical } : {}),
+    },
     asOf: snapshot.asOf,
     rows: snapshot.workspace,
     namespace,

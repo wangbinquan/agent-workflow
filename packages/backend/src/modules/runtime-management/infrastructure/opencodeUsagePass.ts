@@ -10,6 +10,10 @@ import type {
   NativeUsagePassSession,
   NativeUsagePassStep,
 } from '../application/ports/nativeUsagePass'
+import type {
+  HistoricalNativePassIdentity,
+  HistoricalNativePassReader,
+} from '../application/ports/historicalNativeUsage'
 
 interface SessionRow {
   id: string
@@ -36,6 +40,18 @@ interface PartRow {
   cache_write: unknown
   provider: unknown
   model: unknown
+}
+type OriginalNativePassIdentity = NativeUsagePassIdentity | HistoricalNativePassIdentity
+type OriginalNativePassPage<I extends OriginalNativePassIdentity> = Omit<
+  NativeUsagePassPage,
+  'identity'
+> & { readonly identity: I }
+type OriginalNativePassReader<I extends OriginalNativePassIdentity> = Omit<
+  NativeUsagePassReader,
+  'identity' | 'next'
+> & {
+  readonly identity: I
+  next(cursor: string): OriginalNativePassPage<I>
 }
 const identifier = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0
@@ -83,16 +99,13 @@ function measurement(
  * Page bounds control work/IPC only; neither depth nor the original population is capped.
  * The accepted owner must persist each page before calling acknowledge.
  */
-export function openOpencodeUsagePass(
+function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
   path: string,
-  acceptedIdentity: NativeUsagePassIdentity,
+  originalIdentity: I,
   options: { readonly pageRows?: number; readonly pageBytes?: number } = {},
-): NativeUsagePassReader {
-  const identity = Object.freeze({ ...acceptedIdentity })
-  if (
-    Object.values(identity).some((value) => !identifier(value)) ||
-    !['baseline', 'final'].includes(identity.phase)
-  )
+): OriginalNativePassReader<I> {
+  const identity = Object.freeze({ ...originalIdentity })
+  if (Object.values(identity).some((value) => !identifier(value)))
     throw new RangeError('Native pass owner identity unavailable')
   const pageRows = options.pageRows ?? 200,
     pageBytes = options.pageBytes ?? 256 * 1024
@@ -116,7 +129,7 @@ export function openOpencodeUsagePass(
     stepsRead = 0n,
     position = 0n,
     previousDigest = sha256Hex(JSON.stringify(identity)),
-    pending: NativeUsagePassPage | undefined
+    pending: OriginalNativePassPage<I> | undefined
   const cursor = () => JSON.stringify([identity.passId, ordinal.toString(), previousDigest])
   const initialCursor = cursor()
   const counts = (): NativeUsagePassCounts => ({
@@ -391,4 +404,26 @@ export function openOpencodeUsagePass(
     },
     close,
   }
+}
+
+/** Original accepted pass protocol and identity checks retain their existing meaning. */
+export function openOpencodeUsagePass(
+  path: string,
+  identity: NativeUsagePassIdentity,
+  options: { readonly pageRows?: number; readonly pageBytes?: number } = {},
+): NativeUsagePassReader {
+  if (!['baseline', 'final'].includes(identity.phase))
+    throw new RangeError('Native pass owner identity unavailable')
+  return openOriginalOpencodeUsagePass(path, identity, options)
+}
+
+/** Same full original numeric parser/traversal, without invented before-spawn or admission fields. */
+export function openHistoricalOpencodeUsagePass(
+  path: string,
+  identity: HistoricalNativePassIdentity,
+  options: { readonly pageRows?: number; readonly pageBytes?: number } = {},
+): HistoricalNativePassReader {
+  if (identity.kind !== 'historical-observed')
+    throw new RangeError('Historical native reference unavailable')
+  return openOriginalOpencodeUsagePass(path, identity, options)
 }

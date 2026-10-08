@@ -156,7 +156,8 @@ export async function selectCompleteObservationTask(
     throw new Error('Original selected usage population changed')
   if (qualityPopulation !== BigInt(original.unallocatedQualityCount))
     throw new Error('Original unallocated quality population changed')
-  if (invocationPopulation === 0n) completeObservationGap(fold, 'dimension-unresolved')
+  if (invocationPopulation === 0n && !input.sources.historical)
+    completeObservationGap(fold, 'dimension-unresolved')
   await states.flush()
   for await (const row of completeWorkingTraversal<Candidate>(
     input.rows,
@@ -244,6 +245,9 @@ export async function selectCompleteObservationTask(
     attemptsNamespace: space('attempts'),
     invocationsNamespace: space('invocations'),
     allocationsNamespace: space('allocations'),
+    ...(original.originalNativeAllocationsNamespace === undefined
+      ? {}
+      : { originalNativeAllocationsNamespace: original.originalNativeAllocationsNamespace }),
     selectedAllocationCount: String(selectedAllocations),
     unallocatedQualityNamespace: space('unallocated-quality'),
     unallocatedQualityCount: String(selectedQuality),

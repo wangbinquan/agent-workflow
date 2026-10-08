@@ -3,6 +3,8 @@ import type {
   CompleteObservationAllocation,
   CompleteObservationDimension,
   CompleteObservationMetrics,
+  CompleteObservationTask,
+  CompleteHistoricalObservationExecution,
   ObservationDimensionSelection,
   ObservationTaskFacts,
 } from '@agent-workflow/shared'
@@ -17,6 +19,7 @@ import {
 } from '../domain/completeObservationMetrics'
 import type { CompleteObservationCohortInput } from '../ports/completeObservationReport'
 import type { CompleteObservationUnallocatedQuality } from '../ports/completeObservationTask'
+import type { HistoricalAllocation } from './completeHistoricalObservationAllocation'
 import { completeWorkingCache } from './completeWorkingCache'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
 
@@ -45,6 +48,11 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
   const models = completeWorkingCache<boolean>(
     input.rows,
     namespace + '/model-invocations',
+    input.signal,
+  )
+  const historicalReferences = completeWorkingCache<boolean>(
+    input.rows,
+    namespace + '/historical-references',
     input.signal,
   )
   async function group(
@@ -152,10 +160,131 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
     membershipsNamespace,
     addInvocation,
     addModel,
+    async addHistoricalReference(
+      row: CompleteHistoricalObservationExecution,
+      fold: CompleteObservationFold,
+    ) {
+      const e = row.execution
+      const entries: Array<
+        [DimensionWorking['kind'], ObservationDimensionSelection, string | null]
+      > = [
+        [
+          'agent',
+          { agent: { id: e.agentId, revision: e.agentRevision }, purpose: e.purpose },
+          e.agentName,
+        ],
+        [
+          'runtime',
+          {
+            runtime: {
+              authority: 'local',
+              sourceId: null,
+              registrationId: e.runtime?.registrationId ?? null,
+              configurationRevision: e.runtime?.configurationRevision ?? null,
+              protocol: e.runtime?.protocol ?? null,
+            },
+          },
+          e.runtime?.name ?? null,
+        ],
+        ['purpose', { purpose: e.purpose }, e.purpose],
+        ['source', { source: { authority: 'local', sourceId: null } }, 'local'],
+      ]
+      const task =
+        e.parentTaskId === null
+          ? null
+          : await input.rows.get<CompleteObservationTask>(
+              input.namespace + '/task-original-summaries',
+              e.parentTaskId,
+            )
+      for (const [kind, selection, label] of entries) {
+        const key = input.keyOf(JSON.stringify([kind, selection])),
+          identity = input.keyOf(JSON.stringify([key, e.referenceId]))
+        if (await historicalReferences.get(identity)) continue
+        await historicalReferences.put(identity, true)
+        const value = (await cache.get(key)) ?? {
+          key,
+          kind,
+          label,
+          selection,
+          fold: emptyCompleteObservationFold(),
+          taskCount: '0',
+        }
+        mergeCompleteObservationFold(value.fold, fold)
+        await cache.put(key, value)
+        if (!task) continue
+        const member = input.keyOf(JSON.stringify([key, task.task.id]))
+        let membership = await memberships.get(member)
+        if (!membership) {
+          membership = { group: key, task: task.task, fold: emptyCompleteObservationFold() }
+          value.taskCount = String(BigInt(value.taskCount) + 1n)
+          await cache.put(key, value)
+        }
+        mergeCompleteObservationFold(membership.fold, fold)
+        await memberships.put(member, membership)
+      }
+    },
+    async addHistorical(
+      allocation: HistoricalAllocation,
+      references: () => AsyncIterable<{ referenceId: string }>,
+    ) {
+      if (
+        allocation.record.scopeMatch !== 'matched' ||
+        allocation.record.coveredByAcceptedRecords ||
+        allocation.fold.records === '0'
+      )
+        return
+      for (const entry of allocation.dimensions) {
+        const key = input.keyOf(JSON.stringify([entry.kind, entry.selection]))
+        const value = (await cache.get(key)) ?? {
+          key,
+          kind: entry.kind,
+          label: entry.label,
+          selection: entry.selection,
+          fold: emptyCompleteObservationFold(),
+          taskCount: '0',
+        }
+        const next = {
+          ...allocation.fold,
+          historicalReferences: '0',
+          observedHistoricalReferences: '0',
+        }
+        const member =
+          allocation.task === null ? null : input.keyOf(JSON.stringify([key, allocation.task.id]))
+        let membership = member === null ? undefined : await memberships.get(member)
+        if (member !== null && allocation.task !== null && membership === undefined) {
+          membership = { group: key, task: allocation.task, fold: emptyCompleteObservationFold() }
+          value.taskCount = String(BigInt(value.taskCount) + 1n)
+        }
+        mergeCompleteObservationFold(value.fold, next)
+        if (membership) mergeCompleteObservationFold(membership.fold, next)
+        for await (const reference of references()) {
+          const identity = input.keyOf(JSON.stringify([key, reference.referenceId]))
+          if (await historicalReferences.get(identity)) continue
+          await historicalReferences.put(identity, true)
+          value.fold.historicalReferences = String(
+            BigInt(value.fold.historicalReferences ?? '0') + 1n,
+          )
+          value.fold.observedHistoricalReferences = String(
+            BigInt(value.fold.observedHistoricalReferences ?? '0') + 1n,
+          )
+          if (membership) {
+            membership.fold.historicalReferences = String(
+              BigInt(membership.fold.historicalReferences ?? '0') + 1n,
+            )
+            membership.fold.observedHistoricalReferences = String(
+              BigInt(membership.fold.observedHistoricalReferences ?? '0') + 1n,
+            )
+          }
+        }
+        await cache.put(key, value)
+        if (member !== null && membership) await memberships.put(member, membership)
+      }
+    },
     async flush() {
       await cache.flush()
       await memberships.flush()
       await models.flush()
+      await historicalReferences.flush()
     },
     async *entries() {
       await cache.flush()

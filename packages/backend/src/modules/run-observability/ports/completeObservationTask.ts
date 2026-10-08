@@ -86,6 +86,7 @@ export interface CompleteObservationTaskBuild {
   readonly attemptsNamespace: string
   readonly invocationsNamespace: string
   readonly allocationsNamespace: string
+  readonly originalNativeAllocationsNamespace?: string
   readonly selectedAllocationCount: string
   readonly unallocatedQualityNamespace: string
   readonly unallocatedQualityCount: string

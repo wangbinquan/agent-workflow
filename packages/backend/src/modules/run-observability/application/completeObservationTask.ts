@@ -157,6 +157,9 @@ export async function buildCompleteObservationTask(
     attemptsNamespace: space('attempts'),
     invocationsNamespace: space('ready-invocations'),
     allocationsNamespace: space('allocations'),
+    ...(input.sources.historical
+      ? { originalNativeAllocationsNamespace: space('original-native-allocations') }
+      : {}),
     selectedAllocationCount: selected.selected,
     unallocatedQualityNamespace: space('unallocated-quality'),
     unallocatedQualityCount: selected.unallocatedQualityCount,

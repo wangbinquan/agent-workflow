@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 505,
-    "architectureExceptions": 6003,
+    "architectureExceptions": 6030,
     "backgroundJobs": 374,
-    "crossContextImports": 6855,
+    "crossContextImports": 6886,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27623,
-    "mutationEntrypoints": 1971,
+    "moduleSymbolOwners": 27690,
+    "mutationEntrypoints": 1979,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1254,
+    "publicSurfaces": 1259,
     "transactionExternalEffects": 277
   },
   "metrics": {
     "ambientWiringEntries": 505,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2394,
+    "backendProductionFiles": 2411,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -86,7 +86,7 @@
       },
       {
         "context": "intent",
-        "files": 71
+        "files": 74
       },
       {
         "context": "knowledge-evolution",
@@ -94,19 +94,19 @@
       },
       {
         "context": "memory",
-        "files": 34
+        "files": 36
       },
       {
         "context": "resource-catalog",
-        "files": 264
+        "files": 266
       },
       {
         "context": "run-observability",
-        "files": 111
+        "files": 117
       },
       {
         "context": "runtime-management",
-        "files": 75
+        "files": 77
       },
       {
         "context": "source-control",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 478
+        "files": 480
       }
     ],
-    "moduleFiles": 1798,
+    "moduleFiles": 1815,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8f8dfe8bb9a7ed2fba18babadbcbd8d7b4980b91e905e7bdcec499c03d4f8576"
+  "sourceDigest": "sha256:ed1b99d07be6dfe15d1a7f200069df9320659233d4bf081d4366b379bd8616ff"
 }

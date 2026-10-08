@@ -15,6 +15,8 @@ export type CompleteObservationMetrics =
       readonly state: 'not-ready'
       readonly gaps: readonly string[]
       readonly tokenCoverage?: {
+        readonly historicalReferences?: string
+        readonly observedHistoricalReferences?: string
         readonly invocations: string
         readonly observedInvocations: string
         readonly records: string
@@ -26,6 +28,8 @@ export type CompleteObservationMetrics =
         }
       }
       readonly recordedUsage?: {
+        readonly historicalReferences?: string
+        readonly observedHistoricalReferences?: string
         readonly invocations: string
         readonly observedInvocations: string
         readonly records: string
@@ -54,6 +58,8 @@ export type CompleteObservationMetrics =
   | { readonly state: 'not-applicable' }
   | {
       readonly state: 'ready'
+      readonly historicalReferences?: string
+      readonly observedHistoricalReferences?: string
       readonly invocations: string
       readonly observedInvocations: string
       readonly records: string

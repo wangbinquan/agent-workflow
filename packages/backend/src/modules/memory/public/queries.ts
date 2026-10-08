@@ -40,3 +40,5 @@ export interface MemoryInjectionQueries {
     readonly runId: string
   }): Promise<InjectedMemorySnapshot[] | null>
 }
+/** Original historical jobs/events are report facts, independent of current System admissions. */
+export type { HistoricalObservationOwnerQuery as HistoricalMemoryObservationQuery } from '@agent-workflow/shared'

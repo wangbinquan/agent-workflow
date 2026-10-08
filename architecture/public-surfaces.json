@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1334,
-    "exactEntrypointFiles": 70,
+    "consumers": 1339,
+    "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
-    "methods": 1737,
+    "methods": 1750,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 29632,
-    "symbols": 1254
+    "recursiveFields": 29840,
+    "symbols": 1259
   },
   "entries": [
     {
@@ -64710,6 +64710,118 @@
     {
       "authority": "request-authority",
       "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:4471fb8eecfb5f558d25"
+      ],
+      "context": "intent",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:4471fb8eecfb5f558d25"
+          ],
+          "fieldPath": "$method:events.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4471fb8eecfb5f558d25"
+          ],
+          "fieldPath": "$method:owners.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/intent/public/queries.ts",
+      "id": "public:intent:queries:HistoricalIntentObservationQuery",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "events",
+          "signatureDigest": "sha256:f647d7abe84f49ba35ea7b393fe176e5b98176c7b2d1ff2a3b141d194ea4f201"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4471fb8eecfb5f558d25"
+          ],
+          "name": "owners",
+          "signatureDigest": "sha256:a5b24f9ce85498deb37a7dcb3442335ac1714cb73e64d99876150352c4c588a8"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:4471fb8eecfb5f558d25",
+          "file": "packages/backend/src/platform/background/observationReportWorker.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:c4a9ab0d4755e44fe078957e6bf538b40d3fc5cdc9378a959120f19134d88013",
+      "status": "target-context-current-surface",
+      "symbol": "HistoricalIntentObservationQuery",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
         "maxMethods": 34,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 427,
@@ -85079,6 +85191,118 @@
       "status": "target-context-current-surface",
       "symbol": "MemoryMembershipUnfuseSelector",
       "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:2e40814358ec1643ff30"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:2e40814358ec1643ff30"
+          ],
+          "fieldPath": "$method:events.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2e40814358ec1643ff30"
+          ],
+          "fieldPath": "$method:owners.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/queries.ts",
+      "id": "public:memory:queries:HistoricalMemoryObservationQuery",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "events",
+          "signatureDigest": "sha256:f647d7abe84f49ba35ea7b393fe176e5b98176c7b2d1ff2a3b141d194ea4f201"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2e40814358ec1643ff30"
+          ],
+          "name": "owners",
+          "signatureDigest": "sha256:a5b24f9ce85498deb37a7dcb3442335ac1714cb73e64d99876150352c4c588a8"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:2e40814358ec1643ff30",
+          "file": "packages/backend/src/platform/background/observationReportWorker.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:bc60be406ec5045f86cdddf46532b6db2185cb80e8c50cbf403418d148939706",
+      "status": "target-context-current-surface",
+      "symbol": "HistoricalMemoryObservationQuery",
+      "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
     },
@@ -115139,6 +115363,118 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:34a5a6dfebe37166bf70"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:34a5a6dfebe37166bf70"
+          ],
+          "fieldPath": "$method:events.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:34a5a6dfebe37166bf70"
+          ],
+          "fieldPath": "$method:owners.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/queries.ts",
+      "id": "public:resource-catalog:queries:HistoricalMcpObservationQuery",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "events",
+          "signatureDigest": "sha256:f647d7abe84f49ba35ea7b393fe176e5b98176c7b2d1ff2a3b141d194ea4f201"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:34a5a6dfebe37166bf70"
+          ],
+          "name": "owners",
+          "signatureDigest": "sha256:a5b24f9ce85498deb37a7dcb3442335ac1714cb73e64d99876150352c4c588a8"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:34a5a6dfebe37166bf70",
+          "file": "packages/backend/src/platform/background/observationReportWorker.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:2ab79c2de6104deb4e6f4e88d73812f9e9acee609ab76c09036ce3143910bf2e",
+      "status": "target-context-current-surface",
+      "symbol": "HistoricalMcpObservationQuery",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:e774ba0fb2668fca529f"
       ],
       "context": "resource-catalog",
@@ -129536,7 +129872,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 533,
+        "maxTransitiveLeafFields": 573,
         "maxUnionVariants": 206
       },
       "consumerEdgeIds": [
@@ -129664,6 +130000,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.inventory.invocations",
           "type": "string"
         },
@@ -129761,7 +130102,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -129848,7 +130199,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -129898,7 +130259,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -130040,7 +130411,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -130127,7 +130508,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -130177,7 +130568,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -130441,6 +130842,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.inventory.invocations",
           "type": "string"
         },
@@ -130543,7 +130949,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -130630,7 +131046,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -130680,7 +131106,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -131052,6 +131488,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.inventory.invocations",
           "type": "string"
         },
@@ -131149,7 +131590,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -131236,7 +131687,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -131286,7 +131747,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -131428,7 +131899,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -131515,7 +131996,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -131565,7 +132056,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -131829,6 +132330,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.inventory.invocations",
           "type": "string"
         },
@@ -131931,7 +132437,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -132018,7 +132534,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -132068,7 +132594,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -132365,7 +132901,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 572,
+        "maxTransitiveLeafFields": 612,
         "maxUnionVariants": 220
       },
       "consumerEdgeIds": [
@@ -132511,6 +133047,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.inventory.invocations",
           "type": "string"
         },
@@ -132606,7 +133147,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -132691,7 +133242,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -132741,7 +133302,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -132881,7 +133452,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -132966,7 +133547,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -133016,7 +133607,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -133278,6 +133879,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.inventory.invocations",
           "type": "string"
         },
@@ -133378,7 +133984,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -133463,7 +134079,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -133513,7 +134139,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -133860,6 +134496,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.inventory.invocations",
           "type": "string"
         },
@@ -133960,7 +134601,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134045,7 +134696,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134095,7 +134756,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134457,6 +135128,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.inventory.invocations",
           "type": "string"
         },
@@ -134552,7 +135228,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134637,7 +135323,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134687,7 +135383,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134827,7 +135533,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134912,7 +135628,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -134962,7 +135688,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -136677,7 +137413,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 627,
+        "maxTransitiveLeafFields": 667,
         "maxUnionVariants": 246
       },
       "consumerEdgeIds": [
@@ -137023,6 +137759,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.inventory.invocations",
           "type": "string"
         },
@@ -137127,7 +137868,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -137216,7 +137967,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -137268,7 +138029,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -137642,6 +138413,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.inventory.invocations",
           "type": "string"
         },
@@ -137741,7 +138517,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -137830,7 +138616,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -137882,7 +138678,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -138028,7 +138834,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -138117,7 +138933,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -138169,7 +138995,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -138620,6 +139456,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.inventory.invocations",
           "type": "string"
         },
@@ -138724,7 +139565,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -138813,7 +139664,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -138865,7 +139726,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -139239,6 +140110,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.inventory.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.inventory.invocations",
           "type": "string"
         },
@@ -139338,7 +140214,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -139427,7 +140313,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -139479,7 +140375,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -139625,7 +140531,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -139714,7 +140630,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -139766,7 +140692,17 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.historicalReferences",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.observedHistoricalReferences",
           "type": "string"
         },
         {
@@ -150438,47 +151374,47 @@
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.epoch",
+          "fieldPath": "$call.$parameter:identity.epoch",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.invocationId",
+          "fieldPath": "$call.$parameter:identity.invocationId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.lineage",
+          "fieldPath": "$call.$parameter:identity.lineage",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.nativeSource",
+          "fieldPath": "$call.$parameter:identity.nativeSource",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.passId",
+          "fieldPath": "$call.$parameter:identity.passId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.phase.$variant:0",
+          "fieldPath": "$call.$parameter:identity.phase.$variant:0",
           "type": "'baseline'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.phase.$variant:1",
+          "fieldPath": "$call.$parameter:identity.phase.$variant:1",
           "type": "'final'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.rootSessionId",
+          "fieldPath": "$call.$parameter:identity.rootSessionId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:acceptedIdentity.sourceGeneration",
+          "fieldPath": "$call.$parameter:identity.sourceGeneration",
           "type": "string"
         },
         {
@@ -150745,7 +151681,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:d2f59eeb2d919aa5d2afaa3e608e9439f28cf0cf047ddc4c99d053fc5a489b94"
+          "signatureDigest": "sha256:c0ea0d571ed16c60bc1375ab6e941fbf156612f630cb6769e88f9b234305cfcb"
         },
         {
           "consumerEdgeIds": [
@@ -155968,6 +156904,298 @@
       "status": "target-context-current-surface",
       "symbol": "TOKEN_BUCKETS",
       "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 44,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:1c81f6c9114a7e5ea231"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:generation.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:generation.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$parameter:input.referenceId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$parameter:input.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:acknowledge.$parameter:ordinal",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:acknowledge.$parameter:payloadDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:acknowledge.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:close.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$parameter:cursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.counts.parts",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.counts.sessions",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.counts.steps",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.cumulativeDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.cursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.eof.$variant:0.counts",
+          "type": "HistoricalNativeObservationPage['counts']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.eof.$variant:0.fingerprint",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.eof.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1c81f6c9114a7e5ea231"
+          ],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.identity.kind",
+          "type": "'historical-observed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.identity.referenceId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.ordinal",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.payloadDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.previousDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.scannedRawRows",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.scanPositionAfter",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.scanPositionBefore",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.sessions",
+          "type": "readonly { readonly id: string; readonly parentSessionId: string | null }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.$method:next.$return.steps",
+          "type": "readonly {\n    readonly id: string\n    readonly parentSessionId: string | null\n    readonly stepId: string\n    readonly occurredAt: number | null\n    readonly usage: ObservationTokenUsage\n    readonly model: { readonly provider: string; readonly id: string } | null\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1c81f6c9114a7e5ea231"
+          ],
+          "fieldPath": "$method:open.$return.$variant:0.identity.kind",
+          "type": "'historical-observed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.identity.referenceId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.initialCursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.rootCreatedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.rootCreatedAt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "id": "public:runtime-management:queries:HistoricalNativeUsageQuery",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "acknowledge",
+          "signatureDigest": "sha256:b493eb0cbd2d3ffac5b927a57fa47cafb4781a6b0dca84ac426050a09d3c7ee6"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1c81f6c9114a7e5ea231"
+          ],
+          "name": "close",
+          "signatureDigest": "sha256:d495e4327f5d828f02d6cd03556d16496b74c9b148dfd6067d9d9c5137f67af7"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "generation",
+          "signatureDigest": "sha256:1fbe00d1c439c12f80e361eb7a56538375c4886d14f612cf29ce1428b30afba4"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "next",
+          "signatureDigest": "sha256:964ff6c947a9d46e1f6749b82440cd7f46a394f8c8c23706325bb98214f6d27d"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "open",
+          "signatureDigest": "sha256:a082069b556c26793653ee24f2d5bb1604893ec0069731a7ca2fea4b649c714a"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:1c81f6c9114a7e5ea231",
+          "file": "packages/backend/src/platform/background/observationReportWorker.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:ccc55fb5293890abc6a577aef390533909b67e53529c4cee3b861fb996b87738",
+      "status": "target-context-current-surface",
+      "symbol": "HistoricalNativeUsageQuery",
+      "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
     },
@@ -214479,7 +215707,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:97690ec5043f92ffd3ba"
+          ],
           "fieldPath": "$method:get.$parameter:actor.user.id",
           "type": "string"
         },
@@ -214549,7 +215779,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:97690ec5043f92ffd3ba"
+          ],
           "fieldPath": "$method:get.$return.$variant:0.id",
           "type": "string"
         },
@@ -214639,7 +215871,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:97690ec5043f92ffd3ba"
+          ],
           "fieldPath": "$method:list.$parameter:input.actor.user.id",
           "type": "string"
         },
@@ -214684,7 +215918,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:97690ec5043f92ffd3ba"
+          ],
           "fieldPath": "$method:list.$parameter:input.query",
           "type": "z.infer<typeof ObservationTaskPageQuerySchema>"
         },
@@ -214856,7 +216092,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:97690ec5043f92ffd3ba"
+          ],
           "fieldPath": "$method:visibleIds.$parameter:actor.user.id",
           "type": "string"
         },
@@ -215075,7 +216313,9 @@
           "signatureDigest": "sha256:53311bc2d70229b49779a4a9397ac68f294b2c6f0411380ebd19b5b4e9f1b1a2"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:97690ec5043f92ffd3ba"
+          ],
           "name": "get",
           "signatureDigest": "sha256:7c3accfae306245f3bc57f015f93ac29ab84755c1e68e54fdb5256db93d37f42"
         },
@@ -215762,6 +217002,118 @@
       "signatureDigest": "sha256:2fb21d8a5017c62723fcb118ac10abdac3898bc6bbdb4c72e035ff0b4c42fc0d",
       "status": "target-context-current-surface",
       "symbol": "freezeRuntimeBinaryConfiguration",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:9553f758f1197bd927e7"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:9553f758f1197bd927e7"
+          ],
+          "fieldPath": "$method:events.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$parameter:ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:events.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9553f758f1197bd927e7"
+          ],
+          "fieldPath": "$method:owners.$parameter:input.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.items",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:owners.$return.nextCursor.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:HistoricalTaskObservationQuery",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "events",
+          "signatureDigest": "sha256:f647d7abe84f49ba35ea7b393fe176e5b98176c7b2d1ff2a3b141d194ea4f201"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9553f758f1197bd927e7"
+          ],
+          "name": "owners",
+          "signatureDigest": "sha256:a5b24f9ce85498deb37a7dcb3442335ac1714cb73e64d99876150352c4c588a8"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:9553f758f1197bd927e7",
+          "file": "packages/backend/src/platform/background/observationReportWorker.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:276233ab803d9e32e81929dfe263da735d0df6769fa1160f3590ffce81c48c7c",
+      "status": "target-context-current-surface",
+      "symbol": "HistoricalTaskObservationQuery",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -228189,7 +229541,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8f8dfe8bb9a7ed2fba18babadbcbd8d7b4980b91e905e7bdcec499c03d4f8576",
+  "sourceDigest": "sha256:ed1b99d07be6dfe15d1a7f200069df9320659233d4bf081d4366b379bd8616ff",
   "targetContexts": [
     "collaboration",
     "development-automation",

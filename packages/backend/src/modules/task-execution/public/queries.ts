@@ -160,3 +160,5 @@ export {
   validateUploadPlan,
 } from '../domain/uploads'
 export { resolveUniqueUploadNameSync } from '../application/workspaceUploads'
+/** Report-only original owner population; never an invocation admission command. */
+export type { HistoricalObservationOwnerQuery as HistoricalTaskObservationQuery } from '@agent-workflow/shared'

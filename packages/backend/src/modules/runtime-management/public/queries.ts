@@ -83,3 +83,5 @@ export { isRuntimeMcpTestEligible } from '../infrastructure/mcpTestEligibility'
 
 /** The original driver declares native capture support; callers do not select by protocol name. */
 export { isRuntimeNativeUsageCaptureEligible } from '../infrastructure/local/localAgentMaterialDefinition'
+/** Report-only native reads are distinct from accepted baseline/final capture. */
+export type { HistoricalNativeUsageQuery } from '../application/ports/historicalNativeUsage'

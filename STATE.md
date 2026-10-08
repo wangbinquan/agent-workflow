@@ -10932,3 +10932,11 @@ SOURCE9-R1 独立正式有效稳定 PASS 已由 root 实际消费：9 owned、19
 源码SOURCE9-R1和配套MATCHING16-R1独立正式有效稳定PASS均已由root实际消费，74正式配套材料及5份另列原源码复用材料均实际EOF核对；exact23发布 fbf85b2710180228f84a7e98b2becf7756ac50ae，远端0/0、空index、50项并行WIP完整不变。共享Windows暂未提交，所引用Task租约新测试已在main，完整Windows新用例接线仍待两方测试均上库。该SHA主CI37782710720与Windows37782710729已登记，正式终态尚待验收，不以功能门代签总绿。
 
 本普通后继只退役4个已消费的allowGrowth；129项有序完整库存、baseline、旧why及其余字段、canonicalProjection/sourceDigest/原provenance锚点保持，只按原五个纯JSON函数更新contentDigest。四原生成规则、全部本批7个源码/测试及其余12架构文件保持；没有新增整仓census、AW tests/typecheck/build/services/E2E。此有限后继功能门、精确提交和新SHA hosted CI各自验收；三个共享/自有文档只追加、全部并行输出保持。W2-P准备/具名结果投影设计继续修正原显式context优先级，实际根、Task/Node其余分类、19owner/三roots、H7/A-T7/A-G与CS M0～M4仍开放，AW尚未部署CS。
+
+## 2026-10-08 RFC-371 原始历史执行用量恢复
+
+Task、Memory、Intent、Resource Catalog 的原 owner 查询与 Runtime 原生 EOF reader接入同一原快照 Worker；真实历史执行和原生记录单独分页，不补造 Task、调用受理、当前运行时或历史费率。四桶已知数值仍显示，不完整资格和费用未知保持。实际 6,843 条原生记录逐条与原库核对零差异，全部 3,057 NodeRun 和旧记忆 152 步均保留；已知总量 208,393,400 Token，其中旧记忆 2,160,404 已恢复。状态筛选的完成 Task 与其独立详情同为 54,527 Token、¥0.098998，原失败尝试仍保留。见 RFC-371 historical-original-execution-usage.md 与 all-task-type-acceptance-20261008.md。
+
+47 个源文件复用独立 SOURCE R2 VALID/PASS 精确字节；原 v1 两个范围/身份 P2 和旧失败均保留。配套原生成纳入已提交 Task lease 的真实依赖差额，保持 129 项有序库存、旧 why、所有既有公开表面及来源治理；前一提交已退役的四项声明保留，仅登记本批实际增长五项并在普通后继退役。原生成 status 保持完整 raw 字节，不格式化机器产物。共享 STATE 保留并行内容，新增 Task 执行投影和共享 Windows 在制品不收编。
+
+独立匹配门、精确发布及 exact-SHA hosted CI 分别登记，源功能/实际 API 不代签 CI。AW 本机没有运行测试、类型检查、构建或启动/替换服务；实际 API 使用原已运行 daemon，正式总览与分类柱形/金额已回归。数字员工各内置入口、Git 与实际成功的定时/事件仍等待既有明确验收配置/工作区答复；CS 本机部署和正式 Token 对账继续。两个 RFC 保持 In Progress。

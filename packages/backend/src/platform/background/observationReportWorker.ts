@@ -1,5 +1,15 @@
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import type { CompleteTaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
+import type { HistoricalTaskObservationQuery } from '@/modules/task-execution/public/queries'
+import { createHistoricalTaskObservationFacts } from '@/modules/task-execution/composition/historicalObservationFacts'
+import type { HistoricalMemoryObservationQuery } from '@/modules/memory/public/queries'
+import { createHistoricalMemoryObservationFacts } from '@/modules/memory/composition/historicalObservationFacts'
+import type { HistoricalIntentObservationQuery } from '@/modules/intent/public/queries'
+import { createHistoricalIntentObservationFacts } from '@/modules/intent/composition/historicalObservationFacts'
+import type { HistoricalMcpObservationQuery } from '@/modules/resource-catalog/public/queries'
+import { createHistoricalMcpObservationFacts } from '@/modules/resource-catalog/composition/historicalObservationFacts'
+import type { HistoricalNativeUsageQuery } from '@/modules/runtime-management/public/queries'
+import { createHistoricalNativeUsageQuery } from '@/modules/runtime-management/composition/historicalNativeUsage'
 import { prepareObservationNativeHistory } from '@/modules/task-execution/composition/observationNativeHistory'
 import { composeCompleteObservationSnapshot } from '@/modules/run-observability/composition/completeObservationSnapshot'
 import { completeObservationFileSpool } from '@/modules/run-observability/composition/completeObservationSpool'
@@ -35,11 +45,34 @@ async function run(input: OriginalObservationWorkerStart) {
       snapshot.executor,
       input.report.request.taskId,
     )
+    const historicalTasks: HistoricalTaskObservationQuery = createHistoricalTaskObservationFacts(
+      snapshot.executor,
+    )
+    const memory: HistoricalMemoryObservationQuery = createHistoricalMemoryObservationFacts(
+      snapshot.executor,
+    )
+    const intent: HistoricalIntentObservationQuery = createHistoricalIntentObservationFacts(
+      snapshot.executor,
+    )
+    const mcp: HistoricalMcpObservationQuery = createHistoricalMcpObservationFacts(
+      snapshot.executor,
+    )
+    const native: HistoricalNativeUsageQuery = createHistoricalNativeUsageQuery(process.env)
     return {
       kind: 'result',
       result: await composeCompleteObservationSnapshot({
         snapshot,
         tasks,
+        historical: {
+          owners: [
+            { kind: 'task', query: historicalTasks },
+            { kind: 'memory-distill', query: memory },
+            { kind: 'intent-turn', query: intent },
+            { kind: 'mcp-runtime-test', query: mcp },
+          ],
+          native,
+          task: (id) => tasks.get(input.report.request.actor, id),
+        },
         report: input.report,
         spool: completeObservationFileSpool(input.appHome),
         signal: stop.signal,

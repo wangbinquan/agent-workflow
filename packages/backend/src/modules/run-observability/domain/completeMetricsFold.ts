@@ -14,6 +14,11 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
     if (metrics.tokenCoverage) {
       fold.invocations = metrics.tokenCoverage.invocations
       fold.observedInvocations = metrics.tokenCoverage.observedInvocations
+      if (metrics.tokenCoverage.historicalReferences !== undefined) {
+        fold.historicalReferences = metrics.tokenCoverage.historicalReferences
+        fold.observedHistoricalReferences =
+          metrics.tokenCoverage.observedHistoricalReferences ?? '0'
+      }
       fold.records = metrics.tokenCoverage.records
       fold.bucketRecords = { ...metrics.tokenCoverage.bucketRecords }
     }
@@ -39,6 +44,10 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
   }
   fold.invocations = metrics.invocations
   fold.observedInvocations = metrics.observedInvocations
+  if (metrics.historicalReferences !== undefined) {
+    fold.historicalReferences = metrics.historicalReferences
+    fold.observedHistoricalReferences = metrics.observedHistoricalReferences ?? '0'
+  }
   fold.records = metrics.records
   fold.bucketRecords = {
     input: metrics.records,

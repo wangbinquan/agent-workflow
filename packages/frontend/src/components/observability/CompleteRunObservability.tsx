@@ -30,6 +30,10 @@ import {
 import { observationGapLabel } from './observationGapLabel'
 import { CompleteObservationTrend as Trend } from './CompleteObservationTrend'
 import {
+  CompleteHistoricalExecutions,
+  CompleteHistoricalRecords,
+} from './CompleteHistoricalObservations'
+import {
   CompleteObservationCalls,
   CompleteObservationTimeline,
   CompleteObservationTiming,
@@ -97,6 +101,15 @@ function Summary({ report }: { report: ReadableObservationReport }) {
           {t('runObservability.calls')} ·{' '}
           {BigInt(report.summary.inventory.invocations).toLocaleString(i18n.language)}
         </p>
+        {report.summary.inventory.historicalReferences && (
+          <p className="muted">
+            {t('runObservability.historicalReferenceCount', {
+              references: BigInt(report.summary.inventory.historicalReferences).toLocaleString(
+                i18n.language,
+              ),
+            })}
+          </p>
+        )}
         {report.summary.usageCoverage && (
           <p className="muted">
             {t('runObservability.taskUsageCoverage', {
@@ -379,6 +392,7 @@ export function CompleteRunObservability({
               <Card title={t('runObservability.calls')}>
                 <CompleteObservationCalls report={report} parent={parent} />
               </Card>
+              <CompleteHistoricalExecutions report={report} parent={parent} timeline />
               <div className="observation-columns">
                 <DimensionCard
                   report={report}
@@ -410,11 +424,14 @@ export function CompleteRunObservability({
               )}
             </>
           ) : tab === 'tasks' ? (
-            <Card title={t('runObservability.tasks')}>
-              <CompleteObservationPage query={tasks}>
-                {(rows) => <CompleteTaskRows rows={rows} onTask={onTask} />}
-              </CompleteObservationPage>
-            </Card>
+            <>
+              <Card title={t('runObservability.tasks')}>
+                <CompleteObservationPage query={tasks}>
+                  {(rows) => <CompleteTaskRows rows={rows} onTask={onTask} />}
+                </CompleteObservationPage>
+              </Card>
+              <CompleteHistoricalExecutions report={report} />
+            </>
           ) : tab === 'overview' ? (
             <>
               <Card title={t('runObservability.trend')}>
@@ -466,6 +483,7 @@ export function CompleteRunObservability({
               <Card title={t('runObservability.calls')}>
                 <CompleteObservationCalls report={report} />
               </Card>
+              <CompleteHistoricalExecutions report={report} />
             </>
           ) : tab === 'usage' ? (
             <>
@@ -510,6 +528,11 @@ export function CompleteRunObservability({
                   <CompleteObservationAllocations report={report} />
                 </Card>
               )}
+              {BigInt(report.counts['historical-records'] ?? '0') > 0n && (
+                <Card title={t('runObservability.historicalRecords')}>
+                  <CompleteHistoricalRecords report={report} />
+                </Card>
+              )}
             </>
           ) : (
             <>
@@ -519,6 +542,7 @@ export function CompleteRunObservability({
               <Card title={t('runObservability.timeline')}>
                 <CompleteObservationTimeline report={report} />
               </Card>
+              <CompleteHistoricalExecutions report={report} timeline />
               <CompleteObservationCapabilities />
             </>
           )}

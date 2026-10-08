@@ -19,6 +19,15 @@ export function CompleteTokens({
   const { t, i18n } = useTranslation()
   const recorded = value.state === 'not-ready' ? (value.recordedUsage ?? recordedUsage) : undefined
   const tokens = value.state === 'ready' ? value.tokens : recorded?.tokens
+  const historical =
+    recorded && BigInt(recorded.historicalReferences ?? '0') > 0n
+      ? t('runObservability.historicalObservedCoverage', {
+          observed: BigInt(recorded.observedHistoricalReferences ?? '0').toLocaleString(
+            i18n.language,
+          ),
+          references: BigInt(recorded.historicalReferences!).toLocaleString(i18n.language),
+        })
+      : null
   return (
     <>
       {recorded && !compact && (
@@ -54,10 +63,13 @@ export function CompleteTokens({
       )}
       {recorded && compact && (
         <p className="muted">
-          {t('runObservability.recordedUsageCompact', {
-            observed: BigInt(recorded.observedInvocations).toLocaleString(i18n.language),
-            calls: BigInt(recorded.invocations).toLocaleString(i18n.language),
-          })}
+          {recorded.invocations === '0' && historical
+            ? historical
+            : t('runObservability.recordedUsageCompact', {
+                observed: BigInt(recorded.observedInvocations).toLocaleString(i18n.language),
+                calls: BigInt(recorded.invocations).toLocaleString(i18n.language),
+              })}
+          {recorded.invocations !== '0' && historical && <> · {historical}</>}
         </p>
       )}
       {recorded && !compact && (
@@ -70,6 +82,7 @@ export function CompleteTokens({
             })}
           </p>
           <p className="muted">{t('runObservability.reportNotReady')}</p>
+          {historical && <p className="muted">{historical}</p>}
         </>
       )}
     </>
@@ -113,7 +126,11 @@ export function CompleteCost({
       <span>
         {t(
           'runObservability.' +
-            (value.costCoverage.visibility === 'hidden' ? 'hiddenCost' : 'unpriced'),
+            (value.costCoverage.visibility === 'hidden'
+              ? 'hiddenCost'
+              : BigInt(value.tokenCoverage?.historicalReferences ?? '0') > 0n
+                ? 'historicalPriceMissing'
+                : 'unpriced'),
         )}
       </span>
     )
@@ -167,6 +184,15 @@ export function CompleteMetrics({ value }: { value: CompleteObservationMetrics }
           ? BigInt(coverage.records).toLocaleString(i18n.language)
           : t('runObservability.unknown')}
       </dd>
+      {coverage && BigInt(coverage.historicalReferences ?? '0') > 0n && (
+        <>
+          <dt>{t('runObservability.historicalReferences')}</dt>
+          <dd>
+            {BigInt(coverage.observedHistoricalReferences ?? '0').toLocaleString(i18n.language)} /{' '}
+            {BigInt(coverage.historicalReferences!).toLocaleString(i18n.language)}
+          </dd>
+        </>
+      )}
     </dl>
   )
 }

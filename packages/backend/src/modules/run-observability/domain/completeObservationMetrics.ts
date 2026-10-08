@@ -8,6 +8,8 @@ export interface CompleteObservationFold {
   tokenCoverageKnown?: boolean
   invocations: string
   observedInvocations: string
+  historicalReferences?: string
+  observedHistoricalReferences?: string
   records: string
   costRecords?: string
   pricedRecords?: string
@@ -105,6 +107,15 @@ export function mergeCompleteObservationFold(
   into.partiallyPricedRecords = String(
     BigInt(into.partiallyPricedRecords ?? '0') + BigInt(next.partiallyPricedRecords ?? '0'),
   )
+  if (into.historicalReferences !== undefined || next.historicalReferences !== undefined) {
+    into.historicalReferences = String(
+      BigInt(into.historicalReferences ?? '0') + BigInt(next.historicalReferences ?? '0'),
+    )
+    into.observedHistoricalReferences = String(
+      BigInt(into.observedHistoricalReferences ?? '0') +
+        BigInt(next.observedHistoricalReferences ?? '0'),
+    )
+  }
   for (const bucket of TOKEN_BUCKETS)
     into.tokens[bucket] = String(BigInt(into.tokens[bucket]) + BigInt(next.tokens[bucket]))
   for (const field of ['invocations', 'observedInvocations', 'records', 'picos'] as const)
@@ -127,8 +138,16 @@ export function completeObservationMetrics(
     fold.visible && BigInt(pricedRecords) + BigInt(partiallyPricedRecords) > 0n
       ? { currency: 'CNY' as const, amount, records, pricedRecords, ...partialCoverage }
       : undefined
+  const historical =
+    BigInt(fold.historicalReferences ?? '0') > 0n
+      ? {
+          historicalReferences: fold.historicalReferences!,
+          observedHistoricalReferences: fold.observedHistoricalReferences ?? '0',
+        }
+      : {}
   if (fold.gaps.length) {
     const tokenCoverage = {
+      ...historical,
       invocations: fold.invocations,
       observedInvocations: fold.observedInvocations,
       records: fold.records,
@@ -177,10 +196,12 @@ export function completeObservationMetrics(
       ...(recordedCost ? { recordedCost } : {}),
     }
   }
-  if (fold.invocations === '0') return { state: 'not-applicable' }
+  if (fold.invocations === '0' && BigInt(fold.historicalReferences ?? '0') === 0n)
+    return { state: 'not-applicable' }
   const state = !fold.visible ? 'hidden' : fold.priced ? 'complete' : 'unpriced'
   return {
     state: 'ready',
+    ...historical,
     invocations: fold.invocations,
     observedInvocations: fold.observedInvocations,
     records: fold.records,

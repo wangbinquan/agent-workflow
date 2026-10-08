@@ -1,4 +1,40 @@
 export const runObservabilityZh = {
+  historicalExecutions: '原始历史执行',
+  historicalRecords: '历史原生 Token 明细',
+  historicalReferences: '原始归属引用',
+  historicalReferenceCount: '原调用登记缺失的历史执行引用 {{references}} 条',
+  historicalMembership: '统计归属',
+  historicalAlreadyIncluded: '已在受理调用中统计',
+  historicalIncluded: '已计入所选范围',
+  historicalExcluded: '在所选范围外',
+  historicalUnresolved: '未计入 · 归属待确认',
+  historicalPriceMissing: '历史费率未观测',
+  historicalOriginalEstimate: '沿用原受理估值',
+  historicalIndependent: '独立系统执行',
+  historicalTimeBasis: '范围时间依据',
+  'historicalTime_task-cohort': '所属任务时间',
+  'historicalTime_execution-start': '原执行开始时间',
+  'historicalTime_owner-created': '原作业创建时间；执行开始未观测',
+  'historicalTime_unknown-time': '时间未观测；未计入日期合计',
+  historicalSource_task: '任务执行',
+  'historicalSource_memory-distill': '记忆提取',
+  'historicalSource_intent-turn': '意图生成',
+  'historicalSource_mcp-runtime-test': 'MCP 会话',
+  historicalRecordsHint:
+    '原生四类 Token 保留原值。归属未确认的记录不计入所选范围合计；已受理记录不会重复累计。',
+  historicalVersions: '原始记录的不同版本',
+  historicalOwnerUsage: '原任务保存的用量',
+  historicalOwnerUsageHint: '这些汇总值缺少可去重的原生步骤，保留原值供核对，尚未追加到范围合计。',
+  historicalObservedCoverage:
+    '历史执行引用已有原生记录 {{observed}} / {{references}} · 原调用登记不完整',
+  'gap_historical-invocation-unobserved': '历史执行缺少原调用登记或开始前基线',
+  'gap_historical-native-unobserved': '历史执行缺少原生用量记录',
+  'gap_historical-native-unavailable': '原生历史来源暂不可读取',
+  'gap_historical-scope-unresolved': '历史记录的范围归属待确认',
+  'gap_historical-attribution-unresolved': '同一原生记录关联多个执行，尚无法分配',
+  'gap_historical-native-record-conflict': '同一原生记录存在不同版本',
+  'gap_historical-accepted-record-conflict': '历史原生记录与已计入记录有差异',
+  'gap_historical-native-generation-changed': '读取期间原生来源发生变化',
   usageGapTitle: 'Token 用量存在缺口',
   factsAvailable:
     '全部任务、调用与耗时已完整核对。各任务、Agent、运行时与执行尝试显示各自已核实的分类 Token 和人民币费用；包含缺记录的范围标为未知，不能按零计入。',
@@ -344,6 +380,47 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  historicalExecutions: 'Original historical executions',
+  historicalRecords: 'Historical native Token records',
+  historicalReferences: 'Original ownership references',
+  historicalReferenceCount:
+    '{{references}} historical execution references lack original admission',
+  historicalMembership: 'Statistical scope',
+  historicalAlreadyIncluded: 'Already counted through admission',
+  historicalIncluded: 'Included in selected scope',
+  historicalExcluded: 'Outside selected scope',
+  historicalUnresolved: 'Not included · ownership unresolved',
+  historicalPriceMissing: 'Historical rate not observed',
+  historicalOriginalEstimate: 'Uses original admitted valuation',
+  historicalIndependent: 'Independent system execution',
+  historicalTimeBasis: 'Scope time basis',
+  'historicalTime_task-cohort': 'Original parent Task time',
+  'historicalTime_execution-start': 'Original execution start',
+  'historicalTime_owner-created': 'Original owner creation; execution start not observed',
+  'historicalTime_unknown-time': 'Time not observed; not included in date totals',
+  historicalSource_task: 'Task execution',
+  'historicalSource_memory-distill': 'Memory extraction',
+  'historicalSource_intent-turn': 'Intent generation',
+  'historicalSource_mcp-runtime-test': 'MCP session',
+  historicalRecordsHint:
+    'The four original Token buckets are retained. Unresolved records do not contribute to selected totals; admitted records are not counted twice.',
+  historicalVersions: 'Original record versions',
+  historicalOwnerUsage: 'Usage retained by the original Task',
+  historicalOwnerUsageHint:
+    'These summaries lack native step identities for deduplication. Original values remain available for reconciliation and are not added again to scope totals.',
+  historicalObservedCoverage:
+    'Native records observed for {{observed}} / {{references}} historical execution references · original admission incomplete',
+  'gap_historical-invocation-unobserved':
+    'Historical execution lacks original admission or a before-start baseline',
+  'gap_historical-native-unobserved': 'Historical execution lacks original native usage',
+  'gap_historical-native-unavailable': 'Original historical native source is unavailable',
+  'gap_historical-scope-unresolved': 'Historical record scope is unresolved',
+  'gap_historical-attribution-unresolved':
+    'One native record is linked to multiple executions and cannot be assigned',
+  'gap_historical-native-record-conflict': 'One native record has conflicting versions',
+  'gap_historical-accepted-record-conflict':
+    'Historical native evidence differs from the admitted record',
+  'gap_historical-native-generation-changed': 'The native source changed during traversal',
   usageGapTitle: 'Token usage has gaps',
   factsAvailable:
     'All tasks, invocations and durations are reconciled. Tasks, agents, runtimes and attempts show their own verified token categories and CNY costs. Scopes with missing records remain unknown, never zero.',

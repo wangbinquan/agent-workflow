@@ -4,6 +4,7 @@ import type {
   CompleteObservationMetrics,
   CompleteObservationTask,
   CompleteObservationTrend,
+  CompleteObservationAttempt,
   ObservationTaskFacts,
   ObservationSpanDetail,
 } from '@agent-workflow/shared'
@@ -34,6 +35,9 @@ import { completeObservationReportRows } from './completeObservationReportRows'
 import { completeObservationReportDimensions } from './completeObservationReportDimensions'
 import { completeObservationReportDurations } from './completeObservationReportDurations'
 import { buildCompleteObservationTiming } from './completeObservationTiming'
+import { stageHistoricalObservationSources } from './historicalObservationSource'
+import { completeHistoricalObservationAllocation } from './completeHistoricalObservationAllocation'
+import { appendHistoricalObservationCohort } from './appendHistoricalObservationCohort'
 
 type InvocationRow = AcceptedObservationInvocation & {
   readonly metrics: CompleteObservationMetrics
@@ -93,6 +97,26 @@ export async function buildCompleteObservationCohort(
       },
     },
   })
+  const historicalStage = await stageHistoricalObservationSources(input)
+  const historical =
+    historicalStage === null
+      ? null
+      : completeHistoricalObservationAllocation(input, historicalStage, selection)
+  async function addTrend(at: number, next: CompleteObservationFold, tasks = '0') {
+    const day = date.format(at),
+      trend = (await trends.get(day)) ?? {
+        key: day,
+        from: at,
+        to: at + 1,
+        tasks: '0',
+        fold: emptyCompleteObservationFold(),
+      }
+    trend.tasks = String(BigInt(trend.tasks) + BigInt(tasks))
+    trend.from = Math.min(trend.from, at)
+    trend.to = Math.max(trend.to, at + 1)
+    mergeCompleteObservationFold(trend.fold, next)
+    await trends.put(day, trend)
+  }
   let receiptOrdinal = 0n,
     sourceTasks = 0n
   for await (const row of completeWorkingTraversal<ObservationTaskFacts>(
@@ -111,6 +135,22 @@ export async function buildCompleteObservationCohort(
         trace: input.task !== undefined,
       }
       const original = await buildCompleteObservationTask(taskInput)
+      if (historical) {
+        await historical.retainAccepted(original)
+        await input.rows.put(space('task-original-summaries'), {
+          key: task.id,
+          document: original.summary,
+        })
+        for await (const attempt of completeWorkingTraversal<CompleteObservationAttempt>(
+          input.rows,
+          original.attemptsNamespace,
+          input.signal,
+        ))
+          await input.rows.put(space('task-original-attempts'), {
+            key: attempt.key,
+            document: { ...attempt.document, taskId: task.id, taskName: task.name },
+          })
+      }
       sourceTasks++
       for (const receipt of original.sourceReceipts)
         await input.rows.insert(space('receipts'), [
@@ -145,36 +185,12 @@ export async function buildCompleteObservationCohort(
       }
       const build = await selectCompleteObservationTask(taskInput, original, selection)
       if (build === null) return
-      inventory.tasks++
-      if (build.summary.metrics.state === 'ready') usageCoverage.readyTasks++
-      else if (build.summary.metrics.state === 'not-ready') usageCoverage.missingTasks++
-      else usageCoverage.notApplicableTasks++
-      inventory.attempts += BigInt(build.summary.attemptCount)
       inventory.invocations += BigInt(build.fold.invocations)
       inventory.numericRecords += BigInt(build.originalNumericRecords)
-      mergeCompleteObservationFold(fold, build.fold)
-      statuses[task.status] = String(BigInt(statuses[task.status] ?? '0') + 1n)
       await input.rows.insert(space('task-summaries'), [{ key: task.id, document: build.summary }])
       await input.rows.insert(space('task-quality'), [
         { key: task.id, document: [...build.fold.gaps] },
       ])
-      await durations.add(build.summary)
-      const day = date.format(task.startedAt),
-        trend = (await trends.get(day)) ?? {
-          key: day,
-          from: task.startedAt,
-          to: task.startedAt + 1,
-          tasks: '0',
-          fold: emptyCompleteObservationFold(),
-        }
-      trend.tasks = String(BigInt(trend.tasks) + 1n)
-      trend.from = Math.min(trend.from, task.startedAt)
-      trend.to = Math.max(trend.to, task.startedAt + 1)
-      mergeCompleteObservationFold(trend.fold, build.fold)
-      await trends.put(day, trend)
-      for (const reason of build.fold.gaps) {
-        await quality.put(reason, String(BigInt((await quality.get(reason)) ?? '0') + 1n))
-      }
       for await (const item of completeWorkingTraversal<InvocationRow>(
         input.rows,
         build.invocationsNamespace,
@@ -269,8 +285,8 @@ export async function buildCompleteObservationCohort(
         ['platform-captures', build.platformCapturesNamespace],
       ] as const) {
         for await (const item of completeWorkingTraversal(input.rows, namespace, input.signal)) {
-          await output.append(section, task.id, item.key, item.document)
           if (section !== 'attempts') {
+            await output.append(section, task.id, item.key, item.document)
             inventory.nativeCaptures++
             await output.append(section, null, input.keyOf(JSON.stringify([task.id, item.key])), {
               ...(item.document as object),
@@ -280,7 +296,6 @@ export async function buildCompleteObservationCohort(
           } else {
             const attempt = { ...(item.document as object), taskId: task.id, taskName: task.name }
             await input.rows.insert(space('all-attempts'), [{ key: item.key, document: attempt }])
-            await output.append('attempts', null, item.key, attempt)
           }
         }
       }
@@ -326,9 +341,22 @@ export async function buildCompleteObservationCohort(
   }
   if (sourceTasks !== BigInt(taskSource.rows))
     throw new Error('Complete original Task population changed')
+  const recovered =
+    historicalStage && historical
+      ? await appendHistoricalObservationCohort(
+          input,
+          historicalStage,
+          historical,
+          output,
+          dimensions,
+          addTrend,
+        )
+      : null
+  if (recovered) {
+    mergeCompleteObservationFold(fold, recovered.standalone)
+    inventory.numericRecords += recovered.nativeRecords
+  }
   await dimensions.flush()
-  await trends.flush()
-  await quality.flush()
   const taskOrder = await completeExternalSort({
     workspace: input.rows,
     namespace: space('task-order'),
@@ -337,19 +365,66 @@ export async function buildCompleteObservationCohort(
         input.rows,
         space('task-summaries'),
         input.signal,
-      ))
+      )) {
+        const metrics = row.document.metrics
+        const invocations =
+          metrics.state === 'ready'
+            ? metrics.invocations
+            : metrics.state === 'not-ready'
+              ? (metrics.tokenCoverage?.invocations ?? '0')
+              : '0'
+        if (
+          selection !== null &&
+          historical !== null &&
+          invocations === '0' &&
+          (await input.rows.get<boolean>(
+            space('historical-selected-tasks'),
+            row.document.task.id,
+          )) !== true
+        )
+          continue
         yield row.document
+      }
     })(),
     compare: (a, b) => b.task.startedAt - a.task.startedAt || b.task.id.localeCompare(a.task.id),
     signal: input.signal,
   })
   for await (const task of taskOrder.records()) {
+    await input.rows.put(space('final-selected-tasks'), { key: task.task.id, document: true })
+    inventory.tasks++
+    await durations.add(task)
+    inventory.attempts += BigInt(task.attemptCount)
+    if (task.metrics.state === 'ready') usageCoverage.readyTasks++
+    else if (task.metrics.state === 'not-ready') usageCoverage.missingTasks++
+    else usageCoverage.notApplicableTasks++
+    statuses[task.task.status] = String(BigInt(statuses[task.task.status] ?? '0') + 1n)
+    const value = completeMetricsFold(task.metrics)
+    mergeCompleteObservationFold(fold, value)
+    await addTrend(task.task.startedAt, value, '1')
     await output.append('tasks', null, task.task.id, task)
-    const reasons = await input.rows.get<readonly string[]>(space('task-quality'), task.task.id)
+    const reasons = value.gaps
     if (!reasons || new Set(reasons).size !== reasons.length)
       throw new Error('Original Task quality membership missing or duplicated')
-    for (const reason of reasons) await output.append('quality-tasks', reason, task.task.id, task)
+    for (const reason of reasons) {
+      await output.append('quality-tasks', reason, task.task.id, task)
+      await quality.put(reason, String(BigInt((await quality.get(reason)) ?? '0') + 1n))
+    }
   }
+  if (recovered && BigInt(fold.historicalReferences ?? '0') !== recovered.references)
+    throw new Error('Original historical reference population changed')
+  for await (const attempt of completeWorkingTraversal<
+    CompleteObservationAttempt & { taskId: string }
+  >(input.rows, space('all-attempts'), input.signal)) {
+    if (
+      (await input.rows.get<boolean>(space('final-selected-tasks'), attempt.document.taskId)) !==
+      true
+    )
+      continue
+    await output.append('attempts', attempt.document.taskId, attempt.key, attempt.document)
+    await output.append('attempts', null, attempt.key, attempt.document)
+  }
+  await trends.flush()
+  await quality.flush()
   const sections = {
     agent: 'agents',
     runtime: 'runtimes',
@@ -485,6 +560,9 @@ export async function buildCompleteObservationCohort(
       invocations: String(inventory.invocations),
       numericRecords: String(inventory.numericRecords),
       nativeCaptures: String(inventory.nativeCaptures),
+      ...(recovered && recovered.references > 0n
+        ? { historicalReferences: String(recovered.references) }
+        : {}),
     },
     statuses,
     timing: await durations.totals(),

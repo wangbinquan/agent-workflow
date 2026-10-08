@@ -131,6 +131,15 @@ export async function allocateCompleteObservationUsage(
         }
       }
       addCompleteObservationAllocation(entry.fold, contribution, cost, qualified)
+      if (input.sources.historical && entry.invocation.authority.kind === 'local')
+        await input.rows.put(space('original-native-allocations'), {
+          key: row.key,
+          document: {
+            originalUsage: record.measurement.usage,
+            nativeSource: entry.invocation.nativeCaptureSource ?? null,
+            scope: record.measurement.scope ?? null,
+          },
+        })
       allocations.push({
         key: row.key,
         document: {

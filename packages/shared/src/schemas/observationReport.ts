@@ -24,6 +24,10 @@ export const COMPLETE_OBSERVATION_SECTIONS = [
   'span-facts',
   'span-captures',
   'span-statuses',
+  'historical-executions',
+  'historical-records',
+  'historical-record-versions',
+  'historical-record-references',
 ] as const
 export type CompleteObservationSection = (typeof COMPLETE_OBSERVATION_SECTIONS)[number]
 /** Execution facts remain available only after the same complete input and output seals. */
@@ -42,6 +46,10 @@ export const COMPLETE_OBSERVATION_FACT_SECTIONS: readonly CompleteObservationSec
   'dimension-tasks',
   'span-facts',
   'span-statuses',
+  'historical-executions',
+  'historical-records',
+  'historical-record-versions',
+  'historical-record-references',
 ]
 export const CompleteObservationReportQuerySchema = ObservationOverviewQuerySchema
 export const CompleteObservationReportRequestSchema = z
@@ -87,6 +95,7 @@ export interface CompleteObservationReportSummary {
     readonly invocations: string
     readonly numericRecords: string
     readonly nativeCaptures: string
+    readonly historicalReferences?: string
   }
   readonly statuses: Readonly<Record<string, string>>
   readonly timing: {
@@ -107,6 +116,7 @@ export interface CompleteObservationFactSummary {
     readonly tasks: string
     readonly attempts: string
     readonly invocations: string
+    readonly historicalReferences?: string
   }
   readonly statuses: Readonly<Record<string, string>>
   readonly timing: {
