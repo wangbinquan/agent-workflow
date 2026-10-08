@@ -3106,9 +3106,7 @@ async function composeSqliteProviderSession(
   )
 
   const gateContinuationDeps = {
-    ...(taskLaunchConfiguration.selectedQueries === undefined
-      ? {}
-      : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
+    launchConfiguration: taskLaunchConfiguration.continuationQueries,
     db,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     appHome: Paths.root,

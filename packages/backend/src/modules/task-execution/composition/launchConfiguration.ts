@@ -45,6 +45,9 @@ export function composeTaskLaunchConfiguration(
   const selectedQueries = input.kind === 'selected' ? input.queries : undefined
   return Object.freeze({
     selectedQueries,
+    // A continuous gate worker must retain the original live reader in local
+    // mode too; boot-time legacy projections cannot select the resumed model.
+    continuationQueries: input.queries,
     initialRuntime: localRuntime,
     initialStart: localStart,
     runtime: () =>
