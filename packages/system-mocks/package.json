@@ -28,7 +28,7 @@
     "test": "bun test --isolate --randomize"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.27.1",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "fflate": "^0.8.2",
     "jose": "^6.2.3",
     "protobufjs": "^8.6.0"

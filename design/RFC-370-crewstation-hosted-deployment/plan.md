@@ -1176,3 +1176,9 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 ## 2026-10-08 总流水线全绿门槛与 identity 清单 CI 跟进
 
 用户明确选择 GitHub 总流水线全绿后才继续 RFC。7b62be23 的主 CI 37727175165 正式 failure，70 项功能作业和 Windows 37727363630 均成功，不能代签总绿。4efba2f9 的 Ubuntu 1／32 作业 113166465304 仅 RFC-349 完整 identity 清单遗漏新表；同作业的 PostgreSQL DEFAULT、SQLite NULL 和多行事件原判据通过。只补 system_agent_observation_sources 一项，旧清单成员与四 case／完整遍历／预算保持；类型错误由并行 RFC-371 会话修复，本片不改其源码或配套。不增加生产／metadata／census／本机 AW 运行。有限功能门、精确发布和新 SHA hosted CI 分别验收，总流水线成功前 runtime／Node／CS 新实施保持暂停，H7／A-G、M0～M4 与 Done 仍开放。
+
+## 2026-10-08 当前 schema head 的五套既有 schema hosted CI 配套断言
+
+identity 清单已发布 c48db612，新主 CI 37736663092 终态另验。4efba2f9 的 Ubuntu 5／32、15／32、2／32 分别确认 journal 243、active tables 233、backup activeTableCount 233；原精确预期仍为 242／217／217。Ubuntu 31／32 与 12／32 另确认 canonical／SQLite source tables 已为 239，旧预期仍为 223；只更新五套既有测试的这些数字和对应标题，追加 0243／0019 的排序后完整 16 项 System 名单，原 Task／observation\_、六张 archive-only、历史 replay、完整 machine／human snapshot 一致性、Worker 全表分页、全部旧 case／matcher／预算保持。完整逆向和纯 AST 核对，独立有限功能门、精确发布与新 SHA hosted 总 CI 分别验收。零生产／metadata／新 census／本机 AW 产品运行；总流水线全绿前 runtime／Node／CS 新实施继续暂停，H7／A-G、M0～M4 与 Done 未完成。详见[当前 schema head 配套](ci-current-schema-head.md)。所有旧共享正文与并行输出完整保留。
+
+同批 Static scans 必要 CI 排障已获用户明确允许；四个目标依赖的版本／锁文件候选保留原检查规则，有限功能兼容门与 hosted CI 另验，详见[依赖版本修复](ci-dependency-versions.md)。本片 schema 断言门不代签依赖功能兼容或总流水线成功。

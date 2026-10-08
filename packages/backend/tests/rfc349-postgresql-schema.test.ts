@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 217 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 233 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -22,11 +22,11 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(217)
+    expect(tables).toHaveLength(233)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       true,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(217)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(233)
     expect(
       tables.some((table) => table.logicalId === 'task_execution_native_usage_store_bindings'),
     ).toBe(true)
@@ -53,6 +53,30 @@ describe('RFC-349 PostgreSQL schema projection', () => {
       'observation_usage_events',
       'observation_usage_native_records',
       'observation_usage_sources',
+    ])
+    // RFC-371 0243 / PostgreSQL 0019 adds this exact original System table set.
+    expect(
+      tables
+        .map((statement) => statement.logicalId)
+        .filter((id) => id.startsWith('system_agent_'))
+        .sort(),
+    ).toEqual([
+      'system_agent_native_usage_emissions',
+      'system_agent_native_usage_pass_heads',
+      'system_agent_native_usage_pass_pages',
+      'system_agent_native_usage_passes',
+      'system_agent_native_usage_preparations',
+      'system_agent_native_usage_revision_heads',
+      'system_agent_native_usage_root_heads',
+      'system_agent_native_usage_root_results',
+      'system_agent_native_usage_root_sets',
+      'system_agent_native_usage_root_transitions',
+      'system_agent_native_usage_session_parents',
+      'system_agent_native_usage_step_members',
+      'system_agent_native_usage_store_bindings',
+      'system_agent_observation_groups',
+      'system_agent_observation_owners',
+      'system_agent_observation_sources',
     ])
     expect(plan.activeTableCount).toBe(contract.activeTableCount)
     expect(plan.archiveOnlyTableCount).toBe(6)

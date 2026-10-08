@@ -1,3 +1,13 @@
+## 2026-10-08 RFC-371 System 完整报告资格修复候选
+
+真实独立意图报告 404 定位到缓存 admission／publish／retained read 的 Task-only 资格查询。改由 bootstrap 注入原 Task/System owner 工厂，同一 executor 全部 retained IDs 分批到 EOF，再核对完整人口；无任务上限或虚构 Task。新缓存族9保留旧族8终态。新增独立 System 211+3 四桶／重试及203混合来源、已知CNY、旧报告保留回归。原 usage 算法逐字迁入其 owner、窄 public callback与显式数值 mapper补齐；原 System helper串行化实测及守卫负例追加，旧规则／预算／全部四根语句人口和映射保持。源实现门、原13产物、精确上库及 hosted 总CI另验；真实全类型对账、Git/数字员工、页面和CS部署继续，RFC 未完成。详见[报告修复](design/RFC-371-run-observability/system-complete-report-admission.md)。以下旧共享正文与并行输出完整保留。
+
+# RFC-370 CI：当前 schema head 的五个原测试配套
+
+identity 清单修复已精确发布 c48db612，main／origin 同步；新主 CI 37736663092 尚无总绿终态。并行后继 4efba2f9 的五套既有测试失败来自当前迁移头已推进而原精确数字未跟进：journal 242→243、PostgreSQL／canonical active tables 217→233、canonical／SQLite source tables 223→239、backup payload.activeTableCount 217→233。只对齐五份旧测试的原数字与对应标题，追加 0243／0019 的完整 16 项 System 表名单；旧表、六张 archive-only、升级／toy task、备份布局／digest、canonical machine／human 一致性、Worker 分页和所有旧 matcher／case／预算保持。生产、历史迁移与架构 metadata 不改，无新 census 或本机 AW 产品运行。有限独立功能门、精确上库和新 exact-SHA hosted CI 另验，总流水线全绿前不恢复 runtime／Node／CS 新实施；AW 尚未部署 CS，RFC 未完成。详见[当前 schema head 配套](design/RFC-370-crewstation-hosted-deployment/ci-current-schema-head.md)。以下共享旧全文与全部并行输出保持。
+
+同批 Static scans 必要 CI 排障已获用户明确允许；四个目标依赖的版本／锁文件候选保留原检查规则，另做有限功能兼容门与 hosted CI，详见[依赖版本修复](design/RFC-370-crewstation-hosted-deployment/ci-dependency-versions.md)。这项候选不扩展为安全审计，亦不代签总流水线成功。
+
 ## 2026-10-08 RFC-371 Narrative identity CI 修复候选
 
 4efba2f9 的 Windows 37733093248 原平台功能 959 pass / 0 fail，原 System native 全量／续接回归通过；后续 typecheck 因 Narrative resolver 显式结果类型遗漏已选定 observationIdentity 而失败。补回原 System request 可选身份类型，原双 provider Narrative 回归追加同一冻结对象透传断言，保留全部已有功能断言。RFC-349 identity 清单由其原会话负责。全类型真实模型验收发现的 System 完整报告资格查询遗漏另行修复；hosted 总 CI、原生逐记录／四桶／人民币对账、页面与 CS 部署继续，RFC 未完成。以下旧共享 STATE 与并行输出完整保留。详见[系统调用验收](design/RFC-371-run-observability/system-agent-native-accounting.md)。
