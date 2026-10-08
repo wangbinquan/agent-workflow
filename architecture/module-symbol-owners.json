@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2414,
+    "backendFiles": 2416,
     "frontendFiles": 656,
     "legacyFiles": 596,
-    "moduleFiles": 1818,
-    "productionFiles": 3241,
+    "moduleFiles": 1820,
+    "productionFiles": 3243,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27697
+    "symbolsIncludingFileRoots": 27702
   },
   "entries": [
     {
@@ -141149,6 +141149,30 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskNodeWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskNodeWritePurposes.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskNodeWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskNodeWritePurposes.ts#TaskNodeWritePurposes",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskNodeWritePurposes",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskOperationConfiguration.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskOperationConfiguration.ts#$file",
       "removeAfterWave": null,
@@ -163666,6 +163690,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createSelectedTaskNodeRunRuntimePersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts#createSelectedTaskNodeWritePurposes",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSelectedTaskNodeWritePurposes",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts#SelectedWrite",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SelectedWrite",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -333105,5 +333165,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9"
+  "sourceDigest": "sha256:58fa16d2d8fc8b91f284758859b5bc2b22ae5d6adb555cefcdd4ea95b2469d5d"
 }

@@ -1990,6 +1990,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:050d783a6d138cd4e309",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
@@ -102546,9 +102563,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6032,
+    "architectureExceptions": 6033,
     "implementationSccs": 0,
-    "observedEdges": 6888,
+    "observedEdges": 6889,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -104459,6 +104476,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#canViewAccess"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts#$file",
+      "id": "import:050d783a6d138cd4e309",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -213656,7 +213689,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9",
+  "sourceDigest": "sha256:58fa16d2d8fc8b91f284758859b5bc2b22ae5d6adb555cefcdd4ea95b2469d5d",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

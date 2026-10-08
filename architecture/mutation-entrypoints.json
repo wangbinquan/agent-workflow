@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1981,
+    "entries": 1982,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -34654,6 +34654,28 @@
     {
       "controls": {
         "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts#createSelectedTaskNodeWritePurposes",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostNodeWritePurposes.ts#createSelectedTaskNodeWritePurposes",
+      "symbol": "createSelectedTaskNodeWritePurposes",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": false,
@@ -47406,7 +47428,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9",
+  "sourceDigest": "sha256:58fa16d2d8fc8b91f284758859b5bc2b22ae5d6adb555cefcdd4ea95b2469d5d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

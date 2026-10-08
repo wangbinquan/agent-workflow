@@ -1236,3 +1236,31 @@ MATCHING16 独立配套门、精确提交/推送、普通后继退役与新 SHA 
 Windows 37830372844 在 2675701af71c7905ab75dce1a41e8cefe1c34393 的 Typecheck 确认两处 TS2769：matcher 的其他 Task 原始快照和原 selection session 变量可空。仅在原分支中增加显式 undefined 拒绝，保留原快照/对象身份 matcher、14 个定义、21 个用例/provider、全部 107 个 expect 与完整原业务体；5 个生产 TS 及原 13 架构/status 输出保持，没有再次 census 或本机 AW 执行。原失败保留，新 SHA 主/Windows 总绿另验。
 
 d5cc90f476ade1f7bd971918f2ff72da54b834d6 已精确发布四项已消费增长退役和 Windows 两路径过滤/一原命令登记；独立有限门的 41 项完整绑定与分析已实际消费，远端精确同步且共享 index 为空。此次类型修复仍需自己的有限源码门、精确发布与 hosted 运行证据；其余 Task/Node/真实根、H7/A-T7/A-G 和 CS M0～M4 开放，AW 尚未部署 CS。
+
+### W2-P 总流水线修绿后恢复 RFC（2026-10-09）
+
+39393abbdd0d9d9d33efbf8dd5bdab39bc926245 的主 run 37834573995 全 72/72 作业成功、Windows run 37834574026 成功，Windows Typecheck 与平台套件通过；原始两 run/两 jobs API 的完整 EOF/bytes/SHA 及确切 main SHA 已由 root 实际消费。总绿前暂停后续 RFC 的门槛现在满足，原 2675701a/d5cc90f4 TS2769 失败历史保留。Ubuntu job 113508208876 新投影 SQLite/PostgreSQL 各 21 例、macOS job 113508209036 SQLite 21 例、Windows job 113508205993 SQLite 21 例全部通过，三个原完整 group 与每个实际 case 已核对；无本机 AW 执行或重复 census。
+
+W2-P 的有限 adapter/工厂与回归交付验收完成。下一步 C2-W2-N 先独立设计 preparation/issuedResults Node 目的视图、保留原完整 native 方法及缺省装配，再分批明确真实 caller 依赖。工厂支持不代签 caller/三个根/十九 capability owners；完整 H7、A-T7/A-G 与 M0～M4 仍开放，AW 未部署 CS。阶段 B 仍按各层独立 CS adapter、必要先行、M0 先部署再收编后续能力执行。
+
+### C2-W2-N N1：独立 Node 目的视图源码候选（2026-10-09）
+
+原 DESIGN4-R1 39 项有效稳定 PASS，root 完整消费 14 个功能分析字段与首末实际 EOF 绑定；未推进 N2 实际 caller。新增 Task-only 目的端口/独立 native adapter，原 Task aggregate 只在显式 hostWrites 下增加 nodeWritePurposes；原完整 native nodeRuns/nodeExecution、默认装配和原 recovery 保持，两个既有文件的全字节逆向成立。共享 1c624ba2 仅改 RFC-371 文档，原设计 candidate 内容不变。五个源码候选和原双 provider Node 合同/测试各自冻结验收。
+
+新套件 15 个定义/49 案例每 provider/162 个静态 expects，使用原真实共享 installation、两真实 Task、claim/token/work 与原 native SQL，覆盖完整两目的写族/上下文/receiver/事务回滚重试/错误优先与纯读空输入；只给三个新增多操作案例 15_000 预算，所有旧断言和预算保持。静态格式/lint/纯 AST/字节证明不代签执行；SOURCE9、一次原 census、matching、精确上库、Windows 后继登记和新 hosted CI 依序完成。完整 H7/A-T7/A-G、实际 callers/十九 owners/三 roots 和 CS M0～M4 未闭合。
+
+## N1 SOURCE9-R1 功能失败与最小夹具修正
+
+独立 SOURCE9-R1 首末实际 EOF 的 50 项有效稳定 FAIL 已由 root 完整消费全部 16 个功能分析字段；原正式回执 526619 bytes、SHA256 74e09fdadd6621472108f9eb8c8cb37a9e6fb1229a9a4a279413fe91b001614e 保留。唯一 N1-P2-001：同库 draining 用例逐轮重复 prepare 原单一 installation，第二轮在原非 closed 拒绝处失败，后七项 Node 写入断言不可达。另列两个原 prepare 合同的 10285 bytes 首末实际 EOF 已核对，原 50 人口/FP 保持。
+
+修正复用一次真实受理的 fixture，先 lose，再循环原八写；每轮清零同一消费计数，真实 SQL 全行 before/after、BEGIN/ROLLBACK、原 work/lease 断言逐轮保持。其余测试全文精确逆向复原原候选，全部 15 定义、49 案例每 provider、162 静态 expects 和三个新增 15000 预算保持；四 production 和原 controls 不变。三个文档只追加，全部共享历史保留。SOURCE9-R2 独立重审、唯一原 census、配套门和 exact-SHA 全仓 main/Windows CI 仍待验收；尚未本机执行 AW 或新 census，N2/H7/A-G/CS 部署未签。
+
+## N1 原生成、配套增量与发布边界
+
+SOURCE9-R2 独立有效稳定 PASS、0 findings 已由 root 实际消费全部 56 项首末 EOF 绑定和完整 9 个功能分析字段；原 SOURCE9-R1 的唯一夹具 P2、正式 FAIL 及其消费记录保留。15 个定义/每 provider 49 个案例/162 静态 expects 和全部预算保持，新用例仍须 hosted 执行。四生产文件及六实际 caller、所有旧 Node/provider 回归保持。
+
+唯一一次原 scoped census 固定 2b1e93de995870076b160198e26eb845271711af，使用 5 个冻结 TS 输入（4 production）和 6786 个非本批已提交 source blob；四原规则逐字保持，13 完整原始输出保留，sourceDigest sha256:58fa16d2d8fc8b91f284758859b5bc2b22ae5d6adb555cefcdd4ea95b2469d5d。两新增 Task application/infrastructure 文件实测增加 5 owner、1 factory 和 1 个 erased database-adapter type import；四实际生产输入 classic inbound/outbound 均为 0→0，原全仓 SCC/边界、356 条 authored debt、所有旧 why 与完整业务 payload 保持。
+
+129 项有序账本仅配套四项实测增长：rfc294-mutation-entrypoints 1981→1982, rfc294-cross-context-observed-imports 6888→6889, rfc294-architecture-exceptions 6032→6033, rfc294-module-symbol-owners 27697→27702。原四个纯治理/JSON emission 先完整复现原始输出，再给四项一次性声明；源码发布消费后以普通后继退役。全部八份 canonical 和另三份治理的完整原输出保持，status 使用原 renderer 的完整 9215 bytes，不作全文件格式归一；本批真实指标变化同步于原始渲染。
+
+配套 MATCHING16 门、精确 22 路径发布、普通声明退役与已上库测试的 Windows 三处登记、新 exact-SHA main/Windows 全绿逐项验收。没有新增整仓 census 或本机 AW tests/typecheck/build/services/E2E。N2 实际 Node caller、其余 Task/child/boot 分类、十九 owners/三 roots、完整 H7/A-T7/A-G 与 CS M0～M4 继续开放，AW 尚未部署 CS。三个文档只追加，全部共享和并行内容保留。

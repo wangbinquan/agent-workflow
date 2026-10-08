@@ -35,6 +35,7 @@ import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSes
 import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
 import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
 import { createSelectedTaskExecutionProjectionPersistence } from '../infrastructure/taskHostExecutionProjectionPersistence'
+import { createSelectedTaskNodeWritePurposes } from '../infrastructure/taskHostNodeWritePurposes'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -160,6 +161,10 @@ export function createTaskExecutionPersistence(
           hostWrites: dependencies.hostWrites,
           ...nativeProjections,
         })
+  const nativeNodes = {
+    nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
+    nodeExecution: new DrizzleNodeExecutionPersistence(db),
+  }
   return Object.freeze({
     ...(dependencies.nativeUsage ? { nativeUsage: dependencies.nativeUsage } : {}),
     drive: projections.drive,
@@ -171,8 +176,8 @@ export function createTaskExecutionPersistence(
     gateContinuationPreDrive: new DrizzleGateContinuationPreDrivePersistence(db),
     scheduler: new DrizzleSchedulerCompletionPersistence(db),
     childBudget: new DrizzleChildTaskBudgetQueries(db),
-    nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
-    nodeExecution: new DrizzleNodeExecutionPersistence(db),
+    nodeRuns: nativeNodes.nodeRuns,
+    nodeExecution: nativeNodes.nodeExecution,
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
@@ -186,6 +191,15 @@ export function createTaskExecutionPersistence(
     recoveryAdministration: createRecoveryAdministration(db, runtimeLifecycle),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: projections.runtimeSessionCapture,
+    ...(dependencies.hostWrites === undefined
+      ? {}
+      : {
+          nodeWritePurposes: createSelectedTaskNodeWritePurposes({
+            db,
+            hostWrites: dependencies.hostWrites,
+            ...nativeNodes,
+          }),
+        }),
   })
 }
 
