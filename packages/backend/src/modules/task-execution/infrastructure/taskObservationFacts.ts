@@ -86,6 +86,7 @@ function attemptFields() {
     iteration: nodeRuns.iteration,
     wgRound: nodeRuns.wgRound,
     reviewIteration: nodeRuns.reviewIteration,
+    rerunCause: nodeRuns.rerunCause,
   }
 }
 
