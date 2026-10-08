@@ -1224,3 +1224,9 @@ SOURCE7-R2 独立正式有效稳定 PASS 已消费，45 项首末 EOF 绑定与�
 一次原 scoped census 固定上述成功基线，完整 13 输出、四原规则及各并行贡献保持，生产摘要 sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9。新增 3 个 Task infrastructure 文件、7 owner、2 factory、2 个 database-adapter erased type imports；classic targeted inbound/outbound 0→0，原 356 条 authored debt 与全部旧 why 保留，没有新 classic debt。129 项有序账本实测四项差额为 1979→1981、6886→6888、6030→6032、27690→27697，在本源码发布消费后以普通后继退役。原 status raw 字节完整保留，历史格式化失败与修复记录均保留。
 
 MATCHING16 独立配套门、精确提交/推送、普通后继退役与新 SHA hosted CI 分别验收；新测试先上 main，再单独登记完整 Windows 三处命令。没有额外全仓生成或本机 AW tests/typecheck/build/services/E2E。实际根、其余 Task/Node、child/boot、19 owner/三 roots、H7/A-T7/A-G 与 CS M0～M4 仍开放；AW 尚未部署 CS。
+
+## 2026-10-09 W2-P 精确发布与验证接线
+
+2675701af71c7905ab75dce1a41e8cefe1c34393 已将通过独立源码及配套门的 22 个文件正常推送 main；远端精确 0/0、共享 index 为空，原完整文档前缀和所有冻结材料保持。新测试源码已在 main，每 provider 21 个用例仍待新 SHA hosted CI 验收。
+
+本普通后继只退役 4 个已随源码消费的 allowGrowth，保留完整 129 项有序库存、实测 baseline、全部 why、canonicalProjection/sourceDigest 和原 provenance 锚点，仅按原 5 个纯 JSON 函数重算 contentDigest；另在 Windows 的 push/PR 两处路径过滤与原平台测试命令各加入一次已上库的新测试。移除这 3 个新引用可整字节还原原完整 workflow，所有并行接线及断言保留。原 6 个 TS 与其余 12 份架构配套保持，无第二次 census 或本机 AW tests/typecheck/build/services/E2E。有限后继独立门、精确发布及新 SHA 主/Windows 总流水线各自验收；H7/A-T7/A-G 和 CS M0～M4 仍开放，AW 尚未部署 CS。

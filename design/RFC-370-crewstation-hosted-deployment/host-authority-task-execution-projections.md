@@ -64,3 +64,9 @@ CI 前置条件在 0319cc77b7e2e46d737b6926725ea90bd4079b36 实际完成：主�
 129 项有序账本只配套实测差额：mutation-entrypoints 1979→1981、cross-context-observed-imports 6886→6888、architecture-exceptions 6030→6032、module-symbol-owners 27690→27697。四项增长逐项说明 RFC-370 W2-P，在源码发布时消费，再以普通后继退役；不改变分类器、登记理由或检查预算。四个原纯 JSON 治理与 pretty/ascii 格式函数先逐字复现完整原输出，再投影增长声明及 contentDigest；8 份 canonical、3 份未变业务治理及 status 的原始完整输出保持，status 不作 Prettier 归一。
 
 配套独立 MATCHING16 门、精确发布、Windows 新测试登记及新 SHA 整仓 CI 各自验收。实际 Task callers 和三个启动根、其余 Task/Node 分类、child/boot 恢复、19 owner/三 roots、H7/A-T7/A-G 与 CS M0～M4 继续开放；AW 尚未部署 CS。完整阶段 A 门通过后，按各层独立 CS adapter 推进，M0 首先实际部署，随后逐项接入后续能力。
+
+## 2026-10-09 W2-P 精确发布与验证接线
+
+2675701af71c7905ab75dce1a41e8cefe1c34393 已将通过独立源码及配套门的 22 个文件正常推送 main；远端精确 0/0、共享 index 为空，原完整文档前缀和所有冻结材料保持。新测试源码已在 main，每 provider 21 个用例仍待新 SHA hosted CI 验收。
+
+本普通后继只退役 4 个已随源码消费的 allowGrowth，保留完整 129 项有序库存、实测 baseline、全部 why、canonicalProjection/sourceDigest 和原 provenance 锚点，仅按原 5 个纯 JSON 函数重算 contentDigest；另在 Windows 的 push/PR 两处路径过滤与原平台测试命令各加入一次已上库的新测试。移除这 3 个新引用可整字节还原原完整 workflow，所有并行接线及断言保留。原 6 个 TS 与其余 12 份架构配套保持，无第二次 census 或本机 AW tests/typecheck/build/services/E2E。有限后继独立门、精确发布及新 SHA 主/Windows 总流水线各自验收；H7/A-T7/A-G 和 CS M0～M4 仍开放，AW 尚未部署 CS。

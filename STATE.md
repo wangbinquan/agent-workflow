@@ -10954,3 +10954,9 @@ Task、Memory、Intent、Resource Catalog 的原 owner 查询与 Runtime 原生 
 CI 前置已恢复总绿：0319cc77b7e2e46d737b6926725ea90bd4079b36 主流水线 37815498721 的 72 项与 Windows 37815498722 全部 SUCCESS，旧失败留证。W2-P SOURCE7-R2 的 45 项完整绑定和分析已实际消费，5 个生产文件保留原完整端口/方法/callback/context/事务，在显式 hostWrites 下选择原 runtime 准备与具名结果投影。新增测试每 provider 21 项等待源码上库后的 hosted 验收。
 
 一次原 scoped census 固定上述基线，四原规则与 13 完整原输出保持，生产摘要 sha256:221b5e177750b14afbe9984196bb60352b5578ef51296f188b320abea5d10fa9。3 个新 Task infrastructure 文件增加 7 owner、2 factory 和 2 个数据库 adapter 的 erased type imports；classic targeted 0→0，原 356 条债务、全部 why 与 129 项有序库存保留，只有实测四项增长声明随源码消费、普通后继退役。status 使用原始完整渲染输出。配套独立门、精确发布、Windows 三处新测试接线及 exact-SHA CI 分别验收；实际根、其余 Task/Node、child/boot、19 owner/三 roots、H7/A-T7/A-G 和 CS M0～M4 未完成，AW 尚未部署 CS。
+
+## 2026-10-09 W2-P 精确发布与验证接线
+
+2675701af71c7905ab75dce1a41e8cefe1c34393 已将通过独立源码及配套门的 22 个文件正常推送 main；远端精确 0/0、共享 index 为空，原完整文档前缀和所有冻结材料保持。新测试源码已在 main，每 provider 21 个用例仍待新 SHA hosted CI 验收。
+
+本普通后继只退役 4 个已随源码消费的 allowGrowth，保留完整 129 项有序库存、实测 baseline、全部 why、canonicalProjection/sourceDigest 和原 provenance 锚点，仅按原 5 个纯 JSON 函数重算 contentDigest；另在 Windows 的 push/PR 两处路径过滤与原平台测试命令各加入一次已上库的新测试。移除这 3 个新引用可整字节还原原完整 workflow，所有并行接线及断言保留。原 6 个 TS 与其余 12 份架构配套保持，无第二次 census 或本机 AW tests/typecheck/build/services/E2E。有限后继独立门、精确发布及新 SHA 主/Windows 总流水线各自验收；H7/A-T7/A-G 和 CS M0～M4 仍开放，AW 尚未部署 CS。
