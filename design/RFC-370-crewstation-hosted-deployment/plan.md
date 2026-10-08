@@ -1172,3 +1172,7 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 完整根校验五路径已实际发布 `6c2daf58e956519d3a891ee07eaf95a4ce612ebd`，SOURCE5-R3 有限 PASS 已消费，远端 0／0、共享索引空，16 份并行 WIP 保留。该提交主 CI `37725311240`／Windows `37725311251` 已启动，终态另验，未记整仓绿。
 
 原 e609 主 CI `37720290274` 的 Ubuntu 2／32 作业 `113126139077` 只有 RFC-108 源码接线断言失败，仍要求 `selectedQueries`；已提交 `gateContinuationDeps` 实际传 `continuationQueries`。只改这一处 expected 字符串及对应注释，原同步 floor fallback、全部 7 case／18 expect receiver、matcher／名称／预算保持；`120_000`、30 min 默认与不自动传 per-task 预算的原断言保留。纯 AST 全量逆向及原源码 handoff 核对完成，未运行 AW 测试／typecheck／build／服务／E2E，零生产／metadata／新 census。四自有路径的有限独立功能门、精确发布及新 exact-SHA CI 分别验收；原失败不倒写。所有此前 plan／STATE 与并行正文保持，新 runtime／Node／CS 实现继续暂停，H7／A-G、M0～M4／RFC Done 保持开放。
+
+## 2026-10-08 总流水线全绿门槛与 identity 清单 CI 跟进
+
+用户明确选择 GitHub 总流水线全绿后才继续 RFC。7b62be23 的主 CI 37727175165 正式 failure，70 项功能作业和 Windows 37727363630 均成功，不能代签总绿。4efba2f9 的 Ubuntu 1／32 作业 113166465304 仅 RFC-349 完整 identity 清单遗漏新表；同作业的 PostgreSQL DEFAULT、SQLite NULL 和多行事件原判据通过。只补 system_agent_observation_sources 一项，旧清单成员与四 case／完整遍历／预算保持；类型错误由并行 RFC-371 会话修复，本片不改其源码或配套。不增加生产／metadata／census／本机 AW 运行。有限功能门、精确发布和新 SHA hosted CI 分别验收，总流水线成功前 runtime／Node／CS 新实施保持暂停，H7／A-G、M0～M4 与 Done 仍开放。
