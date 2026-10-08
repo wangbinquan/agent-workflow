@@ -1,3 +1,9 @@
+## 2026-10-08 retrospective-first：原 PostgreSQL rollback cause 探针
+
+449 历史生产路径的三组回顾已实际消费：H1268 PASS、H345 / H7 有效 FAIL，各一项已确认功能 P2，原回执保留并交独立修复。后续 runtime / Node / CS 适配暂停至回顾修复与实际 exact-SHA CI 修绿。
+
+本片 PG 探针只把同一注入 rollbackError 的身份断言放到原 DrizzleQueryError.cause，补原错误类和 rollback query；两个 outcome、原真实持锁 / server termination / cleanup ACK / revision / finally、SQLite、15 秒真实心跳和 60_000 用例预算完整保持。只做格式 / lint 与正文 / AST 保持证明；无生产 / canonical / census / 本机 AW 执行。有限实现门、精确发布与新 hosted CI 另验。H345-P2-001 / H7-P2-001 未闭合，完整 H7/A-G、CS M0～M4未完成，AW未部署CS。详见[探针设计](task-host-pg-rollback-cause.md)。以下原 plan 与所有并行输出逐字保留。
+
 # RFC-370 实施计划
 
 状态：In Progress · 2026-09-28。用户已批准实现、部署及提交上库到远端。用户已确认完整接入，以及“先补齐 adapter 切面，再编写 CS 独立 adapter”的顺序。CS adapter 采用必要能力先行、先部署再逐项收编策略。当前执行阶段 A，进度和门状态见末尾实施日志；尚未部署 aw。

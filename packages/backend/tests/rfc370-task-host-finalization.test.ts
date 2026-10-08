@@ -1,6 +1,6 @@
 // RFC-370 C2-W1 D2/D3: actual registry retirement, durable ACK and cleanup retry.
 import { afterEach, expect, spyOn, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { DrizzleQueryError, eq } from 'drizzle-orm'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import {
   nodeRuns,
@@ -394,7 +394,10 @@ describeEachProvider('RFC-370 original Task driver finalization lifetime', (harn
       let finalizing: Promise<void> | undefined, draining: Promise<void> | undefined
       try {
         await commitEntered.promise
-        expect(await heartbeatReturned.promise).toBe(rollbackError)
+        const heartbeatFailure = await heartbeatReturned.promise
+        expect(heartbeatFailure).toBeInstanceOf(DrizzleQueryError)
+        expect((heartbeatFailure as DrizzleQueryError).query).toBe('rollback')
+        expect((heartbeatFailure as DrizzleQueryError).cause).toBe(rollbackError)
         await nextTurn()
         expect(driver.controller.signal.reason).toBe('task-execution-stale-owner')
         finalizing = h.lifecycle

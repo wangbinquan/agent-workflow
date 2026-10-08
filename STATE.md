@@ -1,3 +1,9 @@
+# RFC-370 既有实现回顾及原 PG rollback cause 修复候选
+
+449 个历史生产路径的只读功能回顾已全部完成并消费真实稳定回执：H1268 有限 PASS，H345 / H7 分别保留原有效 FAIL 与已确认 H345-P2-001 引用泄漏、H7-P2-001 undefined failure 被吞。两项修复正在独立设计门，不把未完成的 H7 / A-G / CS 能力当作新增缺陷；新 runtime / Node / CS 实现继续暂停，先修复并验精确 SHA CI。
+
+本片只修原 PG writer 探针对 ORM rollback wrapper 的误判：保留原 rollbackError 身份在 cause，增加原类和 query 断言。SQLite、真实 server 持锁及终止、cleanup revision / review lock / 原完成与 finally、真实首次心跳及两 outcome 的 60_000 预算全部保持。生产与 canonical 不改，无本机 AW tests / typecheck / build / services 或新 census。独立实现门、精确发布及新 hosted CI 尚待验收，原失败不倒写为绿。详情见[原探针修复](design/RFC-370-crewstation-hosted-deployment/task-host-pg-rollback-cause.md)。以下共享 STATE 的全部旧正文与并行输出保留。
+
 ## 2026-10-08 RFC-370 既有代码回顾与 Task CI 观测修复
 
 按用户最新顺序，先回顾既有 RFC 代码的正确性与质量、修绿精确 SHA CI，新的 runtime lease / Node 写点 / CS adapter 实现暂停。当前将两条释放阶段的 null 断言移到原 settle 完成后，新增原 token 与 driver 停止检查；effect 双引擎回滚的两条 INSERT matcher 增加固定可选 schema。原断言、生产 15 秒心跳、60_000 / 15_000 预算、原方法与 receiver、事务和重试保留；无生产或架构 metadata 变化，无新 census / 本机 AW 测试。既有 449 个历史生产路径分组回顾进行中，源码实现门与新 exact-SHA CI 尚待完成；H7 / A-G、完整 CS adapter 与部署仍未完成。以下所有共享旧正文完整保留。详见[修复记录](design/RFC-370-crewstation-hosted-deployment/task-host-ci-phase-oracles.md)。
