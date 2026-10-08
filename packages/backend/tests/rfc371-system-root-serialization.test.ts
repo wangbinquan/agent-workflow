@@ -51,7 +51,9 @@ describeEachProvider('RFC-371 original System root transition serialization', (h
       .where(eq(systemAgentNativeUsage.nativeUsageRootHeads.invocationId, run.invocationId))
       .get()
     expect(head?.nextOrdinal).toBe('2')
-    expect(['original-reset-a', 'original-reset-b']).toContain(head?.lastRootSessionId)
+    expect<Array<string | undefined>>(['original-reset-a', 'original-reset-b']).toContain(
+      head?.lastRootSessionId,
+    )
     const transitions = await db
       .select()
       .from(systemAgentNativeUsage.nativeUsageRootTransitions)

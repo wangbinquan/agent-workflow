@@ -1182,3 +1182,7 @@ SOURCE4/CI SOURCE7有效PASS已实际消费；一次原census与并行e28的3文
 identity 清单已发布 c48db612，新主 CI 37736663092 终态另验。4efba2f9 的 Ubuntu 5／32、15／32、2／32 分别确认 journal 243、active tables 233、backup activeTableCount 233；原精确预期仍为 242／217／217。Ubuntu 31／32 与 12／32 另确认 canonical／SQLite source tables 已为 239，旧预期仍为 223；只更新五套既有测试的这些数字和对应标题，追加 0243／0019 的排序后完整 16 项 System 名单，原 Task／observation\_、六张 archive-only、历史 replay、完整 machine／human snapshot 一致性、Worker 全表分页、全部旧 case／matcher／预算保持。完整逆向和纯 AST 核对，独立有限功能门、精确发布与新 SHA hosted 总 CI 分别验收。零生产／metadata／新 census／本机 AW 产品运行；总流水线全绿前 runtime／Node／CS 新实施继续暂停，H7／A-G、M0～M4 与 Done 未完成。详见[当前 schema head 配套](ci-current-schema-head.md)。所有旧共享正文与并行输出完整保留。
 
 同批 Static scans 必要 CI 排障已获用户明确允许；四个目标依赖的版本／锁文件候选保留原检查规则，有限功能兼容门与 hosted CI 另验，详见[依赖版本修复](ci-dependency-versions.md)。本片 schema 断言门不代签依赖功能兼容或总流水线成功。
+
+### 79b63f48 新增 System 测试的类型修复候选
+
+GitHub 主流水线 `37746020731` 的作业 `113207582002` 在两个新增原测试中报三处类型错误：`refreshKey` 的 UUID 默认值推断过窄、索引后的可选值与 Set matcher、可选 root head 与 Array matcher。仅给 helper 参数声明 `string` 并为两个原 matcher 显式声明可选值类型；原运行时表达式、双 provider、三条原用例、所有断言、记录人口及 60000/120000/30000 ms 预算保持不变。完整 parser 运行时 AST 和独立功能复核作为有限源门，最终仍以 hosted exact-SHA CI 为准。总流水线未全绿，新的 runtime/Node/CS 实现继续暂停，RFC、H7/A-G 和 AW 在 CS 的部署均未完成。

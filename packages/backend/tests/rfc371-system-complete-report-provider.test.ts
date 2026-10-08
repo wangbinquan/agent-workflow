@@ -79,7 +79,7 @@ function reports(harness: ProviderHarness) {
   return {
     service,
     cache,
-    async publish(taskId?: string, refreshKey = randomUUID()) {
+    async publish(taskId?: string, refreshKey: string = randomUUID()) {
       const requested = await service.request(actor, query, refreshKey, taskId)
       const id = requested.state === 'ready' ? requested.header.reportId : requested.reportId
       await service.worker.drain()
@@ -312,9 +312,9 @@ describeEachProvider(
           section: 'tasks',
           limit: 19,
         })
-        expect(new Set(linkedRows.items.map((row) => row.task.id))).toEqual(
-          new Set(['complete-original-task', ids[201]]),
-        )
+        expect<Set<string | undefined>>(
+          new Set(linkedRows.items.map((row) => row.task.id)),
+        ).toEqual(new Set(['complete-original-task', ids[201]]))
         expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([
           { id: 'complete-original-task' },
         ])
