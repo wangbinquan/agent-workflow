@@ -36,6 +36,7 @@ export interface ObservationSearch {
   readonly from: number
   readonly to: number
   readonly period: 'week' | 'month' | 'all' | 'custom'
+  readonly cohort?: 'started' | 'usage'
   readonly after?: string
   readonly task?: string
   readonly tab?: ObservationAnalysisTab | 'tasks'

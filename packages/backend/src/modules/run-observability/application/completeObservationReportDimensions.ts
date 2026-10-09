@@ -118,6 +118,7 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
     task: ObservationTaskFacts,
     allocation: CompleteObservationAllocation | CompleteObservationUnallocatedQuality,
     invocationMetrics: CompleteObservationMetrics,
+    contributionFold?: CompleteObservationFold,
   ) {
     const i = allocation.invocation,
       a = i.authority
@@ -150,8 +151,13 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
         ? allocation.cost
         : { amount: null, complete: false, hidden: !allocation.visible }
     const qualified = 'contribution' in allocation && allocation.qualified !== false
-    addCompleteObservationAllocation(value.fold, contribution, cost, qualified)
-    addCompleteObservationAllocation(membership.fold, contribution, cost, qualified)
+    if (contributionFold) {
+      mergeCompleteObservationFold(value.fold, contributionFold)
+      mergeCompleteObservationFold(membership.fold, contributionFold)
+    } else {
+      addCompleteObservationAllocation(value.fold, contribution, cost, qualified)
+      addCompleteObservationAllocation(membership.fold, contribution, cost, qualified)
+    }
     await cache.put(key, value)
     await memberships.put(member, membership)
   }
@@ -226,11 +232,12 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
     async addHistorical(
       allocation: HistoricalAllocation,
       references: () => AsyncIterable<{ referenceId: string }>,
+      qualityOnly = false,
     ) {
       if (
         allocation.record.scopeMatch !== 'matched' ||
         allocation.record.coveredByAcceptedRecords ||
-        allocation.fold.records === '0'
+        (allocation.fold.records === '0' && !qualityOnly)
       )
         return
       for (const entry of allocation.dimensions) {

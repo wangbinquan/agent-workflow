@@ -86,10 +86,16 @@ export function ObservationFilters({
         </>
       }
     >
-      <FilterField label={t('runObservability.period')}>
+      <FilterField
+        label={t(
+          search.cohort === 'usage' ? 'runObservability.usagePeriod' : 'runObservability.period',
+        )}
+      >
         <Select
           value={search.period}
-          ariaLabel={t('runObservability.period')}
+          ariaLabel={t(
+            search.cohort === 'usage' ? 'runObservability.usagePeriod' : 'runObservability.period',
+          )}
           options={(search.period === 'custom'
             ? (['week', 'month', 'all', 'custom'] as const)
             : (['week', 'month', 'all'] as const)

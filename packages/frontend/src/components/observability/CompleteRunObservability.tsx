@@ -18,6 +18,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { TabBar, tabDomIds } from '@/components/TabBar'
+import { Segmented } from '@/components/Segmented'
 import { useObservationReturn } from '@/hooks/useObservationReturn'
 import { CompleteCost, CompleteMetrics, CompleteTokens } from './CompleteObservationMetrics'
 import { CompleteObservationPage } from './CompleteObservationPager'
@@ -48,6 +49,7 @@ import {
   type ReadableObservationReport,
 } from './completeReportClient'
 import { ObservationFilters } from './ObservationFilters'
+import { CompleteObservationTimeDetails } from './CompleteObservationTimeDetails'
 import type { ObservationSearch } from './RunObservability'
 import './RunObservability.css'
 import './ObservationAnalysis.css'
@@ -93,7 +95,9 @@ function Summary({ report }: { report: ReadableObservationReport }) {
         : undefined
   return (
     <div className="observation-summary observation-summary--complete">
-      <Card title={t('runObservability.fullTasks')}>
+      <Card
+        title={t('runObservability.' + (report.summary.usageWindow ? 'windowTasks' : 'fullTasks'))}
+      >
         <strong className="observation-summary__value">
           {BigInt(report.summary.inventory.tasks).toLocaleString(i18n.language)}
         </strong>
@@ -152,6 +156,8 @@ export function CompleteRunObservability({
   const { t, i18n } = useTranslation(),
     pageRef = useRef<HTMLDivElement | null>(null)
   const [revision, setRevision] = useState(0)
+  const [timeDetails, setTimeDetails] = useState(false)
+  const timeTrigger = useRef<HTMLElement | null>(null)
   const [taskRevisions, setTaskRevisions] = useState<ReadonlyMap<string, number>>(() => new Map())
   const taskRevision = search.task ? (taskRevisions.get(search.task) ?? 0) : 0
   const [dimensions, setDimensions] = useState<
@@ -179,6 +185,7 @@ export function CompleteRunObservability({
     from: search.from,
     to: search.to,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    ...(search.cohort ? { cohort: search.cohort } : {}),
     ...(search.q ? { q: search.q } : {}),
     ...(search.status ? { status: search.status } : {}),
     ...(search.repository ? { repository: search.repository } : {}),
@@ -188,7 +195,7 @@ export function CompleteRunObservability({
   const whole = useCompleteObservationReport(filters, undefined, revision, !search.task)
   // A contribution opens the full Task tree; returning keeps the parent selection in the URL.
   const task = useCompleteObservationReport(
-    { ...filters, selection: undefined },
+    { ...filters, selection: undefined, cohort: undefined },
     search.task,
     taskRevision,
     !!search.task,
@@ -230,6 +237,7 @@ export function CompleteRunObservability({
     dimension?.report.header.reportId ?? null,
     dimension?.row.key ?? null,
     dimension?.kind ?? null,
+    timeDetails,
   ])
   const sourceTask = dimension?.report.header.taskId === search.task ? undefined : search.task
   const saveReturn = useObservationReturn(
@@ -382,6 +390,11 @@ export function CompleteRunObservability({
           )}
           {search.task ? (
             <>
+              {search.cohort === 'usage' && (
+                <NoticeBanner tone="info" size="compact">
+                  {t('runObservability.lifecycleDetailHint')}
+                </NoticeBanner>
+              )}
               <Card title={t('runObservability.summary')}>
                 <CompleteMetrics value={report.summary.metrics} />
                 <CompleteObservationTiming report={report} />
@@ -434,7 +447,28 @@ export function CompleteRunObservability({
             </>
           ) : tab === 'overview' ? (
             <>
-              <Card title={t('runObservability.trend')}>
+              <Card
+                title={t('runObservability.trend')}
+                header={
+                  <Segmented
+                    ariaLabel={t('runObservability.timeCohort')}
+                    value={search.cohort ?? 'started'}
+                    options={(['started', 'usage'] as const).map((cohort) => ({
+                      value: cohort,
+                      label: t('runObservability.cohort_' + cohort),
+                    }))}
+                    onChange={(cohort) => {
+                      setDimension(null)
+                      setTimeDetails(false)
+                      onChange({
+                        ...search,
+                        cohort: cohort === 'started' ? undefined : cohort,
+                        after: undefined,
+                      })
+                    }}
+                  />
+                }
+              >
                 <CompleteObservationPage query={trends}>
                   {(rows) => (
                     <Trend
@@ -453,6 +487,37 @@ export function CompleteRunObservability({
                     />
                   )}
                 </CompleteObservationPage>
+                {report.summary.usageWindow && (
+                  <p className="muted">{t('runObservability.usageWindowHint')}</p>
+                )}
+                {report.summary.usageWindow &&
+                  BigInt(report.summary.usageWindow.partitions['unassigned-time'].records) > 0n && (
+                    <div className="stack--sm">
+                      <p className="muted">
+                        {t('runObservability.unassignedTimeCount', {
+                          count: report.summary.usageWindow.partitions['unassigned-time'].records,
+                        })}
+                      </p>
+                      <CompleteTokens
+                        value={report.summary.usageWindow.partitions['unassigned-time'].metrics}
+                        compact
+                      />
+                      <CompleteCost
+                        value={report.summary.usageWindow.partitions['unassigned-time'].metrics}
+                        compact
+                      />
+                      <button
+                        type="button"
+                        className="link link--button"
+                        onClick={(event) => {
+                          timeTrigger.current = event.currentTarget
+                          setTimeDetails(true)
+                        }}
+                      >
+                        {t('runObservability.viewUnassignedTime')}
+                      </button>
+                    </div>
+                  )}
               </Card>
               <div className="observation-columns">
                 <Card title={t('runObservability.states')}>
@@ -595,6 +660,14 @@ export function CompleteRunObservability({
             </CompleteObservationPage>
           </CompleteDimensionDetails>
         ))}
+      {!search.task && mainReport && timeDetails && (
+        <CompleteObservationTimeDetails
+          report={mainReport}
+          onClose={() => setTimeDetails(false)}
+          onTask={onTask}
+          triggerRef={timeTrigger}
+        />
+      )}
     </div>
   )
 }

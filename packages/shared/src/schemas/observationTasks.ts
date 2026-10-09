@@ -79,6 +79,7 @@ export const ObservationTaskPageQuerySchema = z
     from: time,
     to: time,
     timezone: z.string().min(1).max(100).default('UTC'),
+    cohort: z.enum(['started', 'usage']).optional(),
     q: z.string().trim().min(1).max(200).optional(),
     status: TaskStatusSchema.optional(),
     repository: z.string().trim().min(1).max(4096).optional(),
@@ -107,10 +108,11 @@ export const ObservationOverviewQuerySchema = ObservationTaskPageQuerySchema.ref
   {
     message: 'Overview does not accept task pagination',
   },
-).transform(({ from, to, timezone, q, status, repository, workflow, selection }) => ({
+).transform(({ from, to, timezone, cohort, q, status, repository, workflow, selection }) => ({
   from,
   to,
   timezone,
+  ...(cohort === undefined ? {} : { cohort }),
   ...(q === undefined ? {} : { q }),
   ...(status === undefined ? {} : { status }),
   ...(repository === undefined ? {} : { repository }),

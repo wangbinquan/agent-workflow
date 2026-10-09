@@ -46,8 +46,8 @@ export function createCompleteTaskObservationFacts(
           visible(actor),
           taskId === undefined
             ? and(
-                gte(tasks.startedAt, query.from),
-                lt(tasks.startedAt, query.to),
+                query.cohort === 'usage' ? undefined : gte(tasks.startedAt, query.from),
+                query.cohort === 'usage' ? undefined : lt(tasks.startedAt, query.to),
                 query.status === undefined ? undefined : eq(tasks.status, query.status),
                 query.workflow === undefined ? undefined : eq(tasks.workflowId, query.workflow),
                 search === null
@@ -143,6 +143,7 @@ export function createCompleteTaskObservationFacts(
           query.status,
           query.repository,
           query.workflow,
+          ...(query.cohort === undefined ? [] : [query.cohort]),
         ]),
       )
       let after: [number, string] | null = null
@@ -195,8 +196,8 @@ export function createCompleteTaskObservationFacts(
               query.repository !== undefined || query.workflow !== undefined
                 ? sql`false`
                 : and(
-                    gte(systemGroups.startedAt, query.from),
-                    lt(systemGroups.startedAt, query.to),
+                    query.cohort === 'usage' ? undefined : gte(systemGroups.startedAt, query.from),
+                    query.cohort === 'usage' ? undefined : lt(systemGroups.startedAt, query.to),
                     query.status === undefined ? undefined : eq(systemGroups.status, query.status),
                     search === null
                       ? undefined

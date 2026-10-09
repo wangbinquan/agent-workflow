@@ -138,6 +138,8 @@ export function completeObservationReportService(input: {
       if (stop.signal.aborted)
         throw new CompleteObservationError('not-ready', 'Report worker is stopping')
       const parsed = CompleteObservationReportQuerySchema.parse(query)
+      if (taskId !== undefined && parsed.cohort === 'usage')
+        throw new RangeError('Task details show lifecycle usage; omit cohort=usage')
       if (!refreshKey || refreshKey.length > 200)
         throw new RangeError('Invalid complete report refresh identity')
       const request: CompleteObservationReportRequest = {

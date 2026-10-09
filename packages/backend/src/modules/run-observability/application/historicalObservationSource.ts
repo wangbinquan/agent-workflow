@@ -66,12 +66,13 @@ function membership(
             : 'excluded'
   else if (execution.sourceKind === 'task')
     scopeMatch =
-      parentTask === null || cohortAt === null
+      parentTask === null || (cohortAt === null && input.query.cohort !== 'usage')
         ? 'unresolved'
         : taskSelected
           ? 'matched'
           : 'excluded'
   else if (taskSelected) scopeMatch = 'matched'
+  else if (input.query.cohort === 'usage') scopeMatch = 'matched'
   else if (cohortAt === null) scopeMatch = 'unresolved'
   else if (cohortAt < input.query.from || cohortAt >= input.query.to) scopeMatch = 'excluded'
   if (scopeMatch !== 'excluded' && !input.task) {
@@ -97,7 +98,8 @@ function membership(
       scopeMatch = 'excluded'
   }
   // A missing real clock stays unresolved even if an unknown dimension was explicitly selected.
-  if (cohortAt === null && scopeMatch !== 'excluded') scopeMatch = 'unresolved'
+  if (input.query.cohort !== 'usage' && cohortAt === null && scopeMatch !== 'excluded')
+    scopeMatch = 'unresolved'
   return { execution, parentTask, scopeMatch, timeBasis, cohortAt }
 }
 

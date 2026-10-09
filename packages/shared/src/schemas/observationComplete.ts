@@ -73,12 +73,23 @@ export type CompleteObservationMetrics =
       }
       readonly recordedCost?: RecordedObservationCost
     }
+export interface CompleteObservationOccurrence {
+  readonly occurredAt: number | null
+  readonly basis: 'native-step' | 'request' | null
+  readonly reason?:
+    | 'time-unobserved'
+    | 'time-conflicting'
+    | 'time-nondiscrete'
+    | 'time-evidence-missing'
+}
 export interface CompleteObservationAllocation {
   readonly invocation: AcceptedObservationInvocation
   readonly recordId: string
   readonly sourceId: string
   readonly model: { readonly provider: string | null; readonly id: string } | null
   readonly observedAt: number
+  /** Optional only in usage-window reports; never inferred from observedAt. */
+  readonly occurrence?: CompleteObservationOccurrence
   readonly contribution: ObservationTokenUsage
   /** Ambiguous original contributions retain their population, never guessed values. */
   readonly qualified?: boolean
@@ -87,6 +98,17 @@ export interface CompleteObservationAllocation {
     readonly complete: boolean
     readonly hidden: boolean
   }
+}
+export interface CompleteObservationTimePartition {
+  readonly identity: string
+  readonly partition: 'in-window' | 'outside-window' | 'unassigned-time'
+  readonly kind: 'accepted' | 'historical' | 'quality'
+  readonly recordId: string
+  readonly sourceId: string
+  readonly task: ObservationTaskFacts | null
+  readonly invocation: AcceptedObservationInvocation | null
+  readonly occurrence: CompleteObservationOccurrence
+  readonly metrics: CompleteObservationMetrics
 }
 export interface CompleteObservationAttempt extends ObservationAttemptFacts {
   readonly metrics: CompleteObservationMetrics

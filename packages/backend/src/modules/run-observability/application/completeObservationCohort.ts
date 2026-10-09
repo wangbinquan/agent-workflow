@@ -38,6 +38,8 @@ import { buildCompleteObservationTiming } from './completeObservationTiming'
 import { stageHistoricalObservationSources } from './historicalObservationSource'
 import { completeHistoricalObservationAllocation } from './completeHistoricalObservationAllocation'
 import { appendHistoricalObservationCohort } from './appendHistoricalObservationCohort'
+import { buildCompleteObservationUsageWindow } from './completeObservationUsageWindow'
+import type { HistoricalWorkingNativeRecord } from '../ports/historicalObservationWorking'
 
 type InvocationRow = AcceptedObservationInvocation & {
   readonly metrics: CompleteObservationMetrics
@@ -133,6 +135,28 @@ export async function buildCompleteObservationCohort(
         task,
         namespace: taskSpace,
         trace: input.task !== undefined,
+        ...(input.query.cohort === 'usage' && input.task === undefined
+          ? {
+              occurrenceVersions: async function* (source: string, stepId: string) {
+                if (!historicalStage) return
+                const key = input.keyOf(JSON.stringify([source, stepId]))
+                for await (const row of completeWorkingTraversal<HistoricalWorkingNativeRecord>(
+                  input.rows,
+                  historicalStage.namespace + '/native-versions/' + key,
+                  input.signal,
+                )) {
+                  const original = row.document
+                  yield {
+                    source: original.nativeSource,
+                    stepId: original.step.stepId,
+                    occurredAt: original.step.occurredAt,
+                    usage: original.step.usage,
+                    model: original.step.model,
+                  }
+                }
+              },
+            }
+          : {}),
       }
       const original = await buildCompleteObservationTask(taskInput)
       if (historical) {
@@ -273,6 +297,11 @@ export async function buildCompleteObservationCohort(
         )
         if (!invocation) throw new Error('Complete original quality invocation missing')
         await dimensions.addModel(task, item.document, invocation.metrics)
+        if (input.query.cohort === 'usage' && input.task === undefined)
+          await input.rows.put(space('time-quality'), {
+            key: input.keyOf(JSON.stringify([task.id, item.key])),
+            document: { ...item.document, task },
+          })
       }
       if (
         allocationPopulation !== BigInt(build.selectedAllocationCount) ||
@@ -568,11 +597,14 @@ export async function buildCompleteObservationCohort(
     timing: await durations.totals(),
     rootTask,
   }
-  return {
+  const result = {
     summary,
     rowsNamespace: output.namespace,
     countsNamespace: output.countsNamespace,
     receiptsNamespace: space('receipts'),
     taskSource,
   }
+  return input.query.cohort === 'usage' && input.task === undefined
+    ? buildCompleteObservationUsageWindow(input, result)
+    : result
 }

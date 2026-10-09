@@ -3,6 +3,7 @@ import type {
   ObservationTaskFacts,
   CompleteObservationTask,
   ObservationTokenUsage,
+  ObservationUsageMeasurement,
 } from '@agent-workflow/shared'
 import type { UsageContributionEvidence } from '../domain/usageSelection'
 import type { CompleteObservationFold } from '../domain/completeObservationMetrics'
@@ -17,7 +18,7 @@ import type { ObservationNativeScopeSource } from '../public/participants'
 export interface CompleteObservationContribution extends UsageContributionEvidence {
   readonly measurement: UsageContributionEvidence['measurement'] & {
     readonly usage?: ObservationTokenUsage
-  }
+  } & Partial<Pick<ObservationUsageMeasurement, 'occurredAt' | 'reporting' | 'inclusion' | 'basis'>>
   readonly invocationId: string
   readonly observedAt: number
   readonly localModel: { readonly provider: string | null; readonly id: string } | null
@@ -46,6 +47,17 @@ export interface CompleteObservationUnallocatedQuality {
 export interface CompleteObservationTaskInput {
   /** Full original trace evidence is retained for a requested Task, separately from display pages. */
   readonly trace?: boolean
+  /** Already frozen native versions from the same report snapshot. */
+  readonly occurrenceVersions?: (
+    source: string,
+    stepId: string,
+  ) => AsyncIterable<{
+    readonly source: string
+    readonly stepId: string
+    readonly occurredAt: number | null
+    readonly usage: ObservationTokenUsage
+    readonly model: CompleteObservationContribution['localModel']
+  }>
   readonly task: ObservationTaskFacts
   readonly sources: CompleteObservationSources
   readonly asOf: number

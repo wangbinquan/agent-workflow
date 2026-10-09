@@ -145,6 +145,8 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
             deps.reports!.request(actorOf(c), query.data, 'full-alias'),
           ),
         )
+      if (query.data.cohort === 'usage')
+        throw new ValidationError('invalid-query', 'Usage windows require complete reports')
       return c.json(await deps.tasks.overview(actorOf(c), query.data))
     },
   )
@@ -173,6 +175,8 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
       }
       const query = ObservationTaskPageQuerySchema.safeParse(raw)
       if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation query')
+      if (query.data.cohort === 'usage')
+        throw new ValidationError('invalid-query', 'Usage windows require complete reports')
       try {
         return c.json(await deps.tasks.list(actorOf(c), query.data))
       } catch (error) {
@@ -190,6 +194,8 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
       summary: 'Read task, agent and attempt observations in one snapshot',
     },
     async (c) => {
+      if (c.req.query().cohort === 'usage')
+        throw new ValidationError('invalid-query', 'Task details show lifecycle usage')
       if (deps.reports) {
         const raw = c.req.query()
         validateDimensionQuery(raw)

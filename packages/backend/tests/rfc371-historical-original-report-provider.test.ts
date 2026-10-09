@@ -18,6 +18,8 @@ import type {
   HistoricalNativeObservationReader,
   HistoricalObservationPage,
   ObservationOverviewQuery,
+  CompleteObservationTimePartition,
+  CompleteObservationDimension,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import {
@@ -31,6 +33,7 @@ import {
   mcps,
   observationInvocations,
   observationUsageCaptures,
+  taskExecutionObservationSources,
   mcpRuntimeTestSessions,
   mcpRuntimeTestTurns,
   mcpRuntimeTestEvents,
@@ -107,12 +110,13 @@ function nativeArtifact() {
     output: number | null,
     read = 0,
     write = 0,
+    occurredAt: number | null = COMPLETE_NOW + 1,
   ) {
     db.run('INSERT INTO part VALUES (?,?,?,?,?)', [
       id,
       session,
       'message-' + session,
-      COMPLETE_NOW + 1,
+      occurredAt,
       JSON.stringify({
         type: 'step-finish',
         tokens: { input, output, reasoning: output === null ? null : 2, cache: { read, write } },
@@ -131,7 +135,12 @@ function nativeArtifact() {
     },
   }
 }
-function serviceFor(harness: ProviderHarness, path: string, beforeNativeOpen?: () => void) {
+function serviceFor(
+  harness: ProviderHarness,
+  path: string,
+  beforeNativeOpen?: () => void,
+  unknownOwnerClock?: string,
+) {
   const binding = harness.applicationBinding
   const source =
     binding.provider === 'sqlite'
@@ -172,7 +181,25 @@ function serviceFor(harness: ProviderHarness, path: string, beforeNativeOpen?: (
               { kind: 'task', query: createHistoricalTaskObservationFacts(snapshot.executor) },
               {
                 kind: 'memory-distill',
-                query: createHistoricalMemoryObservationFacts(snapshot.executor),
+                query: (() => {
+                  const query = createHistoricalMemoryObservationFacts(snapshot.executor)
+                  if (unknownOwnerClock === undefined) return query
+                  // The nullable owner-clock protocol is exercised on the real provider/SDK path.
+                  return {
+                    ...query,
+                    async owners(input: Parameters<typeof query.owners>[0]) {
+                      const page = await query.owners(input)
+                      return {
+                        ...page,
+                        items: page.items.map((owner) =>
+                          owner.ownerId === unknownOwnerClock
+                            ? { ...owner, createdAt: null, startedAt: null }
+                            : owner,
+                        ),
+                      }
+                    },
+                  }
+                })(),
               },
               {
                 kind: 'intent-turn',
@@ -267,6 +294,423 @@ async function job(
 describeEachProvider(
   'RFC-371 original historical executions and full native reports',
   (harness) => {
+    test('actual consumption days use the chosen timezone across midnight and daylight-saving transition without changing original totals', async () => {
+      const instants = [
+        '2026-03-08T04:59:59.999Z',
+        '2026-03-08T05:00:00Z',
+        '2026-03-08T06:59:59.999Z',
+        '2026-03-08T07:00:00Z',
+      ].map(Date.parse)
+      await seedCompleteTask(harness, 1, 4, (record) => {
+        const n = Number(record.measurement.recordId.split('-').at(-1))
+        return {
+          ...record,
+          measurement: {
+            ...record.measurement,
+            recordId: 'opencode:step:day-' + n,
+            occurredAt: instants[n]!,
+          },
+        }
+      })
+      const native = nativeArtifact(),
+        service = serviceFor(harness, native.path)
+      const range = { from: instants[0]!, to: instants[3]! + 1, cohort: 'usage' as const }
+      const local = await service.report({ ...range, timezone: 'America/New_York' }),
+        utc = await service.report({ ...range, timezone: 'UTC' })
+      expect(local.content.summary.metrics).toEqual(utc.content.summary.metrics)
+      expect(local.content.summary.metrics).toMatchObject({
+        state: 'ready',
+        records: '4',
+        tokens: { total: '160' },
+        cost: { amount: '0.0005' },
+      })
+      const localDays = await service.pages<CompleteObservationTrend>(local.id, 'trends'),
+        utcDays = await service.pages<CompleteObservationTrend>(utc.id, 'trends')
+      expect(localDays.map((day) => day.key)).toEqual(['2026-03-07', '2026-03-08'])
+      expect(
+        localDays.map((day) => (day.metrics.state === 'ready' ? day.metrics.tokens.total : null)),
+      ).toEqual(['16', '144'])
+      expect(utcDays).toHaveLength(1)
+      expect(utcDays[0]?.metrics).toMatchObject({ tokens: { total: '160' } })
+      for (const day of localDays) expect(day.tasks).toBe('1')
+    }, 120_000)
+
+    test('usage window selects a Task born before the range and exactly partitions original time, late receipt and frozen CNY', async () => {
+      const from = COMPLETE_NOW + 100,
+        to = COMPLETE_NOW + 200
+      await seedCompleteTask(harness, 1, 3, (record) => {
+        const n = Number(record.measurement.recordId.split('-').at(-1))
+        return {
+          ...record,
+          measurement: {
+            ...record.measurement,
+            recordId: 'opencode:step:time-' + n,
+            occurredAt: n === 0 ? from : n === 1 ? to : null,
+            observedAt: to + 99_000,
+          },
+        }
+      })
+      const native = nativeArtifact(),
+        service = serviceFor(harness, native.path)
+      const filters = { from, to, timezone: 'UTC' },
+        original = await service.report(filters)
+      expect(original.content.header.filters).not.toHaveProperty('cohort')
+      expect(original.content.summary.inventory.tasks).toBe('0')
+      const window = await service.report({ ...filters, cohort: 'usage' })
+      expect(window.content.header.filters.cohort).toBe('usage')
+      expect(window.content.summary.metrics).toMatchObject({
+        state: 'not-ready',
+        recordedUsage: {
+          tokens: { input: '1', cacheRead: '3', cacheWrite: '5', output: '7', total: '16' },
+        },
+        recordedCost: { currency: 'CNY', amount: '0.00005' },
+      })
+      expect(window.content.summary.usageWindow?.partitions['in-window']).toMatchObject({
+        records: '1',
+        metrics: { tokens: { total: '16' }, cost: { amount: '0.00005' } },
+      })
+      expect(window.content.summary.usageWindow?.partitions['outside-window']).toMatchObject({
+        records: '1',
+        metrics: { tokens: { total: '32' }, cost: { amount: '0.0001' } },
+      })
+      expect(window.content.summary.usageWindow?.partitions['unassigned-time']).toMatchObject({
+        records: '1',
+        metrics: { tokens: { total: '48' }, cost: { amount: '0.00015' } },
+      })
+      const partitions = await service.pages<CompleteObservationTimePartition>(
+        window.id,
+        'time-partitions',
+      )
+      expect(partitions).toHaveLength(3)
+      expect(new Set(partitions.map((p) => p.identity)).size).toBe(3)
+      expect(partitions.find((p) => p.recordId.endsWith('time-1'))?.partition).toBe(
+        'outside-window',
+      )
+      const unassigned = await service.pages<CompleteObservationTimePartition>(
+        window.id,
+        'time-unassigned',
+      )
+      expect(unassigned).toHaveLength(1)
+      expect(unassigned[0]?.recordId).toBe('opencode:step:time-2')
+      const trends = await service.pages<CompleteObservationTrend>(window.id, 'trends')
+      expect(trends).toHaveLength(1)
+      expect(trends[0]?.metrics).toMatchObject({
+        state: 'ready',
+        records: '1',
+        tokens: { total: '16' },
+      })
+      for (const section of ['agents', 'runtimes', 'models', 'purposes', 'sources'] as const) {
+        const dimensions = await service.pages<CompleteObservationDimension>(window.id, section)
+        expect(dimensions).toHaveLength(1)
+        expect(dimensions[0]?.metrics).toMatchObject({
+          state: 'not-ready',
+          recordedUsage: { tokens: { total: '16' } },
+          recordedCost: { amount: '0.00005' },
+        })
+        const members = await service.pages<CompleteObservationTask>(
+          window.id,
+          'dimension-tasks',
+          dimensions[0]!.key,
+        )
+        expect(members).toHaveLength(1)
+        expect(members[0]?.task.id).toBe('complete-original-task')
+      }
+      const task = await service.report(filters, 'complete-original-task')
+      expect(task.content.summary.metrics).toMatchObject({
+        state: 'ready',
+        tokens: { total: '96' },
+        cost: { amount: '0.0003' },
+      })
+      expect(task.content.summary).not.toHaveProperty('usageWindow')
+      await expect(
+        service.service.request(
+          actor,
+          { ...filters, cohort: 'usage' },
+          'invalid-task-window',
+          'complete-original-task',
+        ),
+      ).rejects.toThrow('Task details show lifecycle usage')
+    }, 120_000)
+
+    test('window values retain pending Task sources and unobserved attempts without borrowing lifecycle numbers', async () => {
+      await seedCompleteTask(harness, 1, 1, (record) => ({
+        ...record,
+        measurement: {
+          ...record.measurement,
+          recordId: 'opencode:step:pending-source-step',
+          occurredAt: COMPLETE_NOW + 10,
+        },
+      }))
+      await harness.db
+        .insert(taskExecutionObservationSources)
+        .values({
+          taskId: 'complete-original-task',
+          nodeRunId: completeFixtureId('run', 0),
+          evidenceJson: '{}',
+          pending: true,
+        })
+        .run()
+      const native = nativeArtifact(),
+        service = serviceFor(harness, native.path),
+        filters = {
+          from: COMPLETE_NOW + 5,
+          to: COMPLETE_NOW + 20,
+          timezone: 'UTC',
+          cohort: 'usage' as const,
+        }
+      const pending = await service.report(filters)
+      expect(pending.content.summary.metrics).toMatchObject({
+        state: 'not-ready',
+        gaps: expect.arrayContaining(['source-projection-pending']),
+        recordedUsage: {
+          records: '1',
+          tokens: { input: '1', cacheRead: '3', cacheWrite: '5', output: '7', total: '16' },
+        },
+        recordedCost: { currency: 'CNY', amount: '0.00005' },
+      })
+      const pendingTasks = await service.pages<CompleteObservationTask>(pending.id, 'tasks')
+      expect(pendingTasks).toHaveLength(1)
+      expect(pendingTasks[0]!.metrics).toEqual(pending.content.summary.metrics)
+      expect(
+        await service.pages<CompleteObservationTask>(
+          pending.id,
+          'quality-tasks',
+          'source-projection-pending',
+        ),
+      ).toHaveLength(1)
+      const quality = await service.pages<{ key: string; taskCount: string }>(pending.id, 'quality')
+      expect(quality.find((q) => q.key === 'source-projection-pending')?.taskCount).toBe('1')
+      expect(pending.content.summary.usageWindow?.partitions['in-window']).toMatchObject({
+        records: '1',
+        metrics: { state: 'ready', tokens: { total: '16' } },
+      })
+      await harness.db
+        .update(taskExecutionObservationSources)
+        .set({ pending: false })
+        .where(eq(taskExecutionObservationSources.taskId, 'complete-original-task'))
+        .run()
+      const settled = await service.report(filters)
+      expect(settled.content.summary.metrics).toMatchObject({
+        state: 'ready',
+        records: '1',
+        tokens: { total: '16' },
+        cost: { amount: '0.00005' },
+      })
+      expect(
+        await service.pages(settled.id, 'quality-tasks', 'source-projection-pending'),
+      ).toHaveLength(0)
+      await harness.db
+        .insert(nodeRuns)
+        .values({
+          id: 'window-unobserved-original-attempt',
+          taskId: 'complete-original-task',
+          nodeId: completeFixtureId('node', 0),
+          status: 'done',
+          startedAt: COMPLETE_NOW + 11,
+          finishedAt: COMPLETE_NOW + 15,
+        })
+        .run()
+      const missingAttempt = await service.report(filters)
+      expect(missingAttempt.content.summary.metrics).toMatchObject({
+        state: 'not-ready',
+        gaps: expect.arrayContaining(['invocation-unobserved']),
+        recordedUsage: { records: '1', tokens: { total: '16' } },
+        recordedCost: { amount: '0.00005' },
+      })
+      expect(
+        await service.pages(missingAttempt.id, 'quality-tasks', 'invocation-unobserved'),
+      ).toHaveLength(1)
+    }, 120_000)
+
+    test('usage uses original step time for independent historical owners outside the window, absent owner clocks and absent step clocks', async () => {
+      await seedCompleteTask(harness, 1, 1)
+      const native = nativeArtifact()
+      native.root('historical-old-owner')
+      native.step('old-owner-step', 'historical-old-owner', 11, 2, 3, 5, COMPLETE_NOW + 10)
+      native.root('historical-no-owner-clock')
+      native.step(
+        'no-owner-clock-step',
+        'historical-no-owner-clock',
+        13,
+        3,
+        7,
+        9,
+        COMPLETE_NOW + 20,
+      )
+      native.root('historical-no-step-clock')
+      native.step('no-step-clock-step', 'historical-no-step-clock', 17, 4, 11, 13, null)
+      await job(harness, 'historical-old-owner', 'historical-old-owner', null, COMPLETE_NOW - 5000)
+      await job(
+        harness,
+        'historical-no-owner-clock',
+        'historical-no-owner-clock',
+        null,
+        COMPLETE_NOW - 5000,
+      )
+      await job(
+        harness,
+        'historical-no-step-clock',
+        'historical-no-step-clock',
+        null,
+        COMPLETE_NOW - 5000,
+      )
+      const lifecycle = await serviceFor(harness, native.path).report()
+      expect(lifecycle.content.summary.metrics).toMatchObject({
+        state: 'ready',
+        tokens: { total: '16' },
+        cost: { amount: '0.00005' },
+      })
+      const service = serviceFor(harness, native.path, undefined, 'historical-no-owner-clock')
+      const window = await service.report({ ...range, cohort: 'usage' })
+      expect(window.content.summary.metrics).toMatchObject({
+        state: 'not-ready',
+        recordedUsage: {
+          tokens: { input: '24', cacheRead: '10', cacheWrite: '14', output: '9', total: '57' },
+        },
+      })
+      expect(window.content.summary.usageWindow?.partitions['in-window'].records).toBe('2')
+      const pool = await service.pages<CompleteObservationTimePartition>(
+        window.id,
+        'time-unassigned',
+      )
+      expect(pool).toHaveLength(2)
+      expect(
+        pool.find((p) => p.recordId === 'opencode:step:no-step-clock-step')?.metrics,
+      ).toMatchObject({
+        recordedUsage: {
+          tokens: { input: '17', cacheRead: '11', cacheWrite: '13', output: '6', total: '47' },
+        },
+      })
+      const trends = await service.pages<CompleteObservationTrend>(window.id, 'trends')
+      expect(trends).toHaveLength(1)
+      expect(trends[0]?.metrics).toMatchObject({ recordedUsage: { tokens: { total: '57' } } })
+      const executions = await service.pages<CompleteHistoricalObservationExecution>(
+        window.id,
+        'historical-executions',
+      )
+      expect(
+        executions.find((e) => e.execution.ownerId === 'historical-old-owner')?.metrics,
+      ).toMatchObject({
+        state: 'not-ready',
+        recordedUsage: {
+          records: '1',
+          tokens: { input: '11', cacheRead: '3', cacheWrite: '5', output: '4', total: '23' },
+        },
+      })
+      expect(
+        executions.find((e) => e.execution.ownerId === 'historical-no-owner-clock')?.metrics,
+      ).toMatchObject({
+        state: 'not-ready',
+        recordedUsage: {
+          records: '1',
+          tokens: { input: '13', cacheRead: '7', cacheWrite: '9', output: '5', total: '34' },
+        },
+      })
+      const untimed = executions.find((e) => e.execution.ownerId === 'historical-no-step-clock')!
+      expect(untimed.metrics).toMatchObject({
+        state: 'not-ready',
+        gaps: expect.arrayContaining(['usage-time-unassigned']),
+        tokenCoverage: { records: '0' },
+      })
+      expect(untimed.metrics).not.toHaveProperty('recordedUsage')
+      const filtered = await service.report({
+        ...range,
+        cohort: 'usage',
+        q: 'Original complete task',
+      })
+      expect(filtered.content.summary.usageWindow?.partitions['in-window'].records).toBe('0')
+      expect(
+        await service.pages<CompleteObservationTimePartition>(filtered.id, 'time-unassigned'),
+      ).toHaveLength(1)
+    }, 120_000)
+
+    test('historical execution rows keep only their uniquely attributed window records while shared native records remain single-counted', async () => {
+      const from = COMPLETE_NOW + 10,
+        to = COMPLETE_NOW + 20
+      await seedCompleteTask(harness, 1, 1, (record) => ({
+        ...record,
+        measurement: {
+          ...record.measurement,
+          recordId: 'opencode:step:accepted-outside',
+          occurredAt: COMPLETE_NOW,
+        },
+      }))
+      const native = nativeArtifact()
+      native.root('unique-window-history')
+      native.step('unique-before', 'unique-window-history', 2, 1, 1, 1, from - 1)
+      native.step('unique-inside', 'unique-window-history', 11, 2, 3, 5, from)
+      native.step('unique-after', 'unique-window-history', 13, 3, 7, 9, to)
+      native.step('unique-unknown', 'unique-window-history', 17, 4, 11, 13, null)
+      await job(harness, 'unique-window-history', 'unique-window-history')
+      native.root('shared-window-history')
+      native.step('shared-inside', 'shared-window-history', 19, 6, 17, 23, from + 1)
+      await job(harness, 'shared-window-owner-a', 'shared-window-history')
+      await job(harness, 'shared-window-owner-b', 'shared-window-history')
+      const service = serviceFor(harness, native.path),
+        lifecycle = await service.report()
+      const originalRows = await service.pages<CompleteHistoricalObservationExecution>(
+        lifecycle.id,
+        'historical-executions',
+      )
+      expect(
+        originalRows.find((e) => e.execution.ownerId === 'unique-window-history')?.metrics,
+      ).toMatchObject({ recordedUsage: { records: '4', tokens: { total: '111' } } })
+      const window = await service.report({ from, to, timezone: 'UTC', cohort: 'usage' })
+      expect(window.content.summary.metrics).toMatchObject({
+        state: 'not-ready',
+        tokenCoverage: {
+          invocations: '0',
+          historicalReferences: '3',
+          observedHistoricalReferences: '3',
+          records: '2',
+        },
+        recordedUsage: {
+          tokens: { input: '30', cacheRead: '20', cacheWrite: '28', output: '12', total: '90' },
+        },
+      })
+      const rows = await service.pages<CompleteHistoricalObservationExecution>(
+        window.id,
+        'historical-executions',
+      )
+      const unique = rows.find((e) => e.execution.ownerId === 'unique-window-history')!
+      expect(unique.metrics).toMatchObject({
+        state: 'not-ready',
+        gaps: expect.arrayContaining(['historical-invocation-unobserved', 'usage-time-unassigned']),
+        recordedUsage: {
+          records: '1',
+          tokens: { input: '11', cacheRead: '3', cacheWrite: '5', output: '4', total: '23' },
+        },
+      })
+      for (const ownerId of ['shared-window-owner-a', 'shared-window-owner-b']) {
+        const shared = rows.find((e) => e.execution.ownerId === ownerId)!
+        expect(shared.metrics).toMatchObject({
+          state: 'not-ready',
+          tokenCoverage: { historicalReferences: '1', records: '0' },
+        })
+        expect(shared.metrics).not.toHaveProperty('recordedUsage')
+      }
+      const trends = await service.pages<CompleteObservationTrend>(window.id, 'trends')
+      expect(trends).toHaveLength(1)
+      expect(trends[0]!.metrics).toMatchObject({
+        recordedUsage: { records: '2', tokens: { total: '90' } },
+      })
+      const pool = await service.pages<CompleteObservationTimePartition>(
+        window.id,
+        'time-unassigned',
+      )
+      expect(pool).toHaveLength(1)
+      expect(pool[0]).toMatchObject({
+        recordId: 'opencode:step:unique-unknown',
+        metrics: { recordedUsage: { tokens: { total: '47' } } },
+      })
+      const parts = await service.pages<CompleteObservationTimePartition>(
+        window.id,
+        'time-partitions',
+      )
+      expect(parts).toHaveLength(6)
+      expect(new Set(parts.map((p) => p.identity)).size).toBe(6)
+    }, 120_000)
+
     test('historical Task and Intent protocol validation retains the saved values without a current runtime lookup', async () => {
       await seedCompleteTask(harness, 3, 1)
       await harness.db
@@ -951,6 +1395,79 @@ describeEachProvider(
         scopeMatch: 'matched',
         issues: [],
       })
+    }, 120_000)
+
+    test('usage matches a missing accepted clock to frozen native versions, retaining accepted deduplication and original CNY', async () => {
+      const native = nativeArtifact()
+      native.root('window-accepted-root')
+      native.step('window-accepted-part', 'window-accepted-root', 1, 5, 3, 5)
+      await seedCompleteTask(harness, 1, 1, (record) => ({
+        ...record,
+        measurement: {
+          ...record.measurement,
+          recordId: 'opencode:step:window-accepted-part',
+          occurredAt: null,
+        },
+      }))
+      const source = sha256Hex(JSON.stringify(['opencode-native-db', native.path]))
+      const accepted = (await harness.db
+        .select()
+        .from(observationInvocations)
+        .where(eq(observationInvocations.id, completeFixtureId('invocation', 0)))
+        .get())!
+      const document = { ...JSON.parse(accepted.document), nativeCaptureSource: source }
+      await harness.db
+        .update(observationInvocations)
+        .set({ document: JSON.stringify(document), fingerprint: JSON.stringify(document) })
+        .where(eq(observationInvocations.id, accepted.id))
+        .run()
+      const capture = (await harness.db
+        .select()
+        .from(observationUsageCaptures)
+        .where(eq(observationUsageCaptures.invocationId, accepted.id))
+        .get())!
+      const captureDocument = JSON.parse(capture.document)
+      captureDocument.evidence.capture.nativeSource = source
+      captureDocument.evidence.capture.rootSessionId = 'window-accepted-root'
+      await harness.db
+        .update(observationUsageCaptures)
+        .set({
+          document: JSON.stringify(captureDocument),
+          summary: JSON.stringify(captureDocument),
+        })
+        .where(eq(observationUsageCaptures.invocationId, accepted.id))
+        .run()
+      await job(
+        harness,
+        'window-accepted-overlap',
+        'window-accepted-root',
+        'complete-original-task',
+      )
+      const service = serviceFor(harness, native.path),
+        lifecycle = await service.report(),
+        window = await service.report({ ...range, cohort: 'usage' })
+      expect(window.content.summary.metrics).toEqual(lifecycle.content.summary.metrics)
+      expect(window.content.summary.metrics).toMatchObject({
+        state: 'ready',
+        records: '1',
+        tokens: { input: '1', cacheRead: '3', cacheWrite: '5', output: '7', total: '16' },
+        cost: { currency: 'CNY', state: 'complete', amount: '0.00005' },
+      })
+      expect(window.content.summary.inventory.historicalReferences).toBeUndefined()
+      expect(window.content.summary.usageWindow?.partitions['in-window'].records).toBe('1')
+      expect(window.content.summary.usageWindow?.partitions['unassigned-time'].records).toBe('0')
+      const partitions = await service.pages<CompleteObservationTimePartition>(
+        window.id,
+        'time-partitions',
+      )
+      expect(partitions).toHaveLength(1)
+      expect(partitions[0]).toMatchObject({
+        kind: 'accepted',
+        recordId: 'opencode:step:window-accepted-part',
+        partition: 'in-window',
+        occurrence: { occurredAt: COMPLETE_NOW + 1, basis: 'native-step' },
+      })
+      expect(await service.pages(window.id, 'time-unassigned')).toEqual([])
     }, 120_000)
 
     test('actual native part changes between two original root snapshots retain both versions and do not overwrite known totals', async () => {

@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1750,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 29840,
+    "recursiveFields": 29864,
     "symbols": 1259
   },
   "entries": [
@@ -129872,7 +129872,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 573,
+        "maxTransitiveLeafFields": 581,
         "maxUnionVariants": 206
       },
       "consumerEdgeIds": [
@@ -130837,6 +130837,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.usageWindow.candidateTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.usageWindow.partitions",
+          "type": "Record<\n        'in-window' | 'outside-window' | 'unassigned-time',\n        {\n          readonly records: string\n          readonly metrics: CompleteObservationMetrics\n        }\n      >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.usageWindow.timingBasis",
+          "type": "'task-lifecycle'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.inventory.attempts",
           "type": "string"
         },
@@ -131362,6 +131377,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.usageCoverage",
           "type": "CompleteObservationReportSummary['usageCoverage']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.usageWindow",
+          "type": "CompleteObservationReportSummary['usageWindow']"
         },
         {
           "consumerEdgeIds": [],
@@ -132325,6 +132345,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.usageWindow.candidateTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.usageWindow.partitions",
+          "type": "Record<\n        'in-window' | 'outside-window' | 'unassigned-time',\n        {\n          readonly records: string\n          readonly metrics: CompleteObservationMetrics\n        }\n      >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.usageWindow.timingBasis",
+          "type": "'task-lifecycle'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.inventory.attempts",
           "type": "string"
         },
@@ -132853,6 +132888,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.usageWindow",
+          "type": "CompleteObservationReportSummary['usageWindow']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.state",
           "type": "'not-ready'"
         }
@@ -132901,7 +132941,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 612,
+        "maxTransitiveLeafFields": 620,
         "maxUnionVariants": 220
       },
       "consumerEdgeIds": [
@@ -133874,6 +133914,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.usageWindow.candidateTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.usageWindow.partitions",
+          "type": "Record<\n        'in-window' | 'outside-window' | 'unassigned-time',\n        {\n          readonly records: string\n          readonly metrics: CompleteObservationMetrics\n        }\n      >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.usageWindow.timingBasis",
+          "type": "'task-lifecycle'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.inventory.attempts",
           "type": "string"
         },
@@ -134393,6 +134448,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.usageCoverage",
           "type": "CompleteObservationReportSummary['usageCoverage']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.usageWindow",
+          "type": "CompleteObservationReportSummary['usageWindow']"
         },
         {
           "consumerEdgeIds": [],
@@ -135010,6 +135070,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.usageCoverage",
           "type": "CompleteObservationReportSummary['usageCoverage']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.usageWindow",
+          "type": "CompleteObservationReportSummary['usageWindow']"
         },
         {
           "consumerEdgeIds": [],
@@ -135952,6 +136017,21 @@
           "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.usageCoverage.readyTasks",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.usageWindow.candidateTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.usageWindow.partitions",
+          "type": "Record<\n        'in-window' | 'outside-window' | 'unassigned-time',\n        {\n          readonly records: string\n          readonly metrics: CompleteObservationMetrics\n        }\n      >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.usageWindow.timingBasis",
+          "type": "'task-lifecycle'"
         },
         {
           "consumerEdgeIds": [],
@@ -137413,7 +137493,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 667,
+        "maxTransitiveLeafFields": 675,
         "maxUnionVariants": 246
       },
       "consumerEdgeIds": [
@@ -138297,6 +138377,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.usageCoverage",
           "type": "CompleteObservationReportSummary['usageCoverage']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.usageWindow",
+          "type": "CompleteObservationReportSummary['usageWindow']"
         },
         {
           "consumerEdgeIds": [],
@@ -139276,6 +139361,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.usageWindow.candidateTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.usageWindow.partitions",
+          "type": "Record<\n        'in-window' | 'outside-window' | 'unassigned-time',\n        {\n          readonly records: string\n          readonly metrics: CompleteObservationMetrics\n        }\n      >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.usageWindow.timingBasis",
+          "type": "'task-lifecycle'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$parameter:actor.authorityRevision",
           "type": "number"
         },
@@ -139994,6 +140094,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.usageCoverage",
           "type": "CompleteObservationReportSummary['usageCoverage']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.usageWindow",
+          "type": "CompleteObservationReportSummary['usageWindow']"
         },
         {
           "consumerEdgeIds": [],
@@ -140970,6 +141075,21 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.usageCoverage.readyTasks",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.usageWindow.candidateTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.usageWindow.partitions",
+          "type": "Record<\n        'in-window' | 'outside-window' | 'unassigned-time',\n        {\n          readonly records: string\n          readonly metrics: CompleteObservationMetrics\n        }\n      >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.usageWindow.timingBasis",
+          "type": "'task-lifecycle'"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/queries.ts",
@@ -229541,7 +229661,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:58fa16d2d8fc8b91f284758859b5bc2b22ae5d6adb555cefcdd4ea95b2469d5d",
+  "sourceDigest": "sha256:95d64876fe6c24a095769147f5e21ca2027514e17153c7ba0281e283cd064038",
   "targetContexts": [
     "collaboration",
     "development-automation",

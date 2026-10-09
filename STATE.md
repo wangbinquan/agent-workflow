@@ -11012,3 +11012,11 @@ Ubuntu失败是新测试在尚未提交的 native patch 后调用普通 this.rea
 Windows swimlane原case拿导航前单独生成的retained报告与UI稍后独立生成的报告比较，原日志精确4对5。只从页面真实POST reports的同一Task响应，经原settledReport和originalRows完整分页，取得页面使用的同一reportId作为原始attempts；保留原精确行数、五tick、1280/390各条轨道宽度/对齐、无页面溢出和截图及全部预算，补上响应成功和content非空断言。不做mock、不放宽断言。一次必要消息已协调该干净E2E case的归属；所有并行RFC371生产/UI/测试与13份架构WIP保留并不纳入本次test-only提交。
 
 本批仅两个测试和三个历史追加文档，经有限独立功能门、精确5路径上库与新exact-SHA main/Windows总绿再验收。无新census或本机AW tests/typecheck/build/services/E2E，全部旧共享正文保留。N2/H7/A-T7/A-G/三roots/十九owners/CS M0～M4仍开放，AW未部署CS。
+
+## 2026-10-09 RFC-371 实际消耗窗口
+
+已批准 AW-R06 的可选 usage 口径使用原同快照 EOF、离散发生时间、四桶和冻结 CNY；旧默认与 Task 详情保持全程。独立设计 v2 PASS，首轮实现门的 Task 来源缺口和历史执行四桶两个 P2 已修正并补真实 provider 正反/共享/跨窗回归，修正候选独立实现 v2 已 VALID/PASS、58份材料稳定且零新findings；配套、发布与 exact-SHA CI 仍分别验收。已有真实七原步骤分为窗口内44732/¥0.062122、窗外31146/¥0.042366，49传输页和15维度逐任务成员全部对拍；正式页时间名称、键盘口径、全程返回原焦点及390/1440px实际已核对。
+
+修正候选使用原官方 assertion-free census 的13份完整输出，摘要 sha256:95d64876fe6c24a095769147f5e21ca2027514e17153c7ba0281e283cd064038。129原有序库存及why保持，唯一owner增长27702→27720由一次声明登记，并在紧邻正常后继退役；不运行本机AW测试、类型、构建、服务或E2E。并行原CI SQL/泳道夹具修复完整保留，不重新扫描或以其后继SHA追赶候选。
+
+新批准 dev_seed_admin 仅用于本机验收任务；16个legacy/current数字员工原内置Agent、Git、成功定时/事件仍待配置授权及真实执行。CS完整检查例外、六CI/本机部署、原资源释放/额度恢复及两RFC其余退出项继续；不把数据恢复或有限源码门当整体完成。见RFC-371 usage-window-implementation.md、usage-window-real-validation-20261009.md 与 remaining-work.md。全部此前共享和并行正文保持。

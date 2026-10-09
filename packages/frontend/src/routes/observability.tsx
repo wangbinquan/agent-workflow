@@ -30,6 +30,7 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
     }
   }
   return {
+    ...(raw.cohort === 'usage' || raw.cohort === 'started' ? { cohort: raw.cohort } : {}),
     ...(q === undefined ? {} : { q }),
     ...(repository === undefined ? {} : { repository }),
     ...(workflow === undefined ? {} : { workflow }),
@@ -80,6 +81,7 @@ function Page() {
         const sameScope =
           search.from === next.from &&
           search.to === next.to &&
+          search.cohort === next.cohort &&
           search.tab === next.tab &&
           search.q === next.q &&
           search.status === next.status &&

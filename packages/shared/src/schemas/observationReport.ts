@@ -28,6 +28,8 @@ export const COMPLETE_OBSERVATION_SECTIONS = [
   'historical-records',
   'historical-record-versions',
   'historical-record-references',
+  'time-partitions',
+  'time-unassigned',
 ] as const
 export type CompleteObservationSection = (typeof COMPLETE_OBSERVATION_SECTIONS)[number]
 /** Execution facts remain available only after the same complete input and output seals. */
@@ -50,6 +52,8 @@ export const COMPLETE_OBSERVATION_FACT_SECTIONS: readonly CompleteObservationSec
   'historical-records',
   'historical-record-versions',
   'historical-record-references',
+  'time-partitions',
+  'time-unassigned',
 ]
 export const CompleteObservationReportQuerySchema = ObservationOverviewQuerySchema
 export const CompleteObservationReportRequestSchema = z
@@ -83,6 +87,19 @@ export interface CompleteObservationReportSummary {
   readonly metrics: CompleteObservationMetrics
   /** Every received record in the sealed scope; full usage may still be unknown. */
   readonly recordedUsage?: CompleteObservationTrend['recordedUsage']
+  readonly usageWindow?: {
+    readonly candidateTasks: string
+    readonly timingBasis: 'task-lifecycle'
+    readonly partitions: Readonly<
+      Record<
+        'in-window' | 'outside-window' | 'unassigned-time',
+        {
+          readonly records: string
+          readonly metrics: CompleteObservationMetrics
+        }
+      >
+    >
+  }
   /** Exact Task states counted during the original full traversal; absent in older reports. */
   readonly usageCoverage?: {
     readonly readyTasks: string
@@ -111,6 +128,7 @@ export interface CompleteObservationReportSummary {
 export interface CompleteObservationFactSummary {
   readonly metrics: Extract<CompleteObservationMetrics, { state: 'not-ready' }>
   readonly recordedUsage?: CompleteObservationReportSummary['recordedUsage']
+  readonly usageWindow?: CompleteObservationReportSummary['usageWindow']
   readonly usageCoverage?: CompleteObservationReportSummary['usageCoverage']
   readonly inventory: {
     readonly tasks: string

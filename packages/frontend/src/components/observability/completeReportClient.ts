@@ -55,6 +55,13 @@ export function useCompleteObservationReport(
       const content = completeObservationReportContent(report)
       if (
         content &&
+        filters.cohort === 'usage' &&
+        taskId === undefined &&
+        !content.summary.usageWindow
+      )
+        throw new Error('Consumption window evidence is missing')
+      if (
+        content &&
         (content.header.reportId !==
           (report.state === 'ready' ? report.header.reportId : report.reportId) ||
           content.header.taskId !== (taskId ?? null) ||

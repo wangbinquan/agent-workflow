@@ -85,6 +85,19 @@ function ready(
     },
     summary: {
       metrics,
+      ...(filters.cohort === 'usage'
+        ? {
+            usageWindow: {
+              candidateTasks: '1001',
+              timingBasis: 'task-lifecycle' as const,
+              partitions: {
+                'in-window': { records: metrics.records, metrics },
+                'outside-window': { records: '0', metrics: { state: 'not-applicable' as const } },
+                'unassigned-time': { records: '0', metrics: { state: 'not-applicable' as const } },
+              },
+            },
+          }
+        : {}),
       inventory: {
         tasks: taskId ? '2' : '1001',
         attempts: '1001',
@@ -320,6 +333,64 @@ test('overview renders exact Token data as bars and opens the matching complete 
   fireEvent.click(bucket)
   await screen.findByRole('button', { name: '任务 0' })
   expect(f.changes.at(-1)).toMatchObject({ tab: 'tasks', period: 'custom', from: 0, to: NOW + 1 })
+})
+test('the existing segmented control selects consumption windows and Task drill-down preserves a full lifecycle report and original return scope', async () => {
+  const f = fixture({
+    ...initial,
+    tab: 'overview',
+    q: 'Original',
+    repository: '/original',
+    cohort: undefined,
+  })
+  const mode = await screen.findByRole('radiogroup', { name: '消耗时间口径' })
+  expect(screen.getByRole('combobox', { name: '任务创建时间' })).toBeDefined()
+  fireEvent.keyDown(within(mode).getByRole('radio', { name: '任务全程' }), { key: 'ArrowRight' })
+  await waitFor(() =>
+    expect([...f.reports.values()].some((r) => r.header.filters.cohort === 'usage')).toBe(true),
+  )
+  const usageReport = [...f.reports.values()].find((r) => r.header.filters.cohort === 'usage')!
+  expect(usageReport.header.filters).toMatchObject({
+    from: initial.from,
+    to: initial.to,
+    q: 'Original',
+    repository: '/original',
+  })
+  expect(screen.getByRole('radio', { name: '窗口内消耗' }).getAttribute('aria-checked')).toBe(
+    'true',
+  )
+  expect(screen.getByRole('combobox', { name: '消耗发生时间' })).toBeDefined()
+  expect(screen.queryByRole('combobox', { name: '任务创建时间' })).toBeNull()
+  fireEvent.click(screen.getByRole('tab', { name: '任务追踪' }))
+  const trigger = await screen.findByRole('button', { name: '任务 0' })
+  fireEvent.click(trigger)
+  await screen.findByRole('button', { name: '← 返回统计分析' })
+  await screen.findByText('此处显示任务全程消耗；返回后恢复原窗口内统计。')
+  const fullTask = [...f.reports.values()].find((r) => r.header.taskId === 'task-0')!
+  expect(fullTask.header.filters.cohort).toBeUndefined()
+  expect(fullTask.summary.usageWindow).toBeUndefined()
+  expect(screen.getByText('此处显示任务全程消耗；返回后恢复原窗口内统计。')).toBeDefined()
+  fireEvent.click(screen.getByRole('button', { name: '← 返回统计分析' }))
+  await screen.findByRole('button', { name: '任务 0' })
+  expect(f.changes.at(-1)).toMatchObject({
+    cohort: 'usage',
+    q: 'Original',
+    repository: '/original',
+    from: initial.from,
+    to: initial.to,
+  })
+  expect(
+    [...f.reports.values()].filter(
+      (r) => r.header.taskId === null && r.header.filters.cohort === 'usage',
+    ),
+  ).toHaveLength(1)
+  fireEvent.keyDown(screen.getByRole('radio', { name: '窗口内消耗' }), { key: 'ArrowLeft' })
+  await waitFor(() =>
+    expect(screen.getByRole('radio', { name: '任务全程' }).getAttribute('aria-checked')).toBe(
+      'true',
+    ),
+  )
+  expect(screen.getByRole('combobox', { name: '任务创建时间' })).toBeDefined()
+  expect(screen.queryByRole('combobox', { name: '消耗发生时间' })).toBeNull()
 })
 
 test('capture page controls belong to their shared Card without adding another card boundary', async () => {

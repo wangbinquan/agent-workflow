@@ -17,6 +17,7 @@ import type { CompleteObservationEvidenceContext } from './completeObservationEv
 import { completePlatformCaptureKey } from './completeObservationPlatform'
 import { completeWorkingPages } from './completeWorkingTraversal'
 import { selectCompleteUsage } from './completeUsageSelection'
+import { completeObservationOccurrence } from './completeObservationOccurrence'
 
 interface Allocation {
   readonly record: CompleteObservationContribution
@@ -152,6 +153,15 @@ export async function allocateCompleteObservationUsage(
           sourceId: record.sourceId,
           model: record.localModel ?? record.measurement.model,
           observedAt: record.observedAt,
+          ...(input.occurrenceVersions === undefined
+            ? {}
+            : {
+                occurrence: await completeObservationOccurrence(
+                  input,
+                  record,
+                  entry.invocation.nativeCaptureSource ?? null,
+                ),
+              }),
           contribution,
           cost,
           ...(!qualified ? { qualified: false } : {}),

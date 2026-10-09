@@ -1,4 +1,20 @@
 export const runObservabilityZh = {
+  timeCohort: '消耗时间口径',
+  cohort_started: '任务全程',
+  cohort_usage: '窗口内消耗',
+  windowTasks: '窗口关联任务',
+  usageWindowHint: '按真实调用发生时间统计。任务状态和执行耗时仍为关联任务的全生命周期。',
+  lifecycleDetailHint: '此处显示任务全程消耗；返回后恢复原窗口内统计。',
+  unassignedTime: '时间未分配明细',
+  unassignedTimeCount: '{{count}} 条记录的发生时间未确认，已知消耗单独保留。',
+  viewUnassignedTime: '查看时间未分配明细',
+  unassignedTimeHint:
+    '保留原输入、缓存、输出 Token 和原人民币估值。没有可靠发生时间的记录不计入窗口或日柱，接收时间不代替发生时间。',
+  'gap_usage-time-unassigned': '部分消耗尚无可核实的发生时间',
+  'gap_time-unobserved': '原始发生时间未采集',
+  'gap_time-conflicting': '原始发生时间有冲突',
+  'gap_time-nondiscrete': '累计汇总不能定位到单次消耗时间',
+  'gap_time-evidence-missing': '缺少对应的原始步骤时间证据',
   historicalExecutions: '原始历史执行',
   historicalRecords: '历史原生 Token 明细',
   historicalReferences: '原始归属引用',
@@ -315,6 +331,7 @@ export const runObservabilityZh = {
   back: '返回任务消耗',
   execution: '查看任务',
   period: '任务创建时间',
+  usagePeriod: '消耗发生时间',
   week: '近 7 天',
   month: '近 30 天',
   all: '全部时间',
@@ -380,6 +397,25 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  timeCohort: 'Consumption time basis',
+  cohort_started: 'Task lifecycle',
+  cohort_usage: 'Usage in window',
+  windowTasks: 'Tasks related to the window',
+  usageWindowHint:
+    'Grouped by original consumption time. Task status and durations describe the related task lifecycle.',
+  lifecycleDetailHint:
+    'This view shows the complete task lifecycle. Returning restores the original usage window.',
+  unassignedTime: 'Usage without verified time',
+  unassignedTimeCount:
+    '{{count}} records have no verified consumption time. Known usage is retained separately.',
+  viewUnassignedTime: 'View usage without verified time',
+  unassignedTimeHint:
+    'Original input, cache and output Tokens and CNY estimates are retained. Records without a reliable occurrence time are excluded from window totals and daily columns; receipt time is never substituted.',
+  'gap_usage-time-unassigned': 'Some usage has no verified consumption time',
+  'gap_time-unobserved': 'Original occurrence time was not captured',
+  'gap_time-conflicting': 'Original occurrence times conflict',
+  'gap_time-nondiscrete': 'A cumulative summary has no discrete consumption instant',
+  'gap_time-evidence-missing': 'The corresponding original step time is unavailable',
   historicalExecutions: 'Original historical executions',
   historicalRecords: 'Historical native Token records',
   historicalReferences: 'Original ownership references',
@@ -711,6 +747,7 @@ export const runObservabilityEn: RunObservabilityMessages = {
   back: 'Back to task usage',
   execution: 'Open task',
   period: 'Task creation time',
+  usagePeriod: 'Usage occurrence time',
   week: 'Last 7 days',
   month: 'Last 30 days',
   all: 'All time',
