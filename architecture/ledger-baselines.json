@@ -829,10 +829,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1985,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371 完整报告加载与刷新修复：原页级事务内增加具名 addCompleteReportGroupRows 批量分组写入站点，保留原 staging 和全部数据人口；原 census 相对已提交 RFC-370 动态状态前态实测 +1。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -867,10 +864,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6899,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371 完整报告加载与刷新修复：统计 infrastructure helper 的 ORM、schema、原事务类型/affectedRows 和原阶段 logger 五条具名适配依赖，原 census 相对已提交 RFC-370 动态状态前态实测 +5；无新 public/跨 context 入口。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -891,10 +885,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 6041,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371 完整报告加载与刷新修复：批量 staging helper 的原 schema/事务类型/affectedRows 与诊断 observer 的原 createLogger 四条 exact infrastructure 适配依赖，原规则相对已提交 RFC-370 动态状态前态实测 +4；不改规则或扩大豁免。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -929,10 +920,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27751,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 完整报告加载与刷新修复：两个具名 infrastructure 文件及顶层符号新增13个 owner，前端 completeReportClient 新增 displayValidityKey 一个 owner；原 stage 的 countScope 迁移消失，原 census 相对已提交 RFC-370 动态状态前态净增13。全部既有登记及 context/层级保持。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -941,7 +929,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "331f30aaf75500487b38910da08df946648664e9",
-    "contentDigest": "sha256:8690049c5b13297f9bfa19e167d766c49eae65d0036f7f667a92a8d607a347df",
+    "contentDigest": "sha256:8780df81c605b352ad366d271e2fea55b9f5850608f4afdb571186496c3748ca",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
