@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { CompleteObservationReport, CompleteObservationMetrics } from '@agent-workflow/shared'
 import { completeObservationReportContent } from '@agent-workflow/shared'
 import { CompleteCost } from '../src/components/observability/CompleteObservationMetrics'
+import { CompleteObservationTiming } from '../src/components/observability/CompleteObservationDetails'
 import { useCompleteObservationReport } from '../src/components/observability/completeReportClient'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import i18n from '../src/i18n'
@@ -128,6 +129,76 @@ test('cached capability seven cannot suppress the original partial amount and it
   ).toBeTruthy()
   expect(requests).toEqual([{ path: '/api/observability/reports', method: 'POST' }])
   expect(JSON.stringify(client.getQueryData(oldKey))).toBe(original)
-  const newKey = ['run-observability-complete', 'scope-metrics/11', filters, null, 0] as const
+  const newKey = ['run-observability-complete', 'scope-metrics/13', filters, null, 0] as const
   expect(client.getQueryData(newKey)).toEqual(current)
+})
+
+test('cached family twelve wall alias is retained while the actual hook requests nullable running-state proof', async () => {
+  if (current.state !== 'not-ready' || !current.facts) throw new Error('Original facts missing')
+  client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
+  })
+  const oldKey = ['run-observability-complete', 'scope-metrics/12', filters, null, 0] as const
+  const legacy: CompleteObservationReport = {
+    ...current,
+    reportId: 'retained-system-wall-alias',
+    facts: {
+      ...current.facts,
+      header: { ...current.facts.header, reportId: 'retained-system-wall-alias' },
+      summary: {
+        ...current.facts.summary,
+        timing: { ...current.facts.summary.timing, wallMs: '8291976', runningMs: '8291976' },
+      },
+    },
+  }
+  client.setQueryData(oldKey, legacy)
+  const original = JSON.stringify(client.getQueryData(oldKey))
+  const corrected: CompleteObservationReport = {
+    ...current,
+    reportId: 'current-system-running-state-proof',
+    facts: {
+      ...current.facts,
+      header: { ...current.facts.header, reportId: 'current-system-running-state-proof' },
+      summary: {
+        ...current.facts.summary,
+        timing: {
+          ...current.facts.summary.timing,
+          wallMs: '8291976',
+          runningMs: null,
+          runningCoverage: { tasks: '1', observedTasks: '0' },
+        },
+      },
+    },
+  }
+  const requests: { path: string; method: string }[] = []
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (raw, init) => {
+    const path = new URL(String(raw)).pathname,
+      method = init?.method ?? 'GET'
+    requests.push({ path, method })
+    if (path !== '/api/observability/reports' || method !== 'POST')
+      throw new Error('The retained System wall alias must not be reused')
+    expect(JSON.parse(String(init?.body)).filters).toEqual(filters)
+    return Response.json(corrected)
+  })
+  function Probe() {
+    const query = useCompleteObservationReport(filters, undefined, 0, true)
+    const content = query.data ? completeObservationReportContent(query.data) : null
+    return content ? <CompleteObservationTiming report={content} /> : <p>Waiting for time proof</p>
+  }
+  render(
+    <QueryClientProvider client={client}>
+      <Probe />
+    </QueryClientProvider>,
+  )
+  const coverage = await screen.findByText(
+    i18n.t('runObservability.runningCoverage', { observed: '0', tasks: '1' }),
+    { exact: false },
+  )
+  expect(coverage.parentElement?.textContent).toContain('—')
+  expect(screen.queryByText(i18n.t('runObservability.recordedRunning'))).toBeNull()
+  expect(requests).toEqual([{ path: '/api/observability/reports', method: 'POST' }])
+  expect(JSON.stringify(client.getQueryData(oldKey))).toBe(original)
+  expect(
+    client.getQueryData(['run-observability-complete', 'scope-metrics/13', filters, null, 0]),
+  ).toEqual(corrected)
 })

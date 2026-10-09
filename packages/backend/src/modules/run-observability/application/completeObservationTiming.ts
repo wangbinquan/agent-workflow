@@ -56,6 +56,7 @@ export async function buildCompleteObservationTiming(input: {
     input.task.runningSince === null ? 0 : Math.max(0, taskEnd - input.task.runningSince)
   const runningMs =
     valid &&
+    input.task.runningMs !== null &&
     Number.isSafeInteger(input.task.runningMs) &&
     input.task.runningMs >= 0 &&
     Number.isSafeInteger(active)

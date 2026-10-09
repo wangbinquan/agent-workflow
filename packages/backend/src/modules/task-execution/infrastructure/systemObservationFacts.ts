@@ -18,10 +18,9 @@ export const systemObservationFields = {
   parentTaskId: groups.parentTaskId,
   startedAt: groups.startedAt,
   finishedAt: groups.finishedAt,
-  runningMs: sql<number>`CASE WHEN ${groups.finishedAt} IS NULL THEN 0 ELSE ${groups.finishedAt} - ${groups.startedAt} END`,
-  runningSince: sql<
-    number | null
-  >`CASE WHEN ${groups.finishedAt} IS NULL THEN ${groups.startedAt} ELSE NULL END`,
+  // A System group has owner intervals, but no original Task running-state clock.
+  runningMs: sql<null>`NULL`,
+  runningSince: sql<null>`NULL`,
 }
 
 /** Independent calls obey their original owner; linked calls inherit the original Task visibility. */
@@ -60,13 +59,7 @@ export function createSystemObservationFacts(db: ProviderNeutralDatabase) {
         .from(groups)
         .where(and(eq(groups.id, id), systemObservationVisibility(db, actor)))
         .get()
-      return row
-        ? {
-            ...row,
-            runningMs: row.finishedAt === null ? 0 : row.finishedAt - row.startedAt,
-            runningSince: row.finishedAt === null ? row.startedAt : null,
-          }
-        : null
+      return row ?? null
     },
     async rows(condition: SQL | undefined, limit: number) {
       const rows = await db
@@ -76,11 +69,7 @@ export function createSystemObservationFacts(db: ProviderNeutralDatabase) {
         .orderBy(desc(groups.startedAt), desc(groups.id))
         .limit(limit)
         .all()
-      return rows.map((row) => ({
-        ...row,
-        runningMs: row.finishedAt === null ? 0 : row.finishedAt - row.startedAt,
-        runningSince: row.finishedAt === null ? row.startedAt : null,
-      }))
+      return rows
     },
     async contains(id: string) {
       return (

@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1750,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 29954,
+    "recursiveFields": 30018,
     "symbols": 1259
   },
   "entries": [
@@ -129872,8 +129872,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 611,
-        "maxUnionVariants": 206
+        "maxTransitiveLeafFields": 631,
+        "maxUnionVariants": 222
       },
       "consumerEdgeIds": [
         "import:82f0eb9d4b569c581f9a",
@@ -130727,8 +130727,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -130855,8 +130860,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.manifest.summary.$variant:0.timing.runningMs",
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -131305,8 +131330,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -131433,8 +131463,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.manifest.summary.$variant:1.timing.runningMs",
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -132310,8 +132360,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -132438,8 +132493,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.manifest.summary.$variant:0.timing.runningMs",
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -132888,8 +132963,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -133016,8 +133096,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.manifest.summary.$variant:1.timing.runningMs",
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -133091,8 +133191,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 650,
-        "maxUnionVariants": 220
+        "maxTransitiveLeafFields": 670,
+        "maxUnionVariants": 236
       },
       "consumerEdgeIds": [
         "import:0abc99eac23c4c14732e",
@@ -133955,8 +134055,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -134082,8 +134187,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "manifest.$variant:0.summary.$variant:0.timing.runningMs",
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -134527,8 +134652,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -134654,8 +134784,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "manifest.$variant:0.summary.$variant:1.timing.runningMs",
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -135174,8 +135324,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -135301,8 +135456,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "report.$variant:1.facts.summary.timing.runningMs",
+          "fieldPath": "report.$variant:1.facts.summary.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -136161,8 +136336,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -136288,8 +136468,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "report.$variant:3.summary.timing.runningMs",
+          "fieldPath": "report.$variant:3.summary.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -137793,8 +137993,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 705,
-        "maxUnionVariants": 246
+        "maxTransitiveLeafFields": 725,
+        "maxUnionVariants": 262
       },
       "consumerEdgeIds": [
         "import:254fc232664722e36ed6"
@@ -138547,8 +138747,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -138683,8 +138888,30 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:request.$return.$variant:1.facts.summary.timing.runningMs",
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -139568,8 +139795,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -139704,8 +139936,30 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:request.$return.$variant:3.summary.timing.runningMs",
+          "fieldPath": "$method:request.$return.$variant:3.summary.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:3.summary.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -140339,8 +140593,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -140475,8 +140734,30 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:status.$return.$variant:1.facts.summary.timing.runningMs",
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -141360,8 +141641,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.task.runningMs",
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -141496,8 +141782,30 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:status.$return.$variant:3.summary.timing.runningMs",
+          "fieldPath": "$method:status.$return.$variant:3.summary.timing.recordedRunningMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.timing.runningCoverage.observedTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:3.summary.timing.runningCoverage.tasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.timing.runningMs.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.timing.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -141598,8 +141906,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 205,
-        "maxUnionVariants": 76
+        "maxTransitiveLeafFields": 207,
+        "maxUnionVariants": 80
       },
       "consumerEdgeIds": [
         "import:44a2cc15a17a1d4359b4",
@@ -141881,8 +142189,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:detail.$return.$variant:0.runningMs",
+          "fieldPath": "$method:detail.$return.$variant:0.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [
@@ -141948,8 +142261,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:detail.$return.$variant:0.task.runningMs",
+          "fieldPath": "$method:detail.$return.$variant:0.task.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.task.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -216173,8 +216491,8 @@
       "budget": {
         "maxMethods": 13,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 132,
-        "maxUnionVariants": 58
+        "maxTransitiveLeafFields": 133,
+        "maxUnionVariants": 60
       },
       "consumerEdgeIds": [
         "import:97690ec5043f92ffd3ba"
@@ -216372,8 +216690,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:get.$return.$variant:0.runningMs",
+          "fieldPath": "$method:get.$return.$variant:0.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$return.$variant:0.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -220772,8 +221095,8 @@
       "budget": {
         "maxMethods": 11,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 110,
-        "maxUnionVariants": 46
+        "maxTransitiveLeafFields": 111,
+        "maxUnionVariants": 48
       },
       "consumerEdgeIds": [
         "import:0f0f0c7c9b99f8905c51",
@@ -220985,8 +221308,13 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:get.$return.$variant:0.runningMs",
+          "fieldPath": "$method:get.$return.$variant:0.runningMs.$variant:0",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$return.$variant:0.runningMs.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -230111,7 +230439,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:66c47ae246183e52845f71a32e3f7ac3ff2239e419f8cd38cd430f9d4d68f1d3",
+  "sourceDigest": "sha256:ea6be3ae1d56bb9c41748beb60906af2cade780e8911b4af7226099e7b44e8cd",
   "targetContexts": [
     "collaboration",
     "development-automation",

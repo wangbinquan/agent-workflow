@@ -282,8 +282,37 @@ export function CompleteObservationTiming({ report }: { report: ReadableObservat
     <dl className="detail-grid observation-metrics">
       <dt>{t('runObservability.wall')}</dt>
       <dd>{ms(timing ? timing.wallMs : report.summary.timing.wallMs)}</dd>
-      <dt>{t('runObservability.running')}</dt>
-      <dd>{ms(timing ? timing.runningMs : report.summary.timing.runningMs)}</dd>
+      {(!root || root.task.runningMs !== null) && (
+        <>
+          <dt>
+            {t(
+              !timing && report.summary.timing.recordedRunningMs !== undefined
+                ? 'runObservability.recordedRunning'
+                : 'runObservability.running',
+            )}
+          </dt>
+          <dd>
+            {ms(
+              timing
+                ? timing.runningMs
+                : (report.summary.timing.recordedRunningMs ?? report.summary.timing.runningMs),
+            )}
+            {!timing && report.summary.timing.runningCoverage && (
+              <span className="muted">
+                {' · '}
+                {t('runObservability.runningCoverage', {
+                  observed: BigInt(
+                    report.summary.timing.runningCoverage.observedTasks,
+                  ).toLocaleString(i18n.language),
+                  tasks: BigInt(report.summary.timing.runningCoverage.tasks).toLocaleString(
+                    i18n.language,
+                  ),
+                })}
+              </span>
+            )}
+          </dd>
+        </>
+      )}
       {timing && (
         <>
           <dt>{t('runObservability.cumulative')}</dt>

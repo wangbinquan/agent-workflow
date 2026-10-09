@@ -469,7 +469,9 @@ function taskSummary(
     metrics: metrics(loaded.invocations, loaded.truncated),
     wallMs: Math.max(0, end - task.startedAt),
     runningMs:
-      task.runningMs + (task.runningSince === null ? 0 : Math.max(0, end - task.runningSince)),
+      task.runningMs === null
+        ? null
+        : task.runningMs + (task.runningSince === null ? 0 : Math.max(0, end - task.runningSince)),
   }
 }
 function attemptInterval(

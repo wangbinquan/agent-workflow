@@ -119,7 +119,11 @@ export interface CompleteObservationReportSummary {
     readonly p50Ms: string | null
     readonly p95Ms: string | null
     readonly wallMs: string
-    readonly runningMs: string
+    readonly runningMs: string | null
+    /** Exact running-state coverage; absent in older or fully observed reports. */
+    readonly runningCoverage?: { readonly tasks: string; readonly observedTasks: string }
+    /** Known running-state subtotal, present only when at least one Task is observed. */
+    readonly recordedRunningMs?: string
     readonly unknown: string
   }
   /** A requested Task and all its descendants; physical Task rows retain their own disjoint usage. */
@@ -141,7 +145,9 @@ export interface CompleteObservationFactSummary {
     readonly p50Ms: string | null
     readonly p95Ms: string | null
     readonly wallMs: string
-    readonly runningMs: string
+    readonly runningMs: string | null
+    readonly runningCoverage?: { readonly tasks: string; readonly observedTasks: string }
+    readonly recordedRunningMs?: string
     readonly unknown: string
   }
   readonly rootTask: CompleteObservationTask | null

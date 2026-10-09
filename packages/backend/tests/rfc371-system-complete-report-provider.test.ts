@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { eq } from 'drizzle-orm'
 import type {
   CompleteObservationTask,
   CompleteObservationAttempt,
@@ -16,6 +17,7 @@ import type {
 import { completeObservationReportContent } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { tasks, users, taskExecutionOwners } from '@/db/schema'
+import { systemAgentObservationOwners } from '@/db/observationSystem'
 import { sha256Hex } from '@/util/hash'
 import { originalReportSnapshotSession } from '@/platform/persistence/reportSnapshot'
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
@@ -23,6 +25,7 @@ import { composeObservationUsageSource } from '@/modules/task-execution/composit
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeCompleteObservationSnapshot } from '@/modules/run-observability/composition/completeObservationSnapshot'
+import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import { completeObservationReportCache } from '@/modules/run-observability/infrastructure/completeObservationReportStore'
 import { completeObservationFileSpool } from '@/modules/run-observability/infrastructure/completeObservationFileSpool'
 import { completeObservationActorScope } from '@/modules/run-observability/infrastructure/completeObservationReportDocuments'
@@ -174,6 +177,24 @@ describeEachProvider(
           attempts: '2',
           invocations: '2',
         })
+        expect(published.content.summary.timing).toMatchObject({
+          runningMs: null,
+          runningCoverage: { tasks: '1', observedTasks: '0' },
+        })
+        expect(published.content.summary.timing).not.toHaveProperty('recordedRunningMs')
+        expect(published.content.summary.rootTask).toMatchObject({
+          task: { runningMs: null, runningSince: null },
+          timing: {
+            wallMs: '499',
+            runningMs: null,
+            intervals: {
+              state: 'complete',
+              cumulativeMs: '997',
+              activeUnionMs: '499',
+              unknown: '0',
+            },
+          },
+        })
         expect(published.content.summary.metrics).toMatchObject({
           state: 'not-ready',
           recordedUsage: {
@@ -323,6 +344,11 @@ describeEachProvider(
           attempts: '203',
           invocations: '203',
         })
+        expect(published.content.summary.timing).toMatchObject({
+          runningMs: null,
+          runningCoverage: { tasks: '203', observedTasks: '1' },
+          recordedRunningMs: '3',
+        })
         expect(published.content.summary.metrics).toMatchObject({
           state: 'not-ready',
           recordedUsage: {
@@ -354,6 +380,12 @@ describeEachProvider(
           attempts: '2',
           invocations: '2',
         })
+        expect(linked.content.summary.timing).toMatchObject({
+          runningMs: null,
+          runningCoverage: { tasks: '2', observedTasks: '1' },
+          recordedRunningMs: '3',
+        })
+        expect(linked.content.summary.rootTask?.timing.runningMs).toBe('3')
         const linkedRows = await original.service.page<CompleteObservationTask>(actor, linked.id, {
           section: 'tasks',
           limit: 19,
@@ -368,5 +400,198 @@ describeEachProvider(
         await original.close()
       }
     }, 120000)
+
+    test('four original retry owners retain long waiting gaps, known Task zero and unknown boundaries without a System state clock', async () => {
+      await seedCompleteTask(harness, 1, 2)
+      const observations = composeLocalInvocationObservations(
+        harness.db,
+        composeObservationUsageSource(harness.db),
+      )
+      const factory = composeSystemAgentObservations({ db: harness.db, observations })
+      const intervals = [
+        [0, 5985],
+        [51266, 8230],
+        [122227, 6948],
+        [8230238, 61738],
+      ] as const
+      const owners: string[] = []
+      let taskId = ''
+      for (const [index, [offset, duration]] of intervals.entries()) {
+        const run = await factory.open({
+          feature: 'memory-distiller',
+          agentName: 'aw-memory-distiller',
+          protocol: 'opencode',
+          startedAt: COMPLETE_NOW + offset,
+          demand: {
+            kind: 'memory-distill',
+            originalId: 'original-retry-time-job',
+            originalAttempt: `${index + 1}:0`,
+            name: 'Original retry time',
+            ownerUserId: actor.user.id,
+            purpose: 'memory',
+          },
+        })
+        taskId = run.taskId
+        owners.push(run.invocationId)
+        await run.accept({})
+        await run.settle(index === 3 ? 'ok' : 'exit-nonzero', COMPLETE_NOW + offset + duration)
+      }
+      const original = reports(harness)
+      try {
+        const scope = completeObservationActorScope(actor),
+          refreshKey = 'original-system-running-state',
+          legacy = await original.cache.ensure(
+            { actor, query, refreshKey, taskId },
+            sha256Hex(
+              JSON.stringify([
+                2,
+                'scope-metrics/12',
+                original.cache.generation,
+                scope,
+                query,
+                taskId,
+                refreshKey,
+              ]),
+            ),
+            scope,
+            'original-system-wall-alias',
+            randomUUID(),
+          )
+        await original.cache.unavailable(legacy.id, legacy.owner, ['original-running-wall-alias'])
+        const legacyReport = (await original.cache.get(legacy.id))!.report
+        const published = await original.publish(taskId, refreshKey)
+        expect(published.id).not.toBe(legacy.id)
+        expect((await original.cache.get(legacy.id))!.report).toEqual(legacyReport)
+        expect(published.content.summary.inventory).toMatchObject({
+          tasks: '1',
+          attempts: '4',
+          invocations: '4',
+        })
+        expect(published.content.summary.timing).toMatchObject({
+          wallMs: '8291976',
+          runningMs: null,
+          runningCoverage: { tasks: '1', observedTasks: '0' },
+          unknown: '0',
+        })
+        expect(published.content.summary.timing).not.toHaveProperty('recordedRunningMs')
+        expect(published.content.summary.rootTask?.timing).toEqual({
+          wallMs: '8291976',
+          runningMs: null,
+          range: { from: COMPLETE_NOW, to: COMPLETE_NOW + 8291976 },
+          intervals: {
+            state: 'complete',
+            cumulativeMs: '82901',
+            activeUnionMs: '82901',
+            unknown: '0',
+          },
+        })
+        const attempts: CompleteObservationAttempt[] = []
+        let after: string | undefined
+        for (;;) {
+          const page = await original.service.page<CompleteObservationAttempt>(
+            actor,
+            published.id,
+            {
+              section: 'attempts',
+              limit: 1,
+              ...(after ? { after } : {}),
+            },
+          )
+          expect(page.total).toBe('4')
+          attempts.push(...page.items)
+          if (page.nextCursor === null) break
+          after = page.nextCursor
+        }
+        expect(new Set(attempts.map((row) => row.id))).toEqual(new Set(owners))
+        const byRetry = [...attempts].sort((a, b) => a.retryIndex - b.retryIndex)
+        expect(byRetry.map((row) => row.durationMs)).toEqual(['5985', '8230', '6948', '61738'])
+        expect(byRetry.map((row) => row.status)).toEqual(['failed', 'failed', 'failed', 'done'])
+        const bounded = composeTaskObservations({
+          db: harness.db,
+          taskSource: createCompleteTaskObservationFacts,
+          now: () => COMPLETE_NOW + 8291977,
+        })
+        const detail = await bounded.detail(actor, taskId)
+        expect(detail?.runningMs).toBeNull()
+        expect(detail?.wallMs).toBe(8291976)
+        expect(detail?.intervals.activeUnionMs).toBe(82901)
+
+        const mixed = await original.publish()
+        expect(mixed.content.summary.timing).toMatchObject({
+          runningMs: null,
+          runningCoverage: { tasks: '2', observedTasks: '1' },
+          recordedRunningMs: '3',
+        })
+        const ordinary = await original.publish('complete-original-task')
+        expect(ordinary.content.summary.timing.runningMs).toBe('3')
+        expect(ordinary.content.summary.timing).not.toHaveProperty('runningCoverage')
+        expect(ordinary.content.summary.timing).not.toHaveProperty('recordedRunningMs')
+        await harness.db
+          .update(tasks)
+          .set({ runningMs: 0 })
+          .where(eq(tasks.id, 'complete-original-task'))
+          .run()
+        const knownZero = await original.publish()
+        expect(knownZero.content.summary.timing).toMatchObject({
+          runningMs: null,
+          runningCoverage: { tasks: '2', observedTasks: '1' },
+          recordedRunningMs: '0',
+        })
+        await harness.db
+          .update(systemAgentObservationOwners)
+          .set({ finishedAt: null })
+          .where(eq(systemAgentObservationOwners.id, owners[3]!))
+          .run()
+        const unknown = await original.publish(taskId)
+        expect(unknown.content.summary.rootTask?.timing).toMatchObject({
+          wallMs: '8291976',
+          runningMs: null,
+          intervals: { state: 'not-ready', unknown: '1' },
+        })
+        await harness.db
+          .update(systemAgentObservationOwners)
+          .set({ finishedAt: COMPLETE_NOW + 8291976 })
+          .where(eq(systemAgentObservationOwners.id, owners[3]!))
+          .run()
+        const liveStartedAt = Date.now() - 1000
+        const live = await factory.open({
+          feature: 'memory-distiller',
+          agentName: 'aw-memory-distiller',
+          protocol: 'opencode',
+          startedAt: liveStartedAt,
+          demand: {
+            kind: 'memory-distill',
+            originalId: 'original-retry-time-job',
+            originalAttempt: '5:0',
+            name: 'Original retry time',
+            ownerUserId: actor.user.id,
+            purpose: 'memory',
+          },
+        })
+        await live.accept({})
+        const open = await original.publish(taskId)
+        const openDuration = open.content.header.asOf - liveStartedAt
+        expect(open.content.summary.inventory).toMatchObject({ attempts: '5', invocations: '5' })
+        expect(open.content.summary.rootTask).toMatchObject({
+          task: { runningMs: null, runningSince: null, finishedAt: null },
+          timing: {
+            runningMs: null,
+            wallMs: String(open.content.header.asOf - COMPLETE_NOW),
+            intervals: {
+              state: 'complete',
+              cumulativeMs: String(82901 + openDuration),
+              activeUnionMs: String(82901 + openDuration),
+              unknown: '0',
+            },
+          },
+        })
+        await live.settle('aborted', Date.now())
+        expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([
+          { id: 'complete-original-task' },
+        ])
+      } finally {
+        await original.close()
+      }
+    }, 60000)
   },
 )

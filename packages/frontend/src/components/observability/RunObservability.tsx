@@ -64,7 +64,8 @@ function TaskDetail({
   const { t, i18n } = useTranslation(),
     selected = search.attempt ?? null
   const attemptTrigger = useRef<HTMLElement | null>(null)
-  const duration = (ms: number) => {
+  const duration = (ms: number | null) => {
+    if (ms === null) return '—'
     const token = formatDurationMs(ms)
     return t(`common.dur.${token.key}`, token.opts)
   }
@@ -92,8 +93,12 @@ function TaskDetail({
         <dl className="detail-grid observation-metrics">
           <dt>{t('runObservability.wall')}</dt>
           <dd>{duration(data.wallMs)}</dd>
-          <dt>{t('runObservability.running')}</dt>
-          <dd>{duration(data.runningMs)}</dd>
+          {data.task.runningMs !== null && (
+            <>
+              <dt>{t('runObservability.running')}</dt>
+              <dd>{duration(data.runningMs)}</dd>
+            </>
+          )}
           <dt>{t('runObservability.cumulative')}</dt>
           <dd>{data.intervals.knownAttempts > 0 ? duration(data.intervals.cumulativeMs) : '—'}</dd>
           <dt>{t('runObservability.union')}</dt>

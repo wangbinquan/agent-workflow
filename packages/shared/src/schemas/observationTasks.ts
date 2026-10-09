@@ -131,7 +131,8 @@ export interface ObservationTaskFacts {
   readonly parentTaskId: string | null
   readonly startedAt: number
   readonly finishedAt: number | null
-  readonly runningMs: number
+  /** Original Task state clock; System groups have no such history and return null. */
+  readonly runningMs: number | null
   readonly runningSince: number | null
 }
 export interface ObservationAttemptFacts {
@@ -175,7 +176,7 @@ export interface ObservationTaskSummary {
   readonly task: ObservationTaskFacts
   readonly metrics: ObservationMetrics
   readonly wallMs: number
-  readonly runningMs: number
+  readonly runningMs: number | null
   /** A selected contribution is incomplete or could not be assigned to this range. */
   readonly dimensionMatch?: 'matched' | 'unresolved'
 }

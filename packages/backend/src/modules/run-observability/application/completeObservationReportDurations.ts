@@ -13,9 +13,23 @@ export function completeObservationReportDurations(input: CompleteObservationCoh
   let count = 0n,
     wall = 0n,
     running = 0n,
+    runningTasks = 0n,
+    observedRunningTasks = 0n,
     unknown = 0n
+  const runningTotals = () =>
+    runningTasks === observedRunningTasks
+      ? { runningMs: String(running) }
+      : {
+          runningMs: null,
+          runningCoverage: {
+            tasks: String(runningTasks),
+            observedTasks: String(observedRunningTasks),
+          },
+          ...(observedRunningTasks > 0n ? { recordedRunningMs: String(running) } : {}),
+        }
   return {
     async add(task: CompleteObservationTask) {
+      runningTasks++
       if (task.timing.wallMs === null) unknown++
       else {
         wall += BigInt(task.timing.wallMs)
@@ -23,7 +37,10 @@ export function completeObservationReportDurations(input: CompleteObservationCoh
           { key: completeOrdinalKey(count++), document: task.timing.wallMs },
         ])
       }
-      if (task.timing.runningMs !== null) running += BigInt(task.timing.runningMs)
+      if (task.timing.runningMs !== null) {
+        running += BigInt(task.timing.runningMs)
+        observedRunningTasks++
+      }
     },
     async totals(): Promise<CompleteObservationReportSummary['timing']> {
       if (!count)
@@ -31,7 +48,7 @@ export function completeObservationReportDurations(input: CompleteObservationCoh
           p50Ms: null,
           p95Ms: null,
           wallMs: String(wall),
-          runningMs: String(running),
+          ...runningTotals(),
           unknown: String(unknown),
         }
       const sorted = await completeExternalSort({
@@ -63,7 +80,7 @@ export function completeObservationReportDurations(input: CompleteObservationCoh
         p50Ms,
         p95Ms,
         wallMs: String(wall),
-        runningMs: String(running),
+        ...runningTotals(),
         unknown: String(unknown),
       }
     },
