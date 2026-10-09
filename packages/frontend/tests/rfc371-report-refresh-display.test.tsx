@@ -754,7 +754,8 @@ test('a new report HTTP error cannot resurrect the previous snapshot', async () 
       ),
     )
     fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
-    await waitFor(() => expect(f.reports).toHaveLength(2))
+    // Vitest advances its fake intervals; DOM waitFor cannot poll this non-DOM counter.
+    await vi.waitFor(() => expect(f.reports).toHaveLength(2), { timeout: 5000 })
     const release = f.block(f.reports[1]!.header.reportId)
     let finished!: Promise<void>
     act(() => {
@@ -774,7 +775,7 @@ test('a new report HTTP error cannot resurrect the previous snapshot', async () 
     expect(f.requests).toHaveLength(requestsAfterError)
     expect(screen.queryByTestId('snapshot')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
-    await waitFor(() => expect(f.reports).toHaveLength(3))
+    await vi.waitFor(() => expect(f.reports).toHaveLength(3), { timeout: 5000 })
     expect(screen.queryByTestId('snapshot')).toBeNull()
   } finally {
     vi.useRealTimers()
