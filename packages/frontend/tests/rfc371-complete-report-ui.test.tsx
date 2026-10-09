@@ -20,7 +20,7 @@ import i18n from '../src/i18n'
 
 const NOW = Date.parse('2026-10-03T00:00:00Z')
 const initial: ObservationSearch = { from: 0, to: NOW + 1, period: 'all', tab: 'tasks' }
-const metrics: CompleteObservationMetrics = {
+const metrics: Extract<CompleteObservationMetrics, { state: 'ready' }> = {
   state: 'ready',
   invocations: '10001',
   observedInvocations: '10001',
@@ -355,9 +355,9 @@ test('the existing segmented control selects consumption windows and Task drill-
     q: 'Original',
     repository: '/original',
   })
-  expect(screen.getByRole('radio', { name: '窗口内消耗' }).getAttribute('aria-checked')).toBe(
-    'true',
-  )
+  expect(
+    (await screen.findByRole('radio', { name: '窗口内消耗' })).getAttribute('aria-checked'),
+  ).toBe('true')
   expect(screen.getByRole('combobox', { name: '消耗发生时间' })).toBeDefined()
   expect(screen.queryByRole('combobox', { name: '任务创建时间' })).toBeNull()
   fireEvent.click(screen.getByRole('tab', { name: '任务追踪' }))

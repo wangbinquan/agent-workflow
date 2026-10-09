@@ -496,9 +496,17 @@ describeEachProvider(
         tokens: { total: '16' },
         cost: { amount: '0.00005' },
       })
-      expect(
-        await service.pages(settled.id, 'quality-tasks', 'source-projection-pending'),
-      ).toHaveLength(0)
+      // The repaired source removes its quality reason. The original page
+      // contract rejects a reason with no sealed index instead of inventing
+      // an empty Task population for that absent reason.
+      const settledQuality = await service.pages<{ key: string }>(settled.id, 'quality')
+      expect(settledQuality.filter((q) => q.key === 'source-projection-pending')).toHaveLength(0)
+      await expect(
+        service.pages(settled.id, 'quality-tasks', 'source-projection-pending'),
+      ).rejects.toMatchObject({
+        code: 'not-ready',
+        message: 'Original quality Task index was not sealed',
+      })
       await harness.db
         .insert(nodeRuns)
         .values({

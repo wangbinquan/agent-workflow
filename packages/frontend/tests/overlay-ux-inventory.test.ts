@@ -132,6 +132,12 @@ const OVERLAY_CALLSITES = {
   'components/observability/CompleteObservationQuality.tsx': { family: 'task-execution', count: 1 },
   // RFC-371: the trace renders one Dialog; its existing tests cover width, pagination and EOF.
   'components/observability/CompleteObservationTrace.tsx': { family: 'task-execution', count: 1 },
+  // RFC-371: unassigned consumption time uses one shared Dialog; rfc371-usage-time-detail
+  // covers the rendered original Task link, four Token bins, yuan and Escape close.
+  'components/observability/CompleteObservationTimeDetails.tsx': {
+    family: 'task-execution',
+    count: 1,
+  },
   // Original execution and numeric-record Dialogs retain rendered scope, EOF and close coverage
   // in rfc371-historical-observations-ui; shared mobile sizing keeps the same owner.
   'components/observability/CompleteHistoricalObservations.tsx': {
