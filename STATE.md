@@ -1,3 +1,6 @@
+# RFC-370 CI：PostgreSQL 服务镜像来源
+
+精确 bfd76107 主 CI 的 Ubuntu7 在初始化容器时先遇 Docker Hub token 超时、后遇匿名拉取限额，测试尚未开始；旧失败保留。实时读取两站完整 OCI index／Linux amd64 manifest，分别10,237／3,628字节及digest逐字一致；仅把原32个Ubuntu分片和独立真实PG服务的两处镜像改为 Docker Official Images 的 ECR Public 来源，原17标签、macOS空分支、连接探针／不可skip判据／全部命令和预算保持。完整默认Windows及四工作区typecheck已成功，不代签主CI总绿。有限独立设计PASS已实际消费，实现门、精确三文件发布和新SHA完整CI另验；零本机AW运行／新census，生命周期L69项保持、211新case未签收，H7／A-G／CS适配与部署及RFC仍开放。详见[镜像来源配套](design/RFC-370-crewstation-hosted-deployment/ci-postgres-service-registry.md)。以下共享旧正文与并行输出完整保留。
 # RFC-370 CI：等待 handoff 的真实后续 readiness
 
 ab457f9c 的原 PostgreSQL HTTP handover case 在 handoff 后立即 resume，原 200 断言实际收到 409；Ubuntu7 分片 819 pass／1 fail，失败日志保留且不虚构未记录的 body/code。源码确认 null policy 使原异步 drive 走 blocked，再最后写 readiness／revision并停止。只在原同一 mission 的两命令间观察首次 readiness，原全部断言、case与120秒预算保持，无 HTTP 重试、后台 stub、生产改动或 census。该 SHA 完整默认 Windows 与四工作区 typecheck 已成功，主 CI 总绿尚未达成；有限独立功能门、精确发布与新 SHA CI 另验。L 生命周期69项仍保持，211新case未签收，AW未部署CS，RFC继续。详见[HTTP时序配套](design/RFC-370-crewstation-hosted-deployment/ci-handover-readiness.md)。以下共享旧全文和并行输出完整保留。

@@ -192,7 +192,7 @@ jobs:
     # `AW_TEST_PROVIDERS=sqlite`；独立 Windows 平台 lane 同理。image 为空字符串时 Actions 跳过服务容器。
     services:
       postgres:
-        image: ${{ matrix.os == 'ubuntu-latest' && 'postgres:17' || '' }}
+        image: ${{ matrix.os == 'ubuntu-latest' && 'public.ecr.aws/docker/library/postgres:17' || '' }}
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: awtest
@@ -343,7 +343,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:17
+        image: public.ecr.aws/docker/library/postgres:17
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rfc357
