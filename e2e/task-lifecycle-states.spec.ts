@@ -357,7 +357,9 @@ async function waitForStatus(
     if (predicate(last)) return last
     await new Promise((r) => setTimeout(r, 200))
   }
-  throw new Error(`waitForStatus(${label}) timed out after ${timeoutMs}ms; last=${last}`)
+  throw new Error(
+    `waitForStatus(${label}) timed out after ${timeoutMs}ms; last=${last}; daemon=${JSON.stringify(daemon.diagnostics())}`,
+  )
 }
 
 async function primeAuthLocalStorage(page: Page, daemon: DaemonHandle): Promise<void> {

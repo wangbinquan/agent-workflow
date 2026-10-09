@@ -1,3 +1,7 @@
+## 2026-10-10 RFC-370 原 E2E 进程归属与超时取证候选
+
+精确 2e671510 的主 CI 37965012479 正式 failure、完整 Windows 37965611777 success，四工作区 typecheck 实际 exit 0，总绿门槛仍未满足。独立 R1 功能门发现串行启动超过原 hook 预算，正式 FAIL 与失败正文保留；现保持三个原 daemon 并行启动，逐一登记真实成功句柄，afterAll 先标记清理并立即 stop 已登记 child，同时等待 pending 启动，由其回调收回 late-success。原 ready 默认 POSIX 30_000ms／Windows 90_000ms、两个 hook 独立 90_000ms／case 300_000ms 保持；两个原 Task waiter 只在超时错误附加现有进程诊断，原断言／轮询／预算保持。前台 502 后旧 snapshot、Enter 钻取和焦点修复由并行 owner 接续；Windows 原超时原因未签收。无本机 AW 执行或新 census，独立有限 R2 功能门／精确发布／新 hosted CI 另验。生命周期 L SOURCE18-R2 已实际消费并保持、L census 尚未启动，完整 H7／A-G／CS M0～M4仍开放，RFC继续。详见[原 E2E 取证](design/RFC-370-crewstation-hosted-deployment/ci-e2e-process-diagnostics.md)。以下旧 STATE 与全部并行输出完整保留。
+
 ## 2026-10-09 RFC-371 重载首屏与原报告计时候选
 
 正式 dev-admin 页重载894ms、默认固定范围重载724ms内显示经原GET复核的四桶、人民币及原统计时间，后台原完整报告仍独立生成，并整体换为23:30:35新结果；首次没有旧报告仍约20–22秒。只保存按原服务/身份/范围/Task隔离的reportId，不保存统计数值；默认入口以原验证范围replace写入URL，错误与原明细失效删除对应旧指针。连接复用6个原SQLite/WAL用例与有限SOURCE PASS保持，新增操作计时门PASS已消费；未测得稳定收益的ID索引实验已仅撤下本会话输出，原失败门/实验完整归档。37533明细、16259组及12集合31页EOF的四桶/CNY对账保持，未加人口上限。首屏有限SOURCE v21有效PASS已完整消费（14项129616B、原8用例47断言逐字保持）；配套metadata、精确发布与新SHA完整CI另验；后台冷性能、全内置Agent成功验收、CS9项失败门/部署和两个RFC仍开放。详见[首屏方案](design/RFC-371-run-observability/report-first-paint.md)、[未采用索引实验](design/RFC-371-run-observability/native-part-id-index.md)。以下旧共享正文及并行输出逐字保持。

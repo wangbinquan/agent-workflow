@@ -172,18 +172,47 @@ async function seedAgent(
   })
 }
 
+let fixtureTeardownStarted = false
+let fixtureStarts: Promise<void>[] = []
+
+async function ownFixtureStartup(
+  start: Promise<DaemonHandle>,
+  record: (child: DaemonHandle) => void,
+): Promise<void> {
+  const child = await start
+  // A failed sibling or the hook timeout can start teardown before this child
+  // is ready. Its successful startup must still hand it to the original stop.
+  if (fixtureTeardownStarted) await child.stop()
+  else record(child)
+}
+
 test.beforeAll(async () => {
-  ;[daemon, workflowDaemon, updateDaemon] = await Promise.all([
-    startDaemon({ stubMode: 'intent' }),
-    startDaemon({ stubMode: 'intent', extraEnv: { STUB_INTENT_VARIANT: 'workflow' } }),
-    startDaemon({ stubMode: 'intent', extraEnv: { STUB_INTENT_VARIANT: 'update' } }),
-  ])
+  fixtureStarts = [
+    ownFixtureStartup(startDaemon({ stubMode: 'intent' }), (child) => {
+      daemon = child
+    }),
+    ownFixtureStartup(
+      startDaemon({ stubMode: 'intent', extraEnv: { STUB_INTENT_VARIANT: 'workflow' } }),
+      (child) => {
+        workflowDaemon = child
+      },
+    ),
+    ownFixtureStartup(
+      startDaemon({ stubMode: 'intent', extraEnv: { STUB_INTENT_VARIANT: 'update' } }),
+      (child) => {
+        updateDaemon = child
+      },
+    ),
+  ]
+  await Promise.all(fixtureStarts)
 })
 
 test.afterAll(async () => {
-  await Promise.all(
-    [daemon, workflowDaemon, updateDaemon].filter((d) => d !== undefined).map((d) => d.stop()),
-  )
+  fixtureTeardownStarted = true
+  await Promise.all([
+    ...[daemon, workflowDaemon, updateDaemon].filter((d) => d !== undefined).map((d) => d.stop()),
+    Promise.allSettled(fixtureStarts),
+  ])
 })
 
 async function authPage(page: Page, target: DaemonHandle): Promise<void> {
