@@ -1,3 +1,4 @@
+import { selectTaskNodeRunWrites } from '../application/taskNodeWriteSelection'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
   isDaemonInterruptionAbortReason,
@@ -571,7 +572,7 @@ async function runTaskEngineOrchestratorInner(
       }
       return {
         persistence: dynamicWorkflow.persistence,
-        nodeRuns: opts.persistence.nodeRuns,
+        nodeRuns: selectTaskNodeRunWrites(opts.persistence, 'preparation'),
         validationContext: dynamicWorkflow.validationContext,
       }
     }

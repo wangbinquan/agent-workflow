@@ -1,5 +1,9 @@
 // RFC-339 — task-execution-owned loop/git/fanout wrapper mechanics.
 
+import {
+  selectTaskNodeExecutionWrites,
+  selectTaskNodeRunWrites,
+} from '../application/taskNodeWriteSelection'
 import type { computeShardScope } from '@/modules/task-execution/domain/fanoutScope'
 import type {
   Agent,
@@ -150,7 +154,7 @@ export function createWrapperMechanicsPorts(
       executionLog[input.level](input.message, input.fields)
     },
     persistProgress: async (runId, progress) => {
-      await state.opts.persistence.nodeExecution.patch({
+      await selectTaskNodeExecutionWrites(state.opts.persistence, 'issuedResults').patch({
         nodeRunId: runId,
         values: { wrapperProgressJson: encodeWrapperProgress(progress) },
         ...(state.opts.executionContext === undefined
@@ -204,7 +208,7 @@ export function createWrapperMechanicsPorts(
         state.containerOf,
       ),
     async recordConsumed(runId, consumed) {
-      await state.opts.persistence.nodeExecution.patch({
+      await selectTaskNodeExecutionWrites(state.opts.persistence, 'issuedResults').patch({
         nodeRunId: runId,
         values: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
         ...(state.opts.executionContext === undefined
@@ -238,7 +242,7 @@ export function createWrapperMechanicsPorts(
           }
     },
     async upsertOutput(input) {
-      await state.opts.persistence.nodeExecution.upsertOutputs({
+      await selectTaskNodeExecutionWrites(state.opts.persistence, 'issuedResults').upsertOutputs({
         nodeRunId: input.runId,
         outputs: [
           {
@@ -622,7 +626,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // allowTerminal: a reaped child is 'interrupted' (terminal); reset to
     // pending so runNode's mark-running (pending → running) applies cleanly.
     shardRunId = freshest.id
-    await state.opts.persistence.nodeRuns.set({
+    await selectTaskNodeRunWrites(state.opts.persistence, 'preparation').set({
       nodeRunId: shardRunId,
       to: 'pending',
       allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
@@ -634,7 +638,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     })
     // The re-run consumes the CURRENT shard value — refresh the stored hash
     // so future reuse decisions compare against what actually ran.
-    await state.opts.persistence.nodeExecution.patch({
+    await selectTaskNodeExecutionWrites(state.opts.persistence, 'preparation').patch({
       nodeRunId: shardRunId,
       values: { shardValueHash: valueHash },
       ...(state.opts.executionContext === undefined
@@ -646,7 +650,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // Branch 3 — mint a fresh row under this wrapper. The T14 replacement target
     // (priorShardUndo) was already derived above from the latest done+merged
     // candidate and is applied at merge-back.
-    shardRunId = await state.opts.persistence.nodeRuns.mint({
+    shardRunId = await selectTaskNodeRunWrites(state.opts.persistence, 'preparation').mint({
       taskId,
       nodeId: innerNode.id,
       status: 'pending',
@@ -715,7 +719,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
 
   const injection = await state.taskExecutionResources.injection(innerAgent.id)
   if (injection.kind === 'failed') {
-    await state.opts.persistence.nodeRuns.set({
+    await selectTaskNodeRunWrites(state.opts.persistence, 'issuedResults').set({
       nodeRunId: shardRunId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -1185,7 +1189,7 @@ async function dispatchFanoutAggregatorAttempt(
     // Re-run the same-generation residue in place (allowTerminal: a reaped
     // aggregator is 'interrupted'; reset to pending for runNode's mark-running).
     aggRunId = freshestAgg.id
-    await state.opts.persistence.nodeRuns.set({
+    await selectTaskNodeRunWrites(state.opts.persistence, 'preparation').set({
       nodeRunId: aggRunId,
       to: 'pending',
       allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
@@ -1197,7 +1201,7 @@ async function dispatchFanoutAggregatorAttempt(
     })
     aggRetryIndex = freshestAgg.retryIndex
   } else {
-    aggRunId = await state.opts.persistence.nodeRuns.mint({
+    aggRunId = await selectTaskNodeRunWrites(state.opts.persistence, 'preparation').mint({
       taskId,
       nodeId: aggNode.id,
       status: 'pending',
@@ -1216,7 +1220,7 @@ async function dispatchFanoutAggregatorAttempt(
 
   const injection = await state.taskExecutionResources.injection(aggAgent.id)
   if (injection.kind === 'failed') {
-    await state.opts.persistence.nodeRuns.set({
+    await selectTaskNodeRunWrites(state.opts.persistence, 'issuedResults').set({
       nodeRunId: aggRunId,
       to: 'failed',
       allowedFrom: ['pending'],

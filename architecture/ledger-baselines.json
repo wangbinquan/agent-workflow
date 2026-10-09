@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:1291ac2d6f99a91c7ee56c31cae6097f1df078422c57fee4f9c6f8eaec735ec4",
+    "sourceDigest": "sha256:66c47ae246183e52845f71a32e3f7ac3ff2239e419f8cd38cd430f9d4d68f1d3",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -821,8 +821,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1982,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1983,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 C2-W2-N2 actual original frozen Task Node caller selection generation: rfc294-mutation-entrypoints 1982 to 1983. One Task-only application selector adds eight file/symbol owners and the original scanner-classified RunSelection type-alias entry. The unchanged scan rules add no new cross-context import, SQL writer or authored debt. Preserve the original complete native ports, callbacks, SQL, transaction and context, all inventory rows and why text, and unchanged classic boundary rules. This measured source-publication declaration is retired in an ordinary successor."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -912,8 +915,11 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27720,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 27728,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 C2-W2-N2 actual original frozen Task Node caller selection generation: rfc294-module-symbol-owners 27720 to 27728. One Task-only application selector adds eight file/symbol owners and the original scanner-classified RunSelection type-alias entry. The unchanged scan rules add no new cross-context import, SQL writer or authored debt. Preserve the original complete native ports, callbacks, SQL, transaction and context, all inventory rows and why text, and unchanged classic boundary rules. This measured source-publication declaration is retired in an ordinary successor."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -921,8 +927,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "40a0d70518f31d18321ae7680bf946a733b74d91",
-    "contentDigest": "sha256:5557f285b7f3a95c88c7514ef152afd8dabe2e7c508e8f19dc072732a2dbad6e",
+    "currentSnapshotSha": "83c6b76f545fc26e314a0e98dd23ff1025d81eef",
+    "contentDigest": "sha256:ff9407b6c26f487f480a2ddb84a21950a789ff7501667a657760f7fd329255de",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

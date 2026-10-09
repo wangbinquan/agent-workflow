@@ -29,6 +29,7 @@ import type { TaskNodeWritePurposes } from './taskNodeWritePurposes'
  * Promise port; provider clients remain in infrastructure factories. */
 export interface TaskExecutionPersistence {
   readonly nativeUsage?: NativeUsageInvocationPersistence
+  readonly nodeWriteMode?: 'host-selected'
   readonly nodeWritePurposes?: TaskNodeWritePurposes
   readonly drive: TaskEngineApplicationPersistence
   readonly ownership: TaskOwnershipPersistence

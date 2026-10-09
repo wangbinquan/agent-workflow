@@ -2,6 +2,10 @@
 // Per-kind selection lives in the closed registry; wrapper bodies are owned by
 // the RFC-339 WrapperRuntime and consume this file only through typed ports.
 
+import {
+  selectTaskNodeRunWrites,
+  selectTaskNodeExecutionWrites,
+} from '../application/taskNodeWriteSelection'
 import type { Actor } from '@/auth/actor'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
@@ -214,8 +218,9 @@ export function isolatedRunBinding(state: SchedulerState): IsolatedAgentRunBindi
 async function setRunStatus(
   state: SchedulerState,
   input: Omit<Parameters<NodeRunLifecyclePersistence['set']>[0], 'executionContext'>,
+  purpose: 'preparation' | 'issuedResults',
 ) {
-  return await state.opts.persistence.nodeRuns.set({
+  return await selectTaskNodeRunWrites(state.opts.persistence, purpose).set({
     ...input,
     ...executionContextInput(state),
   })
@@ -224,8 +229,9 @@ async function setRunStatus(
 async function transitionRunStatus(
   state: SchedulerState,
   input: Omit<Parameters<NodeRunLifecyclePersistence['transition']>[0], 'executionContext'>,
+  purpose: 'preparation' | 'issuedResults',
 ) {
-  return await state.opts.persistence.nodeRuns.transition({
+  return await selectTaskNodeRunWrites(state.opts.persistence, purpose).transition({
     ...input,
     ...executionContextInput(state),
   })
@@ -234,8 +240,9 @@ async function transitionRunStatus(
 async function mintRun(
   state: SchedulerState,
   input: Omit<Parameters<NodeRunLifecyclePersistence['mint']>[0], 'executionContext'>,
+  purpose: 'preparation',
 ): Promise<string> {
-  return await state.opts.persistence.nodeRuns.mint({
+  return await selectTaskNodeRunWrites(state.opts.persistence, purpose).mint({
     ...input,
     ...executionContextInput(state),
   })
@@ -300,13 +307,17 @@ export async function executeWorkgroupHostMechanics(
       ? resolveSyntheticTaskAgentInjection(req.agent, opts.taskAgentRuns.materialReferences)
       : await state.taskExecutionResources.injection(req.agent.id)
   if (injection.kind === 'failed') {
-    await setRunStatus(state, {
-      nodeRunId: req.nodeRunId,
-      to: 'failed',
-      allowedFrom: ['pending'],
-      reason: 'wg-injection-failed',
-      extra: { finishedAt: Date.now(), errorMessage: injection.message },
-    })
+    await setRunStatus(
+      state,
+      {
+        nodeRunId: req.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['pending'],
+        reason: 'wg-injection-failed',
+        extra: { finishedAt: Date.now(), errorMessage: injection.message },
+      },
+      'issuedResults',
+    )
     broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
     return { status: 'failed', outputs: {}, errorMessage: injection.message }
   }
@@ -541,18 +552,22 @@ export async function executeWorkgroupHostMechanics(
             const lateSuppress = async (): Promise<WorkgroupTurnHostResult> => {
               const dropped = result.clarify?.questions.length ?? 0
               const suppressedMsg = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back disabled mid-run (autonomous); dropped ${dropped} question(s)`
-              await setRunStatus(state, {
-                nodeRunId: req.nodeRunId,
-                to: 'failed',
-                allowedFrom: ['done'],
-                allowTerminal: true,
-                reason: 'wg-clarify-suppressed-late',
-                extra: {
-                  finishedAt: Date.now(),
-                  errorMessage: suppressedMsg,
-                  failureCode: 'clarify-forbidden',
+              await setRunStatus(
+                state,
+                {
+                  nodeRunId: req.nodeRunId,
+                  to: 'failed',
+                  allowedFrom: ['done'],
+                  allowTerminal: true,
+                  reason: 'wg-clarify-suppressed-late',
+                  extra: {
+                    finishedAt: Date.now(),
+                    errorMessage: suppressedMsg,
+                    failureCode: 'clarify-forbidden',
+                  },
                 },
-              })
+                'issuedResults',
+              )
               broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
               // failureCode mirrors the DB column so the engine's soft-reject branch
               // routes structurally (RFC-145: errorMessage is human breadcrumbs, never
@@ -1111,14 +1126,18 @@ export async function resolveMergeConflicts(
     cwd: string,
     manifest: MergeConflictManifest,
   ): Promise<void> => {
-    const sessionRunId = await mintRun(state, {
-      taskId: task.id,
-      nodeId: mergeNodeId,
-      status: 'pending',
-      cause: 'merge-resolve',
-      iteration: opts.iteration,
-      overrides: { parentNodeRunId: opts.conflictNodeRunId },
-    })
+    const sessionRunId = await mintRun(
+      state,
+      {
+        taskId: task.id,
+        nodeId: mergeNodeId,
+        status: 'pending',
+        cause: 'merge-resolve',
+        iteration: opts.iteration,
+        overrides: { parentNodeRunId: opts.conflictNodeRunId },
+      },
+      'preparation',
+    )
     const frozen = await state.opts.taskAgentRuns.runtimeBindings.resolve(
       sessionRunId,
       null,
@@ -1338,8 +1357,9 @@ export async function runCallWorkflowNode(
   // RFC-243-LOCK 说明为什么这里绝不能 mint）。以 preResolve 回调短路：拿到
   // latestExisting 后本线自己判领养，命中即整段前奏不执行。
   const resolvedCallRow = await resolveSchedulerRunRow({
-    lifecycle: state.opts.persistence.nodeRuns,
-    projections: state.opts.persistence.nodeExecution,
+    lifecycle: selectTaskNodeRunWrites(state.opts.persistence, 'preparation'),
+    supersededLifecycle: selectTaskNodeRunWrites(state.opts.persistence, 'issuedResults'),
+    projections: selectTaskNodeExecutionWrites(state.opts.persistence, 'preparation'),
     ...(state.opts.executionContext === undefined
       ? {}
       : { executionContext: state.opts.executionContext }),
@@ -1378,13 +1398,17 @@ export async function runCallWorkflowNode(
         // Wrapper-revive escape hatch (RFC-053/095 precedent): the parked /
         // reaped / shutdown-canceled call row RESUMES in place — never a fresh
         // mint (see header).
-        await setRunStatus(state, {
-          nodeRunId: latestExisting.id,
-          to: 'running',
-          allowedFrom: ['pending', 'interrupted', 'canceled'],
-          allowTerminal: true,
-          reason: 'call-adoption',
-        })
+        await setRunStatus(
+          state,
+          {
+            nodeRunId: latestExisting.id,
+            to: 'running',
+            allowedFrom: ['pending', 'interrupted', 'canceled'],
+            allowTerminal: true,
+            reason: 'call-adoption',
+          },
+          'preparation',
+        )
         broadcastNodeStatus(taskId, latestExisting.id, node.id, 'running')
       }
       log.info('call node adopted its in-flight child task', {
@@ -1398,7 +1422,7 @@ export async function runCallWorkflowNode(
   const nodeRunId = resolvedCallRow.nodeRunId
   const latestExisting = resolvedCallRow.latestExisting
   if (!resolvedCallRow.adopted) {
-    await transitionRunStatus(state, { nodeRunId, event: { kind: 'mark-running' } })
+    await transitionRunStatus(state, { nodeRunId, event: { kind: 'mark-running' } }, 'preparation')
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
 
     // ---- gates BEFORE side effects: depth, then the global child budget
@@ -1486,7 +1510,7 @@ export async function runCallWorkflowNode(
     // child INSERT — a crash between the two surfaces as `child-deleted`
     // (dangling stamp) instead of a duplicate child on redispatch.
     const childId = ulid()
-    await opts.persistence.nodeExecution.patch({
+    await selectTaskNodeExecutionWrites(opts.persistence, 'preparation').patch({
       nodeRunId,
       values: { childTaskId: childId },
       ...executionContextInput(state),
@@ -1522,7 +1546,7 @@ export async function runCallWorkflowNode(
       launchedChildId = childId
     } catch (err) {
       hold.release()
-      await opts.persistence.nodeExecution.patch({
+      await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').patch({
         nodeRunId,
         values: { childTaskId: null },
         ...executionContextInput(state),
@@ -1561,7 +1585,7 @@ export async function runCallWorkflowNode(
       : parseCallLedger(null)
   const persistLedger = async (): Promise<void> => {
     try {
-      await opts.persistence.nodeExecution.patch({
+      await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').patch({
         nodeRunId,
         values: { wrapperProgressJson: JSON.stringify(ledger) },
         ...executionContextInput(state),
@@ -1799,7 +1823,7 @@ export async function runCallWorkflowNode(
           },
         }
     : outcome.outputs
-  await opts.persistence.nodeExecution.upsertOutputs({
+  await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').upsertOutputs({
     nodeRunId,
     ...executionContextInput(state),
     outputs: Object.entries(projectedOutputs).map(([portName, value]) => ({
@@ -1814,13 +1838,17 @@ export async function runCallWorkflowNode(
   // merge_state (deriveFrontier D15), so nothing dispatches early.
   const currentRow = await opts.persistence.nodeExecution.read(nodeRunId)
   if (currentRow !== null && currentRow.status !== 'done') {
-    await setRunStatus(state, {
-      nodeRunId,
-      to: 'done',
-      allowedFrom: ['running'],
-      extra: { finishedAt: Date.now() },
-      reason: 'call-child-done',
-    })
+    await setRunStatus(
+      state,
+      {
+        nodeRunId,
+        to: 'done',
+        allowedFrom: ['running'],
+        extra: { finishedAt: Date.now() },
+        reason: 'call-child-done',
+      },
+      'issuedResults',
+    )
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
   }
 
@@ -1939,13 +1967,17 @@ async function failCallRow(
   errorMessage: string,
   to: 'failed' | 'canceled' = 'failed',
 ): Promise<void> {
-  const ok = await setRunStatus(state, {
-    nodeRunId,
-    to,
-    allowedFrom: ['pending', 'running'],
-    extra: { finishedAt: Date.now(), errorMessage, failureCode },
-    reason: 'call-settle',
-  })
+  const ok = await setRunStatus(
+    state,
+    {
+      nodeRunId,
+      to,
+      allowedFrom: ['pending', 'running'],
+      extra: { finishedAt: Date.now(), errorMessage, failureCode },
+      reason: 'call-settle',
+    },
+    'issuedResults',
+  )
     .then(() => true)
     .catch(() => false)
   if (ok) broadcastNodeStatus(state.taskId, nodeRunId, nodeId, to)
@@ -2360,8 +2392,9 @@ export async function runCodeHostCallNode(
   //   · 不广播 pending —— 它铸完立刻转 running（下方），多播一条 WS 事件会让
   //     前台看到一个根本不存在的 pending 态。
   const { nodeRunId } = await resolveSchedulerRunRow({
-    lifecycle: opts.persistence.nodeRuns,
-    projections: opts.persistence.nodeExecution,
+    lifecycle: selectTaskNodeRunWrites(opts.persistence, 'preparation'),
+    supersededLifecycle: selectTaskNodeRunWrites(opts.persistence, 'issuedResults'),
+    projections: selectTaskNodeExecutionWrites(opts.persistence, 'preparation'),
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
@@ -2376,13 +2409,17 @@ export async function runCodeHostCallNode(
     // RFC-369 实现门 P3-1：canceled 是真实终态（不像 pending 马上转 running），照常广播。
     broadcastCanceled: (id) => broadcastNodeStatus(taskId, id, node.id, 'canceled'),
   })
-  await setRunStatus(state, {
-    nodeRunId,
-    to: 'running',
-    allowedFrom: ['pending'],
-    reason: 'code-host-call-start',
-    extra: {},
-  })
+  await setRunStatus(
+    state,
+    {
+      nodeRunId,
+      to: 'running',
+      allowedFrom: ['pending'],
+      reason: 'code-host-call-start',
+      extra: {},
+    },
+    'preparation',
+  )
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
 
   const settle = async (
@@ -2390,13 +2427,17 @@ export async function runCodeHostCallNode(
     reason: string,
     extra: Record<string, unknown>,
   ): Promise<void> => {
-    await setRunStatus(state, {
-      nodeRunId,
-      to,
-      allowedFrom: ['running'],
-      reason,
-      extra: { finishedAt: Date.now(), ...extra },
-    })
+    await setRunStatus(
+      state,
+      {
+        nodeRunId,
+        to,
+        allowedFrom: ['running'],
+        reason,
+        extra: { finishedAt: Date.now(), ...extra },
+      },
+      'issuedResults',
+    )
     broadcastNodeStatus(taskId, nodeRunId, node.id, to)
   }
 
@@ -2612,7 +2653,7 @@ export async function runCodeHostCallNode(
     })) === true
   if (settledWithEffect) broadcastNodeStatus(taskId, nodeRunId, node.id, 'done')
   else {
-    await opts.persistence.nodeExecution.upsertOutputs({
+    await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').upsertOutputs({
       nodeRunId,
       outputs,
       ...executionContextInput(state),
@@ -2665,8 +2706,9 @@ export async function runScriptNode(
   // RFC-287 T8：取行前奏收编（脚本线不继承 reviewIteration、不写 agentOverrideName
   // ——它没有评审轮次也没有代理借用；其余四维与 agent 线同）。
   const resolvedRow = await resolveSchedulerRunRow({
-    lifecycle: opts.persistence.nodeRuns,
-    projections: opts.persistence.nodeExecution,
+    lifecycle: selectTaskNodeRunWrites(opts.persistence, 'preparation'),
+    supersededLifecycle: selectTaskNodeRunWrites(opts.persistence, 'issuedResults'),
+    projections: selectTaskNodeExecutionWrites(opts.persistence, 'preparation'),
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
@@ -2688,24 +2730,28 @@ export async function runScriptNode(
     opts.scriptInterpreters ?? {},
   )
   if (interpreter === null) {
-    await setRunStatus(state, {
-      nodeRunId,
-      to: 'failed',
-      allowedFrom: ['pending'],
-      reason: 'script-interpreter-missing',
-      extra: {
-        finishedAt: Date.now(),
-        // 带上解析链的逐环结果，而不是只报结论——四环（which / 推导 / 存在 / 探测）
-        // 失败时长得一模一样，光看结论排不了障（RFC-253 T41 的 Windows 首红实证）。
-        errorMessage:
-          `no ${language} interpreter available on this host: ` +
-          opts.taskScriptRuns.describeInterpreterResolution(
-            language,
-            opts.scriptInterpreters ?? {},
-          ),
-        failureCode: 'script-interpreter-missing',
+    await setRunStatus(
+      state,
+      {
+        nodeRunId,
+        to: 'failed',
+        allowedFrom: ['pending'],
+        reason: 'script-interpreter-missing',
+        extra: {
+          finishedAt: Date.now(),
+          // 带上解析链的逐环结果，而不是只报结论——四环（which / 推导 / 存在 / 探测）
+          // 失败时长得一模一样，光看结论排不了障（RFC-253 T41 的 Windows 首红实证）。
+          errorMessage:
+            `no ${language} interpreter available on this host: ` +
+            opts.taskScriptRuns.describeInterpreterResolution(
+              language,
+              opts.scriptInterpreters ?? {},
+            ),
+          failureCode: 'script-interpreter-missing',
+        },
       },
-    })
+      'issuedResults',
+    )
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
     return {
       kind: 'failed',
@@ -2830,16 +2876,20 @@ export async function runScriptNode(
           }
         },
         onNextAttempt: async (attempt) => {
-          nodeRunId = await mintRun(state, {
-            taskId,
-            nodeId: node.id,
-            status: 'pending',
-            cause: 'process-retry',
-            retryIndex: retryIndex + attempt,
-            containerRunId: args.containerRunId,
-            iteration,
-            overrides: { consumedUpstreamRunsJson: consumedUpstreamJson },
-          })
+          nodeRunId = await mintRun(
+            state,
+            {
+              taskId,
+              nodeId: node.id,
+              status: 'pending',
+              cause: 'process-retry',
+              retryIndex: retryIndex + attempt,
+              containerRunId: args.containerRunId,
+              iteration,
+              overrides: { consumedUpstreamRunsJson: consumedUpstreamJson },
+            },
+            'preparation',
+          )
           broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
           if (isoHandle !== null)
             await persistIsoBase(isolatedRunBinding(state), nodeRunId, task.repoCount, isoHandle)
@@ -2989,7 +3039,7 @@ async function runOneScriptAttempt(
         timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
         ...(opts.signal === undefined ? {} : { signal: opts.signal }),
         onLine: async (stream: 'stdout' | 'stderr', line: string) =>
-          await opts.persistence.nodeExecution.appendEvent({
+          await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvent({
             nodeRunId: a.nodeRunId,
             ts: Date.now(),
             kind: stream === 'stderr' ? 'stderr' : 'text',
@@ -3001,17 +3051,21 @@ async function runOneScriptAttempt(
     } catch (err) {
       const detail = err instanceof ScriptDepsInstallError ? err.detail : String(err)
       const message = err instanceof Error ? err.message : String(err)
-      await setRunStatus(state, {
-        nodeRunId: a.nodeRunId,
-        to: 'failed',
-        allowedFrom: ['pending', 'running'],
-        reason: 'script-deps-install-failed',
-        extra: {
-          finishedAt: Date.now(),
-          errorMessage: `${message}\n${detail}`.slice(0, 4000),
-          failureCode: 'script-deps-install-failed',
+      await setRunStatus(
+        state,
+        {
+          nodeRunId: a.nodeRunId,
+          to: 'failed',
+          allowedFrom: ['pending', 'running'],
+          reason: 'script-deps-install-failed',
+          extra: {
+            finishedAt: Date.now(),
+            errorMessage: `${message}\n${detail}`.slice(0, 4000),
+            failureCode: 'script-deps-install-failed',
+          },
         },
-      })
+        'issuedResults',
+      )
       broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
       return { kind: 'failed', summary: message, message: 'script-deps-install-failed' }
     }
@@ -3025,13 +3079,17 @@ async function runOneScriptAttempt(
 
   // DB first, then broadcast — a client must never observe `running` for a row
   // the database still calls `pending`.
-  await setRunStatus(state, {
-    nodeRunId: a.nodeRunId,
-    to: 'running',
-    allowedFrom: ['pending'],
-    reason: 'script-dispatch',
-    extra: { startedAt: Date.now() },
-  })
+  await setRunStatus(
+    state,
+    {
+      nodeRunId: a.nodeRunId,
+      to: 'running',
+      allowedFrom: ['pending'],
+      reason: 'script-dispatch',
+      extra: { startedAt: Date.now() },
+    },
+    'preparation',
+  )
   broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'running')
 
   let processEffect:
@@ -3089,7 +3147,7 @@ async function runOneScriptAttempt(
       })
       if (processEffect === undefined) {
         await opts.taskScriptRuns.recordUnownedStart({
-          persistence: opts.persistence.nodeExecution,
+          persistence: selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults'),
           nodeRunId: a.nodeRunId,
           receipt,
           runtimeParamsJson,
@@ -3105,7 +3163,7 @@ async function runOneScriptAttempt(
       // the port value verbatim (AC-27), so masking this mirror would show the
       // operator something the downstream node never sees. A script that prints
       // its own credential to stdout has published it as data.
-      await opts.persistence.nodeExecution.appendEvent({
+      await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvent({
         nodeRunId: a.nodeRunId,
         ts: Date.now(),
         kind: 'text',
@@ -3119,7 +3177,7 @@ async function runOneScriptAttempt(
       // replay). Masking only the failure detail below was not enough: that
       // value is `stderrTail`, a strict SUFFIX of the very bytes this sink
       // stores, so the same secret stayed in the clear one table over.
-      await opts.persistence.nodeExecution.appendEvent({
+      await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvent({
         nodeRunId: a.nodeRunId,
         ts: Date.now(),
         kind: 'stderr',
@@ -3132,20 +3190,24 @@ async function runOneScriptAttempt(
 
   if (outcome.result.outcome === 'aborted') {
     const daemonShutdown = isDaemonInterruptionAbortReason(opts.signal?.reason)
-    await setRunStatus(state, {
-      nodeRunId: a.nodeRunId,
-      to: daemonShutdown ? 'interrupted' : 'canceled',
-      allowedFrom: ['running'],
-      reason: 'script-aborted',
-      extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
-    })
+    await setRunStatus(
+      state,
+      {
+        nodeRunId: a.nodeRunId,
+        to: daemonShutdown ? 'interrupted' : 'canceled',
+        allowedFrom: ['running'],
+        reason: 'script-aborted',
+        extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
+      },
+      'issuedResults',
+    )
     await processEffect?.settle(outcome.result)
     broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, daemonShutdown ? 'interrupted' : 'canceled')
     return { kind: 'canceled', message: daemonShutdown ? 'daemon-shutdown' : 'canceled' }
   }
 
   if (outcome.result.truncated.stdout) {
-    await opts.persistence.nodeExecution.appendEvent({
+    await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvent({
       nodeRunId: a.nodeRunId,
       ts: Date.now(),
       kind: 'error',
@@ -3206,18 +3268,22 @@ async function runOneScriptAttempt(
   }
 
   if (failureCode !== null) {
-    await setRunStatus(state, {
-      nodeRunId: a.nodeRunId,
-      to: 'failed',
-      allowedFrom: ['running'],
-      reason: failureCode,
-      extra: {
-        finishedAt: Date.now(),
-        exitCode: outcome.result.exitCode,
-        errorMessage,
-        failureCode,
+    await setRunStatus(
+      state,
+      {
+        nodeRunId: a.nodeRunId,
+        to: 'failed',
+        allowedFrom: ['running'],
+        reason: failureCode,
+        extra: {
+          finishedAt: Date.now(),
+          exitCode: outcome.result.exitCode,
+          errorMessage,
+          failureCode,
+        },
       },
-    })
+      'issuedResults',
+    )
     await processEffect?.settle(outcome.result)
     broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
     return {
@@ -3227,7 +3293,7 @@ async function runOneScriptAttempt(
     }
   }
 
-  await opts.persistence.nodeExecution.upsertOutputs({
+  await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').upsertOutputs({
     nodeRunId: a.nodeRunId,
     outputs: Object.entries(ports).map(([portName, content]) => ({
       portName,
@@ -3250,13 +3316,17 @@ async function runOneScriptAttempt(
       ...executionContextInput(state),
     })
   }
-  await setRunStatus(state, {
-    nodeRunId: a.nodeRunId,
-    to: 'done',
-    allowedFrom: ['running'],
-    reason: 'script-done',
-    extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
-  })
+  await setRunStatus(
+    state,
+    {
+      nodeRunId: a.nodeRunId,
+      to: 'done',
+      allowedFrom: ['running'],
+      reason: 'script-done',
+      extra: { finishedAt: Date.now(), exitCode: outcome.result.exitCode },
+    },
+    'issuedResults',
+  )
   await processEffect?.settle(outcome.result)
   broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'done')
   return { kind: 'done' }
@@ -3380,39 +3450,55 @@ async function recordSkippedRun(
   let nodeRunId: string
   if (latest?.status === 'pending') {
     nodeRunId = latest.id
-    await state.opts.persistence.nodeExecution.patch({
+    await selectTaskNodeExecutionWrites(state.opts.persistence, 'issuedResults').patch({
       nodeRunId,
       values: { consumedUpstreamRunsJson: consumedJson },
       ...executionContextInput(state),
     })
-    await transitionRunStatus(state, {
-      nodeRunId,
-      event: { kind: 'mark-skipped', reason },
-      extra: { finishedAt: Date.now() },
-    })
+    await transitionRunStatus(
+      state,
+      {
+        nodeRunId,
+        event: { kind: 'mark-skipped', reason },
+        extra: { finishedAt: Date.now() },
+      },
+      'issuedResults',
+    )
   } else {
     if (latest?.status === 'awaiting_review' || latest?.status === 'awaiting_human') {
-      await transitionRunStatus(state, {
-        nodeRunId: latest.id,
-        event: { kind: 'cancel-by-supersede', reason: 'branch-skipped' },
-        extra: { finishedAt: Date.now() },
-      })
+      await transitionRunStatus(
+        state,
+        {
+          nodeRunId: latest.id,
+          event: { kind: 'cancel-by-supersede', reason: 'branch-skipped' },
+          extra: { finishedAt: Date.now() },
+        },
+        'issuedResults',
+      )
       broadcastNodeStatus(taskId, latest.id, node.id, 'canceled')
     }
-    nodeRunId = await mintRun(state, {
-      taskId,
-      nodeId: node.id,
-      status: 'pending',
-      cause: 'branch-skip',
-      containerRunId,
-      iteration,
-      overrides: { consumedUpstreamRunsJson: consumedJson },
-    })
-    await transitionRunStatus(state, {
-      nodeRunId,
-      event: { kind: 'mark-skipped', reason },
-      extra: { finishedAt: Date.now() },
-    })
+    nodeRunId = await mintRun(
+      state,
+      {
+        taskId,
+        nodeId: node.id,
+        status: 'pending',
+        cause: 'branch-skip',
+        containerRunId,
+        iteration,
+        overrides: { consumedUpstreamRunsJson: consumedJson },
+      },
+      'preparation',
+    )
+    await transitionRunStatus(
+      state,
+      {
+        nodeRunId,
+        event: { kind: 'mark-skipped', reason },
+        extra: { finishedAt: Date.now() },
+      },
+      'issuedResults',
+    )
   }
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'skipped')
   return nodeRunId
@@ -3522,23 +3608,27 @@ export async function runOutputNode(
     projected.push({ binding: b, row })
   }
   // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
-  const nrId = await mintRun(state, {
-    taskId,
-    nodeId: node.id,
-    status: 'done',
-    cause: 'io-virtual',
-    containerRunId: args.containerRunId,
-    iteration,
-    overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
-    outputs: projected.map(({ binding, row }) => ({
-      portName: binding.name,
-      content: row.content,
-      kind: row.kind,
-      archiveJson: row.archiveJson,
-      // RFC-306: the virtual projection preserves branch activation.
-      active: row.active,
-    })),
-  })
+  const nrId = await mintRun(
+    state,
+    {
+      taskId,
+      nodeId: node.id,
+      status: 'done',
+      cause: 'io-virtual',
+      containerRunId: args.containerRunId,
+      iteration,
+      overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
+      outputs: projected.map(({ binding, row }) => ({
+        portName: binding.name,
+        content: row.content,
+        kind: row.kind,
+        archiveJson: row.archiveJson,
+        // RFC-306: the virtual projection preserves branch activation.
+        active: row.active,
+      })),
+    },
+    'preparation',
+  )
   broadcastNodeStatus(taskId, nrId, node.id, 'done')
   return { kind: 'ok', summary: '', message: '' }
 }
@@ -3561,15 +3651,19 @@ export async function runInputNode(
   // RFC-004: an input node's single output port is named after its inputKey,
   // so edges authored on the canvas resolve to the visible handle label.
   // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
-  const nrId = await mintRun(state, {
-    taskId,
-    nodeId: node.id,
-    status: 'done',
-    cause: 'io-virtual',
-    containerRunId: args.containerRunId,
-    iteration,
-    outputs: [{ portName: inputKey, content: value }],
-  })
+  const nrId = await mintRun(
+    state,
+    {
+      taskId,
+      nodeId: node.id,
+      status: 'done',
+      cause: 'io-virtual',
+      containerRunId: args.containerRunId,
+      iteration,
+      outputs: [{ portName: inputKey, content: value }],
+    },
+    'preparation',
+  )
   broadcastNodeStatus(taskId, nrId, node.id, 'done')
   return { kind: 'ok', summary: '', message: '' }
 }
@@ -3636,21 +3730,29 @@ export async function runCrossClarifyNode(
   // Validator runtime defense: a node without a questioner means the
   // workflow is malformed — fail and let the user see it in the UI.
   if (findQuestionerNodeForCrossClarify(definition, node.id) === undefined) {
-    const failId = await mintRun(state, {
-      taskId,
-      nodeId: node.id,
-      status: 'pending',
-      cause: 'cross-clarify-guard',
-      containerRunId: args.containerRunId,
-      iteration,
-    })
-    await setRunStatus(state, {
-      nodeRunId: failId,
-      to: 'failed',
-      allowedFrom: ['pending'],
-      reason: 'cross-clarify-input-source-missing-at-runtime',
-      extra: { finishedAt: Date.now() },
-    })
+    const failId = await mintRun(
+      state,
+      {
+        taskId,
+        nodeId: node.id,
+        status: 'pending',
+        cause: 'cross-clarify-guard',
+        containerRunId: args.containerRunId,
+        iteration,
+      },
+      'preparation',
+    )
+    await setRunStatus(
+      state,
+      {
+        nodeRunId: failId,
+        to: 'failed',
+        allowedFrom: ['pending'],
+        reason: 'cross-clarify-input-source-missing-at-runtime',
+        extra: { finishedAt: Date.now() },
+      },
+      'issuedResults',
+    )
     return {
       kind: 'failed',
       summary: `cross-clarify node ${node.id} has no questioner input`,
@@ -3673,14 +3775,18 @@ export async function runCrossClarifyNode(
       })) === 'stop'
     : false
   if (stopped) {
-    const stopRunId = await mintRun(state, {
-      taskId,
-      nodeId: node.id,
-      status: 'pending',
-      cause: 'cross-clarify-guard',
-      containerRunId: args.containerRunId,
-      iteration,
-    })
+    const stopRunId = await mintRun(
+      state,
+      {
+        taskId,
+        nodeId: node.id,
+        status: 'pending',
+        cause: 'cross-clarify-guard',
+        containerRunId: args.containerRunId,
+        iteration,
+      },
+      'preparation',
+    )
     // RFC-217 T9: the pending→done short-circuit transition (+ its reason
     // string) is owned by the clarify service — single dispatch policy.
     const dispatched = await collaboration.inspectCrossClarify({
@@ -3697,13 +3803,17 @@ export async function runCrossClarifyNode(
     // strand the pending row. Retire the speculative mint and fall through
     // to the common awaiting path (the runner mints its own row on emit).
     if (dispatched.kind !== 'short-circuit-stop') {
-      await setRunStatus(state, {
-        nodeRunId: stopRunId,
-        to: 'canceled',
-        allowedFrom: ['pending'],
-        reason: 'cross-clarify-stop-race',
-        extra: { finishedAt: Date.now() },
-      })
+      await setRunStatus(
+        state,
+        {
+          nodeRunId: stopRunId,
+          to: 'canceled',
+          allowedFrom: ['pending'],
+          reason: 'cross-clarify-stop-race',
+          extra: { finishedAt: Date.now() },
+        },
+        'issuedResults',
+      )
       return { kind: 'ok', summary: '', message: 'cross-clarify-stop-race' }
     }
     broadcastNodeStatus(taskId, stopRunId, node.id, 'done')
@@ -3847,8 +3957,9 @@ export async function runAgentSingleNode(
   // context all key off id-order / the RFC-070 consumed-by stamps, so nothing
   // needs to be carried forward on the row.
   const resolvedRow = await resolveSchedulerRunRow({
-    lifecycle: opts.persistence.nodeRuns,
-    projections: opts.persistence.nodeExecution,
+    lifecycle: selectTaskNodeRunWrites(opts.persistence, 'preparation'),
+    supersededLifecycle: selectTaskNodeRunWrites(opts.persistence, 'issuedResults'),
+    projections: selectTaskNodeExecutionWrites(opts.persistence, 'preparation'),
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
@@ -4022,22 +4133,26 @@ export async function runAgentSingleNode(
         // the answered Q&A via id-order generation derivation + the RFC-070
         // consumed-by stamps, not a carried clarifyIteration. shardKey /
         // parentNodeRunId still belong to this run-of-the-node and persist.
-        nodeRunId = await mintRun(state, {
-          taskId,
-          nodeId: node.id,
-          status: 'pending',
-          cause: 'process-retry',
-          retryIndex: attempt,
-          containerRunId: args.containerRunId,
-          iteration,
-          overrides: {
-            reviewIteration: inheritedReviewIteration,
-            shardKey: inheritedShardKey,
-            parentNodeRunId: inheritedParentNodeRunId,
-            consumedUpstreamRunsJson: consumedUpstreamJson,
-            ...(followupDecision.followup && envelopeNonce.length > 0 ? { envelopeNonce } : {}),
+        nodeRunId = await mintRun(
+          state,
+          {
+            taskId,
+            nodeId: node.id,
+            status: 'pending',
+            cause: 'process-retry',
+            retryIndex: attempt,
+            containerRunId: args.containerRunId,
+            iteration,
+            overrides: {
+              reviewIteration: inheritedReviewIteration,
+              shardKey: inheritedShardKey,
+              parentNodeRunId: inheritedParentNodeRunId,
+              consumedUpstreamRunsJson: consumedUpstreamJson,
+              ...(followupDecision.followup && envelopeNonce.length > 0 ? { envelopeNonce } : {}),
+            },
           },
-        })
+          'preparation',
+        )
         envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)
         broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
         // RFC-130: carry the iso columns onto the freshly-minted retry row so a
@@ -4063,7 +4178,7 @@ export async function runAgentSingleNode(
                 ? followupDecision.failures
                 : [{ port: '', kind: '', subReason: '' }]
             for (const f of failures) {
-              await opts.persistence.nodeExecution.appendEvent({
+              await selectTaskNodeExecutionWrites(opts.persistence, 'preparation').appendEvent({
                 nodeRunId,
                 ts: Date.now(),
                 kind: 'text',
@@ -4079,7 +4194,7 @@ export async function runAgentSingleNode(
             }
           } else {
             const followupReason = followupDecision.reason
-            await opts.persistence.nodeExecution.appendEvent({
+            await selectTaskNodeExecutionWrites(opts.persistence, 'preparation').appendEvent({
               nodeRunId,
               ts: Date.now(),
               kind: 'text',
@@ -4098,7 +4213,7 @@ export async function runAgentSingleNode(
         // 区分的痕迹——用户拍板不新增 rerun cause，事件流就是唯一的区分面。
         // 与上面的 followup 分支互斥：升级时 followupDecision 已被收回成 false。
         if (pendingRestartReason !== undefined) {
-          await opts.persistence.nodeExecution.appendEvent({
+          await selectTaskNodeExecutionWrites(opts.persistence, 'preparation').appendEvent({
             nodeRunId,
             ts: Date.now(),
             kind: 'text',
@@ -4228,11 +4343,15 @@ export async function runAgentSingleNode(
         sourceSessionId: priorSessionId,
       })
       if (resumeDecision.fallbackReason !== undefined) {
-        await recordClarifyInlineEvent(state.opts.persistence.nodeExecution, nodeRunId, {
-          level: 'warning',
-          reason: resumeDecision.fallbackReason,
-          extra: { clarifyGeneration },
-        })
+        await recordClarifyInlineEvent(
+          selectTaskNodeExecutionWrites(state.opts.persistence, 'preparation'),
+          nodeRunId,
+          {
+            level: 'warning',
+            reason: resumeDecision.fallbackReason,
+            extra: { clarifyGeneration },
+          },
+        )
       }
 
       // RFC-132 (PR-C): the designer's §6 update-mode prior output is no longer fetched here (the
@@ -4444,11 +4563,15 @@ export async function runAgentSingleNode(
         }
       }
       if (resumeDecision.inlineMode && resumeDecision.resumeSessionId !== undefined) {
-        await recordClarifyInlineEvent(state.opts.persistence.nodeExecution, nodeRunId, {
-          level: 'info',
-          sessionIdPrefix: resumeDecision.resumeSessionId.slice(0, 8),
-          extra: { clarifyGeneration },
-        })
+        await recordClarifyInlineEvent(
+          selectTaskNodeExecutionWrites(state.opts.persistence, 'preparation'),
+          nodeRunId,
+          {
+            level: 'info',
+            sessionIdPrefix: resumeDecision.resumeSessionId.slice(0, 8),
+            extra: { clarifyGeneration },
+          },
+        )
       }
       // RFC-042: follow-up attempts re-use the prior attempt's opencode
       // session id (captured above into `followupResumeSessionId`) AND swap
@@ -4646,7 +4769,7 @@ export async function runAgentSingleNode(
       // it back via `--session`. NULL on failed / canceled runs is fine.
       if (lastResult.sessionId !== undefined && lastResult.sessionId !== '') {
         const persistedSessionId = lastResult.sessionId
-        await opts.persistence.nodeExecution.patch({
+        await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').patch({
           nodeRunId,
           values: { opencodeSessionId: persistedSessionId },
           ...executionContextInput(state),
@@ -4663,11 +4786,15 @@ export async function runAgentSingleNode(
         // RFC-284 T15（D10）：判据下沉 driver 能力面——措辞属各 CLI 私有。
         // 无该能力的 driver 视为「无法判定」（告警可能缺失但绝不误报）。
         if (getRuntimeDriver(frozenRuntime.protocol).detectSessionNotFound?.(stderrText) === true) {
-          await recordClarifyInlineEvent(state.opts.persistence.nodeExecution, nodeRunId, {
-            level: 'warning',
-            reason: 'session-not-found',
-            extra: { clarifyGeneration },
-          })
+          await recordClarifyInlineEvent(
+            selectTaskNodeExecutionWrites(state.opts.persistence, 'issuedResults'),
+            nodeRunId,
+            {
+              level: 'warning',
+              reason: 'session-not-found',
+              extra: { clarifyGeneration },
+            },
+          )
         }
       }
     } catch (err) {
@@ -4679,11 +4806,15 @@ export async function runAgentSingleNode(
       // abandoned each predecessor, while the final pending/isolating row was
       // redispatched and crashed on begin-isolation from an abandoned state.
       // Close the row before the retry policy observes the synthetic failure.
-      await transitionRunStatus(state, {
-        nodeRunId,
-        event: { kind: 'mark-failed', reason: 'scheduler-node-threw' },
-        extra: { finishedAt: Date.now(), errorMessage, exitCode: null },
-      })
+      await transitionRunStatus(
+        state,
+        {
+          nodeRunId,
+          event: { kind: 'mark-failed', reason: 'scheduler-node-threw' },
+          extra: { finishedAt: Date.now(), errorMessage, exitCode: null },
+        },
+        'issuedResults',
+      )
       lastResult = {
         status: 'failed',
         exitCode: null,

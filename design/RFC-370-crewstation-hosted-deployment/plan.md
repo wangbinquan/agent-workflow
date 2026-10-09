@@ -1290,3 +1290,18 @@ Windows swimlane原case拿导航前单独生成的retained报告与UI稍后独�
 ## 2026-10-09 CI 原 Git 夹具残锁等待
 
 c7375662 的 Mac backend6 job113619940054 中，原 RFC303 两例之一在残锁上重复启动 Git，日志明确 5131.62ms/原5000ms 超时。本有限批只改其测试 helper：第一次原 Git add 和非锁错误传播保持，原十九次25ms最大显式等待改为原夹具 ref lock 的文件检查，随后沿原路径移除残锁并真实重试一次。原 runGit 已先等待 proc.exited 再进同一钩子；生产取消/清理、原两个case全部断言和预算保持。详见 ci-git-fixture-ref-lock-wait.md。限定独立功能检视、精确发布与 hosted 总绿/真实两例逐项验收；无本机AW执行或新census。所有旧文档正文与并行内容保留。N2/H7/A-T7/A-G/CS M0～M4仍开放，AW未部署CS。
+
+
+## 2026-10-09 当前 main 总绿与 N2 调用者设计
+
+40a0d70518f31d18321ae7680bf946a733b74d91 主 CI37872131154 全72/72 success，原 Windows workflow 手动dispatch37873022203 同SHA success/Typecheck通过，全部73 terminal jobs已完整消费；原RFC303两case在Mac/Ubuntu各成功，5000ms和全部断言保持。旧failure/INVALID保留，用户总绿门槛满足，CI修复闭合。N1原8768599的196真实provider案例及原完整main/Windows总绿已消费，40a包含且相关完整source blobs保持，不重复该候选全门或census。
+
+继续已批准N2有限设计：80直接/helper Node动作明确28准备/52结果；进一步核对四个混合run-row helper、三个clarify事件、两个unowned spawn回执和dynamicWorkflow转交。拟新增中立显式选择、selected-only装配标记和真实caller接线，managed effect仍由原登记者负责；详见host-authority-task-node-callers.md。设计门/实现/唯一原census/配套/精确上库及new exact-SHA总绿各自验收。本机无AW执行，全部既有正文与并行输出保持。完整H7/A-T7/A-G/十九owner/三roots/CS M0～M4仍开放，AW未部署CS；继续RFC，不以本有限批收尾。
+
+## N2 原生成与配套候选
+
+独立 N2-SOURCE16-R1 有效稳定 PASS、0 findings 已由 root 完整消费正式45项（16/18/11）首末EOF、三个包装及80原动作实际分析；唯一授权8090-byte旧设计正文单列补充，原表格排版后全部语义保持，原四历史文件正文与1195-byte设计追加逐字保持。10 production、18/provider新真实数据库案例及两个源码合同均冻结；原N1的49/provider案例/162静态expects/原预算不变。新案例的运行验收仍由确切提交 hosted CI 完成。
+
+唯一原 scoped census 固定 83c6b76f545fc26e314a0e98dd23ff1025d81eef，11冻结TS输入（10 production）及6789非本批已提交 source blobs；四原规则全文不变，13完整原输出保存，sourceDigest sha256:66c47ae246183e52845f71a32e3f7ac3ff2239e419f8cd38cd430f9d4d68f1d3。原classic本批 inbound 0→0、outbound 15→15逐条同一，无新增跨域import、全仓SCC/边界或authored debt；356原债务与129有序账本及每条why完整保留。新增中立application文件对应8个file/symbol owner；原规则按符号名额外收录RunSelection类型别名（erased type），保留该原输出，不据此增加SQL写入或修改扫描判据。
+
+两个实测账本增长仅配套一次声明：mutation-entrypoints 1982→1983、module-symbol-owners 27720→27728，源码消费后普通后继退役。四个原纯治理/JSON emission先整字节复现原生成输出，八canonical及另三治理和原完整status渲染全文保持。配套16项功能门、最终29路径精确发布、上库后Windows原workflow新测试登记及new exact-SHA主/Windows总绿与真实18/provider案例依序验收。没有第二次census或本机AW tests/typecheck/build/services/E2E。其余Task/child/control/boot、十九owner、三roots、完整H7/A-T7/A-G与CS M0～M4继续；AW尚未部署CS，RFC继续。

@@ -11,3 +11,10 @@
 两个原 case、全部断言、测试预算、真实仓库/目录/分支材料化、非空目录保留，以及生产清理和 Git 规则全部保留。不新增生产、架构输出或 census；原 N1 唯一成功 census 仍复用。验证采用精确源码保留、限定格式/lint 与独立功能检视，再按 exact-SHA hosted 总流水线及实际两例验收，不运行本机 AW tests/typecheck/build/services/E2E。
 
 截至本候选，独立功能门与新提交 CI 待验收。原失败历史保留。N2/H7/A-T7/A-G、CS M0～M4 继续开放，AW 尚未部署 CS。
+
+
+## 2026-10-09 当前 main 总绿与 N2 调用者设计
+
+40a0d70518f31d18321ae7680bf946a733b74d91 主 CI37872131154 全72/72 success，原 Windows workflow 手动dispatch37873022203 同SHA success/Typecheck通过，全部73 terminal jobs已完整消费；原RFC303两case在Mac/Ubuntu各成功，5000ms和全部断言保持。旧failure/INVALID保留，用户总绿门槛满足，CI修复闭合。N1原8768599的196真实provider案例及原完整main/Windows总绿已消费，40a包含且相关完整source blobs保持，不重复该候选全门或census。
+
+继续已批准N2有限设计：80直接/helper Node动作明确28准备/52结果；进一步核对四个混合run-row helper、三个clarify事件、两个unowned spawn回执和dynamicWorkflow转交。拟新增中立显式选择、selected-only装配标记和真实caller接线，managed effect仍由原登记者负责；详见host-authority-task-node-callers.md。设计门/实现/唯一原census/配套/精确上库及new exact-SHA总绿各自验收。本机无AW执行，全部既有正文与并行输出保持。完整H7/A-T7/A-G/十九owner/三roots/CS M0～M4仍开放，AW未部署CS；继续RFC，不以本有限批收尾。

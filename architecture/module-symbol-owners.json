@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2418,
+    "backendFiles": 2419,
     "frontendFiles": 657,
     "legacyFiles": 596,
-    "moduleFiles": 1822,
-    "productionFiles": 3246,
+    "moduleFiles": 1823,
+    "productionFiles": 3247,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27720
+    "symbolsIncludingFileRoots": 27728
   },
   "entries": [
     {
@@ -144310,6 +144310,102 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "taskLifecycleCommittedEventCodec",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#ExecutionSelection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ExecutionSelection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#Purpose",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Purpose",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#RunSelection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RunSelection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#selectedPurpose",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "selectedPurpose",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#Selection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Selection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#selectTaskNodeExecutionWrites",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "selectTaskNodeExecutionWrites",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskNodeWriteSelection.ts#selectTaskNodeRunWrites",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "selectTaskNodeRunWrites",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -333381,5 +333477,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1291ac2d6f99a91c7ee56c31cae6097f1df078422c57fee4f9c6f8eaec735ec4"
+  "sourceDigest": "sha256:66c47ae246183e52845f71a32e3f7ac3ff2239e419f8cd38cd430f9d4d68f1d3"
 }

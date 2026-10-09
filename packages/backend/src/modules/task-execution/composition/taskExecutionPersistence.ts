@@ -194,6 +194,7 @@ export function createTaskExecutionPersistence(
     ...(dependencies.hostWrites === undefined
       ? {}
       : {
+          nodeWriteMode: 'host-selected' as const,
           nodeWritePurposes: createSelectedTaskNodeWritePurposes({
             db,
             hostWrites: dependencies.hostWrites,

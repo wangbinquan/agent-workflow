@@ -24,6 +24,7 @@
 // ban — binary-build incident). The conflict resolver (which mints child runs
 // and calls runNode directly) is injected by the scheduler as a callback.
 
+import { selectTaskNodeExecutionWrites } from '../application/taskNodeWriteSelection'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 import {
   scopeForIsolatedRun,
@@ -46,7 +47,12 @@ import type { TaskExecutionContextRef } from '@/modules/task-execution/applicati
 export interface IsolatedAgentRunBinding {
   readonly persistence: Pick<
     TaskExecutionPersistence,
-    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'
+    | 'artifactPaths'
+    | 'effects'
+    | 'mergeStates'
+    | 'nodeExecution'
+    | 'nodeWriteMode'
+    | 'nodeWritePurposes'
   >
   readonly executionContext?: TaskExecutionContextRef
 }
@@ -441,7 +447,7 @@ async function persistPendingSubResolves(
   }
 
   if (repoCount === 1) {
-    await binding.persistence.nodeExecution.patch({
+    await selectTaskNodeExecutionWrites(binding.persistence, 'issuedResults').patch({
       nodeRunId,
       values: { isoSubmodulesJson: withPending(row.isoSubmodulesJson, handle.repos[0]) },
       ...contextInput(binding),
@@ -463,7 +469,7 @@ async function persistPendingSubResolves(
     const next = withPending(raw, r)
     if (next !== null) multi[r.worktreeDirName] = JSON.parse(next) as unknown
   }
-  await binding.persistence.nodeExecution.patch({
+  await selectTaskNodeExecutionWrites(binding.persistence, 'issuedResults').patch({
     nodeRunId,
     values: { isoSubmodulesReposJson: JSON.stringify(multi) },
     ...contextInput(binding),

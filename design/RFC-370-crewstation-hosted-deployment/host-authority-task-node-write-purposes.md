@@ -84,3 +84,10 @@ Ubuntu失败是新测试在尚未提交的 native patch 后调用普通 this.rea
 Windows swimlane原case拿导航前单独生成的retained报告与UI稍后独立生成的报告比较，原日志精确4对5。只从页面真实POST reports的同一Task响应，经原settledReport和originalRows完整分页，取得页面使用的同一reportId作为原始attempts；保留原精确行数、五tick、1280/390各条轨道宽度/对齐、无页面溢出和截图及全部预算，补上响应成功和content非空断言。不做mock、不放宽断言。一次必要消息已协调该干净E2E case的归属；所有并行RFC371生产/UI/测试与13份架构WIP保留并不纳入本次test-only提交。
 
 本批仅两个测试和三个历史追加文档，经有限独立功能门、精确5路径上库与新exact-SHA main/Windows总绿再验收。无新census或本机AW tests/typecheck/build/services/E2E，全部旧共享正文保留。N2/H7/A-T7/A-G/三roots/十九owners/CS M0～M4仍开放，AW未部署CS。
+
+
+## 2026-10-09 当前 main 总绿与 N2 调用者设计
+
+40a0d70518f31d18321ae7680bf946a733b74d91 主 CI37872131154 全72/72 success，原 Windows workflow 手动dispatch37873022203 同SHA success/Typecheck通过，全部73 terminal jobs已完整消费；原RFC303两case在Mac/Ubuntu各成功，5000ms和全部断言保持。旧failure/INVALID保留，用户总绿门槛满足，CI修复闭合。N1原8768599的196真实provider案例及原完整main/Windows总绿已消费，40a包含且相关完整source blobs保持，不重复该候选全门或census。
+
+继续已批准N2有限设计：80直接/helper Node动作明确28准备/52结果；进一步核对四个混合run-row helper、三个clarify事件、两个unowned spawn回执和dynamicWorkflow转交。拟新增中立显式选择、selected-only装配标记和真实caller接线，managed effect仍由原登记者负责；详见host-authority-task-node-callers.md。设计门/实现/唯一原census/配套/精确上库及new exact-SHA总绿各自验收。本机无AW执行，全部既有正文与并行输出保持。完整H7/A-T7/A-G/十九owner/三roots/CS M0～M4仍开放，AW未部署CS；继续RFC，不以本有限批收尾。
