@@ -7,6 +7,7 @@ import { ulid } from 'ulid'
 import {
   DwStateSchema,
   initialDwState,
+  WorkgroupRuntimeConfigSchema,
   type DwState,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
@@ -115,11 +116,12 @@ async function dynamicFixture(
         agentId,
         agentName: agentId,
         userId: null,
-        displayName: 'original member',
+        displayName: 'original-member',
         roleDesc: 'answer',
       },
     ],
   }
+  expect(WorkgroupRuntimeConfigSchema.parse(config)).toEqual(config)
   await db
     .update(tasks)
     .set({ workgroupId: config.workgroupId, workgroupConfigJson: JSON.stringify(config) })
@@ -284,7 +286,7 @@ describeEachProvider(
           expect(await save(f, purpose, dw, 4321)).toBeUndefined()
           expect(
             recording.statements.filter((s) =>
-              /^\s*update\s+"?workgroup_task_state"?\b/i.test(s.sql),
+              /^\s*update\s+(?:"agent_workflow"\.)?"?workgroup_task_state"?(?=\s)/i.test(s.sql),
             ),
           ).toHaveLength(1)
           expect(recording.statements.filter((s) => /^\s*commit\b/i.test(s.sql))).toHaveLength(1)
@@ -324,7 +326,7 @@ describeEachProvider(
           ).rejects.toBe(error)
           expect(
             recording.statements.filter((s) =>
-              /^\s*update\s+"?workgroup_task_state"?\b/i.test(s.sql),
+              /^\s*update\s+(?:"agent_workflow"\.)?"?workgroup_task_state"?(?=\s)/i.test(s.sql),
             ),
           ).toHaveLength(1)
           expect(recording.statements.filter((s) => /^\s*rollback\b/i.test(s.sql))).toHaveLength(1)
