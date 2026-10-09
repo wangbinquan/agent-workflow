@@ -33,18 +33,18 @@ function mountRoute(url: string) {
     component: Route.options.component,
   })
   const history = createMemoryHistory({ initialEntries: [url] })
+  const replace = vi.spyOn(history, 'replace')
   const router = createRouter({ routeTree: root.addChildren([observation]), history })
-  const navigate = vi.spyOn(router, 'navigate')
   render(
     // The focused route tree preserves the production /observability match and hooks.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <RouterProvider router={router as any} />,
   )
-  return { router, history, navigate }
+  return { router, history, replace }
 }
 
 test('default range is replaced with the same validated values and all adjacent search fields', async () => {
-  const { router, history, navigate } = mountRoute(
+  const { router, history, replace } = mountRoute(
     '/observability?tab=usage&task=task-id&attempt=attempt-id&span=span-id&agent=agent-id&quality=gap&cohort=usage&q=original',
   )
   const visible = JSON.parse(
@@ -64,16 +64,20 @@ test('default range is replaced with the same validated values and all adjacent 
     q: 'original',
   })
   expect(history.length).toBe(1)
-  expect(navigate.mock.calls.filter(([options]) => options.replace === true)).toHaveLength(1)
-  expect(navigate).toHaveBeenCalledWith({ search: visible, replace: true, resetScroll: false })
+  // Router's initial canonicalization can call commitLocation directly before Page mounts.
+  // Verify the real persisted URL and replacement, regardless of that internal entrypoint.
+  await waitFor(() => expect(replace).toHaveBeenCalledTimes(1))
+  expect(history.location.search).toBe(router.state.location.searchStr)
+  expect(replace.mock.calls[0]![0]).toBe(router.state.location.href)
 })
 
 test('an explicit valid range keeps its original URL and browser history', async () => {
   const url = '/observability?from=1000&to=2000&period=custom&tab=tasks&task=original'
-  const { router, history, navigate } = mountRoute(url)
+  const { router, history, replace } = mountRoute(url)
   await screen.findByTestId('actual-range')
   expect(router.state.location.searchStr).toBe(url.slice(url.indexOf('?')))
   expect(router.state.location.search).toMatchObject({ from: 1000, to: 2000, task: 'original' })
   expect(history.length).toBe(1)
-  expect(navigate.mock.calls.filter(([options]) => options.replace === true)).toHaveLength(0)
+  expect(history.location.href).toBe(url)
+  expect(replace).not.toHaveBeenCalled()
 })

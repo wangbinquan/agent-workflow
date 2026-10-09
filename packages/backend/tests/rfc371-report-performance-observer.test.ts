@@ -219,7 +219,7 @@ test('source wrappers retain original workspace receivers, parameters, Maps, and
     async getMany<T>(...args: [string, readonly string[]]) {
       expect(this).toBe(rows)
       calls.push(['getMany', ...args])
-      return found as ReadonlyMap<string, T>
+      return found as unknown as ReadonlyMap<string, T>
     },
     async page<T>(...args: [string, string | null, number?]) {
       expect(this).toBe(rows)
@@ -241,7 +241,7 @@ test('source wrappers retain original workspace receivers, parameters, Maps, and
   await measured.rows.insert('namespace', [original])
   await measured.rows.put('namespace', original)
   await measured.rows.upsert('namespace', [original])
-  expect(await measured.rows.get('namespace', 'key')).toBe(value)
+  expect(await measured.rows.get<typeof value>('namespace', 'key')).toBe(value)
   expect(await measured.rows.getMany('namespace', ['key'])).toBe(found)
   expect(await measured.rows.page('namespace', 'after', 137)).toBe(result)
   expect(await measured.rows.page('namespace', null)).toBe(result)

@@ -746,6 +746,13 @@ test('a new report HTTP error cannot resurrect the previous snapshot', async () 
     const f = fixture()
     mountProbe()
     await screen.findByTestId('snapshot')
+    // A restored report is visible while its header request is still settling.
+    // Wait for the actual user action to become available before clicking it.
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '刷新探针' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    )
     fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
     await waitFor(() => expect(f.reports).toHaveLength(2))
     const release = f.block(f.reports[1]!.header.reportId)
