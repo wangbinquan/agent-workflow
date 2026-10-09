@@ -245,7 +245,7 @@ describeEachProvider('RFC-321 托管发布的真 smart-HTTP 证据（双引擎�
       publicationSubject: { kind: 'user', userId: bob.id },
       publicationTransport: transport,
     })
-    if (!global.ok) throw new Error(global.code)
+    if (!global.ok) throw new Error(`${global.code}: ${global.detail}`)
     expect(global.ok).toBe(true)
     expect(global.receipt.publication.credentialSource).toBe('global')
     const afterGlobal = await suite.client.requests()

@@ -55,3 +55,9 @@ macOS shard 7/12、Ubuntu shard 15/32 和 Windows 的完整作业日志都显示
 本轮主流水线Ubuntu24作业113696280855的原canonical投影检查发现唯一80项登记排在14条自动投影记录之后。原projectGovernanceArtifacts保留手工登记，再追加原n1LedgerSpecs；此次仅将这一完整登记从129索引移至115索引，其他129条相对顺序及全部130条字段、baseline和why保持。原五个纯JSON摘要函数重算provenance.contentDigest，其余原锚点、sourceDigest和canonicalProjection保持；不修改原检查或再跑census。完整原账本可通过移动回原索引、恢复旧contentDigest逐字恢复。
 
 同SHA文档链接作业113696280091仍因两个外部页面返回504失败；原配置包含5次重试，未接受5xx或删除任何引用。针对该完成作业的重跑请求返回403，原因是所属流水线仍在运行，请求尚未执行。本轮顺序修复、后续链接检查、完整GitHub主流水线及Windows总绿分别保留验收边界。没有本机AW tests/typecheck/build/services/E2E，完整H7/A-T7/A-G及CS adapter、M0部署与RFC完成状态继续开放。
+
+## 2026-10-09 既有发布用例的失败详情
+
+顺序修复 b8ef988a37802272fec1bd82b16f3170f0a35be5 的 Windows 默认完整验证已成功，主流水线仍待总绿。macOS shard 6/12 作业113715219910在原 RFC-321 smart-HTTP SQLite 用例的 global 发布步骤返回 repository-push-authentication-failed；原 throw 只保留 code，丢掉了已有 detail，当前证据不足以认定具体根因。
+
+本片仅让该 throw 同时保留原返回的 detail，与同一用例的 personal 失败路径写法一致。完整测试其余字节、原 case／全部断言／30_000预算和生产实现保持；不重试失败发布、不改失败判据。新 hosted 日志用于必要 CI 定向排障，不能记作问题已经修复或总流水线全绿。没有本机 AW tests/typecheck/build/services/E2E 或新 census；RFC 新实施继续等待全绿。
