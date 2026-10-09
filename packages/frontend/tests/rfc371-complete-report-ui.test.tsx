@@ -383,7 +383,8 @@ test('the existing segmented control selects consumption windows and Task drill-
       (r) => r.header.taskId === null && r.header.filters.cohort === 'usage',
     ),
   ).toHaveLength(1)
-  fireEvent.keyDown(screen.getByRole('radio', { name: '窗口内消耗' }), { key: 'ArrowLeft' })
+  fireEvent.click(screen.getByRole('tab', { name: '总览' }))
+  fireEvent.keyDown(await screen.findByRole('radio', { name: '窗口内消耗' }), { key: 'ArrowLeft' })
   await waitFor(() =>
     expect(screen.getByRole('radio', { name: '任务全程' }).getAttribute('aria-checked')).toBe(
       'true',
