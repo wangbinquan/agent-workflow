@@ -25,6 +25,14 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
       value.partiallyPricedRecords === undefined
         ? {}
         : { partiallyPricedRecords: value.partiallyPricedRecords }
+    const zeroCostCount = (value: { readonly knownZeroCostInvocations?: string }) =>
+      value.knownZeroCostInvocations ?? '0'
+    const zeroCostFields = (value: { readonly knownZeroCostInvocations?: string }) =>
+      value.knownZeroCostInvocations === undefined
+        ? {}
+        : { knownZeroCostInvocations: value.knownZeroCostInvocations }
+    const positiveOptionalCount = (count: unknown) =>
+      count === undefined || (canonicalCount(count) && BigInt(count as string) > 0n)
     const historicalFields = (value: {
       readonly historicalReferences?: string
       readonly observedHistoricalReferences?: string
@@ -59,6 +67,8 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
           canonicalCount,
         ) ||
         BigInt(coverage.observedInvocations) > BigInt(coverage.invocations) ||
+        !positiveOptionalCount(coverage.knownZeroInvocations) ||
+        BigInt(coverage.knownZeroInvocations ?? '0') > BigInt(coverage.observedInvocations) ||
         (BigInt(coverage.records) > 0n &&
           coverage.invocations === '0' &&
           BigInt(coverage.observedHistoricalReferences ?? '0') === 0n) ||
@@ -78,6 +88,9 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
           ...historicalFields(coverage),
           invocations: coverage.invocations,
           observedInvocations: coverage.observedInvocations,
+          ...(coverage.knownZeroInvocations === undefined
+            ? {}
+            : { knownZeroInvocations: coverage.knownZeroInvocations }),
           records: coverage.records,
           bucketRecords: Object.fromEntries(
             TOKEN_BUCKETS.map((bucket) => [bucket, coverage.bucketRecords[bucket]]),
@@ -105,10 +118,12 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
         coverage = metrics.tokenCoverage
       if (
         !usage ||
-        !TOKEN_BUCKETS.some((bucket) => coverage.bucketRecords[bucket] !== '0') ||
+        (BigInt(coverage.knownZeroInvocations ?? '0') === 0n &&
+          !TOKEN_BUCKETS.some((bucket) => coverage.bucketRecords[bucket] !== '0')) ||
         !TOKEN_BUCKETS.every((bucket) =>
           coverage.bucketRecords[bucket] === '0'
-            ? usage.tokens[bucket] === null
+            ? usage.tokens[bucket] ===
+              (BigInt(coverage.knownZeroInvocations ?? '0') > 0n ? '0' : null)
             : canonicalCount(usage.tokens[bucket]),
         ) ||
         !canonicalCount(usage.tokens.total) ||
@@ -130,12 +145,16 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
       if (
         !coverage ||
         !qualifiedPopulation(coverage) ||
+        !positiveOptionalCount(coverage.knownZeroCostInvocations) ||
+        BigInt(zeroCostCount(coverage)) >
+          BigInt(metrics.tokenCoverage?.knownZeroInvocations ?? '0') ||
         (BigInt(partialCount(coverage)) > 0n && !metrics.tokenCoverage) ||
         !['visible', 'hidden'].includes(coverage.visibility) ||
         !isDeepStrictEqual(coverage, {
           records: coverage.records,
           pricedRecords: coverage.pricedRecords,
           ...partialFields(coverage),
+          ...zeroCostFields(coverage),
           visibility: coverage.visibility,
         })
       )
@@ -149,20 +168,30 @@ export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): bool
         typeof recorded.amount !== 'string' ||
         !/^(0|[1-9]\d*)(\.\d{1,12})?$/.test(recorded.amount) ||
         !qualifiedPopulation(recorded) ||
-        BigInt(recorded.pricedRecords) + BigInt(partialCount(recorded)) <= 0n ||
+        !positiveOptionalCount(recorded.knownZeroCostInvocations) ||
+        BigInt(recorded.pricedRecords) +
+          BigInt(partialCount(recorded)) +
+          BigInt(zeroCostCount(recorded)) <=
+          0n ||
+        (BigInt(recorded.pricedRecords) + BigInt(partialCount(recorded)) === 0n &&
+          recorded.amount !== '0') ||
         !isDeepStrictEqual(recorded, {
           currency: 'CNY',
           amount: recorded.amount,
           records: recorded.records,
           pricedRecords: recorded.pricedRecords,
           ...partialFields(recorded),
+          ...zeroCostFields(recorded),
         }) ||
         (metrics.state === 'not-ready'
           ? metrics.costCoverage?.visibility !== 'visible' ||
             metrics.costCoverage.records !== recorded.records ||
             metrics.costCoverage.pricedRecords !== recorded.pricedRecords ||
-            partialCount(metrics.costCoverage) !== partialCount(recorded)
-          : metrics.cost.state !== 'unpriced' || metrics.records !== recorded.records)
+            partialCount(metrics.costCoverage) !== partialCount(recorded) ||
+            zeroCostCount(metrics.costCoverage) !== zeroCostCount(recorded)
+          : metrics.cost.state !== 'unpriced' ||
+            metrics.records !== recorded.records ||
+            BigInt(zeroCostCount(recorded)) > BigInt(metrics.observedInvocations))
       )
         return false
     }

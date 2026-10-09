@@ -8,6 +8,9 @@ export interface CompleteObservationFold {
   tokenCoverageKnown?: boolean
   invocations: string
   observedInvocations: string
+  /** Complete empty native captures; these are calls, never invented records. */
+  knownZeroInvocations?: string
+  knownZeroCostInvocations?: string
   historicalReferences?: string
   observedHistoricalReferences?: string
   records: string
@@ -107,6 +110,12 @@ export function mergeCompleteObservationFold(
   into.partiallyPricedRecords = String(
     BigInt(into.partiallyPricedRecords ?? '0') + BigInt(next.partiallyPricedRecords ?? '0'),
   )
+  into.knownZeroInvocations = String(
+    BigInt(into.knownZeroInvocations ?? '0') + BigInt(next.knownZeroInvocations ?? '0'),
+  )
+  into.knownZeroCostInvocations = String(
+    BigInt(into.knownZeroCostInvocations ?? '0') + BigInt(next.knownZeroCostInvocations ?? '0'),
+  )
   if (into.historicalReferences !== undefined || next.historicalReferences !== undefined) {
     into.historicalReferences = String(
       BigInt(into.historicalReferences ?? '0') + BigInt(next.historicalReferences ?? '0'),
@@ -134,9 +143,21 @@ export function completeObservationMetrics(
     pricedRecords = fold.pricedRecords ?? (fold.priced ? fold.records : '0')
   const partiallyPricedRecords = fold.partiallyPricedRecords ?? '0'
   const partialCoverage = BigInt(partiallyPricedRecords) > 0n ? { partiallyPricedRecords } : {}
+  const knownZeroInvocations = fold.knownZeroInvocations ?? '0'
+  const zeroTokenCoverage = BigInt(knownZeroInvocations) > 0n ? { knownZeroInvocations } : {}
+  const knownZeroCostInvocations = fold.knownZeroCostInvocations ?? '0'
+  const zeroCostCoverage = BigInt(knownZeroCostInvocations) > 0n ? { knownZeroCostInvocations } : {}
   const recordedCost =
-    fold.visible && BigInt(pricedRecords) + BigInt(partiallyPricedRecords) > 0n
-      ? { currency: 'CNY' as const, amount, records, pricedRecords, ...partialCoverage }
+    fold.visible &&
+    BigInt(pricedRecords) + BigInt(partiallyPricedRecords) + BigInt(knownZeroCostInvocations) > 0n
+      ? {
+          currency: 'CNY' as const,
+          amount,
+          records,
+          pricedRecords,
+          ...partialCoverage,
+          ...zeroCostCoverage,
+        }
       : undefined
   const historical =
     BigInt(fold.historicalReferences ?? '0') > 0n
@@ -150,6 +171,7 @@ export function completeObservationMetrics(
       ...historical,
       invocations: fold.invocations,
       observedInvocations: fold.observedInvocations,
+      ...zeroTokenCoverage,
       records: fold.records,
       bucketRecords: {
         ...(fold.bucketRecords ?? {
@@ -162,14 +184,19 @@ export function completeObservationMetrics(
     }
     const recordedUsage =
       fold.tokenCoverageKnown !== false &&
-      TOKEN_BUCKETS.some((bucket) => tokenCoverage.bucketRecords[bucket] !== '0')
+      (BigInt(knownZeroInvocations) > 0n ||
+        TOKEN_BUCKETS.some((bucket) => tokenCoverage.bucketRecords[bucket] !== '0'))
         ? {
             ...tokenCoverage,
             tokens: {
               ...(Object.fromEntries(
                 TOKEN_BUCKETS.map((bucket) => [
                   bucket,
-                  tokenCoverage.bucketRecords[bucket] === '0' ? null : fold.tokens[bucket],
+                  tokenCoverage.bucketRecords[bucket] === '0'
+                    ? BigInt(knownZeroInvocations) > 0n
+                      ? '0'
+                      : null
+                    : fold.tokens[bucket],
                 ]),
               ) as Record<keyof ObservationTokenUsage, string | null>),
               total: String(
@@ -183,12 +210,13 @@ export function completeObservationMetrics(
       gaps: [...fold.gaps],
       ...(fold.tokenCoverageKnown !== false ? { tokenCoverage } : {}),
       ...(recordedUsage ? { recordedUsage } : {}),
-      ...(records !== '0' || !fold.visible
+      ...(records !== '0' || !fold.visible || BigInt(knownZeroCostInvocations) > 0n
         ? {
             costCoverage: {
               records,
               pricedRecords,
               ...partialCoverage,
+              ...zeroCostCoverage,
               visibility: fold.visible ? ('visible' as const) : ('hidden' as const),
             },
           }

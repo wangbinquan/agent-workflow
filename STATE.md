@@ -1,3 +1,7 @@
+## 2026-10-09 RFC-371 已确认零消耗与未知调用并存
+
+原失败批次 24 个任务及记忆组、112 次调用、136 次尝试，10 类集合／31 传输页完整 EOF，全部 ID 与原库及 SDK 对齐。64 次完整空 capture 的四桶 0／已确认人民币 0 在汇总保留，48 次未采集仍未知；原缺口与人口不变，新缓存族12不回写旧报告。正式总览显示四桶、¥0及64/112不完整说明，中英文与1440/768/390已查看，卡片16px且无整页溢出。原模型失败不算内置Agent／Git成功验收，定时任务原33589四桶与¥0.041582成功证据保持。源设计／实现有限PASS已消费，原13产物只生成一次、129有序库存／why全行保持、无增长许可；配套门、精确上库与hosted CI另验。全局默认算力变更与CS原失败门豁免仍待直接答复，CS未新部署，两RFC继续开放。详见[原批次验收](design/RFC-371-run-observability/known-zero-metrics-acceptance.md)、[配套发布](design/RFC-371-run-observability/known-zero-metrics-publication.md)。以下共享旧正文与并行输出完整保留。
+
 ## 2026-10-08 RFC-371 系统 Agent 名称与功能 CI 修复
 
 真实 owner 无目录名称与框架编排器名称已由同一原快照的窄 Task 查询提供，普通目录优先、名称冲突/缺失保持未观测；原 ID、四桶、费用和人口不变，新缓存族10保留旧报告。原 Worker 真公共查询消费且移除RO反向类型边。双 provider warm 原Task2/System2、纯usage facade精确名单、W5原334行内实际调用点1→2、趋势原时间桶定位均修复，所有原断言与预算保留。18源候选和13原始架构产物独立功能门VALID/PASS；唯一原census、141未消费ID、129原账本/why/SCC及四个实测增长保留，未跑AW本地测试/类型/构建/E2E。12类新真实任务全14区段/原根/原生part EOF与四桶CNY对账已落[验收记录](design/RFC-371-run-observability/all-task-type-acceptance-20261008.md)，含失败融合297340Token/¥0.592784，失败不抹去。两既有任务名称复验保持32360/¥0.043222与54527/¥0.098998，两个临时默认选择已恢复。精确远端新CI另验，历史Memory2160404Token/历史Task-Intent等恢复、Git/数字员工/定时事件、正式页面与CS部署未完成，RFC保持进行中。以下全部共享旧正文与并行输出保持。
@@ -11040,3 +11044,10 @@ c73756628b9ee2705918889067ac991e48861274 的 Windows 37868217983、视觉检查 
 ## 2026-10-09 CI 原 Git 夹具残锁等待
 
 c7375662 的 Mac backend6 job113619940054 中，原 RFC303 两例之一在残锁上重复启动 Git，日志明确 5131.62ms/原5000ms 超时。本有限批只改其测试 helper：第一次原 Git add 和非锁错误传播保持，原十九次25ms最大显式等待改为原夹具 ref lock 的文件检查，随后沿原路径移除残锁并真实重试一次。原 runGit 已先等待 proc.exited 再进同一钩子；生产取消/清理、原两个case全部断言和预算保持。详见 ci-git-fixture-ref-lock-wait.md。限定独立功能检视、精确发布与 hosted 总绿/真实两例逐项验收；无本机AW执行或新census。所有旧文档正文与并行内容保留。N2/H7/A-T7/A-G/CS M0～M4仍开放，AW未部署CS。
+
+
+## 2026-10-09 当前 main 总绿与 N2 调用者设计
+
+40a0d70518f31d18321ae7680bf946a733b74d91 主 CI37872131154 全72/72 success，原 Windows workflow 手动dispatch37873022203 同SHA success/Typecheck通过，全部73 terminal jobs已完整消费；原RFC303两case在Mac/Ubuntu各成功，5000ms和全部断言保持。旧failure/INVALID保留，用户总绿门槛满足，CI修复闭合。N1原8768599的196真实provider案例及原完整main/Windows总绿已消费，40a包含且相关完整source blobs保持，不重复该候选全门或census。
+
+继续已批准N2有限设计：80直接/helper Node动作明确28准备/52结果；进一步核对四个混合run-row helper、三个clarify事件、两个unowned spawn回执和dynamicWorkflow转交。拟新增中立显式选择、selected-only装配标记和真实caller接线，managed effect仍由原登记者负责；详见host-authority-task-node-callers.md。设计门/实现/唯一原census/配套/精确上库及new exact-SHA总绿各自验收。本机无AW执行，全部既有正文与并行输出保持。完整H7/A-T7/A-G/十九owner/三roots/CS M0～M4仍开放，AW未部署CS；继续RFC，不以本有限批收尾。

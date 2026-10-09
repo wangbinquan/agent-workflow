@@ -14,6 +14,7 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
     if (metrics.tokenCoverage) {
       fold.invocations = metrics.tokenCoverage.invocations
       fold.observedInvocations = metrics.tokenCoverage.observedInvocations
+      fold.knownZeroInvocations = metrics.tokenCoverage.knownZeroInvocations ?? '0'
       if (metrics.tokenCoverage.historicalReferences !== undefined) {
         fold.historicalReferences = metrics.tokenCoverage.historicalReferences
         fold.observedHistoricalReferences =
@@ -29,6 +30,7 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
       fold.costRecords = metrics.costCoverage.records
       fold.pricedRecords = metrics.costCoverage.pricedRecords
       fold.partiallyPricedRecords = metrics.costCoverage.partiallyPricedRecords ?? '0'
+      fold.knownZeroCostInvocations = metrics.costCoverage.knownZeroCostInvocations ?? '0'
       fold.visible = metrics.costCoverage.visibility !== 'hidden'
       fold.priced = false
     }
@@ -61,6 +63,17 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
       ? metrics.records
       : (metrics.recordedCost?.pricedRecords ?? '0')
   fold.partiallyPricedRecords = metrics.recordedCost?.partiallyPricedRecords ?? '0'
+  const completeEmpty =
+    metrics.records === '0' && Object.values(metrics.tokens).every((count) => count === '0')
+  // A visible explicit zero-cost proof also proves that call's four zero buckets.
+  // Old incomplete zero-record coverage never enters this ready-only branch.
+  fold.knownZeroInvocations = completeEmpty
+    ? metrics.observedInvocations
+    : (metrics.recordedCost?.knownZeroCostInvocations ?? '0')
+  fold.knownZeroCostInvocations =
+    completeEmpty && metrics.cost.state === 'complete' && metrics.cost.amount === '0'
+      ? metrics.observedInvocations
+      : (metrics.recordedCost?.knownZeroCostInvocations ?? '0')
   fold.visible = metrics.cost.state !== 'hidden'
   fold.priced = metrics.cost.state === 'complete'
   const amount = metrics.cost.amount ?? metrics.recordedCost?.amount

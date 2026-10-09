@@ -225,3 +225,189 @@ test('recorded cost rejects invented currency, hidden amounts, inconsistent popu
       false,
     )
 })
+
+// RFC-371 known-zero-recorded-metrics: complete empty native captures are known
+// contributions, even when other original calls still have no usage evidence.
+const completeEmptyCalls: CompleteObservationMetrics = {
+  state: 'ready',
+  invocations: '64',
+  observedInvocations: '64',
+  records: '0',
+  tokens: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0', total: '0' },
+  cost: { currency: 'CNY', state: 'complete', amount: '0' },
+}
+const mergeEmptyWithUnknown = (zero = completeEmptyCalls) => {
+  const unknown = emptyCompleteObservationFold('48')
+  completeObservationGap(unknown, 'native-capture-unobserved')
+  completeObservationGap(unknown, 'usage-unobserved')
+  const fold = completeMetricsFold(zero)
+  mergeCompleteObservationFold(fold, unknown)
+  return completeObservationMetrics(fold)
+}
+test('64 complete empty calls retain four known zero buckets and zero CNY beside 48 unknown calls', () => {
+  const value = mergeEmptyWithUnknown()
+  const coverage = { ...tokenCoverage('112', '64', '0'), knownZeroInvocations: '64' }
+  expect(value).toEqual({
+    state: 'not-ready',
+    gaps: ['native-capture-unobserved', 'usage-unobserved'],
+    tokenCoverage: coverage,
+    recordedUsage: { ...coverage, tokens: completeEmptyCalls.tokens },
+    costCoverage: {
+      records: '0',
+      pricedRecords: '0',
+      knownZeroCostInvocations: '64',
+      visibility: 'visible',
+    },
+    recordedCost: {
+      currency: 'CNY',
+      amount: '0',
+      records: '0',
+      pricedRecords: '0',
+      knownZeroCostInvocations: '64',
+    },
+  })
+  expect(qualifiedCostEvidence(value)).toBe(true)
+  expect(completeObservationMetrics(completeMetricsFold(value))).toEqual(value)
+  expect(completeObservationMetrics(completeMetricsFold(completeEmptyCalls))).toEqual(
+    completeEmptyCalls,
+  )
+})
+test('old incomplete zero-record coverage does not invent empty-capture proof', () => {
+  const old: CompleteObservationMetrics = {
+    state: 'not-ready',
+    gaps: ['native-capture-unobserved'],
+    tokenCoverage: tokenCoverage('1', '1', '0'),
+  }
+  const restored = completeObservationMetrics(completeMetricsFold(old))
+  expect(restored).toEqual(old)
+  expect(restored).not.toHaveProperty('recordedUsage')
+  expect(restored).not.toHaveProperty('recordedCost')
+  expect(qualifiedCostEvidence(restored)).toBe(true)
+})
+test('platform empty Token proof with pending or hidden valuation never invents visible zero CNY', () => {
+  for (const state of ['unpriced', 'hidden'] as const) {
+    const zero: CompleteObservationMetrics = {
+      ...completeEmptyCalls,
+      cost: { currency: 'CNY', state, amount: null },
+    }
+    const value = mergeEmptyWithUnknown(zero)
+    expect(value).toMatchObject({
+      state: 'not-ready',
+      tokenCoverage: { knownZeroInvocations: '64' },
+      recordedUsage: { tokens: completeEmptyCalls.tokens },
+    })
+    expect(value).not.toHaveProperty('recordedCost')
+    if (value.state !== 'not-ready') throw new Error('Unknown original calls were removed')
+    expect(value.costCoverage?.knownZeroCostInvocations).toBeUndefined()
+    if (state === 'hidden') expect(value.costCoverage?.visibility).toBe('hidden')
+    expect(qualifiedCostEvidence(value)).toBe(true)
+    expect(completeObservationMetrics(completeMetricsFold(value))).toEqual(value)
+  }
+})
+test('empty proof keeps original partial Token and CNY sums without manufacturing numeric records', () => {
+  const partial = emptyCompleteObservationFold('1')
+  partial.observedInvocations = '1'
+  addCompleteObservationAllocation(
+    partial,
+    { input: '120', cacheRead: null, cacheWrite: '0', output: null },
+    { amount: '0.00012', complete: false, hidden: false },
+  )
+  mergeCompleteObservationFold(partial, completeMetricsFold(mergeEmptyWithUnknown()))
+  const value = completeObservationMetrics(partial)
+  expect(value).toMatchObject({
+    state: 'not-ready',
+    tokenCoverage: {
+      invocations: '113',
+      observedInvocations: '65',
+      knownZeroInvocations: '64',
+      records: '1',
+      bucketRecords: { input: '1', cacheRead: '0', cacheWrite: '1', output: '0' },
+    },
+    recordedUsage: {
+      tokens: { input: '120', cacheRead: '0', cacheWrite: '0', output: '0', total: '120' },
+    },
+    recordedCost: {
+      currency: 'CNY',
+      amount: '0.00012',
+      records: '1',
+      pricedRecords: '0',
+      partiallyPricedRecords: '1',
+      knownZeroCostInvocations: '64',
+    },
+  })
+  if (value.state !== 'not-ready') throw new Error('Original gaps lost')
+  expect(value.gaps).toEqual(['usage-incomplete', 'native-capture-unobserved', 'usage-unobserved'])
+  expect(qualifiedCostEvidence(value)).toBe(true)
+  expect(completeObservationMetrics(completeMetricsFold(value))).toEqual(value)
+})
+test('visible empty cost proof survives a ready scope with other fully observed but unpriced records', () => {
+  const fold = completeMetricsFold(completeEmptyCalls)
+  const unpriced = emptyCompleteObservationFold('1')
+  unpriced.observedInvocations = '1'
+  addCompleteObservationAllocation(unpriced, usage, {
+    amount: null,
+    complete: false,
+    hidden: false,
+  })
+  mergeCompleteObservationFold(fold, unpriced)
+  const value = completeObservationMetrics(fold)
+  expect(value).toMatchObject({
+    state: 'ready',
+    invocations: '65',
+    observedInvocations: '65',
+    records: '1',
+    tokens: { ...usage, total: '6' },
+    cost: { currency: 'CNY', state: 'unpriced', amount: null },
+    recordedCost: {
+      currency: 'CNY',
+      amount: '0',
+      records: '1',
+      pricedRecords: '0',
+      knownZeroCostInvocations: '64',
+    },
+  })
+  expect(qualifiedCostEvidence(value)).toBe(true)
+  expect(completeObservationMetrics(completeMetricsFold(value))).toEqual(value)
+})
+test('zero-evidence counters and zero-only amount must match the original observed population', () => {
+  const value = mergeEmptyWithUnknown()
+  if (value.state !== 'not-ready' || !value.recordedUsage || !value.recordedCost)
+    throw new Error('Known original zero contributions lost')
+  for (const count of ['0', '064', '-1', '65']) {
+    expect(
+      qualifiedCostEvidence({
+        ...value,
+        tokenCoverage: { ...value.tokenCoverage!, knownZeroInvocations: count },
+        recordedUsage: { ...value.recordedUsage, knownZeroInvocations: count },
+      }),
+    ).toBe(false)
+    expect(
+      qualifiedCostEvidence({
+        ...value,
+        costCoverage: { ...value.costCoverage!, knownZeroCostInvocations: count },
+        recordedCost: { ...value.recordedCost, knownZeroCostInvocations: count },
+      }),
+    ).toBe(false)
+  }
+  expect(
+    qualifiedCostEvidence({
+      ...value,
+      recordedCost: { ...value.recordedCost, amount: '1' },
+    }),
+  ).toBe(false)
+  expect(
+    qualifiedCostEvidence({
+      ...value,
+      recordedUsage: {
+        ...value.recordedUsage,
+        tokens: { ...value.recordedUsage.tokens, input: '1', total: '1' },
+      },
+    }),
+  ).toBe(false)
+  expect(
+    qualifiedCostEvidence({
+      ...value,
+      costCoverage: { ...value.costCoverage!, visibility: 'hidden' },
+    }),
+  ).toBe(false)
+})

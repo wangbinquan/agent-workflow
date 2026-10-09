@@ -75,6 +75,10 @@ export async function buildCompleteObservationTask(
       if (entry.rawRecords === '0' && !entry.knownZero)
         completeObservationGap(entry.fold, 'usage-unobserved')
       if (entry.rawRecords !== '0' || entry.knownZero) entry.fold.observedInvocations = '1'
+      if (entry.rawRecords === '0' && entry.knownZero) {
+        entry.fold.knownZeroInvocations = '1'
+        if (entry.emptyCostVisible && entry.fold.visible) entry.fold.knownZeroCostInvocations = '1'
+      }
       if (
         entry.rawRecords === '0' &&
         entry.invocation.authority.kind === 'crewstation' &&

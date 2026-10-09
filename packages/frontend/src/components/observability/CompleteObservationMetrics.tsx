@@ -56,7 +56,7 @@ export function CompleteTokens({
                 {tokens && tokens[bucket] !== null
                   ? BigInt(tokens[bucket]).toLocaleString(i18n.language)
                   : t('runObservability.unknown')}
-                {recorded && 'bucketRecords' in recorded && (
+                {recorded && 'bucketRecords' in recorded && recorded.records !== '0' && (
                   <span className="muted" title={t('runObservability.numericRecords')}>
                     {' '}
                     · {BigInt(recorded.bucketRecords[bucket]).toLocaleString(i18n.language)} /{' '}
@@ -104,11 +104,21 @@ export function CompleteCost({
 }) {
   const { t, i18n } = useTranslation()
   const recorded = value.state === 'not-applicable' ? undefined : value.recordedCost
+  const onlyZeroCost =
+    recorded &&
+    BigInt(recorded.pricedRecords) + BigInt(recorded.partiallyPricedRecords ?? '0') === 0n &&
+    BigInt(recorded.knownZeroCostInvocations ?? '0') > 0n
   if (recorded)
     return (
       <>
         <strong>{formatObservationCny(recorded.amount, true)}</strong>
-        {compact || BigInt(recorded.partiallyPricedRecords ?? '0') > 0n ? (
+        {onlyZeroCost ? (
+          <p className="muted">
+            {t('runObservability.recordedZeroCostCoverage', {
+              calls: BigInt(recorded.knownZeroCostInvocations!).toLocaleString(i18n.language),
+            })}
+          </p>
+        ) : compact || BigInt(recorded.partiallyPricedRecords ?? '0') > 0n ? (
           <p className="muted">
             {t(
               BigInt(recorded.partiallyPricedRecords ?? '0') > 0n

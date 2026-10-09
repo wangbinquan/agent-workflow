@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { buildActor } from '@/auth/actor'
-import { observationReportRows, observationReportReceipts, tasks } from '@/db/schema'
+import {
+  observationReportRows,
+  observationReportReceipts,
+  observationUsageCaptures,
+  tasks,
+} from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { originalReportSnapshotSession } from '@/platform/persistence/reportSnapshot'
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
@@ -14,8 +19,17 @@ import { completeObservationFileSpool } from '@/modules/run-observability/infras
 import { completeObservationReportCache } from '@/modules/run-observability/infrastructure/completeObservationReportStore'
 import { completeObservationActorScope } from '@/modules/run-observability/infrastructure/completeObservationReportDocuments'
 import { completeObservationReportService } from '@/modules/run-observability/application/completeObservationReportService'
-import type { CompleteObservationTask, CompleteObservationReportPage } from '@agent-workflow/shared'
-import { COMPLETE_NOW, seedCompleteTask } from './helpers/rfc371CompleteTaskFixture'
+import type {
+  CompleteObservationTask,
+  CompleteObservationReportPage,
+  CompleteObservationMetrics,
+} from '@agent-workflow/shared'
+import {
+  COMPLETE_NOW,
+  seedCompleteTask,
+  completeFixtureId,
+  buildOriginalCompleteTask,
+} from './helpers/rfc371CompleteTaskFixture'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const actor = buildActor({
@@ -27,6 +41,182 @@ const actor = buildActor({
     role: 'admin',
     status: 'active',
   },
+})
+
+// RFC-371 known-zero-recorded-metrics: two original complete empty captures and
+// one uncaptured original call must survive every retained scope, not become three zeros.
+describeEachProvider('RFC-371 known empty native calls beside unknown calls', (harness) => {
+  test('Task, invocation, attempt, every dimension and trend retain known zero contributions through report publication and EOF', async () => {
+    await seedCompleteTask(harness, 3, 0)
+    await harness.db
+      .delete(observationUsageCaptures)
+      .where(eq(observationUsageCaptures.invocationId, completeFixtureId('invocation', 2)))
+      .run()
+    const original = await buildOriginalCompleteTask(harness, 0)
+    const expected = {
+      state: 'not-ready',
+      tokenCoverage: {
+        invocations: '3',
+        observedInvocations: '2',
+        knownZeroInvocations: '2',
+        records: '0',
+        bucketRecords: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+      },
+      recordedUsage: {
+        tokens: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0', total: '0' },
+      },
+      recordedCost: {
+        currency: 'CNY',
+        amount: '0',
+        records: '0',
+        pricedRecords: '0',
+        knownZeroCostInvocations: '2',
+      },
+    }
+    expect(original.summary.metrics).toMatchObject(expected)
+    expect(original.allocations).toHaveLength(0)
+    expect(String(original.originals[0]?.records)).toBe('0')
+    expect(original.sourceReceipts.every((receipt) => receipt.eof)).toBe(true)
+    expect(original.attempts.map((row) => row.id).sort()).toEqual(
+      [0, 1, 2].map((n) => completeFixtureId('run', n)),
+    )
+    const binding = harness.applicationBinding
+    const source =
+      binding.provider === 'sqlite'
+        ? { ...binding, generationId: 'known-empty-original-generation' }
+        : { provider: 'postgresql' as const, runtime: binding.runtime }
+    const cache = completeObservationReportCache(
+      harness.db,
+      source.provider === 'sqlite' ? source.generationId : source.runtime.generationId,
+      createCompleteTaskObservationFacts,
+    )
+    const folder = mkdtempSync(join(tmpdir(), 'aw-known-empty-report-'))
+    const spool = completeObservationFileSpool(folder)
+    const service = completeObservationReportService({
+      store: cache,
+      spool,
+      owner: randomUUID(),
+      heartbeatDuringRead: false,
+      scopeOf: completeObservationActorScope,
+      keyOf: sha256Hex,
+      newId: randomUUID,
+      build: (report, signal) =>
+        originalReportSnapshotSession(source).run(
+          (snapshot) =>
+            composeCompleteObservationSnapshot({
+              snapshot,
+              tasks: createCompleteTaskObservationFacts(snapshot.executor),
+              report,
+              spool,
+              signal,
+            }),
+          signal,
+        ),
+    })
+    try {
+      const actorScope = completeObservationActorScope(actor),
+        refreshKey = 'known-empty-capture'
+      const old = await cache.ensure(
+        { actor, query, refreshKey },
+        sha256Hex(
+          JSON.stringify([
+            2,
+            'scope-metrics/11',
+            cache.generation,
+            actorScope,
+            query,
+            null,
+            refreshKey,
+          ]),
+        ),
+        actorScope,
+        'original-version-eleven',
+        randomUUID(),
+      )
+      await cache.unavailable(old.id, old.owner, ['legacy-known-empty-contribution-unavailable'])
+      const retainedOld = (await cache.get(old.id))!.report
+      const accepted = await service.request(actor, query, refreshKey)
+      const id = accepted.state === 'ready' ? accepted.header.reportId : accepted.reportId
+      expect(id).not.toBe(old.id)
+      await service.worker.drain()
+      const report = await service.status(actor, id)
+      if (report.state !== 'not-ready' || !report.facts)
+        throw new Error('Original unknown call or known empty proof lost')
+      expect(report.facts.summary.inventory).toMatchObject({
+        tasks: '1',
+        attempts: '3',
+        invocations: '3',
+      })
+      expect(report.facts.summary.metrics).toMatchObject(expected)
+      const populations: Record<string, number> = {}
+      for (const section of [
+        'tasks',
+        'attempts',
+        'invocations',
+        'agents',
+        'runtimes',
+        'purposes',
+        'sources',
+        'trends',
+      ] as const) {
+        const rows: Array<{ metrics: CompleteObservationMetrics; recordedUsage?: unknown }> = []
+        let after: string | null = null
+        const cursors = new Set<string>()
+        do {
+          const page: CompleteObservationReportPage<{
+            metrics: CompleteObservationMetrics
+            recordedUsage?: unknown
+          }> = await service.page(actor, id, {
+            section,
+            limit: 1,
+            ...(after === null ? {} : { after }),
+          })
+          expect(page.total).toBe(report.facts.counts[section]!)
+          rows.push(...page.items)
+          after = page.nextCursor
+          if (after !== null) {
+            expect(cursors.has(after)).toBe(false)
+            cursors.add(after)
+          }
+        } while (after !== null)
+        expect(String(rows.length)).toBe(report.facts.counts[section]!)
+        populations[section] = rows.length
+        if (section === 'attempts' || section === 'invocations') {
+          expect(rows.filter((row) => row.metrics.state === 'ready')).toHaveLength(2)
+          expect(rows.filter((row) => row.metrics.state === 'not-ready')).toHaveLength(1)
+          for (const row of rows) {
+            if (row.metrics.state === 'ready') {
+              expect(row.metrics.records).toBe('0')
+              expect(row.metrics.tokens).toEqual({
+                input: '0',
+                cacheRead: '0',
+                cacheWrite: '0',
+                output: '0',
+                total: '0',
+              })
+              expect(row.metrics.cost).toEqual({ currency: 'CNY', state: 'complete', amount: '0' })
+            } else {
+              expect(row.metrics).not.toHaveProperty('recordedUsage')
+              expect(row.metrics).not.toHaveProperty('recordedCost')
+            }
+          }
+        } else {
+          expect(rows.length).toBeGreaterThan(0)
+          for (const row of rows) expect(row.metrics).toMatchObject(expected)
+        }
+        // The legacy extra trend carrier still requires actual numeric records.
+        if (section === 'trends') for (const row of rows) expect(row.recordedUsage).toBeUndefined()
+      }
+      expect(populations.tasks).toBe(1)
+      expect(populations.attempts).toBe(3)
+      expect(populations.invocations).toBe(3)
+      expect((await cache.get(old.id))!.report).toEqual(retainedOld)
+      expect(await service.status(actor, old.id)).toEqual(retainedOld)
+    } finally {
+      await service.worker.stop()
+      rmSync(folder, { recursive: true, force: true })
+    }
+  }, 60000)
 })
 const query = { from: COMPLETE_NOW, to: COMPLETE_NOW + 60_000, timezone: 'UTC' }
 describeEachProvider('RFC-371 full report publication and retained pages', (harness) => {

@@ -8,6 +8,7 @@ interface RecordedObservationCost {
   readonly records: string
   readonly pricedRecords: string
   readonly partiallyPricedRecords?: string
+  readonly knownZeroCostInvocations?: string
 }
 /** Decimal strings preserve exact cardinalities and every original token bucket. */
 export type CompleteObservationMetrics =
@@ -19,6 +20,7 @@ export type CompleteObservationMetrics =
         readonly observedHistoricalReferences?: string
         readonly invocations: string
         readonly observedInvocations: string
+        readonly knownZeroInvocations?: string
         readonly records: string
         readonly bucketRecords: {
           readonly input: string
@@ -32,6 +34,7 @@ export type CompleteObservationMetrics =
         readonly observedHistoricalReferences?: string
         readonly invocations: string
         readonly observedInvocations: string
+        readonly knownZeroInvocations?: string
         readonly records: string
         readonly bucketRecords: {
           readonly input: string
@@ -51,6 +54,7 @@ export type CompleteObservationMetrics =
         readonly records: string
         readonly pricedRecords: string
         readonly partiallyPricedRecords?: string
+        readonly knownZeroCostInvocations?: string
         readonly visibility: 'visible' | 'hidden'
       }
       readonly recordedCost?: RecordedObservationCost
