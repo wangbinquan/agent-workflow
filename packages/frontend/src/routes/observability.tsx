@@ -1,4 +1,9 @@
-import { createRoute, useLocation } from '@tanstack/react-router'
+import {
+  createRoute,
+  useLocation,
+  type SearchSchemaInput,
+  type ValidatorFn,
+} from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { TaskStatusSchema, ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
 import type { ObservationSearch } from '@/components/observability/RunObservability'
@@ -71,7 +76,11 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/observability',
-  validateSearch: validateObservationSearch,
+  // Empty search is a valid input; the existing validator supplies required defaults.
+  validateSearch: validateObservationSearch as ValidatorFn<
+    Record<string, unknown> & SearchSchemaInput,
+    ObservationSearch
+  >,
   component: Page,
 })
 function Page() {
