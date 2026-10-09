@@ -587,12 +587,16 @@ const CONSTRUCT_IDS = new Set(DIALECT_CONSTRUCTS.map((construct) => construct.id
 const observedDebt: string[] = []
 const matrixConstructIds = new Set<string>()
 const unshimmed = new Set<string>()
+const usedSqlFunctions = new Set<string>()
 let fragmentCount = 0
 
 for (const file of SURFACE) {
   const fragments = sqlFragments(file.path, file.text)
   fragmentCount += fragments.length
   const findings = dialectConstructFindings(file.path, file.text)
+  const functions = sqlFunctionNames(file.path, file.text)
+  // Include renderers too: the portable-core assertion uses the whole surface.
+  for (const name of functions) usedSqlFunctions.add(name)
   if (RENDERER_PATHS.has(file.path)) {
     if (file.path === MATRIX_FILE) {
       for (const finding of findings) {
@@ -602,7 +606,7 @@ for (const file of SURFACE) {
     continue // 渲染器按引擎各写一次，是方言点的家。
   }
   observedDebt.push(...findings)
-  for (const name of sqlFunctionNames(file.path, file.text)) {
+  for (const name of functions) {
     if (PORTABLE_SQL_FUNCTIONS[name] !== undefined) continue
     if (POSTGRESQL_FUNCTION_SHIMS[name] !== undefined) continue
     // 已被方言词汇表认领的函数（greatest / pg_advisory_*）由 J1 报，这里不重复记账。
@@ -719,10 +723,7 @@ describe('RFC-359 W5-T20 —— J2 函数词汇闭集', () => {
   })
 
   test('可移植核心无过期条目：列在表里就必须真的有人用（否则删掉这一行）', () => {
-    const used = new Set<string>()
-    for (const file of SURFACE) {
-      for (const name of sqlFunctionNames(file.path, file.text)) used.add(name)
-    }
+    const used = usedSqlFunctions
     const stale = Object.keys(PORTABLE_SQL_FUNCTIONS)
       .filter((name) => !used.has(name))
       .sort()

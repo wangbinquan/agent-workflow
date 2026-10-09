@@ -1,3 +1,6 @@
+## 2026-10-10 RFC-370 原 SQL 方言语料重复解析修复
+
+精确 f54fa4a 的 Mac shard 12 原 J2 反向 case 在5245.93ms触及默认5000ms预算，1472 pass／2 skip／1 fail，原失败保留。复用模块采数时同一 sqlFunctionNames 的完整语料集合，在渲染器 continue 之前收集，原非渲染器 J2 仍使用同一函数数组；原语料／方言词汇／账本／shim、13 case／全部 matcher／负 fixture及5秒预算保持。未改生产／metadata／四个原census规则，无本机AW执行或新census。独立有限功能门、精确发布及新SHA主CI／完整Windows另验；生命周期L SOURCE18-R2保持、L census未启动，H7／A-G／CS M0～M4及RFC仍开放。详见[语料复用修复](design/RFC-370-crewstation-hosted-deployment/ci-dialect-corpus-reuse.md)。以下旧STATE和全部并行输出完整保留。
 ## 2026-10-10 RFC-370 原 E2E 进程归属与超时取证候选
 
 精确 2e671510 的主 CI 37965012479 正式 failure、完整 Windows 37965611777 success，四工作区 typecheck 实际 exit 0，总绿门槛仍未满足。独立 R1 功能门发现串行启动超过原 hook 预算，正式 FAIL 与失败正文保留；现保持三个原 daemon 并行启动，逐一登记真实成功句柄，afterAll 先标记清理并立即 stop 已登记 child，同时等待 pending 启动，由其回调收回 late-success。原 ready 默认 POSIX 30_000ms／Windows 90_000ms、两个 hook 独立 90_000ms／case 300_000ms 保持；两个原 Task waiter 只在超时错误附加现有进程诊断，原断言／轮询／预算保持。前台 502 后旧 snapshot、Enter 钻取和焦点修复由并行 owner 接续；Windows 原超时原因未签收。无本机 AW 执行或新 census，独立有限 R2 功能门／精确发布／新 hosted CI 另验。生命周期 L SOURCE18-R2 已实际消费并保持、L census 尚未启动，完整 H7／A-G／CS M0～M4仍开放，RFC继续。详见[原 E2E 取证](design/RFC-370-crewstation-hosted-deployment/ci-e2e-process-diagnostics.md)。以下旧 STATE 与全部并行输出完整保留。
