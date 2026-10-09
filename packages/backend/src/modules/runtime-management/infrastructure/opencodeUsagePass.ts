@@ -139,6 +139,9 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
     position = 0n,
     previousDigest = sha256Hex(JSON.stringify(identity)),
     pending: OriginalNativePassPage<I> | undefined
+  let partKeys:
+    | { session: string; eligible: boolean; ids: Array<{ id: unknown }>; index: number }
+    | undefined
   const cursor = () => JSON.stringify([identity.passId, ordinal.toString(), previousDigest])
   const initialCursor = cursor()
   const counts = (): NativeUsagePassCounts => ({
@@ -149,6 +152,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
   const close = () => {
     if (!closed) {
       closed = true
+      partKeys = undefined
       db.close()
     }
   }
@@ -245,6 +249,43 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             continue
           }
           if (!current.parts_done) {
+            if (partKeys?.session !== current.id) {
+              let eligible = false
+              try {
+                // The original sorted projection can fail on a later physical row.
+                // Only valid JSON permits point reads without changing that failure prefix.
+                eligible =
+                  db
+                    .query<{ unavailable: number }, [string]>(
+                      `SELECT 1 AS unavailable FROM part p
+                      LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
+                      WHERE p.session_id=?1 AND (json_valid(p.data) IS NOT 1 OR
+                        (m.id IS NOT NULL AND json_valid(m.data) IS NOT 1)) LIMIT 1`,
+                    )
+                    .get(current.id) === null
+              } catch {
+                // Uncertain qualification keeps the complete original range query.
+              }
+              partKeys = { session: current.id, eligible, ids: [], index: 0 }
+            }
+            if (partKeys.eligible && partKeys.index === partKeys.ids.length) {
+              const size = Math.min(200, pageRows - scanned)
+              partKeys.ids =
+                current.part_after === null
+                  ? db
+                      .query<
+                        { id: unknown },
+                        [string, number]
+                      >('SELECT p.id FROM part p WHERE p.session_id=?1 ORDER BY p.id LIMIT ?2')
+                      .all(current.id, size)
+                  : db
+                      .query<
+                        { id: unknown },
+                        [string, string, number]
+                      >('SELECT p.id FROM part p WHERE p.session_id=?1 AND p.id>?2 ORDER BY p.id LIMIT ?3')
+                      .all(current.id, current.part_after, size)
+              partKeys.index = 0
+            }
             // Extract only numeric/model fields. Text/tool bodies are never buffered or transported.
             // Keep the non-null continuation as an actual composite-index range.
             // A nullable OR makes SQLite rescan every prior part for every original row.
@@ -261,20 +302,32 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
               FROM part p LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
               LEFT JOIN temp.native_pass_message_models c ON c.message=p.message_id AND c.session=p.session_id
               `
-            const row =
-              current.part_after === null
-                ? db
-                    .query<
-                      CachedMessagePartRow,
-                      [string]
-                    >(fields + ' WHERE p.session_id=?1 ORDER BY p.id LIMIT 1')
-                    .get(current.id)
-                : db
-                    .query<
-                      CachedMessagePartRow,
-                      [string, string]
-                    >(fields + ' WHERE p.session_id=?1 AND p.id>?2 ORDER BY p.id LIMIT 1')
-                    .get(current.id, current.part_after)
+            const key = partKeys.ids[partKeys.index]
+            let row: CachedMessagePartRow | null = null
+            if (!partKeys.eligible || (key && !identifier(key.id))) {
+              // Invalid keys and unqualified JSON retain the original query and rejection.
+              row =
+                current.part_after === null
+                  ? db
+                      .query<
+                        CachedMessagePartRow,
+                        [string]
+                      >(fields + ' WHERE p.session_id=?1 ORDER BY p.id LIMIT 1')
+                      .get(current.id)
+                  : db
+                      .query<
+                        CachedMessagePartRow,
+                        [string, string]
+                      >(fields + ' WHERE p.session_id=?1 AND p.id>?2 ORDER BY p.id LIMIT 1')
+                      .get(current.id, current.part_after)
+            } else if (key) {
+              row = db
+                .query<
+                  CachedMessagePartRow,
+                  [string, unknown]
+                >(fields + ' WHERE p.session_id=?1 AND p.id=?2 ORDER BY p.id LIMIT 1')
+                .get(current.id, key.id)
+            }
             const messageCached = row?.cache_message != null
             // This transport-internal flag must never enter the original PartRow fingerprint.
             if (row) delete row.cache_message
@@ -294,6 +347,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
               db.query<unknown, [string]>(
                 'UPDATE temp.native_pass_queue SET parts_done=1 WHERE id=?',
               ).get(current.id)
+              partKeys = undefined
               continue
             }
             if (!identifier(row.id)) throw new Error('Native part cursor unavailable')
@@ -336,6 +390,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             db.query<unknown, [string, string]>(
               'UPDATE temp.native_pass_queue SET part_after=? WHERE id=?',
             ).get(row.id, current.id)
+            if (partKeys.eligible) partKeys.index++
             if (!messageCached && identifier(row.message_id) && identifier(row.session_id))
               db.query<unknown, [string, string, unknown, unknown]>(
                 `INSERT INTO temp.native_pass_message_models(message,session,provider,model)
