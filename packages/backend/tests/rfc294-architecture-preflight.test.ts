@@ -1742,7 +1742,9 @@ describe('RFC-294 W0-R current modules ratchet', () => {
 // 两者在断言层面同形，后者是永久静默的假绿。这一条把「扫描器还活着」变成可断言事实；
 // 下限同时两向钉进 architecture/guard-manifest.json，静默调低会红。
 describe('RFC-317 T13 —— 语料非空', () => {
+  // 全模块仍逐个构建 AST；hosted macOS 实际用了 5469.66ms，超过默认 5s。
+  // 本例验证语料下限，按同类全语料扫描分配 30s；扫描与 120 阈值保持。
   test('扫描确实覆盖到源码语料（扫空即假绿）', () => {
     expect(productionModuleUnits().length).toBeGreaterThanOrEqual(120)
-  })
+  }, 30_000)
 })
