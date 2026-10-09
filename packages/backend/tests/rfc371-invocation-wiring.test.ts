@@ -169,7 +169,10 @@ test('native model preparation uses final spawn env and local numeric retries av
     }
     if (
       ts.isCallExpression(node) &&
-      node.expression.getText() === 'opts.persistence.nodeExecution.appendEvents'
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'appendEvents' &&
+      ts.isCallExpression(node.expression.expression) &&
+      node.expression.expression.expression.getText() === 'selectTaskNodeExecutionWrites'
     ) {
       const input = node.arguments[0]!
       if (
@@ -178,6 +181,10 @@ test('native model preparation uses final spawn env and local numeric retries av
       ) {
         const fields = properties(input)
         if (fields.get('events')?.getText() === '[]') {
+          const selection = node.expression.expression
+          expect(selection.arguments).toHaveLength(2)
+          expect(selection.arguments[0]?.getText()).toBe('opts.persistence')
+          expect(selection.arguments[1]?.getText()).toBe("'issuedResults'")
           expect(fields.get('nodeRunId')?.getText()).toBe('opts.nodeRunId')
           expect(
             input.properties.filter(ts.isShorthandPropertyAssignment).map((p) => p.name.text),

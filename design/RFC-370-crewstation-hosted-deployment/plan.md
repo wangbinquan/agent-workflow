@@ -1305,3 +1305,9 @@ c7375662 的 Mac backend6 job113619940054 中，原 RFC303 两例之一在残锁
 唯一原 scoped census 固定 83c6b76f545fc26e314a0e98dd23ff1025d81eef，11冻结TS输入（10 production）及6789非本批已提交 source blobs；四原规则全文不变，13完整原输出保存，sourceDigest sha256:66c47ae246183e52845f71a32e3f7ac3ff2239e419f8cd38cd430f9d4d68f1d3。原classic本批 inbound 0→0、outbound 15→15逐条同一，无新增跨域import、全仓SCC/边界或authored debt；356原债务与129有序账本及每条why完整保留。新增中立application文件对应8个file/symbol owner；原规则按符号名额外收录RunSelection类型别名（erased type），保留该原输出，不据此增加SQL写入或修改扫描判据。
 
 两个实测账本增长仅配套一次声明：mutation-entrypoints 1982→1983、module-symbol-owners 27720→27728，源码消费后普通后继退役。四个原纯治理/JSON emission先整字节复现原生成输出，八canonical及另三治理和原完整status渲染全文保持。配套16项功能门、最终29路径精确发布、上库后Windows原workflow新测试登记及new exact-SHA主/Windows总绿与真实18/provider案例依序验收。没有第二次census或本机AW tests/typecheck/build/services/E2E。其余Task/child/control/boot、十九owner、三roots、完整H7/A-T7/A-G与CS M0～M4继续；AW尚未部署CS，RFC继续。
+
+## 2026-10-09 N2 源码与清单上库、Windows 接线及增长回执退役
+
+cf50bc330dd0cb7d73095da26f8862dcb4db80ca 已将真实 Node caller 选择的29个文件正常提交并推送 main；独立 SOURCE16-R1 与 MATCHING16-R1 有效稳定 PASS 均已完整消费，远端0/0、空index及全部并行内容保留。18/provider 新回归和2个 source 案例已上库；正式行为仍须验收本后继新SHA main/Windows 总绿及实际案例，不将有限源码门当成 hosted 成功。
+
+本普通后继只删除两个随源码消费的 allowGrowth，129有序库存/baseline/why、canonicalProjection/sourceDigest/原provenance锚点保持；用原五个纯JSON函数重算 contentDigest。Windows 原 push/PR 过滤及平台命令各登记一次已上库新测试，四个尚未监测的实际生产路径各加入两处过滤，其余六个生产路径已覆盖且保留。删除11个新增引用可恢复完整原workflow，所有旧命令、并行接线、断言和预算保持。三份文档只追加；其余25个已发布路径字节不变，无新 census 或本机 AW tests/typecheck/build/services/E2E。独立后继功能门、确切发布及总绿分别验收；完整 H7/A-T7/A-G、十九owner/三roots及独立CS adapter、M0首次部署至M4继续，AW尚未部署CS。
