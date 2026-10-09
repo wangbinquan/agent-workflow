@@ -1,5 +1,15 @@
 # RFC-371 剩余工作与关闭条件
 
+## 2026-10-10 当前加载修复与剩余工作
+
+AW 已发布原生 part 主键批次读取 `183715b050efe1e876be750160038764ab1f39cf`，以及已完成报告重开和两处原 CI 配套修复 `4c6bf55e2b89d36ecab2f1dac94304c103366658`；紧邻普通后继 `ab457f9c8e5b9eb8859a2866a5b2165d245b0406` 只退役一次性登记许可，339 条登记及全部其它字段保持。本批精确 [主 CI 37987208134](https://github.com/wangbinquan/agent-workflow/actions/runs/37987208134) 已终态 failure，完整 72 作业到 EOF，70 success、2 failure；唯一原用例失败是 PostgreSQL handover 恢复 HTTP 409/200，另一失败是汇总。后继共享主干 `bfd76107e95797e3cba2ab41880f645e27f8d485` 已由其负责会话修复原 readiness 等待，本片保留其完整输出及旧失败，新主干 CI 另验。精确 [视觉 CI 37987208470](https://github.com/wangbinquan/agent-workflow/actions/runs/37987208470) 与 [Windows 平台 CI 37988483492](https://github.com/wangbinquan/agent-workflow/actions/runs/37988483492) 均 completed/success，各一作业；不能代签主 CI。原 `183715` 的 NULL matcher 类型错误和同一原生 SQLite 构造缺登记所导致的 Ubuntu/macOS 失败仍保留为失败，不用 SOURCE PASS 代签新 CI。
+
+正式同一显式范围冷重开实测 907 ms，没有新 POST 或新增报告；一次实际刷新仍唯一完整构建并整体换到新统计时间。默认侧栏候选修复前另实测创建新毫秒范围，报告生成 19,033 ms；首版返回曾有 invalidated 错误，原失败保留。最终通过新页面实例验收完整报告查询的原 GC 设置：冷重开 877 ms，刷新完成后经首页点击侧栏返回 209 ms，返回后再次刷新创建另一份新报告，再次返回 192 ms；两次返回分别保持最新的 05:26:19／05:29:40 统计时间，均未新增报告。初始四份报告经两个显式刷新只增加两份，返回不重复生成，忙时原日期和结果照常保留。三份原报告全部 37,533 明细、16,259 分组的完整有序字段摘要相等；四桶 1,189,241/1,255,680/0/186,002、合计 2,630,923、已知人民币 ¥4.078952、三个有实际数字的柱状区间及原缺口保持。两次新构建仍分别花费 18,592／18,373 ms，首次和新范围生成并未解决；上述返回耗时含浏览器工具开销，仅代表实际验收路径，不代签全部交错。新增真实 Router／完整页回归覆盖五分钟默认缓存、离页收集、B404/A仍可读、再次刷新、未知桶、部分 CNY 及原显式周期，实际执行仍待本候选 exact-SHA hosted CI。见[已完成报告重开](./completed-report-open.md)及[侧栏默认范围接续](./sidebar-default-report-range.md)。全量性能资格和 observability-scale 仍未通过，后者保持停止，没有重新触发。
+
+System 组墙钟冒充普通 Task 运行态的问题已经修复并做原查询及正式页面验收：墙钟 8,291,976 ms 与四次尝试累计/活动并集 82,901 ms 分开，System 的普通任务运行态保持不适用；普通任务的真实运行态仍保留。详见[System 运行态验收](./system-running-time-acceptance.md)。下文 10 月 9 日的“仍需分离”是历史状态，AW-R07 的排队/等待/关键路径及执行比较仍未关闭。
+
+CS 当前 33 文件候选的唯一原完整检查为 6,575 pass、9 fail、153 skip，9 个超时失败没有删改或覆盖；随后原环境定向诊断的 34 pass/0 fail、344 断言只证明六文件当次成功，不关闭原完整失败。该候选带九失败发布的明确例外仍待答复，新精确 CI、本机部署、真实 CLI/平台自测、原 A/B 验收资源释放及临时额度恢复继续。已授权的记忆专用运行时已经恢复，16 个内置 Agent 和 Git 全入口的逐个成功实跑仍未完成；全局默认运行时切换不能由记忆许可替代。AW-R02～12 的其它退出项和两个 RFC 均继续，不将当前故障修复记为整体 Done。
+
 ## 2026-10-09 当前发布、记忆实跑与未完成项
 
 观测零值证明修复已精确上库 `83c6b76f545fc26e314a0e98dd23ff1025d81eef`。[主 CI 37879858796](https://github.com/wangbinquan/agent-workflow/actions/runs/37879858796) 的 72 项作业全部 completed/success，[视觉回归 37879858803](https://github.com/wangbinquan/agent-workflow/actions/runs/37879858803) 的 1 项作业 success；两者完整 headSha 相同，全部作业分页已消费。没有重启或重新触发 observability-scale。

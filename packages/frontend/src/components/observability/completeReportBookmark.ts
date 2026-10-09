@@ -4,6 +4,7 @@ import {
 } from '@agent-workflow/shared'
 import { getAuthSessionRevision, getBaseUrl, getToken } from '@/stores/auth'
 import { sha256Hex } from '@/lib/sha256'
+import { discardObservationDefaultRange } from './observationDefaultRange'
 
 const PREFIX = 'agent-workflow.observation-complete-bookmark/13:'
 const rejectedIds = new Set<string>()
@@ -59,6 +60,7 @@ export function observationReportWasRejected(id: string): boolean {
 /** Exact-ID removal cannot erase a different, subsequently completed report. */
 export function discardObservationReportBookmark(id: string) {
   rejectedIds.add(id)
+  discardObservationDefaultRange(id)
   try {
     const keys: string[] = []
     for (let i = 0; i < localStorage.length; i++) {

@@ -3,16 +3,20 @@ import { useEffect, useRef } from 'react'
 import { TaskStatusSchema, ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
 import type { ObservationSearch } from '@/components/observability/RunObservability'
 import { CompleteRunObservability } from '@/components/observability/CompleteRunObservability'
+import { observationDefaultRange } from '@/components/observability/observationDefaultRange'
 import { Route as RootRoute } from './__root'
 
 export function validateObservationSearch(raw: Record<string, unknown>): ObservationSearch {
-  const fallbackTo = Date.now() + 1
+  const completedDefault = Object.keys(raw).every((key) => key === 'tab')
+    ? observationDefaultRange()
+    : null
+  const fallbackTo = completedDefault?.to ?? Date.now() + 1
   const to =
     typeof raw.to === 'number' && Number.isSafeInteger(raw.to) && raw.to > 0 ? raw.to : fallbackTo
   const from =
     typeof raw.from === 'number' && Number.isSafeInteger(raw.from) && raw.from >= 0 && raw.from < to
       ? raw.from
-      : Math.max(0, to - 7 * 86400000)
+      : (completedDefault?.from ?? Math.max(0, to - 7 * 86400000))
   const status = TaskStatusSchema.safeParse(raw.status)
   const text = (key: string, max: number) =>
     typeof raw[key] === 'string' && raw[key].trim() && raw[key].length <= max ? raw[key] : undefined

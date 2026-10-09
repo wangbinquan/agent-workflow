@@ -1,6 +1,15 @@
 // RFC-371: a same-scope refresh keeps a dated completed snapshot, never invalid old totals.
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type {
@@ -20,6 +29,7 @@ import {
   observationReportBookmark,
 } from '../src/components/observability/completeReportBookmark'
 import i18n from '../src/i18n'
+import { Route, validateObservationSearch } from '../src/routes/observability'
 
 const NOW = Date.parse('2026-10-09T00:00:00Z')
 const filters: ObservationOverviewQuery = { from: NOW - 60000, to: NOW + 1, timezone: 'UTC' }
@@ -865,4 +875,524 @@ test('a new report HTTP error cannot resurrect the previous snapshot', async () 
   } finally {
     vi.useRealTimers()
   }
+})
+
+// The sidebar supplies no dates. Its second visit must use the actual completed
+// range, rather than Date.now() creating another full historical report.
+function mountSidebarPage() {
+  const root = createRootRoute({
+    component: () => (
+      <>
+        <Link to="/tasks">离开观测</Link>
+        <Link to="/observability">侧栏返回观测</Link>
+        <Outlet />
+      </>
+    ),
+  })
+  const observation = createRoute({
+    getParentRoute: () => root,
+    path: '/observability',
+    validateSearch: validateObservationSearch,
+    component: Route.options.component,
+  })
+  const tasks = createRoute({
+    getParentRoute: () => root,
+    path: '/tasks',
+    component: () => <h1>任务路由</h1>,
+  })
+  const history = createMemoryHistory({ initialEntries: ['/observability'] })
+  const router = createRouter({ routeTree: root.addChildren([observation, tasks]), history })
+  render(
+    <QueryClientProvider client={client}>
+      {/* The focused tree keeps production route IDs and the complete page. */}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <RouterProvider router={router as any} />
+    </QueryClientProvider>,
+  )
+  return { router, history }
+}
+
+function defaultWeek(): ObservationOverviewQuery {
+  return {
+    from: NOW + 1 - 7 * 86400000,
+    to: NOW + 1,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }
+}
+
+function partialFacts(original: Ready): CompleteObservationReport {
+  return {
+    state: 'not-ready',
+    reportId: original.header.reportId,
+    gaps: ['native-token-bucket-unknown'],
+    facts: {
+      header: original.header,
+      counts: original.counts,
+      summary: {
+        ...original.summary,
+        metrics: {
+          state: 'not-ready',
+          gaps: ['native-token-bucket-unknown'],
+          recordedUsage: {
+            invocations: '1',
+            observedInvocations: '1',
+            records: '1',
+            bucketRecords: { input: '1', cacheRead: '0', cacheWrite: '1', output: '1' },
+            tokens: { input: '12', cacheRead: null, cacheWrite: '0', output: '56', total: '68' },
+          },
+          costCoverage: {
+            records: '1',
+            pricedRecords: '0',
+            partiallyPricedRecords: '1',
+            visibility: 'visible',
+          },
+          recordedCost: {
+            currency: 'CNY',
+            amount: '0.068',
+            records: '1',
+            pricedRecords: '0',
+            partiallyPricedRecords: '1',
+          },
+        },
+      },
+    },
+  }
+}
+
+test.each(['ready', 'incomplete'] as const)(
+  'real sidebar return keeps the qualified %s range, dated buckets, CNY and bars without a second build',
+  async (mode) => {
+    const f = fixture()
+    // Use the real application's five-minute default. The report hook must
+    // collect its own unobserved entries without clearing this QueryClient.
+    client.setQueryDefaults(['run-observability-complete'], { gcTime: 5 * 60000 })
+    setToken('sidebar-' + fixtureSequence)
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    f.control.firstBuilding = mode === 'incomplete'
+    const { router, history } = mountSidebarPage()
+    await waitFor(() => expect(f.reports).toHaveLength(1))
+    const original = f.reports[0]!
+    if (mode === 'incomplete') await f.finish(partialFacts(original))
+    const trendName = mode === 'ready' ? /1 个任务.*102 Token/ : /1 个任务.*已记录 68/
+    await screen.findByRole('button', { name: trendName })
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    )
+    const originalScope = original.header.filters
+    const originalTime = screen.getByText(
+      i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
+    ).textContent!
+    expect(originalScope).toEqual(defaultWeek())
+    fireEvent.click(screen.getByRole('link', { name: '离开观测' }))
+    await screen.findByRole('heading', { name: '任务路由' })
+    await waitFor(() =>
+      expect(client.getQueriesData({ queryKey: ['run-observability-complete'] })).toHaveLength(0),
+    )
+    clock.mockReturnValue(NOW + 2 * 3600000)
+    const beforeReturn = f.requests.length
+    fireEvent.click(screen.getByRole('link', { name: '侧栏返回观测' }))
+    await screen.findByRole('button', { name: trendName })
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    )
+    expect(router.state.location.search).toMatchObject({
+      from: originalScope.from,
+      to: originalScope.to,
+      period: 'week',
+      tab: 'overview',
+    })
+    expect(history.location.search).toBe(router.state.location.searchStr)
+    expect(screen.getByText(originalTime)).toBeTruthy()
+    const tokenCard = screen
+      .getByRole('heading', {
+        name: i18n.t(
+          'runObservability.' + (mode === 'ready' ? 'totalTokens' : 'recordedTokenUsage'),
+        ),
+      })
+      .closest<HTMLElement>('.card')!
+    expect(
+      [...tokenCard.querySelectorAll('[data-token-bucket] dd')].map((node) =>
+        node.firstChild?.textContent?.trim(),
+      ),
+    ).toEqual(['12', mode === 'ready' ? '34' : i18n.t('runObservability.unknown'), '0', '56'])
+    const costCard = screen
+      .getByRole('heading', {
+        name: i18n.t('runObservability.' + (mode === 'ready' ? 'cost' : 'recordedCost')),
+      })
+      .closest<HTMLElement>('.card')!
+    expect(within(costCard).getByText(mode === 'ready' ? '¥0.102' : '¥0.068')).toBeTruthy()
+    if (mode === 'incomplete') expect(within(tokenCard).getByText(/记录不完整/)).toBeTruthy()
+    expect(f.reports).toHaveLength(1)
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(1)
+    const reopened = f.requests.slice(beforeReturn)
+    expect(reopened).toContainEqual({
+      path: '/api/observability/reports/' + original.header.reportId,
+      method: 'GET',
+      reportId: original.header.reportId,
+    })
+    expect(reopened.some((request) => request.path.endsWith('/pages'))).toBe(true)
+    expect(reopened.every((request) => request.reportId === original.header.reportId)).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    await waitFor(() => expect(f.reports).toHaveLength(2))
+    await screen.findByText(i18n.t('runObservability.refreshingPrevious'))
+    expect(screen.getByText(originalTime)).toBeTruthy()
+    const refresh = screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement
+    expect(refresh.disabled).toBe(true)
+    fireEvent.click(refresh)
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
+    await f.finish(f.reports[1]!)
+    await screen.findByRole('button', { name: /1 个任务.*132 Token/ })
+    expect(f.reports[1]!.header.filters).toEqual(originalScope)
+    expect(screen.queryByText(originalTime)).toBeNull()
+    const refreshedCostCard = screen
+      .getByRole('heading', { name: i18n.t('runObservability.cost') })
+      .closest<HTMLElement>('.card')!
+    expect(within(refreshedCostCard).getByText('¥0.132')).toBeTruthy()
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
+
+    const initialCache = client.getQueryData<CompleteObservationReport>([
+      'run-observability-complete',
+      'scope-metrics/13',
+      originalScope,
+      null,
+      0,
+    ])
+    expect(completeObservationReportContent(initialCache!)?.header.reportId).toBe(
+      original.header.reportId,
+    )
+    fireEvent.click(screen.getByRole('link', { name: '离开观测' }))
+    await screen.findByRole('heading', { name: '任务路由' })
+    await waitFor(() =>
+      expect(client.getQueriesData({ queryKey: ['run-observability-complete'] })).toHaveLength(0),
+    )
+    const beforeLatestReturn = f.requests.length
+    fireEvent.click(screen.getByRole('link', { name: '侧栏返回观测' }))
+    await screen.findByRole('button', { name: /1 个任务.*132 Token/ })
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    )
+    expect(screen.queryByText(originalTime)).toBeNull()
+    expect(
+      screen.getByText(
+        i18n.t('runObservability.completeAsOf', {
+          time: new Date(NOW + 10000).toLocaleString('zh'),
+        }),
+      ),
+    ).toBeTruthy()
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
+    const latestReturn = f.requests.slice(beforeLatestReturn)
+    expect(latestReturn).toContainEqual({
+      path: '/api/observability/reports/' + f.reports[1]!.header.reportId,
+      method: 'GET',
+      reportId: f.reports[1]!.header.reportId,
+    })
+    expect(
+      latestReturn.every((request) => request.reportId === f.reports[1]!.header.reportId),
+    ).toBe(true)
+
+    discardObservationReportBookmark(original.header.reportId)
+    expect(validateObservationSearch({})).toMatchObject({
+      from: originalScope.from,
+      to: originalScope.to,
+    })
+    // A remount resets revision to zero. Its next explicit refresh must create
+    // a new report, rather than GET the previous visit's revision=1 report.
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    await waitFor(() => expect(f.reports).toHaveLength(3))
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
+    expect(f.reports[2]!.header.filters).toEqual(originalScope)
+    const newest = {
+      ...f.reports[2]!,
+      header: { ...f.reports[2]!.header, asOf: NOW + 20000 },
+    }
+    await f.finish(newest)
+    await screen.findByText(
+      i18n.t('runObservability.completeAsOf', {
+        time: new Date(NOW + 20000).toLocaleString('zh'),
+      }),
+    )
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
+    discardObservationReportBookmark(f.reports[1]!.header.reportId)
+    expect(validateObservationSearch({}).to).toBe(originalScope.to)
+    discardObservationReportBookmark(newest.header.reportId)
+    expect(validateObservationSearch({}).to).toBe(NOW + 2 * 3600000 + 1)
+  },
+)
+
+test('a warm application returning after B is evicted never revives readable A and builds exactly once', async () => {
+  const f = fixture()
+  client.setQueryDefaults(['run-observability-complete'], { gcTime: 5 * 60000 })
+  setToken('sidebar-evicted-' + fixtureSequence)
+  vi.spyOn(Date, 'now').mockReturnValue(NOW)
+  mountSidebarPage()
+  await screen.findByRole('button', { name: /1 个任务.*102 Token/ })
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  )
+  const original = f.reports[0]!
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+  await waitFor(() => expect(f.reports).toHaveLength(2))
+  const refreshed = f.reports[1]!
+  await f.finish(refreshed)
+  await screen.findByRole('button', { name: /1 个任务.*132 Token/ })
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  )
+  expect(
+    completeObservationReportContent(
+      client.getQueryData<CompleteObservationReport>([
+        'run-observability-complete',
+        'scope-metrics/13',
+        original.header.filters,
+        null,
+        0,
+      ])!,
+    )?.header.reportId,
+  ).toBe(original.header.reportId)
+  const release = f.block(refreshed.header.reportId)
+  fireEvent.click(screen.getByRole('link', { name: '离开观测' }))
+  await screen.findByRole('heading', { name: '任务路由' })
+  await waitFor(() =>
+    expect(client.getQueriesData({ queryKey: ['run-observability-complete'] })).toHaveLength(0),
+  )
+  const beforeReturn = f.requests.length
+  fireEvent.click(screen.getByRole('link', { name: '侧栏返回观测' }))
+  await waitFor(() =>
+    expect(f.requests.slice(beforeReturn)).toContainEqual({
+      path: '/api/observability/reports/' + refreshed.header.reportId,
+      method: 'GET',
+      reportId: refreshed.header.reportId,
+    }),
+  )
+  expect(screen.queryByRole('button', { name: /1 个任务.*102 Token/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: /1 个任务.*132 Token/ })).toBeNull()
+  await act(async () => {
+    release({ error: { code: 'not-found', message: 'Evicted report' } }, 404)
+  })
+  await waitFor(() => expect(f.reports).toHaveLength(3))
+  expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
+  expect(screen.queryByRole('button', { name: /1 个任务.*102 Token/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: /1 个任务.*132 Token/ })).toBeNull()
+  expect(
+    f.requests.slice(beforeReturn).some((request) => request.reportId === original.header.reportId),
+  ).toBe(false)
+  const replacement = {
+    ...f.reports[2]!,
+    header: { ...f.reports[2]!.header, asOf: NOW + 20000 },
+  }
+  expect(replacement.header.filters).toEqual(original.header.filters)
+  await f.finish(replacement)
+  await screen.findByText(
+    i18n.t('runObservability.completeAsOf', {
+      time: new Date(NOW + 20000).toLocaleString('zh'),
+    }),
+  )
+  await screen.findByRole('button', { name: /1 个任务.*132 Token/ })
+  expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
+  expect(
+    f.requests.slice(beforeReturn).some((request) => request.reportId === original.header.reportId),
+  ).toBe(false)
+  // A remains readable at its owner; collecting the client query did not delete it.
+  expect(f.states.get(original.header.reportId)).toEqual(original)
+})
+
+test('a completed default cannot replace any explicit URL field or a user-selected time period', async () => {
+  const f = fixture()
+  setToken('sidebar-explicit-' + fixtureSequence)
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+  mountProbe({ scope: defaultWeek() })
+  await screen.findByTestId('snapshot')
+  clock.mockReturnValue(NOW + 3600000)
+  const { from, to } = defaultWeek()
+  expect(validateObservationSearch({ tab: 'usage' })).toMatchObject({
+    from,
+    to,
+    tab: 'usage',
+  })
+  for (const raw of [
+    { period: 'week' },
+    { period: 'month' },
+    { period: 'custom' },
+    { period: 'all' },
+    { task: 'task-id' },
+    { cohort: 'usage' },
+    { cohort: 'started' },
+    { q: 'search' },
+    { status: 'done' },
+    { repository: 'repo' },
+    { workflow: 'workflow' },
+    { selection: JSON.stringify({ purpose: 'memory' }) },
+    { runtime: 'runtime' },
+    { model: 'model' },
+    { attempt: 'attempt' },
+    { span: 'span' },
+    { agent: 'agent' },
+    { quality: 'gap' },
+    { after: 'cursor' },
+    { unknown: 'keep-original-validation' },
+    { from: undefined },
+  ]) {
+    expect(validateObservationSearch(raw).to).toBe(NOW + 3600000 + 1)
+  }
+  expect(validateObservationSearch({ from: 1000, to: 2000, period: 'custom' })).toMatchObject({
+    from: 1000,
+    to: 2000,
+    period: 'custom',
+  })
+  expect(validateObservationSearch({ to: 2000 })).toMatchObject({ from: 0, to: 2000 })
+  expect(validateObservationSearch({ from: 1000 }).from).toBe(1000)
+  expect(f.reports).toHaveLength(1)
+})
+
+test('the formal period control still selects a fresh month instead of the remembered default week', async () => {
+  const f = fixture()
+  setToken('sidebar-period-' + fixtureSequence)
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+  const { router } = mountSidebarPage()
+  await screen.findByRole('button', { name: /1 个任务.*102 Token/ })
+  clock.mockReturnValue(NOW + 3600000)
+  fireEvent.click(screen.getByRole('combobox', { name: i18n.t('runObservability.period') }))
+  fireEvent.mouseDown(await screen.findByRole('option', { name: i18n.t('runObservability.month') }))
+  await waitFor(() => expect(f.reports).toHaveLength(2))
+  expect(f.reports[1]!.header.filters).toEqual({
+    from: NOW + 3600001 - 30 * 86400000,
+    to: NOW + 3600001,
+    timezone: defaultWeek().timezone,
+  })
+  expect(router.state.location.search).toMatchObject({
+    from: NOW + 3600001 - 30 * 86400000,
+    to: NOW + 3600001,
+    period: 'month',
+  })
+  expect(screen.queryByRole('button', { name: /1 个任务.*102 Token/ })).toBeNull()
+  await f.finish(f.reports[1]!)
+  await screen.findByRole('button', { name: /1 个任务.*132 Token/ })
+  expect(validateObservationSearch({}).to).toBe(NOW + 1)
+})
+
+test.each([
+  { cohort: 'usage' as const },
+  { cohort: 'started' as const },
+  { q: 'filtered' },
+  { status: 'done' as const },
+  { repository: 'repository' },
+  { workflow: 'workflow' },
+  { selection: JSON.stringify({ purpose: 'memory' }) },
+  { from: NOW - 60000 },
+] as const)('a report filtered by %j never supplies the sidebar default', async (extra) => {
+  const f = fixture()
+  setToken('sidebar-filtered-' + fixtureSequence)
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+  const scope: ObservationOverviewQuery = { ...defaultWeek(), ...extra }
+  f.control.firstBuilding = true
+  mountProbe({ scope })
+  await waitFor(() => expect(f.reports).toHaveLength(1))
+  const original = f.reports[0]!
+  // Qualify the original usage-cohort report with its required window evidence.
+  if (scope.cohort === 'usage') {
+    await f.finish({
+      ...original,
+      summary: {
+        ...original.summary,
+        usageWindow: {
+          candidateTasks: '1',
+          timingBasis: 'task-lifecycle',
+          partitions: {
+            'in-window': { records: '1', metrics: original.summary.metrics },
+            'outside-window': { records: '0', metrics: { state: 'not-applicable' } },
+            'unassigned-time': { records: '0', metrics: { state: 'not-applicable' } },
+          },
+        },
+      },
+    })
+  } else {
+    await f.finish(original)
+  }
+  await screen.findByTestId('snapshot')
+  clock.mockReturnValue(NOW + 60000)
+  expect(validateObservationSearch({}).to).toBe(NOW + 60001)
+})
+
+test.each(['task', 'timezone', 'building', 'failed', 'missing-facts'] as const)(
+  '%s responses cannot qualify a default root range',
+  async (mode) => {
+    const f = fixture()
+    setToken('sidebar-ineligible-' + fixtureSequence)
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    f.control.firstBuilding = mode !== 'task' && mode !== 'timezone'
+    const scope = defaultWeek()
+    if (mode === 'timezone') scope.timezone = scope.timezone === 'UTC' ? 'Asia/Shanghai' : 'UTC'
+    mountProbe({ scope, ...(mode === 'task' ? { taskId: 'original-task' } : {}) })
+    await waitFor(() => expect(f.reports).toHaveLength(1))
+    if (mode === 'failed')
+      await f.finish({
+        state: 'failed',
+        reportId: f.reports[0]!.header.reportId,
+        error: 'Original failed',
+        retryable: true,
+      })
+    else if (mode === 'missing-facts')
+      await f.finish({
+        state: 'not-ready',
+        reportId: f.reports[0]!.header.reportId,
+        gaps: ['missing-facts'],
+      })
+    else if (mode === 'task' || mode === 'timezone') await screen.findByTestId('snapshot')
+    clock.mockReturnValue(NOW + 60000)
+    expect(validateObservationSearch({}).to).toBe(NOW + 60001)
+  },
+)
+
+test.each(['account', 'service', 'timezone'] as const)(
+  'a changed %s makes the remembered range unavailable',
+  async (mode) => {
+    const f = fixture()
+    const token = 'sidebar-identity-' + fixtureSequence
+    setToken(token)
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    mountProbe({ scope: defaultWeek() })
+    await screen.findByTestId('snapshot')
+    clock.mockReturnValue(NOW + 60000)
+    expect(validateObservationSearch({}).to).toBe(NOW + 1)
+    if (mode === 'account') setToken(token + '-other')
+    else if (mode === 'service') setBaseUrl('http://other-report-service.test')
+    else {
+      const options = Intl.DateTimeFormat().resolvedOptions()
+      vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+        ...options,
+        timeZone: options.timeZone === 'UTC' ? 'Asia/Shanghai' : 'UTC',
+      })
+    }
+    expect(validateObservationSearch({}).to).toBe(NOW + 60001)
+    if (mode === 'account') {
+      setToken(token)
+      expect(validateObservationSearch({}).to).toBe(NOW + 60001)
+    }
+    expect(f.reports).toHaveLength(1)
+  },
+)
+
+test('a rejected original detail retires its default range as well as its displayed numbers', async () => {
+  const f = fixture()
+  setToken('sidebar-rejected-' + fixtureSequence)
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+  mountProbe({ scope: defaultWeek() })
+  await screen.findByTestId('snapshot')
+  clock.mockReturnValue(NOW + 60000)
+  expect(validateObservationSearch({}).to).toBe(NOW + 1)
+  f.control.pageFailure = true
+  fireEvent.click(screen.getByRole('button', { name: '重新读取原明细' }))
+  await waitFor(() => expect(screen.queryByTestId('snapshot')).toBeNull())
+  expect(validateObservationSearch({}).to).toBe(NOW + 60001)
 })

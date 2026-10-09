@@ -16,6 +16,7 @@ import {
   observationReportBookmark,
   observationReportWasRejected,
 } from './completeReportBookmark'
+import { rememberObservationDefaultRange } from './observationDefaultRange'
 
 export type ReadableObservationReport = CompleteObservationReportContent
 export type ReadyObservationReport = Extract<CompleteObservationReport, { state: 'ready' }>
@@ -71,6 +72,7 @@ export function useCompleteObservationReport(
     queryKey: key,
     enabled,
     retry: false,
+    gcTime: 0,
     refetchOnMount: 'always',
     queryFn: async ({ signal }) => {
       const cached = client.getQueryData<CompleteObservationReport>(key)
@@ -100,6 +102,7 @@ export function useCompleteObservationReport(
               client.setQueryData(displayValidityKey(restoredId), true)
               setPrevious({ scope: displayScope, content })
               retainedIds.current.set(scope, restoredId)
+              rememberObservationDefaultRange(content, bookmark.current)
               return restored
             } catch (error) {
               discardObservationReportBookmark(restoredId)
@@ -124,7 +127,10 @@ export function useCompleteObservationReport(
         const content = checkedReportContent(report, filters, taskId, id)
         const reportId = report.state === 'ready' ? report.header.reportId : report.reportId
         retainedIds.current.set(scope, reportId)
-        if (content) bookmark.remember(reportId)
+        if (content) {
+          bookmark.remember(reportId)
+          rememberObservationDefaultRange(content, bookmark.current)
+        }
         if (report.state === 'failed' || (report.state === 'not-ready' && !report.facts)) {
           if (restoredId) discardObservationReportBookmark(restoredId)
           if (previous?.scope === displayScope)
