@@ -406,7 +406,8 @@ describeEachProvider('RFC-370 Task Node callers retain native transactions', (ha
         .update(nodeRuns)
         .set({
           nodeId: 'fan',
-          wrapperProgressJson: '{"kind":"fanout","reuseDisabled":true,"round":3}',
+          wrapperProgressJson:
+            '{"kind":"fanout","phase":"inner-running","reuseDisabled":true,"round":3}',
         })
         .where(eq(nodeRuns.id, f.runId))
       const owners = await f.owners()
@@ -432,6 +433,7 @@ describeEachProvider('RFC-370 Task Node callers retain native transactions', (ha
       expect((await f.rows())[0]).toMatchObject({ status, finishedAt: expect.any(Number) })
       expect(JSON.parse((await f.rows())[0]!.wrapperProgressJson!)).toEqual({
         kind: 'fanout',
+        phase: 'inner-running',
         round: 3,
       })
       expect(f.calls).toEqual({ newWork: 0, issuedAck: 2 })

@@ -93,9 +93,17 @@ test('post-reap native metadata and model corrections share one final write', ()
   walk(subtree, (node) => {
     if (
       ts.isCallExpression(node) &&
-      node.expression.getText(subtree) === 'opts.persistence.nodeExecution.appendEvents'
-    )
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'appendEvents' &&
+      ts.isCallExpression(node.expression.expression) &&
+      node.expression.expression.expression.getText(subtree) === 'selectTaskNodeExecutionWrites'
+    ) {
+      const selection = node.expression.expression
+      expect(selection.arguments).toHaveLength(2)
+      expect(selection.arguments[0]?.getText(subtree)).toBe('opts.persistence')
+      expect(selection.arguments[1]?.getText(subtree)).toBe("'issuedResults'")
       writes.push(node)
+    }
   })
   expect(writes).toHaveLength(1)
   expect(final).toContain('const observations = [...modelRevisions, ...spanFacts]')
