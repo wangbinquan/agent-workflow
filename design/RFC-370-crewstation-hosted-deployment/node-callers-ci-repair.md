@@ -47,3 +47,11 @@ macOS shard 7/12、Ubuntu shard 15/32 和 Windows 的完整作业日志都显示
 源码用例。没有追加生产改动或第二次 census，没有执行本地 AW 测试、typecheck、build、
 服务或 E2E。必须等账本登记落实，并取得包含全部修复的确切提交的主流水线与 Windows
 完整成功及实际用例结果，才能继续 RFC 实现。
+
+## 2026-10-09 登记后的 canonical 顺序修复与 CI 验收边界
+
+80项完整登记已随84372720a6ee741b32953483b7f3a90ff8d35dac上库，原四个测试修复也完整包含。该SHA的Windows作业37893752035经现有workflow_dispatch默认入口执行原完整命令和预算，已1/1成功；它未命中push路径过滤，不能写成普通push触发。完整实际用例证据与主流水线总绿仍待验收。
+
+本轮主流水线Ubuntu24作业113696280855的原canonical投影检查发现唯一80项登记排在14条自动投影记录之后。原projectGovernanceArtifacts保留手工登记，再追加原n1LedgerSpecs；此次仅将这一完整登记从129索引移至115索引，其他129条相对顺序及全部130条字段、baseline和why保持。原五个纯JSON摘要函数重算provenance.contentDigest，其余原锚点、sourceDigest和canonicalProjection保持；不修改原检查或再跑census。完整原账本可通过移动回原索引、恢复旧contentDigest逐字恢复。
+
+同SHA文档链接作业113696280091仍因两个外部页面返回504失败；原配置包含5次重试，未接受5xx或删除任何引用。针对该完成作业的重跑请求返回403，原因是所属流水线仍在运行，请求尚未执行。本轮顺序修复、后续链接检查、完整GitHub主流水线及Windows总绿分别保留验收边界。没有本机AW tests/typecheck/build/services/E2E，完整H7/A-T7/A-G及CS adapter、M0部署与RFC完成状态继续开放。
