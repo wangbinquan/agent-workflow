@@ -250,13 +250,13 @@ test('formal refresh retains the dated four buckets, CNY and bars and blocks dup
   const originalTime = screen.getByText(
     i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
   ).textContent
-  fireEvent.click(screen.getByRole('button', { name: '刷新', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }))
   await waitFor(() => expect(f.reports).toHaveLength(2))
   await screen.findByText(i18n.t('runObservability.refreshingPrevious'))
   expect(values()).toEqual(['12', '34', '0', '56'])
   expect(screen.getByText('¥0.102')).toBeTruthy()
   expect(screen.getByText(originalTime!)).toBeTruthy()
-  const refresh = screen.getByRole('button', { name: '刷新', exact: true }) as HTMLButtonElement
+  const refresh = screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement
   expect(refresh.disabled).toBe(true)
   fireEvent.click(refresh)
   expect(f.requests.filter((row) => row.method === 'POST')).toHaveLength(2)

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { sql } from 'drizzle-orm'
 import { originalSqliteFileReportSnapshot } from '@/platform/persistence/reportSqliteSnapshot'
-import type { ReportWorkspace } from '@/platform/persistence/reportWorkspace'
+import type { ReportWorkingPage, ReportWorkspace } from '@/platform/persistence/reportWorkspace'
 
 test('report-local disk caches preserve complete TEMP rows, snapshot and writer configuration', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'aw-report-cache-')),
@@ -62,11 +62,12 @@ test('report-local disk caches preserve complete TEMP rows, snapshot and writer 
       const actualRows: typeof expectedRows = []
       let cursor: string | null = null
       do {
-        const page = await snapshot.workspace.page<(typeof expectedRows)[number]['document']>(
-          'complete-tokens',
-          cursor,
-          137,
-        )
+        const page: ReportWorkingPage<(typeof expectedRows)[number]['document']> =
+          await snapshot.workspace.page<(typeof expectedRows)[number]['document']>(
+            'complete-tokens',
+            cursor,
+            137,
+          )
         actualRows.push(...page.items)
         expect(page.nextCursor === null || page.nextCursor !== cursor).toBe(true)
         cursor = page.nextCursor
