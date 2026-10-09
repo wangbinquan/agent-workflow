@@ -166,7 +166,7 @@ function consume(reader: Reader, initial = reader.initialCursor, maxBytes = 256 
     last: ReturnType<Reader['next']> | undefined
   const steps: NativeUsagePassStep[] = []
   while (cursor !== null) {
-    const page = reader.next(cursor)
+    const page: ReturnType<Reader['next']> = reader.next(cursor)
     expect(reader.next(cursor)).toEqual(page)
     expect(page.cursor).toBe(cursor)
     expect(JSON.stringify(page)).not.toContain('cache_message')
