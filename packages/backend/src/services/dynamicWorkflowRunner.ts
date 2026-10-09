@@ -39,6 +39,7 @@ import {
   type ParsedTriggerContext,
 } from '@agent-workflow/shared'
 import type { DynamicWorkflowPersistence } from '@/modules/task-execution/application/ports/dynamicWorkflowPersistence'
+import { selectDynamicWorkflowStateWrites } from '@/modules/task-execution/application/dynamicWorkflowWriteSelection'
 import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import type { WorkgroupTurnHostOperations } from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 import type { TaskScopeOutcome } from '@/modules/task-execution/domain/taskEngine'
@@ -338,7 +339,7 @@ export async function runDynamicWorkflowGenerate(
       priorAttempts: dw.generateAttempts,
     })
     dw = { ...dw, generateAttempts: 0 }
-    await persistence.saveState(taskId, dw)
+    await selectDynamicWorkflowStateWrites(persistence, 'preparation').saveState(taskId, dw)
   }
 
   let errorNotice: string | null = null
@@ -444,7 +445,7 @@ export async function runDynamicWorkflowGenerate(
     if (evaluated !== null && evaluated.ok) {
       const { rejectionComment: _consumed, ...rest } = dw
       dw = { ...rest, phase: 'awaiting_confirm', generatedDef: evaluated.def }
-      await persistence.saveState(taskId, dw)
+      await selectDynamicWorkflowStateWrites(persistence, 'issuedResults').saveState(taskId, dw)
       await openDwGate(nodeRuns, taskId)
       log.info('dynamic workflow generated — awaiting confirmation', {
         taskId,
@@ -457,7 +458,7 @@ export async function runDynamicWorkflowGenerate(
     const errors = failure ?? (evaluated as { ok: false; errors: string[] }).errors
     errorNotice = errors.map((e) => `- ${e}`).join('\n')
     dw = { ...dw, generateAttempts: dw.generateAttempts + 1 }
-    await persistence.saveState(taskId, dw)
+    await selectDynamicWorkflowStateWrites(persistence, 'issuedResults').saveState(taskId, dw)
     log.warn('dynamic workflow generation attempt failed', {
       taskId,
       attempt: dw.generateAttempts,

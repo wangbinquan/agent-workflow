@@ -1311,3 +1311,25 @@ c7375662 的 Mac backend6 job113619940054 中，原 RFC303 两例之一在残锁
 cf50bc330dd0cb7d73095da26f8862dcb4db80ca 已将真实 Node caller 选择的29个文件正常提交并推送 main；独立 SOURCE16-R1 与 MATCHING16-R1 有效稳定 PASS 均已完整消费，远端0/0、空index及全部并行内容保留。18/provider 新回归和2个 source 案例已上库；正式行为仍须验收本后继新SHA main/Windows 总绿及实际案例，不将有限源码门当成 hosted 成功。
 
 本普通后继只删除两个随源码消费的 allowGrowth，129有序库存/baseline/why、canonicalProjection/sourceDigest/原provenance锚点保持；用原五个纯JSON函数重算 contentDigest。Windows 原 push/PR 过滤及平台命令各登记一次已上库新测试，四个尚未监测的实际生产路径各加入两处过滤，其余六个生产路径已覆盖且保留。删除11个新增引用可恢复完整原workflow，所有旧命令、并行接线、断言和预算保持。三份文档只追加；其余25个已发布路径字节不变，无新 census 或本机 AW tests/typecheck/build/services/E2E。独立后继功能门、确切发布及总绿分别验收；完整 H7/A-T7/A-G、十九owner/三roots及独立CS adapter、M0首次部署至M4继续，AW尚未部署CS。
+
+## 2026-10-09 N2 总流水线修绿后恢复 H7
+
+确切提交 `19bf1e1d3d22f75b6aa44f94e9dc7ada75c6e53d` 的[主 CI 37901830295](https://github.com/wangbinquan/agent-workflow/actions/runs/37901830295) 正式 success，72/72 作业全部成功；同 SHA 原 Windows 默认完整 dispatch [37901896472](https://github.com/wangbinquan/agent-workflow/actions/runs/37901896472) 正式 success、Typecheck 成功。两 run 与全部 73 terminal jobs 已完整读取并核对。
+
+37 份完整功能作业日志、68 份唯一原始材料与 23 份已审 Git 内容已核对，298 个实际标题全部逐项消费：N2 78、原 N1 196、原观测接线 15、三套旧回归 6、原托管发布 3；Windows 74、Ubuntu 146、macOS 78。四个旧测试的完整逆向保持证明、N2 的一次原 census 与各有限门分别保留，无新 census 或本机 AW tests/typecheck/build/services/E2E。
+
+b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1e1d 仅在原错误分支增加已有 detail，三例在原预算内通过，不声称已查明或修复该次具体原因。取证脚本的重复列表索引、后缀误匹配、Windows 路径分隔符错误单独记录并修正；只有证据读取器重跑，未改产品、人口、断言或 hosted CI。
+
+用户要求的总绿门槛已满足，N2 有限交付正式验收，恢复已批准 H7：先按真实三处动态生成状态动作设计 preparation/issuedResults，再继续 Task 控制、child/workgroup、boot、十九 owner 与三个实际 roots；完整 H7/A-T7/A-G、CS 独立 adapter 与 M0～M4 仍开放，AW 尚未部署 CS，RFC 继续。动态状态设计见 [C2-W2-D](host-authority-task-dynamic-state.md)。全部旧共享正文与并行输出保持。
+
+## 2026-10-09 C2-W2-D 原生成与配套候选
+
+动态状态 SOURCE9-R2 有效稳定 PASS、0 findings 已实际消费：43 项（9 owned/31 control/3 evidence）、三个包装及全部功能分析首末一致；回执 127314 bytes／sha256:ca524961177d191483b19a0048a4b7a7ed57b6db94735994e7973bfffaf557f8。七个生产文件、一个新测试保留 1 preparation/2 issuedResults 的三处原动作、原 SQL/时钟/JSON/Task 工作与同一实际事务，四个原 reader 和完整生成器逆向证明保持。26/provider+1 global 的新案例尚未运行，旧 RFC-167、RFC-223、N1/N2 全文和预算不改。
+
+本最终源码候选的原 scoped census 只执行一次，固定 19bf1e1d3d22f75b6aa44f94e9dc7ada75c6e53d，8 冻结 TS（7 production）与 6797 个非本批已提交源码，四条原规则全文不改；13 完整私有输出 sourceDigest sha256:a2416dd0cf4891ecedea696fc545c118dc4e44e5048ce5c9a7654e75e03005e5。并行观测的 7 tracked/6 untracked TS 在制内容被排除并完整保留，无本机 AW tests/typecheck/build/services/E2E。
+
+实测 classic inbound 4→5，唯一新增为原 services/dynamicWorkflowRunner 到 Task application selector 的 value 边；原四条边逐项保持，outbound 0→0。不用 canonical role 推断 classic 分类；生成器完整 public 边界收口仍在 A-T7。原 130 行有序库存与每条 why、356 条 authored debt、40 required SPI/69 target edges 和空 implementation SCC 保持。
+
+四项实际增长各只声明一次：mutation 1983→1984、observed imports 6889→6894、exact compatibility exceptions 6033→6037、symbol owners 27728→27738。新增三个生产文件及十个 file/symbol owner、五条实测导入、四条原规则精确兼容项和一条分类 entry 全部保留原输出。原纯治理/JSON 函数先整字节复现四份治理输出，八份 canonical 与另外三份治理、status 原完整输出保持；增长声明在源码消费后的普通后继退役。
+
+配套功能门、精确上库、新测试上 main 后的原 Windows 登记、同 SHA 全仓 main/Windows 总绿与真实新增案例分别验收。历史 19bf 总绿和 298 例只作已消费前置，不代签本候选。其余 Task 生命周期/人工控制/child/workgroup/boot、十九 owner/三个 roots、完整 H7/A-T7/A-G 和各层 CS 独立 adapter、M0 首次部署到 M4 继续；AW 尚未部署 CS，RFC 未完成。全部旧正文与并行输出保持。

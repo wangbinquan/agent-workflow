@@ -6973,6 +6973,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:105500241bc6474d8610",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroupTaskState",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "workgroupTaskState",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "fromPath": "packages/backend/src/services/resourceAcl.ts",
       "fromSymbol": "$file",
@@ -23085,6 +23102,23 @@
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts",
       "toSymbol": "ScriptRunRequest",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostDynamicWorkflowWritePurposes.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskHostDynamicWorkflowWritePurposes.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:378c31ca2d9f7c9031a9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -72948,6 +72982,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b8d6f45f56206d47c3e7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts#$file",
@@ -73915,6 +73966,23 @@
       "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toSymbol": "databaseSessionFor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#$file",
+      "fromPath": "packages/backend/src/services/dynamicWorkflowRunner.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bb3b58a40d559690177a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/dynamicWorkflowWriteSelection.ts#selectDynamicWorkflowStateWrites",
+      "toPath": "packages/backend/src/modules/task-execution/application/dynamicWorkflowWriteSelection.ts",
+      "toSymbol": "selectDynamicWorkflowStateWrites",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -102563,9 +102631,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6033,
+    "architectureExceptions": 6037,
     "implementationSccs": 0,
-    "observedEdges": 6889,
+    "observedEdges": 6894,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -109663,6 +109731,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts#$file",
+      "id": "import:105500241bc6474d8610",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "workgroupTaskState",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroupTaskState"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/resourceAcl.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
@@ -113388,6 +113472,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts#developmentImplicitAgentContractDeclarations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts#$file",
+      "id": "import:185b00aa4f105f732078",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "type",
@@ -127052,6 +127152,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts#ScriptRunRequest"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskHostDynamicWorkflowWritePurposes.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostDynamicWorkflowWritePurposes.ts#$file",
+      "id": "import:378c31ca2d9f7c9031a9",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -181358,6 +181474,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowStateWrite.ts#$file",
+      "id": "import:b8d6f45f56206d47c3e7",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
@@ -182332,6 +182464,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/dynamicWorkflowRunner.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#$file",
+      "id": "import:bb3b58a40d559690177a",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/application/dynamicWorkflowWriteSelection",
+      "syntax": "static-import",
+      "targetSymbol": "selectDynamicWorkflowStateWrites",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/application/dynamicWorkflowWriteSelection.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/dynamicWorkflowWriteSelection.ts#selectDynamicWorkflowStateWrites"
     },
     {
       "edgeKind": "value",
@@ -213689,7 +213837,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea6be3ae1d56bb9c41748beb60906af2cade780e8911b4af7226099e7b44e8cd",
+  "sourceDigest": "sha256:a2416dd0cf4891ecedea696fc545c118dc4e44e5048ce5c9a7654e75e03005e5",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

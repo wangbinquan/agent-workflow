@@ -67,3 +67,13 @@ N1 保存的原完整 context/token/work/capture、同一 outer/inner write fram
 cf50bc330dd0cb7d73095da26f8862dcb4db80ca 已将真实 Node caller 选择的29个文件正常提交并推送 main；独立 SOURCE16-R1 与 MATCHING16-R1 有效稳定 PASS 均已完整消费，远端0/0、空index及全部并行内容保留。18/provider 新回归和2个 source 案例已上库；正式行为仍须验收本后继新SHA main/Windows 总绿及实际案例，不将有限源码门当成 hosted 成功。
 
 本普通后继只删除两个随源码消费的 allowGrowth，129有序库存/baseline/why、canonicalProjection/sourceDigest/原provenance锚点保持；用原五个纯JSON函数重算 contentDigest。Windows 原 push/PR 过滤及平台命令各登记一次已上库新测试，四个尚未监测的实际生产路径各加入两处过滤，其余六个生产路径已覆盖且保留。删除11个新增引用可恢复完整原workflow，所有旧命令、并行接线、断言和预算保持。三份文档只追加；其余25个已发布路径字节不变，无新 census 或本机 AW tests/typecheck/build/services/E2E。独立后继功能门、确切发布及总绿分别验收；完整 H7/A-T7/A-G、十九owner/三roots及独立CS adapter、M0首次部署至M4继续，AW尚未部署CS。
+
+## N2 最终 exact-SHA 功能验收（2026-10-09）
+
+确切提交 `19bf1e1d3d22f75b6aa44f94e9dc7ada75c6e53d` 的[主 CI 37901830295](https://github.com/wangbinquan/agent-workflow/actions/runs/37901830295) 正式 success，72/72 作业全部成功；同 SHA 原 Windows 默认完整 dispatch [37901896472](https://github.com/wangbinquan/agent-workflow/actions/runs/37901896472) 正式 success、Typecheck 成功。两 run 与全部 73 terminal jobs 已完整读取并核对。
+
+37 份完整功能作业日志、68 份唯一原始材料与 23 份已审 Git 内容已核对，298 个实际标题全部逐项消费：N2 78、原 N1 196、原观测接线 15、三套旧回归 6、原托管发布 3；Windows 74、Ubuntu 146、macOS 78。四个旧测试的完整逆向保持证明、N2 的一次原 census 与各有限门分别保留，无新 census 或本机 AW tests/typecheck/build/services/E2E。
+
+b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1e1d 仅在原错误分支增加已有 detail，三例在原预算内通过，不声称已查明或修复该次具体原因。取证脚本的重复列表索引、后缀误匹配、Windows 路径分隔符错误单独记录并修正；只有证据读取器重跑，未改产品、人口、断言或 hosted CI。
+
+用户要求的总绿门槛已满足，N2 有限交付正式验收，恢复已批准 H7：先按真实三处动态生成状态动作设计 preparation/issuedResults，再继续 Task 控制、child/workgroup、boot、十九 owner 与三个实际 roots；完整 H7/A-T7/A-G、CS 独立 adapter 与 M0～M4 仍开放，AW 尚未部署 CS，RFC 继续。

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1983,
+    "entries": 1984,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -34632,6 +34632,30 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostDynamicWorkflowWritePurposes.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskHostDynamicWorkflowWritePurposes.ts#createSelectedDynamicWorkflowWritePurposes",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostDynamicWorkflowWritePurposes.ts#createSelectedDynamicWorkflowWritePurposes",
+      "symbol": "createSelectedDynamicWorkflowWritePurposes",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -47453,7 +47477,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ea6be3ae1d56bb9c41748beb60906af2cade780e8911b4af7226099e7b44e8cd",
+  "sourceDigest": "sha256:a2416dd0cf4891ecedea696fc545c118dc4e44e5048ce5c9a7654e75e03005e5",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

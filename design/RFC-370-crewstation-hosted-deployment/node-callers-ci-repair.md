@@ -61,3 +61,13 @@ macOS shard 7/12、Ubuntu shard 15/32 和 Windows 的完整作业日志都显示
 顺序修复 b8ef988a37802272fec1bd82b16f3170f0a35be5 的 Windows 默认完整验证已成功，主流水线仍待总绿。macOS shard 6/12 作业113715219910在原 RFC-321 smart-HTTP SQLite 用例的 global 发布步骤返回 repository-push-authentication-failed；原 throw 只保留 code，丢掉了已有 detail，当前证据不足以认定具体根因。
 
 本片仅让该 throw 同时保留原返回的 detail，与同一用例的 personal 失败路径写法一致。完整测试其余字节、原 case／全部断言／30_000预算和生产实现保持；不重试失败发布、不改失败判据。新 hosted 日志用于必要 CI 定向排障，不能记作问题已经修复或总流水线全绿。没有本机 AW tests/typecheck/build/services/E2E 或新 census；RFC 新实施继续等待全绿。
+
+## 2026-10-09 同 SHA 总绿与真实用例验收
+
+确切提交 `19bf1e1d3d22f75b6aa44f94e9dc7ada75c6e53d` 的[主 CI 37901830295](https://github.com/wangbinquan/agent-workflow/actions/runs/37901830295) 正式 success，72/72 作业全部成功；同 SHA 原 Windows 默认完整 dispatch [37901896472](https://github.com/wangbinquan/agent-workflow/actions/runs/37901896472) 正式 success、Typecheck 成功。两 run 与全部 73 terminal jobs 已完整读取并核对。
+
+37 份完整功能作业日志、68 份唯一原始材料与 23 份已审 Git 内容已核对，298 个实际标题全部逐项消费：N2 78、原 N1 196、原观测接线 15、三套旧回归 6、原托管发布 3；Windows 74、Ubuntu 146、macOS 78。四个旧测试的完整逆向保持证明、N2 的一次原 census 与各有限门分别保留，无新 census 或本机 AW tests/typecheck/build/services/E2E。
+
+b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1e1d 仅在原错误分支增加已有 detail，三例在原预算内通过，不声称已查明或修复该次具体原因。取证脚本的重复列表索引、后缀误匹配、Windows 路径分隔符错误单独记录并修正；只有证据读取器重跑，未改产品、人口、断言或 hosted CI。
+
+用户要求的总绿门槛已满足，N2 有限交付正式验收，恢复已批准 H7：先按真实三处动态生成状态动作设计 preparation/issuedResults，再继续 Task 控制、child/workgroup、boot、十九 owner 与三个实际 roots；完整 H7/A-T7/A-G、CS 独立 adapter 与 M0～M4 仍开放，AW 尚未部署 CS，RFC 继续。

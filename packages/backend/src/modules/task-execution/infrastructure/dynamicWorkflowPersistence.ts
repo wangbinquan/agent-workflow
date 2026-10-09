@@ -6,8 +6,11 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 
 import { agents, nodeRuns, tasks, workgroupTaskState } from '@/db/schema'
 import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
-import { DwStateSchema } from '@agent-workflow/shared'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
+import {
+  prepareDynamicWorkflowStateWrite,
+  writeDynamicWorkflowState,
+} from './dynamicWorkflowStateWrite'
 
 export class DrizzleDynamicWorkflowPersistence implements DynamicWorkflowPersistence {
   constructor(private readonly db: ProviderNeutralDatabase) {}
@@ -60,10 +63,7 @@ export class DrizzleDynamicWorkflowPersistence implements DynamicWorkflowPersist
     state: Parameters<DynamicWorkflowPersistence['saveState']>[1],
     now = Date.now(),
   ) {
-    await this.db
-      .update(workgroupTaskState)
-      .set({ dwStateJson: JSON.stringify(DwStateSchema.parse(state)), updatedAt: now })
-      .where(eq(workgroupTaskState.taskId, taskId))
-      .run()
+    const prepared = prepareDynamicWorkflowStateWrite(taskId, state, now)
+    await writeDynamicWorkflowState(this.db, prepared)
   }
 }

@@ -11,10 +11,20 @@ export interface DynamicWorkflowTaskSnapshot {
  * Provider-neutral persistence for the dynamic-workflow transport adapter.
  * Provider clients and Drizzle rows remain inside infrastructure.
  */
-export interface DynamicWorkflowPersistence {
+export interface DynamicWorkflowStateWriter {
+  saveState(taskId: string, state: DwState, now?: number): Promise<void>
+}
+
+export interface DynamicWorkflowWritePurposes {
+  readonly preparation: DynamicWorkflowStateWriter
+  readonly issuedResults: DynamicWorkflowStateWriter
+}
+
+export interface DynamicWorkflowPersistence extends DynamicWorkflowStateWriter {
+  readonly writeMode?: 'host-selected'
+  readonly writePurposes?: DynamicWorkflowWritePurposes
   loadTask(taskId: string): Promise<DynamicWorkflowTaskSnapshot | null>
   loadAgent(agentId: string): Promise<Agent | null>
   hasAwaitingConfirmationRun(taskId: string, cause: string): Promise<boolean>
   countNodeRuns(taskId: string, nodeId: string): Promise<number>
-  saveState(taskId: string, state: DwState, now?: number): Promise<void>
 }
