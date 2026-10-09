@@ -64,18 +64,21 @@ function addWorktreeToleratingStaleRefLock(
   worktreePath: string,
 ): void {
   const lockPath = join(repoPath, '.git', `${branchRef}.lock`)
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      execFileSync('git', ['worktree', 'add', '-q', '-b', branch, worktreePath, 'HEAD'], {
-        cwd: repoPath,
-      })
-      return
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (!message.includes('cannot lock ref') || attempt >= 20) throw error
-      if (attempt === 19) rmSync(lockPath, { force: true })
-      else Bun.sleepSync(25)
-    }
+  const add = (): void => {
+    execFileSync('git', ['worktree', 'add', '-q', '-b', branch, worktreePath, 'HEAD'], {
+      cwd: repoPath,
+    })
+  }
+  try {
+    add()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!message.includes('cannot lock ref')) throw error
+    // The cancelled child has exited before this fixture hook. Wait on its
+    // remaining ref lock without repeatedly spawning Git on a slow runner.
+    for (let attempt = 0; attempt < 19 && existsSync(lockPath); attempt += 1) Bun.sleepSync(25)
+    rmSync(lockPath, { force: true })
+    add()
   }
 }
 

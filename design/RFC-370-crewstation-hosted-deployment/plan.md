@@ -1286,3 +1286,7 @@ Ubuntu失败是新测试在尚未提交的 native patch 后调用普通 this.rea
 Windows swimlane原case拿导航前单独生成的retained报告与UI稍后独立生成的报告比较，原日志精确4对5。只从页面真实POST reports的同一Task响应，经原settledReport和originalRows完整分页，取得页面使用的同一reportId作为原始attempts；保留原精确行数、五tick、1280/390各条轨道宽度/对齐、无页面溢出和截图及全部预算，补上响应成功和content非空断言。不做mock、不放宽断言。一次必要消息已协调该干净E2E case的归属；所有并行RFC371生产/UI/测试与13份架构WIP保留并不纳入本次test-only提交。
 
 本批仅两个测试和三个历史追加文档，经有限独立功能门、精确5路径上库与新exact-SHA main/Windows总绿再验收。无新census或本机AW tests/typecheck/build/services/E2E，全部旧共享正文保留。N2/H7/A-T7/A-G/三roots/十九owners/CS M0～M4仍开放，AW未部署CS。
+
+## 2026-10-09 CI 原 Git 夹具残锁等待
+
+c7375662 的 Mac backend6 job113619940054 中，原 RFC303 两例之一在残锁上重复启动 Git，日志明确 5131.62ms/原5000ms 超时。本有限批只改其测试 helper：第一次原 Git add 和非锁错误传播保持，原十九次25ms最大显式等待改为原夹具 ref lock 的文件检查，随后沿原路径移除残锁并真实重试一次。原 runGit 已先等待 proc.exited 再进同一钩子；生产取消/清理、原两个case全部断言和预算保持。详见 ci-git-fixture-ref-lock-wait.md。限定独立功能检视、精确发布与 hosted 总绿/真实两例逐项验收；无本机AW执行或新census。所有旧文档正文与并行内容保留。N2/H7/A-T7/A-G/CS M0～M4仍开放，AW未部署CS。
