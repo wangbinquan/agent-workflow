@@ -1411,11 +1411,22 @@ test('actual attempt swimlanes fill aligned tracks on one ruler at desktop and n
   page,
 }, testInfo) => {
   const { task } = await seedTask()
-  const original = await originalReport(task.id)
-  const attempts = await originalRows<CompleteObservationAttempt>(original, 'attempts')
-  expect(attempts.length).toBeGreaterThan(0)
   await prime(page)
+  const reportResponse = page.waitForResponse((response) => {
+    const request = response.request()
+    return (
+      new URL(response.url()).pathname === '/api/observability/reports' &&
+      request.method() === 'POST' &&
+      request.postDataJSON()?.taskId === task.id
+    )
+  })
   await page.goto(`${daemon.baseUrl}/observability?task=${task.id}`)
+  const response = await reportResponse
+  expect(response.ok()).toBe(true)
+  const original = completeObservationReportContent(await settledReport(await response.json()))
+  expect(original).not.toBeNull()
+  const attempts = await originalRows<CompleteObservationAttempt>(original!, 'attempts')
+  expect(attempts.length).toBeGreaterThan(0)
   const lanes = page.locator('.execution-swimlane').first()
   await expect(lanes.locator('tbody tr')).toHaveCount(attempts.length)
   await expect(lanes.locator('.execution-swimlane__axis span')).toHaveCount(5)

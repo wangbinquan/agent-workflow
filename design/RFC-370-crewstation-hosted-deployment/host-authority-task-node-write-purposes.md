@@ -74,3 +74,13 @@ cee3853bffdfafc61d9ea08a3b8f63aa6b59a744 已将独立 SOURCE9-R2 与 MATCHING16-
 cee3853b 原 main run 37854363636 的 Lint + Typecheck 作业、Windows run 37854363696 的 Typecheck 均实际报同一 TS2339：新 Node 目的测试第616行，按 purpose 索引后的 union 别名不能随 purpose 分支缩窄。原错误日志和 failure 历史完整保留；此事实不能签总绿。
 
 此前 RETIREMENT-WINDOWS5-R1 对43项首末真实EOF的独立有效稳定PASS、0 findings已由root完整消费。本次必要修复仅保留原一次 traceNative 返回值为 purposeViews，原八操作继续选择 purposeViews[purpose]，原 preparation 分支的 mint 明确使用同对象的 purposeViews.preparation.nodeRuns。未加 cast、跳过分支、删断言或改预算；移除一条局部绑定及还原 mint 接收对象可全字节恢复原42933-byte测试，15定义/每provider49例/162静态expects/三个新增15000预算保持。四生产和旧原端口、已退休 ledger 与 Windows 九处接线保持，不重复 census 或本机AW执行。测试及三个历史追加文档再经有限独立功能门，与前次5-path门组合为最终6路径普通后继，精确推送后以新SHA main/Windows总绿及实际49例逐项验收。N2/H7/A-T7/A-G/CS M0～M4继续开放，AW未部署CS。
+
+## 2026-10-09 N1 hosted PostgreSQL 与 Windows E2E 取证修复
+
+8157a5489ea2da0c921d7b33441a3cfe88d31e12 的 Windows run 37858162638 完整终态 success，Typecheck 成功，真实 SQLite 新49例名称已逐项核对。主 run 37858162641 的 Static scans success，但 Ubuntu25 job113587266022 和 Windows E2E3 job113588294353 实际 failure，主总绿未签，N2继续等待；两处原日志和先前TS2339修复全部保留。
+
+Ubuntu失败是新测试在尚未提交的 native patch 后调用普通 this.read；PG 普通 client SELECT 走原事务之外，看不到刚写入的 promptText，SQLite同连接因此没暴露。只把此测试的实际SQL探针改为原 withTaskExecutionWrite 重入同一原事务并 SELECT 原行，保留原字段值断言、originalError对象、BEGIN/ROLLBACK、双方全部行、原work/lease及零host消费断言；49/provider、162静态expects、15定义和全部预算不改，生产和普通读端口不改。
+
+Windows swimlane原case拿导航前单独生成的retained报告与UI稍后独立生成的报告比较，原日志精确4对5。只从页面真实POST reports的同一Task响应，经原settledReport和originalRows完整分页，取得页面使用的同一reportId作为原始attempts；保留原精确行数、五tick、1280/390各条轨道宽度/对齐、无页面溢出和截图及全部预算，补上响应成功和content非空断言。不做mock、不放宽断言。一次必要消息已协调该干净E2E case的归属；所有并行RFC371生产/UI/测试与13份架构WIP保留并不纳入本次test-only提交。
+
+本批仅两个测试和三个历史追加文档，经有限独立功能门、精确5路径上库与新exact-SHA main/Windows总绿再验收。无新census或本机AW tests/typecheck/build/services/E2E，全部旧共享正文保留。N2/H7/A-T7/A-G/三roots/十九owners/CS M0～M4仍开放，AW未部署CS。

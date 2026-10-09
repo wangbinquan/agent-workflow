@@ -32,6 +32,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createSelectedTaskNodeWritePurposes } from '@/modules/task-execution/infrastructure/taskHostNodeWritePurposes'
+import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import type { TaskHostWriteBinding } from '@/modules/task-execution/infrastructure/hostExecutionWriteTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -1043,7 +1044,13 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
       expect(this).toBe(native)
       expect(currentTaskExecutionContext()).toBe(f.context)
       expect(await original.call(this, input)).toBe(true)
-      expect((await this.read(f.runId))?.promptText).toBe('real SQL before original error')
+      const uncommitted = await withTaskExecutionWrite(f.db, async (tx) =>
+        tx
+          .select({ promptText: nodeRuns.promptText })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, f.runId)),
+      )
+      expect(uncommitted[0]?.promptText).toBe('real SQL before original error')
       throw originalError
     }
     const views = createSelectedTaskNodeWritePurposes({
