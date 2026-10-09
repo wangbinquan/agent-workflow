@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2424,
-    "frontendFiles": 657,
+    "backendFiles": 2425,
+    "frontendFiles": 658,
     "legacyFiles": 596,
-    "moduleFiles": 1828,
-    "productionFiles": 3252,
+    "moduleFiles": 1829,
+    "productionFiles": 3254,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27752
+    "symbolsIncludingFileRoots": 27769
   },
   "entries": [
     {
@@ -112386,6 +112386,18 @@
     {
       "currentContext": "run-observability",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/composition/completeObservationSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/composition/completeObservationSnapshot.ts#assembleCompleteObservationSnapshot",
+      "removeAfterWave": "RFC-371",
+      "status": "current-module",
+      "symbol": "assembleCompleteObservationSnapshot",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/run-observability/composition/completeObservationSnapshot.ts",
       "id": "owner:packages/backend/src/modules/run-observability/composition/completeObservationSnapshot.ts#composeCompleteObservationSnapshot",
@@ -115148,6 +115160,30 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts#completeReportOperationObserver",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "completeReportOperationObserver",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts#CompleteReportOperationSample",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CompleteReportOperationSample",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts",
       "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts#completeReportPerformanceObserver",
       "removeAfterWave": null,
       "status": "current-module",
@@ -115164,6 +115200,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "CompleteReportPerformanceSample",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts#measureCompleteReportSources",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "measureCompleteReportSources",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -118513,12 +118561,36 @@
     {
       "currentContext": "runtime-management",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#assembleHistoricalNativeUsageQuery",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "assembleHistoricalNativeUsageQuery",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createHistoricalNativeUsageQuery",
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "createHistoricalNativeUsageQuery",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createReportHistoricalNativeUsageQuery",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "createReportHistoricalNativeUsageQuery",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -119978,6 +120050,42 @@
       "currentContext": "runtime-management",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#createOpencodeReportConnections",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createOpencodeReportConnections",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#OriginalNativeConnection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "OriginalNativeConnection",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeSpanSnapshot.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeSpanSnapshot.ts#$file",
       "removeAfterWave": null,
@@ -120091,6 +120199,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "counter",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#createHistoricalOpencodeUsagePassFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createHistoricalOpencodeUsagePassFactory",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -248853,11 +248973,95 @@
       "currentContext": "frontend",
       "currentLayer": "components",
       "exported": false,
+      "file": "packages/frontend/src/components/observability/completeReportBookmark.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportBookmark.ts#$file",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "$file",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/completeReportBookmark.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportBookmark.ts#discardObservationReportBookmark",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "discardObservationReportBookmark",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/completeReportBookmark.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportBookmark.ts#observationReportBookmark",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "observationReportBookmark",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/completeReportBookmark.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportBookmark.ts#observationReportWasRejected",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "observationReportWasRejected",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
+      "file": "packages/frontend/src/components/observability/completeReportBookmark.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportBookmark.ts#PREFIX",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "PREFIX",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
+      "file": "packages/frontend/src/components/observability/completeReportBookmark.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportBookmark.ts#rejectedIds",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "rejectedIds",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
       "file": "packages/frontend/src/components/observability/completeReportClient.ts",
       "id": "owner:packages/frontend/src/components/observability/completeReportClient.ts#$file",
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "$file",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
+      "file": "packages/frontend/src/components/observability/completeReportClient.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportClient.ts#checkedReportContent",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "checkedReportContent",
       "targetContext": "frontend",
       "targetLayer": "components"
     },
@@ -333765,5 +333969,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d814901a0583ebaebbd7cf684940bd95b0082df767c52fce7b00ebe6e7bfdd9"
+  "sourceDigest": "sha256:3f5f918b3c3c72eead0d1fcee76e0463d6ca56fd42ec014859ebbc5afcc2de14"
 }

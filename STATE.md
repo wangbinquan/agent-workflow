@@ -1,3 +1,7 @@
+## 2026-10-09 RFC-371 重载首屏与原报告计时候选
+
+正式 dev-admin 页重载894ms、默认固定范围重载724ms内显示经原GET复核的四桶、人民币及原统计时间，后台原完整报告仍独立生成，并整体换为23:30:35新结果；首次没有旧报告仍约20–22秒。只保存按原服务/身份/范围/Task隔离的reportId，不保存统计数值；默认入口以原验证范围replace写入URL，错误与原明细失效删除对应旧指针。连接复用6个原SQLite/WAL用例与有限SOURCE PASS保持，新增操作计时门PASS已消费；未测得稳定收益的ID索引实验已仅撤下本会话输出，原失败门/实验完整归档。37533明细、16259组及12集合31页EOF的四桶/CNY对账保持，未加人口上限。首屏有限SOURCE v21有效PASS已完整消费（14项129616B、原8用例47断言逐字保持）；配套metadata、精确发布与新SHA完整CI另验；后台冷性能、全内置Agent成功验收、CS9项失败门/部署和两个RFC仍开放。详见[首屏方案](design/RFC-371-run-observability/report-first-paint.md)、[未采用索引实验](design/RFC-371-run-observability/native-part-id-index.md)。以下旧共享正文及并行输出逐字保持。
+
 ## 2026-10-09 RFC-371 完整报告首次加载与错误重试
 
 同一正式时间范围首次完整生成从30.045秒降至22.119秒；37533条物理明细、16259组和12集合31页全部EOF与原报告逐条一致，输入1189241／缓存读取1255680／缓存写入0／输出186002、总2630923及人民币4.078952保持，已有缺口原样显示，未限制统计人口。原生消息模型字段仅在每个原快照的磁盘TEMP表复用，NULL、原顺序、每根BEGIN与ACK/fingerprint保持；来源有限功能门PASS已消费。HTTP失败时停止building轮询并恢复手工重试，原CNY/两级返回测试只补正确定位与新报告就绪等待，原断言和预算保留；真实SQLite两项高水位登记按实际夹具核对。配套门、精确发布与新SHA CI另验，22秒性能仍未达成验收，报告内连接复用正在接续，两RFC及CS部署继续开放。详见[原生字段复用](design/RFC-371-run-observability/native-message-field-reuse.md)、[错误重试修复](design/RFC-371-run-observability/report-refresh-error-ci-recovery.md)。以下共享旧正文与并行输出逐字保留。

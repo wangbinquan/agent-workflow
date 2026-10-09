@@ -8,7 +8,11 @@ import { completeObservationAgentNames } from '../infrastructure/completeObserva
 import { completeObservationSourceRevision } from '../infrastructure/completeObservationSourceRevision'
 import { assertCompleteReportActor } from '../infrastructure/completeObservationReportAdmission'
 import { completeUsageWorkspace } from '../infrastructure/completeUsageWorkspace'
-import { completeReportPerformanceObserver } from '../infrastructure/completeReportPerformanceObserver'
+import {
+  completeReportPerformanceObserver,
+  completeReportOperationObserver,
+  measureCompleteReportSources,
+} from '../infrastructure/completeReportPerformanceObserver'
 import type {
   CompleteObservationBuildResult,
   CompleteObservationSpool,
@@ -26,6 +30,27 @@ export async function composeCompleteObservationSnapshot(input: {
   readonly spool: CompleteObservationSpool
   readonly signal?: AbortSignal
 }): Promise<CompleteObservationBuildResult> {
+  const observer = completeReportOperationObserver(input.report.id, input.report.request.refreshKey)
+  if (!observer) return assembleCompleteObservationSnapshot(input)
+  const measured = measureCompleteReportSources(
+    observer,
+    input.snapshot.workspace,
+    input.historical,
+  )
+  try {
+    return await assembleCompleteObservationSnapshot({
+      ...input,
+      snapshot: { ...input.snapshot, workspace: measured.rows },
+      historical: measured.historical,
+    })
+  } finally {
+    observer.flush()
+  }
+}
+
+async function assembleCompleteObservationSnapshot(
+  input: Parameters<typeof composeCompleteObservationSnapshot>[0],
+): Promise<CompleteObservationBuildResult> {
   const { snapshot, report, signal } = input
   signal?.throwIfAborted()
   if (snapshot.generationId !== report.generation)

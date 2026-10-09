@@ -9,7 +9,7 @@ import { createHistoricalIntentObservationFacts } from '@/modules/intent/composi
 import type { HistoricalMcpObservationQuery } from '@/modules/resource-catalog/public/queries'
 import { createHistoricalMcpObservationFacts } from '@/modules/resource-catalog/composition/historicalObservationFacts'
 import type { HistoricalNativeUsageQuery } from '@/modules/runtime-management/public/queries'
-import { createHistoricalNativeUsageQuery } from '@/modules/runtime-management/composition/historicalNativeUsage'
+import { createReportHistoricalNativeUsageQuery } from '@/modules/runtime-management/composition/historicalNativeUsage'
 import { prepareObservationNativeHistory } from '@/modules/task-execution/composition/observationNativeHistory'
 import { composeCompleteObservationSnapshot } from '@/modules/run-observability/composition/completeObservationSnapshot'
 import { completeObservationFileSpool } from '@/modules/run-observability/composition/completeObservationSpool'
@@ -57,10 +57,13 @@ async function run(input: OriginalObservationWorkerStart) {
     const mcp: HistoricalMcpObservationQuery = createHistoricalMcpObservationFacts(
       snapshot.executor,
     )
-    const native: HistoricalNativeUsageQuery = createHistoricalNativeUsageQuery(process.env)
-    return {
-      kind: 'result',
-      result: await composeCompleteObservationSnapshot({
+    const native: HistoricalNativeUsageQuery & { close(): void } =
+      createReportHistoricalNativeUsageQuery(process.env)
+    let result: Awaited<ReturnType<typeof composeCompleteObservationSnapshot>>,
+      cleanupFailed = false,
+      cleanupFailure: unknown
+    try {
+      result = await composeCompleteObservationSnapshot({
         snapshot,
         tasks,
         historical: {
@@ -76,8 +79,19 @@ async function run(input: OriginalObservationWorkerStart) {
         report: input.report,
         spool: completeObservationFileSpool(input.appHome),
         signal: stop.signal,
-      }),
+      })
+    } finally {
+      try {
+        native.close()
+      } catch (error) {
+        cleanupFailed = true
+        cleanupFailure = error
+      }
     }
+    // A thrown source/cancellation error already propagated through finally.
+    // Only successful composition reaches this check for physical-close failure.
+    if (cleanupFailed) throw cleanupFailure
+    return { kind: 'result', result }
   }
   try {
     stop.signal.throwIfAborted()

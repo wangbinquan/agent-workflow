@@ -1,4 +1,5 @@
-import { createRoute } from '@tanstack/react-router'
+import { createRoute, useLocation } from '@tanstack/react-router'
+import { useEffect, useRef } from 'react'
 import { TaskStatusSchema, ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
 import type { ObservationSearch } from '@/components/observability/RunObservability'
 import { CompleteRunObservability } from '@/components/observability/CompleteRunObservability'
@@ -72,6 +73,21 @@ export const Route = createRoute({
 function Page() {
   const search = Route.useSearch(),
     navigate = Route.useNavigate()
+  const searchStr = useLocation({ select: (location) => location.searchStr })
+  const pinned = useRef<string | null>(null)
+  useEffect(() => {
+    const raw = new URLSearchParams(searchStr)
+    if (
+      raw.has('from') &&
+      raw.has('to') &&
+      Number(raw.get('from')) === search.from &&
+      Number(raw.get('to')) === search.to
+    )
+      return
+    if (pinned.current === searchStr) return
+    pinned.current = searchStr
+    void navigate({ search, replace: true, resetScroll: false })
+  }, [navigate, search, searchStr])
   return (
     <CompleteRunObservability
       search={search}

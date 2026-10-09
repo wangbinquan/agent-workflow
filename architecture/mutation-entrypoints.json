@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1985,
+    "entries": 1988,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -23348,6 +23348,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createReportHistoricalNativeUsageQuery",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createReportHistoricalNativeUsageQuery",
+      "symbol": "createReportHistoricalNativeUsageQuery",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -24027,6 +24052,54 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#opencodeNativeStoreGeneration",
       "symbol": "opencodeNativeStoreGeneration",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#createOpencodeReportConnections",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#createOpencodeReportConnections",
+      "symbol": "createOpencodeReportConnections",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#createHistoricalOpencodeUsagePassFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#createHistoricalOpencodeUsagePassFactory",
+      "symbol": "createHistoricalOpencodeUsagePassFactory",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -36732,7 +36805,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -36743,7 +36816,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -47501,7 +47573,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d814901a0583ebaebbd7cf684940bd95b0082df767c52fce7b00ebe6e7bfdd9",
+  "sourceDigest": "sha256:3f5f918b3c3c72eead0d1fcee76e0463d6ca56fd42ec014859ebbc5afcc2de14",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

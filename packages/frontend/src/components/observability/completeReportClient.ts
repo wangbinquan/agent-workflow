@@ -10,12 +10,41 @@ import {
   type CompleteObservationReportContent,
   type ObservationOverviewQuery,
 } from '@agent-workflow/shared'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
+import {
+  discardObservationReportBookmark,
+  observationReportBookmark,
+  observationReportWasRejected,
+} from './completeReportBookmark'
 
 export type ReadableObservationReport = CompleteObservationReportContent
 export type ReadyObservationReport = Extract<CompleteObservationReport, { state: 'ready' }>
 const displayValidityKey = (reportId: string | null) =>
   ['run-observability-complete-display-valid', reportId] as const
+function checkedReportContent(
+  report: CompleteObservationReport,
+  filters: ObservationOverviewQuery,
+  taskId: string | undefined,
+  requestedId?: string,
+) {
+  const id = report.state === 'ready' ? report.header.reportId : report.reportId
+  const content = completeObservationReportContent(report)
+  if (requestedId !== undefined && requestedId !== id)
+    throw new Error('Complete report identity changed')
+  if (content && filters.cohort === 'usage' && taskId === undefined && !content.summary.usageWindow)
+    throw new Error('Consumption window evidence is missing')
+  if (
+    content &&
+    (content.header.reportId !== id ||
+      content.header.taskId !== (taskId ?? null) ||
+      JSON.stringify(CompleteObservationReportQuerySchema.parse(content.header.filters)) !==
+        JSON.stringify(CompleteObservationReportQuerySchema.parse(filters)))
+  )
+    throw new Error('Complete report scope changed')
+  if (content && observationReportWasRejected(id))
+    throw new Error('Complete report was invalidated')
+  return content
+}
 export function useCompleteObservationReport(
   filters: ObservationOverviewQuery,
   taskId: string | undefined,
@@ -44,43 +73,78 @@ export function useCompleteObservationReport(
     retry: false,
     refetchOnMount: 'always',
     queryFn: async ({ signal }) => {
-      const previous = client.getQueryData<CompleteObservationReport>(key)
+      const cached = client.getQueryData<CompleteObservationReport>(key)
       const id =
-        (previous?.state === 'ready' ? previous.header.reportId : previous?.reportId) ??
+        (cached?.state === 'ready' ? cached.header.reportId : cached?.reportId) ??
         retainedIds.current.get(scope)
-      const report = id
-        ? await api.get<CompleteObservationReport>(
-            '/api/observability/reports/' + encodeURIComponent(id),
-            undefined,
-            signal,
-          )
-        : await api.post<CompleteObservationReport>(
-            '/api/observability/reports',
-            { filters, refreshKey, ...(taskId ? { taskId } : {}) },
-            signal,
-          )
-      const content = completeObservationReportContent(report)
-      if (
-        content &&
-        filters.cohort === 'usage' &&
-        taskId === undefined &&
-        !content.summary.usageWindow
-      )
-        throw new Error('Consumption window evidence is missing')
-      if (
-        content &&
-        (content.header.reportId !==
-          (report.state === 'ready' ? report.header.reportId : report.reportId) ||
-          content.header.taskId !== (taskId ?? null) ||
-          JSON.stringify(CompleteObservationReportQuerySchema.parse(content.header.filters)) !==
-            JSON.stringify(CompleteObservationReportQuerySchema.parse(filters)))
-      )
-        throw new Error('Complete report scope changed')
-      retainedIds.current.set(
-        scope,
-        report.state === 'ready' ? report.header.reportId : report.reportId,
-      )
-      return report
+      const bookmark = await observationReportBookmark(filters, taskId)
+      const assertCurrent = () => {
+        signal.throwIfAborted()
+        if (!bookmark.current()) throw new Error('Complete report identity changed')
+      }
+      let restoredId: string | null = null
+      try {
+        assertCurrent()
+        if (!id && revision === 0) {
+          restoredId = bookmark.read()
+          if (restoredId) {
+            try {
+              const restored = await api.get<CompleteObservationReport>(
+                '/api/observability/reports/' + encodeURIComponent(restoredId),
+                undefined,
+                signal,
+              )
+              assertCurrent()
+              const content = checkedReportContent(restored, filters, taskId, restoredId)
+              if (!content) throw new Error('Completed report content is missing')
+              client.setQueryData(displayValidityKey(restoredId), true)
+              setPrevious({ scope: displayScope, content })
+            } catch (error) {
+              discardObservationReportBookmark(restoredId)
+              if (!(error instanceof ApiError && error.status === 404)) throw error
+              assertCurrent()
+              restoredId = null
+            }
+          }
+        }
+        const report = id
+          ? await api.get<CompleteObservationReport>(
+              '/api/observability/reports/' + encodeURIComponent(id),
+              undefined,
+              signal,
+            )
+          : await api.post<CompleteObservationReport>(
+              '/api/observability/reports',
+              { filters, refreshKey, ...(taskId ? { taskId } : {}) },
+              signal,
+            )
+        assertCurrent()
+        const content = checkedReportContent(report, filters, taskId, id)
+        const reportId = report.state === 'ready' ? report.header.reportId : report.reportId
+        retainedIds.current.set(scope, reportId)
+        if (content) bookmark.remember(reportId)
+        if (report.state === 'failed' || (report.state === 'not-ready' && !report.facts)) {
+          if (restoredId) discardObservationReportBookmark(restoredId)
+          if (previous?.scope === displayScope)
+            discardObservationReportBookmark(previous.content.header.reportId)
+          discardObservationReportBookmark(reportId)
+        }
+        return report
+      } catch (error) {
+        if (restoredId) discardObservationReportBookmark(restoredId)
+        if (id) discardObservationReportBookmark(id)
+        if (previous?.scope === displayScope)
+          discardObservationReportBookmark(previous.content.header.reportId)
+        setPrevious((old) =>
+          old?.scope === displayScope &&
+          (old.content.header.reportId === restoredId ||
+            old.content.header.reportId === id ||
+            old.content.header.reportId === previous?.content.header.reportId)
+            ? null
+            : old,
+        )
+        throw error
+      }
     },
     refetchInterval: (query) =>
       query.state.status !== 'error' && query.state.data?.state === 'building' ? 2000 : false,
@@ -100,6 +164,8 @@ export function useCompleteObservationReport(
       query.data?.state === 'failed' ||
       (query.data?.state === 'not-ready' && !query.data.facts)
     ) {
+      if (previous?.scope === displayScope)
+        discardObservationReportBookmark(previous.content.header.reportId)
       setPrevious(null)
     } else if (content && !query.isFetching) {
       // Only a successful original scope-checked response can qualify the snapshot again.
@@ -120,6 +186,7 @@ export function useCompleteObservationReport(
     query.dataUpdatedAt,
     query.error,
     query.isFetching,
+    previous,
   ])
   const busy =
     query.isPending || query.isFetching || (!query.error && query.data?.state === 'building')
@@ -195,6 +262,7 @@ export function useCompleteObservationPage<T>(
         return page
       } catch (error) {
         if (!signal.aborted) {
+          discardObservationReportBookmark(report.header.reportId)
           // The displayed old report can outlive its original query entry during a new build.
           // Keep only its invalidation flag observed; never write old facts into the new query.
           client.setQueryData(displayValidityKey(report.header.reportId), false)

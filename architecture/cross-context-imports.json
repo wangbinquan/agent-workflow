@@ -2995,6 +2995,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:06fe10770e724993054a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#openReadonlySqliteDatabase",
+      "toPath": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toSymbol": "openReadonlySqliteDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
       "fromSymbol": "$file",
@@ -44694,6 +44711,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6f326e3ac4994e5dc372",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createReportHistoricalNativeUsageQuery",
+      "toPath": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
+      "toSymbol": "createReportHistoricalNativeUsageQuery",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts#$file",
@@ -61169,23 +61203,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
-      "fromPath": "packages/backend/src/platform/background/observationReportWorker.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9a57d99f54b1c316662a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createHistoricalNativeUsageQuery",
-      "toPath": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
-      "toSymbol": "createHistoricalNativeUsageQuery",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "fromSymbol": "$file",
@@ -69954,6 +69971,23 @@
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toSymbol": "LegacyProviderNeutralDatabase",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b1f372f3dca6d2a48ad5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase",
+      "toPath": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toSymbol": "ReadonlySqliteDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -94385,6 +94419,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ec98d5e9f3c2aebbb78f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase",
+      "toPath": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toSymbol": "ReadonlySqliteDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#$file",
@@ -102699,9 +102750,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6041,
+    "architectureExceptions": 6044,
     "implementationSccs": 0,
-    "observedEdges": 6899,
+    "observedEdges": 6902,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -105636,6 +105687,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#$file",
+      "id": "import:06fe10770e724993054a",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/sqlite/readonlySqliteDatabase",
+      "syntax": "static-import",
+      "targetSymbol": "openReadonlySqliteDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#openReadonlySqliteDatabase"
     },
     {
       "edgeKind": "value",
@@ -150870,6 +150937,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "id": "import:6f326e3ac4994e5dc372",
+      "owner": "platform",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/composition/historicalNativeUsage",
+      "syntax": "static-import",
+      "targetSymbol": "createReportHistoricalNativeUsageQuery",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createReportHistoricalNativeUsageQuery"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRecovery.ts",
@@ -168455,22 +168538,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/background/observationReportWorker.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
-      "id": "import:9a57d99f54b1c316662a",
-      "owner": "platform",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/runtime-management/composition/historicalNativeUsage",
-      "syntax": "static-import",
-      "targetSymbol": "createHistoricalNativeUsageQuery",
-      "toContext": "runtime-management",
-      "toFile": "packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeUsage.ts#createHistoricalNativeUsageQuery"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts#$file",
@@ -178372,6 +178439,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#$file",
+      "id": "import:b1f372f3dca6d2a48ad5",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/sqlite/readonlySqliteDatabase",
+      "syntax": "static-import",
+      "targetSymbol": "ReadonlySqliteDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase"
     },
     {
       "edgeKind": "value",
@@ -204358,6 +204441,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#releaseSystemAgentScratch"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#$file",
+      "id": "import:ec98d5e9f3c2aebbb78f",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/sqlite/readonlySqliteDatabase",
+      "syntax": "static-import",
+      "targetSymbol": "ReadonlySqliteDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "event-center",
       "fromFile": "packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts",
@@ -213985,7 +214084,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d814901a0583ebaebbd7cf684940bd95b0082df767c52fce7b00ebe6e7bfdd9",
+  "sourceDigest": "sha256:3f5f918b3c3c72eead0d1fcee76e0463d6ca56fd42ec014859ebbc5afcc2de14",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

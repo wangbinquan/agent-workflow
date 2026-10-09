@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto'
 import { ObservationTokenUsageSchema } from '@agent-workflow/shared'
-import { openReadonlySqliteDatabase } from '@/platform/persistence/sqlite/readonlySqliteDatabase'
+import {
+  openReadonlySqliteDatabase,
+  type ReadonlySqliteDatabase,
+} from '@/platform/persistence/sqlite/readonlySqliteDatabase'
 import { sha256Hex } from '@/util/hash'
+import { createOpencodeReportConnections } from './opencodeReportConnections'
 import type {
   NativeUsagePassCounts,
   NativeUsagePassIdentity,
@@ -106,6 +110,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
   path: string,
   originalIdentity: I,
   options: { readonly pageRows?: number; readonly pageBytes?: number } = {},
+  openDatabase: (path: string) => ReadonlySqliteDatabase = openReadonlySqliteDatabase,
 ): OriginalNativePassReader<I> {
   const identity: I = { ...originalIdentity }
   Object.freeze(identity)
@@ -122,7 +127,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
     pageBytes > 1024 * 1024
   )
     throw new RangeError('Invalid native pass packet size')
-  const db = openReadonlySqliteDatabase(path),
+  const db = openDatabase(path),
     issues = new Set<string>(),
     fingerprint = createHash('sha256')
   let closed = false,
@@ -445,4 +450,40 @@ export function openHistoricalOpencodeUsagePass(
   if (identity.kind !== 'historical-observed')
     throw new RangeError('Historical native reference unavailable')
   return openOriginalOpencodeUsagePass(path, identity, options)
+}
+
+/** Each original root retains its own snapshot; only released physical handles belong to this report. */
+export function createHistoricalOpencodeUsagePassFactory(
+  path: string,
+  options: {
+    readonly pageRows?: number
+    readonly pageBytes?: number
+    readonly openDatabase?: (path: string) => ReadonlySqliteDatabase
+  } = {},
+) {
+  const connections = createOpencodeReportConnections(path, options.openDatabase),
+    active = new Set<HistoricalNativePassReader>()
+  let closed = false
+  return {
+    open(identity: HistoricalNativePassIdentity): HistoricalNativePassReader {
+      if (closed) throw new Error('Historical native reader factory closed')
+      if (identity.kind !== 'historical-observed')
+        throw new RangeError('Historical native reference unavailable')
+      const state: { reader?: HistoricalNativePassReader } = {}
+      const reader = openOriginalOpencodeUsagePass(path, identity, options, () =>
+        connections.borrow(identity.sourceGeneration, () => {
+          if (state.reader) active.delete(state.reader)
+        }),
+      )
+      state.reader = reader
+      active.add(reader)
+      return reader
+    },
+    close() {
+      if (closed) return
+      closed = true
+      for (const reader of [...active]) reader.close()
+      connections.close()
+    },
+  }
 }
