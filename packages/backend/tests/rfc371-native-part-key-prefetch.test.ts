@@ -357,7 +357,9 @@ for (const key of ['', null]) {
     f.part(key, 'root', 'shared')
     const reader = f.open('root', 1),
       cursor = ackRoot(reader)
-    expect(originalRange(f.db, 'root', null)?.id).toBe(key)
+    const originalId = originalRange(f.db, 'root', null)?.id
+    if (key === null) expect(originalId).toBeNull()
+    else expect(originalId).toBe(key)
     expect(() => reader.next(cursor)).toThrow('Native part cursor unavailable')
     expect(() => reader.next(cursor)).toThrow('snapshot closed')
   })

@@ -410,6 +410,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc371-native-owner-pass.test.ts: 2',
   // RFC-371：外部原生格式固定 SQLite，AW durable owner/source/revision/archive 由两个 provider 验证。
   'rfc371-native-pages-provider.test.ts: 2',
+  // RFC-371：外部 OpenCode SQLite/WAL 文件的原排序、JSON 异常前缀和分页完整性，不构造 AW 持久 provider 库。
+  'rfc371-native-part-key-prefetch.test.ts: 1',
   // RFC-371：报告内真实原生 SQLite/WAL 根快照、TEMP清理与换代，不属于应用持久 provider。
   'rfc371-native-reader-connection-reuse.test.ts: 1',
   // RFC-371：原外部 OpenCode SQLite 的建库与实际子进程各一处；AW 根、数字与恢复全部走双 provider。

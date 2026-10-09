@@ -261,7 +261,7 @@ function remountProbe(
 }
 
 test.each(['ambient-digest', 'fallback-digest'] as const)(
-  'a cold QueryClient with %s displays original dated buckets and CNY before one new report finishes',
+  'a cold QueryClient with %s reads the original report and only an explicit refresh starts a new report',
   async (digest) => {
     if (digest === 'fallback-digest') {
       const original = globalThis.crypto
@@ -281,10 +281,17 @@ test.each(['ambient-digest', 'fallback-digest'] as const)(
     expect(stored[0]![0]).not.toContain('test')
     expect(stored[0]![1]).toBe(f.reports[0]!.header.reportId)
     remountProbe(view)
+    await screen.findByTestId('snapshot')
+    const button = screen.getByRole('button', { name: '刷新探针' }) as HTMLButtonElement
+    await waitFor(() => expect(button.disabled).toBe(false))
+    expect(screen.getByTestId('snapshot').textContent).toBe(old)
+    expect(screen.queryByText('显示上次完成统计')).toBeNull()
+    expect(f.reports).toHaveLength(1)
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(1)
+    fireEvent.click(button)
     await screen.findByText('显示上次完成统计')
     await waitFor(() => expect(f.reports).toHaveLength(2))
     expect(screen.getByTestId('snapshot').textContent).toBe(old)
-    const button = screen.getByRole('button', { name: '刷新探针' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     fireEvent.click(button)
     expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
@@ -349,6 +356,14 @@ test('a cold incomplete report restores its known buckets, unknown cache bucket 
   })
   const old = (await screen.findByTestId('snapshot')).textContent
   remountProbe(view)
+  await screen.findByTestId('snapshot')
+  const button = screen.getByRole('button', { name: '刷新探针' }) as HTMLButtonElement
+  await waitFor(() => expect(button.disabled).toBe(false))
+  expect(screen.getByTestId('snapshot').textContent).toBe(old)
+  expect(screen.queryByText('显示上次完成统计')).toBeNull()
+  expect(f.reports).toHaveLength(1)
+  expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(1)
+  fireEvent.click(button)
   await screen.findByText('显示上次完成统计')
   await waitFor(() => expect(f.reports).toHaveLength(2))
   expect(screen.getByTestId('snapshot').textContent).toBe(old)
@@ -365,6 +380,12 @@ test.each(['failed', 'missing-facts'] as const)(
     await screen.findByTestId('snapshot')
     const bookmark = await observationReportBookmark(filters, undefined)
     remountProbe(view)
+    await screen.findByTestId('snapshot')
+    const button = screen.getByRole('button', { name: '刷新探针' }) as HTMLButtonElement
+    await waitFor(() => expect(button.disabled).toBe(false))
+    expect(f.reports).toHaveLength(1)
+    expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(1)
+    fireEvent.click(button)
     await screen.findByText('显示上次完成统计')
     await waitFor(() => expect(f.reports).toHaveLength(2))
     const id = f.reports[1]!.header.reportId
@@ -539,6 +560,54 @@ test('an invalid old detail removes the persistent pointer across a cold QueryCl
   await waitFor(() => expect(f.reports).toHaveLength(2))
   expect(screen.queryByTestId('snapshot')).toBeNull()
   expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
+})
+
+test('formal cold open reads the completed report and its dated buckets, CNY and bars without rebuilding', async () => {
+  const f = fixture()
+  const page = () => (
+    <QueryClientProvider client={client}>
+      <CompleteRunObservability
+        search={{ ...filters, period: 'custom', tab: 'overview' }}
+        onChange={() => {}}
+      />
+    </QueryClientProvider>
+  )
+  const view = render(page())
+  await screen.findByRole('button', { name: /1 个任务.*102 Token/ })
+  const originalId = f.reports[0]!.header.reportId
+  const originalTime = screen.getByText(
+    i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
+  ).textContent
+  view.unmount()
+  client.clear()
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+  const requestsBeforeOpen = f.requests.length
+  render(page())
+  await screen.findByRole('button', { name: /1 个任务.*102 Token/ })
+  const refresh = screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement
+  await waitFor(() => expect(refresh.disabled).toBe(false))
+  const tokenCard = screen
+    .getByRole('heading', { name: '完整 Token 消耗' })
+    .closest<HTMLElement>('.card')!
+  expect(
+    [...tokenCard.querySelectorAll('[data-token-bucket] dd')].map((node) => node.textContent),
+  ).toEqual(['12', '34', '0', '56'])
+  const costCard = screen
+    .getByRole('heading', { name: i18n.t('runObservability.cost') })
+    .closest<HTMLElement>('.card')!
+  expect(within(costCard).getByText('¥0.102')).toBeTruthy()
+  expect(screen.getByText(originalTime!)).toBeTruthy()
+  expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
+  expect(f.reports).toHaveLength(1)
+  expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(1)
+  const reopenedRequests = f.requests.slice(requestsBeforeOpen)
+  expect(reopenedRequests).toContainEqual({
+    path: '/api/observability/reports/' + originalId,
+    method: 'GET',
+    reportId: originalId,
+  })
+  expect(reopenedRequests.some((request) => request.path.endsWith('/pages'))).toBe(true)
+  expect(reopenedRequests.every((request) => request.reportId === originalId)).toBe(true)
 })
 
 test('formal refresh retains the dated four buckets, CNY and bars and blocks duplicate jobs until full replacement', async () => {

@@ -99,6 +99,8 @@ export function useCompleteObservationReport(
               if (!content) throw new Error('Completed report content is missing')
               client.setQueryData(displayValidityKey(restoredId), true)
               setPrevious({ scope: displayScope, content })
+              retainedIds.current.set(scope, restoredId)
+              return restored
             } catch (error) {
               discardObservationReportBookmark(restoredId)
               if (!(error instanceof ApiError && error.status === 404)) throw error
