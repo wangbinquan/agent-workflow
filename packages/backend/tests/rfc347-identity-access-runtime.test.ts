@@ -46,9 +46,16 @@ function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 }
 
+// RFC-370 CI: reuse the original comment projection of this fixed source snapshot.
+// The original six-query case repeated this work and exceeded 5s on macOS.
+const callSources = productionSources.map(({ path, source }) => ({
+  path,
+  source: stripComments(source),
+}))
+
 function callPaths(needle: string): string[] {
-  return productionSources
-    .filter(({ source }) => stripComments(source).includes(needle))
+  return callSources
+    .filter(({ source }) => source.includes(needle))
     .map(({ path }) => path)
     .sort()
 }

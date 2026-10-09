@@ -1,3 +1,6 @@
+# RFC-370 CI：复用原源码的注释投影
+
+精确13a58441的主CI已终态69/72成功；原Mac1源码锁case在6608.86ms触及默认5000ms，原失败完整保留。该原测试模块已固定完整源码快照，六次原查询重复去注释；只将原注释函数的同一全量投影生成一次并复用，原路径／排序／raw查询、8个case与70个expect及全部预算逐字保持。前台搜索输入类型修复属于并行输出并完整保留。有限独立设计PASS已实际消费，实现门、精确三文件发布与新SHA主CI／完整默认Windows另验；不代签总绿。零本机AW运行／新census，生命周期L69项仍保持、211新case未签收，H7／A-G／各层CS adapter、M0～M4及RFC继续开放，AW未部署CS。详见[原注释投影复用](design/RFC-370-crewstation-hosted-deployment/ci-source-comment-projection-reuse.md)。以下共享旧全文与并行输出完整保留。
 # RFC-370 CI：PostgreSQL 服务镜像来源
 
 精确 bfd76107 主 CI 的 Ubuntu7 在初始化容器时先遇 Docker Hub token 超时、后遇匿名拉取限额，测试尚未开始；旧失败保留。实时读取两站完整 OCI index／Linux amd64 manifest，分别10,237／3,628字节及digest逐字一致；仅把原32个Ubuntu分片和独立真实PG服务的两处镜像改为 Docker Official Images 的 ECR Public 来源，原17标签、macOS空分支、连接探针／不可skip判据／全部命令和预算保持。完整默认Windows及四工作区typecheck已成功，不代签主CI总绿。有限独立设计PASS已实际消费，实现门、精确三文件发布和新SHA完整CI另验；零本机AW运行／新census，生命周期L69项保持、211新case未签收，H7／A-G／CS适配与部署及RFC仍开放。详见[镜像来源配套](design/RFC-370-crewstation-hosted-deployment/ci-postgres-service-registry.md)。以下共享旧正文与并行输出完整保留。
