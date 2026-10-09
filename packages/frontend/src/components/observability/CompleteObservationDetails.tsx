@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   CompleteObservationAllocation,
@@ -123,13 +123,80 @@ export function CompleteObservationTimeline({
 }) {
   const { t, i18n } = useTranslation(),
     query = useCompleteObservationPage<Attempt>(report, 'attempts', parent)
-  const [selected, setSelected] = useState<{ reportId: string; attempt: Attempt } | null>(null)
+  const scope = JSON.stringify([report.header.taskId, report.header.filters, parent])
+  const [selected, setSelected] = useState<{
+    scope: string
+    reportId: string
+    attempt: Attempt
+  } | null>(null)
+  const [returnAttempt, setReturnAttempt] = useState<{
+    scope: string
+    reportId: string
+    attemptId: string
+    taskId: string
+  } | null>(null)
+  const timeline = useRef<HTMLDivElement | null>(null)
   const attemptTrigger = useRef<HTMLButtonElement | null>(null)
   const [alignment, setAlignment] = useState<CompleteTimelineAlignment>('task-relative')
   const crossTask = report.header.taskId === null
   const date = (time: number) => new Date(time).toLocaleString(i18n.language)
+
+  useEffect(() => {
+    if (!selected) return
+    if (selected.scope !== scope) {
+      setSelected(null)
+      setReturnAttempt(null)
+    } else if (selected.reportId !== report.header.reportId) {
+      // The old Dialog closes immediately; its replacement button may not have loaded yet.
+      setReturnAttempt({
+        scope,
+        reportId: report.header.reportId,
+        attemptId: selected.attempt.id,
+        taskId: selected.attempt.taskId,
+      })
+      setSelected(null)
+    }
+  }, [scope, report.header.reportId, selected])
+
+  useEffect(() => {
+    if (!returnAttempt) return
+    const cancel = () => setReturnAttempt((old) => (old === returnAttempt ? null : old))
+    if (
+      returnAttempt.scope !== scope ||
+      returnAttempt.reportId !== report.header.reportId ||
+      query.error ||
+      (document.activeElement !== null && document.activeElement !== document.body)
+    ) {
+      cancel()
+      return
+    }
+    if (query.data && !query.isFetching) {
+      const member = query.data.items.find(
+        (row) => row.id === returnAttempt.attemptId && row.taskId === returnAttempt.taskId,
+      )
+      const target = member
+        ? Array.from(
+            timeline.current?.querySelectorAll<HTMLButtonElement>('[data-execution-id]') ?? [],
+          ).find((button) => button.dataset.executionId === member.id)
+        : undefined
+      target?.focus({ preventScroll: true })
+      cancel()
+      return
+    }
+    // Remember any intervening user move, even if its target later unmounts back to body.
+    const onFocus = (event: FocusEvent) => {
+      if (event.target !== document.body) cancel()
+    }
+    document.addEventListener('focusin', onFocus)
+    document.addEventListener('pointerdown', cancel, true)
+    return () => {
+      document.removeEventListener('focusin', onFocus)
+      document.removeEventListener('pointerdown', cancel, true)
+    }
+  }, [scope, report.header.reportId, returnAttempt, query.data, query.error, query.isFetching])
+
   return (
-    <div className="stack--md">
+    <div className="stack--md" ref={timeline}>
       <CompleteObservationPage query={query}>
         {(rows) => {
           const display = projectCompleteAttemptTimeline(
@@ -177,7 +244,7 @@ export function CompleteObservationTimeline({
                   const attempt = rows.find((row) => row.id === id)
                   if (attempt) {
                     attemptTrigger.current = trigger
-                    setSelected({ reportId: report.header.reportId, attempt })
+                    setSelected({ scope, reportId: report.header.reportId, attempt })
                   }
                 }}
                 rows={rows.map((row, index) => ({
@@ -207,7 +274,7 @@ export function CompleteObservationTimeline({
           )
         }}
       </CompleteObservationPage>
-      {selected?.reportId === report.header.reportId && (
+      {selected?.scope === scope && selected.reportId === report.header.reportId && (
         <Dialog
           open
           onClose={() => setSelected(null)}

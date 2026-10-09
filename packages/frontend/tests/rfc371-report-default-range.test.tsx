@@ -7,13 +7,37 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { ObservationSearch } from '../src/components/observability/RunObservability'
 
 vi.mock('../src/components/observability/CompleteRunObservability', () => ({
-  CompleteRunObservability: ({ search }: { search: ObservationSearch }) => (
-    <output data-testid="actual-range">{JSON.stringify(search)}</output>
+  CompleteRunObservability: ({
+    search,
+    onChange,
+  }: {
+    search: ObservationSearch
+    onChange: (search: ObservationSearch) => void
+  }) => (
+    <>
+      <output data-testid="actual-range">{JSON.stringify(search)}</output>
+      <button
+        type="button"
+        onClick={() =>
+          onChange({ ...search, from: 1100, to: 1200, period: 'custom', tab: 'tasks' })
+        }
+      >
+        Trend drilldown
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onChange({ ...search, from: 3000, to: 4000, period: 'custom', tab: 'overview' })
+        }
+      >
+        Another range
+      </button>
+    </>
   ),
 }))
 
@@ -80,4 +104,58 @@ test('an explicit valid range keeps its original URL and browser history', async
   expect(history.length).toBe(1)
   expect(history.location.href).toBe(url)
   expect(replace).not.toHaveBeenCalled()
+})
+
+test.each([
+  ['Trend drilldown', { from: 1100, to: 1200, tab: 'tasks' }],
+  ['Another range', { from: 3000, to: 4000, tab: 'overview' }],
+] as const)(
+  'a valid %s navigation is never replaced by the preceding range',
+  async (name, next) => {
+    const original = { from: 1000, to: 2000, period: 'custom', tab: 'overview' }
+    const { router, history, replace } = mountRoute(
+      '/observability?from=1000&to=2000&period=custom&tab=overview',
+    )
+    await screen.findByTestId('actual-range')
+    fireEvent.click(screen.getByRole('button', { name }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject(next))
+    await waitFor(() =>
+      expect(JSON.parse(screen.getByTestId('actual-range').textContent!)).toMatchObject(next),
+    )
+    expect(history.length).toBe(2)
+    expect(replace).not.toHaveBeenCalled()
+    history.back()
+    await waitFor(() => expect(router.state.location.search).toMatchObject(original))
+    await waitFor(() =>
+      expect(JSON.parse(screen.getByTestId('actual-range').textContent!)).toMatchObject(original),
+    )
+    expect(replace).not.toHaveBeenCalled()
+    history.forward()
+    await waitFor(() => expect(router.state.location.search).toMatchObject(next))
+    await waitFor(() =>
+      expect(JSON.parse(screen.getByTestId('actual-range').textContent!)).toMatchObject(next),
+    )
+    expect(replace).not.toHaveBeenCalled()
+  },
+)
+
+test.each([
+  'from=bad&to=2000',
+  'from=2000&to=1000',
+  'from=1000&to=1000',
+  'from=-1&to=2000',
+  'from=1.5&to=2000',
+  'from=0&to=9007199254740992',
+  'from=%221000%22&to=2000',
+] as const)('an invalid %s URL still receives the actual validated range', async (range) => {
+  const { router, history, replace } = mountRoute('/observability?' + range + '&tab=overview')
+  const visible = JSON.parse(
+    (await screen.findByTestId('actual-range')).textContent!,
+  ) as ObservationSearch
+  await waitFor(() => expect(replace).toHaveBeenCalledTimes(1))
+  expect(router.state.location.search).toEqual(visible)
+  expect(history.location.search).toBe(router.state.location.searchStr)
+  expect(history.length).toBe(1)
+  expect(visible.from).toBeGreaterThanOrEqual(0)
+  expect(visible.from).toBeLessThan(visible.to)
 })

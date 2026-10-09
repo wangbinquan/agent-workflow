@@ -756,11 +756,27 @@ test('a new report HTTP error cannot resurrect the previous snapshot', async () 
     fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
     // Vitest advances its fake intervals; DOM waitFor cannot poll this non-DOM counter.
     await vi.waitFor(() => expect(f.reports).toHaveLength(2), { timeout: 5000 })
+    // The fixture records POST before its query settles. Invalidation during that
+    // first fetch reuses POST instead of starting the intended blocked header GET.
+    await vi.waitFor(
+      () => expect(client.isFetching({ queryKey: ['run-observability-complete'] })).toBe(0),
+      { timeout: 5000 },
+    )
     const release = f.block(f.reports[1]!.header.reportId)
+    const requestsBeforeHeaderRead = f.requests.length
     let finished!: Promise<void>
     act(() => {
       finished = client.invalidateQueries({ queryKey: ['run-observability-complete'] })
     })
+    await vi.waitFor(
+      () =>
+        expect(f.requests.slice(requestsBeforeHeaderRead)).toContainEqual({
+          path: '/api/observability/reports/' + f.reports[1]!.header.reportId,
+          method: 'GET',
+          reportId: f.reports[1]!.header.reportId,
+        }),
+      { timeout: 5000 },
+    )
     await act(async () => {
       release({ error: { code: 'upstream-failed', message: 'Read failed' } }, 502)
       await finished

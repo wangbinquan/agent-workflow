@@ -73,21 +73,25 @@ export const Route = createRoute({
 function Page() {
   const search = Route.useSearch(),
     navigate = Route.useNavigate()
-  const searchStr = useLocation({ select: (location) => location.searchStr })
+  const location = useLocation()
+  const searchStr = location.searchStr
   const pinned = useRef<string | null>(null)
   useEffect(() => {
-    const raw = new URLSearchParams(searchStr)
+    const { from, to } = location.search
     if (
-      raw.has('from') &&
-      raw.has('to') &&
-      Number(raw.get('from')) === search.from &&
-      Number(raw.get('to')) === search.to
+      typeof from === 'number' &&
+      typeof to === 'number' &&
+      Number.isSafeInteger(from) &&
+      Number.isSafeInteger(to) &&
+      from >= 0 &&
+      from < to &&
+      to > 0
     )
       return
     if (pinned.current === searchStr) return
     pinned.current = searchStr
     void navigate({ search, replace: true, resetScroll: false })
-  }, [navigate, search, searchStr])
+  }, [location.search, navigate, search, searchStr])
   return (
     <CompleteRunObservability
       search={search}
