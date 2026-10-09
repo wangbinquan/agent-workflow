@@ -920,10 +920,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27752,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 原生消息字段复用与错误重试：原生 reader 新增唯一内部 CachedMessagePartRow interface，原 census 对 bf939 已提交前态实测 owner +1；原字段、所有旧 owner/context/layer 和 130 行 why/order 保留，不改规则或统计人口。本次实测声明仅用于这笔源候选，紧邻普通后继删除已消费许可。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -932,7 +929,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "bf9393621813b05e60e5c5bb8e92944f0fd27ab0",
-    "contentDigest": "sha256:ecf1dfcd9497e05863949bb89de69e405d71181ed68fe1a0b58c31dd679bd880",
+    "contentDigest": "sha256:ddd3694a320f67c8d0b9b7ef4ad12ba52a5a0680da8f11be9b8a0bbcbb616da9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
