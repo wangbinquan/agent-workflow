@@ -6,7 +6,7 @@
     "moduleFiles": 1828,
     "productionFiles": 3252,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27751
+    "symbolsIncludingFileRoots": 27752
   },
   "entries": [
     {
@@ -120067,6 +120067,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#CachedMessagePartRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CachedMessagePartRow",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -333753,5 +333765,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a611cc07afc20cac6d4d628d3a890e2b9540f9305510d20a7ac085f30f558307"
+  "sourceDigest": "sha256:4d814901a0583ebaebbd7cf684940bd95b0082df767c52fce7b00ebe6e7bfdd9"
 }

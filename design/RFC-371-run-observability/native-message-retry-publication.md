@@ -1,0 +1,13 @@
+# RFC-371：原生字段读取与错误重试的配套发布
+
+本片提交原生消息字段复用、HTTP失败后恢复刷新、两个原前端回归的正确定位／新报告就绪等待及两个实际SQLite夹具的精确W5登记。SOURCE exact5＋exact5已通过有限独立功能门并实际消费；原断言、预算、原字段和完整统计人口保持。保留并行bf939已提交的两处角色查询与泛型类型修正，原失败CI不改为成功。
+
+正式同一范围首次完整报告22118.66ms，原37533条物理明细、16259组、12集合31传输页EOF逐条完全相同；四桶1189241／1255680／0／186002、总2630923及人民币4.078952保持，原缺口原样保留。22秒仍未通过首次加载性能验收，连接复用接续另验，不以缓存读取耗时替代首次生成。
+
+## 唯一原配套生成
+
+在primary main使用bf9393621813b05e60e5c5bb8e92944f0fd27ab0完整已提交源加六份本片冻结TS候选，只执行一次原scoped census；原四规则主体逐字逆恢复，原13产物齐全，原sourceDigest为sha256:4d814901a0583ebaebbd7cf684940bd95b0082df767c52fce7b00ebe6e7bfdd9。无测试、typecheck、build、服务或规模CI执行；未提交的下一片连接池helper仍未接线，明确排除，所有其他源均取上述已提交基线。
+
+原130有序ledger的id／why和所有非关联基线保持。唯一实测增长为module-symbol-owners 27751→27752，对应原生reader内部CachedMessagePartRow interface；只登记这个实测声明，并在紧邻普通后继删除已消费allowGrowth。原commons authored登记、其他owner/context/layer、guard规则和SCC不扩展。sourceDigest及原派生provenance／canonicalProjection按原helper刷新。
+
+共享STATE只加本片状态段，以下完整原正文及并行输出逐字保留。精确发布须检查空共享索引／两把发布锁／完整25路径白名单，提交前、推送前及推送后fetch并确认main与origin精确同步。新增Hosted CI由真实最终SHA验收，有限配套门不代签测试执行、全部性能目标、CS部署或两个RFC完成。

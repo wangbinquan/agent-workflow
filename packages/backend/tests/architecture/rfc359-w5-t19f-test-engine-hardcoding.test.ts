@@ -403,6 +403,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-371：唯一原生 SQLite 文件是 OpenCode 外部数据格式；原 Task／账本／报告仍走双 provider，另验 PG poolMax1。
   'rfc371-native-ledger-provider.test.ts: 1',
   // RFC-371：原生 OpenCode 固定 SQLite 文件夹具（建库/修改各一处），不属于 AW 持久 provider。
+  // RFC-371：原 OpenCode 磁盘 SQLite/WAL reader 的消息字段与完整指纹，非应用 provider 实现。
+  'rfc371-native-message-field-reuse.test.ts: 1',
   'rfc371-native-model.test.ts: 2',
   // RFC-371：真实外部 OpenCode SQLite 的 Worker 分页及中断夹具；不构造 AW provider 库。
   'rfc371-native-owner-pass.test.ts: 2',
@@ -423,6 +425,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // AW 原始持久来源、完整投影与人民币关联在 complete-spans-provider 等双 provider 用例验证。
   'rfc371-native-usage-pass.test.ts: 1',
   // RFC-371：真实原 WAL 文件快照与 TEMP 可写性；通用报告行为另由两个 provider 实际验证。
+  // RFC-371：SQLite 专用 FILE TEMP 与连接页缓存；报告 staging 和计数由双 provider 套件覆盖。
+  'rfc371-report-snapshot-file-performance.test.ts: 1',
   'rfc371-report-snapshot-file.test.ts: 1',
   // RFC-371: this one real file is the external OpenCode SQLite format;
   // System persistence, EOF, resume and CNY are covered by both AW providers.

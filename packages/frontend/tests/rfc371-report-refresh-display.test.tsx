@@ -1,7 +1,7 @@
 // RFC-371: a same-scope refresh keeps a dated completed snapshot, never invalid old totals.
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type {
   CompleteObservationReport,
@@ -246,7 +246,12 @@ test('formal refresh retains the dated four buckets, CNY and bars and blocks dup
     [...card.querySelectorAll('[data-token-bucket] dd')].map((node) => node.textContent)
   await screen.findByRole('button', { name: /1 个任务.*102 Token/ })
   expect(values()).toEqual(['12', '34', '0', '56'])
-  expect(screen.getByText('¥0.102')).toBeTruthy()
+  const costs = within(
+    screen
+      .getByRole('heading', { name: i18n.t('runObservability.cost') })
+      .closest<HTMLElement>('.card')!,
+  )
+  expect(costs.getByText('¥0.102')).toBeTruthy()
   const originalTime = screen.getByText(
     i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
   ).textContent
@@ -254,21 +259,21 @@ test('formal refresh retains the dated four buckets, CNY and bars and blocks dup
   await waitFor(() => expect(f.reports).toHaveLength(2))
   await screen.findByText(i18n.t('runObservability.refreshingPrevious'))
   expect(values()).toEqual(['12', '34', '0', '56'])
-  expect(screen.getByText('¥0.102')).toBeTruthy()
+  expect(costs.getByText('¥0.102')).toBeTruthy()
   expect(screen.getByText(originalTime!)).toBeTruthy()
   const refresh = screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement
   expect(refresh.disabled).toBe(true)
   fireEvent.click(refresh)
   expect(f.requests.filter((row) => row.method === 'POST')).toHaveLength(2)
   await f.finish(f.reports[1]!)
-  await screen.findByText('¥0.132')
+  await costs.findByText('¥0.132')
   const newCard = screen
     .getByRole('heading', { name: '完整 Token 消耗' })
     .closest<HTMLElement>('.card')!
   expect(
     [...newCard.querySelectorAll('[data-token-bucket] dd')].map((node) => node.textContent),
   ).toEqual(['22', '44', '0', '66'])
-  expect(screen.queryByText('¥0.102')).toBeNull()
+  expect(costs.queryByText('¥0.102')).toBeNull()
   expect(screen.queryByText(originalTime!)).toBeNull()
   expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
   expect(refresh.disabled).toBe(false)
@@ -424,22 +429,35 @@ test.each(['failed', 'missing-facts'] as const)(
 )
 
 test('a new report HTTP error cannot resurrect the previous snapshot', async () => {
-  const f = fixture()
-  mountProbe()
-  await screen.findByTestId('snapshot')
-  fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
-  await waitFor(() => expect(f.reports).toHaveLength(2))
-  const release = f.block(f.reports[1]!.header.reportId)
-  let finished!: Promise<void>
-  act(() => {
-    finished = client.invalidateQueries({ queryKey: ['run-observability-complete'] })
-  })
-  await act(async () => {
-    release({ error: { code: 'upstream-failed', message: 'Read failed' } }, 502)
-    await finished
-  })
-  await waitFor(() => expect(screen.queryByTestId('snapshot')).toBeNull())
-  fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
-  await waitFor(() => expect(f.reports).toHaveLength(3))
-  expect(screen.queryByTestId('snapshot')).toBeNull()
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+  try {
+    const f = fixture()
+    mountProbe()
+    await screen.findByTestId('snapshot')
+    fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
+    await waitFor(() => expect(f.reports).toHaveLength(2))
+    const release = f.block(f.reports[1]!.header.reportId)
+    let finished!: Promise<void>
+    act(() => {
+      finished = client.invalidateQueries({ queryKey: ['run-observability-complete'] })
+    })
+    await act(async () => {
+      release({ error: { code: 'upstream-failed', message: 'Read failed' } }, 502)
+      await finished
+    })
+    await waitFor(() => expect(screen.queryByTestId('snapshot')).toBeNull())
+    const refresh = screen.getByRole('button', { name: '刷新探针' }) as HTMLButtonElement
+    await waitFor(() => expect(refresh.disabled).toBe(false))
+    const requestsAfterError = f.requests.length
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000)
+    })
+    expect(f.requests).toHaveLength(requestsAfterError)
+    expect(screen.queryByTestId('snapshot')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '刷新探针' }))
+    await waitFor(() => expect(f.reports).toHaveLength(3))
+    expect(screen.queryByTestId('snapshot')).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
 })

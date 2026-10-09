@@ -82,7 +82,8 @@ export function useCompleteObservationReport(
       )
       return report
     },
-    refetchInterval: (query) => (query.state.data?.state === 'building' ? 2000 : false),
+    refetchInterval: (query) =>
+      query.state.status !== 'error' && query.state.data?.state === 'building' ? 2000 : false,
   })
   const content = query.data ? completeObservationReportContent(query.data) : null
   const retained = previous?.scope === displayScope ? previous.content : null
@@ -120,7 +121,8 @@ export function useCompleteObservationReport(
     query.error,
     query.isFetching,
   ])
-  const busy = query.isPending || query.isFetching || query.data?.state === 'building'
+  const busy =
+    query.isPending || query.isFetching || (!query.error && query.data?.state === 'building')
   const checkedContent = query.isFetching
     ? content?.header.reportId === retained?.header.reportId
       ? retained

@@ -432,6 +432,11 @@ test('a child refresh and another descendant retain both ancestor reports and re
   await waitFor(() =>
     expect([...f.reports.values()].filter((row) => row.header.taskId === 'child')).toHaveLength(2),
   )
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  )
   fireEvent.click(await screen.findByRole('button', { name: '实现 Agent' }))
   fireEvent.click(
     await within(await screen.findByRole('dialog')).findByRole('button', { name: '孙任务' }),

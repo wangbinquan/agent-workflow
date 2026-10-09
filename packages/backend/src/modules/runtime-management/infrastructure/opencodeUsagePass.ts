@@ -41,6 +41,9 @@ interface PartRow {
   provider: unknown
   model: unknown
 }
+interface CachedMessagePartRow extends PartRow {
+  cache_message?: string | null
+}
 type OriginalNativePassIdentity = NativeUsagePassIdentity | HistoricalNativePassIdentity
 type OriginalNativePassPage<I extends OriginalNativePassIdentity> = Omit<
   NativeUsagePassPage,
@@ -178,6 +181,10 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
       `CREATE TEMP TABLE native_pass_open_steps (
       session TEXT NOT NULL,message TEXT NOT NULL,delta INTEGER NOT NULL,PRIMARY KEY(session,message))`,
     ).get()
+    db.query<unknown, []>(
+      `CREATE TEMP TABLE native_pass_message_models (
+      message TEXT NOT NULL,session TEXT NOT NULL,provider,model,PRIMARY KEY(message,session))`,
+    ).get()
     db.query<unknown, [string, string | null]>(
       'INSERT INTO temp.native_pass_queue(id,parent) VALUES (?,?)',
     ).get(root.id, null)
@@ -243,24 +250,29 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
               CASE WHEN json_type(p.data,'$.tokens.reasoning') IN ('integer','real','text') THEN json_extract(p.data,'$.tokens.reasoning') END AS reasoning,
               CASE WHEN json_type(p.data,'$.tokens.cache.read') IN ('integer','real','text') THEN json_extract(p.data,'$.tokens.cache.read') END AS cache_read,
               CASE WHEN json_type(p.data,'$.tokens.cache.write') IN ('integer','real','text') THEN json_extract(p.data,'$.tokens.cache.write') END AS cache_write,
-              CASE WHEN json_extract(m.data,'$.role')='assistant' THEN json_extract(m.data,'$.providerID') END AS provider,
-              CASE WHEN json_extract(m.data,'$.role')='assistant' THEN json_extract(m.data,'$.modelID') END AS model
+              CASE WHEN c.message IS NOT NULL THEN c.provider ELSE CASE WHEN json_extract(m.data,'$.role')='assistant' THEN json_extract(m.data,'$.providerID') END END AS provider,
+              CASE WHEN c.message IS NOT NULL THEN c.model ELSE CASE WHEN json_extract(m.data,'$.role')='assistant' THEN json_extract(m.data,'$.modelID') END END AS model,
+              c.message AS cache_message
               FROM part p LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
+              LEFT JOIN temp.native_pass_message_models c ON c.message=p.message_id AND c.session=p.session_id
               `
             const row =
               current.part_after === null
                 ? db
                     .query<
-                      PartRow,
+                      CachedMessagePartRow,
                       [string]
                     >(fields + ' WHERE p.session_id=?1 ORDER BY p.id LIMIT 1')
                     .get(current.id)
                 : db
                     .query<
-                      PartRow,
+                      CachedMessagePartRow,
                       [string, string]
                     >(fields + ' WHERE p.session_id=?1 AND p.id>?2 ORDER BY p.id LIMIT 1')
                     .get(current.id, current.part_after)
+            const messageCached = row?.cache_message != null
+            // This transport-internal flag must never enter the original PartRow fingerprint.
+            if (row) delete row.cache_message
             if (!row) {
               if (
                 db
@@ -319,6 +331,11 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             db.query<unknown, [string, string]>(
               'UPDATE temp.native_pass_queue SET part_after=? WHERE id=?',
             ).get(row.id, current.id)
+            if (!messageCached && identifier(row.message_id) && identifier(row.session_id))
+              db.query<unknown, [string, string, unknown, unknown]>(
+                `INSERT INTO temp.native_pass_message_models(message,session,provider,model)
+              VALUES (?,?,?,?) ON CONFLICT(message,session) DO NOTHING`,
+              ).get(row.message_id, row.session_id, row.provider, row.model)
             continue
           }
           const child =
