@@ -1,3 +1,6 @@
+# RFC-370 CI：等待 handoff 的真实后续 readiness
+
+ab457f9c 的原 PostgreSQL HTTP handover case 在 handoff 后立即 resume，原 200 断言实际收到 409；Ubuntu7 分片 819 pass／1 fail，失败日志保留且不虚构未记录的 body/code。源码确认 null policy 使原异步 drive 走 blocked，再最后写 readiness／revision并停止。只在原同一 mission 的两命令间观察首次 readiness，原全部断言、case与120秒预算保持，无 HTTP 重试、后台 stub、生产改动或 census。该 SHA 完整默认 Windows 与四工作区 typecheck 已成功，主 CI 总绿尚未达成；有限独立功能门、精确发布与新 SHA CI 另验。L 生命周期69项仍保持，211新case未签收，AW未部署CS，RFC继续。详见[HTTP时序配套](design/RFC-370-crewstation-hosted-deployment/ci-handover-readiness.md)。以下共享旧全文和并行输出完整保留。
 ## 2026-10-10 RFC-370 原 SQL 方言语料重复解析修复
 
 精确 f54fa4a 的 Mac shard 12 原 J2 反向 case 在5245.93ms触及默认5000ms预算，1472 pass／2 skip／1 fail，原失败保留。复用模块采数时同一 sqlFunctionNames 的完整语料集合，在渲染器 continue 之前收集，原非渲染器 J2 仍使用同一函数数组；原语料／方言词汇／账本／shim、13 case／全部 matcher／负 fixture及5秒预算保持。未改生产／metadata／四个原census规则，无本机AW执行或新census。独立有限功能门、精确发布及新SHA主CI／完整Windows另验；生命周期L SOURCE18-R2保持、L census未启动，H7／A-G／CS M0～M4及RFC仍开放。详见[语料复用修复](design/RFC-370-crewstation-hosted-deployment/ci-dialect-corpus-reuse.md)。以下旧STATE和全部并行输出完整保留。

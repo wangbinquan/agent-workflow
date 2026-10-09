@@ -397,6 +397,17 @@ describeEachProviderHttpApplication(
         pending: false,
       })
 
+      // RFC-370 CI：handoff 路由还会异步 drive 本 mission。此夹具没有 policy，
+      // drive 在 blocked 后最后写 readiness，再停止；先观察这次真实写入，
+      // 避免 resume 的 OCC 与它交错。保留同一 mission 的原 handoff → resume。
+      const handoffReadinessDeadline = Date.now() + 10_000
+      while ((await fx.store.getMission(m1))?.readinessJson == null) {
+        if (Date.now() >= handoffReadinessDeadline) {
+          throw new Error(`handoff readiness did not settle for mission ${m1}`)
+        }
+        await Bun.sleep(10)
+      }
+
       // resume：happy path（刚交接的 mission 拉回 active）。
       const resumed = await post(`/api/code/missions/${m1}/resume`)
       expect(resumed.status).toBe(200)
