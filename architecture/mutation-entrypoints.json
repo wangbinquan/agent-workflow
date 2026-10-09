@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1984,
+    "entries": 1985,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22288,6 +22288,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPage",
       "symbol": "stageCompleteReportPage",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#addCompleteReportGroupRows",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#addCompleteReportGroupRows",
+      "symbol": "addCompleteReportGroupRows",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -47477,7 +47501,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a2416dd0cf4891ecedea696fc545c118dc4e44e5048ce5c9a7654e75e03005e5",
+  "sourceDigest": "sha256:a611cc07afc20cac6d4d628d3a890e2b9540f9305510d20a7ac085f30f558307",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

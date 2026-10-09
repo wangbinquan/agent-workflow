@@ -17751,6 +17751,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2a6d359e9cfc637ea621",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
+      "toPath": "packages/backend/src/util/log.ts",
+      "toSymbol": "createLogger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -47377,6 +47394,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7737137a327faaf7faff",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "observationReportCounts",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -77164,6 +77198,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c2c186a9414b574fdaf0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "DatabaseTransaction",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts#$file",
@@ -96053,6 +96104,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f0388d17e1cb9e023f63",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#affectedRows",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "affectedRows",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
       "fromSymbol": "$file",
@@ -102631,9 +102699,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6037,
+    "architectureExceptions": 6041,
     "implementationSccs": 0,
-    "observedEdges": 6894,
+    "observedEdges": 6899,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -109856,6 +109924,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#$file",
+      "id": "import:10ab55fe39e9d842c4fd",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "type",
@@ -121584,6 +121668,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeReportPerformanceObserver.ts#$file",
+      "id": "import:2a6d359e9cfc637ea621",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/log",
+      "syntax": "static-import",
+      "targetSymbol": "createLogger",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/log.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
     },
     {
       "edgeKind": "value",
@@ -153715,6 +153815,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#$file",
+      "id": "import:7737137a327faaf7faff",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "observationReportCounts",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts#$file",
@@ -185794,6 +185910,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/persistence.ts#CommittedEventDeliveryPersistencePort"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#$file",
+      "id": "import:c2c186a9414b574fdaf0",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseTransaction",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts",
@@ -205955,6 +206087,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#$file",
+      "id": "import:f0388d17e1cb9e023f63",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "affectedRows",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#affectedRows"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#$file",
@@ -213837,7 +213985,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a2416dd0cf4891ecedea696fc545c118dc4e44e5048ce5c9a7654e75e03005e5",
+  "sourceDigest": "sha256:a611cc07afc20cac6d4d628d3a890e2b9540f9305510d20a7ac085f30f558307",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

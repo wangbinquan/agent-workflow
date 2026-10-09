@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CompleteObservationReportQuerySchema,
   COMPLETE_OBSERVATION_FACT_SECTIONS,
@@ -14,6 +14,8 @@ import { api } from '@/api/client'
 
 export type ReadableObservationReport = CompleteObservationReportContent
 export type ReadyObservationReport = Extract<CompleteObservationReport, { state: 'ready' }>
+const displayValidityKey = (reportId: string | null) =>
+  ['run-observability-complete-display-valid', reportId] as const
 export function useCompleteObservationReport(
   filters: ObservationOverviewQuery,
   taskId: string | undefined,
@@ -31,7 +33,12 @@ export function useCompleteObservationReport(
     revision,
   ] as const
   const retainedIds = useRef(new Map<string, string>())
-  return useQuery({
+  const [previous, setPrevious] = useState<{
+    scope: string
+    content: ReadableObservationReport
+  } | null>(null)
+  const displayScope = JSON.stringify(['scope-metrics/13', filters, taskId ?? null])
+  const query = useQuery({
     queryKey: key,
     enabled,
     retry: false,
@@ -77,6 +84,58 @@ export function useCompleteObservationReport(
     },
     refetchInterval: (query) => (query.state.data?.state === 'building' ? 2000 : false),
   })
+  const content = query.data ? completeObservationReportContent(query.data) : null
+  const retained = previous?.scope === displayScope ? previous.content : null
+  const validity = useQuery({
+    queryKey: displayValidityKey(content?.header.reportId ?? retained?.header.reportId ?? null),
+    queryFn: async () => true,
+    initialData: true,
+    enabled: false,
+    gcTime: 0,
+  })
+  useEffect(() => {
+    if (
+      query.error ||
+      query.data?.state === 'failed' ||
+      (query.data?.state === 'not-ready' && !query.data.facts)
+    ) {
+      setPrevious(null)
+    } else if (content && !query.isFetching) {
+      // Only a successful original scope-checked response can qualify the snapshot again.
+      client.setQueryData(displayValidityKey(content.header.reportId), true)
+      setPrevious((old) =>
+        old?.scope === displayScope && old.content === content
+          ? old
+          : { scope: displayScope, content },
+      )
+    } else {
+      setPrevious((old) => (old?.scope === displayScope ? old : null))
+    }
+  }, [
+    client,
+    content,
+    displayScope,
+    query.data,
+    query.dataUpdatedAt,
+    query.error,
+    query.isFetching,
+  ])
+  const busy = query.isPending || query.isFetching || query.data?.state === 'building'
+  const checkedContent = query.isFetching
+    ? content?.header.reportId === retained?.header.reportId
+      ? retained
+      : null
+    : content
+  const displayContent =
+    !query.error && validity.data !== false
+      ? (checkedContent ?? (!query.data || query.data.state === 'building' ? retained : null))
+      : null
+  return {
+    ...query,
+    busy,
+    displayContent,
+    refreshingPrevious: !!displayContent && busy,
+  }
 }
 
 /** One display page is retained at a time; the server's sealed count covers the entire population. */
@@ -134,6 +193,9 @@ export function useCompleteObservationPage<T>(
         return page
       } catch (error) {
         if (!signal.aborted) {
+          // The displayed old report can outlive its original query entry during a new build.
+          // Keep only its invalidation flag observed; never write old facts into the new query.
+          client.setQueryData(displayValidityKey(report.header.reportId), false)
           const matches = (query: {
             readonly queryKey: readonly unknown[]
             readonly state: { readonly data: unknown }

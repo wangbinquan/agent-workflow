@@ -8,10 +8,7 @@ import type {
   CompleteObservationQuality,
   ObservationOverviewQuery,
 } from '@agent-workflow/shared'
-import {
-  completeObservationReportContent,
-  ObservationDimensionSelectionSchema,
-} from '@agent-workflow/shared'
+import { ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
@@ -200,15 +197,9 @@ export function CompleteRunObservability({
     taskRevision,
     !!search.task,
   )
-  const mainReport =
-    whole.data && !whole.error && !whole.isFetching
-      ? completeObservationReportContent(whole.data)
-      : null
+  const mainReport = whole.displayContent
   const current = search.task ? task : whole,
-    report =
-      current.data && !current.error && !current.isFetching
-        ? completeObservationReportContent(current.data)
-        : null
+    report = current.displayContent
   const dimensionVisible = !!report && dimension?.report.header.reportId === report.header.reportId
   const tasks = useCompleteObservationPage<CompleteObservationTask>(
     mainReport,
@@ -302,6 +293,7 @@ export function CompleteRunObservability({
           <button
             type="button"
             className="btn btn--sm"
+            disabled={current.busy}
             onClick={() => {
               setDimension(null)
               if (search.task) {
@@ -342,6 +334,7 @@ export function CompleteRunObservability({
         <ErrorBanner error={current.error} onRetry={() => void current.refetch()} />
       )}
       {!current.error &&
+        !report &&
         (current.isPending || current.isFetching || current.data?.state === 'building') && (
           <>
             <LoadingState />
@@ -379,6 +372,11 @@ export function CompleteRunObservability({
               time: new Date(report.header.asOf).toLocaleString(i18n.language),
             })}
           </p>
+          {current.refreshingPrevious && (
+            <NoticeBanner tone="info" size="compact">
+              {t('runObservability.refreshingPrevious')}
+            </NoticeBanner>
+          )}
           {!search.task && tab === 'overview' && <Summary report={report} />}
           {!search.task && tab === 'overview' && (
             <QualityCard

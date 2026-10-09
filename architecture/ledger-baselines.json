@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:a2416dd0cf4891ecedea696fc545c118dc4e44e5048ce5c9a7654e75e03005e5",
+    "sourceDigest": "sha256:a611cc07afc20cac6d4d628d3a890e2b9540f9305510d20a7ac085f30f558307",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -828,10 +828,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1984,
+      "baseline": 1985,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-370 C2-W2-D actual original frozen dynamic state generation: rfc294-mutation-entrypoints 1983 to 1984. The neutral selector, original prepared SQL helper and selected Task-local two-purpose writer add three production files and ten file/symbol owners. Unchanged rules observe five added imports, four exact compatibility exceptions and one additional classified mutation entry. The actual classic inbound is four to five with one legacy dynamic generator to Task application selector value edge; outbound remains zero. Preserve all original readers, SQL and owner semantics, callbacks, transaction, context, inventory order and why text. Full generator/public boundary cutover remains A-T7. This measured source-publication declaration is retired in an ordinary successor."
+        "why": "RFC-371 完整报告加载与刷新修复：原页级事务内增加具名 addCompleteReportGroupRows 批量分组写入站点，保留原 staging 和全部数据人口；原 census 相对已提交 RFC-370 动态状态前态实测 +1。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
       }
     },
     {
@@ -866,10 +866,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6894,
+      "baseline": 6899,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-370 C2-W2-D actual original frozen dynamic state generation: rfc294-cross-context-observed-imports 6889 to 6894. The neutral selector, original prepared SQL helper and selected Task-local two-purpose writer add three production files and ten file/symbol owners. Unchanged rules observe five added imports, four exact compatibility exceptions and one additional classified mutation entry. The actual classic inbound is four to five with one legacy dynamic generator to Task application selector value edge; outbound remains zero. Preserve all original readers, SQL and owner semantics, callbacks, transaction, context, inventory order and why text. Full generator/public boundary cutover remains A-T7. This measured source-publication declaration is retired in an ordinary successor."
+        "why": "RFC-371 完整报告加载与刷新修复：统计 infrastructure helper 的 ORM、schema、原事务类型/affectedRows 和原阶段 logger 五条具名适配依赖，原 census 相对已提交 RFC-370 动态状态前态实测 +5；无新 public/跨 context 入口。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
       }
     },
     {
@@ -890,10 +890,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6037,
+      "baseline": 6041,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-370 C2-W2-D actual original frozen dynamic state generation: rfc294-architecture-exceptions 6033 to 6037. The neutral selector, original prepared SQL helper and selected Task-local two-purpose writer add three production files and ten file/symbol owners. Unchanged rules observe five added imports, four exact compatibility exceptions and one additional classified mutation entry. The actual classic inbound is four to five with one legacy dynamic generator to Task application selector value edge; outbound remains zero. Preserve all original readers, SQL and owner semantics, callbacks, transaction, context, inventory order and why text. Full generator/public boundary cutover remains A-T7. This measured source-publication declaration is retired in an ordinary successor."
+        "why": "RFC-371 完整报告加载与刷新修复：批量 staging helper 的原 schema/事务类型/affectedRows 与诊断 observer 的原 createLogger 四条 exact infrastructure 适配依赖，原规则相对已提交 RFC-370 动态状态前态实测 +4；不改规则或扩大豁免。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
       }
     },
     {
@@ -928,10 +928,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27738,
+      "baseline": 27751,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 C2-W2-D actual original frozen dynamic state generation: rfc294-module-symbol-owners 27728 to 27738. The neutral selector, original prepared SQL helper and selected Task-local two-purpose writer add three production files and ten file/symbol owners. Unchanged rules observe five added imports, four exact compatibility exceptions and one additional classified mutation entry. The actual classic inbound is four to five with one legacy dynamic generator to Task application selector value edge; outbound remains zero. Preserve all original readers, SQL and owner semantics, callbacks, transaction, context, inventory order and why text. Full generator/public boundary cutover remains A-T7. This measured source-publication declaration is retired in an ordinary successor."
+        "why": "RFC-371 完整报告加载与刷新修复：两个具名 infrastructure 文件及顶层符号新增13个 owner，前端 completeReportClient 新增 displayValidityKey 一个 owner；原 stage 的 countScope 迁移消失，原 census 相对已提交 RFC-370 动态状态前态净增13。全部既有登记及 context/层级保持。本次声明在普通紧邻后继退役，前批已消费许可及其真实基线保留于 331f30aa 的原提交。"
       }
     }
   ],
@@ -940,8 +940,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "19bf1e1d3d22f75b6aa44f94e9dc7ada75c6e53d",
-    "contentDigest": "sha256:8d634cf9ef1cb77aa1b9a8dd2a5d90e72d7fe8f21d4b416111c76f54e04cbcef",
+    "currentSnapshotSha": "331f30aaf75500487b38910da08df946648664e9",
+    "contentDigest": "sha256:8690049c5b13297f9bfa19e167d766c49eae65d0036f7f667a92a8d607a347df",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

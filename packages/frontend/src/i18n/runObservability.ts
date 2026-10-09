@@ -88,6 +88,7 @@ export const runObservabilityZh = {
   notApplicable: '无模型调用',
   reportNotReady: '该范围用量记录不完整',
   reportBuilding: '正在读取全部原始记录并核对完整性',
+  refreshingPrevious: '正在重新统计；以下仍为上次完成的结果，统计时间见上方。',
   noIncompleteTotals: '该范围存在缺失或未核实的用量，无法给出准确总量；各完整范围的明细仍可查看。',
   reportFailed: '完整报告生成失败',
   completeAsOf: '完整统计截至 {{time}}；刷新可纳入后续记录。',
@@ -498,6 +499,8 @@ export const runObservabilityEn: RunObservabilityMessages = {
   notApplicable: 'No model calls',
   reportNotReady: 'Usage records are incomplete for this scope',
   reportBuilding: 'Reading every original record and verifying completeness',
+  refreshingPrevious:
+    'Refreshing statistics. The previous completed result remains below; its time is shown above.',
   noIncompleteTotals:
     'This scope has missing or unverified usage, so an accurate total is unavailable. Complete scopes retain their own details.',
   reportFailed: 'Complete report failed',

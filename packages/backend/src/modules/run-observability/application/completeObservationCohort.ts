@@ -99,6 +99,7 @@ export async function buildCompleteObservationCohort(
       },
     },
   })
+  input.observePhase?.('tasks-collected')
   const historicalStage = await stageHistoricalObservationSources(input)
   const historical =
     historicalStage === null
@@ -370,6 +371,7 @@ export async function buildCompleteObservationCohort(
   }
   if (sourceTasks !== BigInt(taskSource.rows))
     throw new Error('Complete original Task population changed')
+  input.observePhase?.('tasks-built')
   const recovered =
     historicalStage && historical
       ? await appendHistoricalObservationCohort(
@@ -381,6 +383,7 @@ export async function buildCompleteObservationCohort(
           addTrend,
         )
       : null
+  input.observePhase?.('historical-allocated')
   if (recovered) {
     mergeCompleteObservationFold(fold, recovered.standalone)
     inventory.numericRecords += recovered.nativeRecords
@@ -604,6 +607,7 @@ export async function buildCompleteObservationCohort(
     receiptsNamespace: space('receipts'),
     taskSource,
   }
+  input.observePhase?.('cohort-folded')
   return input.query.cohort === 'usage' && input.task === undefined
     ? buildCompleteObservationUsageWindow(input, result)
     : result

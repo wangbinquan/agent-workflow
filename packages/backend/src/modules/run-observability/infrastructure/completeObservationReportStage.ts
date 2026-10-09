@@ -32,13 +32,10 @@ import {
   ownedCompleteReport,
   type CompleteReportTaskSource,
 } from './completeObservationReportAdmission'
-
-const countScope = (id: string, section: string, parent: string) =>
-  and(
-    eq(observationReportCounts.reportId, id),
-    eq(observationReportCounts.section, section),
-    eq(observationReportCounts.parent, parent),
-  )
+import {
+  declareCompleteReportCounts,
+  addCompleteReportGroupRows,
+} from './completeObservationReportStageCounts'
 export async function stageCompleteReportPage(
   db: ProviderNeutralDatabase,
   id: string,
@@ -70,7 +67,8 @@ export async function stageCompleteReportPage(
     }
     assertCompleteReportTransferPage(page, id, progress.pages, progress.digest, sha256Hex)
     const rows: (typeof observationReportRows.$inferInsert)[] = [],
-      receipts: (typeof observationReportReceipts.$inferInsert)[] = []
+      receipts: (typeof observationReportReceipts.$inferInsert)[] = [],
+      declarations: Array<{ section: string; parent: string; total: string }> = []
     const groups = new Map<string, { section: string; parent: string; size: bigint }>()
     for (let index = 0; index < page.items.length; index++) {
       const item = page.items[index]!
@@ -104,67 +102,14 @@ export async function stageCompleteReportPage(
           !/^(0|[1-9]\d*)$/.test(count.total)
         )
           throw new Error('Original report count invalid')
-        const current = await tx
-          .select()
-          .from(observationReportCounts)
-          .where(countScope(id, count.section, parent))
-          .get()
-        if (current?.declared) throw new Error('Original report count identity duplicated')
-        if (current)
-          await tx
-            .update(observationReportCounts)
-            .set({ total: count.total, declared: true })
-            .where(countScope(id, count.section, parent))
-            .run()
-        else
-          await tx
-            .insert(observationReportCounts)
-            .values({
-              reportId: id,
-              section: count.section,
-              parent,
-              total: count.total,
-              actual: '0',
-              declared: true,
-            })
-            .run()
+        declarations.push({ section: count.section, parent, total: count.total })
         progress.counts = String(BigInt(progress.counts) + 1n)
       } else throw new Error('Unknown complete report transfer kind')
     }
+    await declareCompleteReportCounts(tx, id, declarations)
     if (rows.length) await tx.insert(observationReportRows).values(rows).run()
     if (receipts.length) await tx.insert(observationReportReceipts).values(receipts).run()
-    for (const group of groups.values()) {
-      const current = await tx
-        .select()
-        .from(observationReportCounts)
-        .where(countScope(id, group.section, group.parent))
-        .get()
-      if (current) {
-        const changed = await tx
-          .update(observationReportCounts)
-          .set({ actual: String(BigInt(current.actual) + group.size) })
-          .where(
-            and(
-              countScope(id, group.section, group.parent),
-              eq(observationReportCounts.actual, current.actual),
-            ),
-          )
-          .run()
-        if (affectedRows(changed) !== 1)
-          throw new Error('Original report row count changed during transfer')
-      } else
-        await tx
-          .insert(observationReportCounts)
-          .values({
-            reportId: id,
-            section: group.section,
-            parent: group.parent,
-            actual: String(group.size),
-            total: '0',
-            declared: false,
-          })
-          .run()
-    }
+    await addCompleteReportGroupRows(tx, id, [...groups.values()])
     await tx
       .insert(observationReportPages)
       .values({

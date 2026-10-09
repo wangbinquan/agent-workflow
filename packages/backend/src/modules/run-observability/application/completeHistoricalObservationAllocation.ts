@@ -167,6 +167,7 @@ export function completeHistoricalObservationAllocation(
     return target
   }
   async function* allocations(): AsyncGenerator<HistoricalAllocation> {
+    let dayFormatter: Intl.DateTimeFormat | undefined
     for await (const row of completeWorkingTraversal<HistoricalWorkingNativeRecord>(
       input.rows,
       stage.nativeRecordsNamespace,
@@ -214,12 +215,12 @@ export function completeHistoricalObservationAllocation(
         const day =
           working.cohortAt === null
             ? null
-            : new Intl.DateTimeFormat('en-CA', {
+            : (dayFormatter ??= new Intl.DateTimeFormat('en-CA', {
                 timeZone: input.query.timezone,
                 year: 'numeric',
                 month: '2-digit',
                 day: '2-digit',
-              }).format(working.cohortAt)
+              })).format(working.cohortAt)
         if (commonDay === undefined) {
           commonDay = day
           cohortAt = working.cohortAt

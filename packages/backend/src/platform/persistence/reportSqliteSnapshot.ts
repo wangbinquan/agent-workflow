@@ -102,6 +102,10 @@ export function originalSqliteFileReportSnapshot(input: {
         const mode = sqlite.query('PRAGMA journal_mode').get() as { journal_mode: string }
         if (mode.journal_mode !== 'wal')
           throw new Error('Original report file requires the existing WAL mode')
+        // Bound page residency on this report's handle; every source/TEMP row remains on disk.
+        sqlite.exec('PRAGMA main.cache_size=-65536')
+        sqlite.exec('PRAGMA temp_store=FILE')
+        sqlite.exec('PRAGMA temp.cache_size=-32768')
         sqlite.exec(CREATE_REPORT_WORKING_TABLE)
         sqlite.exec('BEGIN DEFERRED')
         const identity = originalIdentity(sqlite, sqlite.filename, input.generationId)

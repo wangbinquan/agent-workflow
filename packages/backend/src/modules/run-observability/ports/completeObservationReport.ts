@@ -29,6 +29,8 @@ export interface CompleteObservationCohortInput extends Omit<CompleteObservation
   readonly query: ObservationOverviewQuery
   readonly task?: ObservationTaskFacts
   readonly agentName?: (id: string | null) => Promise<string | null>
+  /** Composition supplies a synchronous, non-throwing diagnostic observer only when requested. */
+  readonly observePhase?: (phase: string) => void
 }
 export interface CompleteObservationCohortBuild {
   readonly summary: CompleteObservationReportSummary

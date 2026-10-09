@@ -14,6 +14,7 @@ import type {
 import type { CompleteSourceReader } from '../ports/completeReport'
 import { consumeCompleteSource } from './completePageTraversal'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
+import { completeWorkingCache } from './completeWorkingCache'
 
 const PAGE = 100
 export interface HistoricalObservationStage {
@@ -120,34 +121,59 @@ export async function stageHistoricalObservationSources(
     receiptsNamespace,
     sourceRows: '0',
   }
+  const executions = completeWorkingCache<HistoricalWorkingExecution>(
+      input.rows,
+      executionsNamespace,
+      input.signal,
+    ),
+    parents = completeWorkingCache<{ task: ObservationTaskFacts | null; selected: boolean }>(
+      input.rows,
+      namespace + '/parent-task-qualification',
+      input.signal,
+    ),
+    rootEdges = completeWorkingCache<boolean>(
+      input.rows,
+      namespace + '/retained-root-edges',
+      input.signal,
+    )
   let sourceRows = 0n
   const putExecution = async (execution: HistoricalObservationExecution) => {
-    const existing = await input.rows.get<HistoricalWorkingExecution>(
-      executionsNamespace,
-      input.keyOf(execution.referenceId),
-    )
+    const executionKey = input.keyOf(execution.referenceId),
+      existing = await executions.get(executionKey)
     if (existing) {
       if (!isDeepStrictEqual(existing.execution, execution))
         throw new Error('Original historical execution identity changed')
       return existing
     }
-    const parentTask =
-      execution.parentTaskId === null ? null : await sources.task(execution.parentTaskId)
+    let parent: { task: ObservationTaskFacts | null; selected: boolean } = {
+      task: null,
+      selected: false,
+    }
+    if (execution.parentTaskId !== null) {
+      const cached = await parents.get(execution.parentTaskId)
+      if (cached !== undefined) parent = cached
+      else {
+        parent = {
+          task: await sources.task(execution.parentTaskId),
+          selected:
+            (await input.rows.get(input.namespace + '/original-tasks', execution.parentTaskId)) !==
+            undefined,
+        }
+        await parents.put(execution.parentTaskId, parent)
+      }
+    }
+    const parentTask = parent.task
     const privileged = input.actor.permissions.has('tasks:read:all')
     const visible =
       privileged || parentTask !== null || execution.ownerUserId === input.actor.user.id
     if (!visible) return null
-    const selected =
-      execution.parentTaskId !== null &&
-      (await input.rows.get(input.namespace + '/original-tasks', execution.parentTaskId)) !==
-        undefined
-    const value = membership(input, execution, parentTask, selected)
-    await input.rows.insert(executionsNamespace, [
-      { key: input.keyOf(execution.referenceId), document: value },
-    ])
+    const value = membership(input, execution, parentTask, parent.selected)
+    await executions.put(executionKey, value)
     return value
   }
   const root = async (referenceId: string, sessionId: string) => {
+    const edgeKey = input.keyOf(JSON.stringify([referenceId, sessionId]))
+    if ((await rootEdges.get(edgeKey)) === true) return
     const key = input.keyOf(sessionId)
     await input.rows.put(namespace + '/roots', { key, document: { sessionId } })
     await input.rows.put(namespace + '/root-refs/' + key, {
@@ -158,6 +184,7 @@ export async function stageHistoricalObservationSources(
       key,
       document: { rootKey: key },
     })
+    await rootEdges.put(edgeKey, true)
   }
   const events = async (
     query: HistoricalObservationOwnerQuery,
@@ -262,12 +289,17 @@ export async function stageHistoricalObservationSources(
     })
     await input.rows.put(receiptsNamespace, { key: input.keyOf(receipt.source), document: receipt })
   }
+  await executions.flush()
+  await parents.flush()
+  await rootEdges.flush()
+  input.observePhase?.('owners-events-collected')
   for await (const row of completeWorkingTraversal<{ sessionId: string }>(
     input.rows,
     namespace + '/roots',
     input.signal,
   ))
     await retainHistoricalNativeRoot(input, stage, row.key, row.document.sessionId)
+  input.observePhase?.('native-collected')
   return { ...stage, sourceRows: String(sourceRows) }
 }
 

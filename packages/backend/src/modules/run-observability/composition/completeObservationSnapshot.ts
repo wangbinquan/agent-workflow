@@ -8,6 +8,7 @@ import { completeObservationAgentNames } from '../infrastructure/completeObserva
 import { completeObservationSourceRevision } from '../infrastructure/completeObservationSourceRevision'
 import { assertCompleteReportActor } from '../infrastructure/completeObservationReportAdmission'
 import { completeUsageWorkspace } from '../infrastructure/completeUsageWorkspace'
+import { completeReportPerformanceObserver } from '../infrastructure/completeReportPerformanceObserver'
 import type {
   CompleteObservationBuildResult,
   CompleteObservationSpool,
@@ -29,6 +30,7 @@ export async function composeCompleteObservationSnapshot(input: {
   signal?.throwIfAborted()
   if (snapshot.generationId !== report.generation)
     throw new Error('Original report database generation changed')
+  const observePhase = completeReportPerformanceObserver(report.id, report.request.refreshKey)
   await assertCompleteReportActor(
     snapshot.executor,
     report.request.actor,
@@ -41,6 +43,7 @@ export async function composeCompleteObservationSnapshot(input: {
       : await input.tasks.get(report.request.actor, report.request.taskId)
   if (report.request.taskId !== undefined && !task)
     throw new Error('Original complete report root Task missing')
+  observePhase?.('actor-qualified')
   const namespace = 'report/' + report.id
   const value = completeObservationValuation({
     db: snapshot.executor,
@@ -75,9 +78,12 @@ export async function composeCompleteObservationSnapshot(input: {
     usageWorkspace: completeUsageWorkspace,
     value: value.value,
     agentName: names.name,
+    ...(observePhase ? { observePhase } : {}),
   })
+  observePhase?.('cohort-complete')
   await value.flush()
   await names.flush()
+  observePhase?.('lookup-caches-flushed')
   // Unknown selection membership cannot support an exact selected factual population.
   if (
     build.summary.metrics.state === 'not-ready' &&
@@ -91,6 +97,7 @@ export async function composeCompleteObservationSnapshot(input: {
     snapshotId: snapshot.snapshotId,
     signal,
   })
+  observePhase?.('source-sealed')
   const header = {
     projectionVersion: 2 as const,
     reportId: report.id,
@@ -111,6 +118,7 @@ export async function composeCompleteObservationSnapshot(input: {
     spool: input.spool,
     signal,
   })
+  observePhase?.('transfer-sealed')
   return build.summary.metrics.state === 'not-ready'
     ? { state: 'not-ready', gaps: build.summary.metrics.gaps, manifest }
     : { state: 'ready', manifest }
