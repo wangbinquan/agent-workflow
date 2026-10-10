@@ -78,7 +78,7 @@ export const Route = createRoute({
   path: '/observability',
   // Empty search is a valid input; the existing validator supplies required defaults.
   validateSearch: validateObservationSearch as ValidatorFn<
-    Record<string, unknown> & SearchSchemaInput,
+    Partial<ObservationSearch> & SearchSchemaInput,
     ObservationSearch
   >,
   component: Page,
