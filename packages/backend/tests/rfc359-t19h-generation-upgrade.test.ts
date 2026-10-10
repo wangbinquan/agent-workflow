@@ -2,7 +2,7 @@
 // boundary before an existing generation pointer advances. PostgreSQL's real
 // copy/upgrade/export lane lives in rfc359-t19h-postgresql-upgrade.integration.
 
-import { afterAll, afterEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import {
   copyFileSync,
@@ -56,6 +56,12 @@ import { createPortableBackupArchive } from '@/services/portableBackupArchive'
 import { acquireLock } from '@/util/lock'
 import { prepareDatabaseInstallation } from '@/modules/system-operations/application/prepareDatabaseInstallation'
 import { createFileDatabaseInstallation } from '@/modules/system-operations/infrastructure/local/fileDatabaseInstallation'
+
+// RFC-370 CI 38023183230：原 root/refreshed-link 恢复 case 在 5595.96ms 撞默认 5000ms。
+// 本文件操作真实历史 SQLite、manifest/pointer 与完整迁移历史，没有 5 秒性能断言。
+// 按同组 migration-sequence / logical-backup-restore 的先例设置明确完成预算；
+// 这不是性能门，原显式 30 秒 case、连接/语句超时和全部恢复/错误/清理断言保持。
+setDefaultTimeout(60_000)
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const history = await loadPostgresqlMigrationHistory()
@@ -874,7 +880,7 @@ describe('RFC-359 T19h interrupted copy pointer discovery', () => {
     'a healthy completed %s target keeps the original public resume rejection',
     async (version) => {
       // One real coordinator follows both completed states; its existing history
-      // cache avoids loading the same historical schema twice in this 5s case.
+      // cache avoids loading the same historical schema twice in the original 5s case.
       const f = completedPointerFixture(version, 'accepting-writes')
       const { paths, store, operationId } = f
       const coordinator = createDatabaseMigrationCoordinator({

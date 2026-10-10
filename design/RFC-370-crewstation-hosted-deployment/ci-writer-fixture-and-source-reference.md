@@ -23,3 +23,7 @@
 先完成有限独立功能设计门，再改两份原测试源码和一个原引用；保留完整旧文件快照，以精确逆变换验证未触及的原内容。实现门只审这批测试与文档、格式和静态 lint；不执行本机 AW tests、typecheck、build、services 或 E2E，无新 census。
 
 精确发布后的主 CI 和默认完整 Windows 必须重新验收。旧失败保留；主 CI 总绿前不开始 HumanGate 实现。生命周期 211 次实际执行、完整 H7／十九 owner／三个启动根、A-T7／A-G、各层 CS adapter 与 M0～M4 部署仍开放；AW 尚未部署 CS，RFC 未完成。
+
+## 后续主 CI 终态与迁移恢复预算
+
+前述设计冻结后，`a9d60588` 的主 CI 正式终态为 failure，72 作业中 68 success／4 failure：原链接、Ubuntu3 writer、Ubuntu27 迁移恢复与聚合；完整 Windows 成功，旧失败保持。Ubuntu27 的原 root/refreshed-link 用例在 5595.96ms 超过 Bun 隐式 5000ms，没有 5 秒产品性能断言。同组迁移历史与恢复文件已采用明确 60 秒预算；本片按同一规则仅设置该原文件默认预算，保留原显式 30 秒 case、全部旧恢复步骤／断言／连接与语句超时，生产不改。有限设计门 PASS 已消费，实现门、精确三路径发布及后继全部 hosted CI 仍分别验收。详见[迁移恢复测试预算](ci-generation-upgrade-time-budget.md)。
