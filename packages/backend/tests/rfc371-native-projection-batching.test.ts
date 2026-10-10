@@ -57,6 +57,8 @@ test('original scalar fields, order and EOF survive >200 parts and byte-budget r
         expect(JSON.stringify(pages)).not.toContain('cache_message')
         expect(instrument.counts.batches).toBeGreaterThan(1)
         expect(instrument.counts.points).toBe(0)
+        expect(instrument.counts.messageWriteAttempts).toBe(3)
+        expect(instrument.counts.messageWrites).toBe(3)
         for (const original of instrument.projected) {
           const row = { ...original }
           delete row.cache_message

@@ -23,6 +23,7 @@ interface PartWindow {
   ids: Array<{ id: unknown }>
   index: number
   rows?: CachedMessagePartRow[]
+  cachedMessages?: Set<string>
 }
 const identifier = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0
@@ -83,6 +84,7 @@ export function createOpencodePartProjection(db: ReadonlySqliteDatabase) {
                 .all(session, after, size)
         window.index = 0
         window.rows = undefined
+        window.cachedMessages = undefined
         if (
           window.ids.length &&
           window.ids.every((key) => identifier(key.id)) &&
@@ -98,8 +100,10 @@ export function createOpencodePartProjection(db: ReadonlySqliteDatabase) {
             if (
               rows.length === window.ids.length &&
               rows.every((row, index) => row.id === window!.ids[index]!.id)
-            )
+            ) {
               window.rows = rows
+              window.cachedMessages = new Set()
+            }
           } catch {
             // Prefetch is optional: the original current-key query retains its errors/EOF.
           }
@@ -133,7 +137,18 @@ export function createOpencodePartProjection(db: ReadonlySqliteDatabase) {
             .get(session, key.id)
       }
       // The reader deletes its internal flag and may retry this row after a byte-budget break.
-      return row ? { ...row } : null
+      if (!row) return null
+      const result = { ...row }
+      if (
+        window.rows &&
+        window.cachedMessages?.has(JSON.stringify([row.session_id, row.message_id]))
+      )
+        result.cache_message = row.message_id
+      return result
+    },
+    rememberCachedMessage(session: string, message: string) {
+      if (window?.rows && window.session === session)
+        window.cachedMessages?.add(JSON.stringify([session, message]))
     },
     advance() {
       if (window?.eligible) window.index++

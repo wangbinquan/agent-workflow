@@ -114,10 +114,12 @@ export function instrumentProjectionDatabase(
   options: {
     batchFault?: BatchFault
     pointFailureId?: string
+    messageCacheFailureId?: string
   } = {},
 ) {
-  const counts = { batches: 0, points: 0, closes: 0 },
+  const counts = { batches: 0, points: 0, closes: 0, messageWrites: 0, messageWriteAttempts: 0 },
     projected: Record<string, unknown>[] = []
+  let messageCacheFailed = false
   const open = (path: string): ReadonlySqliteDatabase => {
     const db = openReadonlySqliteDatabase(path)
     let closed = false
@@ -131,7 +133,17 @@ export function instrumentProjectionDatabase(
               if (parameters[1] === options.pointFailureId)
                 throw new Error('original-point-failure')
             }
-            return statement.get(...parameters)
+            const messageWrite = sql.includes('INSERT INTO temp.native_pass_message_models(')
+            if (messageWrite) {
+              counts.messageWriteAttempts++
+              if (!messageCacheFailed && parameters[0] === options.messageCacheFailureId) {
+                messageCacheFailed = true
+                throw new Error('original-message-cache-failure')
+              }
+            }
+            const result = statement.get(...parameters)
+            if (messageWrite) counts.messageWrites++
+            return result
           },
           all(...parameters: Parameters) {
             if (!sql.includes('FROM json_each(?2)')) return statement.all(...parameters)

@@ -295,11 +295,13 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
               'UPDATE temp.native_pass_queue SET part_after=? WHERE id=?',
             ).get(row.id, current.id)
             partProjection.advance()
-            if (!messageCached && identifier(row.message_id) && identifier(row.session_id))
+            if (!messageCached && identifier(row.message_id) && identifier(row.session_id)) {
               db.query<unknown, [string, string, unknown, unknown]>(
                 `INSERT INTO temp.native_pass_message_models(message,session,provider,model)
               VALUES (?,?,?,?) ON CONFLICT(message,session) DO NOTHING`,
               ).get(row.message_id, row.session_id, row.provider, row.model)
+              partProjection.rememberCachedMessage(row.session_id, row.message_id)
+            }
             continue
           }
           const child =

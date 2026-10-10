@@ -180,3 +180,73 @@ test('late malformed JSON uses the original range prefix and closes without inve
     fixture.close()
   }
 })
+
+test('a late original message-cache error retains the full ACK prefix and a fresh pass recovers', () => {
+  const fixture = projectionFixture()
+  fixture.db.query('INSERT INTO message VALUES (?,?,?)').run(
+    'message-late',
+    'root',
+    JSON.stringify({
+      role: 'assistant',
+      providerID: 'original-provider',
+      modelID: 'original-late-model',
+    }),
+  )
+  for (const n of [249, 250, 251])
+    fixture.db.query('UPDATE part SET message_id=? WHERE id=?').run('message-late', fixture.id(n))
+  const expectedRows = scalarRows(fixture.db),
+    expectedEOF = scalarRootEOF(fixture.db),
+    instrument = instrumentProjectionDatabase({ messageCacheFailureId: 'message-late' }),
+    factory = createHistoricalOpencodeUsagePassFactory(fixture.path, {
+      pageRows: 10,
+      pageBytes: 1024 * 1024,
+      openDatabase: instrument.open,
+    }),
+    reader = factory.open(projectionIdentity('late-message-cache'))
+  try {
+    let cursor = reader.initialCursor,
+      failure: unknown
+    const acknowledged: ReturnType<typeof reader.next>[] = []
+    for (;;) {
+      try {
+        const page = reader.next(cursor)
+        expect(page.eof).toBeNull()
+        expect(reader.next(cursor)).toEqual(page)
+        reader.acknowledge(page.ordinal, page.payloadDigest)
+        acknowledged.push(page)
+        cursor = page.nextCursor!
+      } catch (error) {
+        failure = error
+        break
+      }
+    }
+    expect((failure as Error).message).toBe('original-message-cache-failure')
+    expect(acknowledged).toHaveLength(25)
+    expect(acknowledged.at(-1)!.counts).toEqual({ sessions: '1', parts: '249', steps: '83' })
+    expect(acknowledged.flatMap((page) => page.steps).map((step) => step.stepId)).toEqual(
+      expectedRows
+        .slice(0, 249)
+        .filter((row) => row.kind === 'step-finish')
+        .map((row) => row.id as string),
+    )
+    expect(() => reader.next(cursor)).toThrow('snapshot closed')
+    expect(instrument.counts.messageWriteAttempts).toBe(4)
+    expect(instrument.counts.messageWrites).toBe(3)
+    expect(instrument.counts.closes).toBe(0)
+    const recovered = consumeProjection(factory.open(projectionIdentity('fresh-message-cache')))
+    expect(recovered.eof).toEqual(expectedEOF)
+    expect(recovered.steps.map((step) => step.stepId)).toEqual(
+      expectedRows.filter((row) => row.kind === 'step-finish').map((row) => row.id as string),
+    )
+    expect(recovered.steps.find((step) => step.stepId === fixture.id(250))!.model?.id).toBe(
+      'original-late-model',
+    )
+    expect(instrument.counts.messageWriteAttempts).toBe(8)
+    expect(instrument.counts.messageWrites).toBe(7)
+    factory.close()
+    expect(instrument.counts.closes).toBe(1)
+  } finally {
+    factory.close()
+    fixture.close()
+  }
+})
