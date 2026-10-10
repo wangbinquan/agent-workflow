@@ -1381,3 +1381,9 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 32679b0c／eb6a4884 已发布，SOURCE1-R2／MATCHING1-R1 PASS 和完整消费保留；新 SHA 功能 CI 发现六个上下文引用 TS2339、H05/H08 冻结 Proxy 错误及 T19b 新 marker，Windows 已 failure。当前按原合同修复显式上下文解析、application 绑定选择和完整三方法夹具；原错误码、案例／断言／预算、九原源码与 37 编辑／十调用保持。原 T19b 单文件纯声明得 0／0／0，未运行 AW 本机 test/typecheck/build/service/E2E，规则与账本不改。
 
 新有限源码门、唯一原 census／配套门、精确发布、新全部主 CI／默认完整 Windows 与 398 次实际案例分别验证；共享清单并行输出保持，待其正常提交后生成本片配套。详见[CI 修复记录](ci-human-gate-context-and-frozen-fixture.md)。总绿之前不推进下一批生产实现；完整 H7／A-G、各层 CS adapter 与 M0～M4 仍开放，AW 尚未部署 CS，RFC 未完成。全部旧正文和并行输出保持。
+
+## 2026-10-10 CI：历史来源链接超时
+
+HumanGate 修复 127ab32d／abca1d51 已发布；源码与配套 PASS 保留。abca1d51 的默认完整 Windows 38042223475 正式成功，根会话已核对 26 步、47 次 HumanGate＋53 次生命周期实际案例和四工作区 typecheck code 0。主 CI 38042223483 的历史文档 man7 外链超时，原日志只有一个超时、零错误；原主 CI 终态继续留证，总绿尚未通过。
+
+本有限片仅保留原来源名称／完整 URL 为纯文本，历史正文和结论保持原字节；检查规则／预算与生产／测试不改。并行 ff450237 的三路径已正常提交且保留，32 份原 HumanGate 源码／控制与已消费门一致；无新 census 或本机 AW 执行。四路径精确发布、新 SHA 全主 CI＋默认完整 Windows和 398 次实际案例另验。下一批生产实现仍等总绿，完整 H7／A-T7／A-G、各层 CS adapter 与 M0～M4 未完成，AW 尚未部署 CS。详见[历史引用修复](ci-historical-source-citation.md)。全部旧 plan 与并行输出保持。

@@ -1,3 +1,9 @@
+## 2026-10-10 RFC-370：Windows 通过，历史引用 CI 超时
+
+HumanGate 修复 127ab32d／abca1d51 已上库；默认完整 Windows 38042223475 正式成功，26 步、47 次 HumanGate＋53 次生命周期及四工作区 typecheck code 0 已实际核对。主 CI 38042223483 的既有 man7 来源外链超时，总绿仍未通过；原运行与失败记录保留。
+
+当前有限片只将该处来源名称／原 URL 保留为纯文本，旧正文及结论原字节保持，检查规则／预算与生产／测试源码不改；并行 ff450237 三路径保持，32 份 HumanGate 源码／控制与已消费门相同。四文档引用格式与新增正文的有限功能复核、精确上库、新 SHA 主 CI＋完整 Windows及 398 次实际案例另验，无新 census 或本机 AW 执行。下一批 RFC 生产实现仍等待总绿，完整 H7／十九 owner／三个根、A-T7／A-G、CS 各层独立 adapter 和 M0～M4 继续，AW 尚未部署 CS，RFC 未完成。详见[历史引用修复](design/RFC-370-crewstation-hosted-deployment/ci-historical-source-citation.md)。以下旧 STATE 与并行输出完整保持。
+
 ## 2026-10-10 RFC-370：HumanGate CI 修复候选
 
 HumanGate 源码与配套 32679b0c、紧邻许可退役 eb6a4884 已推送并精确同步。新主 CI 的已读功能日志发现上下文引用类型、冻结 Proxy 夹具和 T19b 新 marker 三项问题，Windows 已 failure；原失败与源码／配套 PASS 回执完整保留，不能代签当前总绿。
