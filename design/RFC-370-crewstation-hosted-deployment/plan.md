@@ -1337,3 +1337,7 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 ## 2026-10-10 生命周期写切面的原配套候选
 
 用户指定的总绿门槛已在确切 `5a0e315c` 达成：主 CI `38008043629` 的 72 作业及默认完整 Windows `38008122161` 全部 success，逐项消费。SOURCE18-R2 69 项仍为固定已消费闭包，原生命周期源码不因无关 HEAD 变动重跑实现门；211 新用例仍未验收。唯一原算法生成完整 13 项，四原规则保持，本片 14 生产文件 classic R1 35／R2 0 的完整集合相等；130 有序 ledger 仅五个原观测库存分母随完整人口更新，其余 baseline、ID／why／顺序保持，不增许可。配套门、精确发布及新 SHA 全部 CI 分别收口，之后继续剩余 H7／A-T7／A-G，再按 M0 先部署、M1～M4 逐项接入；RFC 未 Done，AW 未部署 CS。详见[配套发布](host-authority-task-runtime-lifecycle-publication.md)。全部旧 plan 和并行输出保留。
+
+## 2026-10-10 生命周期 CI 配套修复
+
+精确981ae0f默认完整Windows failure，主CI typecheck及相关backend分片已失败，旧失败据实保持。修新测试的原事务作用域、单reporter ACK差值、真正不可attach的Task前置和可空Task类型，补六原调用的有限逆变换及两insert行号；52个provider用例与一个全量调用者case／原预算保持。原五分母增长遗漏当次声明只在账本note记录，不补造未增长后继许可、不降分母或改规则，130行保持；生产和四原规则不变，无新census／本机AW运行。功能门、精确上库、新SHA主CI／默认完整Windows总绿与211真实用例逐项验收；HumanGate有限设计PASS，生产等总绿后接续。H7／19owner／3roots／A-T7／A-G与各层CS独立adapter、M0先部署及M1～M4仍开放，RFC未Done，AW未部署CS。详见[CI修复](ci-task-runtime-lifecycle.md)。旧plan与并行输出完整保留。

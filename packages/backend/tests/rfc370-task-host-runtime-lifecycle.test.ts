@@ -63,6 +63,7 @@ import {
   nextTurn,
 } from './helpers/taskHostExecution'
 import originalCallers from './fixtures/rfc370-task-runtime-lifecycle-original-callers.json'
+import { inverseTaskRuntimeLifecycleRootSelections } from './helpers/taskLaunchRootStatementInverse'
 
 const modules: { resetForTesting(): void }[] = []
 const spies: { mockRestore(): void }[] = []
@@ -511,7 +512,12 @@ describeEachProvider('RFC-370 Task runtime lifecycle keeps original transactions
         }
       | undefined
     let publisherErrorRaised = false
+    let heldActive = false
+    let heldTask: Awaited<ReturnType<typeof f.task>>
     f.controls.beforeConsume = async () => {
+      const tx = f.transactions[0]!
+      heldActive = databaseTransactionIsActive(tx)
+      heldTask = await tx.select().from(tasks).where(eq(tasks.id, f.taskId)).get()
       entered.resolve()
       await release.promise
     }
@@ -549,13 +555,11 @@ describeEachProvider('RFC-370 Task runtime lifecycle keeps original transactions
       ])
       expect(published).toBe(0)
       expect(f.transactions).toHaveLength(1)
-      expect(databaseTransactionIsActive(f.transactions[0]!)).toBe(true)
+      expect(heldActive).toBe(true)
       await nextTurn()
       expect(published).toBe(0)
       expect(settled).toBe(false)
-      expect(
-        await f.transactions[0]!.select().from(tasks).where(eq(tasks.id, f.taskId)).get(),
-      ).toMatchObject({ status: 'failed' })
+      expect(heldTask).toMatchObject({ status: 'failed' })
       release.resolve()
       expect(await pending).toBe(true)
       expect(published).toBe(1)
@@ -752,6 +756,7 @@ describeEachProvider('RFC-370 Task runtime lifecycle keeps original transactions
       .where(eq(tasks.id, f.taskId))
     f.controls.exists = async () => false
     const before = await snapshot(f)
+    if (before.task === undefined) throw new Error('original-tombstone-task-missing')
     const mutation = {
       ...input(f, 'pending'),
       allowedFrom: ['failed' as TaskStatus],
@@ -780,6 +785,7 @@ describeEachProvider('RFC-370 Task runtime lifecycle keeps original transactions
         .set({ status: 'failed', runningSince: null })
         .where(eq(tasks.id, f.taskId))
       const before = await snapshot(f)
+      if (before.task === undefined) throw new Error('original-revival-task-missing')
       f.controls.exists = async () => {
         await harness.db
           .update(tasks)
@@ -1018,6 +1024,7 @@ describeEachProvider('RFC-370 original Task lifecycle callers retain their work'
       const error = new Error('original-drive-result')
       const original = reporter(f, record)
       let reports = 0
+      let reportWrites = 0
       const coordinator = new DefaultTaskDriveCoordinator({
         runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc370-lifecycle' }),
         lifecycle: f.lifecycle,
@@ -1033,7 +1040,9 @@ describeEachProvider('RFC-370 original Task lifecycle callers retain their work'
         failureReporter: {
           async report(input) {
             reports++
-            return await original.report.call(original, input)
+            const before = f.calls.issuedResults
+            await original.report.call(original, input)
+            reportWrites = f.calls.issuedResults - before
           },
         },
       })
@@ -1049,7 +1058,7 @@ describeEachProvider('RFC-370 original Task lifecycle callers retain their work'
         ),
       ).toContain(error)
       expect(reports).toBe(1)
-      expect(f.calls.issuedResults).toBe(1)
+      expect(reportWrites).toBe(1)
       expect(await f.task()).toMatchObject({
         status: 'failed',
         finishedAt: CLOCK,
@@ -1075,6 +1084,9 @@ describeEachProvider('RFC-370 original Task lifecycle callers retain their work'
         controller,
       })
       expect(attached.kind).toBe('attached')
+      // A live attachable driver is awaited, not refused. Park the original task
+      // so the real attachable-status check supplies the not-attached outcome.
+      await harness.db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, f.taskId))
       const before = await snapshot(f)
       const original = reporter(f, record)
       let reports = 0,
@@ -1340,6 +1352,38 @@ test('all 21 original calls retain their exact inputs; removing the 15 selection
         expect((receiver.arguments[1] as ts.StringLiteral).text).toBe(old.purpose)
         edits.push({ start: callee.getStart(file), end: callee.end, text: old.callee })
       }
+    }
+    if (original.path.includes('/cli/') || original.path.endsWith('/server.ts')) {
+      const restored = inverseTaskRuntimeLifecycleRootSelections(file)
+      let expectedText = file.text
+      for (const edit of [...edits].sort((a, b) => b.start - a.start))
+        expectedText = expectedText.slice(0, edit.start) + edit.text + expectedText.slice(edit.end)
+      expect(restored.text).toBe(expectedText)
+      for (const statement of restored.statements) expect(statement.parent).toBe(restored)
+      const first = calls[0]!
+      const selection = (first.expression as ts.PropertyAccessExpression)
+        .expression as ts.CallExpression
+      const wrongPurpose = selection.arguments[1]!
+      const changed = (start: number, end: number, replacement: string) =>
+        ts.createSourceFile(
+          file.fileName,
+          file.text.slice(0, start) + replacement + file.text.slice(end),
+          ts.ScriptTarget.Latest,
+          true,
+        )
+      expect(() =>
+        inverseTaskRuntimeLifecycleRootSelections(
+          changed(wrongPurpose.getStart(file), wrongPurpose.end, "'preparation'"),
+        ),
+      ).toThrow('task-lifecycle inverse unreviewed call: ' + expected[0]!.id)
+      expect(() =>
+        inverseTaskRuntimeLifecycleRootSelections(
+          changed(first.arguments[0]!.getStart(file), first.arguments[0]!.end, '{}'),
+        ),
+      ).toThrow('task-lifecycle inverse unreviewed call: ' + expected[0]!.id)
+      expect(() =>
+        inverseTaskRuntimeLifecycleRootSelections(changed(first.getStart(file), first.end, 'true')),
+      ).toThrow('task-lifecycle inverse selected call population changed')
     }
     const imports = visit(
       file,

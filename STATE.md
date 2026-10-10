@@ -1,3 +1,6 @@
+# RFC-370：生命周期切面 CI 修复候选
+
+精确981ae0f的默认完整Windows正式failure，主CI的typecheck和相关backend分片失败，旧失败保留。仅修新测试的事务作用域／reporter单次差值／真实not-attached前置及两处可空Task类型，补六个生命周期调用的精确原根逆变换和两处insert账本行号；原52个provider用例、一个全量原调用者case与全部预算保持。T17漏附当次增长声明在原账本note据实记录，不补造后继许可、不降分母／改规则或改写历史，130行整字节语义保持。14个生产文件和四原生成规则保持，无新census／本机AW运行。有限功能门、精确发布及新SHA全仓CI／完整Windows／211例实际验收另验；HumanGate设计PASS但实现等总绿，完整H7／A-G／CS M0～M4和RFC继续，AW未部署CS。详见[本次CI修复](design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md)。以下旧共享全文与并行输出保留。
 # RFC-370：生命周期写切面配套候选
 
 精确 `5a0e315c` 的主 CI 72/72 与默认完整 Windows 全部终态 success，73 个作业逐项消费；原路由类型与源码注释投影超时已修绿。SOURCE18-R2 的 69 项固定候选继续保持，211 个新增用例尚未签收。唯一原算法已按固定 16 个 TS 覆盖及提交内全量其余源码生成 13 项私有配套，原四规则保持；本片 14 个生产文件 classic R1 同一 35 条／R2 空集合不变。Windows 路径与用例登记、独立配套门、精确发布和新 SHA 全仓 CI 分别验收。HumanGate 等剩余 H7／A-T7／A-G、各层 CS adapter、M0～M4 和 RFC 仍开放，AW 未部署 CS。详见[生命周期配套发布](design/RFC-370-crewstation-hosted-deployment/host-authority-task-runtime-lifecycle-publication.md)。以下旧共享全文与并行输出逐字保持。
