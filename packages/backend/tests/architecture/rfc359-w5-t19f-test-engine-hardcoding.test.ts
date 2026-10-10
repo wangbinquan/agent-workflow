@@ -97,6 +97,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-371：OpenCode 原生磁盘 SQLite/WAL 文件的 Worker 基线夹具；
   // 原 Task/账本/基线由 rfc371-native-baseline-worker-provider 的双 provider 用例验证。
   'helpers/rfc371NativeBaselineWorkerFixture.ts: 1',
+  // RFC-371：原 OpenCode SQLite/WAL 的批量投影、故障前缀与 EOF 夹具；AW 持久报告另走双 provider。
+  'helpers/rfc371NativeProjectionFixture.ts: 1',
   'input-port-contract.test.ts: 1',
   'integration-chaos/chaos-scenarios.integration.test.ts: 2',
   'memory-distiller-source-context.test.ts: 1',

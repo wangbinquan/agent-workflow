@@ -142,7 +142,7 @@ export function instrumentProjectionDatabase(
             if (options.batchFault === 'missing') return rows.slice(1)
             if (options.batchFault === 'duplicate')
               return rows.length > 1 ? [rows[0]!, ...rows.slice(0, -1)] : []
-            if (options.batchFault === 'reverse') return rows.toReversed()
+            if (options.batchFault === 'reverse') return [...rows].reverse()
             return rows
           },
         }

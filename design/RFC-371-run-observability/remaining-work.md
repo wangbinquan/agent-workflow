@@ -1,5 +1,17 @@
 # RFC-371 剩余工作与关闭条件
 
+## 2026-10-10 批量读取提速与正式页面验收
+
+原生记录窗口批量投影已发布 `9525c5bc7063f59b649cfb85a8d4a7a4ee12f03f`，紧邻普通提交 `86129c12f17a3e31ce0f9614af771edd9ae0e172` 只退役当次四项增长声明，保留全部 130 行、当前基线、原理由及历史记录。19 个源文件／测试／设计与原配套经过完整功能复核，有限元数据续审闭合唯一遗漏；未运行本机 AW 产品测试、类型检查、构建或新服务。
+
+同一标记任务报告三次完整构建为 18,297／16,222／13,066 ms；31,826 条明细及 14,997 组完整有序字段摘要一致。7,798 份收据中，4,066 份原 native／historical key 与 document 全字节一致；3,732 份派生收据只正规化每次新 report／snapshot 身份后全字段相等，EOF 全 true，不宣称派生原字节不变。四桶 30,636／42,496／0／2,746、合计 75,878，验收费率估值 ¥0.104488 保持。
+
+正式总览同一范围生成由 15,929 降至 14,129 ms，137 任务／595 尝试／446 调用／198 历史引用及全部记录口径保持。四桶 1,189,241／1,255,680／0／186,002、合计 2,630,923、已记录 ¥4.078952（210／227 条已定价）和原缺口保留；三个柱状区间实际数字为 371,573／2,212,426／46,924。刷新期间旧日期与值继续可见，完成后整体换到新统计时间。经首页点击原侧栏返回实测 193 ms；前后同一账号 465 份报告的全部 ID／创建／更新时间／状态原样，没有创建新报告。该路径仅证明这次缓存重入，首次生成和新范围全量统计仍约 14 秒，不记为性能问题全部解决。
+
+上一笔批量事务提交 `7d93c46c033113dd4292fbec8b1c947c7af2c6bb` 的主 CI [38026978561](https://github.com/wangbinquan/agent-workflow/actions/runs/38026978561) 正式 failure：72 作业、69 success／3 failure。原日志确认两个后端分片都仅失败于同一 RFC-317 T17：遗漏当次四项增长登记，第三项为汇总。此旧失败照实保留，不补造后继未增长提交的许可或改写历史。新精确 `86129c12` 的主 CI [38030585360](https://github.com/wangbinquan/agent-workflow/actions/runs/38030585360) 尚在执行；Windows [38030585328](https://github.com/wangbinquan/agent-workflow/actions/runs/38030585328) 正式 failure，原日志仅有新回归的两项类型／目标库错误。主 CI 已结束的 Ubuntu 5 分片有两项物理关闭时机断言失败，macOS 9／Ubuntu 17 同指一个新外部 SQLite 夹具漏登记。本候选保留全部原数字／前缀／EOF／预算：使用独立反序副本、显式 `unknown[]` 完整相等断言，按原共享连接合同在关闭工厂后断言物理关闭一次，并登记唯一构造行及 339→340 的一次真实增长。原 Windows 过滤与平台命令准确接入两个新回归，全部旧引用保持；限定七路径复核、精确发布、紧邻单路径许可退役和新 hosted CI 分别验收，见[CI 兼容修复](./ci-native-projection-compatibility.md)。没有重新触发 observability-scale。
+
+CS 原 33 文件完整检查的九项超时、其发布例外答复、本机部署与清理，以及 16 内置 Agent／Git 原入口成功实跑和全局默认运行时临时配置答复仍待。记忆专用配置已恢复；首次性能、全类型与 AW-R02～12 其它退出项继续，两个 RFC 保持 In Progress。下文同日较早的耗时和 CI 是历史记录，不覆盖本段。
+
 ## 2026-10-10 当前加载修复与剩余工作
 
 AW 已发布原生 part 主键批次读取 `183715b050efe1e876be750160038764ab1f39cf`，以及已完成报告重开和两处原 CI 配套修复 `4c6bf55e2b89d36ecab2f1dac94304c103366658`；紧邻普通后继 `ab457f9c8e5b9eb8859a2866a5b2165d245b0406` 只退役一次性登记许可，339 条登记及全部其它字段保持。本批精确 [主 CI 37987208134](https://github.com/wangbinquan/agent-workflow/actions/runs/37987208134) 已终态 failure，完整 72 作业到 EOF，70 success、2 failure；唯一原用例失败是 PostgreSQL handover 恢复 HTTP 409/200，另一失败是汇总。后继共享主干 `bfd76107e95797e3cba2ab41880f645e27f8d485` 已由其负责会话修复原 readiness 等待，本片保留其完整输出及旧失败，新主干 CI 另验。精确 [视觉 CI 37987208470](https://github.com/wangbinquan/agent-workflow/actions/runs/37987208470) 与 [Windows 平台 CI 37988483492](https://github.com/wangbinquan/agent-workflow/actions/runs/37988483492) 均 completed/success，各一作业；不能代签主 CI。原 `183715` 的 NULL matcher 类型错误和同一原生 SQLite 构造缺登记所导致的 Ubuntu/macOS 失败仍保留为失败，不用 SOURCE PASS 代签新 CI。

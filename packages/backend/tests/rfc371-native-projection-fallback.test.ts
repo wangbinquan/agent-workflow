@@ -28,7 +28,7 @@ test('failed, missing, duplicated or reordered prefetch keeps every original poi
       try {
         const actual = consumeProjection(factory.open(projectionIdentity(batchFault)))
         expect(actual.eof).toEqual(expected)
-        expect(actual.steps.map((step) => step.stepId)).toEqual(expectedIds)
+        expect<unknown[]>(actual.steps.map((step) => step.stepId)).toEqual(expectedIds)
         expect(instrument.counts.batches).toBe(4)
         expect(instrument.counts.points).toBe(603)
       } finally {
@@ -79,6 +79,8 @@ test('prefetch failure retains an original late point error and exactly its ackn
         .map((row) => row.id as string),
     )
     expect(() => reader.next(cursor)).toThrow('snapshot closed')
+    expect(instrument.counts.closes).toBe(0)
+    factory.close()
     expect(instrument.counts.closes).toBe(1)
   } finally {
     factory.close()
@@ -170,6 +172,8 @@ test('late malformed JSON uses the original range prefix and closes without inve
       'child',
     ])
     expect(instrument.projected.every((row) => row.session_id === 'root')).toBe(true)
+    expect(instrument.counts.closes).toBe(0)
+    factory.close()
     expect(instrument.counts.closes).toBe(1)
   } finally {
     factory.close()
