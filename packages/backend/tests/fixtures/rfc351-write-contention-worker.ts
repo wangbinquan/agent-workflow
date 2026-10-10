@@ -15,9 +15,9 @@ self.onmessage = (event: MessageEvent<{ dbPath: string; holdMs?: number }>) => {
     "UPDATE employee_tool_registrations SET updated_at = updated_at + 1 WHERE id = 'rfc351-contended'",
   ).run()
   self.postMessage({ type: 'locked' })
-  setTimeout(() => {
-    db.exec('COMMIT;')
-    db.close()
-    self.postMessage({ type: 'released' })
-  }, event.data.holdMs ?? 100)
+  // 在当前 Worker handler 持锁等待，不依赖下一轮 timer callback；原默认 100ms 保持。
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, event.data.holdMs ?? 100)
+  db.exec('COMMIT;')
+  db.close()
+  self.postMessage({ type: 'released' })
 }

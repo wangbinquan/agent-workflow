@@ -1354,3 +1354,10 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 - 修复范围为既有 bad JSON / null / array 三个生成器的显式 `string` 返回类型；三个函数的表达式、全部原用例/数据/断言/预算和并行内容完整保留。
 - 记录见 `design/RFC-370-crewstation-hosted-deployment/ci-default-range-return-types.md`。只发布该测试及本 RFC 的 STATE、plan、记录文档；后继主 CI + 完整 Windows 总绿、原 211 次生命周期实际执行单独验收，本地 AW 运行 0 次。
 - HumanGate 生产代码、全 H7/A-G、CS adapter / M0–M4 / RFC 完成仍未签。
+
+
+## 2026-10-10 CI：原 writer 持锁与跨仓引用
+
+精确 `a9d60588` 的原工具发布 case 在 `BEGIN IMMEDIATE` 遇到 `SQLITE_BUSY`，指定 CS 来源外链返回 503；旧失败保留。完整 Windows `38023368643` 全部成功、四工作区类型检查 exit 0 与生命周期 53/53 不代签主 CI。有限设计 PASS 已消费；Worker 改为当前 handler 等待原 100ms 再执行原 COMMIT／close／released，父测试只补说明，真实 SQL、两 case／八 expect／原 1s 上限及默认预算保持，生产不改。共享 RFC-371 的一处来源改为原路径／已核对版本的文本引用，全部原事实与并行内容保持。
+
+有限实现门、精确六路径发布及后继主 CI＋完整 Windows 总绿／211 次生命周期实际执行分别验收；无本机 AW 运行或新 census。HumanGate 实现仍等总绿，完整 H7／十九 owner／三个根、A-T7／A-G 以及各层 CS adapter、M0 首次部署与 M1～M4 继续，RFC 未完成、AW 尚未部署 CS。详见[夹具与来源设计](ci-writer-fixture-and-source-reference.md)。全部旧 plan 和并行输出完整保留。

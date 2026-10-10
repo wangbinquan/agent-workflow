@@ -1,3 +1,9 @@
+## 2026-10-10 RFC-370 CI：原 writer 夹具与跨仓来源
+
+精确 `a9d60588ef735f9b1d406f1ab88a550f338ea358` 的主 CI 原 Ubuntu3 工具发布 case 在 `BEGIN IMMEDIATE` 等锁失败、原 CS 文档外链返回 503；完整 Windows `38023368643` 已成功，生命周期 53/53 和四工作区类型检查通过，部分成功不代签主 CI。独立有限功能设计门 PASS 已实际消费。只将 Worker 的下一轮定时回调改为当前 handler 内等待原 100ms，保留真实 WAL writer、两原 case／八个 expect／原 1s 上限和默认预算；生产事务和重试不改。指定 CS 引用改为已核对路径／源码版本的文本引用，共享文件包含另一会话的完整原内容。
+
+实现门、精确六路径发布和后继主 CI／完整 Windows／211 次生命周期实际执行另验；无本机 AW 测试、类型检查、构建或新 census。HumanGate 生产仍等总绿，完整 H7／十九 owner／三个启动根、A-T7／A-G、各层 CS adapter 与 M0～M4 继续，AW 尚未部署 CS，RFC 未完成。详见[夹具与来源设计](design/RFC-370-crewstation-hosted-deployment/ci-writer-fixture-and-source-reference.md)。以下全部共享旧全文及并行输出完整保留。
+
 ## 2026-10-10 RFC-370 总绿门槛：并行 RFC-371 测试的显式返回类型修复候选
 
 `7f83f3ce514cecbe68d9c451200babf4f8ccadc2` 的自动完整 Windows run `38020057586` 中，RFC-370 生命周期文件的 53 次实际执行全部通过，原九个 not-attached 超时已消除；整条 Windows 仍为 failure，阻塞在 RFC-371 新测试 `rfc371-persistent-default-range.test.ts:197–199` 的三条 `TS7024`。本候选只给 bad JSON / null / array 三个原字符串生成器补 `: string` 返回类型。完整原测试、全部原数据、断言、注册与预算保留，未执行本地 AW 测试或类型检查。该共享测试包含另一会话已发布的 RFC-371 内容。

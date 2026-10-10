@@ -15,6 +15,10 @@
 // 在 BEGIN 处等（此时 busy_timeout 生效），拿到锁后读到的是最新快照，不存在升级这一步。
 //
 // 改造前本文件红（publishTool 抛 SQLITE_BUSY_SNAPSHOT），改造后绿。
+//
+// RFC-370 CI run 38023183230：原 Worker 未在三次 BEGIN IMMEDIATE 等待内释放 writer。
+// 夹具改为当前 handler 内等待原 100ms，保留真实 WAL 竞争、全部原断言和 1s 上限；
+// 日志没有记录 timer callback 时间，不能据此认定具体调度根因。
 
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
