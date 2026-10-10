@@ -51,3 +51,11 @@
 上述是两次不同范围各一次新报告观察，不能把全部差异归因于单个查询或承诺稳定降幅。首次／新范围仍需约 10～12 秒，本项继续开放；不通过减少任务、调用、原归属证据或完整性核对提速。唯一原 canonical 生成已完成，13 份原配套更新 sourceDigest，删除两个旧私有 helper 后 moduleSymbolOwners 从 27,805 到 27,803；不增加增长许可，不重跑生成。
 
 ACK 夹具后继 `ff450237c` 的主 CI [38043641753](https://github.com/wangbinquan/agent-workflow/actions/runs/38043641753) 为 completed/failure：70 作业 success，Markdown link check 与依赖汇总 failure，原失败保留。普通后继 `ca947c2431cd710bdaa63af3bae4903c1ace03b4` 的主 CI [38044940528](https://github.com/wangbinquan/agent-workflow/actions/runs/38044940528) 为 completed/success，72／72 作业 success；Windows [38045024500](https://github.com/wangbinquan/agent-workflow/actions/runs/38045024500) 也 completed/success。这两份是新复合键源码发布前的已提交内容证据，不代签本候选，新 SHA 的主／Windows 结果仍另验。没有启动 observability-scale，两个 RFC 继续 In Progress。
+
+## 复合键优化正式发布与确切 CI 终态
+
+`ef91b49e15412d3908b0911e1f773229a41a38f1` 已将上述复合键优化、双 provider 回归及原完整配套共 18 路径精确提交并推送；提交后的全部 18 个文件与已审候选完整字节一致，main／origin/main 为 0／0，共享 index 为空，并行 RFC-370 在制内容保持。主 CI [38048649757](https://github.com/wangbinquan/agent-workflow/actions/runs/38048649757) 为 completed／success，全部 72 个作业成功；同 SHA 的 Windows [38048649744](https://github.com/wangbinquan/agent-workflow/actions/runs/38048649744) 为 completed／success，原 26 步成功。此前失败记录保留，没有启动规模 CI。
+
+已读取 Ubuntu shard 2／32 的实际目标测试日志：原五个展开场景及新增复合键场景，在真实 PostgreSQL 和 SQLite 上各六例全部 pass，无跳过；新增场景分别为 320.39 ms 与 62.82 ms。Windows 的同组六个 SQLite 场景全部 pass，新增场景为 105.57 ms。主流水线中名称为 real PostgreSQL 的另一个专门任务只运行旧 Task 分页用例，不能拿它作为本次计数组回归证据；上述 PostgreSQL 证据来自配置了真实数据库的 Ubuntu 分片。归档同时含作业汇总和测试步骤副本，按同一次执行核对，不重复计为新增运行。
+
+首次／新范围约 10～12 秒的实测与完整逐行对账仍以上节两个原报告为准；CI 成功不代表已经达到首次加载性能目标。后续只读 SQL 研究比较了原生 JSON 资格查询，在同一原快照的全部 2,743 个 session 上结果相等，但观察顺序和热缓存影响未消除；保留原比较方向及存储类型的候选在热读中为 679.45 ms，原查询为 367.14 ms，未采用，也未改产品源码、运行时配置或统计人口。当前源码不按仅代表文件身份的 sourceGeneration 跨报告复用数值或资格判断。

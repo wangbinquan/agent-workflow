@@ -448,3 +448,17 @@ SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只�
 同一标记任务的新报告 10,719 ms，原全部 31,826 明细／14,997 组／7,798 回执保持，四桶与验收 CNY 相等。正式同范围总览新报告 11,746 ms，原全部 37,533 明细／16,259 组／8,326 回执保持，137 任务／595 尝试／446 调用、2,630,923 Token、已记录 ¥4.078952 及原缺口相等；派生回执只按原 generation／rows／pages／EOF 集合核对，不冒认 nonce／source／key 或全文相等。页面实际刷新结束且分类柱数据保持。两份均是各一次实测，首次／新范围约 10～12 秒仍偏慢，继续改进，不能减少人口、原证据或完整性核对。详见 load-performance-acceptance-20261010.md 与 count-key-batch-lookup.md。
 
 CS 原 33 路径候选的完整检查九项超时、精确发布／六项 CI／本机部署及 producer 验收、16 内置 Agent 与 Git 原入口成功覆盖、临时全局默认运行时答复、所有未取证的 AW-R02～12 和其它两 RFC 出口继续。记忆专用临时配置已恢复；没有启动规模 CI，两个 RFC 未完成。
+
+### 2026-10-10 复合键优化上库与剩余阻塞
+
+上述 18 路径已精确发布为 `ef91b49e15412d3908b0911e1f773229a41a38f1`，候选字节、远端同步与并行内容保持已核对。该 SHA 主 CI [38048649757](https://github.com/wangbinquan/agent-workflow/actions/runs/38048649757) 全部 72 作业 success，Windows [38048649744](https://github.com/wangbinquan/agent-workflow/actions/runs/38048649744) success；Ubuntu 2／32 的目标原计数组测试在真实 PostgreSQL／SQLite 各六例全部 pass，Windows 同组六例 SQLite pass。原失败完整保留，不重新运行 census 或规模 CI。首次／新范围仍约 10～12 秒，继续开放，已有报告的快速重入不代签首次生成。详见 load-performance-acceptance-20261010.md。
+
+CS 的 33 路径候选保持。一次有限诊断沿原 Linux 容器、原用户和数据库运行六个原测试文件，34 例中 21 pass／13 fail；13 个 Registry 例均在创建原 `/tmp/cs-file-consumers-*` 夹具时遇到 ENOSPC。容器所在 Docker 磁盘 197 GB／已用 187 GB、可用 0、100%；其它原七项非 Registry 超时场景在此次有限诊断通过，不能据此覆盖原完整检查的九项超时失败，原预算不改，不盲目重跑相同全门。此前获准的精确 11 镜像／13 缓存清单已执行；新只读库存另有 78 项可回收、非共享 BuildKit 缓存约 2.57 GB，新精确清单已准备并单独待批准，尚未清理，不删除容器、镜像、卷或仓库。空间恢复后的原因修复、完整检查发布门槛、精确上库／六项 CI／本机部署继续。
+
+原账号 dev_seed_admin 继续仅用于明确标记的本机验收；只读配置核对显示 defaultRuntime 仍为 opencode，memoryDistillRuntime 字段已恢复缺省，memoryDistillModel 与 commitPushModel 保持原值。16 个原内置 Agent 和 Git 的正向消耗覆盖仍需完成，临时全局默认运行时的待答复事项保持，不改配置、克隆内置 Agent 或以准备／模型失败当成功覆盖。两个 RFC 继续 In Progress，其它尚未取得直接证据的出口不在本次有限优化中关闭。
+
+### 2026-10-10 CS 空间恢复与原失败文件核对
+
+上述新 78 项缓存随后已获明确批准并执行。首次命令的附加 private=true 过滤器匹配 0 项、释放 0 B，原回执保留；只读诊断确认精确 ID 可匹配全部 78 项，且均可回收、非共享。再次逐项核对原 ID、创建身份和状态后，只以同一精确 ID 清理，78 项全部移除，其它缓存 ID 与全部 23 项在用缓存保持；Buildx 报告释放 2.574 GB，原容器 df 的可用空间为 2,834,264,064 B／99%。未执行镜像、容器、卷、仓库或工作区删除。沿同一原容器、只读主树、原用户和数据库再次核对六份原失败文件，34 pass／0 fail、344 个断言，33 候选和六文件的原字节前后完全不变，ENOSPC 已消失；旧九项完整检查超时及当前完整发布门槛仍保留，不以有限通过代签全门。
+
+只读核对实际注册表确认 obs-native-20261007 仍启用；原 Agent 启动接口没有逐任务运行时覆盖，Git 提交另有独立运行时／旧模型优先级。剩余验收的具体临时配置与恢复清单已准备：defaultRuntime、commitPushRuntime、mergeAgentRuntime、changeNarrativeRuntime 四字段拟设为 obs-native-20261007，结束后恢复各字段的原值及缺省状态，保留原模型、记忆配置和其它并行设置。此范围包含期间新自动任务的影响，已补充原待答复事项，尚未执行配置写入；16 内置 Agent／Git 成功消耗仍开放。
