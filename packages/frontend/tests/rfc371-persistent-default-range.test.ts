@@ -232,8 +232,8 @@ test.each([
 test('a pointer read failure uses the original range without changing authentication storage', async () => {
   const modules = await coldModules()
   await qualify(modules)
-  const original = Storage.prototype.getItem
-  vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+  const original = localStorage.getItem
+  vi.spyOn(localStorage, 'getItem').mockImplementation((key) => {
     if (key.startsWith(PREFIX)) throw new Error('Original storage unavailable')
     return original.call(localStorage, key)
   })
@@ -245,8 +245,8 @@ test('a pointer read failure uses the original range without changing authentica
 
 test('a pointer write failure preserves qualified memory and a cold entry uses the original fallback', async () => {
   const modules = await coldModules()
-  const original = Storage.prototype.setItem
-  vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key, value) => {
+  const original = localStorage.setItem
+  vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
     if (key.startsWith(PREFIX)) throw new Error('Original storage unavailable')
     original.call(localStorage, key, value)
   })
@@ -260,8 +260,8 @@ test('a pointer write failure preserves qualified memory and a cold entry uses t
 test('failed storage removal cannot resurrect a retired range in the same application', async () => {
   const modules = await coldModules()
   await qualify(modules)
-  const original = Storage.prototype.removeItem
-  vi.spyOn(Storage.prototype, 'removeItem').mockImplementation((key) => {
+  const original = localStorage.removeItem
+  vi.spyOn(localStorage, 'removeItem').mockImplementation((key) => {
     if (key.startsWith(PREFIX)) throw new Error('Original storage unavailable')
     original.call(localStorage, key)
   })

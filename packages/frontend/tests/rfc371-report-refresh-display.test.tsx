@@ -784,12 +784,26 @@ test('an old detail failure removes the fallback even after its original query h
       client.getQueryData(['run-observability-complete', 'scope-metrics/13', filters, null, 0]),
     ).toBeUndefined(),
   )
+  // POST is recorded before its response settles. Block the subsequent original
+  // header GET only after that first fetch has actually finished.
+  await waitFor(() =>
+    expect(client.isFetching({ queryKey: ['run-observability-complete'] })).toBe(0),
+  )
   const release = f.block(f.reports[1]!.header.reportId)
+  const requestsBeforeHeaderRead = f.requests.length
   f.control.pageFailure = true
   fireEvent.click(screen.getByRole('button', { name: '重新读取原明细' }))
   await waitFor(() => expect(screen.queryByTestId('snapshot')).toBeNull())
   expect(screen.queryByText('显示上次完成统计')).toBeNull()
+  await waitFor(() =>
+    expect(f.requests.slice(requestsBeforeHeaderRead)).toContainEqual({
+      path: '/api/observability/reports/' + f.reports[1]!.header.reportId,
+      method: 'GET',
+      reportId: f.reports[1]!.header.reportId,
+    }),
+  )
   await act(async () => {
+    f.states.set(f.reports[1]!.header.reportId, f.reports[1]!)
     release(f.reports[1]!)
   })
   const next = await screen.findByTestId('snapshot')
