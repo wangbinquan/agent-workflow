@@ -1,3 +1,6 @@
+# RFC-370 CI：先清算原 driver 再验证不附着
+
+精确102919a4的默认完整Windows仍为failure，九个原not-attached case触及30秒；旧失败和旧功能门结论分别保留。源码确认selected attach在Task status前等待原host lifetime；夹具现先调用原releaseAndFinalize、确认pending由存在到清除，再以完整Task／owner／event快照和原累计ACK差额验证原not-attached、reporter／drive／新增ACK均零。原52个provider case、一个全量原调用者case及全部预算保持，生产／fixture／Windows／架构规则和产物不改，无新census／本机AW运行。独立有限功能门、精确四路径发布与后继SHA总主CI／默认Windows／211例另验；ECR限流的未执行测试分片独立处理。HumanGate实现仍等总绿，H7／A-G／CS M0～M4和RFC继续，AW未部署CS。详见[原driver清算夹具](design/RFC-370-crewstation-hosted-deployment/ci-not-attached-driver-finalization.md)。以下全部共享旧全文与并行输出保留。
 # RFC-370：生命周期切面 CI 修复候选
 
 精确981ae0f的默认完整Windows正式failure，主CI的typecheck和相关backend分片失败，旧失败保留。仅修新测试的事务作用域／reporter单次差值／真实not-attached前置及两处可空Task类型，补六个生命周期调用的精确原根逆变换和两处insert账本行号；原52个provider用例、一个全量原调用者case与全部预算保持。T17漏附当次增长声明在原账本note据实记录，不补造后继许可、不降分母／改规则或改写历史，130行整字节语义保持。14个生产文件和四原生成规则保持，无新census／本机AW运行。有限功能门、精确发布及新SHA全仓CI／完整Windows／211例实际验收另验；HumanGate设计PASS但实现等总绿，完整H7／A-G／CS M0～M4和RFC继续，AW未部署CS。详见[本次CI修复](design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md)。以下旧共享全文与并行输出保留。

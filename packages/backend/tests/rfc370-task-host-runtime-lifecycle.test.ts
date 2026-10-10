@@ -1084,30 +1084,37 @@ describeEachProvider('RFC-370 original Task lifecycle callers retain their work'
         controller,
       })
       expect(attached.kind).toBe('attached')
-      // A live attachable driver is awaited, not refused. Park the original task
-      // so the real attachable-status check supplies the not-attached outcome.
-      await harness.db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, f.taskId))
-      const before = await snapshot(f)
-      const original = reporter(f, record)
-      let reports = 0,
-        drives = 0
-      const coordinator = new DefaultTaskDriveCoordinator({
-        runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc370-lifecycle' }),
-        lifecycle: f.lifecycle,
-        repositoryPreparation: skipRepositoryPreparation,
-        engineOrchestrator: {
-          async drive() {
-            drives++
-          },
-        },
-        failureReporter: {
-          async report(input) {
-            reports++
-            return await original.report.call(original, input)
-          },
-        },
-      })
       try {
+        // Selected attach waits for the previous host lifetime before it reads
+        // Task status. Finish that real lifetime, then measure this submission.
+        await harness.db
+          .update(tasks)
+          .set({ status: 'awaiting_human' })
+          .where(eq(tasks.id, f.taskId))
+        expect(f.module.host?.finalizations.pendingForTask(f.taskId)).toBeDefined()
+        await f.lifecycle.releaseAndFinalize({ taskId: f.taskId, controller })
+        expect(f.module.host?.finalizations.pendingForTask(f.taskId)).toBeUndefined()
+        const before = await snapshot(f)
+        const writesBefore = f.calls.issuedResults
+        const original = reporter(f, record)
+        let reports = 0,
+          drives = 0
+        const coordinator = new DefaultTaskDriveCoordinator({
+          runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc370-lifecycle' }),
+          lifecycle: f.lifecycle,
+          repositoryPreparation: skipRepositoryPreparation,
+          engineOrchestrator: {
+            async drive() {
+              drives++
+            },
+          },
+          failureReporter: {
+            async report(input) {
+              reports++
+              return await original.report.call(original, input)
+            },
+          },
+        })
         expect(
           await coordinator.submit({
             taskId: f.taskId,
@@ -1117,7 +1124,7 @@ describeEachProvider('RFC-370 original Task lifecycle callers retain their work'
         ).toMatchObject({ kind: 'not-attached' })
         expect(reports).toBe(0)
         expect(drives).toBe(0)
-        expect(f.calls.issuedResults).toBe(0)
+        expect(f.calls.issuedResults - writesBefore).toBe(0)
         expect(await snapshot(f)).toEqual(before)
       } finally {
         await f.lifecycle.releaseAndFinalize({ taskId: f.taskId, controller })

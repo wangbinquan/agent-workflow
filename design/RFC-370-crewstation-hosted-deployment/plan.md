@@ -1341,3 +1341,8 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 ## 2026-10-10 生命周期 CI 配套修复
 
 精确981ae0f默认完整Windows failure，主CI typecheck及相关backend分片已失败，旧失败据实保持。修新测试的原事务作用域、单reporter ACK差值、真正不可attach的Task前置和可空Task类型，补六原调用的有限逆变换及两insert行号；52个provider用例与一个全量调用者case／原预算保持。原五分母增长遗漏当次声明只在账本note记录，不补造未增长后继许可、不降分母或改规则，130行保持；生产和四原规则不变，无新census／本机AW运行。功能门、精确上库、新SHA主CI／默认完整Windows总绿与211真实用例逐项验收；HumanGate有限设计PASS，生产等总绿后接续。H7／19owner／3roots／A-T7／A-G与各层CS独立adapter、M0先部署及M1～M4仍开放，RFC未Done，AW未部署CS。详见[CI修复](ci-task-runtime-lifecycle.md)。旧plan与并行输出完整保留。
+
+
+## CI：原 driver lifetime 的 not-attached 夹具修复
+
+精确102919a4的Windows run 38017304465终态failure：九个原not-attached case仍在原30秒内等待未清算的首个host lifetime，旧失败保留。原attach在读Task status前等pending，故先以原releaseAndFinalize完成原driver，再测目标提交的完整状态与累计ACK差额；保留原全部结果／零reporter／零drive／零新增ACK／完整快照／幂等finally，加pending存在与清除两断言。原25注册／52-provider＋1全量case／所有预算、14生产／四规则及产物保持，无新census或本机AW运行。有限实现门、精确四文件发布及后继总主CI／完整Windows／211例另验；本轮ECR限流初始化分片独立处理，不skip、不代签总绿。HumanGate生产仍等总绿，H7／A-T7／A-G／各层CS adapter与M0～M4继续开放，RFC未完成。详见[CI夹具说明](ci-not-attached-driver-finalization.md)。
