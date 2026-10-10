@@ -1,3 +1,15 @@
+## 2026-10-10 RFC-370：HumanGate 源码门通过，发布配套待验
+
+SOURCE1-R2独立功能PASS／零findings已逐项消费；R1正式FAIL和两项新增测试修正保留，17份源码／测试不再改。唯一原census在236c6dab同步基底完成13份清单，四原规则与6818份非本片Git blob保持；实际只增长1 mutation和10 owner，登记两项一次性许可并准备紧邻普通退役提交。原28个纯投影／渲染声明逐字复现全部13份输出；完整Windows候选补12精确输入／三套测试，原配置与并行内容保持。
+
+配套独立检视、35路径发布、新精确SHA全部主CI＋默认完整Windows、HumanGate187次与原生命周期211次真实执行另验。无额外census或本机AW运行；完整H7／十九owner／三个启动根／A-T7／A-G与CS各层adapter、M0～M4仍开放，AW尚未部署CS，RFC未完成。详见[配套清单与发布](design/RFC-370-crewstation-hosted-deployment/host-authority-task-human-gate-publication.md)。以下旧全文与并行输出完整保持。
+
+## 2026-10-10 RFC-370：生命周期总绿，HumanGate 实施候选
+
+精确801435f8的主CI38028006155为72/72 success，默认完整Windows38028075893为1/1 success；211次原生命周期实际执行及两条四工作区类型检查通过，0562e658两条完整流水线亦已成功。前置总绿门槛已满足，旧失败记录保留。
+
+已实施经设计PASS的HumanGate三原子两目的视图、公共composition原绑定和十个真实调用点，并写入双provider行为回归。纯文本／AST保持证明通过，原生命周期52+全量case和原启动根inverse保留；独立功能实现门、唯一该候选census、配套清单与完整Windows登记、精确发布及后继hosted CI另验。未运行本机AW测试／类型检查／构建／服务／E2E。完整H7／十九owner／三个启动根、A-T7／A-G与CS M0～M4仍开放，AW尚未部署CS，RFC未完成。详见[人工门设计与候选](design/RFC-370-crewstation-hosted-deployment/host-authority-task-human-gate.md)。以下全部共享旧全文与并行输出保持。
+
 ## 2026-10-10 RFC-370 CI：原 writer 夹具与跨仓来源
 
 精确 `a9d60588ef735f9b1d406f1ab88a550f338ea358` 的主 CI 原 Ubuntu3 工具发布 case 在 `BEGIN IMMEDIATE` 等锁失败、原 CS 文档外链返回 503；完整 Windows `38023368643` 已成功，生命周期 53/53 和四工作区类型检查通过，部分成功不代签主 CI。独立有限功能设计门 PASS 已实际消费。只将 Worker 的下一轮定时回调改为当前 handler 内等待原 100ms，保留真实 WAL writer、两原 case／八个 expect／原 1s 上限和默认预算；生产事务和重试不改。指定 CS 引用改为已核对路径／源码版本的文本引用，共享文件包含另一会话的完整原内容。

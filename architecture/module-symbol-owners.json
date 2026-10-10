@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2428,
+    "backendFiles": 2430,
     "frontendFiles": 659,
     "legacyFiles": 596,
-    "moduleFiles": 1832,
-    "productionFiles": 3258,
+    "moduleFiles": 1834,
+    "productionFiles": 3260,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27794
+    "symbolsIncludingFileRoots": 27804
   },
   "entries": [
     {
@@ -136373,6 +136373,42 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/humanGateTaskWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/humanGateTaskWriteSelection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/humanGateTaskWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/humanGateTaskWriteSelection.ts#selectHumanGateTaskWrites",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "selectHumanGateTaskWrites",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/humanGateTaskWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/humanGateTaskWriteSelection.ts#Selection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Selection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/launch/launchTask.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/launch/launchTask.ts#$file",
       "removeAfterWave": null,
@@ -138202,6 +138238,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "HumanGateTaskParkResult",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/humanGateTaskLifecycle.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/humanGateTaskLifecycle.ts#HumanGateTaskWritePurposes",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HumanGateTaskWritePurposes",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -146506,6 +146554,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "parkPreparedHumanGate",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/humanGate.ts#resolveHumanGateTaskWrites",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "resolveHumanGateTaskWrites",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -157648,6 +157708,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts#assertPreparedInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertPreparedInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts#DatabaseHumanGateTaskLifecyclePersistence",
@@ -157678,6 +157750,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "gatesIn",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts#HostHumanGateGuardWrite",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostHumanGateGuardWrite",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts#HostHumanGateWrite",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostHumanGateWrite",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -164482,6 +164578,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskHostExecutionWriteSelection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostHumanGateWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostHumanGateWritePurposes.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostHumanGateWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostHumanGateWritePurposes.ts#createSelectedHumanGateTaskWritePurposes",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSelectedHumanGateTaskWritePurposes",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -334269,5 +334389,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4b69219cb6c4acd801eece0d77874b6d55042cc1107fac2d1dca7bf814b9ad51"
+  "sourceDigest": "sha256:af830c52e7f2206701ba489e1ae1dcfa46e9266e16d03583cd1dffd8492eadc9"
 }

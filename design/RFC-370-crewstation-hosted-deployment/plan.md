@@ -1361,3 +1361,16 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 精确 `a9d60588` 的原工具发布 case 在 `BEGIN IMMEDIATE` 遇到 `SQLITE_BUSY`，指定 CS 来源外链返回 503；旧失败保留。完整 Windows `38023368643` 全部成功、四工作区类型检查 exit 0 与生命周期 53/53 不代签主 CI。有限设计 PASS 已消费；Worker 改为当前 handler 等待原 100ms 再执行原 COMMIT／close／released，父测试只补说明，真实 SQL、两 case／八 expect／原 1s 上限及默认预算保持，生产不改。共享 RFC-371 的一处来源改为原路径／已核对版本的文本引用，全部原事实与并行内容保持。
 
 有限实现门、精确六路径发布及后继主 CI＋完整 Windows 总绿／211 次生命周期实际执行分别验收；无本机 AW 运行或新 census。HumanGate 实现仍等总绿，完整 H7／十九 owner／三个根、A-T7／A-G 以及各层 CS adapter、M0 首次部署与 M1～M4 继续，RFC 未完成、AW 尚未部署 CS。详见[夹具与来源设计](ci-writer-fixture-and-source-reference.md)。全部旧 plan 和并行输出完整保留。
+
+## 2026-10-10 生命周期总绿收口与 HumanGate 实施
+
+精确801435f8主CI38028006155（72/72）和默认完整Windows38028075893（1/1）均success；原生命周期211次实际执行、两条四工作区类型检查完整通过。0562e658两条全流水线亦success，旧失败保留。前置总绿门槛已满足。
+
+已开始经独立设计PASS的HumanGate候选：Task三原子的preparation／issuedResults完整视图、原serializable callback与同一capture的body后／COMMIT前消费、独立guard+purpose入口、公共composition原ownership binding／调用者dependency优先、八个engine调用与Review／Clarify两producer显式目的。九份原生产源码及十个原输入的文本／AST保持证明通过；旧生命周期52+全量case及原启动根inverse保留。新双provider测试已写，未在本机执行；独立实现门、唯一新内容census、配套清单／Windows登记检视、精确发布与后继完整CI继续。详见[人工门切面](host-authority-task-human-gate.md)。完整H7／A-G、CS M0～M4未闭合，AW尚未部署CS，RFC继续。
+
+
+## 2026-10-10 HumanGate SOURCE1-R2 与发布配套
+
+独立源码门R2 PASS／零findings已消费，R1 FAIL及两项新增测试夹具修正保留。唯一原census在236c6dab基底完成13份产物；原四规则、6818份非本片Git blob和全部原库存保持，实际增长仅mutation1993→1994、owner27794→27804。两个一次性许可将随源码消费提交登记并由紧邻普通ledger提交退役。原28个纯声明逐字复现13份输出，本片11生产文件经典边界前后0／0。Windows候选补12个缺失输入／三套测试并保留原完整配置与并行内容。
+
+配套独立检视、35个精确路径发布、紧邻退役、新SHA完整主CI＋默认完整Windows和398次实际案例另验；无额外census或本机AW运行。详见[配套发布记录](host-authority-task-human-gate-publication.md)。本片不闭合完整H7／十九owner／三个根／A-T7／A-G，各层CS adapter与M0首次部署、M1～M4继续，AW尚未部署CS，RFC未完成。全部旧plan与并行输出保持。

@@ -7,7 +7,7 @@ import type { GateContinuationEffectPersistence } from '../drive/gateContinuatio
 import type { TaskExecutionIntentTerminalPersistence } from '../terminalizeExecutionIntent'
 import type { TaskExecutionRecoveryPersistence } from '../recoverTaskExecutions'
 import type { HumanGateDecisionPersistence } from '../acceptHumanGateDecision'
-import type { HumanGateTaskLifecycle } from './humanGateTaskLifecycle'
+import type { HumanGateTaskLifecycle, HumanGateTaskWritePurposes } from './humanGateTaskLifecycle'
 import type { TaskEngineApplicationPersistence } from './taskEngineApplicationPersistence'
 import type { GateContinuationPreDrivePersistence } from './gateContinuationPreDrivePersistence'
 import type { SchedulerCompletionPersistence } from './schedulerCompletionPersistence'
@@ -36,6 +36,8 @@ export interface TaskExecutionPersistence {
   readonly nodeWritePurposes?: TaskNodeWritePurposes
   readonly runtimeLifecycleWriteMode?: 'host-selected'
   readonly runtimeLifecycleWritePurposes?: TaskRuntimeLifecycleWritePurposes
+  readonly humanGateWriteMode?: 'host-selected'
+  readonly humanGateWritePurposes?: HumanGateTaskWritePurposes
   readonly drive: TaskEngineApplicationPersistence
   readonly ownership: TaskOwnershipPersistence
   readonly intents: TaskExecutionIntentPersistence

@@ -284,8 +284,32 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     const engine = read(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
-    expect(engine.match(/humanGateLifecycle\.settleManualQuestionParks\(\{/g)).toHaveLength(4)
-    expect(engine.match(/humanGateLifecycle\.trySetWhenNoManualQuestionParks\(\{/g)).toHaveLength(4)
+    expect(countNamedCalls('engine.ts', 'settleManualQuestionParks', engine)).toBe(4)
+    expect(countNamedCalls('engine.ts', 'trySetWhenNoManualQuestionParks', engine)).toBe(4)
+    const engineFile = parse('engine.ts', engine)
+    let purposes = 0
+    const checkPurpose = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ['settleManualQuestionParks', 'trySetWhenNoManualQuestionParks'].includes(
+          node.expression.name.text,
+        )
+      ) {
+        const receiver = node.expression.expression
+        expect(ts.isCallExpression(receiver)).toBe(true)
+        if (!ts.isCallExpression(receiver)) throw new Error('human-gate-write-selection-missing')
+        expect(receiver.expression.getText(engineFile)).toBe('selectHumanGateTaskWrites')
+        expect(receiver.arguments.map((argument) => argument.getText(engineFile))).toEqual([
+          'opts.persistence',
+          "'issuedResults'",
+        ])
+        purposes++
+      }
+      ts.forEachChild(node, checkPurpose)
+    }
+    checkPurpose(engineFile)
+    expect(purposes).toBe(8)
     expect(engine).toContain("if (statusBeforeReviewPark === 'awaiting_human')")
     expect(engine).toContain("reason: 'active-clarify-released-before-review'")
     expect(engine).toContain('task review outcome yielded to a durable manual question')

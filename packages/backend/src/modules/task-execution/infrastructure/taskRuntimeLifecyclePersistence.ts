@@ -141,6 +141,31 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
     }
   }
 
+  /** HumanGate purpose entry; the boot-recovery guard above stays native. */
+  async trySetWithGuardAndHostWrite(
+    input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
+    guard: (tx: TaskExecutionTransaction) => Promise<void>,
+    binding: TaskHostWriteBinding,
+    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,
+  ): Promise<boolean> {
+    const work = captureTaskHostExecutionWrite(binding, input)
+    const capturedInput = {
+      ...input,
+      allowedFrom: [...input.allowedFrom],
+      ...(input.extra === undefined ? {} : { extra: { ...input.extra } }),
+      executionContext: work.context,
+    }
+    return runWithTaskExecutionContext(work.context, async () => {
+      try {
+        await this.set(capturedInput, guard, { selection: work.selection, write })
+        return true
+      } catch (error) {
+        if (error instanceof ConflictError || error instanceof NotFoundError) return false
+        throw error
+      }
+    })
+  }
+
   private async set(
     input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
     guard?: (tx: TaskExecutionTransaction) => Promise<void>,

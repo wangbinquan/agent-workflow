@@ -37,3 +37,9 @@ export interface HumanGateTaskLifecycle {
     Readonly<{ kind: 'settled'; won: boolean }> | Readonly<{ kind: 'manual-question-pending' }>
   >
 }
+
+/** The caller supplies the business purpose; target status does not determine it. */
+export interface HumanGateTaskWritePurposes {
+  readonly preparation: HumanGateTaskLifecycle
+  readonly issuedResults: HumanGateTaskLifecycle
+}

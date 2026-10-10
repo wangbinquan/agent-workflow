@@ -37,6 +37,7 @@ import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteT
 import { createSelectedTaskExecutionProjectionPersistence } from '../infrastructure/taskHostExecutionProjectionPersistence'
 import { createSelectedTaskNodeWritePurposes } from '../infrastructure/taskHostNodeWritePurposes'
 import { createSelectedTaskRuntimeLifecycleWritePurposes } from '../infrastructure/taskHostRuntimeLifecycleWritePurposes'
+import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -149,6 +150,7 @@ export function createTaskExecutionPersistence(
 ): TaskExecutionPersistence {
   const effects = new DrizzleTaskExecutionEffectPersistence(db, dependencies.hostWrites)
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
+  const humanGateLifecycle = new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)
   const nativeProjections = {
     drive: new DrizzleTaskEngineApplicationPersistence(db),
     wrapperRuns: new DrizzleWrapperRunPersistence(db),
@@ -187,7 +189,7 @@ export function createTaskExecutionPersistence(
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
     recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
-    humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle),
+    humanGateLifecycle,
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createRecoveryAdministration(db, runtimeLifecycle),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
@@ -197,6 +199,11 @@ export function createTaskExecutionPersistence(
       : {
           nodeWriteMode: 'host-selected' as const,
           runtimeLifecycleWriteMode: 'host-selected' as const,
+          humanGateWriteMode: 'host-selected' as const,
+          humanGateWritePurposes: createSelectedHumanGateTaskWritePurposes({
+            humanGateLifecycle,
+            hostWrites: dependencies.hostWrites,
+          }),
           runtimeLifecycleWritePurposes: createSelectedTaskRuntimeLifecycleWritePurposes({
             runtimeLifecycle,
             hostWrites: dependencies.hostWrites,

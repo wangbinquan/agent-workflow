@@ -237,7 +237,8 @@ test('源码锁：停靠只剩一份实现，legacy 同步停靠路与 provider 
   const lifecycle = read(
     'modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
   )
-  expect(lifecycle).toContain('withTaskExecutionSerializable(this.db, async (tx)')
+  expect(lifecycle).toContain('return withTaskExecutionSerializable(this.db, body)')
+  expect(lifecycle).toContain("isolation: 'serializable'")
   expect(lifecycle).toContain('transitionHumanGateTask(tx, {')
   // 围栏挪进了同一笔事务：不再有「库外预读 owner，再另开事务写」的窗口。
   expect(lifecycle).toContain('assertTaskOwnerlessTx(tx, taskId)')
@@ -271,7 +272,9 @@ test('源码锁：停靠只剩一份实现，legacy 同步停靠路与 provider 
     'new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)',
   )
   // legacy 服务的停靠入口也落到同一份，不再有第二条同步路。
-  expect(read('modules/task-execution/composition/humanGate.ts')).toMatch(
-    /parkTaskAtHumanGate\(\s*new DatabaseHumanGateTaskLifecyclePersistence\(\s*input\.db,\s*createTaskRuntimeLifecyclePersistence\(input\.db, input\),/,
+  const composition = read('modules/task-execution/composition/humanGate.ts')
+  expect(composition).toMatch(
+    /new DatabaseHumanGateTaskLifecyclePersistence\(\s*input\.db,\s*createTaskRuntimeLifecyclePersistence\(input\.db, input\),/,
   )
+  expect(composition).toContain('parkTaskAtHumanGate(selection.lifecycle, {')
 })

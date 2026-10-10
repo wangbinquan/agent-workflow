@@ -1,0 +1,412 @@
+{
+  "base": "981ae0f4dd28f6711adac2bec65c96fb231fd77d",
+  "designFingerprint": "2df632bb72737ec268ecdeae90cc33f1fce116d399c51d02cfdec3f7c0681761",
+  "scope": "Finite approved HumanGate selection additions only; exact delta is removed before older lifecycle inversion, never from source() or unrelated startup roots.",
+  "files": [
+    {
+      "path": "packages/backend/src/modules/task-execution/application/ports/humanGateTaskLifecycle.ts",
+      "bytes": 1481,
+      "sha256": "87945bfd99ec523557e0ae68e6e9a44423b4876c66d7fcbd774d2b32c36d13a6",
+      "candidateBytes": 1712,
+      "candidateSha256": "8e3a271fdcec517d220e9ae8fa07ff7c13dd4ca07c6e67c537154bae70b5e20b",
+      "inverseEdits": [
+        {
+          "start": 1481,
+          "end": 1712,
+          "introduced": "\n/** The caller supplies the business purpose; target status does not determine it. */\nexport interface HumanGateTaskWritePurposes {\n  readonly preparation: HumanGateTaskLifecycle\n  readonly issuedResults: HumanGateTaskLifecycle\n}\n",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts",
+      "bytes": 3953,
+      "sha256": "2eca736422fd36152e881ffec755bccfc83b5c974c353fa5419fecf234c99786",
+      "candidateBytes": 4092,
+      "candidateSha256": "8a08a0a779430c5d0a99ed97f45a16da082176a9643a59cf2793ffa298d7543d",
+      "inverseEdits": [
+        {
+          "start": 729,
+          "end": 828,
+          "introduced": "import type { HumanGateTaskLifecycle, HumanGateTaskWritePurposes } from './humanGateTaskLifecycle'\n",
+          "previous": "import type { HumanGateTaskLifecycle } from './humanGateTaskLifecycle'\n"
+        },
+        {
+          "start": 2650,
+          "end": 2761,
+          "introduced": "  readonly humanGateWriteMode?: 'host-selected'\n  readonly humanGateWritePurposes?: HumanGateTaskWritePurposes\n",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "bytes": 11559,
+      "sha256": "25ee1498ca8bd7bbface26a5ecbb121e9bc8beec614440e79339f7f9fe2128a2",
+      "candidateBytes": 11923,
+      "candidateSha256": "67534677eff79643fe254ea3151f5ad4a0d30a1e3f949d472d177e2c518a52bb",
+      "inverseEdits": [
+        {
+          "start": 3681,
+          "end": 3789,
+          "introduced": "import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'\n",
+          "previous": ""
+        },
+        {
+          "start": 7788,
+          "end": 7885,
+          "introduced": "  const humanGateLifecycle = new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)\n",
+          "previous": ""
+        },
+        {
+          "start": 9721,
+          "end": 9745,
+          "introduced": "    humanGateLifecycle,\n",
+          "previous": "    humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle),\n"
+        },
+        {
+          "start": 10176,
+          "end": 10404,
+          "introduced": "          humanGateWriteMode: 'host-selected' as const,\n          humanGateWritePurposes: createSelectedHumanGateTaskWritePurposes({\n            humanGateLifecycle,\n            hostWrites: dependencies.hostWrites,\n          }),\n",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
+      "bytes": 3858,
+      "sha256": "df9a227b8008cf22d3e4b126b04901ebb3a85ddabd18ae265d97991126b00fa1",
+      "candidateBytes": 6470,
+      "candidateSha256": "be7bb358a4d1a68f4b091678f5d705aa10c7c20dff968c05d4a32a2e9135bfeb",
+      "inverseEdits": [
+        {
+          "start": 1053,
+          "end": 1452,
+          "introduced": "import {\n  assertTaskExecutionContext,\n  currentTaskExecutionContext,\n  runWithTaskExecutionContext,\n} from '../application/taskExecutionContext'\nimport type { HumanGateTaskWritePurposes } from '../application/ports/humanGateTaskLifecycle'\nimport { selectHumanGateTaskWrites } from '../application/humanGateTaskWriteSelection'\nimport { taskHostWorkForToken } from '../application/taskHostAdmission'\n",
+          "previous": "import { assertTaskExecutionContext } from '../application/taskExecutionContext'\n"
+        },
+        {
+          "start": 1564,
+          "end": 1758,
+          "introduced": "import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'\nimport { taskOwnershipHostBinding } from '../infrastructure/taskOwnershipPersistence'\n",
+          "previous": ""
+        },
+        {
+          "start": 1928,
+          "end": 3709,
+          "introduced": "\n/** Resolve the original context and its ownership binding before a durable await.\n * Caller dependencies retain precedence over context-derived dependencies. */\nfunction resolveHumanGateTaskWrites(\n  input: {\n    readonly db: ProviderNeutralDatabase\n    readonly executionContext?: TaskExecutionContextRef\n    readonly writePurpose?: keyof HumanGateTaskWritePurposes\n  } & TaskExecutionPersistenceDependencies,\n  taskId: string,\n) {\n  const context = input.executionContext ?? currentTaskExecutionContext(taskId)\n  const selectedContext =\n    context !== undefined &&\n    (context.persistence.humanGateWriteMode !== undefined ||\n      context.persistence.humanGateWritePurposes !== undefined ||\n      taskHostWorkForToken(context.token) !== undefined)\n  const binding =\n    input.hostWrites ??\n    (context === undefined ? undefined : taskOwnershipHostBinding(context.persistence.ownership))\n  if (selectedContext && binding === undefined) {\n    throw new Error('human-gate-task-host-binding-not-composed')\n  }\n  const native = new DatabaseHumanGateTaskLifecyclePersistence(\n    input.db,\n    createTaskRuntimeLifecyclePersistence(input.db, input),\n  )\n  if (binding === undefined) return { lifecycle: native, context, selected: false }\n  const purpose = input.writePurpose\n  if (purpose === undefined) throw new Error('human-gate-task-write-purpose-required')\n  if (\n    context !== undefined &&\n    (context.persistence.humanGateWriteMode !== undefined ||\n      context.persistence.humanGateWritePurposes !== undefined)\n  ) {\n    selectHumanGateTaskWrites(context.persistence, purpose)\n  }\n  const views = createSelectedHumanGateTaskWritePurposes({\n    humanGateLifecycle: native,\n    hostWrites: binding,\n  })\n  return { lifecycle: views[purpose], context, selected: true }\n}\n",
+          "previous": ""
+        },
+        {
+          "start": 4318,
+          "end": 4379,
+          "introduced": "    readonly writePurpose?: keyof HumanGateTaskWritePurposes\n",
+          "previous": ""
+        },
+        {
+          "start": 4617,
+          "end": 4761,
+          "introduced": "  const selection = resolveHumanGateTaskWrites(input, input.prepared.taskId)\n  const run = () =>\n    parkTaskAtHumanGate(selection.lifecycle, {\n",
+          "previous": "  return await parkTaskAtHumanGate(\n    new DatabaseHumanGateTaskLifecyclePersistence(\n      input.db,\n      createTaskRuntimeLifecyclePersistence(input.db, input),\n    ),\n    {\n"
+        },
+        {
+          "start": 4951,
+          "end": 5099,
+          "introduced": "    })\n  return await (selection.selected && selection.context !== undefined\n    ? runWithTaskExecutionContext(selection.context, run)\n    : run())\n",
+          "previous": "    },\n  )\n"
+        },
+        {
+          "start": 5297,
+          "end": 5358,
+          "introduced": "    readonly writePurpose?: keyof HumanGateTaskWritePurposes\n",
+          "previous": ""
+        },
+        {
+          "start": 5592,
+          "end": 5751,
+          "introduced": "  const selection = resolveHumanGateTaskWrites(input, input.taskId)\n  const run = () =>\n    settleManualQuestionParkObligationsInternal(selection.lifecycle, {\n",
+          "previous": "  return await settleManualQuestionParkObligationsInternal(\n    new DatabaseHumanGateTaskLifecyclePersistence(\n      input.db,\n      createTaskRuntimeLifecyclePersistence(input.db, input),\n    ),\n    {\n"
+        },
+        {
+          "start": 5937,
+          "end": 6085,
+          "introduced": "    })\n  return await (selection.selected && selection.context !== undefined\n    ? runWithTaskExecutionContext(selection.context, run)\n    : run())\n",
+          "previous": "    },\n  )\n"
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts",
+      "bytes": 8118,
+      "sha256": "9e835cff1b45d545e92bf56a25f2efdb99723e5e1b1c4ba307dd7a3d5a06a8d9",
+      "candidateBytes": 11622,
+      "candidateSha256": "ee858ae28acc60a7870d642b654282b8c854f54a98d1a603cab2bd312eb7ae4b",
+      "inverseEdits": [
+        {
+          "start": 2080,
+          "end": 2716,
+          "introduced": "import { runWithTaskExecutionContext } from '../application/taskExecutionContext'\nimport { captureTaskHostExecutionWrite } from './taskHostExecutionWriteSelection'\nimport type {\n  withTaskHostNewWork,\n  withTaskHostIssuedAck,\n  TaskHostWriteBinding,\n  TaskHostWriteSelection,\n} from './hostExecutionWriteTransaction'\n\ntype HostHumanGateWrite = Readonly<{\n  selection: Extract<TaskHostWriteSelection, { kind: 'selected' }>\n  write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck\n}>\ntype HostHumanGateGuardWrite = Readonly<{\n  binding: TaskHostWriteBinding\n  write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck\n}>\n",
+          "previous": ""
+        },
+        {
+          "start": 2819,
+          "end": 3226,
+          "introduced": "\nfunction assertPreparedInput(input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0]): void {\n  if (\n    input.prepared.taskId.length === 0 ||\n    input.prepared.expectedTaskRevision < 0 ||\n    input.prepared.manifestDigest.length === 0 ||\n    (input.token !== undefined && input.token.taskId !== input.prepared.taskId)\n  ) {\n    throw new Error('prepared-human-gate-task-or-manifest-mismatch')\n  }\n}\n",
+          "previous": ""
+        },
+        {
+          "start": 4152,
+          "end": 4188,
+          "introduced": "    hostWrite?: HostHumanGateWrite,\n",
+          "previous": ""
+        },
+        {
+          "start": 4228,
+          "end": 4326,
+          "introduced": "    assertPreparedInput(input)\n    const result = await this.withWrite(hostWrite, async (tx) => {\n",
+          "previous": "    if (\n      input.prepared.taskId.length === 0 ||\n      input.prepared.expectedTaskRevision < 0 ||\n      input.prepared.manifestDigest.length === 0 ||\n      (input.token !== undefined && input.token.taskId !== input.prepared.taskId)\n    ) {\n      throw new Error('prepared-human-gate-task-or-manifest-mismatch')\n    }\n    const result = await withTaskExecutionSerializable(this.db, async (tx) => {\n"
+        },
+        {
+          "start": 5714,
+          "end": 5750,
+          "introduced": "    hostWrite?: HostHumanGateWrite,\n",
+          "previous": ""
+        },
+        {
+          "start": 5821,
+          "end": 5888,
+          "introduced": "    const result = await this.withWrite(hostWrite, async (tx) => {\n",
+          "previous": "    const result = await withTaskExecutionSerializable(this.db, async (tx) => {\n"
+        },
+        {
+          "start": 7849,
+          "end": 7890,
+          "introduced": "    hostWrite?: HostHumanGateGuardWrite,\n",
+          "previous": ""
+        },
+        {
+          "start": 7977,
+          "end": 8260,
+          "introduced": "      const won = await this.trySetWithGuard(\n        input,\n        async (tx) => {\n          const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)\n          if (pending.length > 0) throw new ManualQuestionPending()\n        },\n        hostWrite,\n      )\n",
+          "previous": "      const won = await this.runtimeLifecycle.trySetWithGuard(input, async (tx) => {\n        const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)\n        if (pending.length > 0) throw new ManualQuestionPending()\n      })\n"
+        },
+        {
+          "start": 8441,
+          "end": 11072,
+          "introduced": "\n  /** Freeze original inputs and work before the first durable await. */\n  async parkPreparedWithHostWrite(\n    input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0],\n    binding: TaskHostWriteBinding,\n    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,\n  ): Promise<HumanGateTaskParkResult> {\n    assertPreparedInput(input)\n    const capturedInput = { ...input }\n    const work = captureTaskHostExecutionWrite(binding, { taskId: input.prepared.taskId })\n    return runWithTaskExecutionContext(work.context, () =>\n      this.parkPrepared(capturedInput, { selection: work.selection, write }),\n    )\n  }\n\n  async settleManualQuestionParksWithHostWrite(\n    input: Parameters<HumanGateTaskLifecycle['settleManualQuestionParks']>[0],\n    binding: TaskHostWriteBinding,\n    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,\n  ): ReturnType<HumanGateTaskLifecycle['settleManualQuestionParks']> {\n    const capturedInput = { ...input }\n    const work = captureTaskHostExecutionWrite(binding, input)\n    return runWithTaskExecutionContext(work.context, () =>\n      this.settleManualQuestionParks(capturedInput, { selection: work.selection, write }),\n    )\n  }\n\n  async trySetWhenNoManualQuestionParksWithHostWrite(\n    input: Parameters<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']>[0],\n    binding: TaskHostWriteBinding,\n    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,\n  ): ReturnType<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']> {\n    const capturedInput = {\n      ...input,\n      allowedFrom: [...input.allowedFrom],\n      ...(input.extra === undefined ? {} : { extra: { ...input.extra } }),\n    }\n    return this.trySetWhenNoManualQuestionParks(capturedInput, { binding, write })\n  }\n\n  private withWrite<T>(\n    hostWrite: HostHumanGateWrite | undefined,\n    body: (tx: TaskExecutionTransaction) => Promise<T>,\n  ): Promise<T> {\n    if (hostWrite === undefined) return withTaskExecutionSerializable(this.db, body)\n    return hostWrite.write({\n      db: this.db,\n      selection: hostWrite.selection,\n      isolation: 'serializable',\n      body,\n    })\n  }\n\n  private trySetWithGuard(\n    input: Parameters<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']>[0],\n    guard: (tx: TaskExecutionTransaction) => Promise<void>,\n    hostWrite: HostHumanGateGuardWrite | undefined,\n  ): Promise<boolean> {\n    if (hostWrite === undefined) return this.runtimeLifecycle.trySetWithGuard(input, guard)\n    return this.runtimeLifecycle.trySetWithGuardAndHostWrite(\n      input,\n      guard,\n      hostWrite.binding,\n      hostWrite.write,\n    )\n  }\n",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
+      "bytes": 11681,
+      "sha256": "091b65af12f23e96834bdd92ebe7d68d52215df3a930ae5afc59746268f7fa98",
+      "candidateBytes": 12660,
+      "candidateSha256": "eb1f07276e8d4211a153147fe5f023785febaf846e347e5098f2e597d9b29451",
+      "inverseEdits": [
+        {
+          "start": 5328,
+          "end": 6307,
+          "introduced": "  }\n\n  /** HumanGate purpose entry; the boot-recovery guard above stays native. */\n  async trySetWithGuardAndHostWrite(\n    input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],\n    guard: (tx: TaskExecutionTransaction) => Promise<void>,\n    binding: TaskHostWriteBinding,\n    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,\n  ): Promise<boolean> {\n    const work = captureTaskHostExecutionWrite(binding, input)\n    const capturedInput = {\n      ...input,\n      allowedFrom: [...input.allowedFrom],\n      ...(input.extra === undefined ? {} : { extra: { ...input.extra } }),\n      executionContext: work.context,\n    }\n    return runWithTaskExecutionContext(work.context, async () => {\n      try {\n        await this.set(capturedInput, guard, { selection: work.selection, write })\n        return true\n      } catch (error) {\n        if (error instanceof ConflictError || error instanceof NotFoundError) return false\n        throw error\n      }\n    })\n",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "bytes": 38793,
+      "sha256": "f858a9e95426141a71f24514466da70c462d52258d1abee29bc7c1b182fdfda4",
+      "candidateBytes": 39268,
+      "candidateSha256": "6aceaa8079f17475f3ee0cd2d39f79018278319656632859bc72859705ded415",
+      "inverseEdits": [
+        {
+          "start": 0,
+          "end": 87,
+          "introduced": "import { selectHumanGateTaskWrites } from '../application/humanGateTaskWriteSelection'\n",
+          "previous": ""
+        },
+        {
+          "start": 14777,
+          "end": 14913,
+          "introduced": "  const initialManualPark = await selectHumanGateTaskWrites(\n    opts.persistence,\n    'issuedResults',\n  ).settleManualQuestionParks({\n",
+          "previous": "  const initialManualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n"
+        },
+        {
+          "start": 29221,
+          "end": 29358,
+          "introduced": "    const manualPark = await selectHumanGateTaskWrites(\n      opts.persistence,\n      'issuedResults',\n    ).settleManualQuestionParks({\n",
+          "previous": "    const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n"
+        },
+        {
+          "start": 31159,
+          "end": 31316,
+          "introduced": "        const unparked = await selectHumanGateTaskWrites(\n          opts.persistence,\n          'issuedResults',\n        ).trySetWhenNoManualQuestionParks({\n",
+          "previous": "        const unparked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n"
+        },
+        {
+          "start": 31746,
+          "end": 31901,
+          "introduced": "        const parked = await selectHumanGateTaskWrites(\n          opts.persistence,\n          'issuedResults',\n        ).trySetWhenNoManualQuestionParks({\n",
+          "previous": "        const parked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n"
+        },
+        {
+          "start": 32404,
+          "end": 32549,
+          "introduced": "      const manualPark = await selectHumanGateTaskWrites(\n        opts.persistence,\n        'issuedResults',\n      ).settleManualQuestionParks({\n",
+          "previous": "      const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n"
+        },
+        {
+          "start": 36064,
+          "end": 36213,
+          "introduced": "      const unparked = await selectHumanGateTaskWrites(\n        opts.persistence,\n        'issuedResults',\n      ).trySetWhenNoManualQuestionParks({\n",
+          "previous": "      const unparked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n"
+        },
+        {
+          "start": 36623,
+          "end": 36771,
+          "introduced": "      const settled = await selectHumanGateTaskWrites(\n        opts.persistence,\n        'issuedResults',\n      ).trySetWhenNoManualQuestionParks({\n",
+          "previous": "      const settled = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n"
+        },
+        {
+          "start": 37241,
+          "end": 37378,
+          "introduced": "    const manualPark = await selectHumanGateTaskWrites(\n      opts.persistence,\n      'issuedResults',\n    ).settleManualQuestionParks({\n",
+          "previous": "    const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n"
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "bytes": 187873,
+      "sha256": "4d65574fd6c43d493189cbc3d925291d30f978327c5357917f582b76c2b4dc35",
+      "candidateBytes": 187910,
+      "candidateSha256": "4aaafa9833d60de63fc0b72feab92b5321546403588abf91466cd53b0c239553",
+      "inverseEdits": [
+        {
+          "start": 43177,
+          "end": 43214,
+          "introduced": "        writePurpose: 'preparation',\n",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "bytes": 33575,
+      "sha256": "0942ad73ccc2875dada41799ac47d7bb3c1124e435967f6ca178a4aabf5f0a6b",
+      "candidateBytes": 33612,
+      "candidateSha256": "cdd8edddcde0d626af29b5a88d15d228674335f284ddcfb423f4fd0f5eb45daa",
+      "inverseEdits": [
+        {
+          "start": 16140,
+          "end": 16177,
+          "introduced": "      writePurpose: 'issuedResults',\n",
+          "previous": ""
+        }
+      ]
+    }
+  ],
+  "calls": [
+    {
+      "id": "H01",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "settleManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n    taskId,\n    ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n    now: Date.now(),\n  })",
+      "originalArguments": [
+        "{\n    taskId,\n    ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n    now: Date.now(),\n}"
+      ]
+    },
+    {
+      "id": "H02",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "settleManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n      taskId,\n      ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n      now: Date.now(),\n    })",
+      "originalArguments": [
+        "{\n    taskId,\n    ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n    now: Date.now(),\n}"
+      ]
+    },
+    {
+      "id": "H03",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "trySetWhenNoManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n          taskId,\n          to: 'running',\n          allowedFrom: ['awaiting_human'],\n          ...(opts.executionContext !== undefined\n            ? { executionContext: opts.executionContext }\n            : {}),\n          now: Date.now(),\n          reason: 'active-clarify-released-before-review',\n        })",
+      "originalArguments": [
+        "{\n    taskId,\n    to: 'running',\n    allowedFrom: ['awaiting_human'],\n    ...(opts.executionContext !== undefined\n        ? { executionContext: opts.executionContext }\n        : {}),\n    now: Date.now(),\n    reason: 'active-clarify-released-before-review',\n}"
+      ]
+    },
+    {
+      "id": "H04",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "trySetWhenNoManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n          taskId,\n          to: 'awaiting_review',\n          allowedFrom: ['running'],\n          ...(opts.executionContext !== undefined\n            ? { executionContext: opts.executionContext }\n            : {}),\n          now: Date.now(),\n          reason: 'scope-awaiting-review',\n        })",
+      "originalArguments": [
+        "{\n    taskId,\n    to: 'awaiting_review',\n    allowedFrom: ['running'],\n    ...(opts.executionContext !== undefined\n        ? { executionContext: opts.executionContext }\n        : {}),\n    now: Date.now(),\n    reason: 'scope-awaiting-review',\n}"
+      ]
+    },
+    {
+      "id": "H05",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "settleManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n        taskId,\n        ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n        now: Date.now(),\n      })",
+      "originalArguments": [
+        "{\n    taskId,\n    ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n    now: Date.now(),\n}"
+      ]
+    },
+    {
+      "id": "H06",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "trySetWhenNoManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n        taskId,\n        to: 'running',\n        allowedFrom: ['awaiting_review', 'awaiting_human'],\n        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),\n        now: Date.now(),\n        reason: 'active-human-gate-released-before-complete',\n      })",
+      "originalArguments": [
+        "{\n    taskId,\n    to: 'running',\n    allowedFrom: ['awaiting_review', 'awaiting_human'],\n    ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),\n    now: Date.now(),\n    reason: 'active-human-gate-released-before-complete',\n}"
+      ]
+    },
+    {
+      "id": "H07",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "trySetWhenNoManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({\n        taskId,\n        to: 'done',\n        allowedFrom: ['running'],\n        extra: { finishedAt: Date.now() },\n        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),\n        now: Date.now(),\n        reason: 'task-done',\n      })",
+      "originalArguments": [
+        "{\n    taskId,\n    to: 'done',\n    allowedFrom: ['running'],\n    extra: { finishedAt: Date.now() },\n    ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),\n    now: Date.now(),\n    reason: 'task-done',\n}"
+      ]
+    },
+    {
+      "id": "H08",
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "purpose": "issuedResults",
+      "method": "settleManualQuestionParks",
+      "originalCall": "opts.persistence.humanGateLifecycle.settleManualQuestionParks({\n      taskId,\n      ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n      now: Date.now(),\n    })",
+      "originalArguments": [
+        "{\n    taskId,\n    ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),\n    now: Date.now(),\n}"
+      ]
+    },
+    {
+      "id": "H09",
+      "path": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
+      "purpose": "preparation",
+      "method": "parkPreparedHumanGate",
+      "originalCall": "humanGateComposition.parkPreparedHumanGate({\n        db,\n        prepared: prepared.prepared,\n        ...(executionContext === undefined ? {} : { executionContext }),\n      })",
+      "originalArguments": [
+        "{\n    db,\n    prepared: prepared.prepared,\n    ...(executionContext === undefined ? {} : { executionContext }),\n}"
+      ]
+    },
+    {
+      "id": "H10",
+      "path": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+      "purpose": "issuedResults",
+      "method": "parkPreparedHumanGate",
+      "originalCall": "humanGateComposition.parkPreparedHumanGate({\n      db: args.db,\n      prepared: prepared.prepared,\n      ...(executionContext === undefined ? {} : { executionContext }),\n      now: createdAt,\n    })",
+      "originalArguments": [
+        "{\n    db: args.db,\n    prepared: prepared.prepared,\n    ...(executionContext === undefined ? {} : { executionContext }),\n    now: createdAt,\n}"
+      ]
+    }
+  ]
+}

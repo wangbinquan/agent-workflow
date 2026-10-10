@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:4b69219cb6c4acd801eece0d77874b6d55042cc1107fac2d1dca7bf814b9ad51",
+    "sourceDigest": "sha256:af830c52e7f2206701ba489e1ae1dcfa46e9266e16d03583cd1dffd8492eadc9",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -828,8 +828,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1993,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1994,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 HumanGate SOURCE1-R2 功能实现：Task 自有三原子 preparation／issuedResults 完整视图新增原生成器实际枚举的 createSelectedHumanGateTaskWritePurposes 一项（1993→1994），复用原事务、原输入及原宿主绑定；完整原 census 一次成功，十个真实调用及有限原源码逆变换经独立功能门 PASS。只许可本提交这一项实际增长，紧邻普通后继提交移除。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -919,8 +922,11 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27794,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 27804,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 HumanGate SOURCE1-R2 功能实现：Task 自有选择器和三原子完整视图两文件、HumanGateTaskWritePurposes 合同、原输入判据／两原写方法及公共选择函数，原生成器实际新增十个 owner（27794→27804）；所有原 owner ID、原非本片 source 与经典边界保持。只许可本提交这十项实际增长，紧邻普通后继提交移除。"
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。 RFC-370 历史记录：981ae0f4dd28f6711adac2bec65c96fb231fd77d 相对父提交5a0e315c51ffa51ec56fc5c626049296d944dc67增加生命周期双 purpose 切面：mutation-entrypoints 1988→1989、cross-context observed imports 6902→6905、architecture exceptions 6044→6047、public surfaces 1259→1260、module symbol owners 27775→27782；遗漏当次allowGrowth声明，主CI的RFC-317 T17正式失败。已有批准覆盖一个新公开selector、三个bootstrap消费边、七个owner及一个观测写入口；原规则和其他125个baseline保持。此处记录遗漏，不补造后继未增长提交的许可，不改旧历史，不把后继CI追记为981ae0f准入通过；详见design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md。",
@@ -928,8 +934,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7d93c46c033113dd4292fbec8b1c947c7af2c6bb",
-    "contentDigest": "sha256:0db59a9a0df4ddda11b77d0630e94c717a4a780d71a15abd9f0eded740ea1fb0",
+    "currentSnapshotSha": "236c6dab9d6c7b242d9e01d7445a9ac942f033b7",
+    "contentDigest": "sha256:b14744346033be5ad2305f8b2f200337c50da802f7fdd02afae58ff67c64f0eb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

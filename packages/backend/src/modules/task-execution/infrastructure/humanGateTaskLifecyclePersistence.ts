@@ -37,10 +37,38 @@ import {
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
 import type { DrizzleTaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
+import { runWithTaskExecutionContext } from '../application/taskExecutionContext'
+import { captureTaskHostExecutionWrite } from './taskHostExecutionWriteSelection'
+import type {
+  withTaskHostNewWork,
+  withTaskHostIssuedAck,
+  TaskHostWriteBinding,
+  TaskHostWriteSelection,
+} from './hostExecutionWriteTransaction'
+
+type HostHumanGateWrite = Readonly<{
+  selection: Extract<TaskHostWriteSelection, { kind: 'selected' }>
+  write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck
+}>
+type HostHumanGateGuardWrite = Readonly<{
+  binding: TaskHostWriteBinding
+  write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck
+}>
 
 class ManualQuestionPending extends Error {}
 
 const journal = new DatabaseHumanGateOperationJournal()
+
+function assertPreparedInput(input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0]): void {
+  if (
+    input.prepared.taskId.length === 0 ||
+    input.prepared.expectedTaskRevision < 0 ||
+    input.prepared.manifestDigest.length === 0 ||
+    (input.token !== undefined && input.token.taskId !== input.prepared.taskId)
+  ) {
+    throw new Error('prepared-human-gate-task-or-manifest-mismatch')
+  }
+}
 
 /** 「有 token 就按 owner 围栏，没有就按无主围栏」——与合一前两侧同一条判据，只是挪进了同一笔事务。 */
 async function fence(
@@ -73,16 +101,10 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
 
   async parkPrepared(
     input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0],
+    hostWrite?: HostHumanGateWrite,
   ): Promise<HumanGateTaskParkResult> {
-    if (
-      input.prepared.taskId.length === 0 ||
-      input.prepared.expectedTaskRevision < 0 ||
-      input.prepared.manifestDigest.length === 0 ||
-      (input.token !== undefined && input.token.taskId !== input.prepared.taskId)
-    ) {
-      throw new Error('prepared-human-gate-task-or-manifest-mismatch')
-    }
-    const result = await withTaskExecutionSerializable(this.db, async (tx) => {
+    assertPreparedInput(input)
+    const result = await this.withWrite(hostWrite, async (tx) => {
       await fence(tx, input.prepared.taskId, input.token, input.now)
       const consumed = await gatesIn(tx).consumePreparedGateTx({
         prepared: input.prepared,
@@ -117,8 +139,9 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
 
   async settleManualQuestionParks(
     input: Parameters<HumanGateTaskLifecycle['settleManualQuestionParks']>[0],
+    hostWrite?: HostHumanGateWrite,
   ): ReturnType<HumanGateTaskLifecycle['settleManualQuestionParks']> {
-    const result = await withTaskExecutionSerializable(this.db, async (tx) => {
+    const result = await this.withWrite(hostWrite, async (tx) => {
       await fence(tx, input.taskId, input.token, input.now)
       const task = (
         await tx
@@ -175,16 +198,87 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
 
   async trySetWhenNoManualQuestionParks(
     input: Parameters<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']>[0],
+    hostWrite?: HostHumanGateGuardWrite,
   ): ReturnType<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']> {
     try {
-      const won = await this.runtimeLifecycle.trySetWithGuard(input, async (tx) => {
-        const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)
-        if (pending.length > 0) throw new ManualQuestionPending()
-      })
+      const won = await this.trySetWithGuard(
+        input,
+        async (tx) => {
+          const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)
+          if (pending.length > 0) throw new ManualQuestionPending()
+        },
+        hostWrite,
+      )
       return { kind: 'settled', won }
     } catch (error) {
       if (error instanceof ManualQuestionPending) return { kind: 'manual-question-pending' }
       throw error
     }
+  }
+
+  /** Freeze original inputs and work before the first durable await. */
+  async parkPreparedWithHostWrite(
+    input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0],
+    binding: TaskHostWriteBinding,
+    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,
+  ): Promise<HumanGateTaskParkResult> {
+    assertPreparedInput(input)
+    const capturedInput = { ...input }
+    const work = captureTaskHostExecutionWrite(binding, { taskId: input.prepared.taskId })
+    return runWithTaskExecutionContext(work.context, () =>
+      this.parkPrepared(capturedInput, { selection: work.selection, write }),
+    )
+  }
+
+  async settleManualQuestionParksWithHostWrite(
+    input: Parameters<HumanGateTaskLifecycle['settleManualQuestionParks']>[0],
+    binding: TaskHostWriteBinding,
+    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,
+  ): ReturnType<HumanGateTaskLifecycle['settleManualQuestionParks']> {
+    const capturedInput = { ...input }
+    const work = captureTaskHostExecutionWrite(binding, input)
+    return runWithTaskExecutionContext(work.context, () =>
+      this.settleManualQuestionParks(capturedInput, { selection: work.selection, write }),
+    )
+  }
+
+  async trySetWhenNoManualQuestionParksWithHostWrite(
+    input: Parameters<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']>[0],
+    binding: TaskHostWriteBinding,
+    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,
+  ): ReturnType<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']> {
+    const capturedInput = {
+      ...input,
+      allowedFrom: [...input.allowedFrom],
+      ...(input.extra === undefined ? {} : { extra: { ...input.extra } }),
+    }
+    return this.trySetWhenNoManualQuestionParks(capturedInput, { binding, write })
+  }
+
+  private withWrite<T>(
+    hostWrite: HostHumanGateWrite | undefined,
+    body: (tx: TaskExecutionTransaction) => Promise<T>,
+  ): Promise<T> {
+    if (hostWrite === undefined) return withTaskExecutionSerializable(this.db, body)
+    return hostWrite.write({
+      db: this.db,
+      selection: hostWrite.selection,
+      isolation: 'serializable',
+      body,
+    })
+  }
+
+  private trySetWithGuard(
+    input: Parameters<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']>[0],
+    guard: (tx: TaskExecutionTransaction) => Promise<void>,
+    hostWrite: HostHumanGateGuardWrite | undefined,
+  ): Promise<boolean> {
+    if (hostWrite === undefined) return this.runtimeLifecycle.trySetWithGuard(input, guard)
+    return this.runtimeLifecycle.trySetWithGuardAndHostWrite(
+      input,
+      guard,
+      hostWrite.binding,
+      hostWrite.write,
+    )
   }
 }
