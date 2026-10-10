@@ -208,6 +208,7 @@ test('streams every original numeric and parent identity beyond all legacy total
 }, 60000)
 
 test('a failed or changed original-owner ACK never releases a page or reads its successor', async () => {
+  const { dir, path } = fixture(200)
   for (const patch of [
     { ownerReceiptId: 'other' },
     { ordinal: '9' },
@@ -219,9 +220,11 @@ test('a failed or changed original-owner ACK never releases a page or reads its 
     { identity: { ...identity, passId: 'other' } },
     { sourceWatermark: '-1' },
   ]) {
-    const { dir, path } = fixture(200),
-      reader = observedReader(path),
-      owner = durableTestOwner(dir, (ack) => ({ ...ack, ...patch }))
+    const reader = observedReader(path),
+      owner = durableTestOwner(mkdtempSync(join(dir, 'ack-owner-')), (ack) => ({
+        ...ack,
+        ...patch,
+      }))
     try {
       await expect(persistNativeUsagePass(reader.port, owner.port)).rejects.toThrow()
       expect(reader.state()).toEqual({ reads: 1, acks: 0, closed: true })
