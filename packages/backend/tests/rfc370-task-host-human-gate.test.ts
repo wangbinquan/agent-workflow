@@ -969,17 +969,16 @@ describeEachProvider('RFC-370 original HumanGate purposes retain their transacti
       const f = await fixture(harness.db)
       await f.db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, f.taskId))
       let reads = 0
-      const drive = new Proxy(f.persistence.drive, {
-        get(target, key) {
-          if (key === 'findStatus')
-            return async (taskId: string) => {
-              reads++
-              if (reads === 1) await manualQuestion(f)
-              return target.findStatus(taskId)
-            }
-          return Reflect.get(target, key)
+      const originalDrive = f.persistence.drive
+      const drive = {
+        load: originalDrive.load.bind(originalDrive),
+        updateWorkspaceProfile: originalDrive.updateWorkspaceProfile.bind(originalDrive),
+        async findStatus(taskId: string) {
+          reads++
+          if (reads === 1) await manualQuestion(f)
+          return originalDrive.findStatus(taskId)
         },
-      })
+      }
       await runWithTaskExecutionContext(f.context, () =>
         originalEngineTail(f, { kind }, { ...f.persistence, drive }),
       )

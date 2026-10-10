@@ -25,7 +25,10 @@ import {
   runWithTaskExecutionContext,
 } from '../application/taskExecutionContext'
 import type { HumanGateTaskWritePurposes } from '../application/ports/humanGateTaskLifecycle'
-import { selectHumanGateTaskWrites } from '../application/humanGateTaskWriteSelection'
+import {
+  requireHumanGateTaskHostBinding,
+  selectHumanGateTaskWrites,
+} from '../application/humanGateTaskWriteSelection'
 import { taskHostWorkForToken } from '../application/taskHostAdmission'
 import { DatabaseHumanGateTaskLifecyclePersistence } from '../infrastructure/humanGateTaskLifecyclePersistence'
 import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'
@@ -43,18 +46,19 @@ function resolveHumanGateTaskWrites(
   } & TaskExecutionPersistenceDependencies,
   taskId: string,
 ) {
-  const context = input.executionContext ?? currentTaskExecutionContext(taskId)
+  const context =
+    input.executionContext !== undefined
+      ? runWithTaskExecutionContext(input.executionContext, () => currentTaskExecutionContext())
+      : currentTaskExecutionContext(taskId)
   const selectedContext =
     context !== undefined &&
     (context.persistence.humanGateWriteMode !== undefined ||
       context.persistence.humanGateWritePurposes !== undefined ||
       taskHostWorkForToken(context.token) !== undefined)
-  const binding =
+  const originalBinding =
     input.hostWrites ??
     (context === undefined ? undefined : taskOwnershipHostBinding(context.persistence.ownership))
-  if (selectedContext && binding === undefined) {
-    throw new Error('human-gate-task-host-binding-not-composed')
-  }
+  const binding = requireHumanGateTaskHostBinding(originalBinding, selectedContext)
   const native = new DatabaseHumanGateTaskLifecyclePersistence(
     input.db,
     createTaskRuntimeLifecyclePersistence(input.db, input),

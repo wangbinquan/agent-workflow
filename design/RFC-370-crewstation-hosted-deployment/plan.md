@@ -1374,3 +1374,10 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 独立源码门R2 PASS／零findings已消费，R1 FAIL及两项新增测试夹具修正保留。唯一原census在236c6dab基底完成13份产物；原四规则、6818份非本片Git blob和全部原库存保持，实际增长仅mutation1993→1994、owner27794→27804。两个一次性许可将随源码消费提交登记并由紧邻普通ledger提交退役。原28个纯声明逐字复现13份输出，本片11生产文件经典边界前后0／0。Windows候选补12个缺失输入／三套测试并保留原完整配置与并行内容。
 
 配套独立检视、35个精确路径发布、紧邻退役、新SHA完整主CI＋默认完整Windows和398次实际案例另验；无额外census或本机AW运行。详见[配套发布记录](host-authority-task-human-gate-publication.md)。本片不闭合完整H7／十九owner／三个根／A-T7／A-G，各层CS adapter与M0首次部署、M1～M4继续，AW尚未部署CS，RFC未完成。全部旧plan与并行输出保持。
+
+
+## 2026-10-10 HumanGate CI 修复候选
+
+32679b0c／eb6a4884 已发布，SOURCE1-R2／MATCHING1-R1 PASS 和完整消费保留；新 SHA 功能 CI 发现六个上下文引用 TS2339、H05/H08 冻结 Proxy 错误及 T19b 新 marker，Windows 已 failure。当前按原合同修复显式上下文解析、application 绑定选择和完整三方法夹具；原错误码、案例／断言／预算、九原源码与 37 编辑／十调用保持。原 T19b 单文件纯声明得 0／0／0，未运行 AW 本机 test/typecheck/build/service/E2E，规则与账本不改。
+
+新有限源码门、唯一原 census／配套门、精确发布、新全部主 CI／默认完整 Windows 与 398 次实际案例分别验证；共享清单并行输出保持，待其正常提交后生成本片配套。详见[CI 修复记录](ci-human-gate-context-and-frozen-fixture.md)。总绿之前不推进下一批生产实现；完整 H7／A-G、各层 CS adapter 与 M0～M4 仍开放，AW 尚未部署 CS，RFC 未完成。全部旧正文和并行输出保持。

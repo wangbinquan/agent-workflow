@@ -9,6 +9,17 @@ type Selection = Pick<
   'humanGateLifecycle' | 'humanGateWriteMode' | 'humanGateWritePurposes'
 >
 
+/** Resolve the original binding as part of HumanGate write selection. */
+export function requireHumanGateTaskHostBinding<T>(
+  binding: T | undefined,
+  selected: boolean,
+): T | undefined {
+  if (selected && binding === undefined) {
+    throw new Error('human-gate-task-host-binding-not-composed')
+  }
+  return binding
+}
+
 export function selectHumanGateTaskWrites(
   persistence: Selection,
   purpose: keyof HumanGateTaskWritePurposes,

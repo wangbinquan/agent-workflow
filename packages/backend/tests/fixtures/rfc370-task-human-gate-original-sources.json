@@ -76,60 +76,60 @@
       "path": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
       "bytes": 3858,
       "sha256": "df9a227b8008cf22d3e4b126b04901ebb3a85ddabd18ae265d97991126b00fa1",
-      "candidateBytes": 6470,
-      "candidateSha256": "be7bb358a4d1a68f4b091678f5d705aa10c7c20dff968c05d4a32a2e9135bfeb",
+      "candidateBytes": 6601,
+      "candidateSha256": "cf92583f6c4cd621d5b21ac0afb544b16853a96174723b013a9bea78d1bd007f",
       "inverseEdits": [
         {
           "start": 1053,
-          "end": 1452,
-          "introduced": "import {\n  assertTaskExecutionContext,\n  currentTaskExecutionContext,\n  runWithTaskExecutionContext,\n} from '../application/taskExecutionContext'\nimport type { HumanGateTaskWritePurposes } from '../application/ports/humanGateTaskLifecycle'\nimport { selectHumanGateTaskWrites } from '../application/humanGateTaskWriteSelection'\nimport { taskHostWorkForToken } from '../application/taskHostAdmission'\n",
+          "end": 1490,
+          "introduced": "import {\n  assertTaskExecutionContext,\n  currentTaskExecutionContext,\n  runWithTaskExecutionContext,\n} from '../application/taskExecutionContext'\nimport type { HumanGateTaskWritePurposes } from '../application/ports/humanGateTaskLifecycle'\nimport {\n  requireHumanGateTaskHostBinding,\n  selectHumanGateTaskWrites,\n} from '../application/humanGateTaskWriteSelection'\nimport { taskHostWorkForToken } from '../application/taskHostAdmission'\n",
           "previous": "import { assertTaskExecutionContext } from '../application/taskExecutionContext'\n"
         },
         {
-          "start": 1564,
-          "end": 1758,
+          "start": 1602,
+          "end": 1796,
           "introduced": "import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'\nimport { taskOwnershipHostBinding } from '../infrastructure/taskOwnershipPersistence'\n",
           "previous": ""
         },
         {
-          "start": 1928,
-          "end": 3709,
-          "introduced": "\n/** Resolve the original context and its ownership binding before a durable await.\n * Caller dependencies retain precedence over context-derived dependencies. */\nfunction resolveHumanGateTaskWrites(\n  input: {\n    readonly db: ProviderNeutralDatabase\n    readonly executionContext?: TaskExecutionContextRef\n    readonly writePurpose?: keyof HumanGateTaskWritePurposes\n  } & TaskExecutionPersistenceDependencies,\n  taskId: string,\n) {\n  const context = input.executionContext ?? currentTaskExecutionContext(taskId)\n  const selectedContext =\n    context !== undefined &&\n    (context.persistence.humanGateWriteMode !== undefined ||\n      context.persistence.humanGateWritePurposes !== undefined ||\n      taskHostWorkForToken(context.token) !== undefined)\n  const binding =\n    input.hostWrites ??\n    (context === undefined ? undefined : taskOwnershipHostBinding(context.persistence.ownership))\n  if (selectedContext && binding === undefined) {\n    throw new Error('human-gate-task-host-binding-not-composed')\n  }\n  const native = new DatabaseHumanGateTaskLifecyclePersistence(\n    input.db,\n    createTaskRuntimeLifecyclePersistence(input.db, input),\n  )\n  if (binding === undefined) return { lifecycle: native, context, selected: false }\n  const purpose = input.writePurpose\n  if (purpose === undefined) throw new Error('human-gate-task-write-purpose-required')\n  if (\n    context !== undefined &&\n    (context.persistence.humanGateWriteMode !== undefined ||\n      context.persistence.humanGateWritePurposes !== undefined)\n  ) {\n    selectHumanGateTaskWrites(context.persistence, purpose)\n  }\n  const views = createSelectedHumanGateTaskWritePurposes({\n    humanGateLifecycle: native,\n    hostWrites: binding,\n  })\n  return { lifecycle: views[purpose], context, selected: true }\n}\n",
+          "start": 1966,
+          "end": 3840,
+          "introduced": "\n/** Resolve the original context and its ownership binding before a durable await.\n * Caller dependencies retain precedence over context-derived dependencies. */\nfunction resolveHumanGateTaskWrites(\n  input: {\n    readonly db: ProviderNeutralDatabase\n    readonly executionContext?: TaskExecutionContextRef\n    readonly writePurpose?: keyof HumanGateTaskWritePurposes\n  } & TaskExecutionPersistenceDependencies,\n  taskId: string,\n) {\n  const context =\n    input.executionContext !== undefined\n      ? runWithTaskExecutionContext(input.executionContext, () => currentTaskExecutionContext())\n      : currentTaskExecutionContext(taskId)\n  const selectedContext =\n    context !== undefined &&\n    (context.persistence.humanGateWriteMode !== undefined ||\n      context.persistence.humanGateWritePurposes !== undefined ||\n      taskHostWorkForToken(context.token) !== undefined)\n  const originalBinding =\n    input.hostWrites ??\n    (context === undefined ? undefined : taskOwnershipHostBinding(context.persistence.ownership))\n  const binding = requireHumanGateTaskHostBinding(originalBinding, selectedContext)\n  const native = new DatabaseHumanGateTaskLifecyclePersistence(\n    input.db,\n    createTaskRuntimeLifecyclePersistence(input.db, input),\n  )\n  if (binding === undefined) return { lifecycle: native, context, selected: false }\n  const purpose = input.writePurpose\n  if (purpose === undefined) throw new Error('human-gate-task-write-purpose-required')\n  if (\n    context !== undefined &&\n    (context.persistence.humanGateWriteMode !== undefined ||\n      context.persistence.humanGateWritePurposes !== undefined)\n  ) {\n    selectHumanGateTaskWrites(context.persistence, purpose)\n  }\n  const views = createSelectedHumanGateTaskWritePurposes({\n    humanGateLifecycle: native,\n    hostWrites: binding,\n  })\n  return { lifecycle: views[purpose], context, selected: true }\n}\n",
           "previous": ""
         },
         {
-          "start": 4318,
-          "end": 4379,
+          "start": 4449,
+          "end": 4510,
           "introduced": "    readonly writePurpose?: keyof HumanGateTaskWritePurposes\n",
           "previous": ""
         },
         {
-          "start": 4617,
-          "end": 4761,
+          "start": 4748,
+          "end": 4892,
           "introduced": "  const selection = resolveHumanGateTaskWrites(input, input.prepared.taskId)\n  const run = () =>\n    parkTaskAtHumanGate(selection.lifecycle, {\n",
           "previous": "  return await parkTaskAtHumanGate(\n    new DatabaseHumanGateTaskLifecyclePersistence(\n      input.db,\n      createTaskRuntimeLifecyclePersistence(input.db, input),\n    ),\n    {\n"
         },
         {
-          "start": 4951,
-          "end": 5099,
+          "start": 5082,
+          "end": 5230,
           "introduced": "    })\n  return await (selection.selected && selection.context !== undefined\n    ? runWithTaskExecutionContext(selection.context, run)\n    : run())\n",
           "previous": "    },\n  )\n"
         },
         {
-          "start": 5297,
-          "end": 5358,
+          "start": 5428,
+          "end": 5489,
           "introduced": "    readonly writePurpose?: keyof HumanGateTaskWritePurposes\n",
           "previous": ""
         },
         {
-          "start": 5592,
-          "end": 5751,
+          "start": 5723,
+          "end": 5882,
           "introduced": "  const selection = resolveHumanGateTaskWrites(input, input.taskId)\n  const run = () =>\n    settleManualQuestionParkObligationsInternal(selection.lifecycle, {\n",
           "previous": "  return await settleManualQuestionParkObligationsInternal(\n    new DatabaseHumanGateTaskLifecyclePersistence(\n      input.db,\n      createTaskRuntimeLifecyclePersistence(input.db, input),\n    ),\n    {\n"
         },
         {
-          "start": 5937,
-          "end": 6085,
+          "start": 6068,
+          "end": 6216,
           "introduced": "    })\n  return await (selection.selected && selection.context !== undefined\n    ? runWithTaskExecutionContext(selection.context, run)\n    : run())\n",
           "previous": "    },\n  )\n"
         }

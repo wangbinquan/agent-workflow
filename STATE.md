@@ -1,3 +1,9 @@
+## 2026-10-10 RFC-370：HumanGate CI 修复候选
+
+HumanGate 源码与配套 32679b0c、紧邻许可退役 eb6a4884 已推送并精确同步。新主 CI 的已读功能日志发现上下文引用类型、冻结 Proxy 夹具和 T19b 新 marker 三项问题，Windows 已 failure；原失败与源码／配套 PASS 回执完整保留，不能代签当前总绿。
+
+当前仅修复这些 CI 原因：沿用原上下文同步解析、将原绑定选择判断落回 application 层、用完整三方法委托夹具保持冻结对象。原错误码、所有原断言／预算、九源码／37逆变换／十调用保持；原 T19b 单文件纯声明计数为 0／0／0，规则与账本不改。新源码门、唯一原 census／配套门及新 SHA 总绿仍待验证；共享清单并行输出保持，待其正常发布后生成本片配套。详见[CI 修复记录](design/RFC-370-crewstation-hosted-deployment/ci-human-gate-context-and-frozen-fixture.md)。没有本机 AW 执行。完整 H7／A-G、各层 CS adapter 和 M0～M4 继续开放，AW 尚未部署 CS，RFC 未完成。
+
 ## 2026-10-10 RFC-370：HumanGate 源码门通过，发布配套待验
 
 SOURCE1-R2独立功能PASS／零findings已逐项消费；R1正式FAIL和两项新增测试修正保留，17份源码／测试不再改。唯一原census在236c6dab同步基底完成13份清单，四原规则与6818份非本片Git blob保持；实际只增长1 mutation和10 owner，登记两项一次性许可并准备紧邻普通退役提交。原28个纯投影／渲染声明逐字复现全部13份输出；完整Windows候选补12精确输入／三套测试，原配置与并行内容保持。

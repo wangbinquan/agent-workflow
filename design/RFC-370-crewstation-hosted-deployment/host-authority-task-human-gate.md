@@ -69,3 +69,8 @@ H09／H10 在真实 producer 显式传递目的；没有选择宿主的原公共
 SOURCE1-R2 独立功能门 PASS、零 findings，主会话已消费全部40份冻结材料及实际字节身份；R1 FAIL 和两项夹具修正保留。17份源码／测试与 R2 相同，本文只追加配套记录。新187次 HumanGate与原211次生命周期仍须新 SHA hosted 实际执行，静态人口不代签。
 
 在同步的236c6dab基底唯一原 census 已成功生成全部13份产物，四份原规则不改，6818份非本片源码来自精确 Git blob。本片实际只新增1个 mutation、10个 owner；原条目／SCC／边／后台人口／130行ledger保持。原28个纯声明逐字复现全部13份产物，两个实际baseline增长登记一次性说明并准备紧邻普通退役提交；无额外census或本机AW运行。完整Windows候选只加12个缺失输入与三套测试，保留全部原配置和并行输出。独立配套检视、精确发布及新主CI／完整Windows另验，详见[配套清单与发布](host-authority-task-human-gate-publication.md)。完整H7／A-G和CS M0～M4继续开放，AW尚未部署CS，RFC未完成。
+
+
+## 2026-10-10 精确 SHA CI 修复候选
+
+源码 32679b0c 与紧邻退役 eb6a4884 已上库。旧源码／配套 PASS 与完整消费保留，新 CI 的六个 TS2339、冻结 Proxy H05/H08 和 T19b marker 失败另记。当前上下文解析沿用原完整实例入口，原绑定判断回到 application 选择层，夹具以三方法委托保留原 receiver；错误码、全部旧断言／预算及九原源码／37 编辑／十调用保持。新功能源码门、唯一原生成／配套门与新精确 SHA 总绿另验，见[CI 修复记录](ci-human-gate-context-and-frozen-fixture.md)。398 次仍为预期；完整 H7／A-G、各层 CS adapter、M0～M4 和 RFC 未完成，AW 尚未部署 CS。
