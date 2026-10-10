@@ -1346,3 +1346,11 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 ## CI：原 driver lifetime 的 not-attached 夹具修复
 
 精确102919a4的Windows run 38017304465终态failure：九个原not-attached case仍在原30秒内等待未清算的首个host lifetime，旧失败保留。原attach在读Task status前等pending，故先以原releaseAndFinalize完成原driver，再测目标提交的完整状态与累计ACK差额；保留原全部结果／零reporter／零drive／零新增ACK／完整快照／幂等finally，加pending存在与清除两断言。原25注册／52-provider＋1全量case／所有预算、14生产／四规则及产物保持，无新census或本机AW运行。有限实现门、精确四文件发布及后继总主CI／完整Windows／211例另验；本轮ECR限流初始化分片独立处理，不skip、不代签总绿。HumanGate生产仍等总绿，H7／A-T7／A-G／各层CS adapter与M0～M4继续开放，RFC未完成。详见[CI夹具说明](ci-not-attached-driver-finalization.md)。
+
+
+### CI follow-up：RFC-371 三个字符串生成器返回类型（2026-10-10）
+
+- 前驱 `7f83f3ce514cecbe68d9c451200babf4f8ccadc2` 的完整 Windows run `38020057586`：平台测试通过，RFC-370 生命周期文件 53/53 实际 pass；Typecheck 因并行 RFC-371 测试的三条 `TS7024` 失败，整个 Windows 未绿。
+- 修复范围为既有 bad JSON / null / array 三个生成器的显式 `string` 返回类型；三个函数的表达式、全部原用例/数据/断言/预算和并行内容完整保留。
+- 记录见 `design/RFC-370-crewstation-hosted-deployment/ci-default-range-return-types.md`。只发布该测试及本 RFC 的 STATE、plan、记录文档；后继主 CI + 完整 Windows 总绿、原 211 次生命周期实际执行单独验收，本地 AW 运行 0 次。
+- HumanGate 生产代码、全 H7/A-G、CS adapter / M0–M4 / RFC 完成仍未签。

@@ -1,3 +1,9 @@
+## 2026-10-10 RFC-370 总绿门槛：并行 RFC-371 测试的显式返回类型修复候选
+
+`7f83f3ce514cecbe68d9c451200babf4f8ccadc2` 的自动完整 Windows run `38020057586` 中，RFC-370 生命周期文件的 53 次实际执行全部通过，原九个 not-attached 超时已消除；整条 Windows 仍为 failure，阻塞在 RFC-371 新测试 `rfc371-persistent-default-range.test.ts:197–199` 的三条 `TS7024`。本候选只给 bad JSON / null / array 三个原字符串生成器补 `: string` 返回类型。完整原测试、全部原数据、断言、注册与预算保留，未执行本地 AW 测试或类型检查。该共享测试包含另一会话已发布的 RFC-371 内容。
+
+范围与待验收项见 `design/RFC-370-crewstation-hosted-deployment/ci-default-range-return-types.md`。后继 exact-SHA 主 CI、完整 Windows、211 次生命周期实际执行仍待验收；HumanGate、H7/A-G、CS 部署和 RFC 完成状态保持未签。
+
 # RFC-370 CI：先清算原 driver 再验证不附着
 
 精确102919a4的默认完整Windows仍为failure，九个原not-attached case触及30秒；旧失败和旧功能门结论分别保留。源码确认selected attach在Task status前等待原host lifetime；夹具现先调用原releaseAndFinalize、确认pending由存在到清除，再以完整Task／owner／event快照和原累计ACK差额验证原not-attached、reporter／drive／新增ACK均零。原52个provider case、一个全量原调用者case及全部预算保持，生产／fixture／Windows／架构规则和产物不改，无新census／本机AW运行。独立有限功能门、精确四路径发布与后继SHA总主CI／默认Windows／211例另验；ECR限流的未执行测试分片独立处理。HumanGate实现仍等总绿，H7／A-G／CS M0～M4和RFC继续，AW未部署CS。详见[原driver清算夹具](design/RFC-370-crewstation-hosted-deployment/ci-not-attached-driver-finalization.md)。以下全部共享旧全文与并行输出保留。

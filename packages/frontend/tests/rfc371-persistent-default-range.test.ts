@@ -194,9 +194,9 @@ test('late retirement of report A preserves report B and its exact pointer throu
 })
 
 test.each([
-  ['bad JSON', () => '{'],
-  ['null', () => 'null'],
-  ['array', () => '[]'],
+  ['bad JSON', (): string => '{'],
+  ['null', (): string => 'null'],
+  ['array', (): string => '[]'],
   ['missing report ID', () => JSON.stringify(filters)],
   ['empty report ID', () => JSON.stringify({ reportId: '', ...filters })],
   ['numeric report ID', () => JSON.stringify({ reportId: 1, ...filters })],
