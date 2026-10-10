@@ -1,3 +1,4 @@
+import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
 import type {
@@ -2104,7 +2105,7 @@ function composeFallbackDevelopmentAutomation(
       failureReporter: {
         async report({ taskId, error, execution }) {
           const now = Date.now()
-          await persistence.runtimeLifecycle.trySet({
+          await selectTaskRuntimeLifecycleWrites(persistence, 'issuedResults').trySet({
             taskId,
             to: 'failed',
             allowedFrom: ['pending', 'running'],
@@ -3355,7 +3356,10 @@ function composeSqliteApiRouteMounts(
             failureReporter: {
               async report({ taskId, error, execution }) {
                 const now = Date.now()
-                await taskExecutionPersistence.runtimeLifecycle.trySet({
+                await selectTaskRuntimeLifecycleWrites(
+                  taskExecutionPersistence,
+                  'issuedResults',
+                ).trySet({
                   taskId,
                   to: 'failed',
                   allowedFrom: ['pending', 'running'],
@@ -3555,7 +3559,7 @@ function composeSqliteApiRouteMounts(
       failureReporter: {
         async report({ taskId, error, execution }) {
           const now = Date.now()
-          await taskExecutionPersistence.runtimeLifecycle.trySet({
+          await selectTaskRuntimeLifecycleWrites(taskExecutionPersistence, 'issuedResults').trySet({
             taskId,
             to: 'failed',
             allowedFrom: ['pending', 'running'],

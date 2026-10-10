@@ -1,3 +1,4 @@
+import { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 import {
   WorkflowDefinitionSchema,
@@ -399,7 +400,7 @@ function createCoordinator(
     failureReporter: {
       async report({ taskId, execution, error }) {
         const occurredAt = (dependencies.now ?? Date.now)()
-        await dependencies.persistence.runtimeLifecycle.trySet({
+        await selectTaskRuntimeLifecycleWrites(dependencies.persistence, 'issuedResults').trySet({
           taskId,
           to: 'failed',
           allowedFrom: ['pending', 'running'],

@@ -1333,3 +1333,7 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 四项实际增长各只声明一次：mutation 1983→1984、observed imports 6889→6894、exact compatibility exceptions 6033→6037、symbol owners 27728→27738。新增三个生产文件及十个 file/symbol owner、五条实测导入、四条原规则精确兼容项和一条分类 entry 全部保留原输出。原纯治理/JSON 函数先整字节复现四份治理输出，八份 canonical 与另外三份治理、status 原完整输出保持；增长声明在源码消费后的普通后继退役。
 
 配套功能门、精确上库、新测试上 main 后的原 Windows 登记、同 SHA 全仓 main/Windows 总绿与真实新增案例分别验收。历史 19bf 总绿和 298 例只作已消费前置，不代签本候选。其余 Task 生命周期/人工控制/child/workgroup/boot、十九 owner/三个 roots、完整 H7/A-T7/A-G 和各层 CS 独立 adapter、M0 首次部署到 M4 继续；AW 尚未部署 CS，RFC 未完成。全部旧正文与并行输出保持。
+
+## 2026-10-10 生命周期写切面的原配套候选
+
+用户指定的总绿门槛已在确切 `5a0e315c` 达成：主 CI `38008043629` 的 72 作业及默认完整 Windows `38008122161` 全部 success，逐项消费。SOURCE18-R2 69 项仍为固定已消费闭包，原生命周期源码不因无关 HEAD 变动重跑实现门；211 新用例仍未验收。唯一原算法生成完整 13 项，四原规则保持，本片 14 生产文件 classic R1 35／R2 0 的完整集合相等；130 有序 ledger 仅五个原观测库存分母随完整人口更新，其余 baseline、ID／why／顺序保持，不增许可。配套门、精确发布及新 SHA 全部 CI 分别收口，之后继续剩余 H7／A-T7／A-G，再按 M0 先部署、M1～M4 逐项接入；RFC 未 Done，AW 未部署 CS。详见[配套发布](host-authority-task-runtime-lifecycle-publication.md)。全部旧 plan 和并行输出保留。

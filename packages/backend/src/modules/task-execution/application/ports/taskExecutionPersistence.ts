@@ -14,7 +14,10 @@ import type { SchedulerCompletionPersistence } from './schedulerCompletionPersis
 import type { ChildTaskBudgetQueries } from './childTaskBudgetQueries'
 import type { NodeRunLifecyclePersistence } from './nodeRunLifecyclePersistence'
 import type { WrapperRunPersistence } from './wrapperRunPersistence'
-import type { TaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
+import type {
+  TaskRuntimeLifecyclePersistence,
+  TaskRuntimeLifecycleWritePurposes,
+} from './taskRuntimeLifecyclePersistence'
 import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
 import type { NodeActivationSnapshotReader } from './nodeActivationSnapshotReader'
 import type { MergeStateLifecyclePersistence } from './mergeStateLifecyclePersistence'
@@ -31,6 +34,8 @@ export interface TaskExecutionPersistence {
   readonly nativeUsage?: NativeUsageInvocationPersistence
   readonly nodeWriteMode?: 'host-selected'
   readonly nodeWritePurposes?: TaskNodeWritePurposes
+  readonly runtimeLifecycleWriteMode?: 'host-selected'
+  readonly runtimeLifecycleWritePurposes?: TaskRuntimeLifecycleWritePurposes
   readonly drive: TaskEngineApplicationPersistence
   readonly ownership: TaskOwnershipPersistence
   readonly intents: TaskExecutionIntentPersistence

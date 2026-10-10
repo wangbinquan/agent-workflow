@@ -36,6 +36,7 @@ import type { NativeUsageInvocationPersistence } from '../application/ports/nati
 import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
 import { createSelectedTaskExecutionProjectionPersistence } from '../infrastructure/taskHostExecutionProjectionPersistence'
 import { createSelectedTaskNodeWritePurposes } from '../infrastructure/taskHostNodeWritePurposes'
+import { createSelectedTaskRuntimeLifecycleWritePurposes } from '../infrastructure/taskHostRuntimeLifecycleWritePurposes'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -195,6 +196,11 @@ export function createTaskExecutionPersistence(
       ? {}
       : {
           nodeWriteMode: 'host-selected' as const,
+          runtimeLifecycleWriteMode: 'host-selected' as const,
+          runtimeLifecycleWritePurposes: createSelectedTaskRuntimeLifecycleWritePurposes({
+            runtimeLifecycle,
+            hostWrites: dependencies.hostWrites,
+          }),
           nodeWritePurposes: createSelectedTaskNodeWritePurposes({
             db,
             hostWrites: dependencies.hostWrites,

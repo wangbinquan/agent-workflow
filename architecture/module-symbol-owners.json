@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2425,
+    "backendFiles": 2427,
     "frontendFiles": 659,
     "legacyFiles": 596,
-    "moduleFiles": 1829,
-    "productionFiles": 3255,
+    "moduleFiles": 1831,
+    "productionFiles": 3257,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27775
+    "symbolsIncludingFileRoots": 27782
   },
   "entries": [
     {
@@ -142216,6 +142216,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskRuntimeLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskRuntimeLifecyclePersistence.ts#TaskRuntimeLifecycleWritePurposes",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskRuntimeLifecycleWritePurposes",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations.ts#$file",
@@ -144730,6 +144742,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "selectTaskNodeRunWrites",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskRuntimeLifecycleWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskRuntimeLifecycleWriteSelection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/taskRuntimeLifecycleWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskRuntimeLifecycleWriteSelection.ts#Selection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Selection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/taskRuntimeLifecycleWriteSelection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/taskRuntimeLifecycleWriteSelection.ts#selectTaskRuntimeLifecycleWrites",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "selectTaskRuntimeLifecycleWrites",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -164393,6 +164441,30 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostRuntimeLifecycleWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostRuntimeLifecycleWritePurposes.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostRuntimeLifecycleWritePurposes.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostRuntimeLifecycleWritePurposes.ts#createSelectedTaskRuntimeLifecycleWritePurposes",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSelectedTaskRuntimeLifecycleWritePurposes",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#$file",
       "removeAfterWave": null,
@@ -168286,6 +168358,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DrizzleTaskRuntimeLifecyclePersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#HostLifecycleWrite",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostLifecycleWrite",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -334041,5 +334125,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29e620a4501a39ea683c9c302fb4296c1c88fd0f099756442152d23cbcada938"
+  "sourceDigest": "sha256:d2455eb7f09f2b95bf9aa2822953cff3024e698ec19a95c0117066112240aa51"
 }

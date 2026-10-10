@@ -1,3 +1,4 @@
+import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
@@ -1398,7 +1399,10 @@ export async function composePostgresqlApplication(
     failureReporter: {
       async report({ taskId, error, execution }) {
         const now = Date.now()
-        await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
+        await selectTaskRuntimeLifecycleWrites(
+          taskExecutionProvider.persistence,
+          'issuedResults',
+        ).trySet({
           taskId,
           to: 'failed',
           allowedFrom: ['pending', 'running'],

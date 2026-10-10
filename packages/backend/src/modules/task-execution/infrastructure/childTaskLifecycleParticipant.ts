@@ -1,3 +1,4 @@
+import { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'
 // RFC-349 — PostgreSQL task continuation/cascade control.  Admission, intent
 // minting and lifecycle events commit atomically; native-session fencing and
 // git rollback complete before the replacement driver can touch a workspace.
@@ -418,7 +419,7 @@ async function markUnsafeResume(
   },
 ): Promise<never> {
   const now = Date.now()
-  await dependencies.persistence.runtimeLifecycle.trySet({
+  await selectTaskRuntimeLifecycleWrites(dependencies.persistence, 'issuedResults').trySet({
     taskId: input.taskId,
     to: 'failed',
     allowedFrom: ['pending'],
@@ -1016,7 +1017,7 @@ export async function resumeTaskProjection(
     failureReporter: {
       async report({ taskId, execution, error }) {
         const now = Date.now()
-        await dependencies.persistence.runtimeLifecycle.trySet({
+        await selectTaskRuntimeLifecycleWrites(dependencies.persistence, 'issuedResults').trySet({
           taskId,
           to: 'failed',
           allowedFrom: ['pending', 'running'],

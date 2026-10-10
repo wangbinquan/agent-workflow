@@ -116,6 +116,7 @@ export type {
   TaskSourceTerminationReceipt,
 } from '../application/applySourceTerminationEffect'
 export type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
+export { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'
 /** Invocation ownership remains on the participant seam, outside public value types. */
 export type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
 

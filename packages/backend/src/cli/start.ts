@@ -1,3 +1,4 @@
+import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
@@ -2403,7 +2404,10 @@ async function composeSqliteProviderSession(
     failureReporter: {
       async report({ taskId, error, execution }) {
         const now = Date.now()
-        await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
+        await selectTaskRuntimeLifecycleWrites(
+          taskExecutionProvider.persistence,
+          'issuedResults',
+        ).trySet({
           taskId,
           to: 'failed',
           allowedFrom: ['pending', 'running'],
@@ -2998,7 +3002,10 @@ async function composeSqliteProviderSession(
         failureReporter: {
           async report({ taskId, error, execution }) {
             const now = Date.now()
-            await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
+            await selectTaskRuntimeLifecycleWrites(
+              taskExecutionProvider.persistence,
+              'issuedResults',
+            ).trySet({
               taskId,
               to: 'failed',
               allowedFrom: ['pending', 'running'],

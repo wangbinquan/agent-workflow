@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:751",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:752",
       "kind": "register-call",
-      "line": 751,
+      "line": 752,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3261",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3268",
       "kind": "register-call",
-      "line": 3261,
+      "line": 3268,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3267",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3274",
       "kind": "register-call",
-      "line": 3267,
+      "line": 3274,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -36,9 +36,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:923",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:924",
       "kind": "register-call",
-      "line": 923,
+      "line": 924,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -47,9 +47,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:929",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:930",
       "kind": "register-call",
-      "line": 929,
+      "line": 930,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1100",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1101",
       "kind": "register-call",
-      "line": 1100,
+      "line": 1101,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3647",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3654",
       "kind": "register-call",
-      "line": 3647,
+      "line": 3654,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -80,9 +80,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1887",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1888",
       "kind": "register-call",
-      "line": 1887,
+      "line": 1888,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3699",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3706",
       "kind": "global-setter",
-      "line": 3699,
+      "line": 3706,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -102,9 +102,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:951",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:952",
       "kind": "global-setter",
-      "line": 951,
+      "line": 952,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -5492,9 +5492,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:4274",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:4278",
       "kind": "register-call",
-      "line": 4274,
+      "line": 4278,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5503,9 +5503,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1629",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1630",
       "kind": "register-call",
-      "line": 1629,
+      "line": 1630,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5514,9 +5514,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:4050",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:4054",
       "kind": "register-call",
-      "line": 4050,
+      "line": 4054,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5525,9 +5525,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:4334",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:4338",
       "kind": "register-call",
-      "line": 4334,
+      "line": 4338,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -9266,7 +9266,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$setTimeout:868",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$setTimeout:869",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9280,7 +9280,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:868",
+      "symbol": "$setTimeout:869",
       "targetContext": "task-execution"
     },
     {
@@ -9461,7 +9461,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$setTimeout:309",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$setTimeout:310",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9475,7 +9475,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:309",
+      "symbol": "$setTimeout:310",
       "targetContext": "task-execution"
     },
     {
@@ -13794,5 +13794,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29e620a4501a39ea683c9c302fb4296c1c88fd0f099756442152d23cbcada938"
+  "sourceDigest": "sha256:d2455eb7f09f2b95bf9aa2822953cff3024e698ec19a95c0117066112240aa51"
 }

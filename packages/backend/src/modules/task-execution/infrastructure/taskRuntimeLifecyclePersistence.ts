@@ -30,6 +30,19 @@ import {
   taskLifecycleWriteSequence,
   type TaskLifecycleWriteInput,
 } from './taskLifecycleWriteSequence'
+import { runWithTaskExecutionContext } from '../application/taskExecutionContext'
+import type {
+  withTaskHostNewWork,
+  withTaskHostIssuedAck,
+  TaskHostWriteBinding,
+  TaskHostWriteSelection,
+} from './hostExecutionWriteTransaction'
+import { captureTaskHostExecutionWrite } from './taskHostExecutionWriteSelection'
+
+type HostLifecycleWrite = Readonly<{
+  selection: Extract<TaskHostWriteSelection, { kind: 'selected' }>
+  write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck
+}>
 
 type LifecycleRow = Readonly<{
   status: TaskStatus
@@ -89,6 +102,30 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
     }
   }
 
+  /** Provider-private purpose entry; capture precedes the first lifecycle read. */
+  async trySetWithHostWrite(
+    input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
+    binding: TaskHostWriteBinding,
+    write: typeof withTaskHostNewWork | typeof withTaskHostIssuedAck,
+  ): Promise<boolean> {
+    const work = captureTaskHostExecutionWrite(binding, input)
+    const capturedInput = {
+      ...input,
+      allowedFrom: [...input.allowedFrom],
+      ...(input.extra === undefined ? {} : { extra: { ...input.extra } }),
+      executionContext: work.context,
+    }
+    return runWithTaskExecutionContext(work.context, async () => {
+      try {
+        await this.set(capturedInput, undefined, { selection: work.selection, write })
+        return true
+      } catch (error) {
+        if (error instanceof ConflictError || error instanceof NotFoundError) return false
+        throw error
+      }
+    })
+  }
+
   /** Provider-private composition hook for named cross-context atoms. The
    * application port never receives this transaction callback. */
   async trySetWithGuard(
@@ -107,6 +144,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
   private async set(
     input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
     guard?: (tx: TaskExecutionTransaction) => Promise<void>,
+    hostWrite?: HostLifecycleWrite,
   ): Promise<void> {
     const snapshot = await this.load(input.taskId)
     const from = snapshot.status
@@ -150,26 +188,34 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
         snapshot.worktreePath !== '' &&
         !(await this.workspacePresence.exists(snapshot.worktreePath))
       ) {
-        const changed = await withTaskExecutionWrite(this.db, async (tx) => {
-          await this.fence(tx, input)
-          return await tx
-            .update(tasks)
-            .set({ workspacePrunedAt: input.now })
-            .where(
-              and(
-                eq(tasks.id, input.taskId),
-                eq(tasks.status, snapshot.status),
-                eq(tasks.worktreePath, snapshot.worktreePath),
-                eq(tasks.lifecycleEventRevision, snapshot.lifecycleEventRevision),
-                isNull(tasks.deletedAt),
-                isNull(tasks.sourceTerminationFence),
-                isNull(tasks.workspacePruningAt),
-                isNull(tasks.workspacePrunedAt),
-              ),
-            )
-            .returning({ id: tasks.id })
-            .all()
-        })
+        const changed = await this.withWrite(
+          hostWrite,
+          async (tx) => {
+            await this.fence(tx, input)
+            return await tx
+              .update(tasks)
+              .set({ workspacePrunedAt: input.now })
+              .where(
+                and(
+                  eq(tasks.id, input.taskId),
+                  eq(tasks.status, snapshot.status),
+                  eq(tasks.worktreePath, snapshot.worktreePath),
+                  eq(tasks.lifecycleEventRevision, snapshot.lifecycleEventRevision),
+                  isNull(tasks.deletedAt),
+                  isNull(tasks.sourceTerminationFence),
+                  isNull(tasks.workspacePruningAt),
+                  isNull(tasks.workspacePrunedAt),
+                ),
+              )
+              .returning({ id: tasks.id })
+              .all()
+          },
+          (changed) => {
+            if (changed.length === 0) {
+              throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
+            }
+          },
+        )
         if (changed.length === 0) {
           throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
         }
@@ -191,7 +237,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
       },
       input.to,
     )
-    const result = await withTaskExecutionWrite(this.db, async (tx) => {
+    const result = await this.withWrite(hostWrite, async (tx) => {
       await this.fence(tx, input)
       await guard?.(tx)
       const changed = await writeTaskRuntimeLifecycleInTx(tx, {
@@ -213,6 +259,23 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
       return changed.eventRef === null ? [] : [changed.eventRef]
     })
     await publishCommittedEventsAfterCommit(result)
+  }
+
+  private withWrite<T>(
+    hostWrite: HostLifecycleWrite | undefined,
+    body: (tx: TaskExecutionTransaction) => Promise<T>,
+    beforeConsume?: (result: T) => void,
+  ): Promise<T> {
+    if (hostWrite === undefined) return withTaskExecutionWrite(this.db, body)
+    return hostWrite.write({
+      db: this.db,
+      selection: hostWrite.selection,
+      body: async (tx) => {
+        const result = await body(tx)
+        beforeConsume?.(result)
+        return result
+      },
+    })
   }
 
   private async load(taskId: string): Promise<LifecycleRow> {

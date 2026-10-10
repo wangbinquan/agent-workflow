@@ -1,3 +1,6 @@
+# RFC-370：生命周期写切面配套候选
+
+精确 `5a0e315c` 的主 CI 72/72 与默认完整 Windows 全部终态 success，73 个作业逐项消费；原路由类型与源码注释投影超时已修绿。SOURCE18-R2 的 69 项固定候选继续保持，211 个新增用例尚未签收。唯一原算法已按固定 16 个 TS 覆盖及提交内全量其余源码生成 13 项私有配套，原四规则保持；本片 14 个生产文件 classic R1 同一 35 条／R2 空集合不变。Windows 路径与用例登记、独立配套门、精确发布和新 SHA 全仓 CI 分别验收。HumanGate 等剩余 H7／A-T7／A-G、各层 CS adapter、M0～M4 和 RFC 仍开放，AW 未部署 CS。详见[生命周期配套发布](design/RFC-370-crewstation-hosted-deployment/host-authority-task-runtime-lifecycle-publication.md)。以下旧共享全文与并行输出逐字保持。
 # RFC-370 CI：复用原源码的注释投影
 
 精确13a58441的主CI已终态69/72成功；原Mac1源码锁case在6608.86ms触及默认5000ms，原失败完整保留。该原测试模块已固定完整源码快照，六次原查询重复去注释；只将原注释函数的同一全量投影生成一次并复用，原路径／排序／raw查询、8个case与70个expect及全部预算逐字保持。前台搜索输入类型修复属于并行输出并完整保留。有限独立设计PASS已实际消费，实现门、精确三文件发布与新SHA主CI／完整默认Windows另验；不代签总绿。零本机AW运行／新census，生命周期L69项仍保持、211新case未签收，H7／A-G／各层CS adapter、M0～M4及RFC继续开放，AW未部署CS。详见[原注释投影复用](design/RFC-370-crewstation-hosted-deployment/ci-source-comment-projection-reuse.md)。以下共享旧全文与并行输出完整保留。

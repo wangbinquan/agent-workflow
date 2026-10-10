@@ -1,3 +1,4 @@
+import { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'
 import { selectTaskNodeRunWrites } from '../application/taskNodeWriteSelection'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -77,7 +78,7 @@ async function failRuntimeTask(
   errorMessage: string,
   failedNodeId?: string,
 ): Promise<void> {
-  const won = await opts.persistence.runtimeLifecycle.trySet({
+  const won = await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
     taskId: opts.taskId,
     to: 'failed',
     allowedFrom: ['pending', 'running'],
@@ -107,7 +108,7 @@ async function cancelRuntimeTask(
   await withTaskReviewMutationLock(opts.taskId, async () => {
     const now = Date.now()
     if (isDaemonInterruptionAbortReason(abortReason)) {
-      await opts.persistence.runtimeLifecycle.trySet({
+      await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
         taskId: opts.taskId,
         to: 'interrupted',
         allowedFrom: ['running'],
@@ -126,7 +127,7 @@ async function cancelRuntimeTask(
     }
     const structuredCause = taskStopCauseFromUnknown(abortReason)
     const projection = taskStopProjection(structuredCause ?? { kind: 'user' })
-    const won = await opts.persistence.runtimeLifecycle.trySet({
+    const won = await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
       taskId: opts.taskId,
       to: 'canceled',
       allowedFrom: ['running'],
@@ -347,7 +348,7 @@ async function runTaskEngineOrchestratorInner(
   // The unconditional write here used to revive canceled/done tasks and let a
   // second runTask take over a live one. CAS loss → another driver owns the
   // task (or it is terminal): log and step away without minting anything.
-  const claimed = await opts.persistence.runtimeLifecycle.trySet({
+  const claimed = await selectTaskRuntimeLifecycleWrites(opts.persistence, 'preparation').trySet({
     taskId,
     to: 'running',
     allowedFrom: ['pending'],
@@ -835,7 +836,7 @@ async function runTaskEngineOrchestratorInner(
       return
     }
     if (
-      await opts.persistence.runtimeLifecycle.trySet({
+      await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
         taskId,
         to: 'awaiting_human',
         allowedFrom: ['running'],

@@ -1,0 +1,295 @@
+{
+  "base": "0c63e52d3d36c3abce4f799c245c45bd4f52a3a6",
+  "wholeCallers": [
+    {
+      "path": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "bytes": 130585,
+      "sha256": "338665d96b19f7caa583b18ff3dcd7faacb61fd021632c5773e0b184fc1fdfd5"
+    },
+    {
+      "path": "packages/backend/src/cli/start.ts",
+      "bytes": 185579,
+      "sha256": "099cd0e04b4d6cbcdc0f38100c1ba9a1b96b844ea74d1ebe65d316512fbcdc6e"
+    },
+    {
+      "path": "packages/backend/src/server.ts",
+      "bytes": 205576,
+      "sha256": "a0ddade1a6563a9ccc920c434660cb3235ba97eb409b30e9be65efaae8fc28f6"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
+      "bytes": 42846,
+      "sha256": "775058dd45011eb475622fe7ce54e1bb1d32928e5a94b4040da5a136d17fb4b1"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts",
+      "bytes": 14937,
+      "sha256": "73dcd47999bb52a76be2dff9875390ca113ddbcf38637ba7e16a053f0a865589"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "bytes": 113879,
+      "sha256": "5b9486090036103e8d799e17a2485c2b3a84da70a319c6d57abbf67622343eaa"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "bytes": 59791,
+      "sha256": "0a2b767e4625eb7b0cf183ebedceefe3f3ca175a70cbf4e34f71d0d54ea93462"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts",
+      "bytes": 30092,
+      "sha256": "fb4a1ebcc139eeff4335b10f8d2be6dddf2ca025cb4b4edab3d7e5160837c9ac"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts",
+      "bytes": 8118,
+      "sha256": "9e835cff1b45d545e92bf56a25f2efdb99723e5e1b1c4ba307dd7a3d5a06a8d9"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "bytes": 11190,
+      "sha256": "ef2148f28dcb487103ed9aa26d9503c5586724a100ced7f6c290da75b512315c"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "bytes": 38524,
+      "sha256": "55d9ac23e79ba879475aad4628572b4f8231cb36dbe960c175613d3415e726d3"
+    }
+  ],
+  "calls": [
+    {
+      "path": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "line": 1401,
+      "callee": "taskExecutionProvider.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "taskExecutionProvider.persistence.runtimeLifecycle.trySet({\n          taskId,\n          to: 'failed',\n          allowedFrom: ['pending', 'running'],\n          extra: {\n            finishedAt: now,\n            errorSummary: 'task drive failed',\n            errorMessage: error instanceof Error ? error.message : String(error),\n          },\n          executionContext: execution,\n          now,\n          reason: 'task-drive',\n        })",
+      "enclosingStartLine": 1399,
+      "enclosingEndLine": 1421,
+      "id": "L06",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/cli/start.ts",
+      "line": 2406,
+      "callee": "taskExecutionProvider.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "taskExecutionProvider.persistence.runtimeLifecycle.trySet({\n          taskId,\n          to: 'failed',\n          allowedFrom: ['pending', 'running'],\n          extra: {\n            finishedAt: now,\n            errorSummary: 'task drive failed',\n            errorMessage: error instanceof Error ? error.message : String(error),\n          },\n          executionContext: execution,\n          now,\n          reason: 'task-drive',\n        })",
+      "enclosingStartLine": 2404,
+      "enclosingEndLine": 2426,
+      "id": "L07",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/cli/start.ts",
+      "line": 3001,
+      "callee": "taskExecutionProvider.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "taskExecutionProvider.persistence.runtimeLifecycle.trySet({\n              taskId,\n              to: 'failed',\n              allowedFrom: ['pending', 'running'],\n              extra: {\n                finishedAt: now,\n                errorSummary: 'task drive failed',\n                errorMessage: error instanceof Error ? error.message : String(error),\n              },\n              executionContext: execution,\n              now,\n              reason: 'task-drive',\n            })",
+      "enclosingStartLine": 2999,
+      "enclosingEndLine": 3021,
+      "id": "L08",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/server.ts",
+      "line": 2107,
+      "callee": "persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "persistence.runtimeLifecycle.trySet({\n            taskId,\n            to: 'failed',\n            allowedFrom: ['pending', 'running'],\n            extra: {\n              finishedAt: now,\n              errorSummary: 'task drive failed',\n              errorMessage: error instanceof Error ? error.message : String(error),\n            },\n            executionContext: execution,\n            now,\n            reason: 'task-drive',\n          })",
+      "enclosingStartLine": 2105,
+      "enclosingEndLine": 2127,
+      "id": "L09",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/server.ts",
+      "line": 3358,
+      "callee": "taskExecutionPersistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "taskExecutionPersistence.runtimeLifecycle.trySet({\n                  taskId,\n                  to: 'failed',\n                  allowedFrom: ['pending', 'running'],\n                  extra: {\n                    finishedAt: now,\n                    errorSummary: 'task drive failed',\n                    errorMessage: error instanceof Error ? error.message : String(error),\n                  },\n                  executionContext: execution,\n                  now,\n                  reason: 'task-drive',\n                })",
+      "enclosingStartLine": 3356,
+      "enclosingEndLine": 3378,
+      "id": "L10",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/server.ts",
+      "line": 3558,
+      "callee": "taskExecutionPersistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "taskExecutionPersistence.runtimeLifecycle.trySet({\n            taskId,\n            to: 'failed',\n            allowedFrom: ['pending', 'running'],\n            extra: {\n              finishedAt: now,\n              errorSummary: 'task drive failed',\n              errorMessage: error instanceof Error ? error.message : String(error),\n            },\n            executionContext: execution,\n            now,\n            reason: 'task-drive',\n          })",
+      "enclosingStartLine": 3556,
+      "enclosingEndLine": 3578,
+      "id": "L11",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
+      "line": 421,
+      "callee": "dependencies.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "markUnsafeResume",
+      "call": "dependencies.persistence.runtimeLifecycle.trySet({\n    taskId: input.taskId,\n    to: 'failed',\n    allowedFrom: ['pending'],\n    extra: {\n      finishedAt: now,\n      errorSummary: input.code,\n      errorMessage: input.detail,\n      failedNodeId: input.nodeId,\n    },\n    ...(input.executionContext === undefined ? {} : { executionContext: input.executionContext }),\n    now,\n    reason: `resumeTask:${input.code}`,\n  })",
+      "enclosingStartLine": 407,
+      "enclosingEndLine": 447,
+      "id": "L13",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
+      "line": 1019,
+      "callee": "dependencies.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "dependencies.persistence.runtimeLifecycle.trySet({\n          taskId,\n          to: 'failed',\n          allowedFrom: ['pending', 'running'],\n          extra: {\n            finishedAt: now,\n            errorSummary: 'task resume failed',\n            errorMessage: error instanceof Error ? error.message : String(error),\n          },\n          executionContext: execution,\n          now,\n          reason: 'postgresql-task-resume',\n        })",
+      "enclosingStartLine": 1017,
+      "enclosingEndLine": 1039,
+      "id": "L12",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts",
+      "line": 372,
+      "callee": "dependencies.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "dependencies.persistence.runtimeLifecycle.trySet({\n              taskId,\n              to: 'failed',\n              allowedFrom: ['pending', 'running'],\n              extra: {\n                finishedAt: now,\n                errorSummary: 'fusion engine task failed',\n                errorMessage: error instanceof Error ? error.message : String(error),\n              },\n              executionContext: execution,\n              now,\n              reason: 'fusion-engine-launch',\n            })",
+      "enclosingStartLine": 370,
+      "enclosingEndLine": 391,
+      "id": "L14",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "line": 1555,
+      "callee": "dependencies.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "escalateUnsafeContinuation",
+      "call": "dependencies.persistence.runtimeLifecycle.trySet({\n    taskId: input.taskId,\n    to: 'failed',\n    allowedFrom: [...input.allowedFrom],\n    // 来源可能已经是终态（retry 的准入门放行 done/failed/canceled/… 六档），所以这条\n    // 「终态→failed」的升级必须显式允许覆写终态，否则升级会被生命周期内核静默丢掉。\n    allowTerminal: true,\n    extra: {\n      finishedAt: now,\n      errorSummary: input.code,\n      errorMessage: input.detail,\n      failedNodeId: input.run.nodeId,\n    },\n    now,\n    reason: `${input.reason}:${input.code}`,\n  })",
+      "enclosingStartLine": 1543,
+      "enclosingEndLine": 1583,
+      "id": "L19",
+      "purpose": null
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "line": 2280,
+      "callee": "dependencies.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "retryNodeProjection",
+      "call": "dependencies.persistence.runtimeLifecycle.trySet({\n        taskId: input.taskId,\n        to: 'failed',\n        allowedFrom: ['interrupted'],\n        allowTerminal: true,\n        now: dependencies.now?.() ?? Date.now(),\n        extra: {\n          finishedAt: dependencies.now?.() ?? Date.now(),\n          errorSummary: 'retry-child-cancel-failed',\n          // 退役实现把「是哪个子任务」写进了任务行的 errorMessage——那是用户唯一能看到\n          // 这个 id 的地方（抛出的 ConflictError 只进 HTTP 响应，不落库），跟着留下。\n          errorMessage: `failed to cancel superseded child task '${childTaskId}': ${detail}`,\n          failedNodeId: target.nodeId,\n        },\n        reason: 'retry-child-cancel-failed',\n      })",
+      "enclosingStartLine": 2058,
+      "enclosingEndLine": 2390,
+      "id": "L20",
+      "purpose": null
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "line": 1141,
+      "callee": "dependencies.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "setTask",
+      "call": "dependencies.persistence.runtimeLifecycle.trySet({\n    taskId: input.taskId,\n    to: input.to,\n    allowedFrom: input.from,\n    ...(input.allowTerminal === true ? { allowTerminal: true } : {}),\n    extra: {\n      finishedAt: input.finishedAt,\n      errorSummary: `manual-repair-${ruleForOptionId(input.optionId) ?? 'unknown'}`,\n      errorMessage: input.errorMessage,\n      failedNodeId: null,\n    },\n    now: dependencies.now?.() ?? Date.now(),\n    reason: input.optionId,\n  })",
+      "enclosingStartLine": 1129,
+      "enclosingEndLine": 1161,
+      "id": "L21",
+      "purpose": null
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts",
+      "line": 402,
+      "callee": "dependencies.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "report",
+      "call": "dependencies.persistence.runtimeLifecycle.trySet({\n          taskId,\n          to: 'failed',\n          allowedFrom: ['pending', 'running'],\n          extra: {\n            finishedAt: occurredAt,\n            errorSummary: 'child task launch failed',\n            errorMessage: error instanceof Error ? error.message : String(error),\n          },\n          executionContext: execution,\n          now: occurredAt,\n          reason: 'postgresql-child-launch',\n        })",
+      "enclosingStartLine": 400,
+      "enclosingEndLine": 422,
+      "id": "L15",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts",
+      "line": 180,
+      "callee": "this.runtimeLifecycle.trySetWithGuard",
+      "enclosingFunction": "trySetWhenNoManualQuestionParks",
+      "call": "this.runtimeLifecycle.trySetWithGuard(input, async (tx) => {\n        const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)\n        if (pending.length > 0) throw new ManualQuestionPending()\n      })",
+      "enclosingStartLine": 176,
+      "enclosingEndLine": 189,
+      "id": "L16",
+      "purpose": null
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "line": 65,
+      "callee": "taskLifecycle.trySetWithGuard",
+      "enclosingFunction": "interruptBootOrphanTask",
+      "call": "taskLifecycle.trySetWithGuard(\n        {\n          taskId: input.taskId,\n          to: 'interrupted',\n          allowedFrom: [input.from],\n          extra: {\n            finishedAt: input.now,\n            errorSummary: input.failureCode,\n            errorMessage: input.errorMessage,\n          },\n          now: input.now,\n          reason: 'reapOrphanRuns',\n        },\n        (tx) =>\n          terminalizeTaskExecutionIntentsInTx(tx, {\n            taskId: input.taskId,\n            state: 'failed',\n            failureCode: input.failureCode,\n            now: input.now,\n          }),\n      )",
+      "enclosingStartLine": 64,
+      "enclosingEndLine": 86,
+      "id": "L17",
+      "purpose": null
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "line": 106,
+      "callee": "taskLifecycle.trySet",
+      "enclosingFunction": "interruptPeriodicTaskIfIdle",
+      "call": "taskLifecycle.trySet({\n        taskId: input.taskId,\n        to: 'interrupted',\n        allowedFrom: ['running'],\n        extra: { finishedAt: input.now, errorSummary: input.failureCode },\n        now: input.now,\n        reason: 'reconcileDeadRunningRuns',\n      })",
+      "enclosingStartLine": 105,
+      "enclosingEndLine": 114,
+      "id": "L18",
+      "purpose": null
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "line": 80,
+      "callee": "opts.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "failRuntimeTask",
+      "call": "opts.persistence.runtimeLifecycle.trySet({\n    taskId: opts.taskId,\n    to: 'failed',\n    allowedFrom: ['pending', 'running'],\n    extra: {\n      finishedAt: Date.now(),\n      errorSummary,\n      errorMessage,\n      ...(failedNodeId === undefined ? {} : { failedNodeId }),\n    },\n    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),\n    now: Date.now(),\n    reason: `failTask: ${errorSummary}`,\n  })",
+      "enclosingStartLine": 74,
+      "enclosingEndLine": 100,
+      "id": "L02",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "line": 110,
+      "callee": "opts.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": null,
+      "call": "opts.persistence.runtimeLifecycle.trySet({\n        taskId: opts.taskId,\n        to: 'interrupted',\n        allowedFrom: ['running'],\n        extra: {\n          finishedAt: now,\n          errorSummary: DAEMON_RESTART_ERROR_SUMMARY,\n          errorMessage:\n            'daemon shutdown interrupted this task; resume (or auto-resume) continues it',\n          ...(failedNodeId === undefined ? {} : { failedNodeId }),\n        },\n        ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),\n        now,\n        reason: 'cancelTaskRow-shutdown',\n      })",
+      "enclosingStartLine": 107,
+      "enclosingEndLine": 154,
+      "id": "L03",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "line": 129,
+      "callee": "opts.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": null,
+      "call": "opts.persistence.runtimeLifecycle.trySet({\n      taskId: opts.taskId,\n      to: 'canceled',\n      allowedFrom: ['running'],\n      extra: {\n        finishedAt: now,\n        errorSummary: projection.summary,\n        errorMessage:\n          structuredCause?.kind === 'webhook-terminal'\n            ? `${projection.code}: delivery=${structuredCause.deliveryId} revision=${structuredCause.streamRevision}`\n            : structuredCause?.kind === 'parent-cascade' && structuredCause.rootCause !== undefined\n              ? `${projection.code}: parent=${structuredCause.parentTaskId} delivery=${structuredCause.rootCause.deliveryId} revision=${structuredCause.rootCause.streamRevision}`\n              : projection.code,\n        ...(failedNodeId === undefined ? {} : { failedNodeId }),\n      },\n      ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),\n      now,\n      reason: 'cancelTaskRow',\n    })",
+      "enclosingStartLine": 107,
+      "enclosingEndLine": 154,
+      "id": "L04",
+      "purpose": "issuedResults"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "line": 350,
+      "callee": "opts.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "runTaskEngineOrchestratorInner",
+      "call": "opts.persistence.runtimeLifecycle.trySet({\n    taskId,\n    to: 'running',\n    allowedFrom: ['pending'],\n    ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),\n    now: Date.now(),\n    reason: 'runTask-start',\n  })",
+      "enclosingStartLine": 200,
+      "enclosingEndLine": 929,
+      "id": "L01",
+      "purpose": "preparation"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts",
+      "line": 838,
+      "callee": "opts.persistence.runtimeLifecycle.trySet",
+      "enclosingFunction": "runTaskEngineOrchestratorInner",
+      "call": "opts.persistence.runtimeLifecycle.trySet({\n        taskId,\n        to: 'awaiting_human',\n        allowedFrom: ['running'],\n        ...(opts.executionContext !== undefined ? { executionContext: opts.executionContext } : {}),\n        now: Date.now(),\n        reason: 'scope-awaiting-human',\n      })",
+      "enclosingStartLine": 200,
+      "enclosingEndLine": 929,
+      "id": "L05",
+      "purpose": "issuedResults"
+    }
+  ],
+  "selected": 15,
+  "remainingNative": 6
+}
