@@ -33,7 +33,11 @@ import {
   ownedCompleteReport,
   type CompleteReportTaskSource,
 } from './completeObservationReportAdmission'
-import { stageCompleteReportPage, publishCompleteReport } from './completeObservationReportStage'
+import {
+  stageCompleteReportPage,
+  stageCompleteReportPages,
+  publishCompleteReport,
+} from './completeObservationReportStage'
 import { completeReportQualifiedReader } from './completeObservationReportRead'
 
 export const completeReportLeaseKey = (id: string) => 'observation-report/' + id
@@ -265,6 +269,7 @@ export function completeObservationReportCache(
       })
     },
     stage: (id, owner, page) => stageCompleteReportPage(db, id, owner, page, now),
+    stageBatch: (id, owner, pages) => stageCompleteReportPages(db, id, owner, pages, now),
     publish: (id, owner, manifest) =>
       publishCompleteReport(db, generation, id, owner, manifest, now, taskSource),
     unavailable: (id, owner, gaps) =>

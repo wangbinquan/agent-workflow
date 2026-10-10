@@ -23,6 +23,11 @@ export interface CompleteObservationReportCache {
   renew(id: string, owner: string): Promise<boolean>
   phase(id: string, owner: string, phase: string): Promise<void>
   stage(id: string, owner: string, page: CompleteObservationTransferPage): Promise<void>
+  stageBatch(
+    id: string,
+    owner: string,
+    pages: readonly CompleteObservationTransferPage[],
+  ): Promise<void>
   publish(id: string, owner: string, manifest: CompleteObservationManifest): Promise<void>
   unavailable(id: string, owner: string, gaps: readonly string[]): Promise<void>
   fail(id: string, owner: string, error: string): Promise<void>

@@ -16,6 +16,7 @@ import type {
   CompleteObservationReportRequest,
   CompleteObservationSpool,
   CompleteObservationStoredReport,
+  CompleteObservationTransferPage,
 } from '../ports/completeObservationReport'
 
 /** A page only selects retained output from one completed original report. */
@@ -89,8 +90,15 @@ export function completeObservationReportService(input: {
       if (!manifest) throw new Error('Original complete report manifest missing')
       // build has released the one original reader reservation before the first writer operation.
       await input.store.phase(report.id, report.owner, 'publishing')
-      for await (const page of input.spool.pages(manifest, job.signal))
-        await input.store.stage(report.id, report.owner, page)
+      let pages: CompleteObservationTransferPage[] = []
+      for await (const page of input.spool.pages(manifest, job.signal)) {
+        pages.push(page)
+        if (pages.length === 8) {
+          await input.store.stageBatch(report.id, report.owner, pages)
+          pages = []
+        }
+      }
+      if (pages.length) await input.store.stageBatch(report.id, report.owner, pages)
       await input.store.assertReadable(report.request.actor, report)
       await input.store.publish(report.id, report.owner, manifest)
     } catch (error) {

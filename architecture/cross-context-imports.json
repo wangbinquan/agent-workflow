@@ -85785,6 +85785,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d76fd4af28acfc03d755",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "DatabaseTransaction",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/historicalTaskObservationFacts.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/historicalTaskObservationFacts.ts",
       "fromSymbol": "$file",
@@ -102801,9 +102818,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6047,
+    "architectureExceptions": 6048,
     "implementationSccs": 0,
-    "observedEdges": 6905,
+    "observedEdges": 6906,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -195181,6 +195198,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#$file",
+      "id": "import:d76fd4af28acfc03d755",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseTransaction",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/historicalTaskObservationFacts.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/historicalTaskObservationFacts.ts#$file",
@@ -214183,7 +214216,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:af61620c29b20d3dc7cc4cc3c49cbd03a0b9a5f412c19066450ea91859da61c8",
+  "sourceDigest": "sha256:24c29c0b3ee17ac1cf7fffe85023d9a47664b9c0e434993d6b2cb7d6777fd828",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

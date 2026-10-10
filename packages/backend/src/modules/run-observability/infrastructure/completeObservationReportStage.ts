@@ -8,7 +8,11 @@ import {
   observationReportReceipts,
   observationReportRetainedRevisions,
 } from '@/db/schema'
-import { databaseSessionFor, affectedRows } from '@/platform/persistence/databaseTransaction'
+import {
+  databaseSessionFor,
+  affectedRows,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import {
   COMPLETE_OBSERVATION_SECTIONS,
@@ -36,6 +40,110 @@ import {
   declareCompleteReportCounts,
   addCompleteReportGroupRows,
 } from './completeObservationReportStageCounts'
+async function stageCompleteReportPageInTransaction(
+  tx: DatabaseTransaction,
+  id: string,
+  owner: string,
+  page: CompleteObservationTransferPage,
+  now: () => number,
+) {
+  const report = await ownedCompleteReport(tx, id, owner),
+    progress = JSON.parse(report.progress) as CompleteReportProgress
+  const ordinal = completeOrdinalKey(BigInt(page.ordinal))
+  const previous = await tx
+    .select()
+    .from(observationReportPages)
+    .where(
+      and(eq(observationReportPages.reportId, id), eq(observationReportPages.ordinal, ordinal)),
+    )
+    .get()
+  if (previous) {
+    if (
+      page.reportId !== id ||
+      previous.digest !== page.digest ||
+      previous.previousDigest !== page.previousDigest ||
+      previous.itemsCount !== page.items.length
+    )
+      throw new Error('Original sealed report replay changed')
+    assertCompleteReportTransferPage(page, id, page.ordinal, page.previousDigest, sha256Hex)
+    return
+  }
+  assertCompleteReportTransferPage(page, id, progress.pages, progress.digest, sha256Hex)
+  const rows: (typeof observationReportRows.$inferInsert)[] = [],
+    receipts: (typeof observationReportReceipts.$inferInsert)[] = [],
+    declarations: Array<{ section: string; parent: string; total: string }> = []
+  const groups = new Map<string, { section: string; parent: string; size: bigint }>()
+  for (let index = 0; index < page.items.length; index++) {
+    const item = page.items[index]!
+    if (item.kind === 'row') {
+      const row = item.row
+      if (!COMPLETE_OBSERVATION_SECTIONS.includes(row.section) || !row.key)
+        throw new Error('Unknown original report row identity')
+      const parent = row.parent ?? '',
+        groupKey = JSON.stringify([row.section, parent])
+      const group = groups.get(groupKey) ?? { section: row.section, parent, size: 0n }
+      group.size++
+      groups.set(groupKey, group)
+      rows.push({
+        reportId: id,
+        ordinal: completeOrdinalKey(BigInt(page.ordinal) * 500n + BigInt(index)),
+        section: row.section,
+        parent,
+        key: row.key,
+        document: JSON.stringify(row.document),
+      })
+      progress.rows = String(BigInt(progress.rows) + 1n)
+    } else if (item.kind === 'receipt') {
+      if (!item.key) throw new Error('Original report receipt identity missing')
+      receipts.push({ reportId: id, key: item.key, document: JSON.stringify(item.document) })
+      progress.receipts = String(BigInt(progress.receipts) + 1n)
+    } else if (item.kind === 'count') {
+      const count = item.count,
+        parent = count.parent ?? ''
+      if (
+        !COMPLETE_OBSERVATION_SECTIONS.includes(count.section) ||
+        !/^(0|[1-9]\d*)$/.test(count.total)
+      )
+        throw new Error('Original report count invalid')
+      declarations.push({ section: count.section, parent, total: count.total })
+      progress.counts = String(BigInt(progress.counts) + 1n)
+    } else throw new Error('Unknown complete report transfer kind')
+  }
+  await declareCompleteReportCounts(tx, id, declarations)
+  if (rows.length) await tx.insert(observationReportRows).values(rows).run()
+  if (receipts.length) await tx.insert(observationReportReceipts).values(receipts).run()
+  await addCompleteReportGroupRows(tx, id, [...groups.values()])
+  await tx
+    .insert(observationReportPages)
+    .values({
+      reportId: id,
+      ordinal,
+      previousDigest: page.previousDigest,
+      digest: page.digest,
+      itemsCount: page.items.length,
+    })
+    .run()
+  progress.pages = String(BigInt(progress.pages) + 1n)
+  progress.digest = page.digest
+  await tx
+    .update(observationReports)
+    .set({ progress: JSON.stringify(progress), updatedAt: now(), leaseUntil: now() + 45_000 })
+    .where(eq(observationReports.id, id))
+    .run()
+}
+
+export async function stageCompleteReportPages(
+  db: ProviderNeutralDatabase,
+  id: string,
+  owner: string,
+  pages: readonly CompleteObservationTransferPage[],
+  now: () => number,
+) {
+  await databaseSessionFor(db).transaction(async (tx) => {
+    for (const page of pages) await stageCompleteReportPageInTransaction(tx, id, owner, page, now)
+  })
+}
+
 export async function stageCompleteReportPage(
   db: ProviderNeutralDatabase,
   id: string,
@@ -43,91 +151,7 @@ export async function stageCompleteReportPage(
   page: CompleteObservationTransferPage,
   now: () => number,
 ) {
-  await databaseSessionFor(db).transaction(async (tx) => {
-    const report = await ownedCompleteReport(tx, id, owner),
-      progress = JSON.parse(report.progress) as CompleteReportProgress
-    const ordinal = completeOrdinalKey(BigInt(page.ordinal))
-    const previous = await tx
-      .select()
-      .from(observationReportPages)
-      .where(
-        and(eq(observationReportPages.reportId, id), eq(observationReportPages.ordinal, ordinal)),
-      )
-      .get()
-    if (previous) {
-      if (
-        page.reportId !== id ||
-        previous.digest !== page.digest ||
-        previous.previousDigest !== page.previousDigest ||
-        previous.itemsCount !== page.items.length
-      )
-        throw new Error('Original sealed report replay changed')
-      assertCompleteReportTransferPage(page, id, page.ordinal, page.previousDigest, sha256Hex)
-      return
-    }
-    assertCompleteReportTransferPage(page, id, progress.pages, progress.digest, sha256Hex)
-    const rows: (typeof observationReportRows.$inferInsert)[] = [],
-      receipts: (typeof observationReportReceipts.$inferInsert)[] = [],
-      declarations: Array<{ section: string; parent: string; total: string }> = []
-    const groups = new Map<string, { section: string; parent: string; size: bigint }>()
-    for (let index = 0; index < page.items.length; index++) {
-      const item = page.items[index]!
-      if (item.kind === 'row') {
-        const row = item.row
-        if (!COMPLETE_OBSERVATION_SECTIONS.includes(row.section) || !row.key)
-          throw new Error('Unknown original report row identity')
-        const parent = row.parent ?? '',
-          groupKey = JSON.stringify([row.section, parent])
-        const group = groups.get(groupKey) ?? { section: row.section, parent, size: 0n }
-        group.size++
-        groups.set(groupKey, group)
-        rows.push({
-          reportId: id,
-          ordinal: completeOrdinalKey(BigInt(page.ordinal) * 500n + BigInt(index)),
-          section: row.section,
-          parent,
-          key: row.key,
-          document: JSON.stringify(row.document),
-        })
-        progress.rows = String(BigInt(progress.rows) + 1n)
-      } else if (item.kind === 'receipt') {
-        if (!item.key) throw new Error('Original report receipt identity missing')
-        receipts.push({ reportId: id, key: item.key, document: JSON.stringify(item.document) })
-        progress.receipts = String(BigInt(progress.receipts) + 1n)
-      } else if (item.kind === 'count') {
-        const count = item.count,
-          parent = count.parent ?? ''
-        if (
-          !COMPLETE_OBSERVATION_SECTIONS.includes(count.section) ||
-          !/^(0|[1-9]\d*)$/.test(count.total)
-        )
-          throw new Error('Original report count invalid')
-        declarations.push({ section: count.section, parent, total: count.total })
-        progress.counts = String(BigInt(progress.counts) + 1n)
-      } else throw new Error('Unknown complete report transfer kind')
-    }
-    await declareCompleteReportCounts(tx, id, declarations)
-    if (rows.length) await tx.insert(observationReportRows).values(rows).run()
-    if (receipts.length) await tx.insert(observationReportReceipts).values(receipts).run()
-    await addCompleteReportGroupRows(tx, id, [...groups.values()])
-    await tx
-      .insert(observationReportPages)
-      .values({
-        reportId: id,
-        ordinal,
-        previousDigest: page.previousDigest,
-        digest: page.digest,
-        itemsCount: page.items.length,
-      })
-      .run()
-    progress.pages = String(BigInt(progress.pages) + 1n)
-    progress.digest = page.digest
-    await tx
-      .update(observationReports)
-      .set({ progress: JSON.stringify(progress), updatedAt: now(), leaseUntil: now() + 45_000 })
-      .where(eq(observationReports.id, id))
-      .run()
-  })
+  await stageCompleteReportPages(db, id, owner, [page], now)
 }
 /** All payload writes are already committed; this transaction validates and publishes only the small header. */
 export async function publishCompleteReport(

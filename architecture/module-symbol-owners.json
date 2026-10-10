@@ -6,7 +6,7 @@
     "moduleFiles": 1831,
     "productionFiles": 3257,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27785
+    "symbolsIncludingFileRoots": 27787
   },
   "entries": [
     {
@@ -114888,6 +114888,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "stageCompleteReportPage",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPageInTransaction",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "stageCompleteReportPageInTransaction",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPages",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "stageCompleteReportPages",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -334161,5 +334185,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:af61620c29b20d3dc7cc4cc3c49cbd03a0b9a5f412c19066450ea91859da61c8"
+  "sourceDigest": "sha256:24c29c0b3ee17ac1cf7fffe85023d9a47664b9c0e434993d6b2cb7d6777fd828"
 }
