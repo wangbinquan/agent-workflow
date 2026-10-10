@@ -39,3 +39,15 @@
 ## 继续开放的工作
 
 完整报告的首次生成仍需进一步实测提速；上面的 SQL 研究不算产品验收。CS 原 33 文件完整检查的九项超时与发布／部署、16 内置 Agent 与 Git 原入口成功实跑、所需全局临时运行时配置答复、AW-R02～12 和其它未取得证据的出口继续开放。记忆专用临时配置已在此前验收后恢复。没有启动 observability-scale，也没有以新成功覆盖旧失败。
+
+## 复合键批量读取候选与新正式验收
+
+在原 select 映射及事务内，将计数组的逐臂完整身份 OR 改为同一 reportId 与成对 section/parent 的参数化 IN (VALUES)。两个原写入函数、任意精度计数、原值条件和错误文本逐字保持；原四个测试声明、五个展开用例、29 处 expect 与全部原预算保持。新增双真实 provider 用例使用两个独立报告、250 个共享 parent 的 500 个完整键，验证同父跨分类、另一报告不同计数、回放、零组、全部行与 progress，并录制每次查询只绑定一次 reportId；500 只是该回归的工作批次，统计仍处理所有后续页直至 EOF。有限独立设计门和源码实现门均 VALID／PASS，零功能 findings；实际 PostgreSQL 与新 hosted CI 另验。
+
+同一已批准标记任务的新原报告 `e1a5145b-49e8-41c0-bd90-b89cbbd3842b` 为 ready，耗时 10,719 ms，原 12,090 ms 记录保留。全部 31,826 条明细与 14,997 组的有序原字段、类型和文档精确相等；7,798 份回执全部存在，4,066 份原 raw key/document 全字节相等，3,732 份派生回执核对原 snapshot 四元组前三个 database-generation 字段、rows、pages、EOF 的完整集合，EOF 全 true，不声称变化的 nonce/source/key 或派生全文相等。4 任务、8 尝试、5 调用、7 数值记录、四桶 30,636／42,496／0／2,746、75,878 Token 与验收专用 ¥0.104488 保持。
+
+正式浏览器在同一范围通过原刷新生成 `4b2d9a1b-5287-4aea-855d-bdc514d1da57`，耗时 11,746 ms，原 19,030 ms 记录保留。全部 37,533 条原明细与 16,259 组有序原字段、类型和文档精确相等；8,326 份回执全部存在，其中 4,066 份原 raw 全字节相等，4,260 份派生按同一明确范围核对且 EOF 全 true。原完整 summary、filters、gaps 相等，137 任务、595 尝试、446 调用、198 历史引用、227 数值记录、四桶 1,189,241／1,255,680／0／186,002、2,630,923 Token 与已记录 ¥4.078952 保持。not-ready 是原数值证据缺口，并非漏采统计人口；已知数值继续显示。正式页面统计时间为 2026/10/10 19:03:16，刷新期间保留上次结果，结束恢复原刷新入口，三根柱的分类与实际 Token 不变。
+
+上述是两次不同范围各一次新报告观察，不能把全部差异归因于单个查询或承诺稳定降幅。首次／新范围仍需约 10～12 秒，本项继续开放；不通过减少任务、调用、原归属证据或完整性核对提速。唯一原 canonical 生成已完成，13 份原配套更新 sourceDigest，删除两个旧私有 helper 后 moduleSymbolOwners 从 27,805 到 27,803；不增加增长许可，不重跑生成。
+
+ACK 夹具后继 `ff450237c` 的主 CI [38043641753](https://github.com/wangbinquan/agent-workflow/actions/runs/38043641753) 为 completed/failure：70 作业 success，Markdown link check 与依赖汇总 failure，原失败保留。普通后继 `ca947c2431cd710bdaa63af3bae4903c1ace03b4` 的主 CI [38044940528](https://github.com/wangbinquan/agent-workflow/actions/runs/38044940528) 为 completed/success，72／72 作业 success；Windows [38045024500](https://github.com/wangbinquan/agent-workflow/actions/runs/38045024500) 也 completed/success。这两份是新复合键源码发布前的已提交内容证据，不代签本候选，新 SHA 的主／Windows 结果仍另验。没有启动 observability-scale，两个 RFC 继续 In Progress。

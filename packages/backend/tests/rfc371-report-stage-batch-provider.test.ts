@@ -55,6 +55,7 @@ async function staging(harness: ProviderHarness) {
   let ordinal = 0n,
     digest = completeReportInitialDigest
   return {
+    cache,
     id: report.id,
     page(items: readonly CompleteObservationTransferItem[]) {
       return completeReportTransferPage(report.id, String(ordinal), digest, items, sha256Hex)
@@ -303,5 +304,132 @@ describeEachProvider('RFC-371 complete report batched staging', (harness) => {
       counts: '500',
       receipts: '0',
     })
+  }, 60_000)
+
+  test('500 composite keys keep shared parents, foreign reports and replay separate while binding the report once per lookup', async () => {
+    const report = await staging(harness)
+    const foreign = await report.cache.ensure(
+      {
+        actor,
+        query: { from: COMPLETE_NOW, to: COMPLETE_NOW + 60_000, timezone: 'UTC' },
+        refreshKey: randomUUID(),
+      },
+      randomUUID(),
+      completeObservationActorScope(actor),
+      randomUUID(),
+      randomUUID(),
+    )
+    const groups = Array.from({ length: 250 }, (_, index) =>
+      (['attempts', 'invocations'] as const).map((section) => ({
+        section,
+        parent: index === 0 ? "shared,'?parent" : 'shared-parent-' + index,
+      })),
+    ).flat()
+    const rows = (key: string): CompleteObservationTransferItem[] =>
+      groups.map((group) => ({
+        kind: 'row',
+        row: { ...group, key, document: { key } },
+      }))
+    const counts = (total: string): CompleteObservationTransferItem[] =>
+      groups.map((group) => ({ kind: 'count', count: { ...group, total } }))
+    let foreignOrdinal = 0n,
+      foreignDigest = completeReportInitialDigest
+    for (const items of [rows('foreign'), counts('1')]) {
+      const page = completeReportTransferPage(
+        foreign.id,
+        String(foreignOrdinal),
+        foreignDigest,
+        items,
+        sha256Hex,
+      )
+      await report.cache.stage(foreign.id, foreign.owner, page)
+      foreignOrdinal++
+      foreignDigest = page.digest
+    }
+    const recording = harness.recordStatements()
+    try {
+      const first = await report.stage(rows('first'))
+      const declared = await report.stage(counts('2'))
+      const last = await report.stage(rows('last'))
+      await report.stage(
+        (['attempts', 'invocations'] as const).map((section) => ({
+          kind: 'count',
+          count: { section, parent: '', total: '0' },
+        })),
+      )
+      await report.replay(first)
+      await report.replay(declared)
+      await report.replay(last)
+    } finally {
+      recording.stop()
+    }
+    const lookups = recording
+      .selects()
+      .filter((entry) => /\bobservation_report_counts\b/.test(entry.sql))
+    expect(lookups).toHaveLength(4)
+    for (const lookup of lookups) {
+      expect(lookup.values.filter((value) => value === report.id)).toHaveLength(1)
+      expect(lookup.values).not.toContain(foreign.id)
+      expect(lookup.sql).toMatch(/\bin\s*\(\s*values\b/i)
+      const plan = await harness.explain(lookup)
+      if (harness.capabilities.isolation === 'exclusive')
+        expect(plan).toContain('report_id=? AND section=? AND parent=?')
+    }
+    for (const [id, total, keys, pages, groupCount] of [
+      [report.id, '2', ['first', 'last'], '4', '502'],
+      [foreign.id, '1', ['foreign'], '2', '500'],
+    ] as const) {
+      const actual = await harness.db
+        .select()
+        .from(observationReportCounts)
+        .where(eq(observationReportCounts.reportId, id))
+        .all()
+      expect(actual).toHaveLength(Number(groupCount))
+      const byIdentity = new Map(
+        actual.map((group) => [JSON.stringify([group.section, group.parent]), group]),
+      )
+      for (const group of groups)
+        expect(byIdentity.get(JSON.stringify([group.section, group.parent]))).toEqual({
+          reportId: id,
+          ...group,
+          total,
+          actual: total,
+          declared: true,
+        })
+      if (id === report.id)
+        for (const section of ['attempts', 'invocations'])
+          expect(byIdentity.get(JSON.stringify([section, '']))).toEqual({
+            reportId: id,
+            section,
+            parent: '',
+            total: '0',
+            actual: '0',
+            declared: true,
+          })
+      const storedRows = await harness.db
+        .select()
+        .from(observationReportRows)
+        .where(eq(observationReportRows.reportId, id))
+        .all()
+      expect(storedRows).toHaveLength(groups.length * keys.length)
+      expect(
+        storedRows.map((value) => JSON.stringify([value.section, value.parent, value.key])).sort(),
+      ).toEqual(
+        groups
+          .flatMap((group) => keys.map((key) => JSON.stringify([group.section, group.parent, key])))
+          .sort(),
+      )
+      const root = await harness.db
+        .select()
+        .from(observationReports)
+        .where(eq(observationReports.id, id))
+        .get()
+      expect(JSON.parse(root!.progress)).toMatchObject({
+        pages,
+        rows: String(storedRows.length),
+        counts: groupCount,
+        receipts: '0',
+      })
+    }
   }, 60_000)
 })

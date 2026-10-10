@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { observationReportCounts } from '@/db/schema'
 import { affectedRows, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 
@@ -13,14 +13,6 @@ interface CountRows extends CountIdentity {
   readonly size: bigint
 }
 const identity = (group: CountIdentity) => JSON.stringify([group.section, group.parent])
-const scope = (group: CountIdentity) =>
-  and(
-    eq(observationReportCounts.section, group.section),
-    eq(observationReportCounts.parent, group.parent),
-  )
-// Each OR arm retains the full composite key for an exact indexed lookup.
-const reportScope = (id: string, group: CountIdentity) =>
-  and(eq(observationReportCounts.reportId, id), scope(group))
 async function currentGroups(
   tx: DatabaseTransaction,
   id: string,
@@ -29,7 +21,15 @@ async function currentGroups(
   const found = await tx
     .select()
     .from(observationReportCounts)
-    .where(or(...groups.map((group) => reportScope(id, group))))
+    .where(
+      and(
+        eq(observationReportCounts.reportId, id),
+        sql`(${observationReportCounts.section},${observationReportCounts.parent}) in (values ${sql.join(
+          groups.map((group) => sql`(${group.section},${group.parent})`),
+          sql`,`,
+        )})`,
+      ),
+    )
     .all()
   return new Map(found.map((group) => [identity(group), group]))
 }

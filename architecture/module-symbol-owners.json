@@ -6,7 +6,7 @@
     "moduleFiles": 1834,
     "productionFiles": 3260,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27805
+    "symbolsIncludingFileRoots": 27803
   },
   "entries": [
     {
@@ -115008,30 +115008,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "identity",
-      "targetContext": "run-observability",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#reportScope",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "reportScope",
-      "targetContext": "run-observability",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStageCounts.ts#scope",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "scope",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -334401,5 +334377,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b42cc2b0735beb2397dfae896fd497e000d759345ce81b63f32d5dfa09417171"
+  "sourceDigest": "sha256:0ffb135ee4ce4c0387d3c85d63f7e24ee07df6d543e9ed9b9fb15b47d8eeb898"
 }

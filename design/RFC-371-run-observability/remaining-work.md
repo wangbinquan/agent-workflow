@@ -440,3 +440,11 @@ SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只�
 原官方一次成功AST在committed9bdc加冻结8路径生成13产物；初次private输入缓冲不完整和report-only遗漏write均保留，不当作成功。四provenance用原函数派生，129库存原静态核对PASS；五实际增长为mutation1849→1852、background358→359、observed imports5936→5944、exceptions5281→5289、symbol owners26329→26359。原规则、所有旧债条款、SPI和target保持；matching canonical之后正常后继退役一次allowGrowth，不重复扫描。后继37b9仅peer测试/文档，不改变本批生产与原规则输入。
 
 这是尚未接入正式producer的采集底座，不能写成最大任务/调用等所有限制已移除。原owner的完整durable baseline/page ACK、原emission冻结与全部pending revision高水/原fence、原数值来源append同事务及v2完成证明仍须实现；原v1与追踪上限尚未移除。CS新0018吞吐候选的原10001/20025断言约21.12s通过，正式SOURCE/CI/部署待。本批还需精确发布和新CI，默认及定时E2E、真实规模/模型任务/四桶人民币/浏览器等继续，开发producer OFF，两RFC In Progress。
+
+### 2026-10-10 完整加载性能接续
+
+原服务已按明确批准恢复；此前原生缓存及 ACK 夹具提交的普通后继 ca947c243 的主 CI 72／72 success，Windows completed/success，旧失败保持。当前复合键计数组读取候选通过有限独立功能设计／源码实现门，原写入函数、全部旧测试断言与预算保持；唯一原 canonical 更新 13 份配套，symbol owners 减少两个私有 helper，无新增长许可。新候选配套门、精确发布及新 SHA 主／Windows CI 继续。
+
+同一标记任务的新报告 10,719 ms，原全部 31,826 明细／14,997 组／7,798 回执保持，四桶与验收 CNY 相等。正式同范围总览新报告 11,746 ms，原全部 37,533 明细／16,259 组／8,326 回执保持，137 任务／595 尝试／446 调用、2,630,923 Token、已记录 ¥4.078952 及原缺口相等；派生回执只按原 generation／rows／pages／EOF 集合核对，不冒认 nonce／source／key 或全文相等。页面实际刷新结束且分类柱数据保持。两份均是各一次实测，首次／新范围约 10～12 秒仍偏慢，继续改进，不能减少人口、原证据或完整性核对。详见 load-performance-acceptance-20261010.md 与 count-key-batch-lookup.md。
+
+CS 原 33 路径候选的完整检查九项超时、精确发布／六项 CI／本机部署及 producer 验收、16 内置 Agent 与 Git 原入口成功覆盖、临时全局默认运行时答复、所有未取证的 AW-R02～12 和其它两 RFC 出口继续。记忆专用临时配置已恢复；没有启动规模 CI，两个 RFC 未完成。
