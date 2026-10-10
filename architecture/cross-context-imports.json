@@ -19568,6 +19568,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2e9d6d863bc3afb14c07",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase",
+      "toPath": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toSymbol": "ReadonlySqliteDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#$file",
@@ -102818,9 +102835,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6048,
+    "architectureExceptions": 6049,
     "implementationSccs": 0,
-    "observedEdges": 6906,
+    "observedEdges": 6907,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -123595,6 +123612,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DelegatedRequestAuthorityFactory"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#$file",
+      "id": "import:2e9d6d863bc3afb14c07",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/sqlite/readonlySqliteDatabase",
+      "syntax": "static-import",
+      "targetSymbol": "ReadonlySqliteDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase"
     },
     {
       "edgeKind": "value",
@@ -214216,7 +214249,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:24c29c0b3ee17ac1cf7fffe85023d9a47664b9c0e434993d6b2cb7d6777fd828",
+  "sourceDigest": "sha256:4b69219cb6c4acd801eece0d77874b6d55042cc1107fac2d1dca7bf814b9ad51",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

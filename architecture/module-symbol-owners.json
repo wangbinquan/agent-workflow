@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2427,
+    "backendFiles": 2428,
     "frontendFiles": 659,
     "legacyFiles": 596,
-    "moduleFiles": 1831,
-    "productionFiles": 3257,
+    "moduleFiles": 1832,
+    "productionFiles": 3258,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27787
+    "symbolsIncludingFileRoots": 27794
   },
   "entries": [
     {
@@ -120074,6 +120074,114 @@
       "currentContext": "runtime-management",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#CachedMessagePartRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CachedMessagePartRow",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#createOpencodePartProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createOpencodePartProjection",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#fields",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "fields",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#identifier",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "identifier",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#joins",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "joins",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#OpencodePartRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "OpencodePartRow",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#PartWindow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "PartWindow",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodePartProjection.ts#projection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "projection",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeReportConnections.ts#$file",
       "removeAfterWave": null,
@@ -120207,18 +120315,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#CachedMessagePartRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "CachedMessagePartRow",
-      "targetContext": "runtime-management",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#counter",
       "removeAfterWave": null,
       "status": "current-module",
@@ -120331,18 +120427,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "OriginalNativePassReader",
-      "targetContext": "runtime-management",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeUsagePass.ts#PartRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PartRow",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -334185,5 +334269,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:24c29c0b3ee17ac1cf7fffe85023d9a47664b9c0e434993d6b2cb7d6777fd828"
+  "sourceDigest": "sha256:4b69219cb6c4acd801eece0d77874b6d55042cc1107fac2d1dca7bf814b9ad51"
 }
