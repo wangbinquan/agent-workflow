@@ -864,10 +864,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6953,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370／RFC-371 原完整 CI 必要类型修复：已独立 SOURCE v362 批准的 historicalNativeFactReader.ts 原 ReportWorkingPage type import 由原生成器投影为唯一实际边 import:70216195a6b2420e8d5f，rfc294-cross-context-observed-imports 6952 → 6953；只登记此次实际增量，不放宽规则。许可在紧邻普通提交退役，原 1752f02e 完整主 CI 与 Windows failure 保留。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -888,10 +885,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 6080,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370／RFC-371 原完整 CI 必要类型修复：已独立 SOURCE v362 批准的 historicalNativeFactReader.ts 原 ReportWorkingPage type import 由原生成器投影为唯一实际边 import:70216195a6b2420e8d5f，rfc294-architecture-exceptions 6079 → 6080；只登记此次实际增量，不放宽规则。许可在紧邻普通提交退役，原 1752f02e 完整主 CI 与 Windows failure 保留。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -935,7 +929,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "1752f02e868ff58ea443ed89efc1af0bb9381075",
-    "contentDigest": "sha256:f169728f770f491e4401becedc0f76ac7272ab137e9765933fc320b2ea00852c",
+    "contentDigest": "sha256:08faf5080451a0b0a8828c7c32035330d0fb78ff943a09f44626064034c32afa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
