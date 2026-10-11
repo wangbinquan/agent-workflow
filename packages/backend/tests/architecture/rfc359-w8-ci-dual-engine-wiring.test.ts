@@ -37,6 +37,9 @@ interface ProviderOverride {
 
 interface WorkflowStep {
   readonly name?: unknown
+  readonly id?: unknown
+  readonly uses?: unknown
+  readonly shell?: unknown
   readonly if?: unknown
   readonly env?: unknown
   readonly run?: unknown
@@ -64,6 +67,67 @@ function envOf(step: { readonly env?: unknown }): Record<string, unknown> {
   return typeof step.env === 'object' && step.env !== null
     ? (step.env as Record<string, unknown>)
     : {}
+}
+
+/** 读取当前显式启动链；SQL probe 和所有双引擎测试必须在可用服务之后。 */
+function hasUbuntuPostgresWiring(job: WorkflowJob): boolean {
+  const steps = stepsOf(job)
+  if (steps.some((step) => typeof step !== 'object' || step === null || Array.isArray(step)))
+    return false
+  const ubuntu = "matrix.os == 'ubuntu-latest'"
+  const helper = 'bash .github/scripts/ci-postgresql-service.sh'
+  const url = 'postgresql://postgres:postgres@127.0.0.1:5432/awtest'
+  const startIndex = steps.findIndex((step) => step.id === 'postgres')
+  const start = steps[startIndex]
+  if (
+    !start ||
+    steps.filter((step) => step.id === 'postgres').length !== 1 ||
+    start.shell !== 'bash' ||
+    start.if !== ubuntu ||
+    start.run !== helper + ' start awtest'
+  )
+    return false
+  const checkoutIndex = steps.findIndex(
+    (step) => typeof step.uses === 'string' && /^actions\/checkout@/.test(step.uses),
+  )
+  if (checkoutIndex < 0 || checkoutIndex >= startIndex) return false
+  const probeIndex = steps.findIndex(
+    (step) =>
+      step.shell === 'bash' &&
+      step.if === ubuntu &&
+      envOf(step)['AW_TEST_POSTGRESQL_URL'] === url &&
+      typeof step.run === 'string' &&
+      step.run.includes('select 1 as ok') &&
+      step.run.includes('bun pg-probe.mjs'),
+  )
+  if (probeIndex <= startIndex) return false
+  const tests = steps.flatMap((step, index) =>
+    typeof step.run === 'string' &&
+    step.run.includes('bun test') &&
+    envOf(step)['AW_TEST_POSTGRESQL_URL'] !== undefined
+      ? [{ step, index }]
+      : [],
+  )
+  if (
+    !tests.length ||
+    tests.some(
+      ({ step, index }) =>
+        index <= probeIndex || step.if !== ubuntu || envOf(step)['AW_TEST_POSTGRESQL_URL'] !== url,
+    )
+  )
+    return false
+  const stops = steps.flatMap((step, index) =>
+    step.run === helper + ' stop' ? [{ step, index }] : [],
+  )
+  const stop = stops[0]
+  return (
+    stops.length === 1 &&
+    stop !== undefined &&
+    stop.step.shell === 'bash' &&
+    stop.step.if ===
+      "always() && matrix.os == 'ubuntu-latest' && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'" &&
+    tests.every(({ index }) => stop.index > index)
+  )
 }
 
 /** 扫全部 workflow，收集 workflow、job 和 step 三层 env 的每一处收窄。 */
@@ -151,10 +215,9 @@ describe('RFC-359 W8 —— CI 的双引擎接线', () => {
   })
 
   test('① backend 分片在 ubuntu 上起了 postgres 服务容器', () => {
-    const services = backend?.services
     expect(
-      typeof services === 'object' && services !== null && 'postgres' in services,
-      '`test-backend` 不再声明 postgres 服务容器——双引擎用例的 PostgreSQL 半边将无库可连',
+      hasUbuntuPostgresWiring(backend ?? {}),
+      '`test-backend` 的 checkout／PostgreSQL 启动／SQL probe／双引擎测试／always 清理接线不完整',
     ).toBe(true)
   })
 
@@ -292,5 +355,58 @@ jobs:
     expect(isWindowsPlatformOverride({ ...row, scope: 'step' })).toBe(false)
     expect(isWindowsPlatformOverride({ ...row, runner: 'ubuntu-latest' })).toBe(false)
     expect(isWindowsPlatformOverride({ ...row, runner: '${{ matrix.os }}' })).toBe(false)
+  })
+
+  test('显式 PostgreSQL 接线缺启动、错条件或数据库、错序和缺清理时不能通过', () => {
+    const ci = parse(readFileSync(join(WORKFLOWS, 'ci.yml'), 'utf8')) as unknown
+    const backend = jobsOf(ci).find(([name]) => name === 'test-backend')?.[1] ?? {}
+    const steps = stepsOf(backend)
+    const startIndex = steps.findIndex((step) => step.id === 'postgres')
+    const probeIndex = steps.findIndex(
+      (step) => typeof step.run === 'string' && step.run.includes('bun pg-probe.mjs'),
+    )
+    const testIndex = steps.findIndex(
+      (step) =>
+        typeof step.run === 'string' &&
+        step.run.includes('bun test') &&
+        envOf(step)['AW_TEST_POSTGRESQL_URL'] !== undefined,
+    )
+    const stopIndex = steps.findIndex(
+      (step) => step.run === 'bash .github/scripts/ci-postgresql-service.sh stop',
+    )
+    const change = (index: number, patch: Partial<WorkflowStep>): WorkflowJob => ({
+      ...backend,
+      steps: steps.map((step, position) => (position === index ? { ...step, ...patch } : step)),
+    })
+    const remove = (index: number): WorkflowJob => ({
+      ...backend,
+      steps: steps.filter((_, position) => position !== index),
+    })
+    const swap = (left: number, right: number): WorkflowJob => ({
+      ...backend,
+      steps: steps.map((step, index) =>
+        index === left ? steps[right]! : index === right ? steps[left]! : step,
+      ),
+    })
+    expect(hasUbuntuPostgresWiring(backend)).toBe(true)
+    const broken: ReadonlyArray<readonly [string, WorkflowJob]> = [
+      ['空步骤项', { ...backend, steps: [null, ...steps] }],
+      ['非对象步骤项', { ...backend, steps: [17, ...steps] }],
+      ['数组步骤项', { ...backend, steps: [[], ...steps] }],
+      ['缺启动', remove(startIndex)],
+      [
+        '错误数据库',
+        change(startIndex, { run: 'bash .github/scripts/ci-postgresql-service.sh start wrong' }),
+      ],
+      ['错误运行条件', change(startIndex, { if: "matrix.os != 'ubuntu-latest'" })],
+      ['checkout 晚于启动', swap(0, startIndex)],
+      ['启动晚于 SQL probe', swap(startIndex, probeIndex)],
+      ['启动晚于双引擎测试', swap(startIndex, testIndex)],
+      ['缺 SQL probe', remove(probeIndex)],
+      ['清理早于双引擎测试', swap(testIndex, stopIndex)],
+      ['缺清理', remove(stopIndex)],
+      ['清理没有 always', change(stopIndex, { if: "matrix.os == 'ubuntu-latest'" })],
+    ]
+    for (const [name, job] of broken) expect(hasUbuntuPostgresWiring(job), name).toBe(false)
   })
 })
