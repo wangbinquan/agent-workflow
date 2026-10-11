@@ -258,6 +258,13 @@ export function CompleteRunObservability({
     dimensionTrigger.current = trigger
     if (report) setDimension({ report, row, kind: 'quality' })
   }
+  const refreshReport = () => {
+    setDimension(null)
+    if (search.task) {
+      const id = search.task
+      setTaskRevisions((value) => new Map(value).set(id, (value.get(id) ?? 0) + 1))
+    } else setRevision((value) => value + 1)
+  }
   const selectedDimensionKey = dimension?.kind === 'dimension' ? dimension.row.key : undefined
   const selectedQualityKey = dimension?.kind === 'quality' ? dimension.row.key : undefined
   const parent = search.task ? JSON.stringify(['task-tree', search.task]) : null
@@ -294,13 +301,7 @@ export function CompleteRunObservability({
             type="button"
             className="btn btn--sm"
             disabled={current.busy}
-            onClick={() => {
-              setDimension(null)
-              if (search.task) {
-                const id = search.task
-                setTaskRevisions((value) => new Map(value).set(id, (value.get(id) ?? 0) + 1))
-              } else setRevision((value) => value + 1)
-            }}
+            onClick={refreshReport}
           >
             {t('runObservability.refresh')}
           </button>
@@ -330,9 +331,7 @@ export function CompleteRunObservability({
           />
         </>
       )}
-      {current.error && (
-        <ErrorBanner error={current.error} onRetry={() => void current.refetch()} />
-      )}
+      {current.error && <ErrorBanner error={current.error} onRetry={refreshReport} />}
       {!current.error &&
         !report &&
         (current.isPending || current.isFetching || current.data?.state === 'building') && (

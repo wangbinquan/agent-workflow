@@ -1,4 +1,5 @@
 // RFC-371: a same-scope refresh keeps a dated completed snapshot, never invalid old totals.
+// An invalidated report must be rebuilt by the formal retry action; see invalidated-report-retry.md.
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -101,6 +102,11 @@ function fixture() {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   const fixtureId = ++fixtureSequence
   const reports: Ready[] = []
+  const admissions: {
+    filters: ObservationOverviewQuery
+    taskId?: string
+    refreshKey: string
+  }[] = []
   const requests: { path: string; method: string; reportId?: string }[] = []
   const states = new Map<string, CompleteObservationReport>()
   const blocked = new Map<
@@ -117,7 +123,9 @@ function fixture() {
       const body = JSON.parse(String(init?.body)) as {
         filters: ObservationOverviewQuery
         taskId?: string
+        refreshKey: string
       }
+      admissions.push(body)
       const report = ready(
         'refresh-report-' + fixtureId + '-' + reports.length,
         body.filters,
@@ -189,6 +197,7 @@ function fixture() {
   })
   return {
     reports,
+    admissions,
     requests,
     states,
     control,
@@ -670,6 +679,63 @@ test('formal refresh retains the dated four buckets, CNY and bars and blocks dup
   expect(refresh.disabled).toBe(false)
   expect(f.requests.filter((row) => row.method === 'POST')).toHaveLength(2)
 })
+
+test.each(['overview', 'task'] as const)(
+  'formal %s retry rebuilds an invalidated report in the same scope with a fresh admission key',
+  async (scope) => {
+    const f = fixture()
+    render(
+      <QueryClientProvider client={client}>
+        <CompleteRunObservability
+          search={{
+            ...filters,
+            period: 'custom',
+            tab: 'overview',
+            ...(scope === 'task' ? { task: 'original-task' } : {}),
+          }}
+          onChange={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('¥0.102')
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    )
+    const original = f.reports[0]!
+    discardObservationReportBookmark(original.header.reportId)
+    await f.finish(original)
+    const retry = await screen.findByRole('button', { name: '重试' })
+    expect(screen.queryByText('¥0.102')).toBeNull()
+    expect(f.admissions).toHaveLength(1)
+    fireEvent.click(retry)
+    await waitFor(() => expect(f.admissions).toHaveLength(2))
+    expect(f.admissions[1]!.refreshKey).not.toBe(f.admissions[0]!.refreshKey)
+    expect(f.admissions[1]!.filters).toEqual(f.admissions[0]!.filters)
+    expect(f.admissions[1]!.taskId).toBe(scope === 'task' ? 'original-task' : undefined)
+    expect(screen.queryByText('¥0.102')).toBeNull()
+    expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
+    await f.finish(f.reports[1]!)
+    await screen.findByText('¥0.132')
+    const card = screen
+      .getByRole('heading', {
+        name: i18n.t('runObservability.' + (scope === 'task' ? 'summary' : 'totalTokens')),
+      })
+      .closest<HTMLElement>('.card')!
+    expect(
+      [...card.querySelectorAll('[data-token-bucket] dd')].map((node) => node.textContent),
+    ).toEqual(['22', '44', '0', '66'])
+    if (scope === 'overview') await screen.findByRole('button', { name: /1 个任务.*132 Token/ })
+    expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
+    expect(f.admissions).toHaveLength(2)
+    const bookmark = await observationReportBookmark(
+      f.admissions[1]!.filters,
+      f.admissions[1]!.taskId,
+    )
+    expect(bookmark.read()).toBe(f.reports[1]!.header.reportId)
+  },
+)
 
 test('initial building, changed filters and another Task never display the previous scope', async () => {
   const f = fixture()
