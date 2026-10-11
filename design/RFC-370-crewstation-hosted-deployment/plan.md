@@ -1400,3 +1400,9 @@ ca947c2431cd710bdaa63af3bae4903c1ace03b4 的主 CI 38044940528 正式 success、
 经独立功能设计 PASS／零 findings，已实施两用途闭合视图和原事务钩子，所有 native 恢复／租约／catch/false／事件行为保持。十六 provider＋一全量源码注册已补，原 H/L 398 次人口保持，新增预计 Ubuntu33／macOS17／Windows17；该数字为登记人口，未执行。原源码判据通过三源文件有限 UTF-16 inverse 组合保持，Windows 原字节可在删除本片新增引用后完整恢复；本片格式／lint和纯语法／字节通过，无本机 AW 运行。
 
 独立源码实现门、唯一原 census、配套门、精确发布和新 SHA 全主 CI＋默认完整 Windows仍待验收。详见[资源恢复切面](task-resource-recovery-write-purposes.md)。完整 H7／A-T7／A-G、十九 owner／三个根、各层独立 CS adapters 与先 M0 部署再 M1～M4 继续，AW 尚未部署 CS，RFC 未完成。全部旧 plan 与并行输出保持。
+
+## 2026-10-11 Task 资源恢复：真实 CI 修复
+
+7b3a4264／6db03c7d 已精确发布，原 SOURCE／MATCHING PASS 与失败、R2 中止和 R3／R4 原生成历史均保留。6db03c7d 的主 CI 38112405396 与完整 Windows 38112405402 实际报红，Ubuntu／macOS／Windows 指向同一原 boot 读取时机与新事务身份判据；主类型检查另有三个 TS7006。当前总绿前置重新未满足，不继续后续 RFC 生产适配。
+
+独立有限设计 PASS 已实际消费；候选恢复原构造冷合同和各 stage 的原输入读取，以现成真实 SQL recorder 验证七／两个独立写原子及原提交／回滚，不改变 DB／mapper／receiver／原事务。R08 首个 stage 拒绝保持四种不完整组合、原错误和零效果；类型只补原接口注解。原 boot／H／L 全文、R 人口、原预算和全部并行内容保持，无本机 AW 执行。详见[修复设计及实施](task-resource-recovery-ci-repair.md)。实现 SOURCE／唯一原 scoped census／MATCHING、精确发布与新 SHA 主 CI＋默认 Windows／465 次实际案例另验；完整 H7／A-T7／A-G、CS adapters、先 M0 再 M1～M4 与 RFC 继续开放，AW 尚未部署 CS。

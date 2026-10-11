@@ -26,7 +26,7 @@ export function captureTaskResourceRecoveryWrite(
   const capture = captureTaskHostWriteContext(port, grant)
   const originalBinding: TaskHostWriteBinding = Object.freeze({
     port,
-    transactionFor(transaction) {
+    transactionFor(transaction: Parameters<TaskHostWriteBinding['transactionFor']>[0]) {
       return transactionFor.call(binding, transaction)
     },
   })

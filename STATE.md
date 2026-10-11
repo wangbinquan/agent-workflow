@@ -1,3 +1,11 @@
+## 2026-10-11 RFC-370：Task 资源恢复真实 CI 修复候选
+
+Task 资源恢复已按独立 SOURCE／MATCHING 门发布到 7b3a4264／6db03c7d；原正式失败与唯一原生成历史完整保留。确切 6db03c7d 的主 CI 38112405396 和完整 Windows 38112405402 实际报红：原 boot 构造读取时机回归、新 R01／R05 错把 SQLite 客户端对象身份当成事务身份，以及三个 TS7006 参数类型缺失。Ubuntu／macOS／Windows 的对应功能失败已核对；不把历史 ca947c24 总绿代签本次。
+
+有限修复设计 PASS／零 findings 已由根实际消费。现恢复 local boot 构造零输入读取，第一 stage 同步解析完整选择、后续 selected 使用原捕获端口，native 四阶段原时点／错误保持；R08 保留原不完整组合和零效果判据并同时检验 prepare／reap 拒绝。R01／R05 以实际 SQL 边界证明原七／两次写入原子和提交／回滚，原行状态、重试及 H／L／原 boot 全文判据保持；三个回调只补原接口参数类型。未运行本机 AW test/typecheck/build/service/E2E。
+
+独立实现门、这次改变后的唯一原 scoped census／配套门、精确上库及修复 SHA 主 CI＋完整 Windows 总绿另验；后续 RFC 生产适配继续等待总绿。完整 H7／十九 owner／三个根、A-T7／A-G、各层独立 CS adapters、M0～M4 和 RFC 仍开放，AW 尚未部署 CS。详见[真实 CI 修复](design/RFC-370-crewstation-hosted-deployment/task-resource-recovery-ci-repair.md)。以下旧 STATE 与全部并行输出保持。
+
 ## 2026-10-10 RFC-370：Task 资源恢复实施候选
 
 总绿前置已在 ca947c24 消费。Task 启动／周期资源恢复独立设计 PASS／零 findings 已实际核对，候选已按原事务写入、closed purpose views 与完整原 receiver 捕获实施，boot recovery 与 active periodic new-work 分开。十六个双 provider case＋一个全量源码 case 已补，原 HumanGate／lifecycle 398 次人口、原 case／断言／预算和 native 路径保持；三份源文件用有限 UTF-16 inverse 保留旧源码判据，Windows 只补精确登记。只做本片格式／lint和纯字节／语法检查，未运行本机 AW test/typecheck/build/service。

@@ -57,6 +57,7 @@ import {
   taskExecutionResourceBinding,
 } from './helpers/integrationTriggerResourceBinding'
 import { inverseTaskResourceRecoverySelections } from './helpers/taskResourceRecoveryStatementInverse'
+import type { StatementRecording } from './helpers/statementRecorder'
 import originalSources from './fixtures/rfc370-task-resource-recovery-original-sources.json'
 
 const modules: { resetForTesting(): void }[] = []
@@ -91,6 +92,24 @@ test('R17 finite recovery inverse preserves the exact preceding H and L source o
 })
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 type Purpose = 'boot' | 'periodic'
+
+/** A SQLite transaction reuses the db object; its actual SQL interval is the atom. */
+function recoveryWriteAtoms(recording: StatementRecording, consumePositions: readonly number[]) {
+  const boundaries = recording.statements.flatMap((statement, index) => {
+    const kind = /^\s*(BEGIN|COMMIT|ROLLBACK)\b/i.exec(statement.sql)?.[1]?.toUpperCase()
+    return kind === undefined ? [] : [{ index, kind }]
+  })
+  return consumePositions.map((position) => {
+    const opening = boundaries.filter((boundary) => boundary.index < position).at(-1)
+    const closing = boundaries.find((boundary) => boundary.index >= position)
+    if (opening === undefined || closing === undefined) {
+      throw new Error('recovery consume has no complete original SQL transaction interval')
+    }
+    expect(opening.kind).toBe('BEGIN')
+    expect(closing.kind).toMatch(/^(COMMIT|ROLLBACK)$/)
+    return { begin: opening.index, end: closing.index, kind: closing.kind }
+  })
+}
 
 async function seedTask(db: ProviderNeutralDatabase, taskId = `resource-${ulid()}`) {
   const slotPath: readonly LineageSlot[] = [
@@ -389,36 +408,52 @@ describeEachProvider('RFC-370 Task resource recovery writes', (harness) => {
   test('R01 local boot keeps all four real steps without admitted Task work', async () => {
     const f = await fixture(harness.db)
     await f.crash()
-    expect(currentTaskExecutionContext()).toBeUndefined()
-    const report = await runTaskExecutionBootRecovery({
-      persistence: f.persistence,
-      recoveryGrant: f.grant,
-      get runtimeSessionLeases(): never {
-        throw new Error('selected boot used native lease fallback')
-      },
-      lockProof: f.lockProof,
-      log: { info() {}, warn() {} },
-    })
-    expect(report.revokedTaskIds).toEqual([f.taskId])
-    expect(report.reap).toEqual({ tasks: 1, runs: 1 })
-    expect(report.repairedRuntimeLeases).toBe(0)
-    expect(report.finalization).toEqual({
-      releasedTaskIds: [f.taskId],
-      outcomeUnknownTaskIds: [],
-      recoveredProcessEffectIds: [],
-      recoveredCodeHostEffectIds: [],
-      retryAuthorizedCodeHostEffectIds: [],
-    })
-    expect((await f.native.ownership.read(f.taskId))?.state).toBe('released')
-    expect(await f.row()).toMatchObject({ status: 'interrupted' })
-    expect((await f.intents())[0]).toMatchObject({
-      state: 'failed',
-      failureCode: DAEMON_RESTART_ERROR_SUMMARY,
-    })
-    expect(f.calls.map((call) => call.purpose)).toEqual(Array(7).fill('boot'))
-    expect(new Set(f.calls.map((call) => call.transaction)).size).toBe(7)
-    expect(f.calls.every((call) => !databaseTransactionIsActive(call.transaction))).toBe(true)
-    expect(currentTaskExecutionContext()).toBeUndefined()
+    const recording = harness.recordStatements()
+    const consumePositions: number[] = []
+    f.controls.before = async () => {
+      consumePositions.push(recording.statements.length)
+    }
+    let persistenceReads = 0
+    try {
+      expect(currentTaskExecutionContext()).toBeUndefined()
+      const report = await runTaskExecutionBootRecovery({
+        get persistence() {
+          persistenceReads++
+          return f.persistence
+        },
+        recoveryGrant: f.grant,
+        get runtimeSessionLeases(): never {
+          throw new Error('selected boot used native lease fallback')
+        },
+        lockProof: f.lockProof,
+        log: { info() {}, warn() {} },
+      })
+      expect(report.revokedTaskIds).toEqual([f.taskId])
+      expect(report.reap).toEqual({ tasks: 1, runs: 1 })
+      expect(report.repairedRuntimeLeases).toBe(0)
+      expect(report.finalization).toEqual({
+        releasedTaskIds: [f.taskId],
+        outcomeUnknownTaskIds: [],
+        recoveredProcessEffectIds: [],
+        recoveredCodeHostEffectIds: [],
+        retryAuthorizedCodeHostEffectIds: [],
+      })
+      expect((await f.native.ownership.read(f.taskId))?.state).toBe('released')
+      expect(await f.row()).toMatchObject({ status: 'interrupted' })
+      expect((await f.intents())[0]).toMatchObject({
+        state: 'failed',
+        failureCode: DAEMON_RESTART_ERROR_SUMMARY,
+      })
+      expect(f.calls.map((call) => call.purpose)).toEqual(Array(7).fill('boot'))
+      const atoms = recoveryWriteAtoms(recording, consumePositions)
+      expect(new Set(atoms.map((atom) => atom.begin)).size).toBe(7)
+      expect(atoms.map((atom) => atom.kind)).toEqual(Array(7).fill('COMMIT'))
+      expect(persistenceReads).toBe(1)
+      expect(f.calls.every((call) => !databaseTransactionIsActive(call.transaction))).toBe(true)
+      expect(currentTaskExecutionContext()).toBeUndefined()
+    } finally {
+      recording.stop()
+    }
   })
 
   test('R02 rejected boot CAS and lifecycle preserve complete original rows and events', async () => {
@@ -560,27 +595,36 @@ describeEachProvider('RFC-370 Task resource recovery writes', (harness) => {
     const boot = f.boot()
     let first: Awaited<ReturnType<typeof rows>> | undefined
     const error = new Error('second lease rejected')
-    f.controls.before = async (_, tx) => {
-      if (f.calls.length === 1) first = await rows(tx)
-      else throw error
+    const recording = harness.recordStatements()
+    const consumePositions: number[] = []
+    try {
+      f.controls.before = async (_, tx) => {
+        consumePositions.push(recording.statements.length)
+        if (f.calls.length === 1) first = await rows(tx)
+        else throw error
+      }
+      await expect(boot.runtimeSessionLeases.repairAfterOrphanReap()).rejects.toBe(error)
+      expect(first).toBeDefined()
+      expect(await rows()).toEqual(first!)
+      const atoms = recoveryWriteAtoms(recording, consumePositions)
+      expect(new Set(atoms.map((atom) => atom.begin)).size).toBe(2)
+      expect(atoms.map((atom) => atom.kind)).toEqual(['COMMIT', 'ROLLBACK'])
+      f.controls.before = undefined
+      expect(await boot.runtimeSessionLeases.repairAfterOrphanReap()).toBe(1)
+      expect(
+        await f.db
+          .select()
+          .from(runtimeSessionLeases)
+          .where(eq(runtimeSessionLeases.taskId, f.taskId))
+          .all(),
+      ).toMatchObject([{ leaseNodeRunId: null, leaseNonceDigest: null }])
+      expect(
+        (await rows()).runs.find((run) => run.id.startsWith('lease-run-b'))?.opencodeSessionId,
+      ).toBeNull()
+      expect(await boot.runtimeSessionLeases.repairAfterOrphanReap()).toBe(0)
+    } finally {
+      recording.stop()
     }
-    await expect(boot.runtimeSessionLeases.repairAfterOrphanReap()).rejects.toBe(error)
-    expect(first).toBeDefined()
-    expect(await rows()).toEqual(first!)
-    expect(new Set(f.calls.map((call) => call.transaction)).size).toBe(2)
-    f.controls.before = undefined
-    expect(await boot.runtimeSessionLeases.repairAfterOrphanReap()).toBe(1)
-    expect(
-      await f.db
-        .select()
-        .from(runtimeSessionLeases)
-        .where(eq(runtimeSessionLeases.taskId, f.taskId))
-        .all(),
-    ).toMatchObject([{ leaseNodeRunId: null, leaseNonceDigest: null }])
-    expect(
-      (await rows()).runs.find((run) => run.id.startsWith('lease-run-b'))?.opencodeSessionId,
-    ).toBeNull()
-    expect(await boot.runtimeSessionLeases.repairAfterOrphanReap()).toBe(0)
   })
 
   test('R06 periodic uses only active work and cannot mutate while draining', async () => {
@@ -651,28 +695,43 @@ describeEachProvider('RFC-370 Task resource recovery writes', (harness) => {
 
   test('R08 missing selected grant or family is rejected before native recovery', async () => {
     const f = await fixture(harness.db)
+    let persistenceReads = 0
     const input = {
-      persistence: f.persistence,
+      get persistence() {
+        persistenceReads++
+        return f.persistence
+      },
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(f.db),
       lockProof: f.lockProof,
       log: { info() {}, warn() {} },
     }
-    expect(() => createLocalBootExecutionRecovery(input)).toThrow(
+    const missingGrant = createLocalBootExecutionRecovery(input)
+    expect(persistenceReads).toBe(0)
+    await expect(missingGrant.prepare()).rejects.toThrow('task-recovery-write-selection-incomplete')
+    expect(persistenceReads).toBe(1)
+    await expect(missingGrant.reap()).rejects.toThrow('task-recovery-write-selection-incomplete')
+    expect(persistenceReads).toBe(2)
+    const missingFamily = createLocalBootExecutionRecovery({
+      ...input,
+      persistence: { ...f.persistence, recoveryWritePurposes: undefined },
+      recoveryGrant: f.grant,
+    })
+    await expect(missingFamily.prepare()).rejects.toThrow(
       'task-recovery-write-selection-incomplete',
     )
-    expect(() =>
-      createLocalBootExecutionRecovery({
-        ...input,
-        persistence: { ...f.persistence, recoveryWritePurposes: undefined },
-        recoveryGrant: f.grant,
-      }),
-    ).toThrow('task-recovery-write-selection-incomplete')
+    await expect(missingFamily.reap()).rejects.toThrow('task-recovery-write-selection-incomplete')
     expect(() => selectTaskPeriodicRecoveryWrites(f.persistence, undefined)).toThrow(
       'task-recovery-write-selection-incomplete',
     )
-    expect(() =>
-      createLocalBootExecutionRecovery({ ...input, persistence: f.native, recoveryGrant: f.grant }),
-    ).toThrow('task-recovery-write-selection-incomplete')
+    const unexpectedGrant = createLocalBootExecutionRecovery({
+      ...input,
+      persistence: f.native,
+      recoveryGrant: f.grant,
+    })
+    await expect(unexpectedGrant.prepare()).rejects.toThrow(
+      'task-recovery-write-selection-incomplete',
+    )
+    await expect(unexpectedGrant.reap()).rejects.toThrow('task-recovery-write-selection-incomplete')
     expect(f.calls).toEqual([])
     expect((await f.row())?.status).toBe('running')
   })

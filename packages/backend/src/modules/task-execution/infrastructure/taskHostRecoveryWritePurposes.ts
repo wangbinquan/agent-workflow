@@ -73,7 +73,7 @@ export function createSelectedTaskRecoveryWritePurposes(input: {
     return { resourceWrite, operations, leaseRepair }
   }
   return Object.freeze({
-    boot(grant) {
+    boot(grant: TaskResourceRecoveryGrant) {
       const { resourceWrite, operations, leaseRepair } = select(grant, 'boot')
       const bootOperations: TaskBootOrphanOperations = Object.freeze({
         loadBootOrphanSnapshot: operations.loadBootOrphanSnapshot.bind(operations),
@@ -91,7 +91,7 @@ export function createSelectedTaskRecoveryWritePurposes(input: {
         runtimeSessionLeases: leaseRepair,
       })
     },
-    periodic(grant) {
+    periodic(grant: TaskResourceRecoveryGrant) {
       const { operations } = select(grant, 'periodic')
       return Object.freeze({
         listPeriodicReconcileCandidates:
