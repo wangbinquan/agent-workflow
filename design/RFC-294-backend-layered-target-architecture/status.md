@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:703cebdb19242d3606c90de51206f65464790bf081c8d8351f64dd942023556d`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f069717bff146345b680f376c85758d3b2be1d91f887b56cac0a3c0f37018c78`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2434 |
+| backend production TS 文件 | 2435 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1838 / 18 |
+| `modules/**` 文件 / 非空 context | 1839 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -35,10 +35,10 @@
 | `crossContextImports` | 6909 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27824 |
+| `moduleSymbolOwners` | 27829 |
 | `mutationEntrypoints` | 1995 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1267 |
+| `publicSurfaces` | 1269 |
 | `transactionExternalEffects` | 275 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -78,7 +78,7 @@
 | run-observability / ports | 19 |
 | development-automation / composition | 18 |
 | intent / domain | 18 |
-| system-operations / composition | 17 |
+| system-operations / composition | 18 |
 | code-capability / infrastructure | 15 |
 | collaboration / domain | 14 |
 | digital-employee / application | 14 |
@@ -259,7 +259,7 @@
 | resource-catalog | 243 |
 | collaboration | 122 |
 | source-control | 104 |
-| system-operations | 87 |
+| system-operations | 89 |
 | runtime-management | 79 |
 | identity-access | 65 |
 | digital-employee | 51 |
@@ -274,13 +274,13 @@
 | intent | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 1267）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 143 / 1269）
 
 | context | 数量 |
 | --- | --- |
 | collaboration | 44 |
+| system-operations | 19 |
 | digital-employee | 18 |
-| system-operations | 17 |
 | task-execution | 14 |
 | code-capability | 11 |
 | event-center | 8 |

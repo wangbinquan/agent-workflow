@@ -12,6 +12,7 @@ import type {
   HostExecutionRecoveryFamily,
   HostExecutionResult,
   HostExecutionRuntimeFamily,
+  HostExecutionWriteLifecycle,
 } from '../application/ports/hostExecutionAuthority'
 import type { DaemonStartupLease } from '../application/ports/daemonStartupLease'
 import { createLocalHostExecutionAuthorityFactory } from '../infrastructure/local/hostExecutionAuthority'
@@ -19,6 +20,7 @@ import { createLocalHostExecutionAuthorityFactory } from '../infrastructure/loca
 interface HostExecutionOwnerFamilies {
   readonly recovery: HostExecutionRecoveryFamily
   readonly runtime: HostExecutionRuntimeFamily
+  readonly writeLifecycle?: HostExecutionWriteLifecycle
 }
 
 /** Each selection supplies the recovery and runtime belonging to this host. */
@@ -78,6 +80,13 @@ function assertOwnerFamilies(selection: HostExecutionAuthoritySelection): void {
   if (selection.kind === 'selected' && typeof selection.factory?.create !== 'function') {
     throw new Error('host-execution-authority-factory-missing-create')
   }
+  if (selection.writeLifecycle !== undefined) {
+    for (const method of ['prepare', 'activate', 'renew', 'quiesce', 'retire'] as const) {
+      if (typeof selection.writeLifecycle?.[method] !== 'function') {
+        throw new Error(`host-execution-write-lifecycle-missing-${method}`)
+      }
+    }
+  }
 }
 
 /** Composition creates no claims or recovery work and keeps the native result sync. */
@@ -98,6 +107,17 @@ export function composeHostExecutionAuthorityBinding(
   }
   assertOwnerFamilies(input.selection)
   const selection = input.selection
+  const selectedWrites = selection.writeLifecycle
+  const writeLifecycle =
+    selectedWrites === undefined
+      ? undefined
+      : Object.freeze<HostExecutionWriteLifecycle>({
+          prepare: selectedWrites.prepare.bind(selectedWrites),
+          activate: selectedWrites.activate.bind(selectedWrites),
+          renew: selectedWrites.renew.bind(selectedWrites),
+          quiesce: selectedWrites.quiesce.bind(selectedWrites),
+          retire: selectedWrites.retire.bind(selectedWrites),
+        })
   const factory =
     selection.kind === 'selected'
       ? selection.factory
@@ -112,6 +132,7 @@ export function composeHostExecutionAuthorityBinding(
       driver,
       recovery: selection.recovery,
       runtime: selection.runtime,
+      writeLifecycle,
       onFailure: input.onFailure,
     })
     const binding = Object.freeze({

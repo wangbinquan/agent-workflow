@@ -11,6 +11,7 @@ import type {
   HostExecutionRecoveryFamily,
   HostExecutionRuntimeFamily,
   HostExecutionStopReason,
+  HostExecutionWriteLifecycle,
 } from './ports/hostExecutionAuthority'
 
 interface AdmissionProgress {
@@ -26,6 +27,9 @@ interface GrantProgress {
   valid: boolean
   reason: HostExecutionStopReason
   preparationAttempted: boolean
+  writePrepared: boolean
+  writeQuiesced: boolean
+  writeRetired: boolean
   startAttempted: boolean
   recoveryQuiesced: boolean
   recoveryDrained: boolean
@@ -41,6 +45,7 @@ export interface CreateHostExecutionAuthorityLifecycleInput {
   readonly driver: HostExecutionAuthorityDriver
   readonly recovery: HostExecutionRecoveryFamily
   readonly runtime: HostExecutionRuntimeFamily
+  readonly writeLifecycle?: HostExecutionWriteLifecycle
   readonly onFailure: (error: unknown) => void
 }
 
@@ -69,6 +74,13 @@ function assertComplete(input: CreateHostExecutionAuthorityLifecycleInput): void
       throw new Error(`host-execution-runtime-missing-${name}`)
     }
   }
+  if (input.writeLifecycle !== undefined) {
+    for (const name of ['prepare', 'activate', 'renew', 'quiesce', 'retire'] as const) {
+      if (typeof input.writeLifecycle?.[name] !== 'function') {
+        throw new Error(`host-execution-write-lifecycle-missing-${name}`)
+      }
+    }
+  }
 }
 
 /** Own one provider generation's admission, control ACKs and grant retirement. */
@@ -76,6 +88,17 @@ export function createHostExecutionAuthorityLifecycle(
   input: CreateHostExecutionAuthorityLifecycleInput,
 ): HostExecutionAuthorityLifecycle {
   assertComplete(input)
+  const selectedWrites = input.writeLifecycle
+  const writeLifecycle =
+    selectedWrites === undefined
+      ? undefined
+      : Object.freeze<HostExecutionWriteLifecycle>({
+          prepare: selectedWrites.prepare.bind(selectedWrites),
+          activate: selectedWrites.activate.bind(selectedWrites),
+          renew: selectedWrites.renew.bind(selectedWrites),
+          quiesce: selectedWrites.quiesce.bind(selectedWrites),
+          retire: selectedWrites.retire.bind(selectedWrites),
+        })
   let phase: HostExecutionPhase = 'standby'
   let reason: string | null =
     input.mode === 'resource-only' ? 'host-execution-resource-only' : 'host-execution-unclaimed'
@@ -134,6 +157,9 @@ export function createHostExecutionAuthorityLifecycle(
       valid: !closing && operationVersion === version,
       reason: closing ? 'shutdown' : 'authority-loss',
       preparationAttempted: false,
+      writePrepared: false,
+      writeQuiesced: true,
+      writeRetired: true,
       startAttempted: false,
       recoveryQuiesced: true,
       recoveryDrained: true,
@@ -214,6 +240,14 @@ export function createHostExecutionAuthorityLifecycle(
         },
       )
     }
+    if (!grant.writeQuiesced) {
+      await attempt(
+        () => writeLifecycle!.quiesce(grant.context),
+        () => {
+          grant.writeQuiesced = true
+        },
+      )
+    }
     if (!grant.runtimeQuiesced) {
       await attempt(
         () => input.runtime.quiesce({ context: grant.context, reason: grant.reason }),
@@ -248,19 +282,30 @@ export function createHostExecutionAuthorityLifecycle(
     }
     if (
       grant.driverQuiesced &&
+      grant.writeQuiesced &&
       grant.runtimeQuiesced &&
       grant.recoveryQuiesced &&
       grant.runtimeDrained &&
       grant.recoveryDrained
     ) {
       await Promise.all([...grant.admissions].map((entry) => entry.completed))
-      await attempt(
-        () => input.driver.release(grant.reference),
-        () => {
-          grant.released = true
-          ownedGrants.delete(grant)
-        },
-      )
+      if (!grant.writeRetired) {
+        await attempt(
+          () => writeLifecycle!.retire(grant.context),
+          () => {
+            grant.writeRetired = true
+          },
+        )
+      }
+      if (grant.writeRetired) {
+        await attempt(
+          () => input.driver.release(grant.reference),
+          () => {
+            grant.released = true
+            ownedGrants.delete(grant)
+          },
+        )
+      }
     }
     if (failures.length === 1) throw failures[0]
     if (failures.length > 1) {
@@ -280,11 +325,18 @@ export function createHostExecutionAuthorityLifecycle(
     current = grant
     phase = 'preparing'
     reason = 'host-execution-preparing'
-    grant.preparationAttempted = true
-    grant.recoveryQuiesced = false
-    grant.recoveryDrained = false
     let failed = false
     try {
+      if (writeLifecycle !== undefined) {
+        grant.writeQuiesced = false
+        grant.writeRetired = false
+        await writeLifecycle.prepare(grant.context)
+        grant.writePrepared = true
+        if (!grant.context.current()) return
+      }
+      grant.preparationAttempted = true
+      grant.recoveryQuiesced = false
+      grant.recoveryDrained = false
       const prepared = await input.recovery.prepare(grant.context)
       if (!grant.context.current()) return
       if (prepared.kind === 'deferred' || prepared.readyGroups.length === 0) {
@@ -308,6 +360,10 @@ export function createHostExecutionAuthorityLifecycle(
       }
       if (activated.reference !== grant.reference) {
         throw new Error('host-execution-activation-reference-mismatch')
+      }
+      if (writeLifecycle !== undefined) {
+        await writeLifecycle.activate(grant.context)
+        if (!grant.context.current()) return
       }
       grant.startAttempted = true
       grant.runtimeQuiesced = false
@@ -335,15 +391,47 @@ export function createHostExecutionAuthorityLifecycle(
     }
   }
 
+  const renewWrites = async (grant: GrantProgress): Promise<void> => {
+    if (writeLifecycle === undefined || !grant.writePrepared || !grant.context.current()) return
+    await writeLifecycle.renew(grant.context)
+  }
+
+  const observeWriteRenewal = (grant: GrantProgress): void => {
+    if (writeLifecycle === undefined) return
+    serialize(async () => {
+      try {
+        await renewWrites(grant)
+      } catch (error) {
+        if (grant.context.current()) invalidate('authority-loss', 'host-execution-renewal-failed')
+        try {
+          await retireObsolete()
+        } catch (retirementError) {
+          throw new AggregateError(
+            [error, retirementError],
+            'failed to renew and retire host execution grant',
+          )
+        }
+        throw error
+      }
+      await retireObsolete()
+    }).catch(notifyFailure)
+  }
+
   const observe = (observation: HostExecutionAuthorityObservation): void => {
     if (observation.kind !== 'granted') {
       invalidate('authority-loss', observation.reason)
       serialize(retireObsolete).catch(notifyFailure)
       return
     }
-    if (current?.reference === observation.reference && current.context.current()) return
+    if (current?.reference === observation.reference && current.context.current()) {
+      observeWriteRenewal(current)
+      return
+    }
     const known = grants.get(observation.reference)
-    if (known?.context.current()) return
+    if (known?.context.current()) {
+      observeWriteRenewal(known)
+      return
+    }
     if (known && !known.context.current()) {
       serialize(retireObsolete).catch(notifyFailure)
       return
@@ -448,6 +536,8 @@ export function createHostExecutionAuthorityLifecycle(
           if (grant.context.current()) {
             if (observation.kind === 'granted' && observation.reference !== grant.reference) {
               invalidate('authority-loss', 'host-execution-renewal-reference-mismatch')
+            } else if (writeLifecycle !== undefined && observation.kind === 'granted') {
+              await renewWrites(grant)
             } else {
               observe(observation)
             }

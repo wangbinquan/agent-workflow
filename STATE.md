@@ -1,3 +1,19 @@
+## 2026-10-11 RFC-370：SO SOURCE R1 功能问题已修复，R2 待复核
+
+独立 SOURCE R1 正式 FAIL／一项 F01 已由根消费；问题是异步 factory 等待期间可替换原 writeLifecycle 方法。R2 在 factory 前固定五个原 callback 与 receiver，W21 加上方法替换／删除、选择指针替换、真实续租与退役断言。原 R1 FAIL、旧正文、native／Task判据及全部并行输出完整保持；限定格式／lint与纯字节／语法检查，无本机 AW执行。R2 独立复核、唯一原 census／MATCHING、发布和新 SHA 全CI仍待验收。详见[SO控制修复](design/RFC-370-crewstation-hosted-deployment/host-write-lifecycle-control.md)。完整三根／十九 owner／H7／A-T7／A-G及CS分步部署和RFC继续，AW尚未部署CS。以下旧 STATE完整保留。
+
+## 2026-10-11 RFC-370：SO 写上下文生命周期实施候选
+
+`3ed6040c` 主 CI 72／72与默认完整 Windows 26步总绿及534次目标实际执行已由根会话消费。经独立有限设计 PASS，已接 SO 原 authority 队列的完整 write lifecycle：原 receipt 的 prepare／activate、实际 facts 的显式与 observation renew、失权停新受理、全部旧 admission ACK后 retire／release；失败步骤保留进度，prepare调用后拒绝保留未结算。原 durable context、Task adapter、native用例／预算和并行产物保持。
+
+W01～W25 双provider＋W26完整原源码inverse为预期103次登记，尚未实际运行。本片格式／lint及纯静态保持检查、独立 SOURCE／唯一原 census／MATCHING、精确发布和新 SHA全CI各自验收，无本机 AW执行。详见[SO控制候选](design/RFC-370-crewstation-hosted-deployment/host-write-lifecycle-control.md)。完整H7／十九owner／三根、A-T7／A-G、跨进程接管、各层CS adapter与先M0再M1～M4继续开放，AW尚未部署CS，RFC未完成。以下旧STATE与并行内容完整保留。
+
+## 2026-10-11 RFC-370：Task 资源恢复修复总绿，恢复 RFC 实施
+
+确切 `3ed6040c339da628398cfd6eba5353c2935a3b93` 的主 CI `38115032019` 正式 completed／success、72／72 作业成功；默认完整 Windows `38115032033` 正式 success、26 步成功。根会话已核对全部 73 作业、八条 typecheck code 0，以及三平台 534 次实际具名目标案例：原 H／L／R 465 次与原 boot 69 次全部 pass，无缺失／重复／失败／skip／todo。SOURCE／MATCHING 分析与字节身份已消费，原失败、原生成历史与全部并行输出保留。详见[本次总绿验收](design/RFC-370-crewstation-hosted-deployment/ci-task-resource-total-green-closeout.md)。
+
+用户要求的总绿前置已满足，恢复经独立设计门通过的 SO 写上下文生命周期实施。完整 H7／十九 owner／三个根、A-T7／A-G、各层独立 CS adapter、先 M0 部署再 M1～M4 与 RFC 仍开放，AW 尚未部署 CS。本次没有本机 AW 执行或额外 census。以下旧 STATE 与并行输出完整保持。
+
 ## 2026-10-11 RFC-370：Task 资源恢复真实 CI 修复候选
 
 Task 资源恢复已按独立 SOURCE／MATCHING 门发布到 7b3a4264／6db03c7d；原正式失败与唯一原生成历史完整保留。确切 6db03c7d 的主 CI 38112405396 和完整 Windows 38112405402 实际报红：原 boot 构造读取时机回归、新 R01／R05 错把 SQLite 客户端对象身份当成事务身份，以及三个 TS7006 参数类型缺失。Ubuntu／macOS／Windows 的对应功能失败已核对；不把历史 ca947c24 总绿代签本次。

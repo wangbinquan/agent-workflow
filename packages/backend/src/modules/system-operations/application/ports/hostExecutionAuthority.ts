@@ -97,6 +97,15 @@ export interface HostExecutionRuntimeFamily {
   drain(context: HostExecutionGrantContext): HostExecutionResult<void>
 }
 
+/** Complete optional control selection, owned by the original authority queue. */
+export interface HostExecutionWriteLifecycle {
+  prepare(context: HostExecutionGrantContext): HostExecutionResult<void>
+  activate(context: HostExecutionGrantContext): HostExecutionResult<void>
+  renew(context: HostExecutionGrantContext): HostExecutionResult<void>
+  quiesce(context: HostExecutionGrantContext): HostExecutionResult<void>
+  retire(context: HostExecutionGrantContext): HostExecutionResult<void>
+}
+
 export type HostExecutionPhase = 'standby' | 'preparing' | 'active' | 'draining' | 'closed'
 
 export interface HostExecutionAvailabilityQueries {

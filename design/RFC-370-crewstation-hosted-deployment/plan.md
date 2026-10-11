@@ -1406,3 +1406,19 @@ ca947c2431cd710bdaa63af3bae4903c1ace03b4 的主 CI 38044940528 正式 success、
 7b3a4264／6db03c7d 已精确发布，原 SOURCE／MATCHING PASS 与失败、R2 中止和 R3／R4 原生成历史均保留。6db03c7d 的主 CI 38112405396 与完整 Windows 38112405402 实际报红，Ubuntu／macOS／Windows 指向同一原 boot 读取时机与新事务身份判据；主类型检查另有三个 TS7006。当前总绿前置重新未满足，不继续后续 RFC 生产适配。
 
 独立有限设计 PASS 已实际消费；候选恢复原构造冷合同和各 stage 的原输入读取，以现成真实 SQL recorder 验证七／两个独立写原子及原提交／回滚，不改变 DB／mapper／receiver／原事务。R08 首个 stage 拒绝保持四种不完整组合、原错误和零效果；类型只补原接口注解。原 boot／H／L 全文、R 人口、原预算和全部并行内容保持，无本机 AW 执行。详见[修复设计及实施](task-resource-recovery-ci-repair.md)。实现 SOURCE／唯一原 scoped census／MATCHING、精确发布与新 SHA 主 CI＋默认 Windows／465 次实际案例另验；完整 H7／A-T7／A-G、CS adapters、先 M0 再 M1～M4 与 RFC 继续开放，AW 尚未部署 CS。
+
+## 2026-10-11 Task 资源恢复修复：总绿前置通过
+
+确切 `3ed6040c339da628398cfd6eba5353c2935a3b93` 的主 CI `38115032019` 正式 success、72／72 作业成功；同一提交默认完整 Windows `38115032033` 正式 success、26 步成功。根会话实际核对全部 73 作业、八条工作区 typecheck code 0、原 H／L／R 465 次和原 boot 69 次，共 534 次具名 hosted 执行；目标无缺失、额外、重复、fail、skip 或 todo。源码／配套两门与完整 EOF 身份已实际消费；原失败、唯一原生成历史、全部旧正文与并行输出保持，无本机 AW 执行或额外 census。详见[本次总绿验收](ci-task-resource-total-green-closeout.md)。
+
+总绿前置门已满足，开始经独立设计 PASS 的 SO write lifecycle 实施，再接实际三根与十九 owner。完整 H7／A-T7／A-G、各层独立 CS adapter、先 M0 首次部署再 M1～M4 和 RFC 保持未完成；当前 AW 尚未部署 CS。
+
+## 2026-10-11 SO write lifecycle 实施候选
+
+在确切 `3ed6040c` 的全部主 CI／完整 Windows及534次实际目标案例通过后，继续已签有限 SO设计。原 authority lifecycle 增加完整可选控制视图、原 callback／receiver捕获、真实 facts 的两种续租和 ACK后 write retirement；SO composition保留原 receipt与 prepare未结算进度，正常失权排空旧结果，失败仅重试未 ACK步骤。异步factory仍保留完整原选择，native／Task事务与全部原用例保持。
+
+新W01～W25双provider及W26五份源码有限inverse共预期103次，仅登记未执行；三平台实际结果和总绿仍需新SHA验收。限定格式／lint与纯静态保持、独立SOURCE实现门、唯一原scoped census／MATCHING和精确发布依次完成，不运行本机AW测试／类型检查／构建／服务／E2E。详见[SO生命周期候选](host-write-lifecycle-control.md)。本片不签完整H7／三根／十九owner／A-T7／A-G／跨进程接管；随后继续各层CS adapter、先M0部署再M1～M4，AW尚未部署CS、RFC未完成，全部旧plan与并行输出完整保留。
+
+## 2026-10-11 SO SOURCE R1：保留 FAIL，修复后复核 R2
+
+独立 R1 仅有 F01：异步 factory 前固定了对象而没有固定五个原函数。根已消费全部功能分析与52项EOF身份，原 FAIL保持。R2 提前捕获五函数／receiver，W21 使用可变完整视图，pending期间替换／删除方法及选择指针，真实续租／退役仍断言原方法、this与durable行；其余25个callback、注册／默认预算、原native和Task全文保持。限定格式／lint与纯静态检查，无本机AW执行。R2 SOURCE、唯一本候选原scoped census／MATCHING、精确发布和新 SHA主CI＋完整Windows及103次SO行为继续另验；原534次已通过记录不代签新候选。完整H7／三根／十九owner／A-T7／A-G、CS独立adapter及先M0再M1～M4和RFC仍开放，原正文与并行内容完整保留。

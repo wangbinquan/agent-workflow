@@ -1,0 +1,220 @@
+{
+  "base": "3ed6040c339da628398cfd6eba5353c2935a3b93",
+  "files": [
+    {
+      "path": "packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts",
+      "bytes": 17169,
+      "sha256": "749ec9ca4acff5dec33f140a9caae64b8aa3cca3298d7659f6e637b691ecdd7e",
+      "inverseEdits": [
+        {
+          "start": 369,
+          "introduced": ",\n  HostExecutionWriteLifecycle",
+          "prior": ""
+        },
+        {
+          "start": 841,
+          "introduced": "ed: boolean\n  writePrepared: boolean\n  writeQuiesced: boolean\n  writeRetir",
+          "prior": ""
+        },
+        {
+          "start": 1392,
+          "introduced": "\n  readonly writeLifecycle?: HostExecutionWriteLifecycle",
+          "prior": ""
+        },
+        {
+          "start": 2572,
+          "introduced": "  if (input.writeLifecycle !== undefined) {\n    for (const name of ['prepare', 'activate', 'renew', 'quiesce', 'retire'] as const) {\n      if (typeof input.writeLifecycle?.[name] !== 'function') {\n        throw new Error(`host-execution-write-lifecycle-missing-${name}`)\n      }\n    }\n  }\n",
+          "prior": ""
+        },
+        {
+          "start": 3114,
+          "introduced": ")\n  const selectedWrites = input.writeLifecycle\n  const writeLifecycle =\n    selectedWrites === undefined\n      ? undefined\n      : Object.freeze<HostExecutionWriteLifecycle>({\n          prepare: selectedWrites.prepare.bind(selectedWrites),\n          activate: selectedWrites.activate.bind(selectedWrites),\n          renew: selectedWrites.renew.bind(selectedWrites),\n          quiesce: selectedWrites.quiesce.bind(selectedWrites),\n          retire: selectedWrites.retire.bind(selectedWrites),\n        }",
+          "prior": ""
+        },
+        {
+          "start": 5691,
+          "introduced": "e,\n      writePrepared: false,\n      writeQuiesced: true,\n      writeRetired: tru",
+          "prior": ""
+        },
+        {
+          "start": 8333,
+          "introduced": "writeQuiesced) {\n      await attempt(\n        () => writeLifecycle!.quiesce(grant.context),\n        () => {\n          grant.writeQuiesced = true\n        },\n      )\n    }\n    if (!grant.",
+          "prior": ""
+        },
+        {
+          "start": 9421,
+          "introduced": "writeQuiesced &&\n      grant.",
+          "prior": ""
+        },
+        {
+          "start": 9652,
+          "introduced": "if (!grant.writeRetired) {\n        ",
+          "prior": ""
+        },
+        {
+          "start": 9702,
+          "introduced": "          () => writeLifecycle!.retire(grant.context),\n          () => {\n            grant.writeRetired = true\n          },\n        )\n      }\n      if (grant.writeRetired) {\n        await attempt(\n  ",
+          "prior": ""
+        },
+        {
+          "start": 9962,
+          "introduced": "  ",
+          "prior": ""
+        },
+        {
+          "start": 9972,
+          "introduced": "  ",
+          "prior": ""
+        },
+        {
+          "start": 10006,
+          "introduced": "  ",
+          "prior": ""
+        },
+        {
+          "start": 10052,
+          "introduced": "  ",
+          "prior": ""
+        },
+        {
+          "start": 10063,
+          "introduced": "  ",
+          "prior": ""
+        },
+        {
+          "start": 10066,
+          "introduced": "\n      }",
+          "prior": ""
+        },
+        {
+          "start": 10707,
+          "introduced": "let failed = false\n    try {\n      if (writeLifecycle !== undefined) {\n        grant.writeQuiesced = false\n        grant.writeRetired = false\n        await writeLifecycle.prepare(grant.context)\n        grant.writePrepared = true\n        if (!grant.context.current()) return\n      }\n      ",
+          "prior": ""
+        },
+        {
+          "start": 11029,
+          "introduced": "  ",
+          "prior": ""
+        },
+        {
+          "start": 11070,
+          "introduced": "  ",
+          "prior": ""
+        },
+        {
+          "start": 11101,
+          "introduced": "",
+          "prior": "\n    let failed = false\n    try {"
+        },
+        {
+          "start": 12052,
+          "introduced": "if (writeLifecycle !== undefined) {\n        await writeLifecycle.activate(grant.context)\n        if (!grant.context.current()) return\n      }\n      ",
+          "prior": ""
+        },
+        {
+          "start": 13069,
+          "introduced": "renewWrites = async (grant: GrantProgress): Promise<void> => {\n    if (writeLifecycle === undefined || !grant.writePrepared || !grant.context.current()) return\n    await writeLifecycle.renew(grant.context)\n  }\n\n  const observeWriteRenewal = (grant: GrantProgress): void => {\n    if (writeLifecycle === undefined) return\n    serialize(async () => {\n      try {\n        await renewWrites(grant)\n      } catch (error) {\n        if (grant.context.current()) invalidate('authority-loss', 'host-execution-renewal-failed')\n        try {\n          await retireObsolete()\n        } catch (retirementError) {\n          throw new AggregateError(\n            [error, retirementError],\n            'failed to renew and retire host execution grant',\n          )\n        }\n        throw error\n      }\n      await retireObsolete()\n    }).catch(notifyFailure)\n  }\n\n  const ",
+          "prior": ""
+        },
+        {
+          "start": 14247,
+          "introduced": "{\n      observeWriteRenewal(current)\n      ",
+          "prior": ""
+        },
+        {
+          "start": 14296,
+          "introduced": "\n    }",
+          "prior": ""
+        },
+        {
+          "start": 14389,
+          "introduced": "{\n      observeWriteRenewal(known)\n      ",
+          "prior": ""
+        },
+        {
+          "start": 14436,
+          "introduced": "\n    }",
+          "prior": ""
+        },
+        {
+          "start": 18422,
+          "introduced": "if (writeLifecycle !== undefined && observation.kind === 'granted') {\n              await renewWrites(grant)\n            } else ",
+          "prior": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "bytes": 4888,
+      "sha256": "606f4c12c63d10f8acf51da34b06f1a7894c99c12a8f138f3ef0d6c40b6f0684",
+      "inverseEdits": [
+        {
+          "start": 3544,
+          "introduced": "/** Complete optional control selection, owned by the original authority queue. */\nexport interface HostExecutionWriteLifecycle {\n  prepare(context: HostExecutionGrantContext): HostExecutionResult<void>\n  activate(context: HostExecutionGrantContext): HostExecutionResult<void>\n  renew(context: HostExecutionGrantContext): HostExecutionResult<void>\n  quiesce(context: HostExecutionGrantContext): HostExecutionResult<void>\n  retire(context: HostExecutionGrantContext): HostExecutionResult<void>\n}\n\n",
+          "prior": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts",
+      "bytes": 1065,
+      "sha256": "1f0eeca3de368a482ef23193a0ac3f75a188c7fa307ec1f74e6a9a0eda7d21a0",
+      "inverseEdits": [
+        {
+          "start": 172,
+          "introduced": "\n\n/** Actual host control facts; common code neither claims nor invents a lease. */\nexport interface HostExecutionWriteLeaseFacts {\n  forGrant(\n    context: HostExecutionGrantContext,\n  ):\n    | { readonly holder: string; readonly expiresAt: number }\n    | Promise<{ readonly holder: string; readonly expiresAt: number }>\n}",
+          "prior": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/system-operations/composition/hostExecutionAuthority.ts",
+      "bytes": 5861,
+      "sha256": "9e4a1908dc285c66e324ff4c416e16665db4f5fb1bb1839e289f24d19d3be9a5",
+      "inverseEdits": [
+        {
+          "start": 506,
+          "introduced": "  HostExecutionWriteLifecycle,\n",
+          "prior": ""
+        },
+        {
+          "start": 913,
+          "introduced": "\n  readonly writeLifecycle?: HostExecutionWriteLifecycle",
+          "prior": ""
+        },
+        {
+          "start": 3241,
+          "introduced": "  if (selection.writeLifecycle !== undefined) {\n    for (const method of ['prepare', 'activate', 'renew', 'quiesce', 'retire'] as const) {\n      if (typeof selection.writeLifecycle?.[method] !== 'function') {\n        throw new Error(`host-execution-write-lifecycle-missing-${method}`)\n      }\n    }\n  }\n",
+          "prior": ""
+        },
+        {
+          "start": 4372,
+          "introduced": "selectedWrites = selection.writeLifecycle\n  const writeLifecycle =\n    selectedWrites === undefined\n      ? undefined\n      : Object.freeze<HostExecutionWriteLifecycle>({\n          prepare: selectedWrites.prepare.bind(selectedWrites),\n          activate: selectedWrites.activate.bind(selectedWrites),\n          renew: selectedWrites.renew.bind(selectedWrites),\n          quiesce: selectedWrites.quiesce.bind(selectedWrites),\n          retire: selectedWrites.retire.bind(selectedWrites),\n        })\n  const ",
+          "prior": ""
+        },
+        {
+          "start": 5484,
+          "introduced": "e,\n      writeLifecycl",
+          "prior": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "bytes": 863,
+      "sha256": "fce9f52386420b947a003f64b4ef3519e1a10079354cf2c3e2e2aeaabf5a9341",
+      "inverseEdits": [
+        {
+          "start": 143,
+          "introduced": ",\n  HostExecutionWriteLeaseFacts",
+          "prior": ""
+        },
+        {
+          "start": 842,
+          "introduced": "  HostExecutionWriteLifecycle,\n",
+          "prior": ""
+        }
+      ]
+    }
+  ]
+}

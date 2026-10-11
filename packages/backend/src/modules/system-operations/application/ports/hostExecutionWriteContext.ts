@@ -5,6 +5,15 @@ import type {
 
 declare const hostExecutionWriteReceiptBrand: unique symbol
 
+/** Actual host control facts; common code neither claims nor invents a lease. */
+export interface HostExecutionWriteLeaseFacts {
+  forGrant(
+    context: HostExecutionGrantContext,
+  ):
+    | { readonly holder: string; readonly expiresAt: number }
+    | Promise<{ readonly holder: string; readonly expiresAt: number }>
+}
+
 /** The original SO binding owns this identity; consumers cannot reconstruct it. */
 export interface HostExecutionWriteReceipt {
   readonly [hostExecutionWriteReceiptBrand]: true

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2434,
+    "backendFiles": 2435,
     "frontendFiles": 659,
     "legacyFiles": 596,
-    "moduleFiles": 1838,
-    "productionFiles": 3264,
+    "moduleFiles": 1839,
+    "productionFiles": 3265,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27824
+    "symbolsIncludingFileRoots": 27829
   },
   "entries": [
     {
@@ -129576,6 +129576,18 @@
     {
       "currentContext": "system-operations",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts#HostExecutionWriteLifecycle",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostExecutionWriteLifecycle",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts",
       "id": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts#$file",
@@ -129594,6 +129606,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "HostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/hostExecutionWriteContext.ts#HostExecutionWriteLeaseFacts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HostExecutionWriteLeaseFacts",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -130602,6 +130626,42 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "composeHostExecutionWriteContext",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionWriteLifecycle.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionWriteLifecycle.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionWriteLifecycle.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionWriteLifecycle.ts#composeHostExecutionWriteLifecycle",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "composeHostExecutionWriteLifecycle",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/hostExecutionWriteLifecycle.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/hostExecutionWriteLifecycle.ts#WritePreparationProgress",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "WritePreparationProgress",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -334629,5 +334689,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:703cebdb19242d3606c90de51206f65464790bf081c8d8351f64dd942023556d"
+  "sourceDigest": "sha256:f069717bff146345b680f376c85758d3b2be1d91f887b56cac0a3c0f37018c78"
 }

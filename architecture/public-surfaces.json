@@ -3,10 +3,10 @@
     "consumers": 1353,
     "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
-    "methods": 1762,
+    "methods": 1768,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 30274,
-    "symbols": 1267
+    "recursiveFields": 30306,
+    "symbols": 1269
   },
   "entries": [
     {
@@ -181877,7 +181877,9 @@
         "public:system-operations:participants:HostExecutionGrantContext",
         "public:system-operations:participants:HostExecutionRecoveryFamily",
         "public:system-operations:participants:HostExecutionRuntimeFamily",
-        "public:system-operations:participants:HostExecutionWriteContext"
+        "public:system-operations:participants:HostExecutionWriteContext",
+        "public:system-operations:participants:HostExecutionWriteLeaseFacts",
+        "public:system-operations:participants:HostExecutionWriteLifecycle"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -182022,7 +182024,9 @@
       "publicTypeConsumerIds": [
         "public:system-operations:participants:HostExecutionRecoveryFamily",
         "public:system-operations:participants:HostExecutionRuntimeFamily",
-        "public:system-operations:participants:HostExecutionWriteContext"
+        "public:system-operations:participants:HostExecutionWriteContext",
+        "public:system-operations:participants:HostExecutionWriteLeaseFacts",
+        "public:system-operations:participants:HostExecutionWriteLifecycle"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -182379,7 +182383,8 @@
         "public:system-operations:participants:HostExecutionAuthorityDriver",
         "public:system-operations:participants:HostExecutionAuthorityFactory",
         "public:system-operations:participants:HostExecutionRecoveryFamily",
-        "public:system-operations:participants:HostExecutionRuntimeFamily"
+        "public:system-operations:participants:HostExecutionRuntimeFamily",
+        "public:system-operations:participants:HostExecutionWriteLifecycle"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -182842,6 +182847,260 @@
       "unresolvedTypeRefs": [
         "BaseSQLiteDatabase"
       ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "system-operations",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forGrant.$parameter:context.current.$return",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forGrant.$parameter:context.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forGrant.$parameter:context.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forGrant.$return.$variant:0.expiresAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forGrant.$return.$variant:0.holder",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forGrant.$return.$variant:1.expiresAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forGrant.$return.$variant:1.holder",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "id": "public:system-operations:participants:HostExecutionWriteLeaseFacts",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "forGrant",
+          "signatureDigest": "sha256:53b04105d84b941030e7e720207a175a15892d211ecb1956624da32ec9333aa1"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:0a1065de0e198161b05817a8979862c2822f57073a0cabcd0f93d1b46a1243a9",
+      "status": "target-context-current-surface",
+      "symbol": "HostExecutionWriteLeaseFacts",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 25,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "system-operations",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:activate.$parameter:context.current.$return",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:activate.$parameter:context.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:activate.$parameter:context.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:activate.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:activate.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$parameter:context.current.$return",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$parameter:context.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$parameter:context.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:quiesce.$parameter:context.current.$return",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:quiesce.$parameter:context.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:quiesce.$parameter:context.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:quiesce.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:quiesce.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:renew.$parameter:context.current.$return",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:renew.$parameter:context.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:renew.$parameter:context.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:renew.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:renew.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:retire.$parameter:context.current.$return",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:retire.$parameter:context.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:retire.$parameter:context.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:retire.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:retire.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/system-operations/public/participants.ts",
+      "id": "public:system-operations:participants:HostExecutionWriteLifecycle",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "activate",
+          "signatureDigest": "sha256:c45ca2b39f9be1971ac54eeb79b155f0ca3a39eb621a7c90a5409934ff275d2e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "prepare",
+          "signatureDigest": "sha256:8ab911996ac72fd7cf7196475aff0e042e77ff040d35714a0cb897d1e08cec76"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "quiesce",
+          "signatureDigest": "sha256:408248759fc707648c170eb46e99c127ae27df9c38aeaaba647ebfdd7bfd0069"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "renew",
+          "signatureDigest": "sha256:63f8eefbd75a6fe01f65ed483698e7a8d3dde8e3423d34004d8d598af839197c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "retire",
+          "signatureDigest": "sha256:a8584d68deac2ae51a10238793d9fbc3ea7a2b470fea034a5cf96c98b157899f"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:962d447477dd2af4d1dd7bd6cda559c897aaf45b893b6404cdf8d05f57fb3f2b",
+      "status": "target-context-current-surface",
+      "symbol": "HostExecutionWriteLifecycle",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -232235,7 +232494,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:703cebdb19242d3606c90de51206f65464790bf081c8d8351f64dd942023556d",
+  "sourceDigest": "sha256:f069717bff146345b680f376c85758d3b2be1d91f887b56cac0a3c0f37018c78",
   "targetContexts": [
     "collaboration",
     "development-automation",
