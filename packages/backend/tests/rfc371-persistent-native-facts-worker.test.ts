@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import {
+  COMPLETE_OBSERVATION_FACT_SECTIONS,
   COMPLETE_OBSERVATION_SECTIONS,
   completeObservationReportContent,
   type CompleteObservationReportContent,
@@ -76,6 +77,11 @@ async function complete(service: Service, fixture: Fixture, key: string): Promis
   const state = await service.queries.status(actor, id)
   const content = completeObservationReportContent(state)
   if (!content) throw new Error(JSON.stringify(state))
+  const readableSections = new Set<CompleteObservationSection>(
+    state.state === 'not-ready'
+      ? COMPLETE_OBSERVATION_FACT_SECTIONS
+      : COMPLETE_OBSERVATION_SECTIONS,
+  )
   const sections = {} as FullReport['sections'],
     collections: FullReport['collections'] = [],
     scopes = new Map<
@@ -90,7 +96,7 @@ async function complete(service: Service, fixture: Fixture, key: string): Promis
     .where(eq(observationReportCounts.reportId, id))
     .all()
   const originalRows = await fixture.db
-    .select({ section: observationReportRows.section, parent: observationReportRows.parent })
+    .select()
     .from(observationReportRows)
     .where(eq(observationReportRows.reportId, id))
     .all()
@@ -100,12 +106,13 @@ async function complete(service: Service, fixture: Fixture, key: string): Promis
     actualCounts.set(identity, (actualCounts.get(identity) ?? 0n) + 1n)
   }
   for (const count of counts) {
-    expect(COMPLETE_OBSERVATION_SECTIONS).toContain(count.section)
+    expect(COMPLETE_OBSERVATION_SECTIONS).toContain(count.section as CompleteObservationSection)
     expect(count.declared).toBe(true)
     expect(count.actual).toBe(count.total)
     const section = count.section as CompleteObservationSection,
       parent = count.parent || null,
       identity = JSON.stringify([section, parent])
+    expect(readableSections.has(section)).toBe(true)
     expect(count.total).toBe(String(actualCounts.get(identity) ?? 0n))
     expect(scopes.has(identity)).toBe(false)
     if (section === 'quality-tasks') expect(parent).not.toBeNull()
@@ -118,6 +125,16 @@ async function complete(service: Service, fixture: Fixture, key: string): Promis
   ).rejects.toThrow('Original quality reason is required')
   for (const section of COMPLETE_OBSERVATION_SECTIONS) {
     sections[section] = []
+    if (!readableSections.has(section)) {
+      // Historical calls without an original acceptance keep this fixture incomplete.
+      // Its absent numeric populations are rejected, never invented as empty pages.
+      expect(content.counts).not.toHaveProperty(section)
+      expect([...scopes.values()].some((scope) => scope.section === section)).toBe(false)
+      await expect(service.queries.page(actor, id, { section, limit: 2 })).rejects.toThrow(
+        'Original numeric evidence is incomplete; only sealed execution facts are available',
+      )
+      continue
+    }
     if (section === 'quality-tasks') continue
     const identity = JSON.stringify([section, null])
     if (!scopes.has(identity)) scopes.set(identity, { section, parent: null, total: '0' })
@@ -232,6 +249,20 @@ describeEachProvider(
           cached = reports(fixture, true)
         try {
           const original = await complete(oracle, fixture, 'original-numeric-worker-oracle')
+          expect(original.content.summary.metrics.state).toBe('not-ready')
+          expect(original.content.summary.recordedUsage!.tokens).toEqual({
+            input: '9007199254741028',
+            cacheRead: '88',
+            cacheWrite: '109',
+            output: '71',
+            total: '9007199254741296',
+          })
+          expect(original.content.summary.metrics).toHaveProperty('recordedCost', {
+            currency: 'CNY',
+            amount: '0.00015',
+            records: '11',
+            pricedRecords: '2',
+          })
           const coldEventsStart = fixture.events.length
           const cold = await complete(cached, fixture, 'load-performance-numeric-worker-cold')
           const coldEvents = fixture.events.slice(coldEventsStart)

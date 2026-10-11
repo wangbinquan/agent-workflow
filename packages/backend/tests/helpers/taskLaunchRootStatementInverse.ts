@@ -6,7 +6,6 @@ import { inverseTaskProviderHostAssembly } from './taskProviderHostAssemblyState
 
 /** Remove only the six RFC-370 lifecycle selections before the older root inverse. */
 export function inverseTaskRuntimeLifecycleRootSelections(source: ts.SourceFile): ts.SourceFile {
-  source = inverseTaskProviderHostAssembly(source)
   const path = lifecycleCallers.wholeCallers.find(
     (row) =>
       (row.path.includes('/cli/') || row.path.endsWith('/server.ts')) &&
@@ -67,6 +66,7 @@ export function inverseTaskLaunchRootStatements(
   source: ts.SourceFile,
   rootName?: string,
 ): ts.SourceFile {
+  source = inverseTaskProviderHostAssembly(source)
   source = inverseTaskRuntimeLifecycleRootSelections(source)
   const entry = reviewed.roots.find(
     (row) =>

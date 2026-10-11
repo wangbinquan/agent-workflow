@@ -36,9 +36,11 @@ import { taskOwnershipHostBinding } from '@/modules/task-execution/infrastructur
 import { taskEffectHostBinding } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import {
-  assertTaskExecutionContext,
+  assertTaskExecutionContext as assertTrustedTaskExecutionContext,
   taskExecutionHostWriteCapture,
+  type TaskExecutionContext,
 } from '@/modules/task-execution/application/taskExecutionContext'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import { createLogger } from '@/util/log'
 import {
   createTaskDriveCoordinator,
@@ -71,6 +73,13 @@ function unused<T>(name: string): T {
     },
     { get: (_target, key) => unused(`${name}.${String(key)}`) },
   ) as unknown as T
+}
+
+/** The production trust check establishes the internal context used by this assembly test. */
+function assertTaskExecutionContext(
+  context: TaskExecutionContextRef,
+): asserts context is TaskExecutionContext {
+  assertTrustedTaskExecutionContext(context)
 }
 
 function providerGraph(
@@ -391,12 +400,13 @@ describeEachProvider('RFC-370 Task provider host assembly', (harness) => {
       const { h, binding } = await selected(harness)
       const invalid = { ...binding, driverLifecycle: {} } as TaskDriveBinding
       const deps = driveDeps(harness, invalid),
-        db = deps.db
+        // These legacy signatures are tested only before any database effect.
+        db = deps.db as Parameters<typeof resumeTaskWithAtomicSideEffects>[0]
       const recording = harness.recordStatements()
       try {
         const operation =
           entry === 'start'
-            ? startTask({ workflowId: `workflow-${h.taskId}`, name: 'invalid' }, deps)
+            ? startTask({ workflowId: `workflow-${h.taskId}`, name: 'invalid', inputs: {} }, deps)
             : entry === 'human'
               ? wakeHumanGateContinuation(h.taskId, h.intentId, deps)
               : entry === 'resume'
@@ -415,7 +425,7 @@ describeEachProvider('RFC-370 Task provider host assembly', (harness) => {
     const { binding } = await selected(harness)
     const deps = driveDeps(harness, binding)
     const native = createTaskExecutionPersistence(harness.db)
-    const input = {
+    const input: Parameters<typeof createTaskDriveCoordinator>[0] = {
       deps,
       appHome: deps.appHome!,
       engineFailureMessage: 'test',
@@ -449,6 +459,8 @@ describeEachProvider('RFC-370 Task provider host assembly', (harness) => {
           schedulerDriver: {
             drive: unused('fusion scheduler'),
             isTaskActive: unused('fusion activity'),
+            cancelChild: unused('fusion child cancellation'),
+            resumeChild: unused('fusion child resume'),
           },
           driveBinding: binding,
           startDeps: { driveBinding: { ...binding, persistence: native } },
@@ -590,6 +602,7 @@ describeEachProvider('RFC-370 Task provider host assembly', (harness) => {
     } finally {
       release.resolve()
       await awaitTaskDriverIdle(h.taskId, graph.executionModule)
+      await graph.executionModule.host!.finalizations.pendingForTask(h.taskId)
     }
     expect(h.completed).toBe(2)
     expect(
@@ -608,7 +621,7 @@ describeEachProvider('RFC-370 Task provider host assembly', (harness) => {
     try {
       await expect(
         resumeTaskWithAtomicSideEffects(
-          harness.db as StartTaskDeps['db'],
+          harness.db as Parameters<typeof resumeTaskWithAtomicSideEffects>[0],
           h.taskId,
           driveDeps(harness, binding),
           unused('resume transaction'),

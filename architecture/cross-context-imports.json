@@ -45308,6 +45308,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:70216195a6b2420e8d5f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/reportWorkspace.ts#ReportWorkingPage",
+      "toPath": "packages/backend/src/platform/persistence/reportWorkspace.ts",
+      "toSymbol": "ReportWorkingPage",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/workgroups.ts#$file",
       "fromPath": "packages/backend/src/routes/workgroups.ts",
       "fromSymbol": "$file",
@@ -103345,9 +103362,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6079,
+    "architectureExceptions": 6080,
     "implementationSccs": 0,
-    "observedEdges": 6952,
+    "observedEdges": 6953,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -152282,6 +152299,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:70216195a6b2420e8d5f",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/reportWorkspace",
+      "syntax": "static-import",
+      "targetSymbol": "ReportWorkingPage",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/reportWorkspace.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/reportWorkspace.ts#ReportWorkingPage"
     },
     {
       "edgeKind": "type",
@@ -215479,7 +215512,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2b455c70332b9755ce23f7c70dfb9016de0d7a6546c5f9ea9e8a31a87b7fae6e",
+  "sourceDigest": "sha256:c8c76f166c394d81dc68b9e3e0f86693f93363b3621912bd9fe694c97c5553f0",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

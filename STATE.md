@@ -1,3 +1,11 @@
+## 2026-10-12 RFC-370：1752 完整 CI 失败定位与联合必要修复
+
+确切 `1752f02e868ff58ea443ed89efc1af0bb9381075` 的主 CI `38178251313` 已终态 failure，72 作业为 64 success／8 failure；完整 Windows `38178251326` 亦终态 failure，原平台步骤为 1,393 pass／3 skip／9 fail。44 份 backend 分片和完整 Lint、Windows 原日志均已取得。Task 原 119 次目标实际出现，116 pass／3 fail，无缺失／额外／重复；主 CI 的 25 项真实测试失败只属于原 Task lifecycle inverse／P08 finalize ACK 或 RFC-371 Worker，Typecheck 的原测试声明问题分别修正。原失败与此前 SOURCE／MATCHING、生成及发布证据均保留。
+
+本会话仅修正 Task 两个测试文件：唯一 provider inverse 移到外层 launch helper；P08 等待同一 Task 的实际 finalize ACK；测试内委托原可信断言并补齐原入口／协调器／fusion 类型声明。97 个 expect、29 个展开 case、名称及预算保持，其中 95 个 expect 表达式逐字保持，另两处只有必要类型／未使用必需输入。有限 SOURCE-R1／R2 均有效、稳定 PASS／零 findings，根已完整消费，原 R2 回执的一处末行引用通过独立更正保留原件。RFC-371 原 Worker 未受理事实预言及四项分页类型修正由「设计运行观测统计全景」独立 SOURCE v360／v362 通过并正式交接，根已完整核对四文件新 SOURCE 的九项分析、17 份输入、39 处引用及完整差异／逆变换。累计使用量持久化和性能仍由该会话负责。
+
+双方五个 TypeScript 文件（一个生产、四个测试）、两份相关文档与本 STATE 冻结后，仅对新增原分页类型的必要生产输入执行一次原 scoped census，随后有限 MATCHING、精确串行发布和修复 SHA 的完整主 CI＋完整 Windows另验。限定格式／lint和纯源码保持检查，不运行本机 AW test／typecheck／build／服务／E2E。Maintenance 六份在途候选及两份累计用量缓存设计资料完整保留，不纳入这次提交。后续 RFC 生产实施仍坚持 GitHub 总流水线全绿后继续；完整 H7／十九 owner／三个生产启动根、A-T7／A-G、各层 CS adapter 与先 M0 实际部署再 M1～M4仍开放，AW 尚未部署 CS，RFC 未完成。详见[实际 CI 修复](design/RFC-370-crewstation-hosted-deployment/ci-task-provider-host-fixture-and-original-oracles.md)。以下旧 STATE 与全部并行正文完整保留。
+
 ## 2026-10-12 RFC-370：联合发布后的真实 CI 修复，累计用量已交接
 
 Task 与 RFC-371 缓存的联合源码提交 `4037254b5865adeacfcbaae4789f83eab682c1ae`、紧邻许可退役 `ca6f8417e3c4903966e72d21f89264b7756b6586` 已上库并同步。该确切 SHA 主 CI `38171413992` 已终态 failure，72 作业中 52 成功；默认完整 Windows `38171413874` 亦终态 failure。原失败、原 SOURCE／MATCHING 结论与并行输出分别保留，不以部分通过代签总绿。

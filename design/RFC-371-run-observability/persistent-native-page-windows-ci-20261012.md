@@ -27,3 +27,17 @@ Worker 完整比较助手改为从实际已封存 `observation_report_counts` �
 macOS backend shard 7（job `114564631265`）的旧升级用例仍要求 journal head 243，而已发布的 `0244` 增加了原生事实根与分页表。将其标题与精确断言同时改为 244，历史冻结升级目标、toy task 和迁移 `when` 严格递增判据保持。Ubuntu backend shard 27（job `114564631384`）指出公开的 `HistoricalNativeVersionObserver` 没有显式外部消费者；原平台装配已经创建并实际调用其 sample/close 生命周期，本片用同一公开 participants 类型标注实际 observer，消除隐式推断，不新增绕过或未消费例外。原工厂、实际方法调用、失效重建和关闭协议保持。
 
 其他 Task 夹具、旧 caller 源码预言和 `0244_snapshot.json` 格式由原所有者保留并修复。共享原架构配套与发布只在本片有限 SOURCE 检视通过后协调，任何部分绿色、旧 SHA 结果或源码检视均不代签后继全 CI。
+
+## 保留历史未受理调用的真实不完整状态
+
+后继 `1752f02e868ff58ea443ed89efc1af0bb9381075` 的完整 Windows run `38178251326`、job `114585119210` 原始结果为 1393 pass、3 skip、9 fail；本片七项 Worker 用例现在实际到达公共 page 查询，暴露了 `not-ready` 状态下请求未封存数值集合的问题。原生 provider 用例通过。原始失败保留，没有本机重复执行 AW 用例。
+
+这份夹具故意保留没有原始 invocation 受理记录的历史调用，以及无 model/time 的原记录。原报告必须保留已记录四桶和已知人民币部分估值并标记不完整，不能为测试把它改成完整报告。完整比较助手仍独立读取所有物理行与声明数量，枚举所有实际封存 section/parent，以两行公共页到真实 EOF；只有该原状态未封存的五种完整数值集合不被伪造为空页，逐项断言 header、counts、物理集合均缺省且公共接口明确拒绝。所有封存集合、质量原因、Task/attempt/dimension parent、重启、损坏、晚到写、冷/热与原无缓存 oracle 的逐行比较保持。
+
+另增加原无缓存 Worker 的独立精确预言：input=`9007199254741028`、cacheRead=`88`、cacheWrite=`109`、output=`71`、总 Token=`9007199254741296`；output 包含原 7 次 `5 + 2 reasoning`、无 model/time 的 1 及两次已受理调用的 21。原受理费率提供的已知部分估值为人民币 `0.00015`，11 条成本记录只有原 2 条已定价，历史未知金额保持未知。数值超过 JS 安全整数仍逐字符串核对。生产封存、公共页拒绝、原夹具内容、七项案例与原预算均保持；仍待本片 SOURCE 门和后继准确 SHA 的完整 CI。
+
+## 完整主 CI 的分页类型修复
+
+同一 `1752f02e` 的主 CI run `38178251313` 已终态 failure；Lint job `114585119391` 的实际 backend typecheck 报告两处 `TS7022`、一处 `TS2554` 和一处 `TS2769`。原生事实根分页返回值补上原 `ReportWorkingPage<HistoricalNativeFactRoot>` 类型，原 fixture 的原生页补上原 `HistoricalNativeObservationPage` 类型；这两处只有类型标注，分页、确认、EOF、关闭和 emitted JavaScript 保持。Worker 的物理行查询使用两种 Provider 共有的零参数 `select()`，仍读取每条原物理行并核对原 section/parent 数量；封闭 section 在原合法集合验证后使用同一 `CompleteObservationSection` 类型。没有改为较小范围或跳过断言。
+
+前两文件 v360 的有限 SOURCE 已通过并由根完整消费，不能代签这些后续类型修订。四文件修订另做有限 SOURCE，随后与原 Task 所有者串行发布；只做限定格式、lint 和纯源码保持检查，完整类型检查和用例仍以修复 SHA 的 GitHub Actions 为准。原完整主 CI 的 64 success／8 failure 及完整 Windows 的原失败均保留，仍不声明整体绿色或性能目标达成。

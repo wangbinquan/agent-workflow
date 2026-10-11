@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:2b455c70332b9755ce23f7c70dfb9016de0d7a6546c5f9ea9e8a31a87b7fae6e",
+    "sourceDigest": "sha256:c8c76f166c394d81dc68b9e3e0f86693f93363b3621912bd9fe694c97c5553f0",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -863,8 +863,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6952,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6953,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370／RFC-371 原完整 CI 必要类型修复：已独立 SOURCE v362 批准的 historicalNativeFactReader.ts 原 ReportWorkingPage type import 由原生成器投影为唯一实际边 import:70216195a6b2420e8d5f，rfc294-cross-context-observed-imports 6952 → 6953；只登记此次实际增量，不放宽规则。许可在紧邻普通提交退役，原 1752f02e 完整主 CI 与 Windows failure 保留。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -884,8 +887,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6079,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 6080,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370／RFC-371 原完整 CI 必要类型修复：已独立 SOURCE v362 批准的 historicalNativeFactReader.ts 原 ReportWorkingPage type import 由原生成器投影为唯一实际边 import:70216195a6b2420e8d5f，rfc294-architecture-exceptions 6079 → 6080；只登记此次实际增量，不放宽规则。许可在紧邻普通提交退役，原 1752f02e 完整主 CI 与 Windows failure 保留。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -928,8 +934,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ca6f8417e3c4903966e72d21f89264b7756b6586",
-    "contentDigest": "sha256:1550a121e208aef2b38f263f826045270766a7e4155f2ef1d07d40eea97930e6",
+    "currentSnapshotSha": "1752f02e868ff58ea443ed89efc1af0bb9381075",
+    "contentDigest": "sha256:f169728f770f491e4401becedc0f76ac7272ab137e9765933fc320b2ea00852c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -144,7 +144,7 @@ export async function consumeNativeFactReader(
   let cursor: string | null = reader.initialCursor
   try {
     while (cursor !== null) {
-      const page = await reader.next(cursor)
+      const page: HistoricalNativeObservationPage = await reader.next(cursor)
       pages.push(page)
       await reader.acknowledge(page.ordinal, page.payloadDigest)
       cursor = page.nextCursor

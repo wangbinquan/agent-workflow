@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { observationNativeFactRoots, observationNativeFactPages } from '@/db/schema'
-import type { ReportWorkspace } from '@/platform/persistence/reportWorkspace'
+import type { ReportWorkingPage, ReportWorkspace } from '@/platform/persistence/reportWorkspace'
 import {
   advanceOriginalHistoricalNativePage,
   initialHistoricalNativePagePosition,
@@ -223,7 +223,8 @@ export function historicalNativeFactCollector(input: {
       let after: string | null = null
       while (true) {
         input.signal?.throwIfAborted()
-        const page = await input.rows.page<HistoricalNativeFactRoot>(roots, after)
+        const page: ReportWorkingPage<HistoricalNativeFactRoot> =
+          await input.rows.page<HistoricalNativeFactRoot>(roots, after)
         for (const entry of page.items) {
           const root = parseHistoricalNativeFactRoot(
             entry.document,
