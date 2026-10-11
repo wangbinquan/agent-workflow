@@ -1,4 +1,5 @@
 // RFC-371: reuse physical readers without sharing a root's snapshot, TEMP state or ACK.
+// native-traversal-state-reuse.md also locks complete queue order and empty schema reuse.
 import { afterEach, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
@@ -8,6 +9,7 @@ import { join } from 'node:path'
 import {
   openReadonlySqliteDatabase,
   type ReadonlySqliteDatabase,
+  type ReadonlySqliteStatement,
 } from '../src/platform/persistence/sqlite/readonlySqliteDatabase'
 import { createHistoricalOpencodeUsagePassFactory } from '../src/modules/runtime-management/infrastructure/opencodeUsagePass'
 import { opencodeNativeStoreGeneration } from '../src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration'
@@ -68,10 +70,12 @@ function fixture() {
   return { folder, path, writer: store(path) }
 }
 
-// Count only real readonly handles. The optional failed DROP models cleanup failure,
+// Count only real readonly handles. Optional failed DROP/DELETE models cleanup failure,
 // while every successful source query still runs against the original SQLite/WAL file.
-function originalConnections(failDrop = false) {
+function originalConnections(failDrop = false, observe = false, failBegin = false) {
   const handles: ReadonlySqliteDatabase[] = []
+  const statements: string[] = []
+  const preparations: string[] = []
   const counts = { opens: 0, closes: 0 }
   const open = (path: string): ReadonlySqliteDatabase => {
     const db = openReadonlySqliteDatabase(path)
@@ -79,9 +83,25 @@ function originalConnections(failDrop = false) {
     let closed = false
     const handle: ReadonlySqliteDatabase = {
       query<Row, Parameters extends readonly unknown[]>(sql: string) {
-        if (failDrop && sql.startsWith('DROP TABLE')) {
+        if (observe) preparations.push(sql)
+        let statement: ReadonlySqliteStatement<Row, Parameters>
+        if (failBegin && sql === 'BEGIN') {
+          failBegin = false
+          statement = {
+            get() {
+              throw new Error('original-test-BEGIN-not-started')
+            },
+            all() {
+              throw new Error('original-test-BEGIN-not-started')
+            },
+          }
+        } else if (
+          failDrop &&
+          (sql.startsWith('DROP TABLE') ||
+            /^DELETE FROM temp.native_pass_(queue|open_steps|message_models)$/.test(sql))
+        ) {
           failDrop = false
-          return {
+          statement = {
             get() {
               throw new Error('original-test-TEMP-cleanup-failed')
             },
@@ -89,8 +109,18 @@ function originalConnections(failDrop = false) {
               throw new Error('original-test-TEMP-cleanup-failed')
             },
           }
+        } else statement = db.query<Row, Parameters>(sql)
+        if (!observe) return statement
+        return {
+          get(...parameters: Parameters) {
+            statements.push(sql)
+            return statement.get(...parameters)
+          },
+          all(...parameters: Parameters) {
+            statements.push(sql)
+            return statement.all(...parameters)
+          },
         }
-        return db.query<Row, Parameters>(sql)
       },
       close() {
         if (!closed) {
@@ -104,7 +134,7 @@ function originalConnections(failDrop = false) {
     return handle
   }
   cleanups.push(() => handles.forEach((handle) => handle.close()))
-  return { counts, open, handles }
+  return { counts, open, handles, statements, preparations }
 }
 function factory(path: string, connections = originalConnections(), pageRows = 2) {
   const reader = createHistoricalOpencodeUsagePassFactory(path, {
@@ -389,4 +419,198 @@ test('factory shutdown invalidates every active reader and closes all physical h
   )
   expect(() => reader.open(identity('root', generation))).toThrow('factory closed')
   expect(connections.counts).toEqual({ opens: 2, closes: 2 })
+})
+
+test('full repeated roots reuse empty TEMP schema without a queue SELECT per part', async () => {
+  const f = fixture(),
+    { reader, connections } = factory(f.path, originalConnections(false, true), 1000)
+  f.writer.session('root')
+  f.writer.message('message', 'root')
+  f.writer.db.transaction(() => {
+    for (let n = 0; n < 603; n++)
+      f.writer.part('part-' + String(n).padStart(4, '0'), 'root', 'message', String(n + 1))
+  })()
+  const generation = (await opencodeNativeStoreGeneration(f.path))!,
+    expected = oracle(f.writer.db, 'root'),
+    first = consume(reader.open(identity('root', generation)))
+  expect(first.eof).toEqual(expected)
+  expect(first.eof?.counts).toEqual({ sessions: '1', parts: '603', steps: '603' })
+  expect(first.steps.map((step) => step.usage)).toEqual(
+    Array.from({ length: 603 }, (_, n) => ({
+      input: String(n + 1),
+      output: '5',
+      cacheRead: '7',
+      cacheWrite: '13',
+    })),
+  )
+  expect(
+    connections.statements.filter((sql) => sql.includes('WHERE done=0 ORDER BY id LIMIT 1')).length,
+  ).toBeLessThan(603)
+  const handle = connections.handles[0]!,
+    schema = handle.query<{ schema_version: number }, []>('PRAGMA temp.schema_version').get()!
+  for (const table of ['queue', 'open_steps', 'message_models'])
+    expect(
+      handle.query<{ n: number }, []>(`SELECT COUNT(*) AS n FROM temp.native_pass_${table}`).get()
+        ?.n,
+    ).toBe(0)
+  const repeated = consume(reader.open(identity('root', generation, 'repeated')))
+  expect(repeated.eof).toEqual(expected)
+  expect(repeated.steps).toEqual(first.steps)
+  expect(handle.query<{ schema_version: number }, []>('PRAGMA temp.schema_version').get()).toEqual(
+    schema,
+  )
+  f.writer.db
+    .query("UPDATE part SET data=json_set(data,'$.tokens.input','909') WHERE id=?")
+    .run('part-0000')
+  const updated = consume(reader.open(identity('root', generation, 'new-snapshot')))
+  expect(updated.eof).toEqual(oracle(f.writer.db, 'root'))
+  expect(updated.eof).not.toEqual(expected)
+  expect(updated.steps[0]!.usage.input).toBe('909')
+  expect(handle.query<{ schema_version: number }, []>('PRAGMA temp.schema_version').get()).toEqual(
+    schema,
+  )
+  expect(connections.counts).toEqual({ opens: 1, closes: 0 })
+})
+
+test('a discovered earlier child immediately retains the original queue and fingerprint order', async () => {
+  const f = fixture(),
+    { reader } = factory(f.path)
+  for (const [id, parent] of [
+    ['root', null],
+    ['a-child', 'root'],
+    ['b-grandchild', 'a-child'],
+    ['z-child', 'root'],
+  ] as const) {
+    f.writer.session(id, parent)
+    f.writer.message('message-' + id, id)
+    f.writer.part('part-' + id, id, 'message-' + id)
+  }
+  const hash = createHash('sha256')
+  hash.update(
+    JSON.stringify([
+      'root',
+      f.writer.db.query('SELECT id,parent_id,time_created FROM session WHERE id=?').get('root'),
+    ]),
+  )
+  // Independent explicit original discovery order; collecting all siblings at once
+  // would wrongly fingerprint z-child before the earlier child's descendants.
+  for (const [kind, id] of [
+    ['session', 'root'],
+    ['part', 'part-root'],
+    ['child', 'a-child'],
+    ['session', 'a-child'],
+    ['part', 'part-a-child'],
+    ['child', 'b-grandchild'],
+    ['session', 'b-grandchild'],
+    ['part', 'part-b-grandchild'],
+    ['child', 'z-child'],
+    ['session', 'z-child'],
+    ['part', 'part-z-child'],
+  ] as const) {
+    if (kind === 'part') {
+      hash.update(JSON.stringify([kind, f.writer.db.query(fields + ' WHERE p.id=?').get(id)]))
+      continue
+    }
+    const row = f.writer.db
+      .query<
+        { id: string; parent_id: string | null },
+        [string]
+      >('SELECT id,parent_id FROM session WHERE id=?')
+      .get(id)!
+    hash.update(
+      JSON.stringify([
+        kind,
+        kind === 'session' ? { id: row.id, parentSessionId: row.parent_id } : row,
+      ]),
+    )
+  }
+  const generation = (await opencodeNativeStoreGeneration(f.path))!,
+    actual = consume(reader.open(identity('root', generation)))
+  expect(actual.eof).toEqual({
+    fingerprint: hash.digest('hex'),
+    counts: { sessions: '4', parts: '4', steps: '4' },
+  })
+  expect(actual.steps.map((step) => step.stepId)).toEqual([
+    'part-root',
+    'part-a-child',
+    'part-b-grandchild',
+    'part-z-child',
+  ])
+  expect(actual.issues).toEqual([])
+})
+
+test('successful EOF with failed DELETE cleanup discards the handle before another root', async () => {
+  const f = fixture(),
+    { reader, connections } = factory(f.path, originalConnections(true, true))
+  f.writer.session('root')
+  f.writer.message('message', 'root')
+  f.writer.part('part', 'root', 'message')
+  const generation = (await opencodeNativeStoreGeneration(f.path))!
+  expect(consume(reader.open(identity('root', generation))).eof).toEqual(
+    oracle(f.writer.db, 'root'),
+  )
+  expect(connections.statements).toContain('DELETE FROM temp.native_pass_open_steps')
+  expect(connections.counts).toEqual({ opens: 1, closes: 1 })
+  expect(consume(reader.open(identity('root', generation, 'after-cleanup-failure'))).eof).toEqual(
+    oracle(f.writer.db, 'root'),
+  )
+  expect(connections.counts).toEqual({ opens: 2, closes: 1 })
+})
+
+test('a BEGIN failure before TEMP initialization preserves the original reusable handle', async () => {
+  const f = fixture(),
+    { reader, connections } = factory(f.path, originalConnections(false, true, true))
+  f.writer.session('root')
+  f.writer.message('message', 'root')
+  f.writer.part('part', 'root', 'message')
+  const generation = (await opencodeNativeStoreGeneration(f.path))!
+  expect(() => reader.open(identity('root', generation, 'failed-BEGIN'))).toThrow(
+    'original-test-BEGIN-not-started',
+  )
+  expect(connections.counts).toEqual({ opens: 1, closes: 0 })
+  expect(connections.statements).toContain('DROP TABLE IF EXISTS temp.native_pass_queue')
+  expect(connections.statements).not.toContain('DELETE FROM temp.native_pass_queue')
+  expect(consume(reader.open(identity('root', generation, 'after-failed-BEGIN'))).eof).toEqual(
+    oracle(f.writer.db, 'root'),
+  )
+  expect(connections.counts).toEqual({ opens: 1, closes: 0 })
+})
+
+test('the same real connection reuses compiled SQL while every root binds and reads fresh data', async () => {
+  const f = fixture(),
+    { reader, connections } = factory(f.path, originalConnections(false, true))
+  f.writer.session('root')
+  f.writer.session('child', 'root')
+  f.writer.session('other-root')
+  for (const [id, input] of [
+    ['root', '11'],
+    ['child', '31'],
+    ['other-root', '73'],
+  ] as const) {
+    f.writer.message('message-' + id, id)
+    for (let n = 0; n < 5; n++) f.writer.part('part-' + id + '-' + n, id, 'message-' + id, input)
+  }
+  const generation = (await opencodeNativeStoreGeneration(f.path))!,
+    expected = oracle(f.writer.db, 'root'),
+    first = consume(reader.open(identity('root', generation))),
+    preparedCount = connections.preparations.length,
+    executedCount = connections.statements.length
+  expect(first.eof).toEqual(expected)
+  expect(new Set(connections.preparations).size).toBeGreaterThan(20)
+  expect(consume(reader.open(identity('root', generation, 'repeated')))).toEqual(first)
+  expect(connections.preparations.length).toBe(preparedCount)
+  expect(connections.statements.length).toBeGreaterThan(executedCount)
+  const other = consume(reader.open(identity('other-root', generation)))
+  expect(other.eof).toEqual(oracle(f.writer.db, 'other-root'))
+  expect(other.steps).toHaveLength(5)
+  expect(other.steps.map((step) => step.usage)).toEqual(
+    Array.from({ length: 5 }, () => ({
+      input: '73',
+      output: '5',
+      cacheRead: '7',
+      cacheWrite: '13',
+    })),
+  )
+  expect(connections.preparations.length).toBe(preparedCount)
+  expect(connections.counts).toEqual({ opens: 1, closes: 0 })
 })

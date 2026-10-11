@@ -161,19 +161,19 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
         ? root.time_created
         : null
     db.query<unknown, []>(
-      `CREATE TEMP TABLE native_pass_queue (
+      `CREATE TEMP TABLE IF NOT EXISTS native_pass_queue (
       id TEXT PRIMARY KEY,parent TEXT,entered INTEGER NOT NULL DEFAULT 0,parts_done INTEGER NOT NULL DEFAULT 0,
       part_after TEXT,child_after TEXT,done INTEGER NOT NULL DEFAULT 0)`,
     ).get()
     db.query<unknown, []>(
-      `CREATE INDEX temp.native_pass_queue_pending ON native_pass_queue(done,id)`,
+      `CREATE INDEX IF NOT EXISTS temp.native_pass_queue_pending ON native_pass_queue(done,id)`,
     ).get()
     db.query<unknown, []>(
-      `CREATE TEMP TABLE native_pass_open_steps (
+      `CREATE TEMP TABLE IF NOT EXISTS native_pass_open_steps (
       session TEXT NOT NULL,message TEXT NOT NULL,delta INTEGER NOT NULL,PRIMARY KEY(session,message))`,
     ).get()
     db.query<unknown, []>(
-      `CREATE TEMP TABLE native_pass_message_models (
+      `CREATE TEMP TABLE IF NOT EXISTS native_pass_message_models (
       message TEXT NOT NULL,session TEXT NOT NULL,provider,model,PRIMARY KEY(message,session))`,
     ).get()
     db.query<unknown, [string, string | null]>(
@@ -202,9 +202,10 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
       let scanned = 0,
         payloadBytes = 0,
         eof = false
+      let current: QueueRow | null | undefined
       try {
         while (scanned < pageRows && payloadBytes < pageBytes) {
-          const current = db
+          current ??= db
             .query<QueueRow, []>(
               `SELECT id,parent,entered,parts_done,part_after,child_after
             FROM temp.native_pass_queue WHERE done=0 ORDER BY id LIMIT 1`,
@@ -228,6 +229,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             db.query<unknown, [string]>(
               'UPDATE temp.native_pass_queue SET entered=1 WHERE id=?',
             ).get(current.id)
+            current.entered = 1
             continue
           }
           if (!current.parts_done) {
@@ -251,6 +253,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
               db.query<unknown, [string]>(
                 'UPDATE temp.native_pass_queue SET parts_done=1 WHERE id=?',
               ).get(current.id)
+              current.parts_done = 1
               partProjection.reset()
               continue
             }
@@ -294,6 +297,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             db.query<unknown, [string, string]>(
               'UPDATE temp.native_pass_queue SET part_after=? WHERE id=?',
             ).get(row.id, current.id)
+            current.part_after = row.id
             partProjection.advance()
             if (!messageCached && identifier(row.message_id) && identifier(row.session_id)) {
               db.query<unknown, [string, string, unknown, unknown]>(
@@ -322,6 +326,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             db.query<unknown, [string]>('UPDATE temp.native_pass_queue SET done=1 WHERE id=?').get(
               current.id,
             )
+            current = undefined
             continue
           }
           if (!identifier(child.id)) throw new Error('Native child cursor unavailable')
@@ -339,6 +344,8 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
           db.query<unknown, [string, string]>(
             'UPDATE temp.native_pass_queue SET child_after=? WHERE id=?',
           ).get(child.id, current.id)
+          // A discovered child may sort before this parent in the original queue.
+          current = undefined
         }
         const totals = counts(),
           body = {

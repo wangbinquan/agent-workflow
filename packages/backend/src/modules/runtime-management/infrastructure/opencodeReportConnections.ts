@@ -6,6 +6,7 @@ import {
 interface OriginalNativeConnection {
   readonly generation: string
   readonly database: ReadonlySqliteDatabase
+  readonly statements: Map<string, ReturnType<ReadonlySqliteDatabase['query']>>
 }
 
 /** Report-local physical reuse; every borrower still owns its own original BEGIN and TEMP state. */
@@ -18,7 +19,8 @@ export function createOpencodeReportConnections(
     closed = false,
     cleanupFailed = false,
     cleanupFailure: unknown
-  const discard = ({ database }: OriginalNativeConnection) => {
+  const discard = ({ database, statements }: OriginalNativeConnection) => {
+    statements.clear()
     try {
       database.close()
     } catch (error) {
@@ -35,17 +37,29 @@ export function createOpencodeReportConnections(
         discard(idle)
         idle = undefined
       }
-      const original = idle ?? { generation, database: openDatabase(path) }
+      const original = idle ?? { generation, database: openDatabase(path), statements: new Map() }
       idle = undefined
       let live = true,
-        transaction = false
+        transaction = false,
+        committed = false
+      const prepared = <Row, Parameters extends readonly unknown[]>(sql: string) => {
+        let statement = original.statements.get(sql) as
+          | ReturnType<typeof original.database.query<Row, Parameters>>
+          | undefined
+        if (!statement) {
+          statement = original.database.query<Row, Parameters>(sql)
+          original.statements.set(sql, statement)
+        }
+        return statement
+      }
       const lease: ReadonlySqliteDatabase = {
         query<Row, Parameters extends readonly unknown[]>(sql: string) {
           if (!live) throw new Error('Original native connection lease closed')
-          const statement = original.database.query<Row, Parameters>(sql)
+          const statement = prepared<Row, Parameters>(sql)
           if (sql !== 'BEGIN' && sql !== 'COMMIT' && sql !== 'ROLLBACK') return statement
           const completed = () => {
             transaction = sql === 'BEGIN'
+            committed = sql === 'COMMIT'
           }
           return {
             get(...parameters: Parameters) {
@@ -66,19 +80,16 @@ export function createOpencodeReportConnections(
           active.delete(lease)
           let reusable = true
           try {
-            if (transaction) original.database.query<unknown, []>('ROLLBACK').get()
-            original.database
-              .query<unknown, []>('DROP TABLE IF EXISTS temp.native_pass_open_steps')
-              .get()
-            original.database
-              .query<unknown, []>('DROP TABLE IF EXISTS temp.native_pass_message_models')
-              .get()
-            original.database
-              .query<unknown, []>('DROP TABLE IF EXISTS temp.native_pass_queue')
-              .get()
+            const cleanup = committed ? 'DELETE FROM' : 'DROP TABLE IF EXISTS'
+            if (transaction) prepared<unknown, []>('ROLLBACK').get()
+            prepared<unknown, []>(`${cleanup} temp.native_pass_open_steps`).get()
+            prepared<unknown, []>(`${cleanup} temp.native_pass_message_models`).get()
+            prepared<unknown, []>(`${cleanup} temp.native_pass_queue`).get()
           } catch {
             // A failed cleanup may never lend stale root/model state to another reader.
             reusable = false
+          } finally {
+            if (!committed) original.statements.clear()
           }
           if (!reusable || closed || idle) discard(original)
           else idle = original

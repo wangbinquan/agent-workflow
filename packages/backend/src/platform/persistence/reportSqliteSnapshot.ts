@@ -44,12 +44,21 @@ function readonlySource(sqlite: Database, active: () => boolean, signal?: AbortS
   return drizzle(guarded, { schema })
 }
 function workspaceFor(sqlite: Database, active: () => boolean, signal?: AbortSignal) {
+  const statements = new Map<string, ReturnType<Database['query']>>()
+  const query = (statement: string) => {
+    let prepared = statements.get(statement)
+    if (!prepared) {
+      prepared = sqlite.query(statement)
+      statements.set(statement, prepared)
+    }
+    return prepared
+  }
   return privateReportWorkspace(
     {
       all: async (statement, parameters) =>
-        sqlite.query(statement).all(...(parameters as never[])) as Record<string, unknown>[],
+        query(statement).all(...(parameters as never[])) as Record<string, unknown>[],
       run: async (statement, parameters) => {
-        sqlite.query(statement).run(...(parameters as never[]))
+        query(statement).run(...(parameters as never[]))
       },
     },
     active,
