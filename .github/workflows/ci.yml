@@ -56,6 +56,10 @@ jobs:
         run: bun run depcheck
 
       - name: Typecheck
+        env:
+          # 16ba8f366's backend tsc reached the default 4 GB V8 heap and
+          # aborted with code 134. Match the complete Windows typecheck step.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: bun run typecheck
 
       - name: Test (shared, bun:test)
