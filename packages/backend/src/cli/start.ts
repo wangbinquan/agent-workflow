@@ -2072,6 +2072,9 @@ async function composeSqliteProviderSession(
     isTaskActive: (taskId) => taskExecutionProvider.runtime.schedulerDriver.isTaskActive(taskId),
   })
   const taskStartDepsFor = (actorUserId: string) => ({
+    ...(taskExecutionProvider.driveBinding === undefined
+      ? {}
+      : { driveBinding: taskExecutionProvider.driveBinding }),
     ...(taskLaunchConfiguration.selectedQueries === undefined
       ? buildStartTaskDeps(
           db,
@@ -2337,6 +2340,7 @@ async function composeSqliteProviderSession(
       ? resolveLaunchRuntimeConfig(Paths.config)
       : {}
   const routeLaunchDriveCoordinator = createTaskDriveCoordinator({
+    driveBinding: taskExecutionProvider.driveBinding,
     ...(taskLaunchConfiguration.selectedQueries === undefined
       ? {}
       : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -2985,6 +2989,7 @@ async function composeSqliteProviderSession(
       secretBox,
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       coordinator: createTaskDriveCoordinator({
+        driveBinding: taskExecutionProvider.driveBinding,
         ...(taskLaunchConfiguration.selectedQueries === undefined
           ? {}
           : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -3042,7 +3047,8 @@ async function composeSqliteProviderSession(
         authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
         resources: taskExecutionResources,
       }),
-      cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
+      cancelTask: (taskId: string) =>
+        composeTaskCancellation(db, taskExecutionProvider.driveBinding).cancel(taskId),
       readModels: taskExecutionProvider.readModels,
     }
   })()
@@ -3430,6 +3436,7 @@ async function composeSqliteProviderSession(
   const observationBuild = observationReportBuild(
     { provider: 'sqlite', db, generationId: databaseProvider.generation.payload.generationId },
     Paths.root,
+    db,
   )
   const observationReports = composeCompleteObservationReports({
     taskSource: createCompleteTaskObservationFacts,
@@ -3438,6 +3445,7 @@ async function composeSqliteProviderSession(
     appHome: Paths.root,
     heartbeatDuringRead: observationBuild.heartbeatDuringRead,
     build: (report, _spool, signal) => observationBuild.build(report, signal),
+    closeBuild: () => observationBuild.close(),
   })
   const observationReportBindings = await createPausableDaemonRuntimeServiceBindings({
     runtimeId: 'observation-reports',
@@ -3491,6 +3499,9 @@ async function composeSqliteProviderSession(
     workspacePresence,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     taskExecutionReadModels: taskExecutionRuntime.readModels,
+    ...(taskExecutionProvider.driveBinding === undefined
+      ? {}
+      : { taskDriveBinding: taskExecutionProvider.driveBinding }),
     taskRouteLaunch: taskExecutionProvider.routeLaunch,
     taskArchiveMaintenance: taskExecutionProvider.archive,
     skillContent: input.skillContent,
@@ -3589,7 +3600,10 @@ async function composeSqliteProviderSession(
   const idleTimeoutOperations = composeTaskIdleTimeoutOperations({
     persistence: createSqliteTaskIdleTimeoutPersistence(db),
     cancelTask: (taskId, reason) =>
-      composeTaskCancellation(db).cancel(taskId, { kind: 'resource-reaped', ...reason }),
+      composeTaskCancellation(db, taskExecutionProvider.driveBinding).cancel(taskId, {
+        kind: 'resource-reaped',
+        ...reason,
+      }),
   })
   const idleTimeoutRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'task-idle-timeout',

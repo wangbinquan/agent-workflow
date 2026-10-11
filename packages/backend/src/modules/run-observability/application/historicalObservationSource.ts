@@ -15,6 +15,8 @@ import type { CompleteSourceReader } from '../ports/completeReport'
 import { consumeCompleteSource } from './completePageTraversal'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
 import { completeWorkingCache } from './completeWorkingCache'
+import type { HistoricalNativeFactReader } from '../ports/historicalNativeFacts'
+import { HistoricalNativeFactInvalidation } from '../domain/historicalNativeFacts'
 
 const PAGE = 100
 export interface HistoricalObservationStage {
@@ -311,20 +313,23 @@ async function retainHistoricalNativeRoot(
 ) {
   const sources = input.sources.historical!,
     issues = new Set<string>()
-  let reader: HistoricalNativeObservationReader | null = null,
+  let reader: HistoricalNativeObservationReader | HistoricalNativeFactReader | null = null,
     final: ReturnType<HistoricalNativeObservationReader['next']>['eof'] = null,
     pages = 0n
   try {
     // This is a report reference for the original root, never an accepted invocation.
-    reader = await sources.native.open({
+    const selection = {
       referenceId: JSON.stringify(['historical-native-root', sessionId]),
       rootSessionId: sessionId,
-    })
+    }
+    reader = sources.nativeFacts
+      ? await sources.nativeFacts.open(selection)
+      : await sources.native.open(selection)
     if (reader === null) throw new Error('Original historical native store unavailable')
     let cursor = reader.initialCursor
     while (true) {
       input.signal?.throwIfAborted()
-      const page = reader.next(cursor)
+      const page = await reader.next(cursor)
       if (
         page.cursor !== cursor ||
         page.identity.rootSessionId !== sessionId ||
@@ -387,7 +392,7 @@ async function retainHistoricalNativeRoot(
         if (page.eof === null) throw new Error('Original historical native EOF receipt missing')
         final = page.eof
       }
-      reader.acknowledge(page.ordinal, page.payloadDigest)
+      await reader.acknowledge(page.ordinal, page.payloadDigest)
       if (page.nextCursor === null) break
       if (page.nextCursor === cursor)
         throw new Error('Original historical native cursor did not advance')
@@ -396,10 +401,10 @@ async function retainHistoricalNativeRoot(
     if ((await sources.native.generation()) !== reader.identity.sourceGeneration)
       issues.add('historical-native-generation-changed')
   } catch (error) {
-    if (input.signal?.aborted) throw error
+    if (input.signal?.aborted || error instanceof HistoricalNativeFactInvalidation) throw error
     issues.add('historical-native-unavailable')
   } finally {
-    reader?.close()
+    await reader?.close()
   }
   const receipt = {
     kind: 'historical-native-root',

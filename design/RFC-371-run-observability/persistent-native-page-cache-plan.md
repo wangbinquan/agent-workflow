@@ -1,6 +1,6 @@
 # RFC-371 原生数值页持久缓存：第一批实现计划
 
-状态：具体实现计划，待有限功能设计检视；本页所列代码尚未实施。承接 `persistent-usage-facts-20261011.md`，先减少更换范围时重复解析 OpenCode 数值页的成本。第一批不宣称已经完成全部增量汇总、重启后快速命中或 warm P95 <1s。
+状态：有限功能设计门 v319 已通过并由 root 完整消费；第一批源码和真实 provider/Worker 用例已准备，待有限实现门、准确提交的托管 CI 与正式页面耗时验收。实施记录见 `persistent-native-page-source-implementation-20261012.md`。承接 `persistent-usage-facts-20261011.md`，先减少更换范围时重复解析 OpenCode 数值页的成本。第一批不宣称已经完成全部增量汇总、重启后快速命中或 warm P95 <1s。
 
 ## 保留的原合同
 
@@ -20,12 +20,12 @@
 
 新增两张 provider-neutral 派生表，和完整报告表一样不作为业务用量权威：
 
-| 表 | 原键与内容 | 完整条件 |
-| --- | --- | --- |
+| 表                              | 原键与内容                                                                                          | 完整条件                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `observation_native_fact_roots` | cacheKey；上述完整证明；rootSessionId；原 identity、initialCursor、页数、最终 digest、EOF 与 issues | 原全部页面处理与 ACK 成功，原 reader 成功关闭；同一证明覆盖读取前后；state=sealed |
-| `observation_native_fact_pages` | root cacheKey + 原 cursor；原 ordinal、nextCursor、完整数值 page、payload/cumulative digest | 唯一原 cursor；原序号连续、摘要链和 EOF/counts 完整；不能只验证表有多少行 |
+| `observation_native_fact_pages` | root cacheKey + 原 cursor；原 ordinal、nextCursor、完整数值 page、payload/cumulative digest         | 唯一原 cursor；原序号连续、摘要链和 EOF/counts 完整；不能只验证表有多少行         |
 
-cacheKey 包含所有证明字段和 rootSessionId；不同 parser/page 协议版本不能混用。按原 cursor 点查页面，不靠固定宽度 ordinal 或总人口上限。完整原页验证使用 Runtime 提供的原数值页/摘要规则，不另写一套更宽松 parser。header 的缺失、building 状态、缺页、循环、顺序/身份/摘要/EOF 不匹配均使该 cache 失效，不能返回空页或已知零。
+cacheKey 包含所有证明字段、原 referenceId 和 rootSessionId；同一物理 root 的不同原引用不能覆盖彼此的 identity/摘要链，不同 parser/page 协议版本不能混用。按原 cursor 点查页面，不靠固定宽度 ordinal 或总人口上限。完整原页验证使用 Runtime 提供的原数值页/摘要规则，不另写一套更宽松 parser。header 的缺失、building 状态、缺页、循环、顺序/身份/摘要/EOF 不匹配均使该 cache 失效，不能返回空页或已知零。
 
 Worker 的原应用 snapshot 只读派生表；冷读在原 TEMP workspace 中暂存原页。完整读取后，将原页与封闭根写入原 `appHome/operations/observation-reports/<reportId>/<ownerHash>` 下独立的有界传输 spool，带有总页数、根数和全清单摘要。每批只限制内存/I/O，传输全部原记录到 EOF。该 spool 沿用报告的原目录生命周期，不添加独立输入库。
 

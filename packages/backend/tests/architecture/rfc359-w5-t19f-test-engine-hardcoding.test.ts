@@ -99,6 +99,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'helpers/rfc371NativeBaselineWorkerFixture.ts: 1',
   // RFC-371：原 OpenCode SQLite/WAL 的批量投影、故障前缀与 EOF 夹具；AW 持久报告另走双 provider。
   'helpers/rfc371NativeProjectionFixture.ts: 1',
+  // RFC-371: one physical OpenCode SQLite/WAL source; derived pages and original Workers
+  // are independently exercised against both real AW application providers.
+  'helpers/rfc371PersistentNativeFactFixture.ts: 1',
   'input-port-contract.test.ts: 1',
   'integration-chaos/chaos-scenarios.integration.test.ts: 2',
   'memory-distiller-source-context.test.ts: 1',
@@ -421,6 +424,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-371：实际子进程及本地建库各一处，均操作外部 OpenCode 固定 SQLite 文件；
   // 原 Task final owner/来源封存仍在 describeEachProvider 内验证两个持久 provider。
   'rfc371-native-root-final-owner.test.ts: 2',
+  // RFC-371: PRAGMA data_version belongs to the external OpenCode SQLite file and one
+  // continuously open native connection; it is not an AW application-provider fixture.
+  'rfc371-native-source-version.test.ts: 1',
   // RFC-371（Codex）：OpenCode 原生文件格式的元数据夹具，机械归类 real-file-database；
   // AW 来源存储、分页与投影仍由 rfc371-span-source-provider 的双 provider 回归验证。
   'rfc371-native-span-capture.test.ts: 1',

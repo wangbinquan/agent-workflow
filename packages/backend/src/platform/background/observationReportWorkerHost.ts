@@ -65,7 +65,11 @@ async function runOriginalObservationWorker(
       }
       worker.onmessage = (event: MessageEvent<ObservationReportWorkerEvent>) => {
         const message = event.data
-        if (message.kind === 'result' || message.kind === 'native-history-result') {
+        if (
+          message.kind === 'result' ||
+          message.kind === 'native-history-result' ||
+          message.kind === 'native-facts-invalid'
+        ) {
           finish(message)
           return
         }
@@ -128,6 +132,17 @@ export async function runObservationReportWorker(
   const result = await runOriginalObservationWorker(input, signal, snapshot)
   if (result.kind !== 'result') throw new Error('Original Worker returned a different operation')
   return result.result
+}
+/** Private cache metadata never changes the original public/HTTP build result. */
+export async function runObservationReportWorkerWithFacts(
+  input: ObservationReportWorkerStart,
+  signal: AbortSignal,
+  snapshot?: OriginalReportSnapshot,
+): Promise<Extract<OriginalObservationWorkerResult, { kind: 'result' | 'native-facts-invalid' }>> {
+  const result = await runOriginalObservationWorker(input, signal, snapshot)
+  if (result.kind === 'native-history-result')
+    throw new Error('Original Worker returned a different operation')
+  return result
 }
 export async function runNativeHistoryWorker(
   input: NativeHistoryWorkerStart,

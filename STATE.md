@@ -1,3 +1,21 @@
+## 2026-10-12 RFC-370：Task SOURCE-R1 两项测试问题与修正候选
+
+独立 SOURCE-R1 为有效、稳定 FAIL／F01、F02，根已完整消费正式回执、P01～P12、23 项文件结论、30 个案例及实际身份。修正新 P06：同一宿主 installation／receipt 创建两个真实 provider module，保留 controller／idle／零 abort 并补原 driver ACK；新 P04 的 SQLite fusion 冲突断言使用实际 SQLite applicationBinding.db，不放宽生产 DbClient 或用假 DB。原 R1 失败、全部生产、旧用例／预算与并行输出保持。
+
+定向格式／lint及纯语法／字节检查通过；29 个 provider＋1 个 source 登记保持，新增 ACK 后源码 expect 为 103，预期三平台 119 次仍未运行。R2 独立复核、共享 CLI 根的双方依赖／inverse、一次原 census／MATCHING、发布及 exact-SHA 总 CI 分别验收。当前 d8c3a457 主 CI 仍失败，其原架构摘要修复由对应会话独立发布；完整 H7／十九 owner／三根／A-T7／A-G、CS adapter 与先 M0 再 M1～M4继续，AW 未部署 CS、RFC 未完成。详见[Task 实例装配](design/RFC-370-crewstation-hosted-deployment/task-provider-host-assembly.md)。以下旧 STATE 与并行正文完整保留。
+
+## 2026-10-12 RFC-370：Task provider 宿主实例装配候选
+
+总绿前置已在确切 0d43da993 的主 CI 72／72、默认完整 Windows 26 步及 637 次目标执行验收。Task 设计 R2 有效、稳定 PASS／零 findings 已由根消费。现补同一 module／persistence／driver binding，两种 provider 保持原认领部署语义；长驻与四个短入口、人工继续等待／模块 lifetime 去重、查询、取消／fusion 及实际根的转交沿同一实例，配置热读保持。
+
+新增 29 个双 provider 行为＋一个完整原源码 inverse 登记，预期三平台共 119 次，尚未运行。原 native／root 用例、断言与预算、旧源码完整身份和并行输出保持，只做限定格式／lint及纯静态检查。SOURCE／唯一原 scoped census／MATCHING、精确发布与新 SHA 全 CI 另验。完整三根／十九 owner／H7／A-T7／A-G、CS adapters、先 M0 后 M1～M4 与 RFC 仍开放，AW 尚未部署 CS。累计使用量已交接。详见[Task 实例装配](design/RFC-370-crewstation-hosted-deployment/task-provider-host-assembly.md)。以下旧 STATE 与并行内容完整保留。
+
+## 2026-10-11 RFC-370：SO 生命周期与前期代码总绿，继续 Task 宿主装配
+
+确切 `0d43da993b23d245f3f4fd154c55ef1798642d95` 的主 CI `38147310877` 正式 success、72／72；默认完整 Windows `38147310902` 正式 success、26 步成功。根已核对全部 73 作业、八条 typecheck code 0、三平台 637 次实际具名目标执行与 46 份原始日志 EOF；目标无缺失／额外／重复／fail／skip／todo。SO SOURCE／MATCHING、原失败、原预算及并行输出保留，无本机 AW 执行或额外 census。详见[总绿验收](design/RFC-370-crewstation-hosted-deployment/ci-so-write-lifecycle-total-green-closeout.md)。
+
+总绿前置门已满足。Task provider 设计 R2 保留同一原 writes.port，入口固定 acquire／transactionFor 与 receiver，每次 admission 沿现有 capture 保持原 receipt／事务配对；独立设计门与实施仍待完成。完整 H7／十九 owner／三个根／A-T7／A-G、CS adapters 与先 M0 再 M1～M4 继续，AW 尚未部署 CS、RFC 未完成。累计用量持久化已交给「设计运行观测统计全景」会话。以下旧 STATE 与并行内容完整保留。
+
 ## 2026-10-11 RFC-370：SO SOURCE R1 功能问题已修复，R2 待复核
 
 独立 SOURCE R1 正式 FAIL／一项 F01 已由根消费；问题是异步 factory 等待期间可替换原 writeLifecycle 方法。R2 在 factory 前固定五个原 callback 与 receiver，W21 加上方法替换／删除、选择指针替换、真实续租与退役断言。原 R1 FAIL、旧正文、native／Task判据及全部并行输出完整保持；限定格式／lint与纯字节／语法检查，无本机 AW执行。R2 独立复核、唯一原 census／MATCHING、发布和新 SHA 全CI仍待验收。详见[SO控制修复](design/RFC-370-crewstation-hosted-deployment/host-write-lifecycle-control.md)。完整三根／十九 owner／H7／A-T7／A-G及CS分步部署和RFC继续，AW尚未部署CS。以下旧 STATE完整保留。

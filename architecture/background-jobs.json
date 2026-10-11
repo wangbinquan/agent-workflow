@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3268",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3274",
       "kind": "register-call",
-      "line": 3268,
+      "line": 3274,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3274",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3280",
       "kind": "register-call",
-      "line": 3274,
+      "line": 3280,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3654",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3668",
       "kind": "register-call",
-      "line": 3654,
+      "line": 3668,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3706",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3720",
       "kind": "global-setter",
-      "line": 3706,
+      "line": 3720,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -5492,9 +5492,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:4278",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:4314",
       "kind": "register-call",
-      "line": 4278,
+      "line": 4314,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5503,9 +5503,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1630",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1637",
       "kind": "register-call",
-      "line": 1630,
+      "line": 1637,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5514,9 +5514,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:4054",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:4090",
       "kind": "register-call",
-      "line": 4054,
+      "line": 4090,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5525,9 +5525,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:4338",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:4374",
       "kind": "register-call",
-      "line": 4338,
+      "line": 4374,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -5575,9 +5575,9 @@
   "denominator": {
     "ambientWiring": 505,
     "disabled": 9,
-    "entries": 379,
+    "entries": 380,
     "executionLocal": 52,
-    "longRunning": 102,
+    "longRunning": 103,
     "managed": 11,
     "periodic": 216
   },
@@ -8042,7 +8042,7 @@
       ],
       "file": "packages/backend/src/modules/run-observability/application/completeObservationReportService.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:62",
+      "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:63",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8056,7 +8056,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:62",
+      "symbol": "$setTimeout:63",
       "targetContext": "run-observability"
     },
     {
@@ -10889,6 +10889,27 @@
       "dependencies": [],
       "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
       "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorkerWithFacts",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorkerWithFacts",
+      "phase": "unknown",
+      "symbol": "runObservationReportWorkerWithFacts",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
+      "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runOriginalObservationWorker",
       "kind": "long-running",
       "lifecycle": {
@@ -13336,7 +13357,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:405",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:413",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -13350,7 +13371,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:405",
+      "symbol": "$setTimeout:413",
       "targetContext": "task-execution"
     },
     {
@@ -13359,7 +13380,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4320",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4382",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -13373,7 +13394,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:4320",
+      "symbol": "$setTimeout:4382",
       "targetContext": "task-execution"
     },
     {
@@ -13903,5 +13924,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae971f0d1ac4f9dbfed313c020192a16790d5b39507f6b29226661678bc77084"
+  "sourceDigest": "sha256:d1ed5959852bb08cf908223290dec688be756f063023b6f618be7f1fc5ebf3c4"
 }

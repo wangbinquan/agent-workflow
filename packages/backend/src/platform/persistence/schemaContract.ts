@@ -154,6 +154,8 @@ export const RFC349_SOURCE_TABLES = [
   'observation_platform_sources',
   'observation_price_heads',
   'observation_price_versions',
+  'observation_native_fact_pages',
+  'observation_native_fact_roots',
   'observation_report_counts',
   'observation_report_pages',
   'observation_report_receipts',

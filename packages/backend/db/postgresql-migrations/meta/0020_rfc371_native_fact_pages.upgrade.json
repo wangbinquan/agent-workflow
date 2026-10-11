@@ -1,0 +1,384 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:4b1883057f5a2b4096f238e5a2d088f856af2df07fa808db9cde7a08e10ca989', 235, 6)"
+    },
+    "beforeDigest": "sha256:f85f79924dafd8447dda8cc05cfc1e2f32e120e46e40dbb442b0059c1ab04480"
+  },
+  "digest": "sha256:72ab1796e6d87779e4976cf7ab588882d05b5486aca0608f0f8f6e020bb9f704",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "observation_native_fact_pages",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_native_fact_pages\" (\n  \"cache_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"cursor\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_native_fact_pages_pkey\" PRIMARY KEY (\"cache_key\", \"cursor\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_native_fact_roots",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_native_fact_roots\" (\n  \"cache_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"proof_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_native_fact_roots_pkey\" PRIMARY KEY (\"cache_key\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_native_fact_roots:index:observation_native_fact_epoch_idx",
+      "sql": "CREATE INDEX \"observation_native_fact_epoch_idx\" ON \"agent_workflow\".\"observation_native_fact_roots\" (\"proof_key\", \"cache_key\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_native_fact_pages:fk:observation_native_fact_pages_cache_key_observation_native_fact_roots_cache_key_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_native_fact_pages\" ADD CONSTRAINT \"observation_native_fact_pages_cache_key_observatio_1042bfaae129\" FOREIGN KEY (\"cache_key\") REFERENCES \"agent_workflow\".\"observation_native_fact_roots\" (\"cache_key\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_native_fact_roots:check:observation_native_fact_state_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_native_fact_roots\" ADD CONSTRAINT \"observation_native_fact_state_ck\" CHECK (\"state\" = 'sealed')"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:4b1883057f5a2b4096f238e5a2d088f856af2df07fa808db9cde7a08e10ca989', active_table_count = 235, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:14bbd9c6f45a4f4c35452a2bcce3bbed7979c7741f8c20d58ce0458cc395c4d9' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:14bbd9c6f45a4f4c35452a2bcce3bbed7979c7741f8c20d58ce0458cc395c4d9",
+    "planDigest": "sha256:ef6e906f17be45f343d005d244d13a6c572d00801920130da20c93b5bb9e37e3"
+  },
+  "id": "0020_rfc371_native_fact_pages",
+  "indexAdditions": [
+    {
+      "position": 133,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_native_fact_pages",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_native_fact_pages\" (\n  \"cache_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"cursor\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_native_fact_pages_pkey\" PRIMARY KEY (\"cache_key\", \"cursor\")\n)"
+      }
+    },
+    {
+      "position": 134,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_native_fact_roots",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_native_fact_roots\" (\n  \"cache_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"proof_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"root_session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_native_fact_roots_pkey\" PRIMARY KEY (\"cache_key\")\n)"
+      }
+    },
+    {
+      "position": 472,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_native_fact_roots:index:observation_native_fact_epoch_idx",
+        "sql": "CREATE INDEX \"observation_native_fact_epoch_idx\" ON \"agent_workflow\".\"observation_native_fact_roots\" (\"proof_key\", \"cache_key\")"
+      }
+    },
+    {
+      "position": 817,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_native_fact_pages:fk:observation_native_fact_pages_cache_key_observation_native_fact_roots_cache_key_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_native_fact_pages\" ADD CONSTRAINT \"observation_native_fact_pages_cache_key_observatio_1042bfaae129\" FOREIGN KEY (\"cache_key\") REFERENCES \"agent_workflow\".\"observation_native_fact_roots\" (\"cache_key\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 818,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_native_fact_roots:check:observation_native_fact_state_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_native_fact_roots\" ADD CONSTRAINT \"observation_native_fact_state_ck\" CHECK (\"state\" = 'sealed')"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 129,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "cache_key",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "cursor",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["cache_key"],
+            "foreignColumns": ["cache_key"],
+            "foreignTable": "observation_native_fact_roots",
+            "name": "observation_native_fact_pages_cache_key_observation_native_fact_roots_cache_key_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "observation_native_fact_pages",
+        "indexes": [],
+        "migrationKey": ["cache_key", "cursor"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["cache_key", "cursor"],
+        "providerTables": {
+          "postgresql": "observation_native_fact_pages",
+          "sqlite": "observation_native_fact_pages"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationNativeFactPages",
+        "sourceTable": "observation_native_fact_pages",
+        "unique": []
+      }
+    },
+    {
+      "position": 130,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"observation_native_fact_roots\".\"state\" = 'sealed'",
+            "name": "observation_native_fact_state_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "cache_key",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "proof_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "root_session_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["sealed"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_native_fact_roots",
+        "indexes": [
+          {
+            "columns": ["proof_key", "cache_key"],
+            "name": "observation_native_fact_epoch_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["cache_key"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["cache_key"],
+        "providerTables": {
+          "postgresql": "observation_native_fact_roots",
+          "sqlite": "observation_native_fact_roots"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationNativeFactRoots",
+        "sourceTable": "observation_native_fact_roots",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:6e23a78a16e00874132fe3ad5e02ebc9f268754f6247c9139b2751089de76412",
+  "sequence": 20,
+  "sqlDigest": "sha256:96fdeeb245a450b35a86f15436b9dee39ddc8831cffa60bab9a4af25d9212dcd",
+  "sqlFile": "0020_rfc371_native_fact_pages.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791734082934,
+        "hash": "fcb59be164058d5e9980f17cd1d0d743ff42ae9942b3241a827578f13f4a4425",
+        "index": 243,
+        "tag": "0244_rfc371_native_fact_pages"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:559b9133dd11c59e91b008927ace1cf1c75f378fb1558b8dba30014f2449be79",
+      "count": 243,
+      "last": {
+        "folderMillis": 1791433021444,
+        "hash": "270a2953c875d9fcc91314346110adffce50d14aef35ba3bc199619d25a3b8a0",
+        "index": 242,
+        "tag": "0243_rfc371_system_agent_native_usage"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:e4d72c9c8b305d41fd2a30c021d053d40a7844a4c6eb8bd26c253ba363126c2a",
+      "count": 244,
+      "last": {
+        "folderMillis": 1791734082934,
+        "hash": "fcb59be164058d5e9980f17cd1d0d743ff42ae9942b3241a827578f13f4a4425",
+        "index": 243,
+        "tag": "0244_rfc371_native_fact_pages"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:4b1883057f5a2b4096f238e5a2d088f856af2df07fa808db9cde7a08e10ca989",
+    "planDigest": "sha256:c9615cb1cb334ce586da54fb7347f8e7247a43c7ab07956ae57e38c3335a02cf"
+  },
+  "version": 2
+}

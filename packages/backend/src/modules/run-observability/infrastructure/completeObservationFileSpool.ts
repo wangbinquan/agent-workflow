@@ -21,14 +21,19 @@ import {
   qualifiedCostEvidence,
 } from '../domain/completeReportFacts'
 
+/** Shared directory for the original report and its private derived numeric transport. */
+export function completeObservationSpoolDirectory(appHome: string, id: string, owner: string) {
+  if (!isAbsolute(appHome)) throw new Error('Original report operations root must be absolute')
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(id) || !owner)
+    throw new Error('Complete report spool identity invalid')
+  return resolve(appHome, 'operations', 'observation-reports', id, sha256Hex(owner))
+}
+
 /** Sealed derived transport on the original configured operations root, never an input database. */
 export function completeObservationFileSpool(appHome: string): CompleteObservationSpool {
   if (!isAbsolute(appHome)) throw new Error('Original report operations root must be absolute')
-  const folder = (id: string, owner: string) => {
-    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(id) || !owner)
-      throw new Error('Complete report spool identity invalid')
-    return resolve(appHome, 'operations', 'observation-reports', id, sha256Hex(owner))
-  }
+  const folder = (id: string, owner: string) =>
+    completeObservationSpoolDirectory(appHome, id, owner)
   return {
     async seal(input) {
       if (input.header.reportId !== input.reportId)

@@ -5,32 +5,39 @@ import type {
 import type { OriginalReportDatabaseBinding } from './reportSnapshot'
 import { originalReportSnapshotSession } from './reportSnapshot'
 import { unhandledDatabaseProvider } from './databaseProviders'
-import { runObservationReportWorker } from '../background/observationReportWorkerHost'
+import { runObservationReportWorkerWithFacts } from '../background/observationReportWorkerHost'
+import type { ObservationReportWorkerStart } from '../background/observationReportProtocol'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { isDeepStrictEqual } from 'node:util'
+import { createHistoricalNativeVersionObserver } from '@/modules/runtime-management/composition/historicalNativeVersion'
+import {
+  historicalNativeFactFileSpool,
+  importHistoricalNativeFacts,
+} from '@/modules/run-observability/composition/historicalNativeFacts'
+import { completeObservationFileSpool } from '@/modules/run-observability/composition/completeObservationSpool'
+import { createLogger } from '@/util/log'
 
-/** Provider choices are made at platform bootstrap, without a Worker fallback on the serving thread. */
-export function observationReportBuild(
-  binding: OriginalReportDatabaseBinding,
-  appHome: string,
-): {
-  readonly heartbeatDuringRead: boolean
-  readonly build: (
-    report: CompleteObservationStoredReport,
-    signal: AbortSignal,
-  ) => Promise<CompleteObservationBuildResult>
-} {
+const log = createLogger('observation-native-facts')
+
+function originalBuild(binding: OriginalReportDatabaseBinding, appHome: string) {
   if (binding.provider === 'sqlite') {
     const filename = binding.db.$client.filename
     if (!filename || filename === ':memory:')
       throw new Error('Full observation Worker requires the original live database file')
     return {
       heartbeatDuringRead: true,
-      build: (report, signal) =>
-        runObservationReportWorker(
+      build: (
+        report: CompleteObservationStoredReport,
+        signal: AbortSignal,
+        nativeProof?: ObservationReportWorkerStart['nativeProof'],
+      ) =>
+        runObservationReportWorkerWithFacts(
           {
             kind: 'start',
             appHome,
             report,
             source: { kind: 'sqlite-file', filename, generationId: binding.generationId },
+            ...(nativeProof ? { nativeProof } : {}),
           },
           signal,
         ),
@@ -40,10 +47,14 @@ export function observationReportBuild(
     const session = originalReportSnapshotSession(binding)
     return {
       heartbeatDuringRead: false,
-      build: (report, signal) =>
+      build: (
+        report: CompleteObservationStoredReport,
+        signal: AbortSignal,
+        nativeProof?: ObservationReportWorkerStart['nativeProof'],
+      ) =>
         session.run(
           (snapshot) =>
-            runObservationReportWorker(
+            runObservationReportWorkerWithFacts(
               {
                 kind: 'start',
                 appHome,
@@ -54,6 +65,7 @@ export function observationReportBuild(
                   generationId: snapshot.generationId,
                   asOf: snapshot.asOf,
                 },
+                ...(nativeProof ? { nativeProof } : {}),
               },
               signal,
               snapshot,
@@ -64,4 +76,81 @@ export function observationReportBuild(
     }
   }
   return unhandledDatabaseProvider(binding)
+}
+
+/** Provider choices are made at platform bootstrap, without a Worker fallback on the serving thread. */
+export function observationReportBuild(
+  binding: OriginalReportDatabaseBinding,
+  appHome: string,
+  writer?: ProviderNeutralDatabase,
+): {
+  readonly heartbeatDuringRead: boolean
+  readonly build: (
+    report: CompleteObservationStoredReport,
+    signal: AbortSignal,
+  ) => Promise<CompleteObservationBuildResult>
+  readonly close: () => Promise<void>
+} {
+  const original = originalBuild(binding, appHome),
+    observer = writer ? createHistoricalNativeVersionObserver(process.env) : undefined,
+    spool = completeObservationFileSpool(appHome),
+    factSpool = historicalNativeFactFileSpool(appHome),
+    active = new Set<Promise<CompleteObservationBuildResult>>()
+  const build = async (report: CompleteObservationStoredReport, signal: AbortSignal) => {
+    // A cache invalidation retries once in a new original application snapshot, never in old TEMP.
+    for (let pass = 0; pass < 2; pass++) {
+      signal.throwIfAborted()
+      const proof = pass === 0 ? await observer?.sample() : null
+      const result = await original.build(report, signal, proof ?? undefined)
+      signal.throwIfAborted()
+      if (result.kind === 'native-facts-invalid') {
+        if (pass !== 0) throw new Error(result.reason)
+        await spool.remove(report.id, report.owner)
+        await observer?.close()
+        continue
+      }
+      if (result.nativeFacts) {
+        if (report.request.refreshKey.startsWith('load-performance-'))
+          log.info('original native numeric page reuse', {
+            reportId: report.id,
+            pass: String(pass),
+            ...result.nativeFacts.statistics,
+          })
+        const after = await observer?.sample(),
+          same = proof !== null && proof !== undefined && isDeepStrictEqual(proof, after)
+        if (result.nativeFacts.usedCache && !same) {
+          await spool.remove(report.id, report.owner)
+          continue
+        }
+        if (same && writer) {
+          // Awaiting original.build has released SQLite and the outer PostgreSQL reservation.
+          await importHistoricalNativeFacts({
+            db: writer,
+            spool: factSpool,
+            manifest: result.nativeFacts.manifest,
+            signal,
+          })
+          if (result.nativeFacts.usedCache && !isDeepStrictEqual(proof, await observer?.sample())) {
+            await spool.remove(report.id, report.owner)
+            continue
+          }
+        }
+      }
+      return result.result
+    }
+    throw new Error('Original uncached observation rebuild did not finish')
+  }
+  return {
+    heartbeatDuringRead: original.heartbeatDuringRead,
+    build(report, signal) {
+      const work = build(report, signal)
+      active.add(work)
+      void work.finally(() => active.delete(work)).catch(() => {})
+      return work
+    },
+    async close() {
+      await Promise.allSettled([...active])
+      await observer?.close()
+    },
+  }
 }

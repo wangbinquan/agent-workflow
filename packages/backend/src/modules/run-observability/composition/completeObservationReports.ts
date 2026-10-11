@@ -24,6 +24,7 @@ export function composeCompleteObservationReports(input: {
     spool: CompleteObservationSpool,
     signal: AbortSignal,
   ) => Promise<CompleteObservationBuildResult>
+  readonly closeBuild?: () => Promise<void>
 }) {
   const spool = completeObservationFileSpool(input.appHome)
   const service = completeObservationReportService({
@@ -35,6 +36,7 @@ export function composeCompleteObservationReports(input: {
     owner: randomUUID(),
     heartbeatDuringRead: input.heartbeatDuringRead,
     build: (report, signal) => input.build(report, spool, signal),
+    ...(input.closeBuild ? { closeBuild: input.closeBuild } : {}),
   })
   return { queries: service satisfies CompleteObservationReportQueries, worker: service.worker }
 }

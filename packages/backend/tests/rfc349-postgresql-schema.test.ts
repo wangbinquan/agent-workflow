@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 233 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 235 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -22,15 +22,16 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(233)
+    expect(tables).toHaveLength(235)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       true,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(233)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(235)
     expect(
       tables.some((table) => table.logicalId === 'task_execution_native_usage_store_bindings'),
     ).toBe(true)
-    // RFC-371 adds exactly sixteen observation tables and one execution source table.
+    // RFC-371 adds sixteen original observation tables, two derived numeric page
+    // tables (0244 / PostgreSQL 0020), and one execution source table.
     expect(
       tables
         .map((statement) => statement.logicalId)
@@ -38,6 +39,8 @@ describe('RFC-349 PostgreSQL schema projection', () => {
         .sort(),
     ).toEqual([
       'observation_invocations',
+      'observation_native_fact_pages',
+      'observation_native_fact_roots',
       'observation_platform_records',
       'observation_platform_sources',
       'observation_price_heads',

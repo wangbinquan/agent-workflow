@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1995,
+    "entries": 1998,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -23422,6 +23422,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts#createHistoricalNativeVersionObserver",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts#createHistoricalNativeVersionObserver",
+      "symbol": "createHistoricalNativeVersionObserver",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -24101,6 +24126,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#opencodeNativeStoreGeneration",
       "symbol": "opencodeNativeStoreGeneration",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#createOpencodeNativeVersionObserver",
+      "missingControls": [
+        "audit",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#createOpencodeNativeVersionObserver",
+      "symbol": "createOpencodeNativeVersionObserver",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -37124,6 +37171,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorkerWithFacts",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorkerWithFacts",
+      "symbol": "runObservationReportWorkerWithFacts",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": false,
@@ -47743,7 +47815,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae971f0d1ac4f9dbfed313c020192a16790d5b39507f6b29226661678bc77084",
+  "sourceDigest": "sha256:d1ed5959852bb08cf908223290dec688be756f063023b6f618be7f1fc5ebf3c4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -50221,8 +50293,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2504:tasks",
-        "line": 2504,
+        "id": "task-authority:packages/backend/src/services/task.ts#2537:tasks",
+        "line": 2537,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50237,8 +50309,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2632:taskExecutionIntents",
-        "line": 2632,
+        "id": "task-authority:packages/backend/src/services/task.ts#2665:taskExecutionIntents",
+        "line": 2665,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50253,8 +50325,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2690:tasks",
-        "line": 2690,
+        "id": "task-authority:packages/backend/src/services/task.ts#2723:tasks",
+        "line": 2723,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50269,8 +50341,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4564:tasks",
-        "line": 4564,
+        "id": "task-authority:packages/backend/src/services/task.ts#4626:tasks",
+        "line": 4626,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

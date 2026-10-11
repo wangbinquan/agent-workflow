@@ -32,6 +32,7 @@ export function completeObservationReportService(input: {
     report: CompleteObservationStoredReport,
     signal: AbortSignal,
   ) => Promise<CompleteObservationBuildResult>
+  readonly closeBuild?: () => Promise<void>
 }) {
   let stop = new AbortController()
   const jobs = new Map<string, Promise<void>>()
@@ -238,6 +239,7 @@ export function completeObservationReportService(input: {
       async stop() {
         stop.abort(new Error('Original report worker stopped'))
         await tail
+        await input.closeBuild?.()
       },
     },
   }

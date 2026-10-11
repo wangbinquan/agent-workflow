@@ -13,6 +13,11 @@ import { createReportHistoricalNativeUsageQuery } from '@/modules/runtime-manage
 import { prepareObservationNativeHistory } from '@/modules/task-execution/composition/observationNativeHistory'
 import { composeCompleteObservationSnapshot } from '@/modules/run-observability/composition/completeObservationSnapshot'
 import { completeObservationFileSpool } from '@/modules/run-observability/composition/completeObservationSpool'
+import {
+  historicalNativeFactCollector,
+  historicalNativeFactFileSpool,
+} from '@/modules/run-observability/composition/historicalNativeFacts'
+import { HistoricalNativeFactInvalidation } from '@/modules/run-observability/public/participants'
 import { originalSqliteFileReportSnapshot } from '../persistence/reportSqliteSnapshot'
 import { reportReadonlyChannelClient } from '../persistence/reportReadonlyChannelClient'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -69,6 +74,16 @@ async function run(input: OriginalObservationWorkerStart) {
     )
     const native: HistoricalNativeUsageQuery & { close(): void } =
       createReportHistoricalNativeUsageQuery(process.env)
+    const facts = input.nativeProof
+      ? historicalNativeFactCollector({
+          db: snapshot.executor,
+          native,
+          rows: snapshot.workspace,
+          namespace: 'report/' + input.report.id,
+          proof: input.nativeProof,
+          signal: stop.signal,
+        })
+      : undefined
     let result: Awaited<ReturnType<typeof composeCompleteObservationSnapshot>>,
       cleanupFailed = false,
       cleanupFailure: unknown
@@ -84,6 +99,7 @@ async function run(input: OriginalObservationWorkerStart) {
             { kind: 'mcp-runtime-test', query: mcp },
           ],
           native,
+          ...(facts ? { nativeFacts: facts } : {}),
           task: (id) => tasks.get(input.report.request.actor, id),
         },
         report: input.report,
@@ -101,7 +117,22 @@ async function run(input: OriginalObservationWorkerStart) {
     // A thrown source/cancellation error already propagated through finally.
     // Only successful composition reaches this check for physical-close failure.
     if (cleanupFailed) throw cleanupFailure
-    return { kind: 'result', result }
+    const manifest = facts
+      ? await historicalNativeFactFileSpool(input.appHome).seal({
+          reportId: input.report.id,
+          owner: input.report.owner,
+          proof: input.nativeProof!,
+          items: facts.items(),
+          signal: stop.signal,
+        })
+      : undefined
+    return {
+      kind: 'result',
+      result,
+      ...(manifest
+        ? { nativeFacts: { usedCache: facts!.usedCache, manifest, statistics: facts!.statistics } }
+        : {}),
+    }
   }
   try {
     stop.signal.throwIfAborted()
@@ -118,6 +149,10 @@ async function run(input: OriginalObservationWorkerStart) {
           })
     scope.postMessage(result)
   } catch (error) {
+    if (error instanceof HistoricalNativeFactInvalidation && !stop.signal.aborted) {
+      scope.postMessage({ kind: 'native-facts-invalid', reason: error.message })
+      return
+    }
     scope.postMessage({
       kind: 'failed',
       error: error instanceof Error ? error.message : String(error),

@@ -2,9 +2,11 @@ import { createHash } from 'node:crypto'
 import ts from 'typescript'
 import reviewed from './taskLaunchRootStatementInverse.json'
 import lifecycleCallers from '../fixtures/rfc370-task-runtime-lifecycle-original-callers.json'
+import { inverseTaskProviderHostAssembly } from './taskProviderHostAssemblyStatementInverse'
 
 /** Remove only the six RFC-370 lifecycle selections before the older root inverse. */
 export function inverseTaskRuntimeLifecycleRootSelections(source: ts.SourceFile): ts.SourceFile {
+  source = inverseTaskProviderHostAssembly(source)
   const path = lifecycleCallers.wholeCallers.find(
     (row) =>
       (row.path.includes('/cli/') || row.path.endsWith('/server.ts')) &&

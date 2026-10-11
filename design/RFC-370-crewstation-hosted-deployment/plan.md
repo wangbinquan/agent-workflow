@@ -1422,3 +1422,22 @@ ca947c2431cd710bdaa63af3bae4903c1ace03b4 的主 CI 38044940528 正式 success、
 ## 2026-10-11 SO SOURCE R1：保留 FAIL，修复后复核 R2
 
 独立 R1 仅有 F01：异步 factory 前固定了对象而没有固定五个原函数。根已消费全部功能分析与52项EOF身份，原 FAIL保持。R2 提前捕获五函数／receiver，W21 使用可变完整视图，pending期间替换／删除方法及选择指针，真实续租／退役仍断言原方法、this与durable行；其余25个callback、注册／默认预算、原native和Task全文保持。限定格式／lint与纯静态检查，无本机AW执行。R2 SOURCE、唯一本候选原scoped census／MATCHING、精确发布和新 SHA主CI＋完整Windows及103次SO行为继续另验；原534次已通过记录不代签新候选。完整H7／三根／十九owner／A-T7／A-G、CS独立adapter及先M0再M1～M4和RFC仍开放，原正文与并行内容完整保留。
+
+
+## 2026-10-11 SO 生命周期与前期代码：总绿验收，继续 Task provider
+
+确切 `0d43da993b23d245f3f4fd154c55ef1798642d95` 的主 CI `38147310877` 已正式 success、72／72，默认完整 Windows `38147310902` 正式 success、26 步成功。根已核对全部 73 作业、八条真实 typecheck code 0、原 H／L／R／SO／boot 三平台共 637 次具名执行与 46 份完整原始日志；目标缺失／额外／重复／fail／skip／todo 均为零。SOURCE／MATCHING、原 FAIL、唯一原生成历史、全部原预算／native oracle 与并行内容保留，无本机 AW 执行或额外 census。详见[本次总绿验收](ci-so-write-lifecycle-total-green-closeout.md)。
+
+用户要求的总绿前置门已满足。继续 Task provider 完整配对设计 R2，固定原 acquire／transactionFor 和 receiver、保留原 port 对象与每次真实 admission 的完整 capture，再接 module／persistence／driver／查询／取消的同一绑定及实际三个根。R1 冻结包 INVALID 历史保留，新独立设计与实现、唯一原 scoped census／配套、新 SHA CI 另验。完整 H7／十九 owner／A-T7／A-G、各层 CS adapter、先 M0 部署再 M1～M4 和 RFC 仍开放，AW 尚未部署 CS。累计用量优化已交给「设计运行观测统计全景」；全部旧 plan 与并行输出完整保持。
+
+### 2026-10-12 Task provider 实例装配实施候选
+
+设计 R2 独立有效、稳定 PASS／零功能 findings 已由根完整消费；原 R1 INVALID 保留。候选将两种 provider 的 module／persistence／driver 配对，转交长驻与四个短入口、人工继续查询／模块 lifetime 去重、取消／fusion与三个根转交槽；native 默认、SQLite claim(db)／legacyConnection、PG claimPersisted 与配置热读保持。29 个双 provider 行为＋一个完整源码 inverse 为预期 119 次登记，尚未实际运行，原判据／预算保持。
+
+限定格式／lint与纯字节／语法检查后，独立 SOURCE、唯一原 scoped census／MATCHING、精确发布和新 SHA 全主 CI＋默认完整 Windows依次验收。详见[Task 实例装配](task-provider-host-assembly.md)。本片不签完整三根选择／十九 owner／H7／A-T7／A-G、跨进程接管或 CS 部署；各层独立 adapter 与先 M0 后 M1～M4 继续，RFC 未完成。全部旧 plan 与并行内容保留。
+
+### 2026-10-12 Task SOURCE-R1 测试修正候选
+
+独立 SOURCE-R1 有效、稳定 FAIL／F01、F02及全部功能分析和身份已由根实际消费，原失败保留。新 P06 改为同一宿主票据创建两个真实 module，保留原 controller／idle／零 abort 并补 ACK；SQLite fusion 冲突断言使用实际 SQLite applicationBinding 的 DbClient。生产／旧案例／预算不变，29 个 provider＋1 个 source及预期 119 次登记保持，源码直接 expect为103；本机只做定向格式／lint与纯语法／字节检查。
+
+R2 源复核、双方共享 CLI 根／inverse和全部依赖 READY、一次原生成／MATCHING、发布及新 SHA 总 CI分别验收。当前 d8c3a457 的 canonical 摘要失败由对应会话独立修复，不夹带双方在制源码；本片不动其13项配套发布。完整 H7／三根／十九 owner／A-T7／A-G、CS独立adapter与先M0后M1～M4继续，AW未部署CS、RFC未完成；全部旧 plan与并行正文保持。详见[Task 实例装配](task-provider-host-assembly.md)。

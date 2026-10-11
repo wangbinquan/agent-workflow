@@ -4,6 +4,7 @@ import type {
   HistoricalObservationExecution,
   ObservationTaskFacts,
 } from '@agent-workflow/shared'
+import type { HistoricalNativeFacts } from './historicalNativeFacts'
 
 /** Bootstrap composes actual owner queries; observability never reads another module's tables. */
 export interface HistoricalObservationSources {
@@ -18,5 +19,6 @@ export interface HistoricalObservationSources {
     }): Promise<HistoricalNativeObservationReader | null>
     generation(): Promise<string | null>
   }
+  readonly nativeFacts?: HistoricalNativeFacts
   task(id: string): Promise<ObservationTaskFacts | null>
 }

@@ -320,24 +320,36 @@ function releaseDependencies(
   }
 }
 
-export function activeTaskDriverController(taskId: string): AbortController | undefined {
-  const registry = taskExecutionModule.runtimeRegistry
+export function activeTaskDriverController(
+  taskId: string,
+  module: TaskExecutionModule = taskExecutionModule,
+): AbortController | undefined {
+  const registry = module.runtimeRegistry
   const token = registry.tokenForTask(taskId)
   return token === null ? undefined : (registry.controllerFor(token) ?? undefined)
 }
 
-export function isTaskDriverActive(taskId: string): boolean {
-  return taskExecutionModule.runtimeRegistry.hasTask(taskId)
+export function isTaskDriverActive(
+  taskId: string,
+  module: TaskExecutionModule = taskExecutionModule,
+): boolean {
+  return module.runtimeRegistry.hasTask(taskId)
 }
 
 /** 两阶段停机：driver 已停但库里 owner 行 / intent 还在转移时等它 settle（准入前调用）。 */
-export async function awaitTaskDriverReleasedSettled(taskId: string): Promise<void> {
-  await taskExecutionModule.runtimeRegistry.awaitReleasedSettled(taskId)
+export async function awaitTaskDriverReleasedSettled(
+  taskId: string,
+  module: TaskExecutionModule = taskExecutionModule,
+): Promise<void> {
+  await module.runtimeRegistry.awaitReleasedSettled(taskId)
 }
 
 /** Wait for the current process-local owner to release without requesting a stop. */
-export async function awaitTaskDriverIdle(taskId: string): Promise<void> {
-  const registry = taskExecutionModule.runtimeRegistry
+export async function awaitTaskDriverIdle(
+  taskId: string,
+  module: TaskExecutionModule = taskExecutionModule,
+): Promise<void> {
+  const registry = module.runtimeRegistry
   const token = registry.tokenForTask(taskId)
   if (token === null) return
   const result = await registry.awaitStopped({ token, tokenKey: ownershipTokenKey(token) })
@@ -383,15 +395,17 @@ export function createTaskDriverLifecyclePort(
  */
 export function createDatabaseTaskDriverLifecyclePort(options: {
   readonly db: ProviderNeutralDatabase
+  readonly module?: TaskExecutionModule
   readonly persistence?: TaskExecutionPersistence
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly log: TaskExecutionTopologyLogger
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
 }): TaskDriverLifecyclePort {
+  const module = options.module ?? taskExecutionModule
   return createTaskDriverLifecyclePort({
     db: options.db,
-    module: taskExecutionModule,
-    claim: (intentId) => taskExecutionModule.claim({ db: options.db, intentId }),
+    module,
+    claim: (intentId) => module.claim({ db: options.db, intentId }),
     persistence:
       options.persistence ??
       createTaskExecutionPersistence(options.db, { workspacePresence: options.workspacePresence }),

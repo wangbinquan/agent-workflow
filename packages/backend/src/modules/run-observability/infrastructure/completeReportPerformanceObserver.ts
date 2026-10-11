@@ -162,6 +162,32 @@ export function measureCompleteReportSources(
   const measuredHistorical: HistoricalObservationSources | undefined = historical
     ? {
         ...historical,
+        ...(historical.nativeFacts
+          ? {
+              nativeFacts: {
+                async open(input: {
+                  readonly referenceId: string
+                  readonly rootSessionId: string
+                }) {
+                  const reader = await observer.measure('native-facts.open', () =>
+                    historical.nativeFacts!.open(input),
+                  )
+                  return reader
+                    ? {
+                        ...reader,
+                        next: (cursor: string) =>
+                          observer.measure('native-facts.next', () => reader.next(cursor)),
+                        acknowledge: (ordinal: string, digest: string) =>
+                          observer.measure('native-facts.acknowledge', () =>
+                            reader.acknowledge(ordinal, digest),
+                          ),
+                        close: () => observer.measure('native-facts.close', () => reader.close()),
+                      }
+                    : null
+                },
+              },
+            }
+          : {}),
         native: {
           async open(input) {
             const reader = await observer.measure('native.open', () =>

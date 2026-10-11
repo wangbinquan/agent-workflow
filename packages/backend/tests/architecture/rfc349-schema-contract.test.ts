@@ -1,4 +1,4 @@
-// RFC-349 T2/T8 — locks the exact 239-table source census, the 233-table
+// RFC-349 T2/T8 — locks the exact 241-table source census, the 235-table
 // PostgreSQL parity set, and the only six archive-then-omit tables approved by
 // D9. New/missing/ownerless tables and revived legacy consumers must fail here
 // before any migration can prepare a target.
@@ -27,9 +27,9 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(239)
-    expect(contract.sourceTableCount).toBe(239)
-    expect(contract.activeTableCount).toBe(233)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(241)
+    expect(contract.sourceTableCount).toBe(241)
+    expect(contract.activeTableCount).toBe(235)
     expect(contract.archiveOnlyTableCount).toBe(6)
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
     const binding = contract.tables.find(
@@ -41,6 +41,16 @@ describe('RFC-349 canonical schema contract', () => {
       'source_generation',
     ])
     expect(binding.foreignKeys[0]!.foreignTable).toBe('task_execution_native_usage_preparations')
+    // RFC-371 0244 / PostgreSQL 0020: derived pages remain in full schema/migration parity.
+    const roots = contract.tables.find((table) => table.id === 'observation_native_fact_roots')!
+    const pages = contract.tables.find((table) => table.id === 'observation_native_fact_pages')!
+    expect(roots.migrationKey).toEqual(['cache_key'])
+    expect(pages.migrationKey).toEqual(['cache_key', 'cursor'])
+    expect([roots.ownerContext, pages.ownerContext]).toEqual([
+      'run-observability',
+      'run-observability',
+    ])
+    expect(pages.foreignKeys[0]!.foreignTable).toBe('observation_native_fact_roots')
   })
 
   test('every source table has one owner, stable key, codec and provider mapping', () => {

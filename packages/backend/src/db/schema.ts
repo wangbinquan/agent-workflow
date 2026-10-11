@@ -60,6 +60,7 @@ export {
   observationReportReceipts,
   observationReportRetainedRevisions,
 } from './observationReports'
+export { observationNativeFactRoots, observationNativeFactPages } from './observationNativeFacts'
 
 // RFC-371: platform snapshot generations and their cursor are swapped atomically.
 export const observationPlatformSources = sqliteTable('observation_platform_sources', {

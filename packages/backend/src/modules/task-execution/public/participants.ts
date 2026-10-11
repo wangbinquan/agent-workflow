@@ -3,6 +3,7 @@ export {
   selectPortArtifactReader,
 } from '../composition/portArtifacts'
 export { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
+// RFC-370: provider drive bindings belong to composition; bootstrap imports them there.
 // RFC-303 — the only cross-context task-control surface.
 // It deliberately accepts a source binding, never caller-selected task ids.
 import type {

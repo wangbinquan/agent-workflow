@@ -6,13 +6,24 @@ import type { DbClient } from '@/db/client'
 import { composeTaskCancellation } from '../composition/taskCancellation'
 import { getTask, startTask, type StartTaskDeps } from '@/services/task'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
+import { captureTaskDriveBinding, type TaskDriveBinding } from '../composition/taskDriveBinding'
 
 export function createSqliteFusionEngineTaskOperations(input: {
   readonly db: DbClient
   readonly appHome: string
   readonly schedulerDriver: SchedulerDriverPort
   readonly startDeps?: Omit<StartTaskDeps, 'db' | 'appHome' | 'schedulerDriver'>
+  readonly driveBinding?: TaskDriveBinding
 }): FusionEngineTaskOperations {
+  const driveBinding = captureTaskDriveBinding(input.driveBinding ?? input.startDeps?.driveBinding)
+  if (
+    input.driveBinding !== undefined &&
+    input.startDeps?.driveBinding !== undefined &&
+    (input.driveBinding.executionModule !== input.startDeps.driveBinding.executionModule ||
+      input.driveBinding.persistence !== input.startDeps.driveBinding.persistence ||
+      input.driveBinding.driverLifecycle !== input.startDeps.driveBinding.driverLifecycle)
+  )
+    throw new Error('task-drive-binding-mismatch')
   return Object.freeze({
     async launch(command: FusionEngineTaskLaunch) {
       await startTask(
@@ -26,6 +37,7 @@ export function createSqliteFusionEngineTaskOperations(input: {
         },
         {
           ...(input.startDeps ?? {}),
+          ...(driveBinding === undefined ? {} : { driveBinding }),
           db: input.db,
           appHome: input.appHome,
           schedulerDriver: input.schedulerDriver,
@@ -106,7 +118,11 @@ export function createSqliteFusionEngineTaskOperations(input: {
         ) {
           return
         }
-        await composeTaskCancellation(input.db)
+        await (
+          driveBinding === undefined
+            ? composeTaskCancellation(input.db)
+            : composeTaskCancellation(input.db, driveBinding)
+        )
           .cancel(taskId)
           .catch(() => undefined)
       }

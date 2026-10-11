@@ -1338,14 +1338,16 @@ export async function composePostgresqlApplication(
   })
   // RFC-359 AC-1（plan §5hm）：驱动生命周期端口两个引擎共用一份。认领方式由这里绑定——
   // PG 用实例模块的 `claimPersisted`，SQLite 用进程级单例的 `claim({ db, intentId })`。
-  const taskDriverLifecycle = createTaskDriverLifecyclePort({
-    db: input.db,
-    module: taskExecutionProvider.executionModule,
-    claim: (intentId) => taskExecutionProvider.executionModule.claimPersisted({ intentId }),
-    persistence: taskExecutionProvider.persistence,
-    log,
-    finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
-  })
+  const taskDriverLifecycle =
+    taskExecutionProvider.driveBinding?.driverLifecycle ??
+    createTaskDriverLifecyclePort({
+      db: input.db,
+      module: taskExecutionProvider.executionModule,
+      claim: (intentId) => taskExecutionProvider.executionModule.claimPersisted({ intentId }),
+      persistence: taskExecutionProvider.persistence,
+      log,
+      finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
+    })
   const boundTaskDriveCoordinator = new DefaultTaskDriveCoordinator({
     // getter：`contextFor` 每次 drive 读一次，于是每次派发拿到的是当下的配置。
     get runtime() {
@@ -2321,6 +2323,7 @@ export async function composePostgresqlApplication(
   const observationBuild = observationReportBuild(
     { provider: 'postgresql', runtime: input.provider.runtime },
     input.appHome,
+    input.db,
   )
   const observationReports = composeCompleteObservationReports({
     taskSource: createCompleteTaskObservationFacts,
@@ -2329,6 +2332,7 @@ export async function composePostgresqlApplication(
     appHome: input.appHome,
     heartbeatDuringRead: observationBuild.heartbeatDuringRead,
     build: (report, _spool, signal) => observationBuild.build(report, signal),
+    closeBuild: () => observationBuild.close(),
   })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     observability: {

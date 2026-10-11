@@ -132,6 +132,11 @@ import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { createTaskDriveCoordinator, retryRepositoryPreparation } from '@/services/task'
+import {
+  captureTaskDriveBinding,
+  composeTaskDriveActivityParticipant,
+  type TaskDriveBinding,
+} from '@/modules/task-execution/composition/taskDriveBinding'
 import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -869,6 +874,8 @@ export function composePostgresqlDaemonProviderCore(
 }
 
 export interface AppDeps {
+  /** The provider's complete Task instance also serves embedded HTTP entrypoints. */
+  taskDriveBinding?: TaskDriveBinding
   /** The same complete store selection serves skill editing and boot recovery. */
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
@@ -2048,10 +2055,12 @@ function composeFallbackDevelopmentAutomation(
   // 失败上报逐条对齐 PostgreSQL daemon 那份（`postgresqlDaemonApplication.ts` 的
   // `boundTaskDriveCoordinator.failureReporter`）：驱动崩了要把任务落成 failed 并终结意图，
   // 否则失败会表现成「动作卡住不失败」。
-  const persistence = createTaskExecutionPersistence(deps.db, {
-    workspacePresence: deps.workspacePresence,
-    nativeUsage: deps.nativeUsage,
-  })
+  const persistence =
+    deps.taskDriveBinding?.persistence ??
+    createTaskExecutionPersistence(deps.db, {
+      workspacePresence: deps.workspacePresence,
+      nativeUsage: deps.nativeUsage,
+    })
   const hostLaunchStartDeps =
     taskLaunchConfiguration.selectedQueries === undefined
       ? buildStartTaskDeps(
@@ -2088,6 +2097,7 @@ function composeFallbackDevelopmentAutomation(
     secretBox: deps.secretBox,
     gitCommitIdentity: deps.identityAccess.getUserGitCommitIdentity,
     coordinator: createTaskDriveCoordinator({
+      driveBinding: deps.taskDriveBinding,
       ...(taskLaunchConfiguration.selectedQueries === undefined
         ? {}
         : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -2142,7 +2152,8 @@ function composeFallbackDevelopmentAutomation(
       authority: deps.identityAccess.directAuthority.authorityForLegacyProjection(actor),
       resources: deps.identityAccess.taskExecutionResources,
     }),
-    cancelTask: (taskId: string) => composeTaskCancellation(deps.db).cancel(taskId),
+    cancelTask: (taskId: string) =>
+      composeTaskCancellation(deps.db, deps.taskDriveBinding).cancel(taskId),
     readModels: deps.taskExecutionReadModels,
   }
   // RFC-359 W11：终态观察者要回调 `automation.drive`，而 automation 的两个 launcher 又要这个
@@ -2227,6 +2238,8 @@ export function composeSqliteApplicationDeps(
   deps: AppDeps,
   unstarted?: UnstartedApplicationScope,
 ): SqliteAppComposition {
+  const taskDriveBinding = captureTaskDriveBinding(deps.taskDriveBinding)
+  if (taskDriveBinding !== undefined) deps = { ...deps, taskDriveBinding }
   const appHome = deps.appHome ?? Paths.root
   const workspaceUploads = selectWorkspaceUploadContentFactory(deps.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(deps.isolationWorkspaces)
@@ -2300,10 +2313,12 @@ export function composeSqliteApplicationDeps(
     deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
   const memoryInjectionQueries =
     deps.memoryOperations?.injectionQueries ?? composeSqliteMemoryInjectionQueries(deps.db)
-  const taskExecutionPersistence = createTaskExecutionPersistence(deps.db, {
-    workspacePresence,
-    nativeUsage: deps.nativeUsage,
-  })
+  const taskExecutionPersistence =
+    deps.taskDriveBinding?.persistence ??
+    createTaskExecutionPersistence(deps.db, {
+      workspacePresence,
+      nativeUsage: deps.nativeUsage,
+    })
   // RFC-359 W11：读模型先定下来，再决定要不要装配 runtime。此前是反过来的——先装 runtime、
   // 再从 `deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels` 取，于是类型上多出
   // 一个 `undefined` 分支要兜一句 throw，而那个分支**根本不可达**（runtime 只在
@@ -2373,16 +2388,23 @@ export function composeSqliteApplicationDeps(
             taskDagCollaboration: createTaskDagCollaborationOperations(deps.db),
             processConcurrencyScope: deps.db,
             log: createLogger('task'),
-            lifecycle: createDatabaseTaskDriverLifecyclePort({
-              db: deps.db,
-              persistence: taskExecutionPersistence,
-              log: createLogger('task'),
-              finalizeWorkspace: async (taskId: string) => {
-                await finishClaimedWebhookWorkspacePrune(deps.db, taskId)
-              },
-            }),
-            activity: composeLegacyTaskActivityParticipant(),
-            stop: composeLegacyTaskStopRegistry(),
+            lifecycle:
+              deps.taskDriveBinding?.driverLifecycle ??
+              createDatabaseTaskDriverLifecyclePort({
+                db: deps.db,
+                persistence: taskExecutionPersistence,
+                log: createLogger('task'),
+                finalizeWorkspace: async (taskId: string) => {
+                  await finishClaimedWebhookWorkspacePrune(deps.db, taskId)
+                },
+              }),
+            activity:
+              deps.taskDriveBinding === undefined
+                ? composeLegacyTaskActivityParticipant()
+                : composeTaskDriveActivityParticipant(deps.taskDriveBinding),
+            stop:
+              deps.taskDriveBinding?.executionModule.runtimeRegistry ??
+              composeLegacyTaskStopRegistry(),
           }),
           readModels: taskExecutionReadModels,
         })
@@ -3066,7 +3088,10 @@ function composeSqliteApiRouteMounts(
     owners: composeOwnerIdentityQueries(deps.db),
     // RFC-359 AC-1（第 5 刀）：`delete` 的 `task-active` 门读注入的参与者，不再读模块全局。
     // 这条路不装配完整 runtime，所以直接取那个唯一装配点。
-    activity: composeLegacyTaskActivityParticipant(),
+    activity:
+      deps.taskDriveBinding === undefined
+        ? composeLegacyTaskActivityParticipant()
+        : composeTaskDriveActivityParticipant(deps.taskDriveBinding),
     persistence: taskExecutionPersistence,
     // RFC-359 AC-1（第 13 刀收尾）：`/api/tasks` 只剩一个中立工厂。这条**不装配完整 runtime**
     // 的回退路因此要自己把子任务生命周期参与者装出来——它就是第 12 刀之后那份共用实现，
@@ -3079,16 +3104,22 @@ function composeSqliteApiRouteMounts(
       persistence: taskExecutionPersistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
       log: createLogger('task'),
-      lifecycle: createDatabaseTaskDriverLifecyclePort({
-        db: deps.db,
-        persistence: taskExecutionPersistence,
-        log: createLogger('task'),
-        finalizeWorkspace: async (id: string) => {
-          await finishClaimedWebhookWorkspacePrune(deps.db, id)
-        },
-      }),
-      activity: composeLegacyTaskActivityParticipant(),
-      stop: composeLegacyTaskStopRegistry(),
+      lifecycle:
+        deps.taskDriveBinding?.driverLifecycle ??
+        createDatabaseTaskDriverLifecyclePort({
+          db: deps.db,
+          persistence: taskExecutionPersistence,
+          log: createLogger('task'),
+          finalizeWorkspace: async (id: string) => {
+            await finishClaimedWebhookWorkspacePrune(deps.db, id)
+          },
+        }),
+      activity:
+        deps.taskDriveBinding === undefined
+          ? composeLegacyTaskActivityParticipant()
+          : composeTaskDriveActivityParticipant(deps.taskDriveBinding),
+      stop:
+        deps.taskDriveBinding?.executionModule.runtimeRegistry ?? composeLegacyTaskStopRegistry(),
     }),
     topology: { schedulerDriver },
     resumeRuntimeFor: (actor) =>
@@ -3125,6 +3156,7 @@ function composeSqliteApiRouteMounts(
       // 缺席授权 = boot 自动恢复那条路，它继续以 SYSTEM_USER_ID 走 `auto`。
       async retry(taskId: string, authorization?: { readonly actorUserId: string }) {
         await retryRepositoryPreparation(deps.db, taskId, {
+          ...(deps.taskDriveBinding === undefined ? {} : { driveBinding: deps.taskDriveBinding }),
           ...(taskLaunchConfiguration.selectedQueries === undefined
             ? buildStartTaskDeps(
                 deps.db,
@@ -3332,6 +3364,7 @@ function composeSqliteApiRouteMounts(
           secretBox: deps.secretBox,
           gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
           coordinator: createTaskDriveCoordinator({
+            driveBinding: deps.taskDriveBinding,
             ...(taskLaunchConfiguration.selectedQueries === undefined
               ? {}
               : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -3520,6 +3553,7 @@ function composeSqliteApiRouteMounts(
       integrity: agentResourceIntegrity.launch,
     }),
     coordinator: createTaskDriveCoordinator({
+      driveBinding: deps.taskDriveBinding,
       ...(taskLaunchConfiguration.selectedQueries === undefined
         ? {}
         : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -3631,6 +3665,7 @@ function composeSqliteApiRouteMounts(
     systemUserId: SYSTEM_USER_ID,
     // 单进程部署：受理请求的进程既看得到工作树、也持有调度器，预检与驱动都在本进程内做。
     continuation: composeWorkgroupTaskRoomContinuationDriver({
+      driveBinding: deps.taskDriveBinding,
       ...(taskLaunchConfiguration.selectedQueries === undefined
         ? {}
         : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -3899,6 +3934,7 @@ function composeSqliteApiRouteMounts(
     appHome,
     memories: memoryCatalog,
     tasks: createSqliteFusionEngineTaskOperations({
+      driveBinding: deps.taskDriveBinding,
       db: deps.db,
       appHome,
       schedulerDriver,

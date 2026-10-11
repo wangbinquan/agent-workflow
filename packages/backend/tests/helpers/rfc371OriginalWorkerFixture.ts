@@ -22,6 +22,7 @@ class OriginalCleanupConnection implements PostgresqlReservedConnection {
     private readonly original: PostgresqlReservedConnection,
     private readonly events: string[],
     private readonly fault: { value: ReportCleanupFault | undefined },
+    private readonly beforeRead?: (statement: string) => void,
   ) {}
   unsafe(statement: string, parameters?: readonly unknown[]) {
     if (statement.includes('CREATE TEMP TABLE aw_report_workspace')) this.reader = true
@@ -30,6 +31,7 @@ class OriginalCleanupConnection implements PostgresqlReservedConnection {
       this.fault.value = undefined
       throw new Error('Injected original channel cleanup acknowledgement failure')
     }
+    if (this.reader) this.beforeRead?.(statement)
     return this.original.unsafe(statement, parameters)
   }
   release() {
@@ -48,6 +50,7 @@ class OriginalCleanupPool implements PostgresqlPool {
     private readonly original: PostgresqlPool,
     private readonly events: string[],
     private readonly fault: { value: ReportCleanupFault | undefined },
+    private readonly beforeRead?: (statement: string) => void,
   ) {}
   unsafe(statement: string, parameters?: readonly unknown[]) {
     return this.original.unsafe(statement, parameters)
@@ -58,12 +61,17 @@ class OriginalCleanupPool implements PostgresqlPool {
   async reserve(options?: { readonly signal?: AbortSignal }) {
     const original = await this.original.reserve(options)
     this.events.push('reserved')
-    return new OriginalCleanupConnection(original, this.events, this.fault)
+    return new OriginalCleanupConnection(original, this.events, this.fault, this.beforeRead)
   }
 }
 export async function originalWorkerFixture(
   harness: ProviderHarness,
-  options: { attempts?: number; records?: number; cleanupFault?: ReportCleanupFault } = {},
+  options: {
+    attempts?: number
+    records?: number
+    cleanupFault?: ReportCleanupFault
+    beforeOriginalRead?: (statement: string) => void
+  } = {},
 ) {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-original-report-worker-'))
   const original = harness.applicationBinding
@@ -104,7 +112,13 @@ export async function originalWorkerFixture(
   const selected = createPostgresqlDatabaseRuntime({
     config: { ...original.databaseConfig, poolMax: 1 },
     generationId: original.runtime.generationId,
-    poolFactory: () => new OriginalCleanupPool(pool, events, { value: options.cleanupFault }),
+    poolFactory: () =>
+      new OriginalCleanupPool(
+        pool,
+        events,
+        { value: options.cleanupFault },
+        options.beforeOriginalRead,
+      ),
   })
   const db = createPostgresqlDatabaseClient(selected)
   return {

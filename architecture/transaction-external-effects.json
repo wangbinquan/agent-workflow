@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 27,
-    "transactionCallbacks": 275
+    "transactionCallbacks": 276
   },
   "entries": [
     {
@@ -2728,6 +2728,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#transaction:50",
+      "line": 50,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#importHistoricalNativeFacts",
+      "status": "clear",
+      "symbol": "importHistoricalNativeFacts",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#transaction:69",
@@ -3364,7 +3376,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae971f0d1ac4f9dbfed313c020192a16790d5b39507f6b29226661678bc77084",
+  "sourceDigest": "sha256:d1ed5959852bb08cf908223290dec688be756f063023b6f618be7f1fc5ebf3c4",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4477,9 +4489,9 @@
         "effectKind": "workspace-prepare",
         "file": "packages/backend/src/services/task.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/task.ts#4215:workspace-prepare",
+        "id": "task-effect:packages/backend/src/services/task.ts#4277:workspace-prepare",
         "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 4215,
+        "line": 4277,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "recoveryClass": "local-probe-or-actor",

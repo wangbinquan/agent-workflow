@@ -1363,6 +1363,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:036d8e675e7cafce1bc2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
       "fromSymbol": "$file",
@@ -4542,6 +4559,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "fromPath": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0a7e601804490194338e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file",
+      "toPath": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toSymbol": "importHistoricalNativeFacts",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts",
       "fromSymbol": "$file",
@@ -5014,6 +5048,23 @@
       "toPath": "packages/backend/src/modules/source-control/public/commands.ts",
       "toSymbol": "WorkspaceMaintenanceCommand",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0b8af5e6feb48f406e36",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "databaseSessionFor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -8554,6 +8605,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "fromPath": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:144cd1de034d28fc41e2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/completeObservationSpool.ts#$file",
+      "toPath": "packages/backend/src/modules/run-observability/composition/completeObservationSpool.ts",
+      "toSymbol": "completeObservationFileSpool",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts",
       "fromSymbol": "$file",
@@ -9693,6 +9761,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:16bfe92705ee0a063930",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file",
+      "toPath": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toSymbol": "historicalNativeFactFileSpool",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageEvidenceStorage.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageEvidenceStorage.ts",
       "fromSymbol": "$file",
@@ -10135,6 +10220,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:17ece1460600f69b838c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#$file",
       "fromPath": "packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts",
       "fromSymbol": "$file",
@@ -10386,6 +10488,23 @@
       "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toSymbol": "DatabaseTransaction",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1865cb8e65819669076b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file",
+      "toPath": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toSymbol": "historicalNativeFactCollector",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -10657,6 +10776,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory",
       "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
       "toSymbol": "PostgresqlMigrationHistory",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1932df647e895e05b94b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "observationNativeFactPages",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -13006,6 +13142,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1f390049ec74a389000b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/webhook/deliveryStore.ts#$file",
@@ -14434,6 +14587,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportProtocol.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/observationReportProtocol.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:22812e26deb5ae2d5e27",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "toSymbol": "HistoricalNativeFactManifest",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -15197,6 +15367,23 @@
       "toPath": "packages/backend/src/platform/persistence/postgresqlRuntime.ts",
       "toSymbol": "PostgresqlDatabaseRuntime",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:24025bee4265082bd16e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts#captureTaskDriveBinding",
+      "toPath": "packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts",
+      "toSymbol": "captureTaskDriveBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -20437,6 +20624,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:30f6be444f15b7e8de92",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "observationNativeFactPages",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts",
       "fromSymbol": "$file",
@@ -21588,6 +21792,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "clarifyRounds",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3350cd74b012bc8969f8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "observationNativeFactRoots",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -24360,6 +24581,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "workflows",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3ad0d7be68332350c004",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts#TaskDriveBinding",
+      "toPath": "packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts",
+      "toSymbol": "TaskDriveBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -28340,6 +28578,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:44e929231a468b45b7cb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase",
+      "toPath": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toSymbol": "ReadonlySqliteDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts#$file",
@@ -29579,6 +29834,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "skillOperations",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:477820584d374cd7075a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "toSymbol": "HistoricalNativeFactInvalidation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -36604,6 +36876,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5a7b7829b0cd2a5bf71d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "observationNativeFactRoots",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
       "fromPath": "packages/backend/src/services/execution/taskExecutionResourceDependencies.ts",
       "fromSymbol": "$file",
@@ -36650,6 +36939,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#ReclaimableDiskItem",
       "toPath": "packages/backend/src/modules/system-operations/public/types.ts",
       "toSymbol": "ReclaimableDiskItem",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportProtocol.ts#$file",
+      "fromPath": "packages/backend/src/platform/background/observationReportProtocol.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5a9567771fdecc17cd3f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toSymbol": "HistoricalNativeSourceProof",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -39149,6 +39455,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/application/ports/webhookDispatchPersistence.ts#WebhookTriggerRecord",
       "toPath": "packages/backend/src/modules/integration/application/ports/webhookDispatchPersistence.ts",
       "toSymbol": "WebhookTriggerRecord",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "fromPath": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:608bdaf7947c10a7016a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts#createHistoricalNativeVersionObserver",
+      "toPath": "packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts",
+      "toSymbol": "createHistoricalNativeVersionObserver",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -46020,6 +46343,23 @@
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactSpool.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactSpool.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:731121b20e5cc6b0dadd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
@@ -47890,6 +48230,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7814531817fe0e43d5ec",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/reportWorkspace.ts#ReportWorkspace",
+      "toPath": "packages/backend/src/platform/persistence/reportWorkspace.ts",
+      "toSymbol": "ReportWorkspace",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityMatrixRead.ts#$file",
@@ -47938,6 +48295,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/domain/historicalNativePage.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/domain/historicalNativePage.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:785c403a9cf6b8fa7d35",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -76945,6 +77319,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c1dcdb2b5205c8e5db88",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#openReadonlySqliteDatabase",
+      "toPath": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toSymbol": "openReadonlySqliteDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromSymbol": "$file",
@@ -77825,6 +78216,23 @@
       "toPath": "packages/backend/src/services/ref/runtimeRef.ts",
       "toSymbol": "agentSkillRef",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "fromPath": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c41da0461ff80433d44b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file",
+      "toPath": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toSymbol": "historicalNativeFactFileSpool",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -78728,6 +79136,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c629795c313a1fbec543",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts#composeTaskDriveActivityParticipant",
+      "toPath": "packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts",
+      "toSymbol": "composeTaskDriveActivityParticipant",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
@@ -79592,6 +80017,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#DaemonLockHeldError",
       "toPath": "packages/backend/src/util/lock.ts",
       "toSymbol": "DaemonLockHeldError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c8b81a1ae2ed25b25efe",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "toPath": "packages/backend/src/services/runtime/index.ts",
+      "toSymbol": "opencodeUsageDatabasePath",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -89724,6 +90166,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#planNodeRunRollbackTargets",
       "toPath": "packages/backend/src/services/nodeRollback.ts",
       "toSymbol": "planNodeRunRollbackTargets",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e071852116c26bb669e6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -102869,9 +103328,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6051,
+    "architectureExceptions": 6078,
     "implementationSccs": 0,
-    "observedEdges": 6909,
+    "observedEdges": 6951,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -102879,6 +103338,22 @@
   "implementationSccs": [],
   "kind": "cross-context-imports",
   "observedEdges": [
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts#$file",
+      "id": "import:000afba1236fadf4c01e",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "originalHistoricalNativeIdentity",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
+    },
     {
       "edgeKind": "value",
       "fromContext": "legacy",
@@ -104113,6 +104588,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "id": "import:036d8e675e7cafce1bc2",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/composition/webhookDelivery.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDelivery.ts#$file",
@@ -104206,6 +104697,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunEvents"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:03d25ef6fa27a8c01236",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativeSourceProof",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -107473,6 +107980,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "id": "import:0a7e601804490194338e",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/run-observability/composition/historicalNativeFacts",
+      "syntax": "static-import",
+      "targetSymbol": "importHistoricalNativeFacts",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#$file",
@@ -107918,6 +108441,22 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/public/commands.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/commands.ts#WorkspaceMaintenanceCommand"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "id": "import:0b8af5e6feb48f406e36",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "databaseSessionFor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor"
     },
     {
       "edgeKind": "type",
@@ -111777,6 +112316,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "id": "import:144cd1de034d28fc41e2",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/run-observability/composition/completeObservationSpool",
+      "syntax": "static-import",
+      "targetSymbol": "completeObservationFileSpool",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/composition/completeObservationSpool.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/completeObservationSpool.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts#$file",
@@ -113009,6 +113564,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "id": "import:16bfe92705ee0a063930",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/run-observability/composition/historicalNativeFacts",
+      "syntax": "static-import",
+      "targetSymbol": "historicalNativeFactFileSpool",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts#$file",
@@ -113505,6 +114076,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#$file",
+      "id": "import:17ece1460600f69b838c",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "event-center",
       "fromFile": "packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#$file",
@@ -113774,6 +114361,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "id": "import:1865cb8e65819669076b",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/run-observability/composition/historicalNativeFacts",
+      "syntax": "static-import",
+      "targetSymbol": "historicalNativeFactCollector",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -114062,6 +114665,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:1932df647e895e05b94b",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "observationNativeFactPages",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -116576,6 +117195,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts#$file",
+      "id": "import:1f390049ec74a389000b",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/webhook/deliveryStore.ts",
@@ -118208,6 +118843,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/observationReportProtocol.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportProtocol.ts#$file",
+      "id": "import:22812e26deb5ae2d5e27",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/run-observability/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativeFactManifest",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -118254,6 +118905,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:2294e9ab32a2e81431ea",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativePagePosition",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -119038,6 +119705,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlRuntime.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlRuntime.ts#PostgresqlDatabaseRuntime"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:24025bee4265082bd16e",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/taskDriveBinding",
+      "syntax": "static-import",
+      "targetSymbol": "captureTaskDriveBinding",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts#captureTaskDriveBinding"
     },
     {
       "edgeKind": "type",
@@ -121953,6 +122636,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts#$file",
+      "id": "import:2abc8e9b66926edd5ea2",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HISTORICAL_NATIVE_NUMERIC_PAGE_VERSION",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts#$file",
@@ -123070,6 +123769,22 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:2d422f1f1454da76f934",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "advanceOriginalHistoricalNativePage",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -124545,6 +125260,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "id": "import:30f6be444f15b7e8de92",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "observationNativeFactPages",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts#$file",
@@ -125710,6 +126441,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:3350cd74b012bc8969f8",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "observationNativeFactRoots",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -128848,6 +129595,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workflows"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:3ad0d7be68332350c004",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/taskDriveBinding",
+      "syntax": "static-import",
+      "targetSymbol": "TaskDriveBinding",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts#TaskDriveBinding"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -131809,6 +132572,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/ports/historicalNativeFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/historicalNativeFacts.ts#$file",
+      "id": "import:41feae184d85cc414809",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativeSourceProof",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -133054,6 +133833,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#$file",
+      "id": "import:44e929231a468b45b7cb",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/sqlite/readonlySqliteDatabase",
+      "syntax": "static-import",
+      "targetSymbol": "ReadonlySqliteDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#ReadonlySqliteDatabase"
     },
     {
       "edgeKind": "value",
@@ -134366,6 +135161,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#skillOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/observationReportWorker.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
+      "id": "import:477820584d374cd7075a",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/run-observability/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativeFactInvalidation",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -142065,6 +142876,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "id": "import:5a7b7829b0cd2a5bf71d",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "observationNativeFactRoots",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/execution/taskExecutionResourceDependencies.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResourceDependencies.ts#$file",
@@ -142110,6 +142937,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#ReclaimableDiskItem"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/background/observationReportProtocol.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportProtocol.ts#$file",
+      "id": "import:5a9567771fdecc17cd3f",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativeSourceProof",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -144816,6 +145659,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/application/ports/webhookDispatchPersistence.ts#WebhookTriggerRecord"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "id": "import:608bdaf7947c10a7016a",
+      "owner": "platform",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/composition/historicalNativeVersion",
+      "syntax": "static-import",
+      "targetSymbol": "createHistoricalNativeVersionObserver",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts#createHistoricalNativeVersionObserver"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/postgresqlProviderBackup.ts",
@@ -144958,6 +145817,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#SkillFileQueries"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts#$file",
+      "id": "import:61266a9a71db6dd55d6b",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "originalHistoricalNativePageCursor",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -152560,6 +153435,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/localAgentMaterial.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactSpool.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactSpool.ts#$file",
+      "id": "import:731121b20e5cc6b0dadd",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
@@ -154512,6 +155403,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:7814531817fe0e43d5ec",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/reportWorkspace",
+      "syntax": "static-import",
+      "targetSymbol": "ReportWorkspace",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/reportWorkspace.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/reportWorkspace.ts#ReportWorkspace"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/infrastructure/capabilityMatrixRead.ts",
@@ -154558,6 +155465,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/domain/historicalNativePage.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/domain/historicalNativePage.ts#$file",
+      "id": "import:785c403a9cf6b8fa7d35",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "type",
@@ -155150,6 +156073,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskCollaborators"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts#$file",
+      "id": "import:794ba40ea46ec56551cf",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "initialHistoricalNativePagePosition",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -170993,6 +171932,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:9ef3ce84a7d743c1ce3c",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -172862,6 +173817,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/domain/historicalNativeFacts.ts#$file",
+      "id": "import:a369bfd563a0f88dfa99",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativeSourceProof",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -177104,6 +178075,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#Logger"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "id": "import:ae2f5756584618b217bf",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "advanceOriginalHistoricalNativePage",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -177710,6 +178697,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/platformExec.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:afa842148532b4bc9b06",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "originalHistoricalNativeIdentity",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -185809,6 +186812,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeVersionObserver.ts#$file",
+      "id": "import:c1dcdb2b5205c8e5db88",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/sqlite/readonlySqliteDatabase",
+      "syntax": "static-import",
+      "targetSymbol": "openReadonlySqliteDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/readonlySqliteDatabase.ts#openReadonlySqliteDatabase"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
@@ -186753,6 +187772,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "id": "import:c41da0461ff80433d44b",
+      "owner": "platform",
+      "removeAfterWave": "RFC-371",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/run-observability/composition/historicalNativeFacts",
+      "syntax": "static-import",
+      "targetSymbol": "historicalNativeFactFileSpool",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/historicalNativeFacts.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/reviewNodeReviewerStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewNodeReviewerStore.ts#$file",
@@ -187678,6 +188713,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition/databaseMigration.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/databaseMigration.ts#composeLocalDatabaseMigrationOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:c629795c313a1fbec543",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/taskDriveBinding",
+      "syntax": "static-import",
+      "targetSymbol": "composeTaskDriveActivityParticipant",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts#composeTaskDriveActivityParticipant"
     },
     {
       "edgeKind": "type",
@@ -188606,6 +189657,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/lock.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#DaemonLockHeldError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/historicalNativeVersion.ts#$file",
+      "id": "import:c8b81a1ae2ed25b25efe",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/services/runtime",
+      "syntax": "static-import",
+      "targetSymbol": "opencodeUsageDatabasePath",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/runtime/index.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -192830,6 +193897,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:d259960fce75ef5a1491",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "initialHistoricalNativePagePosition",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -199536,6 +200619,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#planNodeRunRollbackTargets"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file",
+      "id": "import:e071852116c26bb669e6",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
@@ -204046,6 +205145,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts#acceptHumanGateDecisionTx"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "id": "import:eb599eb96a4b3becd084",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "initialHistoricalNativePagePosition",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -213121,6 +214236,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#$file",
+      "id": "import:ff558aa3e0e87277f5a1",
+      "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts#$file",
@@ -214315,7 +215446,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ae971f0d1ac4f9dbfed313c020192a16790d5b39507f6b29226661678bc77084",
+  "sourceDigest": "sha256:d1ed5959852bb08cf908223290dec688be756f063023b6f618be7f1fc5ebf3c4",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

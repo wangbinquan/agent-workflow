@@ -2,7 +2,9 @@ import type {
   CompleteObservationBuildResult,
   CompleteObservationStoredReport,
   NativeHistoryPreparation,
+  HistoricalNativeFactManifest,
 } from '@/modules/run-observability/public/participants'
+import type { HistoricalNativeSourceProof } from '@/modules/runtime-management/public/participants'
 import type { OriginalReportReadChannel } from '../persistence/reportSnapshotTypes'
 import type { ReportWorkingRow } from '../persistence/reportWorkspace'
 
@@ -19,6 +21,7 @@ export interface ObservationReportWorkerStart {
   readonly appHome: string
   readonly source: ObservationReportWorkerSource
   readonly report: CompleteObservationStoredReport
+  readonly nativeProof?: HistoricalNativeSourceProof
 }
 export interface NativeHistoryWorkerStart {
   readonly kind: 'native-history'
@@ -27,7 +30,21 @@ export interface NativeHistoryWorkerStart {
 }
 export type OriginalObservationWorkerStart = ObservationReportWorkerStart | NativeHistoryWorkerStart
 export type OriginalObservationWorkerResult =
-  | { readonly kind: 'result'; readonly result: CompleteObservationBuildResult }
+  | {
+      readonly kind: 'result'
+      readonly result: CompleteObservationBuildResult
+      readonly nativeFacts?: {
+        readonly usedCache: boolean
+        readonly manifest: HistoricalNativeFactManifest
+        readonly statistics: {
+          readonly cachedRoots: string
+          readonly cachedPages: string
+          readonly sourceRoots: string
+          readonly sourcePages: string
+        }
+      }
+    }
+  | { readonly kind: 'native-facts-invalid'; readonly reason: string }
   | { readonly kind: 'native-history-result'; readonly result: NativeHistoryPreparation | null }
 export type ObservationReportRequest =
   | {

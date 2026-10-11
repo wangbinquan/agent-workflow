@@ -130,6 +130,18 @@ export type {
   NativeUsageCapture,
   NativeUsageCaptureIdentity,
 } from '../application/ports/nativeUsageCapture'
+export type {
+  HistoricalNativeSourceProof,
+  HistoricalNativeVersionObserver,
+} from '../application/ports/historicalNativeVersion'
+export { HISTORICAL_NATIVE_NUMERIC_PAGE_VERSION } from '../application/ports/historicalNativeVersion'
+export {
+  originalHistoricalNativeIdentity,
+  initialHistoricalNativePagePosition,
+  originalHistoricalNativePageCursor,
+  advanceOriginalHistoricalNativePage,
+} from '../domain/historicalNativePage'
+export type { HistoricalNativePagePosition } from '../domain/historicalNativePage'
 
 /** The accepted runtime owner supplies the original store and full-pass identity. */
 export { openOpencodeUsagePass } from '../infrastructure/opencodeUsagePass'
