@@ -8,12 +8,13 @@ import { sql } from 'drizzle-orm'
 import { originalSqliteFileReportSnapshot } from '@/platform/persistence/reportSqliteSnapshot'
 import type { OriginalReportSnapshot } from '@/platform/persistence/reportSnapshotTypes'
 import type { ReportWorkspace } from '@/platform/persistence/reportWorkspace'
+const openOriginalReportDatabase = (filename: string) => new Database(filename)
 test.each(['direct', 'dot-path', 'symlink'] as const)(
   'original SQLite WAL %s file reads and TEMP writes are exact and never pin the original writer',
   async (pathKind) => {
     const folder = mkdtempSync(join(tmpdir(), 'aw-report-original-')),
       filename = join(folder, 'original.sqlite'),
-      original = new Database(filename)
+      original = openOriginalReportDatabase(filename)
     try {
       original.exec(
         "PRAGMA journal_mode=WAL;CREATE TABLE report_input(id text PRIMARY KEY,value text);INSERT INTO report_input VALUES('original','before')",
@@ -85,7 +86,7 @@ test.each(['direct', 'dot-path', 'symlink'] as const)(
 test('original report handle reuses workspace SQL after other queries without reusing rows or bindings', async () => {
   const folder = mkdtempSync(join(tmpdir(), 'aw-report-statements-')),
     filename = join(folder, 'original.sqlite'),
-    original = new Database(filename)
+    original = openOriginalReportDatabase(filename)
   type Trace = { otherReads: Set<string>; preparations: number; executions: number }
   const handles = new Map<Database, Trace>()
   const originalQuery = Database.prototype.query
@@ -140,7 +141,7 @@ test('original report handle reuses workspace SQL after other queries without re
       const changed = { ...a, input: String(input + 2) }
       await workspace.put(namespace, { key: 'a', document: a })
       await workspace.put(namespace, { key: 'b', document: b })
-      expect(await workspace.get(namespace, 'a')).toEqual(a)
+      expect(await workspace.get<typeof a>(namespace, 'a')).toEqual(a)
       const found = await workspace.getMany(namespace, ['b', 'missing', 'a', 'b'])
       expect([...found.entries()].sort(([left], [right]) => left.localeCompare(right))).toEqual([
         ['a', a],
@@ -158,7 +159,7 @@ test('original report handle reuses workspace SQL after other queries without re
         { key: 'a', document: changed },
         { key: 'c', document: b },
       ])
-      expect(await workspace.get(namespace, 'a')).toEqual(changed)
+      expect(await workspace.get<typeof a>(namespace, 'a')).toEqual(changed)
       await workspace.insert(namespace, [{ key: 'd', document: a }])
       await expect(workspace.insert(namespace, [{ key: 'd', document: b }])).rejects.toThrow()
       await workspace.insert(namespace, [{ key: 'e', document: b }])
