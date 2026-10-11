@@ -42,25 +42,66 @@ const projection = `SELECT p.id,p.session_id,p.message_id,p.time_created,
 const joins = `LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
   LEFT JOIN temp.native_pass_message_models c ON c.message=p.message_id AND c.session=p.session_id`
 const fields = projection + ' FROM part p ' + joins
-
 /** Only this original snapshot's current key window is prefetched, never its full population. */
 export function createOpencodePartProjection(db: ReadonlySqliteDatabase) {
+  const originalQualification = `SELECT 1 AS unavailable FROM part p
+    LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
+    WHERE p.session_id=?1 AND (json_valid(p.data) IS NOT 1 OR
+      (m.id IS NOT NULL AND json_valid(m.data) IS NOT 1)) LIMIT 1`
+  const physicalMessageQualification = `SELECT 1 AS unavailable FROM part p
+    WHERE p.session_id=?1 AND json_valid(p.data) IS NOT 1
+    UNION ALL
+    SELECT 1 AS unavailable FROM
+      (SELECT DISTINCT m._rowid_ AS message_rowid FROM part p
+        LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
+        WHERE p.session_id=?1 AND m.id IS NOT NULL) referenced
+    CROSS JOIN message m ON m._rowid_=referenced.message_rowid
+    WHERE json_valid(m.data) IS NOT 1 LIMIT 1`
+
+  /** Called only after the reader has begun and pinned its original snapshot. */
+  function qualificationForSnapshot(db: ReadonlySqliteDatabase): string {
+    try {
+      const tables = db.query<Record<string, unknown>, []>('PRAGMA table_list').all()
+      if (
+        !tables.length ||
+        tables.some((table) => typeof table.name !== 'string' || typeof table.schema !== 'string')
+      )
+        return originalQualification
+      const messages = tables.filter((table) => (table.name as string).toLowerCase() === 'message')
+      if (
+        messages.length !== 1 ||
+        messages[0]!.schema !== 'main' ||
+        messages[0]!.type !== 'table' ||
+        messages[0]!.wr !== 0
+      )
+        return originalQualification
+      const columns = db
+        .query<Record<string, unknown>, []>('PRAGMA main.table_xinfo(message)')
+        .all()
+      if (
+        !columns.length ||
+        columns.some(
+          (column) => typeof column.name !== 'string' || column.name.toLowerCase() === '_rowid_',
+        )
+      )
+        return originalQualification
+      return physicalMessageQualification
+    } catch {
+      return originalQualification
+    }
+  }
+
   let window: PartWindow | undefined
+  let qualification: string | undefined
   return {
     read(session: string, after: string | null, remaining: number): CachedMessagePartRow | null {
       if (window?.session !== session) {
         let eligible = false
         try {
           // Unqualified JSON must retain the original range query's failure prefix.
+          qualification ??= qualificationForSnapshot(db)
           eligible =
-            db
-              .query<{ unavailable: number }, [string]>(
-                `SELECT 1 AS unavailable FROM part p
-                LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
-                WHERE p.session_id=?1 AND (json_valid(p.data) IS NOT 1 OR
-                  (m.id IS NOT NULL AND json_valid(m.data) IS NOT 1)) LIMIT 1`,
-              )
-              .get(session) === null
+            db.query<{ unavailable: number }, [string]>(qualification).get(session) === null
         } catch {
           // Uncertain qualification keeps the complete original range query.
         }

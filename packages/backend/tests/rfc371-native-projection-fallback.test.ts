@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
+import type { ReadonlySqliteDatabase } from '../src/platform/persistence/sqlite/readonlySqliteDatabase'
 import { createHistoricalOpencodeUsagePassFactory } from '../src/modules/runtime-management/infrastructure/opencodeUsagePass'
 import {
   consumeProjection,
@@ -10,6 +12,53 @@ import {
   scalarRows,
   type BatchFault,
 } from './helpers/rfc371NativeProjectionFixture'
+
+type MetadataFault =
+  | 'table-list-throw'
+  | 'table-list-malformed'
+  | 'xinfo-throw'
+  | 'xinfo-malformed'
+  | 'physical-throw'
+// Successful calls always use the original SQLite. Only explicitly named metadata
+// faults are simulated; original scalar fields/fingerprints remain the oracle.
+function qualificationTrace(options: { fault?: MetadataFault; tempMessage?: boolean } = {}) {
+  const instrument = instrumentProjectionDatabase(),
+    events: string[] = []
+  const open = (path: string): ReadonlySqliteDatabase => {
+    const db = instrument.open(path)
+    if (options.tempMessage)
+      db.query<unknown, []>('CREATE TEMP TABLE message AS SELECT * FROM main.message').get()
+    return {
+      query<Row, Parameters extends readonly unknown[]>(sql: string) {
+        const statement = db.query<Row, Parameters>(sql)
+        return {
+          get(...parameters: Parameters) {
+            events.push(sql)
+            if (options.fault === 'physical-throw' && sql.includes('SELECT DISTINCT m._rowid_'))
+              throw new Error('explicit-physical-qualification-unavailable')
+            return statement.get(...parameters)
+          },
+          all(...parameters: Parameters) {
+            events.push(sql)
+            if (
+              (options.fault === 'table-list-throw' && sql === 'PRAGMA table_list') ||
+              (options.fault === 'xinfo-throw' && sql === 'PRAGMA main.table_xinfo(message)')
+            )
+              throw new Error('explicit-metadata-unavailable')
+            if (
+              (options.fault === 'table-list-malformed' && sql === 'PRAGMA table_list') ||
+              (options.fault === 'xinfo-malformed' && sql === 'PRAGMA main.table_xinfo(message)')
+            )
+              return [{ name: null }] as unknown as Row[]
+            return statement.all(...parameters)
+          },
+        }
+      },
+      close: () => db.close(),
+    }
+  }
+  return { ...instrument, open, events }
+}
 
 test('failed, missing, duplicated or reordered prefetch keeps every original point and EOF', () => {
   const fixture = projectionFixture(),
@@ -513,3 +562,275 @@ test.each(['message', 'part'] as const)(
     }
   },
 )
+
+// RFC-371 physical-message-qualification: repeat-message optimization must not
+// change any original field, Token bucket, snapshot fingerprint or complete EOF.
+test('ordinary physical Message qualification retains all 603 original Part rows and EOF', () => {
+  const fixture = projectionFixture(),
+    expectedRows = scalarRows(fixture.db),
+    expectedEOF = scalarRootEOF(fixture.db),
+    trace = qualificationTrace(),
+    factory = createHistoricalOpencodeUsagePassFactory(fixture.path, {
+      pageRows: 1000,
+      pageBytes: 1024 * 1024,
+      openDatabase: trace.open,
+    })
+  try {
+    const reader = factory.open(projectionIdentity('physical-original-fields'))
+    expect(trace.events.filter((sql) => sql === 'PRAGMA table_list')).toEqual([])
+    const actual = consumeProjection(reader)
+    expect(actual.eof).toEqual(expectedEOF)
+    expect(actual.steps.map((step) => step.stepId)).toEqual(
+      expectedRows.filter((row) => row.kind === 'step-finish').map((row) => row.id as string),
+    )
+    expect(
+      trace.projected.map((row) => {
+        const original = { ...row }
+        delete original.cache_message
+        return original
+      }),
+    ).toEqual(expectedRows)
+    expect(trace.events.filter((sql) => sql.includes('SELECT DISTINCT m._rowid_'))).toHaveLength(1)
+    expect(trace.counts.batches).toBe(4)
+    expect(trace.counts.points).toBe(0)
+  } finally {
+    factory.close()
+    fixture.close()
+  }
+})
+
+test.each([
+  'without-rowid',
+  'view',
+  'virtual',
+  'shadow',
+  'temp',
+  'table-list-throw',
+  'table-list-malformed',
+  'xinfo-throw',
+  'xinfo-malformed',
+] as const)(
+  'unsupported Message shape or metadata %s uses the complete original qualification',
+  (shape) => {
+    const fixture = projectionFixture()
+    if (['without-rowid', 'view', 'virtual', 'shadow'].includes(shape)) {
+      fixture.db.exec('ALTER TABLE message RENAME TO original_message')
+      if (shape === 'without-rowid')
+        fixture.db.exec(
+          'CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT) WITHOUT ROWID; INSERT INTO message SELECT * FROM original_message; DROP TABLE original_message',
+        )
+      else if (shape === 'view')
+        fixture.db.exec('CREATE VIEW message AS SELECT id,session_id,data FROM original_message')
+      else if (shape === 'virtual')
+        fixture.db.exec(
+          'CREATE VIRTUAL TABLE message USING fts5(id UNINDEXED,session_id UNINDEXED,data UNINDEXED); INSERT INTO message SELECT * FROM original_message; DROP TABLE original_message',
+        )
+      else
+        fixture.db.exec(
+          'CREATE TABLE message(_ROWID_ INTEGER,id TEXT PRIMARY KEY,session_id TEXT,data TEXT); INSERT INTO message SELECT rowid,id,session_id,data FROM original_message; DROP TABLE original_message',
+        )
+    }
+    const expectedEOF = scalarRootEOF(fixture.db),
+      expectedRows = scalarRows(fixture.db),
+      trace = qualificationTrace({
+        tempMessage: shape === 'temp',
+        fault: [
+          'table-list-throw',
+          'table-list-malformed',
+          'xinfo-throw',
+          'xinfo-malformed',
+        ].includes(shape)
+          ? (shape as MetadataFault)
+          : undefined,
+      }),
+      factory = createHistoricalOpencodeUsagePassFactory(fixture.path, {
+        pageRows: 1000,
+        pageBytes: 1024 * 1024,
+        openDatabase: trace.open,
+      })
+    try {
+      const actual = consumeProjection(
+        factory.open(projectionIdentity('metadata-fallback-' + shape)),
+      )
+      expect(actual.eof).toEqual(expectedEOF)
+      expect(actual.steps.map((step) => step.stepId)).toEqual(
+        expectedRows.filter((row) => row.kind === 'step-finish').map((row) => row.id as string),
+      )
+      expect(trace.events.filter((sql) => sql.includes('SELECT DISTINCT m._rowid_'))).toEqual([])
+      expect(
+        trace.events.filter((sql) =>
+          sql.includes('(m.id IS NOT NULL AND json_valid(m.data) IS NOT 1)'),
+        ),
+      ).toHaveLength(1)
+      expect(trace.counts.batches).toBe(4)
+    } finally {
+      factory.close()
+      fixture.close()
+    }
+  },
+)
+
+test('an unavailable physical qualification keeps every original range row and complete EOF', () => {
+  const fixture = projectionFixture(),
+    expectedEOF = scalarRootEOF(fixture.db),
+    expectedRows = scalarRows(fixture.db),
+    trace = qualificationTrace({ fault: 'physical-throw' }),
+    factory = createHistoricalOpencodeUsagePassFactory(fixture.path, {
+      pageRows: 1000,
+      pageBytes: 1024 * 1024,
+      openDatabase: trace.open,
+    })
+  try {
+    const actual = consumeProjection(factory.open(projectionIdentity('physical-unavailable')))
+    expect(actual.eof).toEqual(expectedEOF)
+    expect(actual.steps.map((step) => step.stepId)).toEqual(
+      expectedRows.filter((row) => row.kind === 'step-finish').map((row) => row.id as string),
+    )
+    expect(trace.counts.batches).toBe(0)
+    expect(trace.projected).toEqual([])
+  } finally {
+    factory.close()
+    fixture.close()
+  }
+})
+
+test('NOCASE Message data true and TRUE are distinct physical rows and retain the original error prefix', () => {
+  const fixture = projectionFixture(0)
+  fixture.db.exec(
+    'ALTER TABLE message RENAME TO original_message; CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT COLLATE NOCASE); DROP TABLE original_message',
+  )
+  fixture.db.query('INSERT INTO message VALUES (?,?,?)').run('valid', 'root', 'true')
+  fixture.db.query('INSERT INTO message VALUES (?,?,?)').run('invalid', 'root', 'TRUE')
+  const data = JSON.stringify({
+    type: 'step-finish',
+    tokens: { input: 1, output: 2, cache: { read: 3, write: 4 } },
+  })
+  fixture.db.query('INSERT INTO part VALUES (?,?,?,?,?)').run('a', 'root', 'valid', 1000, data)
+  fixture.db.query('INSERT INTO part VALUES (?,?,?,?,?)').run('b', 'root', 'invalid', 1001, data)
+  const originalPrefix: string[] = []
+  let originalError: unknown,
+    after: string | null = null
+  for (;;) {
+    try {
+      const row: Record<string, unknown> | null =
+        after === null
+          ? fixture.db
+              .query<
+                Record<string, unknown>,
+                [string]
+              >(originalFields + ' WHERE p.session_id=?1 ORDER BY p.id LIMIT 1')
+              .get('root')
+          : fixture.db
+              .query<
+                Record<string, unknown>,
+                [string, string]
+              >(originalFields + ' WHERE p.session_id=?1 AND p.id>?2 ORDER BY p.id LIMIT 1')
+              .get('root', after)
+      if (!row) throw new Error('Original NOCASE data fixture did not fail')
+      after = row.id as string
+      originalPrefix.push(after)
+    } catch (error) {
+      originalError = error
+      break
+    }
+  }
+  const trace = qualificationTrace(),
+    factory = createHistoricalOpencodeUsagePassFactory(fixture.path, {
+      pageRows: 1,
+      pageBytes: 1024,
+      openDatabase: trace.open,
+    }),
+    reader = factory.open(projectionIdentity('nocase-data-physical-rows'))
+  try {
+    const acknowledged: ReturnType<typeof reader.next>[] = []
+    let cursor = reader.initialCursor,
+      failure: unknown
+    for (;;) {
+      try {
+        const page = reader.next(cursor)
+        expect(page.eof).toBeNull()
+        reader.acknowledge(page.ordinal, page.payloadDigest)
+        acknowledged.push(page)
+        cursor = page.nextCursor!
+      } catch (error) {
+        failure = error
+        break
+      }
+    }
+    expect((originalError as Error).message).toContain('malformed JSON')
+    expect((failure as Error).message).toBe((originalError as Error).message)
+    expect(acknowledged.flatMap((page) => page.steps).map((step) => step.stepId)).toEqual(
+      originalPrefix,
+    )
+    expect(acknowledged.at(-1)!.counts.parts).toBe(String(originalPrefix.length))
+    expect(trace.counts.batches).toBe(0)
+    expect(() => reader.next(cursor)).toThrow('snapshot closed')
+  } finally {
+    factory.close()
+    fixture.close()
+  }
+})
+
+test('Message metadata is read once after BEGIN and the root, then requalified on the next original transaction', () => {
+  const fixture = projectionFixture(),
+    trace = qualificationTrace()
+  fixture.db.query('INSERT INTO session VALUES (?,?,?)').run('child', 'root', 1001)
+  const rows = scalarRows(fixture.db),
+    hash = createHash('sha256')
+  hash.update(
+    JSON.stringify([
+      'root',
+      fixture.db.query('SELECT id,parent_id,time_created FROM session WHERE id=?').get('root'),
+    ]),
+  )
+  hash.update(JSON.stringify(['session', { id: 'root', parentSessionId: null }]))
+  for (const row of rows) hash.update(JSON.stringify(['part', row]))
+  hash.update(
+    JSON.stringify([
+      'child',
+      fixture.db
+        .query('SELECT id,parent_id FROM session WHERE parent_id=?1 ORDER BY id LIMIT 1')
+        .get('root'),
+    ]),
+  )
+  hash.update(JSON.stringify(['session', { id: 'child', parentSessionId: 'root' }]))
+  const expected = {
+      fingerprint: hash.digest('hex'),
+      counts: { sessions: '2', parts: '603', steps: '201' },
+    },
+    factory = createHistoricalOpencodeUsagePassFactory(fixture.path, {
+      pageRows: 1000,
+      pageBytes: 1024 * 1024,
+      openDatabase: trace.open,
+    })
+  try {
+    const first = factory.open(projectionIdentity('snapshot-probe-first'))
+    expect(trace.events.filter((sql) => sql === 'PRAGMA table_list')).toEqual([])
+    expect(consumeProjection(first).eof).toEqual(expected)
+    expect(trace.events.filter((sql) => sql === 'PRAGMA table_list')).toHaveLength(1)
+    expect(trace.events.filter((sql) => sql === 'PRAGMA main.table_xinfo(message)')).toHaveLength(1)
+    const probe = trace.events.indexOf('PRAGMA table_list')
+    expect(probe).toBeGreaterThan(trace.events.indexOf('BEGIN'))
+    expect(probe).toBeGreaterThan(
+      trace.events.findIndex(
+        (sql) => sql.startsWith('SELECT id,parent_id,') && sql.includes('FROM session WHERE id=?'),
+      ),
+    )
+    fixture.db.exec(
+      'ALTER TABLE message RENAME TO original_message; CREATE TABLE message(_rowid_ INTEGER,id TEXT PRIMARY KEY,session_id TEXT,data TEXT); INSERT INTO message SELECT rowid,id,session_id,data FROM original_message; DROP TABLE original_message',
+    )
+    const start = trace.events.length,
+      second = factory.open(projectionIdentity('snapshot-probe-second'))
+    expect(trace.events.slice(start).filter((sql) => sql === 'PRAGMA table_list')).toEqual([])
+    expect(consumeProjection(second).eof).toEqual(expected)
+    expect(trace.events.slice(start).filter((sql) => sql === 'PRAGMA table_list')).toHaveLength(1)
+    expect(
+      trace.events.slice(start).filter((sql) => sql.includes('SELECT DISTINCT m._rowid_')),
+    ).toEqual([])
+    expect(trace.counts.closes).toBe(0)
+  } finally {
+    factory.close()
+    fixture.close()
+  }
+  expect(trace.counts.closes).toBe(1)
+})
