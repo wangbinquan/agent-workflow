@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 505,
-    "architectureExceptions": 6049,
-    "backgroundJobs": 374,
-    "crossContextImports": 6907,
+    "architectureExceptions": 6051,
+    "backgroundJobs": 379,
+    "crossContextImports": 6909,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27803,
-    "mutationEntrypoints": 1994,
+    "moduleSymbolOwners": 27824,
+    "mutationEntrypoints": 1995,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1260,
-    "transactionExternalEffects": 277
+    "publicSurfaces": 1267,
+    "transactionExternalEffects": 275
   },
   "metrics": {
     "ambientWiringEntries": 505,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2430,
+    "backendProductionFiles": 2434,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 374,
+    "backgroundEntries": 379,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -49,7 +49,7 @@
     ],
     "directNativeIntervals": 23,
     "directNativeTimers": 79,
-    "inboundBoundaryEdges": 311,
+    "inboundBoundaryEdges": 309,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 493
+        "files": 497
       }
     ],
-    "moduleFiles": 1834,
+    "moduleFiles": 1838,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ffb135ee4ce4c0387d3c85d63f7e24ee07df6d543e9ed9b9fb15b47d8eeb898"
+  "sourceDigest": "sha256:b4ddc0dd210c3b8b5159fe69cfa898172328422953c7d73b6be85baa1203922c"
 }

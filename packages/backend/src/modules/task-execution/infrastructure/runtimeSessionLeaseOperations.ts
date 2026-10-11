@@ -16,6 +16,7 @@ import {
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
 import { recordNativeUsageLeaseRoot } from './nativeUsageLeaseRoot'
+import type { TaskResourceRecoveryWrite } from './taskResourceRecoveryWrite'
 
 const TERMINAL = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 
@@ -43,8 +44,18 @@ async function fence(tx: TaskExecutionTransaction, taskId: string, now: number):
 
 export function createRuntimeSessionLeaseOperations(
   db: ProviderNeutralDatabase,
+  resourceWrite?: TaskResourceRecoveryWrite,
 ): RuntimeSessionLeaseOperations {
   const engine = databaseSessionFor(db).engine
+  const repairWrite = <T>(body: (tx: TaskExecutionTransaction) => Promise<T>): Promise<T> =>
+    resourceWrite === undefined
+      ? withTaskExecutionSerializable(db, body)
+      : resourceWrite.write({
+          db,
+          selection: resourceWrite.selection,
+          isolation: 'serializable',
+          body,
+        })
   const operations: RuntimeSessionLeaseOperations = {
     async load(protocol, sessionId) {
       const rows = await db
@@ -411,7 +422,7 @@ export function createRuntimeSessionLeaseOperations(
     },
 
     async discard(token) {
-      return await withTaskExecutionSerializable(db, async (tx) => {
+      return await repairWrite(async (tx) => {
         const heldRows = await tx
           .select({ taskId: runtimeSessionLeases.taskId })
           .from(runtimeSessionLeases)
@@ -450,7 +461,7 @@ export function createRuntimeSessionLeaseOperations(
     },
 
     async release(token) {
-      return await withTaskExecutionSerializable(db, async (tx) => {
+      return await repairWrite(async (tx) => {
         const heldRows = await tx
           .select({ taskId: runtimeSessionLeases.taskId })
           .from(runtimeSessionLeases)

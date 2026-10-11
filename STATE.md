@@ -1,3 +1,15 @@
+## 2026-10-10 RFC-370：Task 资源恢复实施候选
+
+总绿前置已在 ca947c24 消费。Task 启动／周期资源恢复独立设计 PASS／零 findings 已实际核对，候选已按原事务写入、closed purpose views 与完整原 receiver 捕获实施，boot recovery 与 active periodic new-work 分开。十六个双 provider case＋一个全量源码 case 已补，原 HumanGate／lifecycle 398 次人口、原 case／断言／预算和 native 路径保持；三份源文件用有限 UTF-16 inverse 保留旧源码判据，Windows 只补精确登记。只做本片格式／lint和纯字节／语法检查，未运行本机 AW test/typecheck/build/service。
+
+独立实现门、唯一原 scoped census／配套门、精确上库及新 SHA 总绿另验。完整 H7／十九 owner／三个根、A-T7／A-G与各层独立 CS adapter、先 M0 部署再 M1～M4 仍开放，AW 尚未部署 CS，RFC 未完成。详见[资源恢复设计及候选](design/RFC-370-crewstation-hosted-deployment/task-resource-recovery-write-purposes.md)。以下旧 STATE 与并行输出完整保持。
+
+## 2026-10-10 RFC-370：主 CI 与完整 Windows 总绿，继续宿主重构
+
+精确 ca947c2431cd710bdaa63af3bae4903c1ace03b4 的主 CI 38044940528 为 completed / success，72／72 作业成功；默认完整 Windows 38045024500 为 success，26 步成功。根会话已核对全部 73 作业、八条 typecheck code 0 和 398 次实际功能案例（Ubuntu 198／macOS 100／Windows 100），目标案例缺失、重复、失败、skip、todo 均为零。此前失败与并行输出保留，SOURCE／MATCHING 按完整身份复用，无本机 AW 执行或新增 census。详见[总绿验收](design/RFC-370-crewstation-hosted-deployment/ci-human-gate-total-green-closeout.md)。
+
+用户要求的总绿前置门已满足；现继续 Task 启动／周期恢复的原事务切面与宿主装配设计。完整 H7／十九 owner／三个根、A-T7／A-G、各层 CS adapter 与 M0～M4 仍开放，AW 尚未部署 CS，RFC 未完成。以下旧 STATE 与并行输出完整保持。
+
 ## 2026-10-10 RFC-370：Windows 通过，历史引用 CI 超时
 
 HumanGate 修复 127ab32d／abca1d51 已上库；默认完整 Windows 38042223475 正式成功，26 步、47 次 HumanGate＋53 次生命周期及四工作区 typecheck code 0 已实际核对。主 CI 38042223483 的既有 man7 来源外链超时，总绿仍未通过；原运行与失败记录保留。

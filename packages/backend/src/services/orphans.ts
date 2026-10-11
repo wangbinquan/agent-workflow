@@ -19,7 +19,7 @@
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 import type { ReapResult } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
 export type { ReapResult } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import type { TaskBootOrphanOperations } from '@/modules/task-execution/public/participants'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   killStaleRunProcessTree,
@@ -38,7 +38,7 @@ export interface ReapOrphanRunsDependencies {
 }
 
 export async function reapOrphanRuns(
-  operations: TaskRecoveryOperations,
+  operations: TaskBootOrphanOperations,
   dependencies: ReapOrphanRunsDependencies = {},
 ): Promise<ReapResult> {
   const now = Date.now()

@@ -27,6 +27,7 @@ import type { RuntimeSessionCapturePersistence } from './runtimeSessionCapturePe
 import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOperations'
 import type { NativeUsageInvocationPersistence } from './nativeUsageInvocation'
 import type { TaskNodeWritePurposes } from './taskNodeWritePurposes'
+import type { TaskRecoveryWritePurposes } from './taskRecoveryWritePurposes'
 
 /** Bootstrap-selected task-execution persistence. Every member is a named
  * Promise port; provider clients remain in infrastructure factories. */
@@ -38,6 +39,8 @@ export interface TaskExecutionPersistence {
   readonly runtimeLifecycleWritePurposes?: TaskRuntimeLifecycleWritePurposes
   readonly humanGateWriteMode?: 'host-selected'
   readonly humanGateWritePurposes?: HumanGateTaskWritePurposes
+  readonly recoveryWriteMode?: 'host-selected'
+  readonly recoveryWritePurposes?: TaskRecoveryWritePurposes
   readonly drive: TaskEngineApplicationPersistence
   readonly ownership: TaskOwnershipPersistence
   readonly intents: TaskExecutionIntentPersistence

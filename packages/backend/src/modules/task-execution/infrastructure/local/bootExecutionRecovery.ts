@@ -4,6 +4,7 @@ import {
   finalizeTaskExecutionRecovery,
   prepareTaskExecutionRecovery,
 } from '../../application/recoverTaskExecutions'
+import { selectTaskBootRecoveryWrites } from '../../application/taskRecoveryWriteSelection'
 import type {
   BootExecutionRecoveryFactory,
   BootExecutionRecoveryFamily,
@@ -14,6 +15,8 @@ import type {
 export function createLocalBootExecutionRecovery(
   input: TaskExecutionBootRecoveryInput,
 ): BootExecutionRecoveryFamily {
+  const persistence = input.persistence
+  const selected = selectTaskBootRecoveryWrites(persistence, input.recoveryGrant)
   const reapResults = new WeakMap<object, ReapResult>()
   const finalizationResults = new WeakMap<
     object,
@@ -22,12 +25,14 @@ export function createLocalBootExecutionRecovery(
   return {
     async prepare() {
       return await prepareTaskExecutionRecovery({
-        persistence: input.persistence.recovery,
+        persistence: selected?.recovery ?? input.persistence.recovery,
         lockProof: input.lockProof,
       })
     },
     async reap() {
-      const reap = await reapOrphanRuns(input.persistence.recoveryAdministration)
+      const reap = await reapOrphanRuns(
+        selected?.operations ?? input.persistence.recoveryAdministration,
+      )
       const reapRef = Object.freeze({})
       reapResults.set(reapRef, reap)
       return { counts: reap, reapRef }
@@ -36,7 +41,7 @@ export function createLocalBootExecutionRecovery(
       const reap = reapResults.get(reapRef)
       if (reap === undefined) throw new Error('boot recovery reference belongs to another pairing')
       const repairedRuntimeLeases = await repairRuntimeSessionLeasesAfterOrphanReap(
-        input.runtimeSessionLeases,
+        selected?.runtimeSessionLeases ?? input.runtimeSessionLeases,
         true,
       )
       const finalizationRef = Object.freeze({})
@@ -49,7 +54,7 @@ export function createLocalBootExecutionRecovery(
         throw new Error('boot recovery reference belongs to another pairing')
       const { reap, repairedRuntimeLeases } = result
       return await finalizeTaskExecutionRecovery({
-        persistence: input.persistence.recovery,
+        persistence: selected?.recovery ?? input.persistence.recovery,
         lockProof: input.lockProof,
         processEvidence: {
           orphanReaperCompleted: true,

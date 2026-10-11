@@ -38,6 +38,9 @@ import { createSelectedTaskExecutionProjectionPersistence } from '../infrastruct
 import { createSelectedTaskNodeWritePurposes } from '../infrastructure/taskHostNodeWritePurposes'
 import { createSelectedTaskRuntimeLifecycleWritePurposes } from '../infrastructure/taskHostRuntimeLifecycleWritePurposes'
 import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'
+import { createSelectedTaskRecoveryWritePurposes } from '../infrastructure/taskHostRecoveryWritePurposes'
+import type { TaskRuntimeSessionLeaseRepairOperations } from '../application/ports/taskRecoveryWritePurposes'
+import type { TaskResourceRecoveryWrite } from '../infrastructure/taskResourceRecoveryWrite'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -56,65 +59,77 @@ import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/task
  * 收敛后这四个方法一个 provider 名都不问，`createTaskExecutionPersistence` 的分派三元也就
  * 没有存在理由了。
  */
+interface RecoveryAdministrationDependencies {
+  readonly nodeLifecycle?: Pick<DrizzleNodeRunLifecyclePersistence, 'transition'>
+  readonly runtimeLeaseOperations?: TaskRuntimeSessionLeaseRepairOperations
+  readonly eventWrite?: TaskResourceRecoveryWrite
+}
+
 function createRecoveryAdministration(
   db: ProviderNeutralDatabase,
-  taskLifecycle: DrizzleTaskRuntimeLifecyclePersistence,
+  taskLifecycle: Pick<DrizzleTaskRuntimeLifecyclePersistence, 'trySet' | 'trySetWithGuard'>,
+  dependencies: RecoveryAdministrationDependencies = {},
 ) {
-  const nodeLifecycle = new DrizzleNodeRunLifecyclePersistence(db)
-  const runtimeLeaseOperations = createRuntimeSessionLeaseOperationsInternal(db)
-  return createTaskRecoveryOperations(db, {
-    async interruptBootOrphanTask(input) {
-      return await taskLifecycle.trySetWithGuard(
-        {
+  const nodeLifecycle = dependencies.nodeLifecycle ?? new DrizzleNodeRunLifecyclePersistence(db)
+  const runtimeLeaseOperations =
+    dependencies.runtimeLeaseOperations ?? createRuntimeSessionLeaseOperationsInternal(db)
+  return createTaskRecoveryOperations(
+    db,
+    {
+      async interruptBootOrphanTask(input) {
+        return await taskLifecycle.trySetWithGuard(
+          {
+            taskId: input.taskId,
+            to: 'interrupted',
+            allowedFrom: [input.from],
+            extra: {
+              finishedAt: input.now,
+              errorSummary: input.failureCode,
+              errorMessage: input.errorMessage,
+            },
+            now: input.now,
+            reason: 'reapOrphanRuns',
+          },
+          (tx) =>
+            terminalizeTaskExecutionIntentsInTx(tx, {
+              taskId: input.taskId,
+              state: 'failed',
+              failureCode: input.failureCode,
+              now: input.now,
+            }),
+        )
+      },
+      async interruptNodeRun(input) {
+        try {
+          await nodeLifecycle.transition({
+            nodeRunId: input.nodeRunId,
+            event: { kind: 'mark-interrupted' },
+            extra: {
+              finishedAt: input.now,
+              ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
+            },
+          })
+          return true
+        } catch {
+          return false
+        }
+      },
+      async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
+        return repairRuntimeSessionLeasesAfterOrphanReap(runtimeLeaseOperations, true, nodeRunId)
+      },
+      async interruptPeriodicTaskIfIdle(input) {
+        return taskLifecycle.trySet({
           taskId: input.taskId,
           to: 'interrupted',
-          allowedFrom: [input.from],
-          extra: {
-            finishedAt: input.now,
-            errorSummary: input.failureCode,
-            errorMessage: input.errorMessage,
-          },
+          allowedFrom: ['running'],
+          extra: { finishedAt: input.now, errorSummary: input.failureCode },
           now: input.now,
-          reason: 'reapOrphanRuns',
-        },
-        (tx) =>
-          terminalizeTaskExecutionIntentsInTx(tx, {
-            taskId: input.taskId,
-            state: 'failed',
-            failureCode: input.failureCode,
-            now: input.now,
-          }),
-      )
-    },
-    async interruptNodeRun(input) {
-      try {
-        await nodeLifecycle.transition({
-          nodeRunId: input.nodeRunId,
-          event: { kind: 'mark-interrupted' },
-          extra: {
-            finishedAt: input.now,
-            ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
-          },
+          reason: 'reconcileDeadRunningRuns',
         })
-        return true
-      } catch {
-        return false
-      }
+      },
     },
-    async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
-      return repairRuntimeSessionLeasesAfterOrphanReap(runtimeLeaseOperations, true, nodeRunId)
-    },
-    async interruptPeriodicTaskIfIdle(input) {
-      return taskLifecycle.trySet({
-        taskId: input.taskId,
-        to: 'interrupted',
-        allowedFrom: ['running'],
-        extra: { finishedAt: input.now, errorSummary: input.failureCode },
-        now: input.now,
-        reason: 'reconcileDeadRunningRuns',
-      })
-    },
-  })
+    dependencies.eventWrite,
+  )
 }
 
 /**
@@ -200,6 +215,15 @@ export function createTaskExecutionPersistence(
           nodeWriteMode: 'host-selected' as const,
           runtimeLifecycleWriteMode: 'host-selected' as const,
           humanGateWriteMode: 'host-selected' as const,
+          recoveryWriteMode: 'host-selected' as const,
+          recoveryWritePurposes: createSelectedTaskRecoveryWritePurposes({
+            db,
+            hostWrites: dependencies.hostWrites,
+            runtimeLifecycle,
+            nodeLifecycle: nativeNodes.nodeRuns,
+            createAdministration: (selected) =>
+              createRecoveryAdministration(db, selected.taskLifecycle, selected),
+          }),
           humanGateWritePurposes: createSelectedHumanGateTaskWritePurposes({
             humanGateLifecycle,
             hostWrites: dependencies.hostWrites,

@@ -1387,3 +1387,16 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 HumanGate 修复 127ab32d／abca1d51 已发布；源码与配套 PASS 保留。abca1d51 的默认完整 Windows 38042223475 正式成功，根会话已核对 26 步、47 次 HumanGate＋53 次生命周期实际案例和四工作区 typecheck code 0。主 CI 38042223483 的历史文档 man7 外链超时，原日志只有一个超时、零错误；原主 CI 终态继续留证，总绿尚未通过。
 
 本有限片仅保留原来源名称／完整 URL 为纯文本，历史正文和结论保持原字节；检查规则／预算与生产／测试不改。并行 ff450237 的三路径已正常提交且保留，32 份原 HumanGate 源码／控制与已消费门一致；无新 census 或本机 AW 执行。四路径精确发布、新 SHA 全主 CI＋默认完整 Windows和 398 次实际案例另验。下一批生产实现仍等总绿，完整 H7／A-T7／A-G、各层 CS adapter 与 M0～M4 未完成，AW 尚未部署 CS。详见[历史引用修复](ci-historical-source-citation.md)。全部旧 plan 与并行输出保持。
+
+## 2026-10-10 总绿前置门完成，恢复 RFC 实施
+
+ca947c2431cd710bdaa63af3bae4903c1ace03b4 的主 CI 38044940528 正式 success、72／72 作业成功；同一提交默认完整 Windows 38045024500 正式 success、26 步成功。全部 73 作业、八条 typecheck code 0 与 398 次实际功能案例已由根会话实际核对（Ubuntu 198／macOS 100／Windows 100），目标案例无缺失／重复／失败／skip／todo。原失败记录、原预算／规则和所有并行输出完整保留；无本机 AW 执行或新增 census，源码与配套门按完整字节身份复用。详见[总绿验收](ci-human-gate-total-green-closeout.md)。
+
+用户要求的“总流水线全绿后再继续 RFC”前置门已满足。后续先完成 Task 启动恢复／周期资源恢复的原写入与事务清单和功能设计，再接完整宿主装配。完整 H7／十九 owner／三个根、A-T7／A-G、CS 各层独立 adapter、M0～M4 与实际部署保持未完成；本次 CI 验收不代签这些门。
+
+
+## 2026-10-10 Task 启动与周期资源恢复候选
+
+经独立功能设计 PASS／零 findings，已实施两用途闭合视图和原事务钩子，所有 native 恢复／租约／catch/false／事件行为保持。十六 provider＋一全量源码注册已补，原 H/L 398 次人口保持，新增预计 Ubuntu33／macOS17／Windows17；该数字为登记人口，未执行。原源码判据通过三源文件有限 UTF-16 inverse 组合保持，Windows 原字节可在删除本片新增引用后完整恢复；本片格式／lint和纯语法／字节通过，无本机 AW 运行。
+
+独立源码实现门、唯一原 census、配套门、精确发布和新 SHA 全主 CI＋默认完整 Windows仍待验收。详见[资源恢复切面](task-resource-recovery-write-purposes.md)。完整 H7／A-T7／A-G、十九 owner／三个根、各层独立 CS adapters 与先 M0 部署再 M1～M4 继续，AW 尚未部署 CS，RFC 未完成。全部旧 plan 与并行输出保持。

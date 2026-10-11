@@ -9,6 +9,7 @@ import type {
   CodeHostRecoveryDescriptor,
 } from '../../domain/codeHostRecovery'
 import type { ExclusiveDaemonLockProof } from '../../domain/ownership'
+import type { TaskResourceRecoveryGrant } from './taskRecoveryWritePurposes'
 
 export interface ReapResult {
   tasks: number
@@ -21,7 +22,11 @@ export interface BootRecoveryLogger {
 }
 
 export interface TaskExecutionBootRecoveryInput {
-  readonly persistence: Pick<TaskExecutionPersistence, 'recovery' | 'recoveryAdministration'>
+  readonly persistence: Pick<
+    TaskExecutionPersistence,
+    'recovery' | 'recoveryAdministration' | 'recoveryWriteMode' | 'recoveryWritePurposes'
+  >
+  readonly recoveryGrant?: TaskResourceRecoveryGrant
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly lockProof: ExclusiveDaemonLockProof
   readonly codeHostProbe?: (descriptor: CodeHostRecoveryDescriptor) => Promise<CodeHostProbeOutcome>

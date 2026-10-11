@@ -64,6 +64,7 @@ import {
   withTaskHostIssuedAck,
   type TaskHostWriteBinding,
 } from './hostExecutionWriteTransaction'
+import type { TaskResourceRecoveryWrite } from './taskResourceRecoveryWrite'
 import {
   registerTaskHostClaimFailures,
   taskHostClaimObservation,
@@ -306,6 +307,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
   constructor(
     private readonly db: ProviderNeutralDatabase,
     private readonly hostWrites?: TaskHostWriteBinding,
+    private readonly resourceRecovery?: TaskResourceRecoveryWrite,
   ) {
     if (hostWrites !== undefined) {
       if (hostWrites.port === undefined || typeof hostWrites.transactionFor !== 'function') {
@@ -567,6 +569,13 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
   }
 
   async revokeExact(input: Parameters<TaskOwnershipPersistence['revokeExact']>[0]) {
+    if (this.resourceRecovery !== undefined) {
+      return this.resourceRecovery.write({
+        db: this.db,
+        selection: this.resourceRecovery.selection,
+        body: (tx) => revokeExactOwnerInTx(tx, input),
+      })
+    }
     // 单语句 CAS：没有事务包装，客户端本身就是句柄（见 `revokeExactOwnerInTx` 头注释）。
     return await revokeExactOwnerInTx(this.db, input)
   }
@@ -676,6 +685,16 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
     )
   }
 
+  private withRecoverySerializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+    if (this.resourceRecovery === undefined) return databaseSessionFor(this.db).serializable(body)
+    return this.resourceRecovery.write({
+      db: this.db,
+      selection: this.resourceRecovery.selection,
+      isolation: 'serializable',
+      body,
+    })
+  }
+
   async releaseRecovered(input: Parameters<TaskOwnershipPersistence['releaseRecovered']>[0]) {
     assertVerifiedTakeoverProof(input.proof)
     if (
@@ -685,7 +704,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
     ) {
       throw new Error('takeover proof does not match recovered owner')
     }
-    return await databaseSessionFor(this.db).serializable(async (tx) => {
+    return await this.withRecoverySerializable(async (tx) => {
       if (await hasUnresolvedEffects(tx, input.owner.taskId)) {
         throw new TaskExecutionError(
           'task-execution-recovery-required',

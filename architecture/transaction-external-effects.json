@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 28,
-    "transactionCallbacks": 277
+    "coLocatedCandidates": 27,
+    "transactionCallbacks": 275
   },
   "entries": [
     {
@@ -2988,11 +2988,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:807",
-      "line": 807,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#closeRecoveredOutcomeUnknownAndRelease",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:100",
+      "line": 100,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#withTaskDriverIssuedAck",
       "status": "clear",
-      "symbol": "closeRecoveredOutcomeUnknownAndRelease",
+      "symbol": "withTaskDriverIssuedAck",
       "targetContext": "task-execution",
       "transactionCallee": "transaction"
     },
@@ -3002,35 +3002,9 @@
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:83",
       "line": 83,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#withTaskDriverIssuedAck",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#withRecoveryTransaction",
       "status": "clear",
-      "symbol": "withTaskDriverIssuedAck",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:87",
-      "line": 87,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#withTaskDriverIssuedAck",
-      "status": "clear",
-      "symbol": "withTaskDriverIssuedAck",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [
-        "push"
-      ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:952",
-      "line": 952,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#resolveQuiescedCodeHostMutations",
-      "status": "co-located-risk",
-      "symbol": "resolveQuiescedCodeHostMutations",
+      "symbol": "withRecoveryTransaction",
       "targetContext": "task-execution",
       "transactionCallee": "transaction"
     },
@@ -3136,8 +3110,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#transaction:156",
-      "line": 156,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#transaction:157",
+      "line": 157,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#withOwnedTaskWrite",
       "status": "clear",
       "symbol": "withOwnedTaskWrite",
@@ -3148,8 +3122,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#transaction:255",
-      "line": 255,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#transaction:256",
+      "line": 256,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#readTaskDriverFinalizationFact",
       "status": "clear",
       "symbol": "readTaskDriverFinalizationFact",
@@ -3160,8 +3134,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#transaction:579",
-      "line": 579,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#transaction:590",
+      "line": 590,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#createTaskRecoveryOperations",
       "status": "clear",
       "symbol": "createTaskRecoveryOperations",
@@ -3390,7 +3364,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ffb135ee4ce4c0387d3c85d63f7e24ee07df6d543e9ed9b9fb15b47d8eeb898",
+  "sourceDigest": "sha256:b4ddc0dd210c3b8b5159fe69cfa898172328422953c7d73b6be85baa1203922c",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

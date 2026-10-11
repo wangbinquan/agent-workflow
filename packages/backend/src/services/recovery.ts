@@ -57,7 +57,7 @@ export function __resetRecoveryCountersForTest(): void {
  * audit insert did. Also bumps the in-process counter for the kind.
  */
 export async function recordRecoveryEvent(
-  operations: TaskRecoveryOperations,
+  operations: Pick<TaskRecoveryOperations, 'recordEvent'>,
   args: RecordRecoveryEventArgs,
 ): Promise<void> {
   bumpRecoveryCounter(args.kind)

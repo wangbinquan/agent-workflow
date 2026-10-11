@@ -28,7 +28,7 @@
 // loop (modules/task-execution/composition/providerBackground.ts) wires the real
 // isProcessAlive + binary-identity check and the real activeTasks registry.
 
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import type { TaskPeriodicRecoveryOperations } from '@/modules/task-execution/public/participants'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type LivenessReason,
@@ -79,7 +79,7 @@ export function probeRunProcessAlive(pid: number, spawnBinaryPath: string | null
 }
 
 export interface ReconcileDeps {
-  operations: TaskRecoveryOperations
+  operations: TaskPeriodicRecoveryOperations
   /** Only reconcile runs whose startedAt is older than now-graceMs (anti-race). */
   graceMs: number
   /** Injected process probe. Defaults to the real one. */

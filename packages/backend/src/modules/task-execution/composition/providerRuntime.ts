@@ -391,6 +391,8 @@ export function composeSqliteTaskExecutionProviderRuntime<
     lifecycleRepair,
     autoResume,
     recovery: persistence.recoveryAdministration,
+    recoveryWriteMode: persistence.recoveryWriteMode,
+    recoveryWritePurposes: persistence.recoveryWritePurposes,
     taskHasDriver: runtime.schedulerDriver.isTaskActive,
     buildScheduleLaunch,
   })
@@ -633,6 +635,8 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     lifecycleRepair,
     autoResume,
     recovery: persistence.recoveryAdministration,
+    recoveryWriteMode: persistence.recoveryWriteMode,
+    recoveryWritePurposes: persistence.recoveryWritePurposes,
     taskHasDriver: runtime.schedulerDriver.isTaskActive,
     buildScheduleLaunch,
   })

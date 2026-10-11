@@ -1,0 +1,424 @@
+{
+  "base": "ef91b49e15412d3908b0911e1f773229a41a38f1",
+  "designFingerprint": "295a2722642e9fbf02633d422f27dfee91b90c675cdf64157e6b4f1f9dccfe6b",
+  "scope": "Finite resource recovery additions only. Restore the exact preceding source before the unchanged HumanGate and lifecycle inverses. Nonmatching fragments fail; all other bytes survive. Offsets use JavaScript UTF-16 positions.",
+  "files": [
+    {
+      "path": "packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts",
+      "bytes": 4092,
+      "sha256": "8a08a0a779430c5d0a99ed97f45a16da082176a9643a59cf2793ffa298d7543d",
+      "candidateBytes": 4277,
+      "candidateSha256": "b91cfaab863841ce85829ae39828175dcd0b556de458b9f98d56e4a86a252b9d",
+      "inverseEdits": [
+        {
+          "start": 2171,
+          "end": 2248,
+          "introduced": "import type { TaskRecoveryWritePurposes } from './taskRecoveryWritePurposes'\n",
+          "previous": ""
+        },
+        {
+          "start": 2824,
+          "end": 2932,
+          "introduced": "WritePurposes\n  readonly recoveryWriteMode?: 'host-selected'\n  readonly recoveryWritePurposes?: TaskRecovery",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "bytes": 11923,
+      "sha256": "67534677eff79643fe254ea3151f5ad4a0d30a1e3f949d472d177e2c518a52bb",
+      "candidateBytes": 13220,
+      "candidateSha256": "c47cef5a4e36bb33b2928fb6c4a85621866f2bd8b8bb37ca487e6b34f1fc2331",
+      "inverseEdits": [
+        {
+          "start": 3789,
+          "end": 4098,
+          "introduced": "import { createSelectedTaskRecoveryWritePurposes } from '../infrastructure/taskHostRecoveryWritePurposes'\nimport type { TaskRuntimeSessionLeaseRepairOperations } from '../application/ports/taskRecoveryWritePurposes'\nimport type { TaskResourceRecoveryWrite } from '../infrastructure/taskResourceRecoveryWrite'\n",
+          "previous": ""
+        },
+        {
+          "start": 4810,
+          "end": 5068,
+          "introduced": "interface RecoveryAdministrationDependencies {\n  readonly nodeLifecycle?: Pick<DrizzleNodeRunLifecyclePersistence, 'transition'>\n  readonly runtimeLeaseOperations?: TaskRuntimeSessionLeaseRepairOperations\n  readonly eventWrite?: TaskResourceRecoveryWrite\n}\n\n",
+          "previous": ""
+        },
+        {
+          "start": 5155,
+          "end": 5160,
+          "introduced": "Pick<",
+          "previous": ""
+        },
+        {
+          "start": 5199,
+          "end": 5287,
+          "introduced": " 'trySet' | 'trySetWithGuard'>,\n  dependencies: RecoveryAdministrationDependencies = {},",
+          "previous": ""
+        },
+        {
+          "start": 5315,
+          "end": 5345,
+          "introduced": " dependencies.nodeLifecycle ??",
+          "previous": ""
+        },
+        {
+          "start": 5421,
+          "end": 5464,
+          "introduced": "\n    dependencies.runtimeLeaseOperations ??",
+          "previous": ""
+        },
+        {
+          "start": 5551,
+          "end": 5556,
+          "introduced": "\n    ",
+          "previous": ""
+        },
+        {
+          "start": 5559,
+          "end": 5563,
+          "introduced": "\n   ",
+          "previous": ""
+        },
+        {
+          "start": 5566,
+          "end": 5568,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5611,
+          "end": 5613,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5671,
+          "end": 5673,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5675,
+          "end": 5677,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5719,
+          "end": 5721,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5740,
+          "end": 5742,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5789,
+          "end": 5791,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5800,
+          "end": 5802,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5837,
+          "end": 5839,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5896,
+          "end": 5898,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5942,
+          "end": 5944,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5947,
+          "end": 5949,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 5975,
+          "end": 5977,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6021,
+          "end": 6023,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6026,
+          "end": 6028,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6044,
+          "end": 6046,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6110,
+          "end": 6112,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6146,
+          "end": 6148,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6165,
+          "end": 6167,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6223,
+          "end": 6225,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6251,
+          "end": 6253,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6257,
+          "end": 6259,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6271,
+          "end": 6273,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6276,
+          "end": 6278,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6320,
+          "end": 6322,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6328,
+          "end": 6330,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6381,
+          "end": 6383,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6411,
+          "end": 6413,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6470,
+          "end": 6472,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6481,
+          "end": 6483,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6518,
+          "end": 6520,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6625,
+          "end": 6627,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6638,
+          "end": 6640,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6643,
+          "end": 6645,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6671,
+          "end": 6673,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6683,
+          "end": 6685,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6712,
+          "end": 6714,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6716,
+          "end": 6718,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6725,
+          "end": 6727,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6791,
+          "end": 6793,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6893,
+          "end": 6895,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6898,
+          "end": 6900,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6953,
+          "end": 6955,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 6993,
+          "end": 6995,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 7017,
+          "end": 7019,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 7054,
+          "end": 7056,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 7082,
+          "end": 7084,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 7167,
+          "end": 7169,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 7185,
+          "end": 7187,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 7237,
+          "end": 7239,
+          "introduced": "  ",
+          "previous": ""
+        },
+        {
+          "start": 7241,
+          "end": 7250,
+          "introduced": "\n      },",
+          "previous": ""
+        },
+        {
+          "start": 7260,
+          "end": 7289,
+          "introduced": "  dependencies.eventWrite,\n  ",
+          "previous": "}"
+        },
+        {
+          "start": 11121,
+          "end": 11539,
+          "introduced": "recoveryWriteMode: 'host-selected' as const,\n          recoveryWritePurposes: createSelectedTaskRecoveryWritePurposes({\n            db,\n            hostWrites: dependencies.hostWrites,\n            runtimeLifecycle,\n            nodeLifecycle: nativeNodes.nodeRuns,\n            createAdministration: (selected) =>\n              createRecoveryAdministration(db, selected.taskLifecycle, selected),\n          }),\n          ",
+          "previous": ""
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
+      "bytes": 12660,
+      "sha256": "eb1f07276e8d4211a153147fe5f023785febaf846e347e5098f2e597d9b29451",
+      "candidateBytes": 13450,
+      "candidateSha256": "af40563b2abcbbc95a8cdf7238e9f89c4a5f0e7bb2c9b92378839627fd3f1753",
+      "inverseEdits": [
+        {
+          "start": 1717,
+          "end": 1794,
+          "introduced": "'\nimport type { TaskResourceRecoveryWrite } from './taskResourceRecoveryWrite",
+          "previous": ""
+        },
+        {
+          "start": 6383,
+          "end": 7096,
+          "introduced": "\n  }\n\n  /** A resource purpose retains the original input and guard without inventing Task work. */\n  async trySetWithResourceWrite(\n    input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],\n    resourceWrite: TaskResourceRecoveryWrite,\n    guard?: (tx: TaskExecutionTransaction) => Promise<void>,\n  ): Promise<boolean> {\n    const capturedInput = {\n      ...input,\n      allowedFrom: [...input.allowedFrom],\n      ...(input.extra === undefined ? {} : { extra: { ...input.extra } }),\n    }\n    try {\n      await this.set(capturedInput, guard, resourceWrite)\n      return true\n    } catch (err) {\n      if (err instanceof ConflictError || err instanceof NotFoundError) return false\n      throw err\n    }",
+          "previous": ""
+        }
+      ]
+    }
+  ]
+}

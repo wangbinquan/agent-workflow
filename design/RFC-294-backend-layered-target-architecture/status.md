@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:0ffb135ee4ce4c0387d3c85d63f7e24ee07df6d543e9ed9b9fb15b47d8eeb898`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b4ddc0dd210c3b8b5159fe69cfa898172328422953c7d73b6be85baa1203922c`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,18 +10,18 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2430 |
+| backend production TS 文件 | 2434 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1834 / 18 |
+| `modules/**` 文件 / 非空 context | 1838 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 505 |
-| background work entries | 374 |
+| background work entries | 379 |
 | direct native `setInterval`（call / files） | 23 / 19 |
 | direct native timers（全部） | 79 |
-| RFC-317 boundary census（inbound / outbound） | 311 / 46 |
+| RFC-317 boundary census（inbound / outbound） | 309 / 46 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 505 |
-| `architectureExceptions` | 6049 |
-| `backgroundJobs` | 374 |
-| `crossContextImports` | 6907 |
+| `architectureExceptions` | 6051 |
+| `backgroundJobs` | 379 |
+| `crossContextImports` | 6909 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27803 |
-| `mutationEntrypoints` | 1994 |
+| `moduleSymbolOwners` | 27824 |
+| `mutationEntrypoints` | 1995 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1260 |
-| `transactionExternalEffects` | 277 |
+| `publicSurfaces` | 1267 |
+| `transactionExternalEffects` | 275 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -47,8 +47,8 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 178 |
-| task-execution / application | 155 |
+| task-execution / infrastructure | 180 |
+| task-execution / application | 157 |
 | resource-catalog / infrastructure | 132 |
 | task-execution / composition | 96 |
 | resource-catalog / application | 78 |
@@ -208,8 +208,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3835 |
-| legacy-inbound | 1988 |
+| legacy-outbound | 3836 |
+| legacy-inbound | 1989 |
 | offered-consumption | 366 |
 | infrastructure-external | 337 |
 | temporary-internal-debt | 112 |
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3835 |
-| legacy-inbound | 1988 |
+| legacy-outbound | 3836 |
+| legacy-inbound | 1989 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 101 |
 | no-circular | 6 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3224 |
-| W9-D | 1105 |
+| W9 | 3225 |
+| W9-D | 1106 |
 | W4-E1 | 833 |
 | W5 | 203 |
 | W4 | 201 |
@@ -255,7 +255,7 @@
 
 | context | 数量 |
 | --- | --- |
-| task-execution | 299 |
+| task-execution | 306 |
 | resource-catalog | 243 |
 | collaboration | 122 |
 | source-control | 104 |
@@ -274,7 +274,7 @@
 | intent | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 1260）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 141 / 1267）
 
 | context | 数量 |
 | --- | --- |

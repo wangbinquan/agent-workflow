@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1343,
+    "consumers": 1353,
     "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
-    "methods": 1752,
+    "methods": 1762,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 30042,
-    "symbols": 1260
+    "recursiveFields": 30274,
+    "symbols": 1267
   },
   "entries": [
     {
@@ -201055,7 +201055,10 @@
         }
       ],
       "publicTypeConsumerIds": [
-        "public:task-execution:participants:CodeHostSendAttemptObserver"
+        "public:task-execution:participants:CodeHostSendAttemptObserver",
+        "public:task-execution:participants:TaskBootRecoveryWrites",
+        "public:task-execution:participants:TaskRecoveryWritePurposes",
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -201351,7 +201354,10 @@
         "public:task-execution:participants:CodeHostSendAttemptHandle",
         "public:task-execution:participants:CodeHostSendAttemptInfo",
         "public:task-execution:participants:CodeHostSendAttemptObserver",
-        "public:task-execution:participants:CodeHostSendAttemptSettlement"
+        "public:task-execution:participants:CodeHostSendAttemptSettlement",
+        "public:task-execution:participants:TaskBootRecoveryWrites",
+        "public:task-execution:participants:TaskRecoveryWritePurposes",
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -213563,6 +213569,483 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
+        "import:4b59b82a61cbb9b88925"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "Pick<\n  TaskRecoveryOperations,\n  'loadBootOrphanSnapshot' | 'interruptBootOrphanTask' | 'interruptNodeRun' | 'recordEvent'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TaskBootOrphanOperations",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:4b59b82a61cbb9b88925",
+          "file": "packages/backend/src/services/orphans.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/orphans.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:TaskBootRecoveryWrites",
+        "public:task-execution:participants:TaskRecoveryWritePurposes",
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:a0a80aced7fc1590df6b6cc0e41b40e237ba3e8170f025741cf68839c046b814",
+      "status": "target-context-current-surface",
+      "symbol": "TaskBootOrphanOperations",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 72,
+        "maxUnionVariants": 25
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "operations",
+          "type": "Pick<\n  TaskRecoveryOperations,\n  'loadBootOrphanSnapshot' | 'interruptBootOrphanTask' | 'interruptNodeRun' | 'recordEvent'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.action",
+          "type": "(typeof CODE_HOST_ACTIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.baseUrlDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.candidateId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.connectionGeneration.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.connectionGeneration.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.method",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.mutationPathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:0.kind",
+          "type": "'actor-replay'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.expectedBodyDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.kind",
+          "type": "'exact-body'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:2.kind",
+          "type": "'discussion-resolved'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:2.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:3.kind",
+          "type": "'draft-existence-partial'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:3.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.expectedContextDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.expectedProjectionDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.kind",
+          "type": "'commit-status-projection'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.expectedValueDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.kind",
+          "type": "'labels-contain'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.comparison.$variant:0",
+          "type": "'equal'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.comparison.$variant:1",
+          "type": "'contain'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.expectedValueDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.kind",
+          "type": "'assignees'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.expectedHeadDigest.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.expectedHeadDigest.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.kind",
+          "type": "'merge-state'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeAttempt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeAttempt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeJobIdDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.kind",
+          "type": "'run-generation-advanced'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:9.kind",
+          "type": "'pipeline-terminal-state'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:9.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:075f63d0c44a4eb0cc24"
+          ],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.provider",
+          "type": "z.infer<typeof CodeHostProviderSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.v",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.kind",
+          "type": "'applied'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.responseStatus",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.kind",
+          "type": "'definitely-not-applied'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.responseStatus",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.kind",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseStatus.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseStatus.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.lockProof.acquiredAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.lockProof.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.lockProof.lockReceiptDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$parameter:input.processEvidence.orphanReaperCompleted",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$return.outcomeUnknownTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$return.recoveredCodeHostEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$return.recoveredProcessEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$return.releasedTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:finalize.$return.retryAuthorizedCodeHostEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:prepare.$parameter:input.lockProof.acquiredAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:prepare.$parameter:input.lockProof.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:prepare.$parameter:input.lockProof.lockReceiptDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:prepare.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:prepare.$return.revokedTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeSessionLeases",
+          "type": "Pick<\n  RuntimeSessionLeaseOperations,\n  'repairAfterOrphanReap'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TaskBootRecoveryWrites",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "finalize",
+          "signatureDigest": "sha256:9256990f46e4efea88fa3d9a18aaaaa4c331cfbfb4e5c27496cb8120d473b276"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "prepare",
+          "signatureDigest": "sha256:2cc876b0ecd87701f6752ce3b00fb69cb32c4b16cb176c4815a139db1e0226e0"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:TaskRecoveryWritePurposes",
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:ea186ac745aa28d5b07a996737d483c3d898dd4026e7a84df09536873939a7f1",
+      "status": "target-context-current-surface",
+      "symbol": "TaskBootRecoveryWrites",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
         "import:60e883ec96a04d02fc42"
       ],
       "context": "task-execution",
@@ -214068,6 +214551,63 @@
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
         "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:c844d306111eabd306f5"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "Pick<\n  TaskRecoveryOperations,\n  | 'listPeriodicReconcileCandidates'\n  | 'loadPeriodicReconcileSnapshot'\n  | 'findHeldRuntimeSessionId'\n  | 'interruptNodeRun'\n  | 'repairRuntimeSessionLeaseAfterOrphanReap'\n  | 'interruptPeriodicTaskIfIdle'\n  | 'recordEvent'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TaskPeriodicRecoveryOperations",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c844d306111eabd306f5",
+          "file": "packages/backend/src/services/orphanReconcile.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/orphanReconcile.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:TaskRecoveryWritePurposes",
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:29f20eb92d1846e6fe24321ac8acc5ddfc76539f4f0504a5a50135319af3bc2e",
+      "status": "target-context-current-surface",
+      "symbol": "TaskPeriodicRecoveryOperations",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick"
       ],
       "version": 1
     },
@@ -214714,6 +215254,968 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 77,
+        "maxUnionVariants": 25
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$parameter:grant.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$parameter:grant.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.operations",
+          "type": "Pick<\n  TaskRecoveryOperations,\n  'loadBootOrphanSnapshot' | 'interruptBootOrphanTask' | 'interruptNodeRun' | 'recordEvent'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.action",
+          "type": "(typeof CODE_HOST_ACTIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.baseUrlDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.candidateId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.connectionGeneration.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.connectionGeneration.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.method",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.mutationPathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:0.kind",
+          "type": "'actor-replay'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.expectedBodyDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.kind",
+          "type": "'exact-body'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:2.kind",
+          "type": "'discussion-resolved'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:2.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:3.kind",
+          "type": "'draft-existence-partial'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:3.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.expectedContextDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.expectedProjectionDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.kind",
+          "type": "'commit-status-projection'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.expectedValueDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.kind",
+          "type": "'labels-contain'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.comparison.$variant:0",
+          "type": "'equal'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.comparison.$variant:1",
+          "type": "'contain'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.expectedValueDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.kind",
+          "type": "'assignees'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.expectedHeadDigest.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.expectedHeadDigest.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.kind",
+          "type": "'merge-state'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeAttempt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeAttempt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeJobIdDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.kind",
+          "type": "'run-generation-advanced'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:9.kind",
+          "type": "'pipeline-terminal-state'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:9.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:075f63d0c44a4eb0cc24"
+          ],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.provider",
+          "type": "z.infer<typeof CodeHostProviderSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.v",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.kind",
+          "type": "'applied'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.responseStatus",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.kind",
+          "type": "'definitely-not-applied'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.responseStatus",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.kind",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseStatus.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseStatus.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.lockProof.acquiredAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.lockProof.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.lockProof.lockReceiptDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$parameter:input.processEvidence.orphanReaperCompleted",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$return.outcomeUnknownTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$return.recoveredCodeHostEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$return.recoveredProcessEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$return.releasedTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:finalize.$return.retryAuthorizedCodeHostEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:prepare.$parameter:input.lockProof.acquiredAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:prepare.$parameter:input.lockProof.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:prepare.$parameter:input.lockProof.lockReceiptDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:prepare.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.recovery.$method:prepare.$return.revokedTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:boot.$return.runtimeSessionLeases",
+          "type": "Pick<\n  RuntimeSessionLeaseOperations,\n  'repairAfterOrphanReap'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:periodic.$parameter:grant.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:periodic.$parameter:grant.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:periodic.$return",
+          "type": "Pick<\n  TaskRecoveryOperations,\n  | 'listPeriodicReconcileCandidates'\n  | 'loadPeriodicReconcileSnapshot'\n  | 'findHeldRuntimeSessionId'\n  | 'interruptNodeRun'\n  | 'repairRuntimeSessionLeaseAfterOrphanReap'\n  | 'interruptPeriodicTaskIfIdle'\n  | 'recordEvent'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TaskRecoveryWritePurposes",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "boot",
+          "signatureDigest": "sha256:c4de65ae68e565d4833f564b55e3fd0aa77951267b83535ad7d4bc6ddc2faf2f"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "finalize",
+          "signatureDigest": "sha256:9256990f46e4efea88fa3d9a18aaaaa4c331cfbfb4e5c27496cb8120d473b276"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "periodic",
+          "signatureDigest": "sha256:e171ce4edd27a496e5392254e96cc912c838b32c33960408d914e6618d82b168"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "prepare",
+          "signatureDigest": "sha256:2cc876b0ecd87701f6752ce3b00fb69cb32c4b16cb176c4815a139db1e0226e0"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:481b0fa93daccbc9ee4a7e9c2c09a61faa0e4c1011915409ec5b36a7b3d460c4",
+      "status": "target-context-current-surface",
+      "symbol": "TaskRecoveryWritePurposes",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 78,
+        "maxUnionVariants": 25
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWriteMode",
+          "type": "'host-selected'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$parameter:grant.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$parameter:grant.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.operations",
+          "type": "Pick<\n  TaskRecoveryOperations,\n  'loadBootOrphanSnapshot' | 'interruptBootOrphanTask' | 'interruptNodeRun' | 'recordEvent'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.action",
+          "type": "(typeof CODE_HOST_ACTIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.baseUrlDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.candidateId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.connectionGeneration.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.connectionGeneration.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.method",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.mutationPathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:0.kind",
+          "type": "'actor-replay'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.expectedBodyDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.kind",
+          "type": "'exact-body'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:1.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:2.kind",
+          "type": "'discussion-resolved'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:2.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:3.kind",
+          "type": "'draft-existence-partial'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:3.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.expectedContextDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.expectedProjectionDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.kind",
+          "type": "'commit-status-projection'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:4.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.expectedValueDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.kind",
+          "type": "'labels-contain'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:5.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.comparison.$variant:0",
+          "type": "'equal'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.comparison.$variant:1",
+          "type": "'contain'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.expectedValueDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.kind",
+          "type": "'assignees'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:6.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.expectedHeadDigest.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.expectedHeadDigest.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.kind",
+          "type": "'merge-state'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:7.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeAttempt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeAttempt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.beforeJobIdDigests",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.kind",
+          "type": "'run-generation-advanced'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:8.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:9.kind",
+          "type": "'pipeline-terminal-state'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.probe.$variant:9.pathname",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:075f63d0c44a4eb0cc24"
+          ],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.provider",
+          "type": "z.infer<typeof CodeHostProviderSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$parameter:descriptor.v",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.kind",
+          "type": "'applied'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:0.responseStatus",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.kind",
+          "type": "'definitely-not-applied'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:1.responseStatus",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.kind",
+          "type": "'unknown'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.proofCode",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseBody",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseStatus.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.codeHostProbe.$return.$variant:2.responseStatus.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.lockProof.acquiredAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.lockProof.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.lockProof.lockReceiptDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$parameter:input.processEvidence.orphanReaperCompleted",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$return.outcomeUnknownTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$return.recoveredCodeHostEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$return.recoveredProcessEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$return.releasedTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:finalize.$return.retryAuthorizedCodeHostEffectIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:prepare.$parameter:input.lockProof.acquiredAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:prepare.$parameter:input.lockProof.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:prepare.$parameter:input.lockProof.lockReceiptDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:prepare.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.recovery.$method:prepare.$return.revokedTaskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:boot.$return.runtimeSessionLeases",
+          "type": "Pick<\n  RuntimeSessionLeaseOperations,\n  'repairAfterOrphanReap'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:periodic.$parameter:grant.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:periodic.$parameter:grant.reference",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recoveryWritePurposes.$method:periodic.$return",
+          "type": "Pick<\n  TaskRecoveryOperations,\n  | 'listPeriodicReconcileCandidates'\n  | 'loadPeriodicReconcileSnapshot'\n  | 'findHeldRuntimeSessionId'\n  | 'interruptNodeRun'\n  | 'repairRuntimeSessionLeaseAfterOrphanReap'\n  | 'interruptPeriodicTaskIfIdle'\n  | 'recordEvent'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TaskRecoveryWriteSelection",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "boot",
+          "signatureDigest": "sha256:c4de65ae68e565d4833f564b55e3fd0aa77951267b83535ad7d4bc6ddc2faf2f"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "finalize",
+          "signatureDigest": "sha256:9256990f46e4efea88fa3d9a18aaaaa4c331cfbfb4e5c27496cb8120d473b276"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "periodic",
+          "signatureDigest": "sha256:e171ce4edd27a496e5392254e96cc912c838b32c33960408d914e6618d82b168"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "prepare",
+          "signatureDigest": "sha256:2cc876b0ecd87701f6752ce3b00fb69cb32c4b16cb176c4815a139db1e0226e0"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:3c0a9ce7eef24e7d271841d5c972db76ebbdbed6013518954b32c0f986aa2583",
+      "status": "target-context-current-surface",
+      "symbol": "TaskRecoveryWriteSelection",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "reference",
+          "type": "object"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TaskResourceRecoveryGrant",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:TaskRecoveryWritePurposes",
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:34dfde63e7a7de56ddb7fd29de98001ed8c15df264209a5f8a20a12276c8e71b",
+      "status": "target-context-current-surface",
+      "symbol": "TaskResourceRecoveryGrant",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -214887,6 +216389,64 @@
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
         "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:435a9f4edf4bfae8a784"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "Pick<\n  RuntimeSessionLeaseOperations,\n  'repairAfterOrphanReap'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:TaskRuntimeSessionLeaseRepairOperations",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:435a9f4edf4bfae8a784",
+          "file": "packages/backend/src/services/runtimeSessionLease.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:TaskBootRecoveryWrites",
+        "public:task-execution:participants:TaskRecoveryWritePurposes",
+        "public:task-execution:participants:TaskRecoveryWriteSelection"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e7679fcf99535e3de8c2f9814cae0a813eca7907817d93beedad90c27c0e1803",
+      "status": "target-context-current-surface",
+      "symbol": "TaskRuntimeSessionLeaseRepairOperations",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick"
       ],
       "version": 1
     },
@@ -230675,7 +232235,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ffb135ee4ce4c0387d3c85d63f7e24ee07df6d543e9ed9b9fb15b47d8eeb898",
+  "sourceDigest": "sha256:b4ddc0dd210c3b8b5159fe69cfa898172328422953c7d73b6be85baa1203922c",
   "targetContexts": [
     "collaboration",
     "development-automation",

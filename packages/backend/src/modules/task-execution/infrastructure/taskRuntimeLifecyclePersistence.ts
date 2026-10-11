@@ -38,6 +38,7 @@ import type {
   TaskHostWriteSelection,
 } from './hostExecutionWriteTransaction'
 import { captureTaskHostExecutionWrite } from './taskHostExecutionWriteSelection'
+import type { TaskResourceRecoveryWrite } from './taskResourceRecoveryWrite'
 
 type HostLifecycleWrite = Readonly<{
   selection: Extract<TaskHostWriteSelection, { kind: 'selected' }>
@@ -164,6 +165,26 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
         throw error
       }
     })
+  }
+
+  /** A resource purpose retains the original input and guard without inventing Task work. */
+  async trySetWithResourceWrite(
+    input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
+    resourceWrite: TaskResourceRecoveryWrite,
+    guard?: (tx: TaskExecutionTransaction) => Promise<void>,
+  ): Promise<boolean> {
+    const capturedInput = {
+      ...input,
+      allowedFrom: [...input.allowedFrom],
+      ...(input.extra === undefined ? {} : { extra: { ...input.extra } }),
+    }
+    try {
+      await this.set(capturedInput, guard, resourceWrite)
+      return true
+    } catch (err) {
+      if (err instanceof ConflictError || err instanceof NotFoundError) return false
+      throw err
+    }
   }
 
   private async set(

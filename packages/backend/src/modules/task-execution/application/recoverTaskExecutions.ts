@@ -15,7 +15,8 @@ export interface TaskExecutionRecoveryFinalization {
   readonly retryAuthorizedCodeHostEffectIds: readonly string[]
 }
 
-export interface TaskExecutionProcessRecoveryEvidence extends Readonly<Record<string, unknown>> {
+export interface TaskExecutionProcessRecoveryEvidence {
+  readonly [key: string]: unknown
   readonly orphanReaperCompleted: true
 }
 

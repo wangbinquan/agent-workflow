@@ -1,4 +1,5 @@
 import type { TaskRuntimeSessionLeaseExecutionOperations } from '@/modules/task-execution/application/ports/taskRuntimeSessionLeaseExecutionOperations'
+import type { TaskRuntimeSessionLeaseRepairOperations } from '@/modules/task-execution/public/participants'
 
 // Runtime-native conversation ownership and single-writer leases.
 //
@@ -123,7 +124,7 @@ export async function releaseRuntimeSessionLease(
 
 /** Called only after boot orphan reaping has killed or rejected every live child. */
 export async function repairRuntimeSessionLeasesAfterOrphanReap(
-  operations: RuntimeSessionLeaseOperations,
+  operations: TaskRuntimeSessionLeaseRepairOperations,
   orphanReapCompleted: true,
   nodeRunId?: string,
 ): Promise<number> {

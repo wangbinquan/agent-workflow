@@ -199,6 +199,15 @@ export type {
 } from '../application/ports/taskAuthorization'
 
 export type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
+export type {
+  TaskResourceRecoveryGrant,
+  TaskBootOrphanOperations,
+  TaskPeriodicRecoveryOperations,
+  TaskRuntimeSessionLeaseRepairOperations,
+  TaskBootRecoveryWrites,
+  TaskRecoveryWritePurposes,
+  TaskRecoveryWriteSelection,
+} from '../application/ports/taskRecoveryWritePurposes'
 
 export interface TaskDecisionParticipantInTx {
   acceptGateDecisionTx(input: AcceptHumanGateDecisionInput): AcceptedHumanGateDecision

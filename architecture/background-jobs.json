@@ -784,9 +784,9 @@
     {
       "callee": "registerTaskHostClaimFailures",
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts",
-      "id": "ambient:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#registerTaskHostClaimFailures:331",
+      "id": "ambient:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#registerTaskHostClaimFailures:333",
       "kind": "register-call",
-      "line": 331,
+      "line": 333,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts#DrizzleTaskOwnershipPersistence",
       "removeAfterWave": "W6/W9",
       "symbol": "DrizzleTaskOwnershipPersistence",
@@ -5575,8 +5575,8 @@
   "denominator": {
     "ambientWiring": 505,
     "disabled": 9,
-    "entries": 374,
-    "executionLocal": 47,
+    "entries": 379,
+    "executionLocal": 52,
     "longRunning": 102,
     "managed": 11,
     "periodic": 216
@@ -8811,6 +8811,48 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/application/taskRecoveryWriteSelection.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/application/taskRecoveryWriteSelection.ts#selectTaskBootRecoveryWrites",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskRecoveryWriteSelection.ts#selectTaskBootRecoveryWrites",
+      "phase": "before-ready",
+      "symbol": "selectTaskBootRecoveryWrites",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/application/taskRecoveryWriteSelection.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/application/taskRecoveryWriteSelection.ts#selectTaskPeriodicRecoveryWrites",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskRecoveryWriteSelection.ts#selectTaskPeriodicRecoveryWrites",
+      "phase": "execution",
+      "symbol": "selectTaskPeriodicRecoveryWrites",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/modules/task-execution/composition.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/task-execution/composition.ts#DEFAULT_OWNERSHIP_HEARTBEAT_MS",
@@ -8968,7 +9010,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:138",
+      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:143",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8982,7 +9024,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:138",
+      "symbol": "$setTimeout:143",
       "targetContext": "task-execution"
     },
     {
@@ -9370,6 +9412,29 @@
       "targetContext": "task-execution"
     },
     {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#withRecoveryTransaction",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#withRecoveryTransaction",
+      "phase": "execution",
+      "symbol": "withRecoveryTransaction",
+      "targetContext": "task-execution"
+    },
+    {
       "dependencies": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteTransaction.ts",
       "finalCriterion": "owner lifecycle",
@@ -9726,6 +9791,29 @@
     },
     {
       "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskHostRecoveryWritePurposes.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskHostRecoveryWritePurposes.ts#createSelectedTaskRecoveryWritePurposes",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskHostRecoveryWritePurposes.ts#createSelectedTaskRecoveryWritePurposes",
+      "phase": "before-ready",
+      "symbol": "createSelectedTaskRecoveryWritePurposes",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
         "config",
         "db"
       ],
@@ -9746,6 +9834,27 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRecoveryOperations.ts#createTaskRecoveryOperations",
       "phase": "before-ready",
       "symbol": "createTaskRecoveryOperations",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskResourceRecoveryWrite.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskResourceRecoveryWrite.ts#captureTaskResourceRecoveryWrite",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskResourceRecoveryWrite.ts#captureTaskResourceRecoveryWrite",
+      "phase": "before-ready",
+      "symbol": "captureTaskResourceRecoveryWrite",
       "targetContext": "task-execution"
     },
     {
@@ -13794,5 +13903,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0ffb135ee4ce4c0387d3c85d63f7e24ee07df6d543e9ed9b9fb15b47d8eeb898"
+  "sourceDigest": "sha256:b4ddc0dd210c3b8b5159fe69cfa898172328422953c7d73b6be85baa1203922c"
 }

@@ -26,6 +26,11 @@ import type { TaskAutoResumeCommand } from '../application/ports/taskAutoResumeC
 import type { TaskLifecycleAutoRepairCommand } from '../application/ports/taskLifecycleAutoRepairCommand'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 import type {
+  TaskPeriodicRecoveryOperations,
+  TaskRecoveryWriteSelection,
+} from '../application/ports/taskRecoveryWritePurposes'
+import { selectTaskPeriodicRecoveryWrites } from '../application/taskRecoveryWriteSelection'
+import type {
   TaskProviderAuthorityRuntime,
   TaskProviderExecutionAuthority,
 } from '../application/ports/taskProviderAuthorityRuntime'
@@ -71,7 +76,7 @@ export interface TaskExecutionProviderBackgroundControl {
   awaitIdle(): Promise<void>
 }
 
-interface ProviderBackgroundRuntime {
+interface ProviderBackgroundRuntime extends TaskRecoveryWriteSelection {
   readonly module: TaskExecutionModule
   readonly lifecycleRepair: TaskLifecycleAutoRepairCommand
   readonly autoResume: TaskAutoResumeCommand
@@ -189,6 +194,7 @@ function createProviderLoops(
   dependencies: TaskExecutionProviderBackgroundStartDependencies,
   configuration: TaskBackgroundConfigurationQuery,
   canDispatch: () => boolean,
+  periodicRecovery: TaskPeriodicRecoveryOperations = runtime.recovery,
 ): readonly RestartableLoop[] {
   // A selected source supplies every loop. The scheduled-only legacy override
   // remains compatible when the caller has not selected a shared source.
@@ -268,7 +274,7 @@ function createProviderLoops(
       if (!due) return
       lastReconcileAt = now
       await reconcileDeadRunningRuns({
-        operations: runtime.recovery,
+        operations: periodicRecovery,
         taskHasDriver: runtime.taskHasDriver,
         graceMs: 60_000,
       })
@@ -375,6 +381,9 @@ export function composeTaskExecutionProviderBackground(
         ? undefined
         : createFileTaskBackgroundConfigurationQuery(dependencies.configPath))
     if (configuration === undefined) throw new Error('task-background-configuration-required')
+
+    const periodicRecovery =
+      selectTaskPeriodicRecoveryWrites(runtime, authority.recoveryGrant) ?? runtime.recovery
 
     // This old-work ACK loop belongs to the selected Task lifetime, separately
     // from dispatch loops; loss/pause cannot stop actual cleanup retries.
@@ -542,7 +551,13 @@ export function composeTaskExecutionProviderBackground(
       await claims
       if (!canDispatch()) return handle
 
-      ownedLoops = createProviderLoops(runtime, dependencies, configuration, canDispatch)
+      ownedLoops = createProviderLoops(
+        runtime,
+        dependencies,
+        configuration,
+        canDispatch,
+        periodicRecovery,
+      )
       const currentRead = (async () => await configuration.read())()
       const moduleOpen = currentRead.then((settings) => {
         if (!canDispatch()) return undefined
@@ -586,6 +601,7 @@ export function composeTaskExecutionProviderBackground(
     startAuthority,
     async start(dependencies: TaskExecutionProviderBackgroundStartDependencies) {
       if (mode === 'selected') throw new Error('task-provider-execution-authority-mode-mismatch')
+      selectTaskPeriodicRecoveryWrites(runtime, undefined)
       mode = 'native'
       if (authorityQuiesced) throw new Error('task-execution-provider-authority-quiesced')
       if (started) throw new Error('task-execution-provider-background-already-started')
