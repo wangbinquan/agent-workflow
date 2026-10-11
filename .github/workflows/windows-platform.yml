@@ -865,6 +865,9 @@ jobs:
         run: bun run --filter @agent-workflow/shared test
 
       - name: Typecheck
+        # Full backend checking exceeded V8's default ~4 GiB heap on this runner.
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: bun run typecheck
 
       # Reports what the host actually provides, so the interpreter-resolution

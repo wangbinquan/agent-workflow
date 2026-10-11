@@ -229,6 +229,7 @@ function fixture(db: ProviderNeutralDatabase, options: FixtureOptions = {}) {
       kind: 'durable-intent',
       async prepare(context) {
         record('recovery.prepare')
+        if (activeContext === undefined) throw new Error('so-write-fixture-grant-context-missing')
         expect(context).toBe(activeContext)
         expect((await db.select().from(hostExecutionWriteContexts))[0]?.phase).toBe('preparing')
         const captured = taskWrites.port.capture(context)
@@ -258,6 +259,7 @@ function fixture(db: ProviderNeutralDatabase, options: FixtureOptions = {}) {
     runtime: {
       async start({ context }) {
         record('runtime.start')
+        if (activeContext === undefined) throw new Error('so-write-fixture-grant-context-missing')
         expect(context).toBe(activeContext)
         expect((await db.select().from(hostExecutionWriteContexts))[0]?.phase).toBe('active')
         await options.before?.runtime?.()

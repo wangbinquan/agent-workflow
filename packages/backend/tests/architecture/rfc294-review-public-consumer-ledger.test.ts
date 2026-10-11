@@ -328,6 +328,14 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
     id: 'public:system-operations:participants:HostExecutionRecoveryFamily',
     removeAfterWave: 'W9-D',
   },
+  {
+    id: 'public:system-operations:participants:HostExecutionWriteLeaseFacts',
+    removeAfterWave: 'W9-D',
+  },
+  {
+    id: 'public:system-operations:participants:HostExecutionWriteLifecycle',
+    removeAfterWave: 'W9-D',
+  },
 ]
 
 /** provider=0 且 consumer=0 的 required SPI：死声明。 */
