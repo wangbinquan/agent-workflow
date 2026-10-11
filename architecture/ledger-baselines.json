@@ -829,10 +829,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1998,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371 已批准的 native version 两个原工厂和 runObservationReportWorkerWithFacts 新具名入口，完整实际库存1995→1998；不放宽原扫描规则。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,20 +843,14 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 276,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-371 新 historicalNativeFactStore.importHistoricalNativeFacts 的唯一数据库事务，完整原库存275→276，原投影判据保持。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 380,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-371 新具名 runObservationReportWorkerWithFacts 长驻调用，原计时器重定位后完整库存379→380；不改变原生命周期分类规则。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -873,10 +864,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6951,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 同一 Task 绑定三个 server composition 消费符号及 RFC-371 原 native facts/module version/spool 的准确类型和值边，完整原库存6909→6951，共42个实际新ID，不省略旧边。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -897,10 +885,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 6078,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 三个 server Task composition 符号及 RFC-371 准确 legacy 读写/Worker/装配依赖按原规则投影，6051→6078，共27个具名新ID和原到期波次；不新增glob、目录或扫描许可。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -914,10 +899,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1279,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371 新增公开 native fact/version 窄合同及类型，原完整库存1269→1279；RFC-370 私有 Task 装配符号已留在composition，原15个opaque refs保持。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -938,10 +920,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27897,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 Task 新装配声明与文件root，RFC-371 native facts表、页面模型、读写/spool/observer及工厂等准确符号/文件root，原库存27829→27897；每一项由已批准37份生产候选的原全文识别。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。 RFC-370 历史记录：981ae0f4dd28f6711adac2bec65c96fb231fd77d 相对父提交5a0e315c51ffa51ec56fc5c626049296d944dc67增加生命周期双 purpose 切面：mutation-entrypoints 1988→1989、cross-context observed imports 6902→6905、architecture exceptions 6044→6047、public surfaces 1259→1260、module symbol owners 27775→27782；遗漏当次allowGrowth声明，主CI的RFC-317 T17正式失败。已有批准覆盖一个新公开selector、三个bootstrap消费边、七个owner及一个观测写入口；原规则和其他125个baseline保持。此处记录遗漏，不补造后继未增长提交的许可，不改旧历史，不把后继CI追记为981ae0f准入通过；详见design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md。",
@@ -950,7 +929,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "77033f619e9c6839c6de9f23e791ed81ae99a577",
-    "contentDigest": "sha256:92b548fdedffc2fe5a6adca223a920a14d375df9364c538aa5869d310a602704",
+    "contentDigest": "sha256:96b28d2fa1134d5bc9b68cee5fec7f8a160bcff63536bff220d2ee1a2a28dd2e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
