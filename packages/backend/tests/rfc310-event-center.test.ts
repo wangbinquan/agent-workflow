@@ -1235,6 +1235,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
         templateManaged: true,
         timeoutMs: 10_000,
         source: `import { readFileSync } from 'node:fs'
+console.error('RFC-370 native observer started', JSON.stringify({ pid: process.pid, execPath: process.execPath, version: process.version }))
 const input = JSON.parse(readFileSync(process.env.AW_EVENT_INPUT_FILE, 'utf8'))
 console.log(JSON.stringify({
   protocol: 'aw-event-observer@1',
@@ -1247,7 +1248,8 @@ console.log(JSON.stringify({
     sourceEventRevision: 'revision-7',
     summary: '问题状态已更新',
   })),
-}))`,
+}))
+console.error('RFC-370 native observer completed')`,
       },
       eventTypes: [
         {
