@@ -11,7 +11,13 @@ import {
   type CompleteObservationSection,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { nodeRuns, observationNativeFactPages, observationNativeFactRoots } from '@/db/schema'
+import {
+  nodeRuns,
+  observationNativeFactPages,
+  observationNativeFactRoots,
+  observationReportCounts,
+  observationReportRows,
+} from '@/db/schema'
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
@@ -56,16 +62,69 @@ type Service = ReturnType<typeof reports>
 type FullReport = {
   content: CompleteObservationReportContent
   sections: Record<CompleteObservationSection, unknown[]>
+  collections: {
+    section: CompleteObservationSection
+    parent: string | null
+    total: string
+    items: unknown[]
+  }[]
 }
-async function complete(service: Service, key: string): Promise<FullReport> {
+async function complete(service: Service, fixture: Fixture, key: string): Promise<FullReport> {
   const requested = await service.queries.request(actor, filters, key)
   const id = requested.state === 'ready' ? requested.header.reportId : requested.reportId
   await service.worker.drain()
   const state = await service.queries.status(actor, id)
   const content = completeObservationReportContent(state)
   if (!content) throw new Error(JSON.stringify(state))
-  const sections = {} as FullReport['sections']
+  const sections = {} as FullReport['sections'],
+    collections: FullReport['collections'] = [],
+    scopes = new Map<
+      string,
+      { section: CompleteObservationSection; parent: string | null; total: string }
+    >()
+  // Use every sealed original collection, including Task/attempt/dimension/reason parents.
+  // The public header contains only global counts and cannot enumerate these populations.
+  const counts = await fixture.db
+    .select()
+    .from(observationReportCounts)
+    .where(eq(observationReportCounts.reportId, id))
+    .all()
+  const originalRows = await fixture.db
+    .select({ section: observationReportRows.section, parent: observationReportRows.parent })
+    .from(observationReportRows)
+    .where(eq(observationReportRows.reportId, id))
+    .all()
+  const actualCounts = new Map<string, bigint>()
+  for (const row of originalRows) {
+    const identity = JSON.stringify([row.section, row.parent || null])
+    actualCounts.set(identity, (actualCounts.get(identity) ?? 0n) + 1n)
+  }
+  for (const count of counts) {
+    expect(COMPLETE_OBSERVATION_SECTIONS).toContain(count.section)
+    expect(count.declared).toBe(true)
+    expect(count.actual).toBe(count.total)
+    const section = count.section as CompleteObservationSection,
+      parent = count.parent || null,
+      identity = JSON.stringify([section, parent])
+    expect(count.total).toBe(String(actualCounts.get(identity) ?? 0n))
+    expect(scopes.has(identity)).toBe(false)
+    if (section === 'quality-tasks') expect(parent).not.toBeNull()
+    scopes.set(identity, { section, parent, total: count.total })
+  }
+  for (const identity of actualCounts.keys()) expect(scopes.has(identity)).toBe(true)
+  // The production contract deliberately rejects an unqualified reason membership read.
+  await expect(
+    service.queries.page(actor, id, { section: 'quality-tasks', limit: 2 }),
+  ).rejects.toThrow('Original quality reason is required')
   for (const section of COMPLETE_OBSERVATION_SECTIONS) {
+    sections[section] = []
+    if (section === 'quality-tasks') continue
+    const identity = JSON.stringify([section, null])
+    if (!scopes.has(identity)) scopes.set(identity, { section, parent: null, total: '0' })
+    expect(scopes.get(identity)!.total).toBe(content.counts[section] ?? '0')
+  }
+  for (const [identity, scope] of [...scopes].sort(([a], [b]) => a.localeCompare(b))) {
+    const { section, parent, total } = scope
     const items: unknown[] = []
     let after: string | undefined
     for (;;) {
@@ -73,10 +132,13 @@ async function complete(service: Service, key: string): Promise<FullReport> {
       const page = await service.queries.page<unknown>(actor, id, {
         section,
         limit: 2,
+        ...(parent === null ? {} : { parent }),
         ...(after === undefined ? {} : { after }),
       })
       expect(page.reportId).toBe(id)
       expect(page.section).toBe(section)
+      expect(page.parent).toBe(parent)
+      expect(page.total).toBe(total)
       items.push(...page.items)
       if (page.nextCursor === null) {
         expect(String(items.length)).toBe(page.total)
@@ -85,15 +147,17 @@ async function complete(service: Service, key: string): Promise<FullReport> {
       expect(page.nextCursor).not.toBe(after)
       after = page.nextCursor
     }
-    sections[section] = items
+    expect(JSON.stringify([section, parent])).toBe(identity)
+    if (parent === null) sections[section] = items
+    collections.push({ section, parent, total, items })
   }
-  return { content, sections }
+  return { content, sections, collections }
 }
 function stable(report: FullReport) {
   const sections = { ...report.sections }
   // Only the original report namespace and original application snapshot receipt ID differ.
   // Native identity, cursor, EOF, row/page counts, all numerical facts and all issues remain.
-  sections.receipts = sections.receipts.map((value) => {
+  const receipt = (value: unknown) => {
     const row = value as Record<string, unknown>
     return {
       ...row,
@@ -109,8 +173,13 @@ function stable(report: FullReport) {
         ? { snapshotId: '<original-snapshot-id>' }
         : {}),
     }
-  })
-  return { summary: report.content.summary, counts: report.content.counts, sections }
+  }
+  sections.receipts = sections.receipts.map(receipt)
+  const collections = report.collections.map((collection) => ({
+    ...collection,
+    items: collection.section === 'receipts' ? collection.items.map(receipt) : collection.items,
+  }))
+  return { summary: report.content.summary, counts: report.content.counts, sections, collections }
 }
 function reuseLine(fixture: Fixture, report: FullReport) {
   const line = readFileSync(join(fixture.appHome, 'logs', 'daemon.log'), 'utf8')
@@ -162,11 +231,11 @@ describeEachProvider(
         const oracle = reports(fixture, false),
           cached = reports(fixture, true)
         try {
-          const original = await complete(oracle, 'original-numeric-worker-oracle')
+          const original = await complete(oracle, fixture, 'original-numeric-worker-oracle')
           const coldEventsStart = fixture.events.length
-          const cold = await complete(cached, 'load-performance-numeric-worker-cold')
+          const cold = await complete(cached, fixture, 'load-performance-numeric-worker-cold')
           const coldEvents = fixture.events.slice(coldEventsStart)
-          const hot = await complete(cached, 'load-performance-numeric-worker-hot')
+          const hot = await complete(cached, fixture, 'load-performance-numeric-worker-hot')
           expect(stable(cold)).toEqual(stable(original))
           expect(stable(hot)).toEqual(stable(original))
           expect(reuseLine(fixture, cold)).toContain('cachedRoots=0')
@@ -193,10 +262,10 @@ describeEachProvider(
         const oracle = reports(fixture, false),
           cached = reports(fixture, true)
         try {
-          const original = await complete(oracle, 'worker-corruption-oracle')
-          await complete(cached, 'worker-corruption-seed')
+          const original = await complete(oracle, fixture, 'worker-corruption-oracle')
+          await complete(cached, fixture, 'worker-corruption-seed')
           await fixture.db.update(observationNativeFactPages).set({ document: '{' }).run()
-          const recovered = await complete(cached, 'worker-corruption-recovered')
+          const recovered = await complete(cached, fixture, 'worker-corruption-recovered')
           expect(stable(recovered)).toEqual(stable(original))
         } finally {
           await cached.worker.stop()
@@ -219,10 +288,14 @@ describeEachProvider(
           const oracle = reports(fixture, false),
             cached = reports(fixture, true)
           try {
-            const before = await complete(cached, 'worker-late-source-before')
+            const before = await complete(cached, fixture, 'worker-late-source-before')
             native.writer.exec(statement)
-            const original = await complete(oracle, 'worker-late-source-oracle')
-            const after = await complete(cached, 'load-performance-worker-late-source-after')
+            const original = await complete(oracle, fixture, 'worker-late-source-oracle')
+            const after = await complete(
+              cached,
+              fixture,
+              'load-performance-worker-late-source-after',
+            )
             expect(stable(after)).toEqual(stable(original))
             expect(after.sections['historical-records']).not.toEqual(
               before.sections['historical-records'],
@@ -247,7 +320,7 @@ describeEachProvider(
           const cached = reports(fixture, true),
             oracle = reports(fixture, false)
           try {
-            const before = await complete(cached, 'worker-mid-read-before')
+            const before = await complete(cached, fixture, 'worker-mid-read-before')
             const commit = () => {
               native.writer.exec(
                 "UPDATE part SET data=json_set(data,'$.tokens.output',456) WHERE id='step-00000'",
@@ -255,9 +328,13 @@ describeEachProvider(
             }
             if (fixture.binding.provider === 'postgresql') mutate = commit
             else commit()
-            const changed = await complete(cached, 'load-performance-worker-mid-read-changed')
+            const changed = await complete(
+              cached,
+              fixture,
+              'load-performance-worker-mid-read-changed',
+            )
             expect(commitsDuringRead).toBe(fixture.binding.provider === 'postgresql' ? 1 : 0)
-            const original = await complete(oracle, 'worker-mid-read-oracle')
+            const original = await complete(oracle, fixture, 'worker-mid-read-oracle')
             expect(stable(changed)).toEqual(stable(original))
             expect(changed.sections['historical-records']).not.toEqual(
               before.sections['historical-records'],
@@ -294,12 +371,16 @@ describeEachProvider(
       await withOriginal(harness, async (fixture) => {
         const cached = reports(fixture, true)
         try {
-          const before = await complete(cached, 'worker-lifecycle-before')
+          const before = await complete(cached, fixture, 'worker-lifecycle-before')
           const first = await fixture.db.select().from(observationNativeFactRoots).get()
           await cached.worker.stop()
           cached.worker.start()
-          const resumed = await complete(cached, 'load-performance-worker-lifecycle-resumed')
-          const hot = await complete(cached, 'load-performance-worker-lifecycle-hot')
+          const resumed = await complete(
+            cached,
+            fixture,
+            'load-performance-worker-lifecycle-resumed',
+          )
+          const hot = await complete(cached, fixture, 'load-performance-worker-lifecycle-hot')
           expect(stable(resumed)).toEqual(stable(before))
           expect(stable(hot)).toEqual(stable(before))
           expect(reuseLine(fixture, resumed)).toContain('cachedRoots=0')

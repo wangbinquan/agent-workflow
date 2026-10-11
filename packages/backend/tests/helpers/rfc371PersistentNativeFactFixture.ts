@@ -73,21 +73,31 @@ export function persistentNativeFixture(options: { steps?: number; depth?: numbe
     part('unfinished', 'root', { type: 'step-start' })
     part('zero', 'root', {
       type: 'step-finish',
-      tokens: { input: 0, output: 0, cache: { read: 0, write: 0 } },
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     })
     part(
       'no-model-or-time',
       'root',
       {
         type: 'step-finish',
-        tokens: { input: '9007199254740997', output: 1, cache: { read: 2, write: 3 } },
+        tokens: {
+          input: '9007199254740997',
+          output: 1,
+          reasoning: 0,
+          cache: { read: 2, write: 3 },
+        },
       },
       null,
       null,
     )
     part('outside', 'unrelated', {
       type: 'step-finish',
-      tokens: { input: '999999999999999999', output: 1, cache: { read: 2, write: 3 } },
+      tokens: {
+        input: '999999999999999999',
+        output: 1,
+        reasoning: 0,
+        cache: { read: 2, write: 3 },
+      },
     })
   })()
   const observer = createOpencodeNativeVersionObserver(path)

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 1369,
+    "consumers": 1370,
     "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
     "methods": 1774,
@@ -8928,6 +8928,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -8976,6 +8977,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9038,6 +9040,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9129,6 +9132,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9176,6 +9180,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9245,6 +9250,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9316,6 +9322,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9336,6 +9343,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9381,6 +9389,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9455,6 +9464,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9530,6 +9540,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9596,6 +9607,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9668,6 +9680,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -9722,6 +9735,7 @@
           "consumerEdgeIds": [
             "import:21cbf5c64d9d94bc85d2",
             "import:28a0269bd3af1c50a75b",
+            "import:34cd54eded97d01a5768",
             "import:4bfc322fdf6e54abad56",
             "import:b4f584cdff29e8b03ffc",
             "import:e5f00e57c366d14491b0"
@@ -51985,6 +51999,7 @@
         {
           "consumerEdgeIds": [
             "import:1b2f1274eba64c06bc17",
+            "import:254457792b041ec68133",
             "import:2599f06da0dbbbd0f576",
             "import:2e83c47b031dde16f55f",
             "import:f4bbeed18f5ade6b0a66"
@@ -85566,6 +85581,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2d8861ee3f5f352536b9",
             "import:7f9604f6f7ec93a3eb8e",
             "import:bf375c33d0cba5cd929f",
             "import:f2378eb6be03f891eeb7"
@@ -85631,6 +85647,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2d8861ee3f5f352536b9",
             "import:7f9604f6f7ec93a3eb8e",
             "import:bf375c33d0cba5cd929f",
             "import:f2378eb6be03f891eeb7"
@@ -149738,7 +149755,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:6386eb320a4d2380d031"
+      ],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -149785,18 +149804,29 @@
       "members": [],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:6386eb320a4d2380d031"
+          ],
           "name": "close",
           "signatureDigest": "sha256:6a8683020bea564c25f6810b2a01cbb73802656b55a813b0f62dd6ca36e88b69"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:6386eb320a4d2380d031"
+          ],
           "name": "sample",
           "signatureDigest": "sha256:adb9baebd64a9eace277a5fe2bb34e8923b483d6e029d6a0714564768ebba587"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:6386eb320a4d2380d031",
+          "file": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -167653,6 +167683,7 @@
         {
           "consumerEdgeIds": [
             "import:077793f455fd12b53d80",
+            "import:6201e402bfd91675fef7",
             "import:d03cdda2bdca6544c3e1",
             "import:daecd60630dbd4c5126d",
             "import:f8579c6d90fd82342140"
@@ -167695,6 +167726,7 @@
         {
           "consumerEdgeIds": [
             "import:077793f455fd12b53d80",
+            "import:6201e402bfd91675fef7",
             "import:d03cdda2bdca6544c3e1",
             "import:daecd60630dbd4c5126d",
             "import:f8579c6d90fd82342140"
@@ -167813,6 +167845,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:198d7d1249aa59cd063b",
             "import:300224cb7bd5b2cfb4d7",
             "import:3409d49c4e848958f114",
             "import:3ad85f922f3d6444d5a8",
@@ -168093,6 +168126,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:198d7d1249aa59cd063b",
             "import:300224cb7bd5b2cfb4d7",
             "import:3409d49c4e848958f114",
             "import:3ad85f922f3d6444d5a8",
@@ -171121,6 +171155,7 @@
           "consumerEdgeIds": [
             "import:224314ba2fff008f58f2",
             "import:27224a577cedc6d39a8b",
+            "import:4bf78a4ed8b7bb0f70b6",
             "import:58c18bfdc79b46a556d2",
             "import:5c56dd777b49d4a51c18",
             "import:e38ede8048f70c68913a"
@@ -174042,6 +174077,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0c9643f703d45d89fb85",
             "import:1a27a58af626d57983cc",
             "import:58bb93550b353a6a6830",
             "import:880337bfbd0ecfb25957",
@@ -233691,7 +233727,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1ed5959852bb08cf908223290dec688be756f063023b6f618be7f1fc5ebf3c4",
+  "sourceDigest": "sha256:2b455c70332b9755ce23f7c70dfb9016de0d7a6546c5f9ea9e8a31a87b7fae6e",
   "targetContexts": [
     "collaboration",
     "development-automation",

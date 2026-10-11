@@ -80,7 +80,8 @@ const TASK_INSERT_SITES: readonly string[] = [
   // 2026-09-19：3548 → 3570。`createTaskDriveCoordinator` 的运行期配置改成每次 drive 现读
   // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
   // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
-  'services/task.ts:2504 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-370 provider host assembly: 2504 → 2537; the original site and all three columns remain.
+  'services/task.ts:2537 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

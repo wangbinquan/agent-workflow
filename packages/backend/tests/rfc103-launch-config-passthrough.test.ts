@@ -9,7 +9,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
+import ts from 'typescript'
 import { runtimeConfigOpts } from '../src/services/task'
+import { inverseTaskProviderHostAssembly } from './helpers/taskProviderHostAssemblyStatementInverse'
 
 describe('RFC-103 T2 runtimeConfigOpts — 单一事实源摊配置', () => {
   test('commitPush 全字段 + maxConcurrentNodes 摊成 flat RunTaskOptions 键', () => {
@@ -195,7 +197,16 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     // RFC-370 permits a selected asynchronous reader; the original runtime is
     // awaited before children.resume receives it, including the native value.
     expect(routeOperations).toContain('runtime: await dependencies.resumeRuntimeFor(actor, taskId)')
-    const serverSrc = readFileSync(join(import.meta.dir, '../src/server.ts'), 'utf8')
+    // Remove only the reviewed RFC-370 assembly fragments; the original 1400-code-unit
+    // window and every configuration passthrough assertion remain unchanged.
+    const serverSrc = inverseTaskProviderHostAssembly(
+      ts.createSourceFile(
+        'packages/backend/src/server.ts',
+        readFileSync(join(import.meta.dir, '../src/server.ts'), 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      ),
+    ).text
     // RFC-359 AC-1（第 13 刀）改锚：`/api/tasks` 合成一个中立工厂之后，这条**不装配完整
     // runtime** 的回退路改成自己装一份子任务生命周期参与者 + 一个 `resumeRuntimeFor`。
     // 判据不变——**这条路上的复活必须带着本机的启动配置**，只是锚跟着实现走：启动配置从

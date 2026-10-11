@@ -80,55 +80,105 @@ function providerGraph(
   routesCalled: () => void = () => {},
 ): SelectedTaskExecutionProviderRuntime {
   const appHome = '/tmp/rfc370-task-provider-assembly'
-  const runtime = {
-    appHome,
+  const runtime: SqliteTaskExecutionProviderRuntimeDependencies['runtime'] &
+    PostgresqlTaskExecutionProviderRuntimeDependencies['runtime'] = {
     daemonGeneration: host?.daemonGeneration ?? 'native-provider-assembly',
     log: createLogger('rfc370-task-provider-assembly'),
     finalizeWorkspace: async () => {},
     taskRunBinding: { bind: unused('task runs') },
-    observationInvocations: { reconcile: unused('observation reconciliation') },
+    observationInvocations: {
+      accept: unused('observation invocation acceptance'),
+      reconcile: unused('observation reconciliation'),
+    },
+    workspacePresence: unused('workspace presence'),
+    runtimeSessionLeases: unused('runtime session leases'),
+    memoryInjectionQueries: unused('memory injection queries'),
+    runtimeRegistry: unused('runtime profiles'),
+    nodeRunRuntime: unused('node run runtime'),
+    taskDagCollaboration: unused('task DAG collaboration'),
+    collaborationRuntime: unused('collaboration runtime'),
+    workgroupTurns: unused('workgroup turns'),
+    dynamicWorkflow: {
+      persistence: unused('dynamic workflow persistence'),
+      validationContext: unused('dynamic workflow validation'),
+    },
+    identityAccess: {
+      delegatedRequests: unused('delegated requests'),
+      taskExecutionResources: unused('task execution resources'),
+    },
+    repositoryPublicationTransport: unused('repository publication transport'),
+    codeHostConnections: unused('code host connections'),
+    processConcurrencyScope: harness.db,
     ...runtimeOverrides,
   }
-  const routeLaunch = {
+  const routeWorkspace: PostgresqlTaskExecutionProviderRuntimeDependencies['routeWorkspace'] = {
     appHome,
+    sourceContexts: unused('source contexts'),
+    repositoryPreparation: {
+      groupName: unused('repository group name'),
+      legacy: {
+        reclaim: unused('legacy repository reclaim'),
+        prepare: unused('legacy repository prepare'),
+        commit: unused('legacy repository commit'),
+        cleanup: unused('legacy repository cleanup'),
+      },
+      prepareScratch: unused('scratch prepare'),
+      restoreScratch: unused('scratch restore'),
+      cleanupScratch: unused('scratch cleanup'),
+      sourceSeal: unused('repository source seal'),
+      sealedIdentity: unused('sealed repository identity'),
+      snapshot: unused('repository snapshot'),
+      nextAttempt: unused('repository next attempt'),
+      effect: unused('repository preparation effect'),
+    },
+  }
+  const routeLaunch: SqliteTaskExecutionProviderRuntimeDependencies['routeLaunch'] &
+    PostgresqlTaskExecutionProviderRuntimeDependencies['routeLaunch'] = {
     configPath: `${appHome}/config.json`,
     agent: { resources: unused('agent resources'), integrity: unused('agent integrity') },
     workgroup: unused('workgroup resources'),
     coordinator: unused('root launch coordinator'),
     resourceAuthorityFor: unused('resource authority'),
     gitCommitIdentity: unused('git identity'),
-    workspace: unused('workspace'),
+    // SQLite consumes this within routeLaunch; PostgreSQL receives it at the root.
+    routeWorkspace,
+  }
+  const routes: PostgresqlTaskExecutionProviderRuntimeDependencies['routes'] = () => {
+    routesCalled()
+    return {
+      appHome,
+      collaboration: unused('route collaboration'),
+      owners: unused('owner identity queries'),
+    }
   }
   const dependencies = {
     ...(host === undefined ? {} : { host }),
     runtime,
     routeLaunch,
-    routes: () => {
-      routesCalled()
-      return { appHome, collaboration: unused('route collaboration') }
-    },
-    routeWorkspace: {
-      appHome,
-      sourceContexts: unused('source contexts'),
-      repositoryPreparation: unused('repository preparation'),
-    },
-    rootResumeRuntime: unused('root resume configuration'),
-    repositoryPreparationRetry: unused('repository retry'),
+    routes,
+    rootResumeRuntime: unused<SqliteTaskExecutionProviderRuntimeDependencies['rootResumeRuntime']>(
+      'root resume configuration',
+    ),
     lifecycleRepair: {},
     fusion: { appHome },
-    workgroupTaskRoom: { collaboration: unused('workgroup room collaboration') },
   }
   const binding = harness.applicationBinding
   const graph =
     binding.provider === 'sqlite'
-      ? composeSqliteTaskExecutionProviderRuntime(
-          binding.db,
-          dependencies as unknown as SqliteTaskExecutionProviderRuntimeDependencies,
-        )
-      : composePostgresqlTaskExecutionProviderRuntime(
-          binding.db,
-          dependencies as unknown as PostgresqlTaskExecutionProviderRuntimeDependencies,
-        )
+      ? composeSqliteTaskExecutionProviderRuntime(binding.db, {
+          ...dependencies,
+          repositoryPreparationRetry:
+            unused<SqliteTaskExecutionProviderRuntimeDependencies['repositoryPreparationRetry']>(
+              'repository retry',
+            ),
+        })
+      : composePostgresqlTaskExecutionProviderRuntime(binding.db, {
+          ...dependencies,
+          routeWorkspace,
+          workgroupTaskRoom: {
+            collaboration: unused('workgroup room collaboration'),
+          },
+        })
   modules.add(graph.executionModule)
   return graph
 }

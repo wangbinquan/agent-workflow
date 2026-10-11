@@ -202,6 +202,36 @@ describeEachProvider('RFC-371 persistent original native numeric pages', (harnes
     expect(await harness.db.select().from(observationNativeFactPages).all()).toEqual([])
   })
 
+  test('a genuinely absent reasoning counter stays unknown in the uncached, cold and persisted hot pages', async () => {
+    const source = fixture()
+    // A complete-output fixture must supply reasoning; an actual omission cannot become zero.
+    source.part('missing-reasoning-counter', 'root', {
+      type: 'step-finish',
+      tokens: { input: 7, output: 9, cache: { read: 2, write: 3 } },
+    })
+    const proof = (await source.observer.sample())!,
+      reader = await source.query.open(source.selection())
+    if (!reader) throw new Error('Actual original unknown-counter reader missing')
+    const original = await consumeNativeFactReader(reader),
+      cold = await collect(harness, source, proof, ['root'])
+    expect(cold.pages.root).toEqual(original)
+    const missing = original
+      .flatMap((page) => page.steps)
+      .find((step) => step.stepId === 'missing-reasoning-counter')
+    expect(missing?.usage).toEqual({ input: '7', output: null, cacheRead: '2', cacheWrite: '3' })
+    expect(original.at(-1)?.issues).toContain('native-token-bucket-unknown')
+    await publish(harness, source, cold.manifest)
+    const hot = await collect(harness, source, proof, ['root'], true)
+    expect(hot.usedCache).toBe(true)
+    expect(hot.opens).toBe(0)
+    expect(hot.pages.root).toEqual(original)
+    expect(
+      hot.pages.root!.flatMap((page) => page.steps).find((step) => step.stepId === missing!.stepId)
+        ?.usage,
+    ).toEqual(missing!.usage)
+    expect(hot.pages.root!.at(-1)?.issues).toContain('native-token-bucket-unknown')
+  })
+
   test('two original references to one physical root retain their own identity and independently reuse every page', async () => {
     const source = fixture(),
       proof = (await source.observer.sample())!

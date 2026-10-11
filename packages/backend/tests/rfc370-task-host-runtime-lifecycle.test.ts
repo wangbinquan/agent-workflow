@@ -65,6 +65,7 @@ import {
 import originalCallers from './fixtures/rfc370-task-runtime-lifecycle-original-callers.json'
 import { inverseTaskRuntimeLifecycleRootSelections } from './helpers/taskLaunchRootStatementInverse'
 import { inverseHumanGateTaskSelections } from './helpers/humanGateTaskStatementInverse'
+import { inverseTaskProviderHostAssembly } from './helpers/taskProviderHostAssemblyStatementInverse'
 
 const modules: { resetForTesting(): void }[] = []
 const spies: { mockRestore(): void }[] = []
@@ -1322,7 +1323,9 @@ test('all 21 original calls retain their exact inputs; removing the 15 selection
     readFileSync(new URL('../../../.prettierrc', import.meta.url), 'utf8'),
   ) as Record<string, unknown>
   for (const original of originalCallers.wholeCallers) {
-    const file = inverseHumanGateTaskSelections(source(original.path))
+    const file = inverseHumanGateTaskSelections(
+      inverseTaskProviderHostAssembly(source(original.path)),
+    )
     const expected = originalCallers.calls.filter((call) => call.path === original.path)
     const calls = lifecycleCalls(file)
     expect(calls).toHaveLength(expected.length)

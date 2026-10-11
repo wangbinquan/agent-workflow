@@ -40427,6 +40427,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "fromPath": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6386eb320a4d2380d031",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "toPath": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toSymbol": "HistoricalNativeVersionObserver",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -103328,9 +103345,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6078,
+    "architectureExceptions": 6079,
     "implementationSccs": 0,
-    "observedEdges": 6951,
+    "observedEdges": 6952,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -146841,6 +146858,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "id": "import:6386eb320a4d2380d031",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HistoricalNativeVersionObserver",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -215446,7 +215479,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1ed5959852bb08cf908223290dec688be756f063023b6f618be7f1fc5ebf3c4",
+  "sourceDigest": "sha256:2b455c70332b9755ce23f7c70dfb9016de0d7a6546c5f9ea9e8a31a87b7fae6e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

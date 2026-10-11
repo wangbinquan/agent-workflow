@@ -211,7 +211,7 @@ export function createTaskExecutionRuntimeParticipants(
  */
 export function composeLegacyTaskActivityParticipant(): ActiveTaskExecutionParticipant {
   return Object.freeze({
-    isActive: isTaskActive,
+    isActive: (taskId: string) => isTaskActive(taskId),
     awaitReleasedSettled: awaitTaskDriverReleasedSettled,
   })
 }

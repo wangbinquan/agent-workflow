@@ -9,6 +9,7 @@ import { runObservationReportWorkerWithFacts } from '../background/observationRe
 import type { ObservationReportWorkerStart } from '../background/observationReportProtocol'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { isDeepStrictEqual } from 'node:util'
+import type { HistoricalNativeVersionObserver } from '@/modules/runtime-management/public/participants'
 import { createHistoricalNativeVersionObserver } from '@/modules/runtime-management/composition/historicalNativeVersion'
 import {
   historicalNativeFactFileSpool,
@@ -92,7 +93,9 @@ export function observationReportBuild(
   readonly close: () => Promise<void>
 } {
   const original = originalBuild(binding, appHome),
-    observer = writer ? createHistoricalNativeVersionObserver(process.env) : undefined,
+    observer: HistoricalNativeVersionObserver | undefined = writer
+      ? createHistoricalNativeVersionObserver(process.env)
+      : undefined,
     spool = completeObservationFileSpool(appHome),
     factSpool = historicalNativeFactFileSpool(appHome),
     active = new Set<Promise<CompleteObservationBuildResult>>()

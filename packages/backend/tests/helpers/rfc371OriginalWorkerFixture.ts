@@ -84,6 +84,8 @@ export async function originalWorkerFixture(
       await seedCompleteTask({ ...harness, db }, options.attempts ?? 1, options.records ?? 2)
     } catch (error) {
       db.$client.close()
+      // Match the platform's Windows SQLite release boundary before removing this fixture.
+      if (process.platform === 'win32') Bun.gc(true)
       rmSync(appHome, { recursive: true, force: true })
       throw error
     }
@@ -98,6 +100,8 @@ export async function originalWorkerFixture(
       } satisfies OriginalReportDatabaseBinding,
       async close() {
         db.$client.close()
+        // bun:sqlite's just-closed Windows handles release during finalization (RFC-254).
+        if (process.platform === 'win32') Bun.gc(true)
         rmSync(appHome, { recursive: true, force: true })
       },
     }

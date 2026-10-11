@@ -1,3 +1,11 @@
+## 2026-10-12 RFC-370：联合发布后的真实 CI 修复，累计用量已交接
+
+Task 与 RFC-371 缓存的联合源码提交 `4037254b5865adeacfcbaae4789f83eab682c1ae`、紧邻许可退役 `ca6f8417e3c4903966e72d21f89264b7756b6586` 已上库并同步。该确切 SHA 主 CI `38171413992` 已终态 failure，72 作业中 52 成功；默认完整 Windows `38171413874` 亦终态 failure。原失败、原 SOURCE／MATCHING 结论与并行输出分别保留，不以部分通过代签总绿。
+
+本会话处理 Task provider 真实装配夹具、原生命周期／配置源码判据、原单进程活跃度一参数端口、插入站点行号、既有 342／340 字面量账本数量和 0244 快照格式。累计使用量持久化／缓存、原生页／报告 Worker、迁移头及 public consumer 修复已交接给「设计运行观测统计全景」会话，双方分别独立检视后共同生成必要配套并串行发布。未纳入本次 CI 修复的 maintenance 并行候选完整保留。
+
+仅做限定格式／lint与纯语法／字节保持检查，无本机 AW test／typecheck／build／测试服务／E2E。新 SOURCE、必要原 scoped census／MATCHING、精确发布和修复 SHA 的完整主 CI＋完整 Windows 待验。后续 RFC 生产实施坚持等待总绿；完整 H7／十九 owner／三个生产启动根、A-T7／A-G、各层 CS adapter 和先 M0 实际部署再 M1～M4仍开放，AW 尚未部署 CS、RFC 未完成。详见[实际 CI 修复](design/RFC-370-crewstation-hosted-deployment/ci-task-provider-host-fixture-and-original-oracles.md)与[活跃度及站点设计](design/RFC-370-crewstation-hosted-deployment/ci-legacy-activity-and-lineage-design.md)。以下旧 STATE 与全部并行正文完整保留。
+
 ## 2026-10-12 RFC-370：Task SOURCE-R1 两项测试问题与修正候选
 
 独立 SOURCE-R1 为有效、稳定 FAIL／F01、F02，根已完整消费正式回执、P01～P12、23 项文件结论、30 个案例及实际身份。修正新 P06：同一宿主 installation／receipt 创建两个真实 provider module，保留 controller／idle／零 abort 并补原 driver ACK；新 P04 的 SQLite fusion 冲突断言使用实际 SQLite applicationBinding.db，不放宽生产 DbClient 或用假 DB。原 R1 失败、全部生产、旧用例／预算与并行输出保持。
