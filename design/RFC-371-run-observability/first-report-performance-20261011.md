@@ -1,5 +1,19 @@
 # 2026-10-11 首次完整报告：实际耗时与未完成项
 
+## 2026-10-11 当前发布与实验结果
+
+当前生产源码为 `bbc2347fb2e730d3a420f9ccb1b9ccd7b291bca0`。该 SHA 的[主 CI 38136506544](https://github.com/wangbinquan/agent-workflow/actions/runs/38136506544)已终态 success，72 个作业全部 success；[Windows 38136506682](https://github.com/wangbinquan/agent-workflow/actions/runs/38136506682)及[定时维护 38136506527](https://github.com/wangbinquan/agent-workflow/actions/runs/38136506527)也已终态 success。原 16ba 的失败回执和下面的历史描述保持。首次完整报告性能仍未达标，不能用本次 CI 成功关闭该项。
+
+本轮另外评估了 Message 模型字段按物理行复用的两种 SQL 候选，均未提交：全窗口复用报告 `ceb4af1b-7d93-437e-b90d-2a964c10f051` 创建至 API 观测封存为 15,035.507 ms，内部 11,511.05 ms、原生阶段 4,945.52 ms；仅长窗口复用报告 `80fbc349-94d0-400e-a3fd-676321f44bfb` 为 14,222.414 ms，内部 10,289.83 ms、原生阶段 4,514.32 ms。已发布实现的 v255 原生阶段为 4,511.14 ms，未确认本轮 SQL 在完整报告上的收益。只读三个实际消息窗口的小样本收益不能替代这个结果。因此只移除本会话这两份文件中的实验新增内容，原生产查询与原测试全文恢复为 bbc2347 的逐字节内容；没有删除并行工作或重写 Git 历史。
+
+两份候选报告都与原 v188 完整对拍：39,739 条有序明细、17,302 项计数、8,693 份回执及摘要一致，原 3,847 项历史 key/source 哈希绑定逐项验证；全部 65 个 API 页含质量成员页的 items/parent/section/total 和真实 EOF 一致。仅重新绑定当次 report UUID、原快照 nonce 及其派生历史 key，不删其他字段。四桶 1,189,241／1,255,680／0／186,002、总计 2,630,923、已记录 ¥4.078952 和全部缺口保持。比较回执为 `/private/tmp/aw-observability-native-model-complete-comparison-20261011-v273/comparison.json` 与 `/private/tmp/aw-observability-native-model-sized-window-complete-comparison-20261011-v277/comparison.json`；撤回记录为 `/private/tmp/aw-observability-native-model-experiment-retired-20261011-v278/retirement.json`。未运行本机 AW 产品测试、类型检查、构建或规模压测。
+
+原根 `bun dev` 的三个子进程包含 Vite、原后端和 `packages/system-mocks` 的开发登录服务；7460 实际页面显示已就绪，原 issuer 的 discovery 返回 200。只做只读页面与进程核对，没有另起登录进程、重新种子或改换身份。记录见 `/private/tmp/aw-bun-dev-login-original-process-proof-20261011-v280/receipt.json`。
+
+CS 的旧部署仍为 63ae4bbb；本轮任务名称五文件候选的首次完整检查误用了未配置预备事务的本机默认测试库，结果 6,564 pass／177 skip／1 fail，原失败完整保留。回到此前成功的原 Linux 容器及原测试库（max_prepared_transactions=10），原失败文件 18 pass／0 fail；该原环境的完整检查尚在运行，尚未发布或部署名称候选。三个固定范围的系统、管理端项目筛选、独立项目报告实际从请求到可见事实分别为 1,142.964／1,127.844／1,165.736 ms，含原一秒状态轮询；单次测量不代表 P95 或全部页面验收。原 A/B 物理结束、CLI/算力自测及托管联合验收仍开放。
+
+下面按时间保存的旧状态为历史，不替代上述当前回执。
+
 本记录区分首次生成、同范围再次打开与内部阶段耗时。当前首次生成性能仍未达标；语句复用和完整数据对拍不能替代正式页面的加载验收。
 
 ## 当前实际结果（2026-10-11 19:00）
