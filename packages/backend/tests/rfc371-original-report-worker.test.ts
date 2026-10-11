@@ -2,6 +2,8 @@ import { createCompleteTaskObservationFacts } from '@/modules/task-execution/com
 // RFC-371: actual Worker success/cancellation and real max=1 reserved-channel cleanup are hosted gates.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type {
   CompleteObservationReportPage,
   CompleteObservationAllocation,
@@ -57,6 +59,122 @@ const idOf = (report: Awaited<ReturnType<ReturnType<typeof reports>['queries']['
   report.state === 'ready' ? report.header.reportId : report.reportId
 
 describeEachProvider('RFC-371 original live source through a real report Worker', (harness) => {
+  test('explicit performance diagnostics reach the original file through the real Worker with unchanged full facts', async () => {
+    const fixture = await originalWorkerFixture(harness, { attempts: 1, records: 2 })
+    const service = reports(fixture),
+      logfile = join(fixture.appHome, 'logs', 'daemon.log')
+    try {
+      const normalId = idOf(await service.queries.request(actor, filters, 'ordinary-worker-log'))
+      await service.worker.drain()
+      const normal = await service.queries.status(actor, normalId)
+      expect(normal.state).toBe('ready')
+      if (normal.state !== 'ready') throw new Error(JSON.stringify(normal))
+      expect(existsSync(logfile)).toBe(false)
+      const diagnosticId = idOf(
+        await service.queries.request(actor, filters, 'load-performance-original-worker-log'),
+      )
+      await service.worker.drain()
+      const diagnostic = await service.queries.status(actor, diagnosticId)
+      expect(diagnostic.state).toBe('ready')
+      if (diagnostic.state !== 'ready') throw new Error(JSON.stringify(diagnostic))
+      expect(diagnostic.summary.inventory).toEqual({
+        tasks: '1',
+        attempts: '1',
+        invocations: '1',
+        numericRecords: '2',
+        nativeCaptures: '1',
+      })
+      expect(diagnostic.summary.metrics).toEqual(normal.summary.metrics)
+      expect(diagnostic.counts).toEqual(normal.counts)
+      expect(diagnostic.summary.metrics.state).toBe('ready')
+      if (diagnostic.summary.metrics.state !== 'ready') throw new Error('Original usage missing')
+      expect(diagnostic.summary.metrics.tokens).toEqual({
+        input: '3',
+        cacheRead: '9',
+        cacheWrite: '15',
+        output: '21',
+        total: '48',
+      })
+      expect(diagnostic.summary.metrics.cost).toEqual({
+        currency: 'CNY',
+        state: 'complete',
+        amount: '0.00015',
+      })
+      const lines = readFileSync(logfile, 'utf8')
+        .split('\n')
+        .filter((line) => line.includes('reportId=' + diagnosticId))
+      expect(
+        lines
+          .filter((line) => line.includes('Complete report phase'))
+          .map((line) => line.match(/(?:^| )phase=([^ ]+) /)?.[1]),
+      ).toEqual([
+        'actor-qualified',
+        'tasks-collected',
+        'owners-events-collected',
+        'native-collected',
+        'tasks-built',
+        'historical-allocated',
+        'cohort-folded',
+        'cohort-complete',
+        'lookup-caches-flushed',
+        'source-sealed',
+        'transfer-sealed',
+      ])
+      const operations = lines.filter((line) => line.includes('Complete report operation'))
+      expect(operations.some((line) => line.includes('operation=workspace.insert '))).toBe(true)
+      expect(operations.length).toBeGreaterThan(0)
+      for (const line of operations) {
+        const calls = line.match(/(?:^| )calls=([0-9]+) /)?.[1],
+          timed = line.match(/(?:^| )timedCalls=([0-9]+) /)?.[1],
+          total = line.match(/(?:^| )totalMs=([^ ]+)/)?.[1]
+        expect(calls).toBeDefined()
+        expect(timed).toBe(calls)
+        expect(BigInt(calls!)).toBeGreaterThan(0n)
+        expect(Number.isFinite(Number(total))).toBe(true)
+        expect(Number(total)).toBeGreaterThanOrEqual(0)
+      }
+    } finally {
+      await service.worker.stop()
+      await fixture.close()
+    }
+  }, 60000)
+
+  test('unavailable diagnostic directory preserves the actual original Worker result', async () => {
+    const fixture = await originalWorkerFixture(harness, { attempts: 1, records: 2 })
+    const service = reports(fixture),
+      blocked = join(fixture.appHome, 'logs')
+    writeFileSync(blocked, 'original diagnostic directory is unavailable')
+    try {
+      const reportId = idOf(
+        await service.queries.request(actor, filters, 'load-performance-blocked-worker-log'),
+      )
+      await service.worker.drain()
+      const result = await service.queries.status(actor, reportId)
+      expect(result.state).toBe('ready')
+      if (result.state !== 'ready') throw new Error(JSON.stringify(result))
+      expect(result.summary.inventory.numericRecords).toBe('2')
+      expect(result.summary.metrics.state).toBe('ready')
+      if (result.summary.metrics.state !== 'ready') throw new Error('Original usage missing')
+      expect(result.summary.metrics.tokens).toEqual({
+        input: '3',
+        cacheRead: '9',
+        cacheWrite: '15',
+        output: '21',
+        total: '48',
+      })
+      expect(result.summary.metrics.cost).toEqual({
+        currency: 'CNY',
+        state: 'complete',
+        amount: '0.00015',
+      })
+      expect(result.counts.allocations).toBe('2')
+      expect(readFileSync(blocked, 'utf8')).toBe('original diagnostic directory is unavailable')
+    } finally {
+      await service.worker.stop()
+      await fixture.close()
+    }
+  }, 60000)
+
   test('failed status stays terminal until an explicit retry rebuilds the original legacy Task and attempts', async () => {
     const fixture = await originalWorkerFixture(harness, { attempts: 1, records: 2 })
     const bound = observationReportBuild(fixture.binding, fixture.appHome)

@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:d1706889685abebe3bf497246717f5d91e574ed66cb661574c73df5953f36aba",
+    "sourceDigest": "sha256:550976584af0139b38d6b083c998f95e9be03a1a2218340b53bf195781986397",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
@@ -2580,8 +2580,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "cd9613a9a2cd6439bbefa28dec69b6c056d79920",
-    "contentDigest": "sha256:0e2d7b9d0bc2a6cf8f61bd753e13e30f20e241219d6d7a0b1a529e87eecc6206",
+    "currentSnapshotSha": "16ba8f3668301e5a6afaf10616f25d871b2f6740",
+    "contentDigest": "sha256:e8b008c5bc525fb15028d401a317d3e5a700706e046c1b82f78d2cd10bd159bd",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

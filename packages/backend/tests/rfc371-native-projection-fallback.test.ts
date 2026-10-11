@@ -26,8 +26,6 @@ function qualificationTrace(options: { fault?: MetadataFault; tempMessage?: bool
     events: string[] = []
   const open = (path: string): ReadonlySqliteDatabase => {
     const db = instrument.open(path)
-    if (options.tempMessage)
-      db.query<unknown, []>('CREATE TEMP TABLE message AS SELECT * FROM main.message').get()
     return {
       query<Row, Parameters extends readonly unknown[]>(sql: string) {
         const statement = db.query<Row, Parameters>(sql)
@@ -36,7 +34,30 @@ function qualificationTrace(options: { fault?: MetadataFault; tempMessage?: bool
             events.push(sql)
             if (options.fault === 'physical-throw' && sql.includes('SELECT DISTINCT m._rowid_'))
               throw new Error('explicit-physical-qualification-unavailable')
-            return statement.get(...parameters)
+            const row = statement.get(...parameters)
+            // Changing temp_store destroys prior TEMP objects. Install this real
+            // shadow only after the reader has selected its original TEMP store.
+            if (options.tempMessage && sql === 'PRAGMA temp_store=FILE') {
+              db.query<unknown, []>('CREATE TEMP TABLE message AS SELECT * FROM main.message').get()
+              expect(
+                db
+                  .query<{ schema: string; name: string }, []>('PRAGMA table_list')
+                  .all()
+                  .filter((table) => table.name === 'message')
+                  .map((table) => table.schema)
+                  .sort(),
+              ).toEqual(['main', 'temp'])
+              expect(
+                db
+                  .query<Record<string, unknown>, []>('SELECT * FROM temp.message ORDER BY id')
+                  .all(),
+              ).toEqual(
+                db
+                  .query<Record<string, unknown>, []>('SELECT * FROM main.message ORDER BY id')
+                  .all(),
+              )
+            }
+            return row
           },
           all(...parameters: Parameters) {
             events.push(sql)

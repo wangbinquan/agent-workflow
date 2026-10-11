@@ -203,6 +203,14 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
         payloadBytes = 0,
         eof = false
       let current: QueueRow | null | undefined
+      let dirtyPartCursor: { id: string; after: string } | undefined
+      const flushPartCursor = () => {
+        if (!dirtyPartCursor) return
+        db.query<unknown, [string, string]>(
+          'UPDATE temp.native_pass_queue SET part_after=? WHERE id=?',
+        ).get(dirtyPartCursor.after, dirtyPartCursor.id)
+        dirtyPartCursor = undefined
+      }
       try {
         while (scanned < pageRows && payloadBytes < pageBytes) {
           current ??= db
@@ -238,6 +246,7 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
             // This transport-internal flag must never enter the original PartRow fingerprint.
             if (row) delete row.cache_message
             if (!row) {
+              flushPartCursor()
               if (
                 db
                   .query<{ message: string }, [string]>(
@@ -294,10 +303,8 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
                 payloadBytes += Buffer.byteLength(JSON.stringify(value))
               }
             }
-            db.query<unknown, [string, string]>(
-              'UPDATE temp.native_pass_queue SET part_after=? WHERE id=?',
-            ).get(row.id, current.id)
             current.part_after = row.id
+            dirtyPartCursor = { id: current.id, after: row.id }
             partProjection.advance()
             if (!messageCached && identifier(row.message_id) && identifier(row.session_id)) {
               db.query<unknown, [string, string, unknown, unknown]>(
@@ -347,6 +354,8 @@ function openOriginalOpencodeUsagePass<I extends OriginalNativePassIdentity>(
           // A discovered child may sort before this parent in the original queue.
           current = undefined
         }
+        // The next packet reads TEMP state; flush before freezing this original page.
+        flushPartCursor()
         const totals = counts(),
           body = {
             identity,

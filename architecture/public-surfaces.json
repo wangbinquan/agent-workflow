@@ -219283,7 +219283,9 @@
           "signatureDigest": "sha256:a63a614ef8ee741f5e79167bbc795215a13e5532e89657985d8ec2a13d723219"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:97690ec5043f92ffd3ba"
+          ],
           "name": "path",
           "signatureDigest": "sha256:9ef3c7687f0b0cdbfb685f941a5370178a51bf03aa13c9e079d33e0000420a14"
         },
@@ -232494,7 +232496,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d1706889685abebe3bf497246717f5d91e574ed66cb661574c73df5953f36aba",
+  "sourceDigest": "sha256:550976584af0139b38d6b083c998f95e9be03a1a2218340b53bf195781986397",
   "targetContexts": [
     "collaboration",
     "development-automation",

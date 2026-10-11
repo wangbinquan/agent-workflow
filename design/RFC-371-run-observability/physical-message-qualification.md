@@ -23,3 +23,9 @@
 保留现有 Message/Part 两个方向的 NOCASE 错误前缀、未引用 malformed/NULL Message、referenced malformed/NULL、optional-prefetch 失败/丢行/重复/重排、字节与行预算、旧末页和旧 ACK 回归。补充普通物理 Message 去重的实际原结果、NOCASE data 不得去重文本、WITHOUT ROWID/view/virtual/shadow/TEMP/PRAGMA 失败的原查询回退，及元数据只在原事务内探测一次的回归。
 
 有限设计门和实现门分别核对；元数据生成来自本次真实源码完整普查，不调高守卫或账本。按 AW 要求只用 hosted exact-SHA CI。正式原服务生成同一窗口的完整报告后，完整比较全部行、计数和收据（只规范化报告自身随机标识）；四桶 Token、人民币估值、全任务/调用/引用人口及所有 EOF 精确保持，才可记录正式性能变化。若正式收益不足，不声称首屏性能已经达标。
+
+## 2026-10-11 TEMP 夹具的实际生命周期修复
+
+已发布 `16ba8f3668301e5a6afaf10616f25d871b2f6740` 的自动 Windows CI `38132049380` 在 `rfc371-native-projection-fallback.test.ts:659` 失败：TEMP 分支完整 EOF 和 step ID 已通过，但实际执行了物理 Message 资格查询。其余八种不支持的 shape/metadata 回退通过。原失败日志保留于 `/private/tmp/aw-rfc370-provenance-ci-16ba8f366-windows-failed-steps-r1.log`，424,779B，SHA256 `6d587c57c897cdebb44e39f6368e21bffc989b5b0e586be372bc709a0db793c0`；该次 CI 保持 failure。
+
+夹具曾在原连接刚打开时创建 TEMP Message，随后真实 reader 设置 `PRAGMA temp_store=FILE`。SQLite 在改变此设置时会立即删除已有 TEMP 对象，因此资格探测时 TEMP Message 已不存在。[SQLite 原始说明](https://www.sqlite.org/pragma.html#pragma_temp_store) 支持这一生命周期判断。修复把真实 TEMP Message 的创建放到该原 PRAGMA 执行完成之后，并新增实际 `PRAGMA table_list` 必须同时含 main/temp Message、两表完整行值必须相等的断言。原主库保持只读，原资格 SQL、完整 EOF、step IDs、物理查询禁止断言、原回退查询次数和包预算全部保留。没有修改生产探测、提高超时或跳过用例；本机不运行 AW 测试，修复由新的 exact-SHA CI 核对。

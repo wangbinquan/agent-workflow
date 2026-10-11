@@ -16,6 +16,8 @@ import { completeObservationFileSpool } from '@/modules/run-observability/compos
 import { originalSqliteFileReportSnapshot } from '../persistence/reportSqliteSnapshot'
 import { reportReadonlyChannelClient } from '../persistence/reportReadonlyChannelClient'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { configureLogger } from '@/util/log'
+import { join } from 'node:path'
 import { observationReportChannel } from './observationReportChannel'
 import type { OriginalReportSnapshot } from '../persistence/reportSnapshotTypes'
 import type {
@@ -33,6 +35,14 @@ const stop = new AbortController()
 const channel = observationReportChannel((event) => scope.postMessage(event), stop.signal)
 let started = false
 async function run(input: OriginalObservationWorkerStart) {
+  if (input.kind === 'start' && input.report.request.refreshKey.startsWith('load-performance-')) {
+    try {
+      // A Worker has its own logger state; use the already selected original appHome.
+      configureLogger({ logFile: join(input.appHome, 'logs', 'daemon.log') })
+    } catch {
+      // Diagnostic initialization must not fail or replace any original source work.
+    }
+  }
   const build = async (
     snapshot: OriginalReportSnapshot,
   ): Promise<OriginalObservationWorkerResult> => {
