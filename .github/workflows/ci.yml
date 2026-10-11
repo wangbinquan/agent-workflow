@@ -192,21 +192,9 @@ jobs:
     # instead of extending it or changing individual test timeouts.
     timeout-minutes: 15
     # RFC-359 §11.1 —— 双引擎是缺省：`describeEachProvider` 写的用例在 ubuntu 分片上对着真
-    # PostgreSQL 各跑一遍，缺库即红（不是 skip）。macOS runner 没有服务容器，显式选择
-    # `AW_TEST_PROVIDERS=sqlite`；独立 Windows 平台 lane 同理。image 为空字符串时 Actions 跳过服务容器。
-    services:
-      postgres:
-        image: ${{ matrix.os == 'ubuntu-latest' && 'public.ecr.aws/docker/library/postgres:17' || '' }}
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: awtest
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+    # PostgreSQL 各跑一遍，缺库即红（不是 skip）。macOS 显式 `AW_TEST_PROVIDERS=sqlite`。
+    # Start PostgreSQL after checkout so the daemon cache and registry fallback
+    # run before pulling; declarative services are pulled before user steps.
     steps:
       - uses: actions/checkout@v5
         with:
@@ -214,6 +202,12 @@ jobs:
           # payload from its published snapshot.  A depth-1 checkout makes a
           # tampered current file indistinguishable from an unavailable pin.
           fetch-depth: 0
+
+      - name: Start PostgreSQL (ubuntu shards)
+        id: postgres
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh start awtest
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -327,6 +321,11 @@ jobs:
           fail_ci_if_error: false
           disable_search: true
 
+      - name: Stop PostgreSQL (ubuntu shards)
+        if: always() && matrix.os == 'ubuntu-latest' && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh stop
+
   test-backend-postgresql:
     # RFC-357 —— 唯一一条对着**真 PostgreSQL** 跑的常规门禁。
     #
@@ -345,23 +344,15 @@ jobs:
     name: Backend tests (real PostgreSQL)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:17
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: rfc357
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
     env:
       RFC357_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rfc357
     steps:
       - uses: actions/checkout@v5
+
+      - name: Start PostgreSQL
+        id: postgres
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh start rfc357
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -430,6 +421,11 @@ jobs:
           path: test-results/rfc359-p0-mutations/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Stop PostgreSQL
+        if: always() && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh stop
 
   test-frontend:
     # The vitest suite (~590 files) is the second-biggest cost center (~298s on
