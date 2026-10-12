@@ -40,3 +40,13 @@ DESIGN-R1 母 21 项及独立 service 补充 2 项均有效稳定 PASS、0 findi
 真实 Worker 夹具的三项 release 与 stop／channel close／database dispose／严格 rm 按原次序逐一尝试并收集错误，单一原 cause 或全部 AggregateError cause 继续使场景失败；Windows 的 GC 仅放在数据库 dispose 后、严格 rm 前。原同一 Worker、双 provider、全部业务断言、15000ms 阶段等待和 40000ms 测试预算保持。原可选 eventLoop 改用同文件已有严格嵌套匹配；spawn 原一行登记 5→6，其他 matcher／登记／W5 debt 不改。
 
 仅追加三条回归：同一 clearTimer Error 身份、fresh Bun 的 supervisor bare close 无 ACK 超时、fresh Bun 的 service 实际 enqueue pending 超时。两个子进程均调用原 cold 实现及真实 17ms deadline，父进程 3000ms 故障界和五项正常退出／精确输出判据。最终原三套为 service 18、supervisor 16、真实 Worker 每 provider 1，预期 Ubuntu 36／macOS 35／Windows 35，合计 106；此时实际运行仍为 0。限定格式和 lint 成功，未运行本机 AW test／typecheck／build／service／E2E；SOURCE、唯一必要原生成／MATCHING、精确路径上库和新 SHA 总 CI 后继另验。
+
+## 91024 的 hosted 执行与 service 子进程入口修正
+
+`91024cb54423eedb66e70c60679c7a86b0e16602` 的完整 Windows `38210956922`／作业 `114684775237` 实际为 1437 pass、3 skip、1 fail。原真实 SQLite Worker 排空、17 条原 service 案例及 16 条 supervisor 案例均通过，35 个 cold maintenance 目标案例中实际 34 pass、1 fail。唯一失败是新增 service 子进程案例的退出码为 1；原断言没有展示捕获的 stderr，因此不能把具体子进程错误冒称为已由日志确认。maintenance 持续运行检查 `38210956834` 已成功，主 CI `38210956816` 仍须跑完，完整总绿尚未取得。
+
+同 SHA 的 macOS shard 8／12（`114684775400`）为 1536 pass、1 skip、1 fail；Ubuntu shard 12／32（`114684775440`）为 795 pass、1 fail。两份完整原日志均只有同一个 service 子进程用例失败，退出码为 1；也未展示 child stderr。两平台的其它分片及整个主 CI 终态另验，不以这两个分片代签全平台或全仓结论。
+
+有限修正只涉及该 service 测试的两行：用已有 `join` 从 `tests` 目录选到 backend 目录启动子进程，使它使用包含 `@/* → src/*` 的原 backend `tsconfig.json`；退出码仍严格要求 0，但失败消息附上实际 stderr。backend 的 bunfig 预加载配置仅属于 test，子进程仍执行原 `-e` 脚本。真实 17ms deadline、3000ms 故障上限、完整 Config／注入对象、所有原业务及五项结果判据、18／16／每 provider 1 的人口均保持。下一 SHA 的 hosted 实际执行负责验证该入口修正，若仍失败则使用 stderr 继续定位；不增加案例或放宽结果。
+
+本片没有生产源、依赖、生成规则或架构库存变化，复用已消费且已上库的原生成配套；不再运行整个 census。仅做有限格式／lint／纯语法／逆向全文保持检查及独立实现门，随后精确两路径发布并等待同 SHA 完整主 CI 和完整默认 Windows 总绿。原失败继续保留；累计使用量、其它会话在制内容、完整 RFC 与 CS 部署均未被本片关闭。

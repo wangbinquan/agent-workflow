@@ -890,13 +890,13 @@ test('the service drain deadline rejects in a fresh process while actual enqueue
       }
     `
     const result = spawnSync(process.execPath, ['-e', script], {
-      cwd: import.meta.dir,
+      cwd: join(import.meta.dir, '..'),
       encoding: 'utf8',
       timeout: 3_000,
       windowsHide: true,
     })
     expect(result.error).toBeUndefined()
-    expect(result.status).toBe(0)
+    expect(result.status, result.stderr).toBe(0)
     expect(result.signal).toBeNull()
     expect(result.stderr).toBe('')
     expect(result.stdout).toBe('maintenance service drain deadline rejected\n')
