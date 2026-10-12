@@ -1,0 +1,1305 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:f093173a29f7875afcbd167fae1d2687cc3118431348a2f3a848acb8cb929d49', 243, 6)"
+    },
+    "beforeDigest": "sha256:ad9fe1b540e1518508f69b8bd5a2f76d327d77aa36b9c4dbaf76b2ae2edb2abb"
+  },
+  "digest": "sha256:ccd76bc82796d4a2836e35fcae3632d866a2128228f77a89124355ca62dc3721",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "clarify_mindmap_command_receipts",
+      "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_command_receipts\" (\n  \"session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"command_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"result_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"metadata_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_revision\" BIGINT NOT NULL,\n  \"actor_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"clarify_mindmap_command_receipts_pkey\" PRIMARY KEY (\"session_id\", \"request_id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "clarify_mindmap_node_revisions",
+      "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_node_revisions\" (\n  \"node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_revision\" BIGINT NOT NULL,\n  \"body_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"actor_id\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"clarify_mindmap_node_revisions_pkey\" PRIMARY KEY (\"node_id\", \"session_revision\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "clarify_mindmap_nodes",
+      "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_nodes\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"parent_id\" TEXT COLLATE \"C\",\n  \"sort_order\" BIGINT NOT NULL,\n  \"body_json\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"clarify_mindmap_nodes_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "clarify_mindmap_sessions",
+      "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_sessions\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"round_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"entry_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"metadata_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"clarify_mindmap_sessions_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "clarify_mindmap_snapshots",
+      "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_snapshots\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"content_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"markdown\" TEXT COLLATE \"C\" NOT NULL,\n  \"plan_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"finalized_at\" BIGINT,\n  \"finalized_by\" TEXT COLLATE \"C\",\n  CONSTRAINT \"clarify_mindmap_snapshots_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "clarify_mindmap_command_receipts:index:idx_mindmap_receipts_history",
+      "sql": "CREATE INDEX \"idx_mindmap_receipts_history\" ON \"agent_workflow\".\"clarify_mindmap_command_receipts\" (\"session_id\", \"session_revision\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "clarify_mindmap_nodes:index:idx_mindmap_nodes_parent",
+      "sql": "CREATE INDEX \"idx_mindmap_nodes_parent\" ON \"agent_workflow\".\"clarify_mindmap_nodes\" (\"session_id\", \"parent_id\", \"sort_order\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "clarify_mindmap_sessions:index:idx_mindmap_sessions_round",
+      "sql": "CREATE UNIQUE INDEX \"idx_mindmap_sessions_round\" ON \"agent_workflow\".\"clarify_mindmap_sessions\" (\"round_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "clarify_mindmap_sessions:index:idx_mindmap_sessions_entry",
+      "sql": "CREATE UNIQUE INDEX \"idx_mindmap_sessions_entry\" ON \"agent_workflow\".\"clarify_mindmap_sessions\" (\"task_id\", \"entry_ref\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "clarify_mindmap_snapshots:index:idx_mindmap_snapshots_session",
+      "sql": "CREATE INDEX \"idx_mindmap_snapshots_session\" ON \"agent_workflow\".\"clarify_mindmap_snapshots\" (\"session_id\", \"revision\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "clarify_mindmap_command_receipts:fk:clarify_mindmap_command_receipts_session_id_clarify_mindmap_sessions_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_command_receipts\" ADD CONSTRAINT \"clarify_mindmap_command_receipts_session_id_clarif_29e9cd414115\" FOREIGN KEY (\"session_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_sessions\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "clarify_mindmap_node_revisions:fk:clarify_mindmap_node_revisions_node_id_clarify_mindmap_nodes_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_node_revisions\" ADD CONSTRAINT \"clarify_mindmap_node_revisions_node_id_clarify_min_33487613ec18\" FOREIGN KEY (\"node_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_nodes\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "clarify_mindmap_nodes:fk:clarify_mindmap_nodes_session_id_clarify_mindmap_sessions_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_nodes\" ADD CONSTRAINT \"clarify_mindmap_nodes_session_id_clarify_mindmap_sessions_id_fk\" FOREIGN KEY (\"session_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_sessions\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "clarify_mindmap_sessions:fk:clarify_mindmap_sessions_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_sessions\" ADD CONSTRAINT \"clarify_mindmap_sessions_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "clarify_mindmap_sessions:fk:clarify_mindmap_sessions_round_id_clarify_rounds_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_sessions\" ADD CONSTRAINT \"clarify_mindmap_sessions_round_id_clarify_rounds_id_fk\" FOREIGN KEY (\"round_id\") REFERENCES \"agent_workflow\".\"clarify_rounds\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "clarify_mindmap_snapshots:fk:clarify_mindmap_snapshots_session_id_clarify_mindmap_sessions_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_snapshots\" ADD CONSTRAINT \"clarify_mindmap_snapshots_session_id_clarify_mindm_5a30b8c04e81\" FOREIGN KEY (\"session_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_sessions\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:f093173a29f7875afcbd167fae1d2687cc3118431348a2f3a848acb8cb929d49', active_table_count = 243, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:75bf736d0ce25c25e293ba78e82d378ccca540edc2807fa27345d4f8c33dcd27' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:75bf736d0ce25c25e293ba78e82d378ccca540edc2807fa27345d4f8c33dcd27",
+    "planDigest": "sha256:90f14b1a4c9cb80fc7fc19ac40f00c632243017d21690982ba2d716a81d91bc7"
+  },
+  "id": "0022_rfc372_mindmap_workspace",
+  "indexAdditions": [
+    {
+      "position": 18,
+      "statement": {
+        "kind": "table",
+        "logicalId": "clarify_mindmap_command_receipts",
+        "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_command_receipts\" (\n  \"session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"command_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"result_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"metadata_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_revision\" BIGINT NOT NULL,\n  \"actor_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"clarify_mindmap_command_receipts_pkey\" PRIMARY KEY (\"session_id\", \"request_id\")\n)"
+      }
+    },
+    {
+      "position": 19,
+      "statement": {
+        "kind": "table",
+        "logicalId": "clarify_mindmap_node_revisions",
+        "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_node_revisions\" (\n  \"node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_revision\" BIGINT NOT NULL,\n  \"body_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"actor_id\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"clarify_mindmap_node_revisions_pkey\" PRIMARY KEY (\"node_id\", \"session_revision\")\n)"
+      }
+    },
+    {
+      "position": 20,
+      "statement": {
+        "kind": "table",
+        "logicalId": "clarify_mindmap_nodes",
+        "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_nodes\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"parent_id\" TEXT COLLATE \"C\",\n  \"sort_order\" BIGINT NOT NULL,\n  \"body_json\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"clarify_mindmap_nodes_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 21,
+      "statement": {
+        "kind": "table",
+        "logicalId": "clarify_mindmap_sessions",
+        "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_sessions\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"round_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"entry_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"metadata_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"clarify_mindmap_sessions_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 22,
+      "statement": {
+        "kind": "table",
+        "logicalId": "clarify_mindmap_snapshots",
+        "sql": "CREATE TABLE \"agent_workflow\".\"clarify_mindmap_snapshots\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"session_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"content_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"markdown\" TEXT COLLATE \"C\" NOT NULL,\n  \"plan_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"finalized_at\" BIGINT,\n  \"finalized_by\" TEXT COLLATE \"C\",\n  CONSTRAINT \"clarify_mindmap_snapshots_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 261,
+      "statement": {
+        "kind": "index",
+        "logicalId": "clarify_mindmap_command_receipts:index:idx_mindmap_receipts_history",
+        "sql": "CREATE INDEX \"idx_mindmap_receipts_history\" ON \"agent_workflow\".\"clarify_mindmap_command_receipts\" (\"session_id\", \"session_revision\")"
+      }
+    },
+    {
+      "position": 262,
+      "statement": {
+        "kind": "index",
+        "logicalId": "clarify_mindmap_nodes:index:idx_mindmap_nodes_parent",
+        "sql": "CREATE INDEX \"idx_mindmap_nodes_parent\" ON \"agent_workflow\".\"clarify_mindmap_nodes\" (\"session_id\", \"parent_id\", \"sort_order\")"
+      }
+    },
+    {
+      "position": 263,
+      "statement": {
+        "kind": "index",
+        "logicalId": "clarify_mindmap_sessions:index:idx_mindmap_sessions_round",
+        "sql": "CREATE UNIQUE INDEX \"idx_mindmap_sessions_round\" ON \"agent_workflow\".\"clarify_mindmap_sessions\" (\"round_id\")"
+      }
+    },
+    {
+      "position": 264,
+      "statement": {
+        "kind": "index",
+        "logicalId": "clarify_mindmap_sessions:index:idx_mindmap_sessions_entry",
+        "sql": "CREATE UNIQUE INDEX \"idx_mindmap_sessions_entry\" ON \"agent_workflow\".\"clarify_mindmap_sessions\" (\"task_id\", \"entry_ref\")"
+      }
+    },
+    {
+      "position": 265,
+      "statement": {
+        "kind": "index",
+        "logicalId": "clarify_mindmap_snapshots:index:idx_mindmap_snapshots_session",
+        "sql": "CREATE INDEX \"idx_mindmap_snapshots_session\" ON \"agent_workflow\".\"clarify_mindmap_snapshots\" (\"session_id\", \"revision\")"
+      }
+    },
+    {
+      "position": 646,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "clarify_mindmap_command_receipts:fk:clarify_mindmap_command_receipts_session_id_clarify_mindmap_sessions_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_command_receipts\" ADD CONSTRAINT \"clarify_mindmap_command_receipts_session_id_clarif_29e9cd414115\" FOREIGN KEY (\"session_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_sessions\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 647,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "clarify_mindmap_node_revisions:fk:clarify_mindmap_node_revisions_node_id_clarify_mindmap_nodes_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_node_revisions\" ADD CONSTRAINT \"clarify_mindmap_node_revisions_node_id_clarify_min_33487613ec18\" FOREIGN KEY (\"node_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_nodes\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 648,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "clarify_mindmap_nodes:fk:clarify_mindmap_nodes_session_id_clarify_mindmap_sessions_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_nodes\" ADD CONSTRAINT \"clarify_mindmap_nodes_session_id_clarify_mindmap_sessions_id_fk\" FOREIGN KEY (\"session_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_sessions\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 649,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "clarify_mindmap_sessions:fk:clarify_mindmap_sessions_task_id_tasks_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_sessions\" ADD CONSTRAINT \"clarify_mindmap_sessions_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 650,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "clarify_mindmap_sessions:fk:clarify_mindmap_sessions_round_id_clarify_rounds_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_sessions\" ADD CONSTRAINT \"clarify_mindmap_sessions_round_id_clarify_rounds_id_fk\" FOREIGN KEY (\"round_id\") REFERENCES \"agent_workflow\".\"clarify_rounds\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 651,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "clarify_mindmap_snapshots:fk:clarify_mindmap_snapshots_session_id_clarify_mindmap_sessions_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"clarify_mindmap_snapshots\" ADD CONSTRAINT \"clarify_mindmap_snapshots_session_id_clarify_mindm_5a30b8c04e81\" FOREIGN KEY (\"session_id\") REFERENCES \"agent_workflow\".\"clarify_mindmap_sessions\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 8,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "session_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "command_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "result_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "metadata_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "session_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "actor_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["session_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "clarify_mindmap_sessions",
+            "name": "clarify_mindmap_command_receipts_session_id_clarify_mindmap_sessions_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "clarify_mindmap_command_receipts",
+        "indexes": [
+          {
+            "columns": ["session_id", "session_revision"],
+            "name": "idx_mindmap_receipts_history",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["session_id", "request_id"],
+        "ownerContext": "collaboration",
+        "primaryKey": ["session_id", "request_id"],
+        "providerTables": {
+          "postgresql": "clarify_mindmap_command_receipts",
+          "sqlite": "clarify_mindmap_command_receipts"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "collaboration",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "clarifyMindmapCommandReceipts",
+        "sourceTable": "clarify_mindmap_command_receipts",
+        "unique": []
+      }
+    },
+    {
+      "position": 9,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "node_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "session_revision",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "body_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "actor_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["node_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "clarify_mindmap_nodes",
+            "name": "clarify_mindmap_node_revisions_node_id_clarify_mindmap_nodes_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "clarify_mindmap_node_revisions",
+        "indexes": [],
+        "migrationKey": ["node_id", "session_revision"],
+        "ownerContext": "collaboration",
+        "primaryKey": ["node_id", "session_revision"],
+        "providerTables": {
+          "postgresql": "clarify_mindmap_node_revisions",
+          "sqlite": "clarify_mindmap_node_revisions"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "collaboration",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "clarifyMindmapNodeRevisions",
+        "sourceTable": "clarify_mindmap_node_revisions",
+        "unique": []
+      }
+    },
+    {
+      "position": 10,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "session_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "parent_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "sort_order",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "body_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["session_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "clarify_mindmap_sessions",
+            "name": "clarify_mindmap_nodes_session_id_clarify_mindmap_sessions_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "clarify_mindmap_nodes",
+        "indexes": [
+          {
+            "columns": ["session_id", "parent_id", "sort_order"],
+            "name": "idx_mindmap_nodes_parent",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "collaboration",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "clarify_mindmap_nodes",
+          "sqlite": "clarify_mindmap_nodes"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "collaboration",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "clarifyMindmapNodes",
+        "sourceTable": "clarify_mindmap_nodes",
+        "unique": []
+      }
+    },
+    {
+      "position": 11,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "round_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "entry_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "metadata_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "source_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["task_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "tasks",
+            "name": "clarify_mindmap_sessions_task_id_tasks_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          },
+          {
+            "columns": ["round_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "clarify_rounds",
+            "name": "clarify_mindmap_sessions_round_id_clarify_rounds_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "clarify_mindmap_sessions",
+        "indexes": [
+          {
+            "columns": ["round_id"],
+            "name": "idx_mindmap_sessions_round",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["task_id", "entry_ref"],
+            "name": "idx_mindmap_sessions_entry",
+            "unique": true,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "collaboration",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "clarify_mindmap_sessions",
+          "sqlite": "clarify_mindmap_sessions"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "collaboration",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "clarifyMindmapSessions",
+        "sourceTable": "clarify_mindmap_sessions",
+        "unique": [
+          {
+            "columns": ["round_id"],
+            "expression": null,
+            "name": "idx_mindmap_sessions_round"
+          },
+          {
+            "columns": ["task_id", "entry_ref"],
+            "expression": null,
+            "name": "idx_mindmap_sessions_entry"
+          }
+        ]
+      }
+    },
+    {
+      "position": 12,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "session_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "content_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "markdown",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "plan_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "finalized_at",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "finalized_by",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["session_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "clarify_mindmap_sessions",
+            "name": "clarify_mindmap_snapshots_session_id_clarify_mindmap_sessions_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "clarify_mindmap_snapshots",
+        "indexes": [
+          {
+            "columns": ["session_id", "revision"],
+            "name": "idx_mindmap_snapshots_session",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "collaboration",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "clarify_mindmap_snapshots",
+          "sqlite": "clarify_mindmap_snapshots"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "collaboration",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "clarifyMindmapSnapshots",
+        "sourceTable": "clarify_mindmap_snapshots",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:e9c182d3acd1e14c87595806fe4b363b047cb4121961a9bcb22f8f1dd27ab9d5",
+  "sequence": 22,
+  "sqlDigest": "sha256:0e9cf77342f8f66b5726ec6e3f2c381b75d8fbf9544eee870feff65f6990001a",
+  "sqlFile": "0022_rfc372_mindmap_workspace.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791778977481,
+        "hash": "9278ad7ffcca681f047a49d3efedbcd837950c0e5e5944ba5d84e7ce2e9863c3",
+        "index": 245,
+        "tag": "0246_rfc372_mindmap_workspace"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:f86a0e88af1f61d1ea1c497a1f053b5fbdb8133f26d34e0a76c47dd69271b41a",
+      "count": 245,
+      "last": {
+        "folderMillis": 1791771711818,
+        "hash": "d8c1df1f76babbeb745d8bc9c46a25c87d3cbde9474f17cfd627ab92c420f59d",
+        "index": 244,
+        "tag": "0245_rfc371_observation_calculations"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:ac2581bb69c3bbfccce097179cce252e3b1bb3a6a31cf5fb93360852ac8631b2",
+      "count": 246,
+      "last": {
+        "folderMillis": 1791778977481,
+        "hash": "9278ad7ffcca681f047a49d3efedbcd837950c0e5e5944ba5d84e7ce2e9863c3",
+        "index": 245,
+        "tag": "0246_rfc372_mindmap_workspace"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:f093173a29f7875afcbd167fae1d2687cc3118431348a2f3a848acb8cb929d49",
+    "planDigest": "sha256:afc512395b04264ad08309600fe1bfa07d2956c809ddb57b19f20fd8769d9f06"
+  },
+  "version": 2
+}

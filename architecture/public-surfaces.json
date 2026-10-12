@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1370,
+    "consumers": 1373,
     "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
     "methods": 1774,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 30412,
-    "symbols": 1279
+    "recursiveFields": 30430,
+    "symbols": 1282
   },
   "entries": [
     {
@@ -129901,6 +129901,214 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:b0cb8dedbd98b15ce1fa"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.actorScope",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.native.connectionEpoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.native.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.native.parserVersion",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.native.revisionToken",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.native.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b0cb8dedbd98b15ce1fa"
+          ],
+          "fieldPath": "context.source.generationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.source.relations",
+          "type": "readonly { readonly sourceId: string; readonly revision: string }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "context.source.version",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "digest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "owner",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "packets",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "reportId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b0cb8dedbd98b15ce1fa"
+          ],
+          "fieldPath": "rows",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "versions",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:CompleteCalculationFactManifest",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:b0cb8dedbd98b15ce1fa",
+          "file": "packages/backend/src/platform/background/observationReportProtocol.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportProtocol.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:86b5a55b1ec235b46da55906ca7a1cc820ed3d6640110b8c20d15ed5b60911d8",
+      "status": "target-context-current-surface",
+      "symbol": "CompleteCalculationFactManifest",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:7f74ff27d5eb079f83ce"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:CompleteCalculationInvalid",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:7f74ff27d5eb079f83ce",
+          "file": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:c2bb14ff427c9e73afa81118f737d0136352249a5e9bac49f4b6ce86948d6c8e",
+      "status": "target-context-current-surface",
+      "symbol": "CompleteCalculationInvalid",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "extends:Error"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "generationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "relations",
+          "type": "readonly { readonly sourceId: string; readonly revision: string }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "version",
+          "type": "1"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:CompleteCalculationSourceProof",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:run-observability:participants:CompleteCalculationFactManifest"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:cfa7aac001ac3fc291ed7bff12f8de2219fd1cade7ebdc37125deea8f2c44371",
+      "status": "target-context-current-surface",
+      "symbol": "CompleteCalculationSourceProof",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 631,
         "maxUnionVariants": 222
       },
@@ -135565,7 +135773,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:0abc99eac23c4c14732e"
+            "import:0abc99eac23c4c14732e",
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "report.$variant:2.error",
           "type": "string"
@@ -149656,6 +149865,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:0359c5a0d420bab1f008",
         "import:03d25ef6fa27a8c01236",
         "import:41feae184d85cc414809",
         "import:5a9567771fdecc17cd3f",
@@ -149710,6 +149920,12 @@
       "productionConsumers": [
         {
           "context": "run-observability",
+          "edgeId": "import:0359c5a0d420bab1f008",
+          "file": "packages/backend/src/modules/run-observability/ports/completeCalculationFacts.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/run-observability/ports/completeCalculationFacts.ts#$file"
+        },
+        {
+          "context": "run-observability",
           "edgeId": "import:03d25ef6fa27a8c01236",
           "file": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactReader.ts#$file"
@@ -149734,6 +149950,7 @@
         }
       ],
       "publicTypeConsumerIds": [
+        "public:run-observability:participants:CompleteCalculationFactManifest",
         "public:run-observability:participants:HistoricalNativeFactManifest",
         "public:runtime-management:participants:HistoricalNativeVersionObserver",
         "public:runtime-management:participants:originalHistoricalNativeIdentity"
@@ -233727,7 +233944,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3fc04a9fa75f8e128712fdf8158613d870057af0b34327f5d48a8314516e595f",
+  "sourceDigest": "sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095",
   "targetContexts": [
     "collaboration",
     "development-automation",

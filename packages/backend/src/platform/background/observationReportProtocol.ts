@@ -3,6 +3,7 @@ import type {
   CompleteObservationStoredReport,
   NativeHistoryPreparation,
   HistoricalNativeFactManifest,
+  CompleteCalculationFactManifest,
 } from '@/modules/run-observability/public/participants'
 import type { HistoricalNativeSourceProof } from '@/modules/runtime-management/public/participants'
 import type { OriginalReportReadChannel } from '../persistence/reportSnapshotTypes'
@@ -22,6 +23,8 @@ export interface ObservationReportWorkerStart {
   readonly source: ObservationReportWorkerSource
   readonly report: CompleteObservationStoredReport
   readonly nativeProof?: HistoricalNativeSourceProof
+  /** Bootstrap explicitly installs numeric reuse; native-only consumers keep their original contract. */
+  readonly taskCalculations?: true
 }
 export interface NativeHistoryWorkerStart {
   readonly kind: 'native-history'
@@ -41,6 +44,15 @@ export type OriginalObservationWorkerResult =
           readonly cachedPages: string
           readonly sourceRoots: string
           readonly sourcePages: string
+        }
+      }
+      readonly calculationFacts?: {
+        readonly usedCache: boolean
+        readonly manifest: CompleteCalculationFactManifest
+        readonly statistics: {
+          readonly cachedTasks: string
+          readonly calculatedTasks: string
+          readonly cachedRows: string
         }
       }
     }

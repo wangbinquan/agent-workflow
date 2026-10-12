@@ -7,6 +7,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
+import { OBSERVATION_SOURCE_REVISION } from './observationSourceRevisionSchema'
 import {
   buildPostgresqlSchemaPlan,
   POSTGRESQL_BASELINE_ID,
@@ -106,6 +107,24 @@ const ContractObjectSchema = z
       z
         .object({
           id: z.string(),
+          sourceRevisionProjection: z
+            .object({
+              kind: z.literal('observation-source-revision'),
+              sourceColumn: z.literal('source_id'),
+              revisionColumn: z.literal('revision'),
+              sources: z
+                .array(z.string())
+                .refine(
+                  (values) =>
+                    values.length === OBSERVATION_SOURCE_REVISION.sources.length &&
+                    values.every(
+                      (source, index) => source === OBSERVATION_SOURCE_REVISION.sources[index],
+                    ),
+                )
+                .transform(() => OBSERVATION_SOURCE_REVISION.sources),
+            })
+            .strict()
+            .optional(),
           nativeProjection: z
             .object({
               kind: z.literal('retained-output-revision'),

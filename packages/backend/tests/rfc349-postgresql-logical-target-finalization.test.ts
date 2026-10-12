@@ -22,6 +22,7 @@ import {
   buildPostgresqlSchemaPlan,
   type PostgresqlSchemaPlan,
 } from '@/platform/persistence/postgresqlSchema'
+import { OBSERVATION_SOURCE_REVISION } from '@/platform/persistence/observationSourceRevisionSchema'
 
 const CONTRACT_DIGEST = `sha256:${'a'.repeat(64)}`
 const PLAN_DIGEST = `sha256:${'b'.repeat(64)}`
@@ -189,11 +190,49 @@ const EXPECTED = [
 ]
 
 describe('RFC-349 PostgreSQL logical target finalization', () => {
+  test('logical copy keeps source revisions empty for exact copied values while preserving ordinary metadata', async () => {
+    const fake = fixture({ rowCount: 0, tableNames: [] })
+    const sourceInitializer = buildPostgresqlSchemaPlan().statements.find(
+      (statement) => statement.logicalId === 'observation_source_revisions:initial-revisions',
+    )!
+    expect(sourceInitializer.sql).toContain("('agents',gen_random_uuid()::text)")
+    expect(sourceInitializer.sql).toContain("('users',gen_random_uuid()::text)")
+    const ordinary = {
+      kind: 'metadata' as const,
+      logicalId: 'ordinary-copy-metadata',
+      sql: 'CREATE TABLE "agent_workflow_meta"."ordinary_copy_fixture" (id text)',
+    }
+    const table = { ...TABLE, sourceRevisionProjection: OBSERVATION_SOURCE_REVISION }
+    const target = await openPostgresqlLogicalTarget({
+      runtime: fake.runtime,
+      operationId: 'dbm_target_0001',
+      sourceGenerationId: 'dbg_source_0001',
+      contract: { ...CONTRACT, tables: [{ ...table, id: 'observation_source_revisions' }] },
+      plan: { ...PLAN, statements: [ordinary, sourceInitializer] },
+      verifyMigrationHistory: async () => undefined,
+    })
+    try {
+      await target.prepare(9)
+      expect(fake.statements).toContain(ordinary.sql)
+      expect(fake.statements).not.toContain(sourceInitializer.sql)
+      expect(
+        fake.statements.some((statement) =>
+          statement.startsWith('INSERT INTO "agent_workflow_meta"."logical_copy_operations"'),
+        ),
+      ).toBe(true)
+    } finally {
+      await target.close()
+    }
+  })
+
   test('retained revision native functions and triggers install after copied rows and constraints, before verified receipt', async () => {
     const copiedTables: string[] = []
     const fake = fixture({ rowCount: 2, tableNames: copiedTables })
     const native = buildPostgresqlSchemaPlan().statements.filter(
-      (statement) => statement.kind === 'function' || statement.kind === 'trigger',
+      (statement) =>
+        (statement.kind === 'function' || statement.kind === 'trigger') &&
+        !statement.logicalId.startsWith('observation_source_revisions:') &&
+        !statement.logicalId.includes(':observation-source:'),
     )
     expect(native.filter((statement) => statement.kind === 'function')).toHaveLength(3)
     expect(native.filter((statement) => statement.kind === 'trigger')).toHaveLength(12)

@@ -16,11 +16,21 @@ import {
   importHistoricalNativeFacts,
 } from '@/modules/run-observability/composition/historicalNativeFacts'
 import { completeObservationFileSpool } from '@/modules/run-observability/composition/completeObservationSpool'
+import {
+  completeCalculationSourceProof,
+  completeCalculationFactFileSpool,
+  importCompleteTaskCalculations,
+} from '@/modules/run-observability/composition/completeCalculations'
 import { createLogger } from '@/util/log'
+import { CompleteCalculationInvalid } from '@/modules/run-observability/public/participants'
 
 const log = createLogger('observation-native-facts')
 
-function originalBuild(binding: OriginalReportDatabaseBinding, appHome: string) {
+function originalBuild(
+  binding: OriginalReportDatabaseBinding,
+  appHome: string,
+  taskCalculations?: true,
+) {
   if (binding.provider === 'sqlite') {
     const filename = binding.db.$client.filename
     if (!filename || filename === ':memory:')
@@ -39,6 +49,7 @@ function originalBuild(binding: OriginalReportDatabaseBinding, appHome: string) 
             report,
             source: { kind: 'sqlite-file', filename, generationId: binding.generationId },
             ...(nativeProof ? { nativeProof } : {}),
+            ...(taskCalculations ? { taskCalculations } : {}),
           },
           signal,
         ),
@@ -67,6 +78,7 @@ function originalBuild(binding: OriginalReportDatabaseBinding, appHome: string) 
                   asOf: snapshot.asOf,
                 },
                 ...(nativeProof ? { nativeProof } : {}),
+                ...(taskCalculations ? { taskCalculations } : {}),
               },
               signal,
               snapshot,
@@ -84,6 +96,7 @@ export function observationReportBuild(
   binding: OriginalReportDatabaseBinding,
   appHome: string,
   writer?: ProviderNeutralDatabase,
+  options?: { readonly taskCalculations: true },
 ): {
   readonly heartbeatDuringRead: boolean
   readonly build: (
@@ -92,12 +105,13 @@ export function observationReportBuild(
   ) => Promise<CompleteObservationBuildResult>
   readonly close: () => Promise<void>
 } {
-  const original = originalBuild(binding, appHome),
+  const original = originalBuild(binding, appHome, options?.taskCalculations),
     observer: HistoricalNativeVersionObserver | undefined = writer
       ? createHistoricalNativeVersionObserver(process.env)
       : undefined,
     spool = completeObservationFileSpool(appHome),
     factSpool = historicalNativeFactFileSpool(appHome),
+    calculationSpool = completeCalculationFactFileSpool(appHome),
     active = new Set<Promise<CompleteObservationBuildResult>>()
   const build = async (report: CompleteObservationStoredReport, signal: AbortSignal) => {
     // A cache invalidation retries once in a new original application snapshot, never in old TEMP.
@@ -112,8 +126,15 @@ export function observationReportBuild(
         await observer?.close()
         continue
       }
-      if (result.nativeFacts) {
-        if (report.request.refreshKey.startsWith('load-performance-'))
+      if (result.nativeFacts || result.calculationFacts) {
+        const usedCache = result.nativeFacts?.usedCache || result.calculationFacts?.usedCache
+        if (result.calculationFacts && report.request.refreshKey.startsWith('load-performance-'))
+          log.info('original task calculation reuse', {
+            reportId: report.id,
+            pass: String(pass),
+            ...result.calculationFacts.statistics,
+          })
+        if (result.nativeFacts && report.request.refreshKey.startsWith('load-performance-'))
           log.info('original native numeric page reuse', {
             reportId: report.id,
             pass: String(pass),
@@ -121,19 +142,41 @@ export function observationReportBuild(
           })
         const after = await observer?.sample(),
           same = proof !== null && proof !== undefined && isDeepStrictEqual(proof, after)
-        if (result.nativeFacts.usedCache && !same) {
+        if (usedCache && !same) {
           await spool.remove(report.id, report.owner)
           continue
         }
         if (same && writer) {
           // Awaiting original.build has released SQLite and the outer PostgreSQL reservation.
-          await importHistoricalNativeFacts({
-            db: writer,
-            spool: factSpool,
-            manifest: result.nativeFacts.manifest,
-            signal,
-          })
-          if (result.nativeFacts.usedCache && !isDeepStrictEqual(proof, await observer?.sample())) {
+          if (result.nativeFacts)
+            await importHistoricalNativeFacts({
+              db: writer,
+              spool: factSpool,
+              manifest: result.nativeFacts.manifest,
+              signal,
+            })
+          if (
+            result.calculationFacts &&
+            isDeepStrictEqual(
+              result.calculationFacts.manifest.context.source,
+              await completeCalculationSourceProof(writer, report.generation),
+            )
+          )
+            try {
+              await importCompleteTaskCalculations({
+                db: writer,
+                spool: calculationSpool,
+                manifest: result.calculationFacts.manifest,
+                signal,
+              })
+            } catch (error) {
+              signal.throwIfAborted()
+              if (!(error instanceof CompleteCalculationInvalid) || pass !== 0) throw error
+              // Derived corruption gets the original one-time uncached rebuild, not empty statistics.
+              await spool.remove(report.id, report.owner)
+              continue
+            }
+          if (usedCache && !isDeepStrictEqual(proof, await observer?.sample())) {
             await spool.remove(report.id, report.owner)
             continue
           }

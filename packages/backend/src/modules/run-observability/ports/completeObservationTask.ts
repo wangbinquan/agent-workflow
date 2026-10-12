@@ -45,6 +45,8 @@ export interface CompleteObservationUnallocatedQuality {
   readonly visible: boolean
 }
 export interface CompleteObservationTaskInput {
+  /** A version-qualified numeric contribution; timing and trace remain current. */
+  readonly numericCache?: CompleteObservationTaskNumericCache
   /** Full original trace evidence is retained for a requested Task, separately from display pages. */
   readonly trace?: boolean
   /** Already frozen native versions from the same report snapshot. */
@@ -114,4 +116,15 @@ export interface CompleteObservationTaskBuild {
     readonly receipt: CompleteSourceReceipt | null
     readonly projection: CompleteSpanProjection
   }
+}
+
+export interface CompleteObservationTaskNumeric extends Omit<
+  CompleteObservationTaskBuild,
+  'summary' | 'trace'
+> {
+  readonly summary: Omit<CompleteObservationTask, 'timing'>
+}
+export interface CompleteObservationTaskNumericCache {
+  read(input: CompleteObservationTaskInput): Promise<CompleteObservationTaskNumeric | null>
+  retain(input: CompleteObservationTaskInput, build: CompleteObservationTaskNumeric): Promise<void>
 }

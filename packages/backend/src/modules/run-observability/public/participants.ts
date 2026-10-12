@@ -78,7 +78,12 @@ export type {
   CompleteObservationStoredReport,
 } from '../ports/completeObservationReport'
 export type { HistoricalNativeFactManifest } from '../ports/historicalNativeFacts'
+export type {
+  CompleteCalculationFactManifest,
+  CompleteCalculationSourceProof,
+} from '../ports/completeCalculationFacts'
 export { HistoricalNativeFactInvalidation } from '../domain/historicalNativeFacts'
+export { CompleteCalculationInvalid } from '../domain/completeCalculationFacts'
 
 /** Execution supplies frozen facts; bootstrap selects the accounting authority. */
 export type ObservationInvocationStart = Omit<AcceptObservationInvocation, 'authority'> & {

@@ -9,6 +9,7 @@ import {
 import type {
   CompleteObservationTaskInput,
   CompleteObservationTaskBuild,
+  CompleteObservationTaskNumeric,
   CompleteInvocationWorking,
 } from '../ports/completeObservationTask'
 import {
@@ -31,9 +32,9 @@ import { projectCompleteObservationSpans } from './completeSpanProjection'
 import { buildCompleteObservationSpanDetails } from './completeObservationSpanDetails'
 
 /** Complete original Task population; no accepted invocation, attempt or numeric evidence is capped. */
-export async function buildCompleteObservationTask(
+export async function buildCompleteObservationTaskNumeric(
   input: CompleteObservationTaskInput,
-): Promise<CompleteObservationTaskBuild> {
+): Promise<CompleteObservationTaskNumeric> {
   const context = completeObservationEvidenceContext(input),
     { space } = context
   const attempts = await retainCompleteObservationAttempts(context)
@@ -130,30 +131,12 @@ export async function buildCompleteObservationTask(
     completeObservationGap(context.fold, 'source-projection-pending')
     sourceGaps.push('source-projection-pending')
   }
-  const timing = await buildCompleteObservationTiming({
-    task: input.task,
-    asOf: input.asOf,
-    rows: input.rows,
-    attemptsNamespace: space('attempts'),
-    namespace: space('timing'),
-    signal: input.signal,
-  })
-  const projection = input.trace ? await projectCompleteObservationSpans(input) : null
-  const trace = projection
-    ? {
-        ...(await buildCompleteObservationSpanDetails(input, projection)),
-        receipt: projection.receipt,
-        projection,
-      }
-    : undefined
   return {
-    ...(trace ? { trace } : {}),
     sourceGaps,
     summary: {
       task: input.task,
       metrics: completeObservationMetrics(context.fold),
       attemptCount: attempts.rows,
-      timing,
     },
     fold: context.fold,
     originalNumericRecords: String(BigInt(local.rows) + BigInt(platform.usageCount)),
@@ -169,5 +152,37 @@ export async function buildCompleteObservationTask(
     unallocatedQualityCount: selected.unallocatedQualityCount,
     nativeCapturesNamespace: space('captures'),
     platformCapturesNamespace: space('platform-captures'),
+  }
+}
+
+/** New reports always compute their current open intervals and original trace. */
+export async function buildCompleteObservationTask(
+  input: CompleteObservationTaskInput,
+): Promise<CompleteObservationTaskBuild> {
+  let numeric = (await input.numericCache?.read(input)) ?? null
+  if (numeric === null) {
+    numeric = await buildCompleteObservationTaskNumeric(input)
+    await input.numericCache?.retain(input, numeric)
+  }
+  const timing = await buildCompleteObservationTiming({
+    task: input.task,
+    asOf: input.asOf,
+    rows: input.rows,
+    attemptsNamespace: numeric.attemptsNamespace,
+    namespace: input.namespace + '/timing',
+    signal: input.signal,
+  })
+  const projection = input.trace ? await projectCompleteObservationSpans(input) : null
+  const trace = projection
+    ? {
+        ...(await buildCompleteObservationSpanDetails(input, projection)),
+        receipt: projection.receipt,
+        projection,
+      }
+    : undefined
+  return {
+    ...numeric,
+    ...(trace ? { trace } : {}),
+    summary: { ...numeric.summary, timing },
   }
 }

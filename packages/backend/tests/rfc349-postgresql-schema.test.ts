@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 235 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 243 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -22,22 +22,38 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(235)
+    expect(tables).toHaveLength(243)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       true,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(235)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(243)
+    // RFC-372 adds five collaboration companions after the preserved RFC-371 delta.
+    expect(
+      tables
+        .map((statement) => statement.logicalId)
+        .filter((id) => id.startsWith('clarify_mindmap_'))
+        .sort(),
+    ).toEqual([
+      'clarify_mindmap_command_receipts',
+      'clarify_mindmap_node_revisions',
+      'clarify_mindmap_nodes',
+      'clarify_mindmap_sessions',
+      'clarify_mindmap_snapshots',
+    ])
     expect(
       tables.some((table) => table.logicalId === 'task_execution_native_usage_store_bindings'),
     ).toBe(true)
     // RFC-371 adds sixteen original observation tables, two derived numeric page
-    // tables (0244 / PostgreSQL 0020), and one execution source table.
+    // tables (0244 / PostgreSQL 0020), three derived calculation/source-revision
+    // tables (0245 / PostgreSQL 0021), and one execution source table.
     expect(
       tables
         .map((statement) => statement.logicalId)
         .filter((id) => id.startsWith('observation_'))
         .sort(),
     ).toEqual([
+      'observation_calculation_rows',
+      'observation_calculation_versions',
       'observation_invocations',
       'observation_native_fact_pages',
       'observation_native_fact_roots',
@@ -51,6 +67,7 @@ describe('RFC-349 PostgreSQL schema projection', () => {
       'observation_report_retained_revisions',
       'observation_report_rows',
       'observation_reports',
+      'observation_source_revisions',
       'observation_usage_captures',
       'observation_usage_current',
       'observation_usage_events',

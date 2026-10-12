@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3668",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3669",
       "kind": "register-call",
-      "line": 3668,
+      "line": 3669,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3720",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3721",
       "kind": "global-setter",
-      "line": 3720,
+      "line": 3721,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -8042,7 +8042,7 @@
       ],
       "file": "packages/backend/src/modules/run-observability/application/completeObservationReportService.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:63",
+      "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:80",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8056,7 +8056,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:63",
+      "symbol": "$setTimeout:80",
       "targetContext": "run-observability"
     },
     {
@@ -13968,5 +13968,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3fc04a9fa75f8e128712fdf8158613d870057af0b34327f5d48a8314516e595f"
+  "sourceDigest": "sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095"
 }

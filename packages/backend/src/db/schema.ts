@@ -47,6 +47,7 @@ import {
 } from 'drizzle-orm/sqlite-core'
 import { providerAwareSqliteTable } from './providerSchema'
 import { createNativeUsageTables } from './observationNative'
+import { createClarifyMindmapTables } from './clarifyMindmap'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
@@ -61,6 +62,11 @@ export {
   observationReportRetainedRevisions,
 } from './observationReports'
 export { observationNativeFactRoots, observationNativeFactPages } from './observationNativeFacts'
+export { observationSourceRevisions } from './observationSourceRevisions'
+export {
+  observationCalculationVersions,
+  observationCalculationRows,
+} from './observationCalculations'
 
 // RFC-371: platform snapshot generations and their cursor are swapped atomically.
 export const observationPlatformSources = sqliteTable('observation_platform_sources', {
@@ -8598,3 +8604,11 @@ export const {
   nativeUsageEmissions: systemNativeUsageEmissions,
   nativeUsageRevisionHeads: systemNativeUsageRevisionHeads,
 } = systemAgentNativeUsage
+
+export const {
+  clarifyMindmapSessions,
+  clarifyMindmapNodes,
+  clarifyMindmapNodeRevisions,
+  clarifyMindmapCommandReceipts,
+  clarifyMindmapSnapshots,
+} = createClarifyMindmapTables(tasks, clarifyRounds)

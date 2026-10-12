@@ -5,6 +5,7 @@ import { completeObservationReportService } from '../application/completeObserva
 import { completeObservationReportCache } from '../infrastructure/completeObservationReportStore'
 import { completeObservationFileSpool } from '../infrastructure/completeObservationFileSpool'
 import { completeObservationActorScope } from '../infrastructure/completeObservationReportDocuments'
+import { completeReportPerformanceObserver } from '../infrastructure/completeReportPerformanceObserver'
 import type {
   CompleteObservationBuildResult,
   CompleteObservationSpool,
@@ -35,6 +36,8 @@ export function composeCompleteObservationReports(input: {
     newId: randomUUID,
     owner: randomUUID(),
     heartbeatDuringRead: input.heartbeatDuringRead,
+    observePhase: (report) =>
+      completeReportPerformanceObserver(report.id, report.request.refreshKey),
     build: (report, signal) => input.build(report, spool, signal),
     ...(input.closeBuild ? { closeBuild: input.closeBuild } : {}),
   })

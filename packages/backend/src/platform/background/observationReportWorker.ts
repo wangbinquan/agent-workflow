@@ -18,6 +18,11 @@ import {
   historicalNativeFactFileSpool,
 } from '@/modules/run-observability/composition/historicalNativeFacts'
 import { HistoricalNativeFactInvalidation } from '@/modules/run-observability/public/participants'
+import {
+  completeCalculationSourceProof,
+  completeTaskCalculationCollector,
+  completeCalculationFactFileSpool,
+} from '@/modules/run-observability/composition/completeCalculations'
 import { originalSqliteFileReportSnapshot } from '../persistence/reportSqliteSnapshot'
 import { reportReadonlyChannelClient } from '../persistence/reportReadonlyChannelClient'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -72,6 +77,10 @@ async function run(input: OriginalObservationWorkerStart) {
     const mcp: HistoricalMcpObservationQuery = createHistoricalMcpObservationFacts(
       snapshot.executor,
     )
+    const calculationSource =
+      input.nativeProof && input.taskCalculations
+        ? await completeCalculationSourceProof(snapshot.executor, snapshot.generationId)
+        : null
     const native: HistoricalNativeUsageQuery & { close(): void } =
       createReportHistoricalNativeUsageQuery(process.env)
     const facts = input.nativeProof
@@ -81,6 +90,24 @@ async function run(input: OriginalObservationWorkerStart) {
           rows: snapshot.workspace,
           namespace: 'report/' + input.report.id,
           proof: input.nativeProof,
+          signal: stop.signal,
+        })
+      : undefined
+    const calculationContext =
+      calculationSource && input.nativeProof
+        ? {
+            source: calculationSource,
+            native: input.nativeProof,
+            actorScope: input.report.actorScope,
+          }
+        : null
+    const calculations = calculationContext
+      ? completeTaskCalculationCollector({
+          db: snapshot.executor,
+          rows: snapshot.workspace,
+          namespace: 'report/' + input.report.id,
+          snapshotId: snapshot.snapshotId,
+          context: calculationContext,
           signal: stop.signal,
         })
       : undefined
@@ -103,6 +130,7 @@ async function run(input: OriginalObservationWorkerStart) {
           task: (id) => tasks.get(input.report.request.actor, id),
         },
         report: input.report,
+        ...(calculations ? { numericCache: calculations.cache } : {}),
         spool: completeObservationFileSpool(input.appHome),
         signal: stop.signal,
       })
@@ -126,11 +154,29 @@ async function run(input: OriginalObservationWorkerStart) {
           signal: stop.signal,
         })
       : undefined
+    const calculationManifest = calculations
+      ? await completeCalculationFactFileSpool(input.appHome).seal({
+          reportId: input.report.id,
+          owner: input.report.owner,
+          context: calculationContext!,
+          items: calculations.items(),
+          signal: stop.signal,
+        })
+      : undefined
     return {
       kind: 'result',
       result,
       ...(manifest
         ? { nativeFacts: { usedCache: facts!.usedCache, manifest, statistics: facts!.statistics } }
+        : {}),
+      ...(calculationManifest
+        ? {
+            calculationFacts: {
+              usedCache: calculations!.usedCache,
+              manifest: calculationManifest,
+              statistics: calculations!.statistics,
+            },
+          }
         : {}),
     }
   }

@@ -3437,6 +3437,7 @@ async function composeSqliteProviderSession(
     { provider: 'sqlite', db, generationId: databaseProvider.generation.payload.generationId },
     Paths.root,
     db,
+    { taskCalculations: true },
   )
   const observationReports = composeCompleteObservationReports({
     taskSource: createCompleteTaskObservationFacts,

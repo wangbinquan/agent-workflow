@@ -33,6 +33,10 @@ export function completeObservationReportService(input: {
     signal: AbortSignal,
   ) => Promise<CompleteObservationBuildResult>
   readonly closeBuild?: () => Promise<void>
+  /** Optional diagnostics observe the main job; they never replace original work. */
+  readonly observePhase?: (
+    report: CompleteObservationStoredReport,
+  ) => ((phase: string) => void) | undefined
 }) {
   let stop = new AbortController()
   const jobs = new Map<string, Promise<void>>()
@@ -53,6 +57,19 @@ export function completeObservationReportService(input: {
     return report
   }
   async function run(report: CompleteObservationStoredReport) {
+    let observer: ((phase: string) => void) | undefined
+    try {
+      observer = input.observePhase?.(report)
+    } catch {
+      // A diagnostic factory failure leaves the complete original report path intact.
+    }
+    const mark = (phase: string) => {
+      try {
+        observer?.(phase)
+      } catch {
+        // Only diagnostics are inside this catch; original operations remain below.
+      }
+    }
     const job = new AbortController()
     const abort = () => job.abort(stop.signal.reason)
     stop.signal.addEventListener('abort', abort, { once: true })
@@ -74,11 +91,14 @@ export function completeObservationReportService(input: {
       timer.unref?.()
     }
     try {
+      mark('main-job-started')
       stop.signal.throwIfAborted()
       await input.store.assertReadable(report.request.actor, report)
       await input.store.phase(report.id, report.owner, 'collecting')
+      mark('main-inputs-qualified')
       if (input.heartbeatDuringRead) heartbeat()
       const result = await input.build(report, job.signal)
+      mark('main-build-returned')
       keepAlive = false
       if (timer !== undefined) clearTimeout(timer)
       await pulse
@@ -91,17 +111,27 @@ export function completeObservationReportService(input: {
       if (!manifest) throw new Error('Original complete report manifest missing')
       // build has released the one original reader reservation before the first writer operation.
       await input.store.phase(report.id, report.owner, 'publishing')
+      mark('main-transfer-opened')
       let pages: CompleteObservationTransferPage[] = []
       for await (const page of input.spool.pages(manifest, job.signal)) {
         pages.push(page)
         if (pages.length === 8) {
+          mark('main-stage-started')
           await input.store.stageBatch(report.id, report.owner, pages)
+          mark('main-stage-finished')
           pages = []
         }
       }
-      if (pages.length) await input.store.stageBatch(report.id, report.owner, pages)
+      if (pages.length) {
+        mark('main-stage-started')
+        await input.store.stageBatch(report.id, report.owner, pages)
+        mark('main-stage-finished')
+      }
+      mark('main-transfer-staged')
       await input.store.assertReadable(report.request.actor, report)
+      mark('main-publish-qualified')
       await input.store.publish(report.id, report.owner, manifest)
+      mark('main-published')
     } catch (error) {
       await input.store.fail(
         report.id,
@@ -115,6 +145,7 @@ export function completeObservationReportService(input: {
       await pulse
       stop.signal.removeEventListener('abort', abort)
       await input.spool.remove(report.id, report.owner)
+      mark('main-job-finished')
     }
   }
   function schedule(report: CompleteObservationStoredReport) {

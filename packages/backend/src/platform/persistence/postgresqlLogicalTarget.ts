@@ -491,12 +491,20 @@ export async function openPostgresqlLogicalTarget(input: {
 
       await connection.unsafe('BEGIN')
       try {
+        const copiedRevisionInitializers = new Set(
+          input.contract.tables
+            .filter((table) => table.sourceRevisionProjection !== undefined)
+            .map((table) => table.id + ':initial-revisions'),
+        )
         for (const statement of input.plan.statements.filter(
           (statement) =>
-            statement.kind === 'bootstrap' ||
-            statement.kind === 'table' ||
-            statement.kind === 'metadata',
+            (statement.kind === 'bootstrap' ||
+              statement.kind === 'table' ||
+              statement.kind === 'metadata') &&
+            !copiedRevisionInitializers.has(statement.logicalId),
         )) {
+          // Logical copy supplies these complete source rows itself. Cold DDL
+          // initialization would replace their revisions before exact copy verification.
           await connection.unsafe(statement.sql)
         }
         await connection.unsafe(

@@ -131,6 +131,8 @@ export interface ProviderDatabaseHarness {
   readonly applicationBinding: ProviderApplicationBinding
   /** 仅测试夹具的 DDL：经本库 native/runtime 执行，不走业务客户端的 SQL 编译器。 */
   executeFixtureDdl(statement: string): Promise<void>
+  /** Restore this database through the same complete fixture path used before each test. */
+  restoreFixture(): Promise<void>
   /**
    * RFC-359 W6-T27 —— 录制其后**实际执行**的每条语句（含绑定参数与取回行数），两个引擎
    * 同一形状。SQLite 包 bun:sqlite 连接，PostgreSQL 包连接池，因此 drizzle 与裸 SQL
@@ -366,6 +368,7 @@ interface HarnessState {
   record?: () => StatementRecording
   explain?: (statement: RecordedStatement) => Promise<string>
   fixtureDdl?: (statement: string) => Promise<void>
+  restoreFixture?: () => Promise<void>
 }
 
 function databaseView(state: HarnessState): ProviderDatabaseHarness {
@@ -392,6 +395,7 @@ function databaseView(state: HarnessState): ProviderDatabaseHarness {
     recordStatements: () => current('record')(),
     explain: async (statement: RecordedStatement) => await current('explain')(statement),
     executeFixtureDdl: async (statement: string) => await current('fixtureDdl')(statement),
+    restoreFixture: async () => await current('restoreFixture')(),
   })
 }
 
@@ -414,6 +418,7 @@ function harnessView(states: readonly HarnessState[]): ProviderHarness {
     recordStatements: () => primary.recordStatements(),
     explain: async (statement: RecordedStatement) => await primary.explain(statement),
     executeFixtureDdl: async (statement: string) => await primary.executeFixtureDdl(statement),
+    restoreFixture: async () => await primary.restoreFixture(),
     database(index: number) {
       if (!Number.isSafeInteger(index) || index < 0 || index >= databases.length) {
         throw new RangeError(`ProviderHarness database index 必须在 0..${databases.length - 1}`)
@@ -430,6 +435,7 @@ function clearState(state: HarnessState): void {
   state.record = undefined
   state.explain = undefined
   state.fixtureDdl = undefined
+  state.restoreFixture = undefined
 }
 
 /** SQLite 的计划文本：`EXPLAIN QUERY PLAN` 的 detail 列逐行拼起来。 */
@@ -484,23 +490,30 @@ function registerSqlite(
 ): void {
   const states: HarnessState[] = Array.from({ length: databaseCount }, () => ({}))
   let restoreProvider: (() => void) | undefined
+  const restoreDatabase = (state: HarnessState) => {
+    const db = createInMemoryDb(
+      MIGRATIONS,
+      options.bootstrap === undefined ? {} : { bootstrap: options.bootstrap },
+    )
+    state.db = db
+    state.applicationBinding = Object.freeze({ provider: 'sqlite', db })
+    state.session = databaseSessionFor(db)
+    state.record = () => recordSqliteStatements((db as unknown as { $client: never }).$client)
+    state.explain = async (statement) => sqliteExplain(db, statement)
+    state.fixtureDdl = async (statement) => {
+      ;(db as unknown as { $client: { exec(statement: string): void } }).$client.exec(statement)
+    }
+    state.restoreFixture = async () => {
+      ;(db as unknown as { $client: { close(): void } }).$client.close()
+      restoreDatabase(state)
+    }
+  }
   beforeEach(() => {
     // 进程级 schema 投影是全局的：显式选 sqlite，用完还原，不依赖 describe 的先后顺序。
     restoreProvider = selectDatabaseSchemaProvider('sqlite')
     try {
       for (const state of states) {
-        const db = createInMemoryDb(
-          MIGRATIONS,
-          options.bootstrap === undefined ? {} : { bootstrap: options.bootstrap },
-        )
-        state.db = db
-        state.applicationBinding = Object.freeze({ provider: 'sqlite', db })
-        state.session = databaseSessionFor(db)
-        state.record = () => recordSqliteStatements((db as unknown as { $client: never }).$client)
-        state.explain = async (statement) => sqliteExplain(db, statement)
-        state.fixtureDdl = async (statement) => {
-          ;(db as unknown as { $client: { exec(statement: string): void } }).$client.exec(statement)
-        }
+        restoreDatabase(state)
       }
     } catch (error) {
       restoreProvider?.()
@@ -612,12 +625,20 @@ async function resetToSnapshot(
 ): Promise<void> {
   if (snapshot.tables.length === 0) return
   await truncateAll(raw, snapshot.tables)
-  for (const seed of snapshot.seeds) {
+  // Source triggers recreate revision rows while business seeds are restored.
+  // Restore the complete original revision snapshot last, preserving its values.
+  const revisionTable = getTableName(schema.observationSourceRevisions)
+  const seeds = [
+    ...snapshot.seeds.filter((seed) => seed.table !== revisionTable),
+    ...snapshot.seeds.filter((seed) => seed.table === revisionTable),
+  ]
+  for (const seed of seeds) {
     // 不走绑定参数：Bun.SQL 会把字符串参数按 json 类型二次序列化成 JSON 标量（"[...]"），
     // json_populate_recordset 收到的就不是数组。用带唯一标签的美元引号把数组文本内联进去。
     if (seed.rowsJson.includes('$aw_seed$')) {
       throw new Error(`seed rows for ${seed.table} contain the dollar-quote tag`)
     }
+    if (seed.table === revisionTable) await raw(`delete from "agent_workflow"."${revisionTable}"`)
     await raw(
       `insert into "agent_workflow"."${seed.table}" ` +
         `select * from json_populate_recordset(null::"agent_workflow"."${seed.table}", ` +
@@ -660,6 +681,9 @@ async function seedFromSqliteSnapshot(target: ProviderNeutralDatabase): Promise<
   }
   const restoreForWrite = selectDatabaseSchemaProvider('postgresql')
   try {
+    const revisionTable = getTableName(schema.observationSourceRevisions)
+    const revisionSeed = pending.find((entry) => entry.name === revisionTable)
+    if (revisionSeed) pending.splice(pending.indexOf(revisionSeed), 1)
     const seeded = new Set<string>()
     const names = new Set(pending.map((entry) => entry.name))
     while (pending.length > 0) {
@@ -681,6 +705,14 @@ async function seedFromSqliteSnapshot(target: ProviderNeutralDatabase): Promise<
           `seed tables form a foreign-key cycle: ${pending.map((entry) => entry.name).join(', ')}`,
         )
       }
+    }
+    if (revisionSeed) {
+      await target.delete(revisionSeed.table).run()
+      for (let offset = 0; offset < revisionSeed.rows.length; offset += 200)
+        await target
+          .insert(revisionSeed.table)
+          .values(revisionSeed.rows.slice(offset, offset + 200))
+          .run()
     }
   } finally {
     restoreForWrite()
@@ -1314,6 +1346,10 @@ function registerPostgresql(
             state.explain = async (statement) => await postgresqlExplain(query, statement)
             state.fixtureDdl = async (statement) => {
               await query(statement)
+            }
+            state.restoreFixture = async () => {
+              await resetToSnapshot(query, snapshot, options)
+              if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
             }
           }
         } catch (error) {

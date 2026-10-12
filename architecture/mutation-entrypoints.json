@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 2002,
+    "entries": 2005,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1053,6 +1053,29 @@
       "symbol": "runUserCommand",
       "targetContext": "identity-access",
       "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/db/clarifyMindmap.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/db/clarifyMindmap.ts#createClarifyMindmapTables",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/db/clarifyMindmap.ts#createClarifyMindmapTables",
+      "symbol": "createClarifyMindmapTables",
+      "targetContext": "platform",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -22226,6 +22249,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/domain/completeCalculationFacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/domain/completeCalculationFacts.ts#restoreTaskCalculation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/completeCalculationFacts.ts#restoreTaskCalculation",
+      "symbol": "restoreTaskCalculation",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -22245,6 +22293,31 @@
       "symbol": "addCompleteObservationAllocation",
       "targetContext": "run-observability",
       "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactReader.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactReader.ts#updateCalculationRowDigest",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactReader.ts#updateCalculationRowDigest",
+      "symbol": "updateCalculationRowDigest",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -22303,7 +22376,7 @@
       },
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPageInTransaction",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPages",
       "missingControls": [
         "audit",
         "authority",
@@ -22311,8 +22384,8 @@
         "event",
         "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPageInTransaction",
-      "symbol": "stageCompleteReportPageInTransaction",
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPages",
+      "symbol": "stageCompleteReportPages",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -22327,7 +22400,7 @@
       },
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPages",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPagesInTransaction",
       "missingControls": [
         "audit",
         "authority",
@@ -22335,8 +22408,8 @@
         "event",
         "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPages",
-      "symbol": "stageCompleteReportPages",
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPagesInTransaction",
+      "symbol": "stageCompleteReportPagesInTransaction",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -47913,7 +47986,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3fc04a9fa75f8e128712fdf8158613d870057af0b34327f5d48a8314516e595f",
+  "sourceDigest": "sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

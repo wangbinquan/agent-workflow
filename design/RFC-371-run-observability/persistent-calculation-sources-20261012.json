@@ -1,0 +1,810 @@
+{
+  "schemaVersion": 1,
+  "status": "Design inventory; no triggers, source epochs or cache enablement have been implemented.",
+  "generatedAtUTC": "2026-10-11T21:59:23.216538+00:00",
+  "generationMethod": "Static source text only; original schemas/factory suffixes and explicit public-reader dependency closure. No imported or executed product module.",
+  "providerMappingAnchor": "packages/backend/src/platform/persistence/schemaContract.ts:779",
+  "mappingPolicy": "Original KEEP logical relation name in both providers; implementation must assert each active complete relation against the current canonical contract before enabling reuse.",
+  "sourceCount": 55,
+  "sources": [
+    {
+      "sourceId": "agents",
+      "schemaSymbol": "agents",
+      "category": "valuation-name-actor",
+      "providerTables": {
+        "sqlite": "agents",
+        "postgresql": "agents"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "intent_sessions",
+      "schemaSymbol": "intentSessions",
+      "category": "historical-intent",
+      "providerTables": {
+        "sqlite": "intent_sessions",
+        "postgresql": "intent_sessions"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "intent_turn_events",
+      "schemaSymbol": "intentTurnEvents",
+      "category": "historical-intent",
+      "providerTables": {
+        "sqlite": "intent_turn_events",
+        "postgresql": "intent_turn_events"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "intent_turns",
+      "schemaSymbol": "intentTurns",
+      "category": "historical-intent",
+      "providerTables": {
+        "sqlite": "intent_turns",
+        "postgresql": "intent_turns"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "mcp_runtime_test_events",
+      "schemaSymbol": "mcpRuntimeTestEvents",
+      "category": "historical-mcp",
+      "providerTables": {
+        "sqlite": "mcp_runtime_test_events",
+        "postgresql": "mcp_runtime_test_events"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "mcp_runtime_test_sessions",
+      "schemaSymbol": "mcpRuntimeTestSessions",
+      "category": "historical-mcp",
+      "providerTables": {
+        "sqlite": "mcp_runtime_test_sessions",
+        "postgresql": "mcp_runtime_test_sessions"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "mcp_runtime_test_turns",
+      "schemaSymbol": "mcpRuntimeTestTurns",
+      "category": "historical-mcp",
+      "providerTables": {
+        "sqlite": "mcp_runtime_test_turns",
+        "postgresql": "mcp_runtime_test_turns"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "memory_distill_events",
+      "schemaSymbol": "memoryDistillEvents",
+      "category": "historical-memory",
+      "providerTables": {
+        "sqlite": "memory_distill_events",
+        "postgresql": "memory_distill_events"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "memory_distill_jobs",
+      "schemaSymbol": "memoryDistillJobs",
+      "category": "historical-memory",
+      "providerTables": {
+        "sqlite": "memory_distill_jobs",
+        "postgresql": "memory_distill_jobs"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "node_run_events",
+      "schemaSymbol": "nodeRunEvents",
+      "category": "task-and-visibility",
+      "providerTables": {
+        "sqlite": "node_run_events",
+        "postgresql": "node_run_events"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "node_runs",
+      "schemaSymbol": "nodeRuns",
+      "category": "task-and-visibility",
+      "providerTables": {
+        "sqlite": "node_runs",
+        "postgresql": "node_runs"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_invocations",
+      "schemaSymbol": "observationInvocations",
+      "category": "accepted-usage",
+      "providerTables": {
+        "sqlite": "observation_invocations",
+        "postgresql": "observation_invocations"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_platform_records",
+      "schemaSymbol": "observationPlatformRecords",
+      "category": "platform-source",
+      "providerTables": {
+        "sqlite": "observation_platform_records",
+        "postgresql": "observation_platform_records"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_platform_sources",
+      "schemaSymbol": "observationPlatformSources",
+      "category": "platform-source",
+      "providerTables": {
+        "sqlite": "observation_platform_sources",
+        "postgresql": "observation_platform_sources"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_price_heads",
+      "schemaSymbol": "observationPriceHeads",
+      "category": "valuation-name-actor",
+      "providerTables": {
+        "sqlite": "observation_price_heads",
+        "postgresql": "observation_price_heads"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_price_versions",
+      "schemaSymbol": "observationPriceVersions",
+      "category": "valuation-name-actor",
+      "providerTables": {
+        "sqlite": "observation_price_versions",
+        "postgresql": "observation_price_versions"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_usage_captures",
+      "schemaSymbol": "observationUsageCaptures",
+      "category": "accepted-usage",
+      "providerTables": {
+        "sqlite": "observation_usage_captures",
+        "postgresql": "observation_usage_captures"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_usage_current",
+      "schemaSymbol": "observationUsageCurrent",
+      "category": "accepted-usage",
+      "providerTables": {
+        "sqlite": "observation_usage_current",
+        "postgresql": "observation_usage_current"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_usage_events",
+      "schemaSymbol": "observationUsageEvents",
+      "category": "accepted-usage",
+      "providerTables": {
+        "sqlite": "observation_usage_events",
+        "postgresql": "observation_usage_events"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_usage_native_records",
+      "schemaSymbol": "observationUsageNativeRecords",
+      "category": "accepted-usage",
+      "providerTables": {
+        "sqlite": "observation_usage_native_records",
+        "postgresql": "observation_usage_native_records"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "observation_usage_sources",
+      "schemaSymbol": "observationUsageSources",
+      "category": "accepted-usage",
+      "providerTables": {
+        "sqlite": "observation_usage_sources",
+        "postgresql": "observation_usage_sources"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "system_agent_native_usage_emissions",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageEmissions",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_emissions",
+        "postgresql": "system_agent_native_usage_emissions"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_pass_heads",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsagePassHeads",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_pass_heads",
+        "postgresql": "system_agent_native_usage_pass_heads"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_pass_pages",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsagePassPages",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_pass_pages",
+        "postgresql": "system_agent_native_usage_pass_pages"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_passes",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsagePasses",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_passes",
+        "postgresql": "system_agent_native_usage_passes"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_preparations",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsagePreparations",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_preparations",
+        "postgresql": "system_agent_native_usage_preparations"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_revision_heads",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageRevisionHeads",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_revision_heads",
+        "postgresql": "system_agent_native_usage_revision_heads"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_root_heads",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageRootHeads",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_root_heads",
+        "postgresql": "system_agent_native_usage_root_heads"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_root_results",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageRootResults",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_root_results",
+        "postgresql": "system_agent_native_usage_root_results"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_root_sets",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageRootSets",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_root_sets",
+        "postgresql": "system_agent_native_usage_root_sets"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_root_transitions",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageRootTransitions",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_root_transitions",
+        "postgresql": "system_agent_native_usage_root_transitions"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_session_parents",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageSessionParents",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_session_parents",
+        "postgresql": "system_agent_native_usage_session_parents"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_step_members",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageStepMembers",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_step_members",
+        "postgresql": "system_agent_native_usage_step_members"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_native_usage_store_bindings",
+      "schemaSymbol": "systemAgentNativeUsage.nativeUsageStoreBindings",
+      "category": "original-native-system",
+      "providerTables": {
+        "sqlite": "system_agent_native_usage_store_bindings",
+        "postgresql": "system_agent_native_usage_store_bindings"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "system_agent_observation_groups",
+      "schemaSymbol": "systemAgentObservationGroups",
+      "category": "system-owner",
+      "providerTables": {
+        "sqlite": "system_agent_observation_groups",
+        "postgresql": "system_agent_observation_groups"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "system_agent_observation_owners",
+      "schemaSymbol": "systemAgentObservationOwners",
+      "category": "system-owner",
+      "providerTables": {
+        "sqlite": "system_agent_observation_owners",
+        "postgresql": "system_agent_observation_owners"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "system_agent_observation_sources",
+      "schemaSymbol": "systemAgentObservationSources",
+      "category": "system-owner",
+      "providerTables": {
+        "sqlite": "system_agent_observation_sources",
+        "postgresql": "system_agent_observation_sources"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "task_collaborators",
+      "schemaSymbol": "taskCollaborators",
+      "category": "task-and-visibility",
+      "providerTables": {
+        "sqlite": "task_collaborators",
+        "postgresql": "task_collaborators"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "task_execution_native_usage_emissions",
+      "schemaSymbol": "nativeUsageEmissions",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_emissions",
+        "postgresql": "task_execution_native_usage_emissions"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_pass_heads",
+      "schemaSymbol": "nativeUsagePassHeads",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_pass_heads",
+        "postgresql": "task_execution_native_usage_pass_heads"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_pass_pages",
+      "schemaSymbol": "nativeUsagePassPages",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_pass_pages",
+        "postgresql": "task_execution_native_usage_pass_pages"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_passes",
+      "schemaSymbol": "nativeUsagePasses",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_passes",
+        "postgresql": "task_execution_native_usage_passes"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_preparations",
+      "schemaSymbol": "nativeUsagePreparations",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_preparations",
+        "postgresql": "task_execution_native_usage_preparations"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_revision_heads",
+      "schemaSymbol": "nativeUsageRevisionHeads",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_revision_heads",
+        "postgresql": "task_execution_native_usage_revision_heads"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_root_heads",
+      "schemaSymbol": "nativeUsageRootHeads",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_root_heads",
+        "postgresql": "task_execution_native_usage_root_heads"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_root_results",
+      "schemaSymbol": "nativeUsageRootResults",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_root_results",
+        "postgresql": "task_execution_native_usage_root_results"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_root_sets",
+      "schemaSymbol": "nativeUsageRootSets",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_root_sets",
+        "postgresql": "task_execution_native_usage_root_sets"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_root_transitions",
+      "schemaSymbol": "nativeUsageRootTransitions",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_root_transitions",
+        "postgresql": "task_execution_native_usage_root_transitions"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_session_parents",
+      "schemaSymbol": "nativeUsageSessionParents",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_session_parents",
+        "postgresql": "task_execution_native_usage_session_parents"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_step_members",
+      "schemaSymbol": "nativeUsageStepMembers",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_step_members",
+        "postgresql": "task_execution_native_usage_step_members"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_native_usage_store_bindings",
+      "schemaSymbol": "nativeUsageStoreBindings",
+      "category": "original-native-task",
+      "providerTables": {
+        "sqlite": "task_execution_native_usage_store_bindings",
+        "postgresql": "task_execution_native_usage_store_bindings"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original owner transaction; whole native coverage and ancestry dependency retained."
+    },
+    {
+      "sourceId": "task_execution_observation_sources",
+      "schemaSymbol": "taskExecutionObservationSources",
+      "category": "task-and-visibility",
+      "providerTables": {
+        "sqlite": "task_execution_observation_sources",
+        "postgresql": "task_execution_observation_sources"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "task_repos",
+      "schemaSymbol": "taskRepos",
+      "category": "task-and-visibility",
+      "providerTables": {
+        "sqlite": "task_repos",
+        "postgresql": "task_repos"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "tasks",
+      "schemaSymbol": "tasks",
+      "category": "task-and-visibility",
+      "providerTables": {
+        "sqlite": "tasks",
+        "postgresql": "tasks"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    },
+    {
+      "sourceId": "users",
+      "schemaSymbol": "users",
+      "category": "valuation-name-actor",
+      "providerTables": {
+        "sqlite": "users",
+        "postgresql": "users"
+      },
+      "invalidation": "Every actual INSERT/UPDATE/DELETE in the original transaction; conservative related-ledger relations also included."
+    }
+  ],
+  "sourceFileBindings": [
+    {
+      "path": "packages/backend/src/db/observationNative.ts",
+      "bytes": 8597,
+      "sha256": "1a5eb0eedaed753676a6cf01b485d79663a3a78731b6ab9f70396d1834a491a0"
+    },
+    {
+      "path": "packages/backend/src/db/observationSystem.ts",
+      "bytes": 2613,
+      "sha256": "ee8fd578193ee78b49d0808e9f21bde8de30b6e7517a9192925e58b5f44c9ee5"
+    },
+    {
+      "path": "packages/backend/src/db/query.ts",
+      "bytes": 7418,
+      "sha256": "e88b6b3ea08ef58b05b2d6f1cf9fa16b4493bc10d43f036f02fd5fdd17d9e183"
+    },
+    {
+      "path": "packages/backend/src/db/schema.ts",
+      "bytes": 388708,
+      "sha256": "7fe6599654f8fe086a085baee545e89d3b10b2930699d0a2b9be10c06c913419"
+    },
+    {
+      "path": "packages/backend/src/modules/intent/infrastructure/historicalIntentObservationFacts.ts",
+      "bytes": 4807,
+      "sha256": "4492e83e2b85989b597d3da3cab0d2f262e526671e62cba8f0506b19dd5007f3"
+    },
+    {
+      "path": "packages/backend/src/modules/memory/infrastructure/historicalMemoryObservationFacts.ts",
+      "bytes": 4161,
+      "sha256": "9642597ac1ff22f2ba599f38e40571f999c90134fda9db64128b77a5ed59b0dd"
+    },
+    {
+      "path": "packages/backend/src/modules/resource-catalog/infrastructure/historicalMcpObservationFacts.ts",
+      "bytes": 4626,
+      "sha256": "322c7a9809c3b8d3abd32daac82738cc4df0acd6931ba1a25aa14d70ee092a8a"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/completeObservationAgentNames.ts",
+      "bytes": 1372,
+      "sha256": "ca7fc18218ac9fd0712999f5a1e3cc4ba19c09bbc0d889ac1a5d7bbef05c7650"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportAdmission.ts",
+      "bytes": 7336,
+      "sha256": "e9b6c96be4287256748fba6d9a7e8ed65f0642e70a4978e873e1ac7cd29dc660"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/completeObservationSources.ts",
+      "bytes": 5635,
+      "sha256": "2f1cd2ebffc6cdd14f9fe67ed30f1ae3bfd8176d2c9824a1855e9be75c10e1ff"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
+      "bytes": 4657,
+      "sha256": "061aca8f50f36e6b6b9d6f4382f256647a19b894db5dbed92db679d47fbe23e3"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts",
+      "bytes": 7402,
+      "sha256": "90e801bc5903979911a84013535eb73df9d0af2928d3a5d6b68312faae071bde"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts",
+      "bytes": 4656,
+      "sha256": "1261d2651615eae1b32cc27803b26dc47754c19010c8dbede72275f14dacabcd"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts",
+      "bytes": 11369,
+      "sha256": "76a456df450efd576c2f70d3aa2ddf28cd947906f01f198fdabdf5bb96c5e457"
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts",
+      "bytes": 10263,
+      "sha256": "9033b0eeb7fc9820218553fb6d01c710e678cc56ecb29cf43cb3f7376c6af5f1"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/completeTaskObservationFacts.ts",
+      "bytes": 10356,
+      "sha256": "d1fea076eb9ad0c3d251592137f0f37d5b42e31e7fe2905de92f0675b2a94a0f"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/historicalTaskObservationFacts.ts",
+      "bytes": 5888,
+      "sha256": "84b19f5a71c6c062535f8b4906b0de1944316d485bb6f27a8508b47280a32c8b"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageEvidenceStorage.ts",
+      "bytes": 1419,
+      "sha256": "f5d20eca3de435be758c198ab7390a81d2eaa5bda57b860f63e0bf2d0cd07e3c"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageNumericCoverage.ts",
+      "bytes": 6276,
+      "sha256": "0f75a1149253b3ce7f3098d63594482c27e217d9e23fe6815efb48a24c844413"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts",
+      "bytes": 10793,
+      "sha256": "fecb73c87caf2dde6f0df51838961a72e35279165a280f834285b57703aa6239"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageScopeReference.ts",
+      "bytes": 3511,
+      "sha256": "c44bacf753b284994f155e60d531c077afb21467e6d5d802a2a29d6798539e54"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "bytes": 2591,
+      "sha256": "5bdebaa9a71fb44738fa6db49a2b7af831f022ddd93a2797b1cdd283b41af8c8"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/observationNativeQualification.ts",
+      "bytes": 8328,
+      "sha256": "703ef200bcdffde42e0b6bbf239df2015e95f064471040703497d5406f438cdf"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/observationNativeRootQualification.ts",
+      "bytes": 9563,
+      "sha256": "6a0a3391f2b18b5c7d6887f3bc03ad16ae2a1fb6cb3a033aafa9f4279e78e35e"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts",
+      "bytes": 8710,
+      "sha256": "91bfc215cd4a20f2655319093f832aabb3f2263d6758f76184a674a42239262e"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/observationNativeSources.ts",
+      "bytes": 2806,
+      "sha256": "497f6bbb4b8d03e9207216d7e488997182bece031fab98dffc672703447de50f"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/observationSpanSources.ts",
+      "bytes": 6209,
+      "sha256": "cee863d2dc39f47fa67b93502cb3443fdcdbc5feac118aaea659ce9d69f16070"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/systemObservationFacts.ts",
+      "bytes": 5318,
+      "sha256": "b9b11f9b83324f45a8c7c6ce356bedf3312e168739007877d527dc77d21b7384"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts",
+      "bytes": 8959,
+      "sha256": "24a8c63e1bb114465e4635882fe2ae0362af695482100565f6d5a5ab1d195e16"
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskObservationKinds.ts",
+      "bytes": 2778,
+      "sha256": "a6acb0aad814c0537f0f52da5641accd6aa9f4e03a69e701904193a76904632d"
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "bytes": 30172,
+      "sha256": "6bf09d337c3133bfd61241f4f4fdf5990bbc96176b8978eda297a1b1e8fecbed"
+    }
+  ],
+  "conservativeDependencies": [
+    "observation_usage_sources",
+    "observation_usage_events",
+    "observation_usage_native_records"
+  ],
+  "excludedDerivedOutputs": [
+    "observation_reports and its retained output relations",
+    "observation_native_facts derived relations",
+    "the new source revision/preparation/contribution/current-head cache relations"
+  ],
+  "externalSources": "CrewStation/other public source with no complete transaction revision contract must be confirmed through its original uncapped EOF and complete content fingerprint. No invented watermark.",
+  "boundary": "This inventory identifies application relation dependency closure. Cache enablement also requires current native physical proof, actor qualification, complete staged EOF/identity, algorithm versions and the original scope/coverage semantics.",
+  "sourceCategories": {
+    "valuation-name-actor": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts",
+        "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
+        "packages/backend/src/modules/run-observability/infrastructure/completeObservationAgentNames.ts",
+        "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportAdmission.ts"
+      ]
+    },
+    "historical-intent": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/intent/infrastructure/historicalIntentObservationFacts.ts"
+      ]
+    },
+    "historical-mcp": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/resource-catalog/infrastructure/historicalMcpObservationFacts.ts"
+      ]
+    },
+    "historical-memory": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/memory/infrastructure/historicalMemoryObservationFacts.ts"
+      ]
+    },
+    "task-and-visibility": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/task-execution/infrastructure/completeTaskObservationFacts.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/taskObservationKinds.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/historicalTaskObservationFacts.ts",
+        "packages/backend/src/db/query.ts"
+      ]
+    },
+    "accepted-usage": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/run-observability/infrastructure/completeObservationSources.ts",
+        "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
+        "packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts",
+        "packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts"
+      ]
+    },
+    "platform-source": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts",
+        "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportAdmission.ts"
+      ]
+    },
+    "original-native-system": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageEvidenceStorage.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationNativeQualification.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageScopeReference.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationNativeRootQualification.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageNumericCoverage.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationSpanSources.ts"
+      ]
+    },
+    "system-owner": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/task-execution/infrastructure/systemObservationFacts.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationNativeSources.ts"
+      ]
+    },
+    "original-native-task": {
+      "readChainAnchors": [
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageEvidenceStorage.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationNativeQualification.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageScopeReference.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationNativeRootQualification.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/nativeUsageNumericCoverage.ts",
+        "packages/backend/src/modules/task-execution/infrastructure/observationSpanSources.ts"
+      ]
+    }
+  }
+}

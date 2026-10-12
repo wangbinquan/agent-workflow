@@ -2324,6 +2324,7 @@ export async function composePostgresqlApplication(
     { provider: 'postgresql', runtime: input.provider.runtime },
     input.appHome,
     input.db,
+    { taskCalculations: true },
   )
   const observationReports = composeCompleteObservationReports({
     taskSource: createCompleteTaskObservationFacts,

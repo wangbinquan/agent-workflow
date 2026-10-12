@@ -19,8 +19,10 @@ import {
   concreteDatabaseTable,
   renderPostgresqlDatabaseDefault,
   retainedOutputRevisionFor,
+  observationSourceRevisionFor,
 } from '@/db/providerSchema'
 import type { RetainedOutputRevisionContract } from './retainedOutputRevisionSchema'
+import type { ObservationSourceRevisionContract } from './observationSourceRevisionSchema'
 
 export const RFC349_SCHEMA_CONTRACT_VERSION = 2
 
@@ -33,6 +35,11 @@ export const RFC349_SOURCE_TABLES = [
   'automation_policy_revisions',
   'cached_repos',
   'capability_templates',
+  'clarify_mindmap_command_receipts',
+  'clarify_mindmap_node_revisions',
+  'clarify_mindmap_nodes',
+  'clarify_mindmap_sessions',
+  'clarify_mindmap_snapshots',
   'clarify_rounds',
   'code_ai_attempts',
   'code_artifacts',
@@ -149,6 +156,8 @@ export const RFC349_SOURCE_TABLES = [
   'node_run_events',
   'node_run_outputs',
   'node_runs',
+  'observation_calculation_rows',
+  'observation_calculation_versions',
   'observation_invocations',
   'observation_platform_records',
   'observation_platform_sources',
@@ -162,6 +171,7 @@ export const RFC349_SOURCE_TABLES = [
   'observation_report_retained_revisions',
   'observation_report_rows',
   'observation_reports',
+  'observation_source_revisions',
   'observation_usage_sources',
   'observation_usage_captures',
   'observation_usage_native_records',
@@ -390,6 +400,7 @@ export interface ArchiveContract {
 
 export interface LogicalTableContract {
   readonly nativeProjection?: RetainedOutputRevisionContract
+  readonly sourceRevisionProjection?: ObservationSourceRevisionContract
   readonly id: string
   readonly schemaSymbol: string
   readonly ownerContext: OwnerContext
@@ -483,6 +494,7 @@ function ownerFor(table: string): OwnerContext {
   if (
     table.startsWith('collaboration_') ||
     table.startsWith('review_') ||
+    table.startsWith('clarify_mindmap_') ||
     table === 'clarify_rounds' ||
     table === 'task_collaborators' ||
     table === 'task_feedback' ||
@@ -734,6 +746,7 @@ export function buildLogicalSchemaContract(): LogicalSchemaContract {
     if (!entry) throw new Error(`RFC-349 schema contract missing ${name}`)
     const { config } = entry
     const nativeProjection = retainedOutputRevisionFor(entry.table)
+    const sourceRevisionProjection = observationSourceRevisionFor(entry.table)
     const ownerContext = ownerFor(name)
     const disposition = dispositionFor(name)
     const columnPrimary = config.columns
@@ -770,6 +783,7 @@ export function buildLogicalSchemaContract(): LogicalSchemaContract {
 
     const result: LogicalTableContract = {
       ...(nativeProjection === undefined ? {} : { nativeProjection }),
+      ...(sourceRevisionProjection === undefined ? {} : { sourceRevisionProjection }),
       id: name,
       schemaSymbol: entry.symbol,
       ownerContext,
