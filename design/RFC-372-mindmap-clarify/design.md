@@ -30,6 +30,8 @@
 
 追问不新建业务运行，不改变 Task 状态，不把新问题自动视为已回答或已确认。失败与取消直接留在工作区处理，不引入独立提案、采纳、消费生命周期。
 
+生成端口归 collaboration 内部所有；task-execution 的原生执行适配器声明自己需要的运行 ID、任务 ID、请求 ID、提示词和取消信号。两个 daemon bootstrap 通过原路由装配入口检查类型兼容并注入适配器，task-execution 不反向导入 collaboration 的端口，内部端口也不额外公开。此边界只调整类型依赖，生成、取消和任务续跑的运行时代码保持。
+
 ## 4. 单一工作区
 
 原反问详情页面继续拥有 answers、draft durability controller、WS invalidation 和提交 mutation。脑图组件只接收 questions、answers、locked IDs、onChange/onConfirm/onFollowup 等回调；不维护第二份答案或持久化系统。

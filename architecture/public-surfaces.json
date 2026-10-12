@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1375,
+    "consumers": 1374,
     "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
-    "methods": 1778,
+    "methods": 1777,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 30450,
-    "symbols": 1283
+    "recursiveFields": 30444,
+    "symbols": 1282
   },
   "entries": [
     {
@@ -4689,96 +4689,6 @@
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
         "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:e31ff88398999c841c52"
-      ],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [
-            "import:e31ff88398999c841c52"
-          ],
-          "fieldPath": "$method:generate.$parameter:input.askingNodeRunId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:e31ff88398999c841c52"
-          ],
-          "fieldPath": "$method:generate.$parameter:input.prompt",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:e31ff88398999c841c52"
-          ],
-          "fieldPath": "$method:generate.$parameter:input.requestId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:e31ff88398999c841c52"
-          ],
-          "fieldPath": "$method:generate.$parameter:input.signal",
-          "type": "AbortSignal"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:e31ff88398999c841c52"
-          ],
-          "fieldPath": "$method:generate.$parameter:input.taskId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:generate.$return",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "id": "public:collaboration:participants:ClarifyFollowupGenerator",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:e31ff88398999c841c52"
-          ],
-          "name": "generate",
-          "signatureDigest": "sha256:6709bcbfa032a6e0b8b519f604be4cb7b52aa0a6a49c1f59ecb0fdeb9e947810"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "task-execution",
-          "edgeId": "import:e31ff88398999c841c52",
-          "file": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:e78a707044956ba7d61e1447df4748abfe2d48982de91b72978887a2033e60c7",
-      "status": "target-context-current-surface",
-      "symbol": "ClarifyFollowupGenerator",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "AbortSignal"
       ],
       "version": 1
     },
@@ -234172,7 +234082,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8",
+  "sourceDigest": "sha256:28a0236e39b07c56090d6ad6a8c864282d789faf7e59fabb215fd7db343c3b24",
   "targetContexts": [
     "collaboration",
     "development-automation",

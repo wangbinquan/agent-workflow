@@ -2,7 +2,6 @@ import { eq } from 'drizzle-orm'
 import { DEFAULT_CONFIG_DIR_PROFILE, RuntimeStatusEntrySchema } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns } from '@/db/schema'
-import type { ClarifyFollowupGenerator } from '@/modules/collaboration/public/participants'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import { createLogger } from '@/util/log'
 import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
@@ -14,13 +13,21 @@ export function composeClarifyFollowupGenerator(input: {
   appHome: () => string
   registry: RuntimeExecutionQueries
   observations?: () => SystemAgentObservationFactory
-}): ClarifyFollowupGenerator {
+}) {
   const binding = composeLocalSystemAgentRunFamily({
     appHome: input.appHome,
     observations: input.observations,
   })
   return {
-    async generate(request) {
+    // Bootstrap checks compatibility with the collaboration-owned port; the
+    // execution adapter keeps its own input instead of importing its consumer.
+    async generate(request: {
+      askingNodeRunId: string
+      taskId: string
+      requestId: string
+      prompt: string
+      signal: AbortSignal
+    }) {
       const row = (
         await input.db
           .select({

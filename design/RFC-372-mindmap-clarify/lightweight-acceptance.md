@@ -121,3 +121,13 @@
 `c166c340a` 的 [Windows 浏览器 shard 3/4](https://github.com/wangbinquan/agent-workflow/actions/runs/38259719292/job/114849550722) 实际执行新增完整任务，37.4s 通过；同分片原工作区 13.4s、大图 2.2s 通过。整个分片因其他用例失败，以上仅为具体测试的通过证据。日志保存在 `/private/tmp/rfc372-ci-final/c166-job-114849550722.log`。
 
 后继路径修复 `fdbaec7b68251a4e1dd8d8d5b4a6c3ffd8200d01` 已推送并核对远端同步；[对应 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38261966315) 尚未给出最终结果。继续归因发现双 provider 清单遗漏了本次实际备份回归文件：在 LogicalSource 的原有条目中补充 `rfc372-task-schema.test.ts`，与自动扫描出的事实一致，条目总数、配对范围和守卫实现保持。定向原守卫 12 pass / 27 expect，format/lint 通过，证据 `/private/tmp/rfc372-ci-last/provider-pair-final.log`。本次没有生产源码变化，复用完整任务及原生流程验证。
+
+## 最后提交发布与晚完成分片的归因
+
+清单修正 `ad2baacf9c84b791773ae5974155a9d479e07a26` 已推送，随后 fetch 核对本地与远端 0/0、共享 index 为空；[精确 SHA CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38264192480) 正在执行。发布回执位于 `/private/tmp/rfc372-ci-pair/push.json`。未发送跨 session 信息。
+
+此前 `c166c340a` 的 [Linux 浏览器 shard 2/3](https://github.com/wangbinquan/agent-workflow/actions/runs/38259719292/job/114847624906) 新完整任务 40.9s、工作区 15.7s、大图 3.6s 均通过；分片因观测界面用例失败。晚完成的 [macOS 后端 shard 2/12](https://github.com/wangbinquan/agent-workflow/actions/runs/38259719292/job/114846823025) 和 Linux shard 26/32 另发现本会话遗漏：`clarifyFollowupGenerator.ts` 从 task-execution 反向导入 collaboration 的端口类型，触发原 offered DAG 守卫。
+
+修复移除该反向依赖，由执行适配器声明原五项输入，bootstrap 注入时继续经 collaboration 内部端口检查类型兼容；不再有外部消费者的 public 类型导出同时删除。两个受影响文件在相同 TypeScript 编译选项下输出的 JavaScript 逐字一致。原 DAG 守卫作为已抓住缺陷的回归继续保持全部判据，8 pass；公共消费者 6 pass、状态投影 3 pass、lint 通过。原高水位 39 pass / 1 fail，唯一差异是其他会话同期新增的 SQLite helper 登记（在制源码 345，当前提交候选基线 344），未移走或修改它来制造通过。后台类型检查仍有 13 条既有/并发来源错误，没有本次适配器和两个 bootstrap 的类型错误。证据：`/private/tmp/rfc372-closeout-20261012/architecture-fix.log`、`backend-types.log`、`type-only.log`。
+
+原候选 census 的 13 份输出同步更新；四个扫描规则保持，非本次在制文件不作为新提交源码。实测跨域边 7122→7121、兼容项 6231→6230、公共符号 1283→1282，其余账本、全部债务与 why 保持，不新增增长许可。此类型边界修正复用此前实际运行结果，最终仍核对后继精确 SHA CI。

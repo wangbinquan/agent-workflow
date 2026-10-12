@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:28a0236e39b07c56090d6ad6a8c864282d789faf7e59fabb215fd7db343c3b24`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 508 |
-| `architectureExceptions` | 6231 |
+| `architectureExceptions` | 6230 |
 | `backgroundJobs` | 385 |
-| `crossContextImports` | 7122 |
+| `crossContextImports` | 7121 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
 | `moduleSymbolOwners` | 28250 |
 | `mutationEntrypoints` | 2011 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1283 |
+| `publicSurfaces` | 1282 |
 | `transactionExternalEffects` | 284 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -213,7 +213,7 @@
 | offered-consumption | 381 |
 | infrastructure-external | 355 |
 | temporary-internal-debt | 112 |
-| off-dag-offered | 102 |
+| off-dag-offered | 101 |
 | required-implementation | 83 |
 | authority-type-only | 78 |
 | external-layer-debt | 8 |
@@ -226,7 +226,7 @@
 | legacy-outbound | 3975 |
 | legacy-inbound | 2026 |
 | temporary-internal-debt | 112 |
-| off-dag-offered | 102 |
+| off-dag-offered | 101 |
 | external-layer-debt | 8 |
 | no-circular | 6 |
 | no-util-to-upper | 2 |
@@ -239,7 +239,7 @@
 | W9-D | 1114 |
 | W4-E1 | 843 |
 | W5 | 203 |
-| W4 | 202 |
+| W4 | 201 |
 | W4-B | 187 |
 | W4-E8 | 175 |
 | W4-E9 | 83 |
@@ -257,7 +257,7 @@
 | --- | --- |
 | task-execution | 306 |
 | resource-catalog | 243 |
-| collaboration | 123 |
+| collaboration | 122 |
 | source-control | 104 |
 | system-operations | 89 |
 | runtime-management | 87 |
@@ -274,7 +274,7 @@
 | intent | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 143 / 1283）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 143 / 1282）
 
 | context | 数量 |
 | --- | --- |

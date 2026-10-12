@@ -1,6 +1,16 @@
+## 2026-10-12 RFC-372：最后登记修正已推送，消除追问适配器反向类型依赖
+
+`ad2baacf9c84b791773ae5974155a9d479e07a26` 已推送并核对远端 0/0；对应主 CI `38264192480` 正在执行。此前 `c166c340a` 的晚完成分片确认本会话追问适配器反向导入 collaboration 端口，触发原 offered DAG 守卫。现由适配器声明原五项输入、bootstrap 按 collaboration 内部端口检查兼容，删除无外部消费者的 public 类型导出；两个文件编译后的运行时 JavaScript 逐字相同，生成、取消及 Task 续跑保持。原 DAG 8 项、公共消费者 6 项、状态投影 3 项通过，lint 通过；原高水位 39 pass / 1 fail，唯一失败是并发 SQLite helper 清单在制品 345 与当前候选基线 344 的差异，不代改。后台类型检查仍有原有 13 条并发/既有来源错误，无本次适配器或 bootstrap 错误。按原规则生成 13 份候选元数据，跨域边、兼容项、公共符号各减一，无新增豁免或增长声明。补修正的发布与确切 CI 仍待验收；本地完整任务 done 和已固化 E2E 证据保持。
+
 ## 2026-10-12 RFC-372：Windows 完整任务 E2E 已通过，补齐备份验证清单
 
 `c166c340a` 的 Windows 浏览器 shard 3/4 已实际执行并通过新增完整任务（37.4s）、原脑图工作区（13.4s）及 5000 题大图（2.2s）；该分片仍因其他用例失败，不能报整分片通过。后继 `fdbaec7b6` 已推送、远端同步，修复文件 URL 跨平台读取；其 CI 尚在排队。继续核对旧 SHA 完成分片时确认本会话新增 `rfc372-task-schema.test.ts` 的双 provider 备份对拍漏登在 LogicalSource 的既有见证清单中，已补精确一项。原清单守卫 12 pass / 27 expect，format/lint 通过，不改条目数或判据，也无生产变化。并发观测统计、provider/WS/原启动源码断言等失败保留归属，未知的超时不擅自认领。RFC 的整体 CI 收口仍未完成。
+
+## 2026-10-12 RFC-370：SQLite 78 次实际回归通过，补单引擎清单遗漏
+
+本会话的 SQLite 直接受影响行数适配与十三个双工厂回归已随完整共享提交 `95ec4a8ee` 上库，后继 `c166c340a` 的 Ubuntu、macOS、默认 Windows各 26 次 pass，共 78 次；这不代签失败 job 或总 CI。原单引擎清单漏登新增 helper 的一处构造，macOS job `114846823077` 有精确失败差异，本会话补这一条及对应 344→345 高水位和一次性声明，原扫描／分类／债务／豁免与全部其它记录保持。无本机 AW 功能执行、新 census 或小批实现门；精确发布、紧邻声明退役及新 SHA 的完整 CI／Windows另验。
+
+当前主干 `fdbaec7b6` 的格式失败与后续 observationReports 接线导致的原根逆向失败按实际提交和依赖归因，保留完整日志，不接管其他会话实现或发跨 session 信息。后续 RFC 生产仍等总绿，完整 H7、A-G、各层 CS adapter、M0 首次部署与 M1～M4开放。详见[SQLite CI 修复记录](design/RFC-370-crewstation-hosted-deployment/sqlite-trigger-affected-rows-ci-repair.md)。以下并行记录完整保留。
 
 ## 2026-10-12 RFC-372：完整任务及固定 E2E 已推送 c166c340a
 

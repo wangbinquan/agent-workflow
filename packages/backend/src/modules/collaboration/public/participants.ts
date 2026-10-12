@@ -58,5 +58,3 @@ export type {
 export const createWorkgroupClarifyAskGate = createWorkgroupClarifyAskGateInternal
 // RFC-359 W4-D19c-tail：`countWorkgroupClarifyAsks` 的唯一生产消费者是 legacy 工作组引擎的转发层，
 // 随该岛一并退役；计数本身仍在 gate 内部使用，不再对外开口（删除优于留一个零消费者的公共符号）。
-
-export type { ClarifyFollowupGenerator } from '../application/ports/clarifyFollowup'

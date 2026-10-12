@@ -93537,23 +93537,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e31ff88398999c841c52",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toSymbol": "ClarifyFollowupGenerator",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
       "fromSymbol": "$file",
@@ -105929,9 +105912,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6231,
+    "architectureExceptions": 6230,
     "implementationSccs": 0,
-    "observedEdges": 7122,
+    "observedEdges": 7121,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -206757,22 +206740,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "id": "import:e31ff88398999c841c52",
-      "owner": "task-execution",
-      "removeAfterWave": "W4",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/collaboration/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "ClarifyFollowupGenerator",
-      "toContext": "collaboration",
-      "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
@@ -220783,7 +220750,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8",
+  "sourceDigest": "sha256:28a0236e39b07c56090d6ad6a8c864282d789faf7e59fabb215fd7db343c3b24",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
