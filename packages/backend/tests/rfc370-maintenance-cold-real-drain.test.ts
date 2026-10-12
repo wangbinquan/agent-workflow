@@ -81,7 +81,7 @@ describeEachProvider('RFC-370 cold maintenance actual Worker drain', (harness) =
         completedResolve = resolve
       },
     )
-    let failure: unknown
+    const failures: unknown[] = []
     try {
       await store.enqueue({
         id: runId,
@@ -181,20 +181,36 @@ describeEachProvider('RFC-370 cold maintenance actual Worker drain', (harness) =
       expect(workerCreations).toBe(1)
       expect(await store.read(nextRunId)).toMatchObject({ state: 'pending', attempt: 0 })
     } catch (error) {
-      failure = error
+      failures.push(error)
     } finally {
-      phases.release('init')
-      phases.release('collect')
-      phases.release('dispose')
-      await supervisor?.stop(1_000)
-      phases.close()
-      await database.dispose()
-      rmSync(appHome, { recursive: true, force: true })
+      for (const cleanup of [
+        () => phases.release('init'),
+        () => phases.release('collect'),
+        () => phases.release('dispose'),
+        () => supervisor?.stop(1_000),
+        () => phases.close(),
+        () => database.dispose(),
+        () => {
+          if (process.platform === 'win32') Bun.gc(true)
+          rmSync(appHome, { recursive: true, force: true })
+        },
+      ]) {
+        try {
+          await cleanup()
+        } catch (error) {
+          failures.push(error)
+        }
+      }
     }
-    if (failure !== undefined) {
+    if (failures.length > 0) {
       throw new Error(
-        `cold actual Worker drain failed: ${String(failure)}; events=${JSON.stringify(events)}`,
-        { cause: failure },
+        `cold actual Worker drain failed: ${failures.map(String).join('; ')}; events=${JSON.stringify(events)}`,
+        {
+          cause:
+            failures.length === 1
+              ? failures[0]
+              : new AggregateError(failures, 'cold actual Worker drain and cleanup failed'),
+        },
       )
     }
   }, 40_000)

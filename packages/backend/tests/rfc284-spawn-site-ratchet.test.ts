@@ -82,11 +82,11 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
   },
   'platform/background/maintenanceWorkerSupervisor.ts': {
     governance: 'kernel',
-    count: 5,
+    count: 6,
     why:
-      'RFC-338 的唯一长驻 maintenance Worker supervisor：一处本地 spawn 包装与四处' +
-      '启动/重启调用共同拥有 watchdog、terminate、drain 与有界重启，后台重任务不再散落' +
-      '到 HTTP 主事件循环。',
+      'RFC-338 / RFC-370 的 maintenance Worker supervisor：一处本地 spawn 包装与五处' +
+      '启动/重启调用（含 cold 显式 start）共同拥有 watchdog、terminate、drain 与有界重启，' +
+      '后台重任务不再散落到 HTTP 主事件循环。',
   },
   'util/git.ts': {
     governance: 'process-group',

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -633,7 +634,7 @@ test('unstarted normal pause and resume remain cold before explicit current star
     await h.service.resume()
     expect(h.owners).toEqual([])
     expect(h.inputs).toEqual([])
-    expect(h.service.status().eventLoop.sampleCount).toBe(0)
+    expect(h.service.status()).toMatchObject({ eventLoop: { sampleCount: 0 } })
     await ownerReady(h, scope)
     expect(h.owners).toHaveLength(1)
   } finally {
@@ -823,5 +824,83 @@ test('explicit resume after ordinary pause and loss clears intent without reacti
     } finally {
       await h.finish()
     }
+  }
+})
+
+test('the service drain deadline rejects in a fresh process while actual enqueue remains pending', async () => {
+  const h = coldHarness()
+  try {
+    const serviceUrl = new URL('../src/platform/background/maintenanceService.ts', import.meta.url)
+      .href
+    const script = `
+      import { createColdMaintenanceService } from ${JSON.stringify(serviceUrl)};
+      const unexpected = () => { throw new Error('service must not execute Worker operations'); };
+      let admittedResolve;
+      const admitted = new Promise((resolve) => { admittedResolve = resolve; });
+      const store = {
+        enqueue(input) {
+          if (input.jobKey === 'backupPrune') admittedResolve();
+          return new Promise(() => {});
+        },
+        recoverRunning: unexpected,
+        claimNext: unexpected,
+        heartbeat: unexpected,
+        settle: unexpected,
+        async read() { return null; },
+        async readProjection() { return { active: null, last: null, backlog: [] }; },
+      };
+      const supervisor = {
+        wake() {},
+        live() { return { state: 'ready', active: null, error: null, lastHeartbeatAt: null }; },
+        async pause() {},
+        async resume() {},
+        async stop() {},
+        async drain() {},
+        async start() {},
+        quiesce() {},
+        async awaitDrained() {},
+      };
+      const scope = { valid: true, current() { return this.valid; } };
+      const service = createColdMaintenanceService({
+        provider: 'sqlite',
+        appHome: '/cold-maintenance-service-deadline',
+        configPath: '/cold-maintenance-service-deadline/config.json',
+        loadConfig: () => ${JSON.stringify(h.initialConfig)},
+        fileSnapshotInFlight: () => false,
+        payloadSources: {
+          activeTaskIds: () => [],
+          activeIntentApplyJournalIds: () => [],
+          activeResourceBundleApplyIds: () => [],
+          bootIntentTurnIds: () => [],
+        },
+        openAdmissionStore: () => ({ store, close() {} }),
+        createSupervisor: () => supervisor,
+      });
+      await service.start(scope);
+      service.runSoon('backupPrune');
+      await admitted;
+      scope.valid = false;
+      await service.quiesce(scope);
+      try {
+        await service.awaitDrained(scope, 17);
+        throw new Error('actual service drain incorrectly resolved');
+      } catch (error) {
+        if (error?.message !== 'maintenance execution actual drain timed out') throw error;
+        console.log('maintenance service drain deadline rejected');
+      }
+    `
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd: import.meta.dir,
+      encoding: 'utf8',
+      timeout: 3_000,
+      windowsHide: true,
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.signal).toBeNull()
+    expect(result.stderr).toBe('')
+    expect(result.stdout).toBe('maintenance service drain deadline rejected\n')
+  } finally {
+    await h.finish()
   }
 })

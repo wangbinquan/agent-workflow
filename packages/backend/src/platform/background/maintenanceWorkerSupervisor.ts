@@ -240,11 +240,12 @@ function createSupervisor(
       const timeout = setTimer(() => {
         reject(new Error('maintenance worker actual drain timed out'))
       }, timeoutMs)
-      ;(timeout as { unref?: () => void } | null)?.unref?.()
-      void Promise.all(receipts.map((receipt) => receipt.drained)).then(() => {
-        clearTimer(timeout)
-        resolve()
-      })
+      void Promise.all(receipts.map((receipt) => receipt.drained))
+        .then(() => {
+          clearTimer(timeout)
+          resolve()
+        })
+        .catch(reject)
     })
   }
   const scheduleSpawn = (): void => {

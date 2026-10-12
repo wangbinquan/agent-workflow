@@ -1119,7 +1119,6 @@ function createMaintenanceService(
         () => reject(new Error('maintenance execution actual drain timed out')),
         timeoutMs,
       )
-      timer.unref?.()
       void actualDrain.then(
         () => {
           clearTimeout(timer)

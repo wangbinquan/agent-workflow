@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { expect, test } from 'bun:test'
 
 import { MAINTENANCE_CATALOG_DIGEST } from '@/platform/background/maintenanceCatalog'
@@ -437,4 +438,100 @@ test('loss during ordinary resume awaiting the pause ACK prevents deferred Worke
   expect(original.terminated).toBe(1)
   await supervisor.awaitDrained()
   await supervisor.stop()
+})
+
+test('actual drain propagates the same deadline cleanup error to its caller', async () => {
+  const worker = new ManualWorker()
+  const clearError = new Error('actual drain deadline cleanup failed')
+  let drainTimer: unknown
+  const supervisor = createColdMaintenanceWorkerSupervisor({
+    appHome: '/cold-maintenance-supervisor',
+    databaseInit: {
+      dbPath: '/cold-maintenance-supervisor/db.sqlite',
+      migrationsFolder: '/cold-maintenance-supervisor/migrations',
+      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+    },
+    workerFactory: () => worker,
+    setTimer(fn, ms) {
+      const timer = { fn, ms, cleared: false }
+      if (ms === 17) drainTimer = timer
+      return timer
+    },
+    clearTimer(value) {
+      if (value === drainTimer) throw clearError
+      ;(value as { cleared: boolean }).cleared = true
+    },
+  })
+  const starting = supervisor.start()
+  await microtasks()
+  worker.ready()
+  await starting
+  supervisor.quiesce()
+  const draining = supervisor.awaitDrained(17)
+  worker.drained()
+  await expect(draining).rejects.toBe(clearError)
+  expect(worker.terminated).toBe(1)
+  await supervisor.awaitDrained()
+  await supervisor.stop()
+})
+
+test('the actual Worker drain deadline rejects in a fresh process after bare close without ACK', () => {
+  const supervisorUrl = new URL(
+    '../src/platform/background/maintenanceWorkerSupervisor.ts',
+    import.meta.url,
+  ).href
+  const protocolUrl = new URL('../src/platform/background/maintenanceProtocol.ts', import.meta.url)
+    .href
+  const catalogUrl = new URL('../src/platform/background/maintenanceCatalog.ts', import.meta.url)
+    .href
+  const script = `
+    import { createColdMaintenanceWorkerSupervisor } from ${JSON.stringify(supervisorUrl)};
+    import { MAINTENANCE_PROTOCOL_VERSION } from ${JSON.stringify(protocolUrl)};
+    import { MAINTENANCE_CATALOG_DIGEST } from ${JSON.stringify(catalogUrl)};
+    class ManualWorker {
+      onmessage = null;
+      onerror = null;
+      closeListener = null;
+      addEventListener(_type, listener) { this.closeListener = listener; }
+      postMessage(message) {
+        if (message.type === 'init') queueMicrotask(() => this.onmessage?.({ data: {
+          type: 'ready', version: MAINTENANCE_PROTOCOL_VERSION,
+          catalogDigest: MAINTENANCE_CATALOG_DIGEST, at: 100,
+        } }));
+      }
+      terminate() {}
+      close() { this.closeListener?.({ code: 1 }); }
+    }
+    const worker = new ManualWorker();
+    const supervisor = createColdMaintenanceWorkerSupervisor({
+      appHome: '/cold-maintenance-supervisor',
+      databaseInit: {
+        dbPath: '/cold-maintenance-supervisor/db.sqlite',
+        migrationsFolder: '/cold-maintenance-supervisor/migrations',
+        sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
+      },
+      workerFactory: () => worker,
+    });
+    await supervisor.start();
+    supervisor.quiesce();
+    worker.close();
+    try {
+      await supervisor.awaitDrained(17);
+      throw new Error('actual Worker drain incorrectly resolved');
+    } catch (error) {
+      if (error?.message !== 'maintenance worker actual drain timed out') throw error;
+      console.log('maintenance Worker drain deadline rejected');
+    }
+  `
+  const result = spawnSync(process.execPath, ['-e', script], {
+    cwd: import.meta.dir,
+    encoding: 'utf8',
+    timeout: 3_000,
+    windowsHide: true,
+  })
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  expect(result.signal).toBeNull()
+  expect(result.stderr).toBe('')
+  expect(result.stdout).toBe('maintenance Worker drain deadline rejected\n')
 })
