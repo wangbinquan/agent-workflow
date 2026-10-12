@@ -3,7 +3,7 @@ import ts from 'typescript'
 const build = '    build: (report, _spool, signal) => observationBuild.build(report, signal),\n'
 const close = '    closeBuild: () => observationBuild.close(),\n'
 
-/** Test-only inverse of the four exact cache hooks; every other root byte remains visible. */
+/** Test-only inverse of both approved cache revisions; every other root byte remains visible. */
 export function inverseRfc371NativeFactRootHooks(source: ts.SourceFile): ts.SourceFile {
   const home = source.fileName.endsWith('cli/start.ts')
     ? '    Paths.root,\n'
@@ -13,11 +13,13 @@ export function inverseRfc371NativeFactRootHooks(source: ts.SourceFile): ts.Sour
   if (home === undefined) return source
   const writer = source.fileName.endsWith('cli/start.ts') ? '    db,\n' : '    input.db,\n'
   const tail = '  )\n  const observationReports = composeCompleteObservationReports({\n'
+  const count = (text: string) => source.text.split(text).length - 1
+  const calculations = home + writer + '    { taskCalculations: true },\n' + tail
+  const currentArguments = count(calculations) > 0 ? calculations : home + writer + tail
   const changes = [
-    { current: home + writer + tail, previous: home + tail },
+    { current: currentArguments, previous: home + tail },
     { current: build + close + '  })\n', previous: build + '  })\n' },
   ]
-  const count = (text: string) => source.text.split(text).length - 1
   if (changes.every((change) => count(change.current) === 0 && count(change.previous) === 1))
     return source
   if (!changes.every((change) => count(change.current) === 1 && count(change.previous) === 0))

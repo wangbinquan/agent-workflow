@@ -55,6 +55,35 @@ test.each([
   },
 )
 
+test.each([
+  'packages/backend/src/cli/start.ts',
+  'packages/backend/src/cli/postgresqlDaemonApplication.ts',
+])(
+  'both approved %s cache revisions recover the same whole root and retain unknown bytes',
+  (path) => {
+    const current = readFileSync(resolve(root, path), 'utf8')
+    const calculationHook = '    { taskCalculations: true },\n'
+    expect(current.split(calculationHook)).toHaveLength(2)
+    const legacy = current.replace(calculationHook, '')
+    const withoutCache = inverseRfc371NativeFactRootHooks(parse(path, current)).text
+    expect(inverseRfc371NativeFactRootHooks(parse(path, legacy)).text).toBe(withoutCache)
+    for (const replacement of [
+      '    { taskCalculations: false },\n',
+      '    { taskCalculations: true, unreviewed: true },\n',
+      calculationHook + calculationHook,
+    ]) {
+      const changed = current.replace(calculationHook, replacement)
+      expect(() => inverseRfc371NativeFactRootHooks(parse(path, changed))).toThrow(
+        'native-fact root inverse unreviewed or incomplete hooks',
+      )
+    }
+    const suffix = '\n// unrelated calculation marker stays visible\n' + calculationHook
+    expect(inverseRfc371NativeFactRootHooks(parse(path, current + suffix)).text).toBe(
+      withoutCache + suffix,
+    )
+  },
+)
+
 test('files outside the two declared CLI roots are returned without any normalization', () => {
   const source = parse('anotherRoot.ts', '    closeBuild: () => observationBuild.close(),\n')
   expect(inverseRfc371NativeFactRootHooks(source)).toBe(source)
