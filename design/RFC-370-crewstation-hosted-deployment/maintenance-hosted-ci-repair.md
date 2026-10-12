@@ -50,3 +50,13 @@ DESIGN-R1 母 21 项及独立 service 补充 2 项均有效稳定 PASS、0 findi
 有限修正只涉及该 service 测试的两行：用已有 `join` 从 `tests` 目录选到 backend 目录启动子进程，使它使用包含 `@/* → src/*` 的原 backend `tsconfig.json`；退出码仍严格要求 0，但失败消息附上实际 stderr。backend 的 bunfig 预加载配置仅属于 test，子进程仍执行原 `-e` 脚本。真实 17ms deadline、3000ms 故障上限、完整 Config／注入对象、所有原业务及五项结果判据、18／16／每 provider 1 的人口均保持。下一 SHA 的 hosted 实际执行负责验证该入口修正，若仍失败则使用 stderr 继续定位；不增加案例或放宽结果。
 
 本片没有生产源、依赖、生成规则或架构库存变化，复用已消费且已上库的原生成配套；不再运行整个 census。仅做有限格式／lint／纯语法／逆向全文保持检查及独立实现门，随后精确两路径发布并等待同 SHA 完整主 CI 和完整默认 Windows 总绿。原失败继续保留；累计使用量、其它会话在制内容、完整 RFC 与 CS 部署均未被本片关闭。
+
+## f5d91 的实际语法错误与 Windows 原严格清理
+
+前述 `91024` 主 CI 最终为 69 success／3 failure：两个原 service 子进程失败分片及汇总作业，其它 69 作业成功。`f5d91f681fa72ad621a99aae0e9bb3df2552c0b1` 的 Windows `38214823030`／作业 `114697003305` 原日志在 2026-10-12 07:00 UTC 已完整取得：1436 pass／3 skip／2 fail。新增 stderr 诊断实际显示 `loadConfig: () => {"$schema_version":1,...}` 及 `Expected ";" but found ":"`，所以此前 cwd 候选未解决脚本对象返回语法。另一个失败重新出现于原真实 Worker 用例最后的严格 `rmSync`，为 EBUSY；四个原 Worker 事件仍包含 ready／active／completed／drained。`91024` 的一次清理通过不能代签这一缺陷已经修复。此刻 f5d91 的主 CI 仍由原观察进程等待终态。
+
+本候选仅修测试：service 脚本的原完整序列化 Config 仍由原 `loadConfig` 返回，只用括号把 JSON 对象变为明确的箭头函数返回表达式。源码纯语法检查另对替换插值后的完整 child script 进行解析，使用包含带引号键的有限 JSON 占位值；该检查不执行脚本或加载 AW Config，也不代签运行时行为。原 18 个 service 用例／109 个 expect、原 17ms deadline、3000ms 父界和五项结果保持。
+
+真实 Worker 的业务正文、同一 factory／双 provider／全部断言、15000ms 阶段界与 40000ms 总预算继续逐字保持；三项 release、stop、channel close、父 database dispose 的次序和所有错误收集保持。仅把最后的移除动作委托给此文件内的严格 async helper：Windows 在每次原 GC 后尝试原 rm，只有实际 EBUSY 可等待 100ms 再试，最多九次等待／900ms；其余错误立即传播，最后一次原严格 rm 无 catch。这样给终止的 native Worker 与 GC 留出事件循环轮次，不借用既有 tempDir helper 的 warn-and-leave fallback；持续占用和任何原业务／清理错误仍使原场景失败。POSIX 仍只有原一次 rm。Worker close 标记也不被冒称为原生线程已完全退出，具体占用来源与该候选效果仍须后继 Windows 实际执行证明。
+
+三个 owned 为两个原测试与本文件追加；没有生产、依赖、生成规则或架构人口变化，不执行新 whole census。本候选只运行限定格式／lint、纯源码和展开脚本语法／全文逆向核对、有限独立实现门及精确发布，然后验证新 SHA 完整主 CI＋默认完整 Windows。原日志、旧门结论和全部并行输出保持；106 次实测、后续 RFC、CS adapter／部署均不由本测试修正代签。

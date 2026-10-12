@@ -23,6 +23,26 @@ interface Phase {
   readonly instanceRef: string
 }
 
+async function removeClosedWorkerHome(appHome: string): Promise<void> {
+  if (process.platform === 'win32') {
+    // The protocol drain and both database closes precede this cleanup. Let the
+    // terminated native Worker finish between attempts; a persistent lock still
+    // fails the original strict removal, and other errors propagate immediately.
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      Bun.gc(true)
+      try {
+        rmSync(appHome, { recursive: true, force: true })
+        return
+      } catch (error) {
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'EBUSY') throw error
+      }
+      await Bun.sleep(100)
+    }
+    Bun.gc(true)
+  }
+  rmSync(appHome, { recursive: true, force: true })
+}
+
 function phaseChannel() {
   const name = `rfc370-cold-real-drain-${randomUUID()}`
   const channel = new BroadcastChannel(name)
@@ -190,10 +210,7 @@ describeEachProvider('RFC-370 cold maintenance actual Worker drain', (harness) =
         () => supervisor?.stop(1_000),
         () => phases.close(),
         () => database.dispose(),
-        () => {
-          if (process.platform === 'win32') Bun.gc(true)
-          rmSync(appHome, { recursive: true, force: true })
-        },
+        () => removeClosedWorkerHome(appHome),
       ]) {
         try {
           await cleanup()

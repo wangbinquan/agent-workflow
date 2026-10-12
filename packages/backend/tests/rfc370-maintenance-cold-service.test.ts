@@ -865,7 +865,7 @@ test('the service drain deadline rejects in a fresh process while actual enqueue
         provider: 'sqlite',
         appHome: '/cold-maintenance-service-deadline',
         configPath: '/cold-maintenance-service-deadline/config.json',
-        loadConfig: () => ${JSON.stringify(h.initialConfig)},
+        loadConfig: () => (${JSON.stringify(h.initialConfig)}),
         fileSnapshotInFlight: () => false,
         payloadSources: {
           activeTaskIds: () => [],
