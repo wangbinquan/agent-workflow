@@ -44,3 +44,11 @@
 核对未 checkpoint 的 WAL 副本时发现本次读写校验引入缺陷：SQLite 在连接关闭时会 checkpoint 既有 WAL，改变副本 DB/WAL 字节；原回归仅覆盖已 checkpoint 场景。补修正将复制阶段已有 `copied.wal` 事实传入 provider-private 校验，已有 WAL 使用原只读模式；裸 WAL-mode 主文件才允许辅助文件创建。补齐 SHM 存在/不存在的非 checkpoint 校验与真实 busy checkpoint 原始归档三项回归，验证 DB/WAL 字节及 WAL 中实际数据可读。完整补实现和三项用例后集中验证，启动器候选未变，原有效启动/登录结果复用。
 
 补修正集中验证：raw snapshot、boot/doctor、pre-migration backup、restore 四文件 39 pass / 0 fail / 123 个断言；新增三项均通过，包含真实 busy checkpoint 后归档 DB/WAL 字节保持与数据可读。四项 TS 文件 lint 通过；原四个 census 规则继续不改，只按新基底与本片三个后端覆盖由原算法生成配套。启动器、开发登录和实际启动验收结果复用，服务维持关闭。原提交的完整 hosted gate 不取消，新补修正将以新确切 SHA 跟进。
+
+## 2026-10-13 本次 CI 单引擎构造点登记修正
+
+补修正 `b04b37d91b20ab6b2809e94188e1ae02bfcec820` 的 Ubuntu 后端 31/32 分片 `114914174534` 已成功，三个新增 WAL 回归均执行并通过。17/32 分片 `114914174988` 明确新增失败：本次 raw snapshot 用例中的四个 SQLite 原生构造点未登记，实测比账本多出 `rfc213-raw-snapshot.test.ts: 4`；该差异由本次引入，不能归给其它会话。
+
+原守卫已有 `sqlite-only-primitive` 机械理由，依据真实 `.$client` / `PRAGMA` 使用分类；本适配器与 WAL/SHM/busy checkpoint 判据只适用于 SQLite 物理格式，PostgreSQL 备份不进入此路径。因此只补精确四项调用点登记并旁注该理由，计数算法、分类条件、open 迁移清单、四项 census 规则和生产实现保持。既有测试与真实字节/数据断言全部保留，原 39 项及 hosted 三项通过证据复用；只集中验证受影响的原高水位守卫。共享 `STATE.md` 出现其它会话的完成审计条目，完整保留且本次登记提交不包含它。
+
+登记与说明完成后集中验证原守卫：8 pass / 0 fail / 17 个断言，含全测试树构造点逐字匹配、真实原语分类、open 迁移清单、负 fixture 和注册期 harness 判据；该文件 lint 与两文件格式通过。生产输入及原 source digest 未变，不重复 census、备份/启动验收或完整本地门禁。后续以登记修正的新确切 SHA 判断 hosted 高水位与完整 CI，原已开始的运行继续完成。

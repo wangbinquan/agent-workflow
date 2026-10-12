@@ -266,6 +266,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc204-cold-clone-seal.test.ts: 2',
   'rfc212-revalidation-behavior.test.ts: 13',
   'rfc213-pending-restore.test.ts: 1',
+  // RFC-213：真实 DB/WAL/SHM 字节快照和 busy checkpoint 是 SQLite 物理原语；
+  // PostgreSQL 备份不经过该适配器，沿用原 sqlite-only-primitive 机械分类。
+  'rfc213-raw-snapshot.test.ts: 4',
   'rfc213-restore.test.ts: 3',
   'rfc217-migration-0107.test.ts: 1',
   'rfc217-workgroup-task-state.test.ts: 1',
