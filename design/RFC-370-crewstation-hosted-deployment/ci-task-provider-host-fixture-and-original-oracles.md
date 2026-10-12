@@ -55,3 +55,17 @@ RFC-371 的原生页／原报告 Worker 失败、原迁移头 243／244 差额�
 本会话的测试后继候选没有生产源码变化；联合候选的架构生成影响按最终双方批准的实际发布路径核对。此前已完成的生成记录保留，不因 HEAD 移动或这些测试层修正再执行整仓生成。RFC-371 两文件 Worker 修正的 SOURCE v360 与新增类型修正的四文件 SOURCE v362 均已独立通过并由根完整消费；v362 的九项功能分析、四个完整原文件差异／精确逆变换、17 份实际 EOF 输入和 39 处证据引用与当前四文件身份均核对。该会话已正式交接这四个冻结候选，暂停其 AW Git 和共同生成文件写入，交由本会话完成必要生成及串行发布。累计使用量持久化仍由它负责；两份 `persistent-calculation` 设计资料尚未实施，不纳入本次修绿候选。
 
 完整 Lint 作业 `114585119391` 的 Typecheck 还揭示测试声明问题。Task 测试现以仅位于测试内的断言委托执行原 `assertTaskExecutionContext`，把同一个受信实际对象收窄成内部 `TaskExecutionContext`；不扩大生产公共 `TaskExecutionContextRef`。旧 resume／retry 入口按实际原函数参数声明表达同一个数据库入参：不完整绑定路径仍先拒绝，保持零 SQL；P09 则保留原 `getTask` 只读查询和所选实例的 active-owner 拒绝，发生在 continuation 受理、SQL 写入及工作区回滚之前，不声称零 SQL 读取。负向 start 输入补齐必需的空 `inputs`。协调器输入按原函数入参类型声明，未触达的 fusion scheduler 补齐会抛错的 `cancelChild`／`resumeChild`。完整精确逆变换恢复类型修正前候选，再去掉已检视的 ACK 等待即恢复完整发布原文件。97 个断言、29 个展开 case、名称与预算保留；其中 95 个 `expect` 表达式逐字保持，另两处仅为旧数据库类型断言和 negative fusion 构造输入的两个必需未使用端口。限定 lint／format、纯 AST 与完整旧字节检查通过；新的有限 SOURCE-R2 为有效、稳定 PASS／零 findings，八项功能分析、一项 owned 结论、21 份材料、三轮实际身份及 44 处证据引用已由根消费；一处末行引用已由检视者写入独立更正回执，原回执保留，未重做功能门。RFC-371 的四项 page／Worker 类型错误已按实际日志交接；该会话对生产分页增加原接口类型声明；四文件 SOURCE v362 已 PASS／零 findings 并由本会话完整消费。双方五个 TypeScript 候选（一个生产文件、四个测试文件）、两份状态文档及 STATE 将共同冻结；只为该新生产输入执行一次原 scoped census 与配套检视，原历史失败和旧生成证据继续保留。
+
+## d7de7fdd 的完整终态与 Task 119 次实际通过
+
+本片联合源码已以 `ca63fc9b1e19527e67332247d331c81a97ec9eba` 发布，唯一原 scoped census 及有限 MATCHING 的完整内容已由根消费；紧邻普通许可退役为 `d7de7fdd46e46ab3784820f04dc114bfcc236d27`。两项 observed import／legacy exception 的短暂增长许可已退役，原 342 字面量账本、其他基线与规则保持。两笔提交均核对精确路径、真实 co-author 和 push 前后 0／0 同步；维护后台六份候选及累计用量两份设计资料继续排除。
+
+该确切 SHA 的主 CI `38184373091` 已正式 completed／failure，72 作业为 69 success／3 failure。失败仅是 macOS 5／12 的报告 Worker 作业 `114603453221`、Ubuntu 29／32 的报告 Worker 作业 `114603453230`，以及因此失败的 `CI required` 汇总作业 `114608936297`。默认完整 Windows `38184373106`／作业 `114603452397` 亦 completed／failure；其原平台步骤为 1,396 pass／3 skip／6 fail。汇总失败不算新的独立功能失败，过去失败及 SOURCE／MATCHING 的结论均保留。
+
+根已取得并完整消费 44 份 backend 分片、完整 Lint 和完整 Windows，共 46 份实际原日志 EOF、18,274,338 B，核对全部 73 作业的确切 SHA 及终态。原 Task 119 次目标实际执行全部 pass：Ubuntu 59、macOS 30、Windows 30；30 个原 case 的预期身份无缺失、额外、重复、fail、skip 或 todo。原 Task lifecycle 另为 Ubuntu 105、macOS 53、Windows 53 次实际 pass；原配置透传、W7／W8 源码与升级判据在其实际登记平台亦通过。主 Lint 作业 `114603452899` 的 system-mocks／shared／frontend／backend 四包 typecheck 均实际 code 0、无 TS error；这次完整 Windows 不含 typecheck 步骤，不声明八条输出。
+
+所有 backend／Windows 的 24 个真实失败只属于 `rfc371-persistent-native-facts-worker.test.ts` 的同六个原 case：Ubuntu SQLite／PostgreSQL 各六、macOS 六、Windows 六。原 CNY／四类 Token、历史记录及缓存根数量预言继续暴露历史原生事实缺失；原生 provider 用例已通过，不能代签 Worker。完整终态和失败证据已必要交接给「设计运行观测统计全景」；累计用量／持久化缓存与该 Worker 数据链路仍由它负责，本会话不接管其实现或删减原判据。
+
+证据在 `/tmp/aw-rfc370-task-finalization-cache-ci-composition-r2/hosted/`：`terminal-summary.json`、`logs-index.json`、`targets.json`、`terminal-backend-functional-classification.json` 与 `terminal-ci-root-consumed.json`。`targets.json` 原综合字段还包含相关 Worker 回归，因此为 false；后继完整分类明确分开“原 Task 119 全部实际通过”与“相关 Worker／完整流水线失败”，不把目标通过宣称总绿。根消费记录为 53,608 B／SHA-256 `8a312daa393b35baf8c157aa61dd2f6e3974cdc22dd34d75b4135f0c5c9a0bd1`。
+
+本片未运行本机 AW test／typecheck／build／服务／E2E，也未重跑原 census 或完整源码门。后续等待该会话的独立 SOURCE 修正及实际发布候选；必要配套按实际新增生产输入判定，精确发布后另验新 SHA 的完整主 CI 与默认完整 Windows。GitHub 总流水线全绿后才继续 RFC 生产实施。完整 H7／十九 owner／三个生产启动根、A-T7／A-G、各层独立 CS adapter、先 M0 实际部署再 M1～M4 以及 RFC 完成仍开放，AW 尚未部署 CS。

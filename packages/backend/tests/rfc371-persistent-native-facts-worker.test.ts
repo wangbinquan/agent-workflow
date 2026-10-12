@@ -1,5 +1,7 @@
 // RFC-371: actual Workers reuse complete numerical pages; faults, late source writes and
 // lifecycle restarts must retain the complete uncached report, including all Token buckets.
+// Each newly created Worker also reads the current original daemon environment after a
+// real native artifact change; equal empty reports cannot satisfy the independent oracle.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -284,6 +286,56 @@ describeEachProvider(
         } finally {
           await cached.worker.stop()
           await oracle.worker.stop()
+        }
+      })
+    }, 60000)
+
+    test('each original Worker captures the current real native artifact when the daemon environment changes', async () => {
+      await withOriginal(harness, async (fixture, native) => {
+        const alternate = persistentNativeFixture({ steps: 3, depth: 2 }),
+          cached = reports(fixture, true)
+        try {
+          const first = await complete(cached, fixture, 'load-performance-worker-environment-first')
+          expect(first.content.summary.recordedUsage!.tokens).toEqual({
+            input: '9007199254741028',
+            cacheRead: '88',
+            cacheWrite: '109',
+            output: '71',
+            total: '9007199254741296',
+          })
+          process.env.OPENCODE_DB = alternate.path
+          const second = await complete(
+            cached,
+            fixture,
+            'load-performance-worker-environment-second',
+          )
+          expect(second.content.summary.recordedUsage!.tokens).toEqual({
+            input: '9007199254741006',
+            cacheRead: '44',
+            cacheWrite: '57',
+            output: '43',
+            total: '9007199254741150',
+          })
+          expect(second.content.summary.metrics).toHaveProperty('recordedCost', {
+            currency: 'CNY',
+            amount: '0.00015',
+            records: '7',
+            pricedRecords: '2',
+          })
+          expect(second.sections['historical-records']).toHaveLength(5)
+          expect(reuseLine(fixture, second)).toContain('cachedRoots=0')
+          expect(reuseLine(fixture, second)).toContain('sourceRoots=1')
+          const hot = await complete(cached, fixture, 'load-performance-worker-environment-hot')
+          expect(stable(hot)).toEqual(stable(second))
+          expect(reuseLine(fixture, hot)).toContain('cachedRoots=1')
+          expect(reuseLine(fixture, hot)).toContain('sourceRoots=0')
+        } finally {
+          process.env.OPENCODE_DB = native.path
+          try {
+            await cached.worker.stop()
+          } finally {
+            await alternate.close()
+          }
         }
       })
     }, 60000)

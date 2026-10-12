@@ -1,3 +1,17 @@
+## 2026-10-12 RFC-371：原报告 Worker 当前环境修复候选
+
+正式页面切换到 30 天仍需约 13 秒的观察上界，性能未达标；已显示 189 个任务、16,154,874 已记录 Token（输入 4,566,519／缓存读取 11,039,168／缓存写入 0／输出 549,187）和人民币估值 ¥18.545628，完整／缺口标签保留。此次仅修复报告 Worker 原创建点：同步复制后端当前全部已定义环境字符串并显式传入 Worker，三个原入口和生命周期保持。旧七项用例逐字节保留，新增两个真实 WAL 原生库之间切换的完整四桶／历史行／cold-hot 回归；未运行本机 AW test／typecheck／build／新服务或 E2E。
+
+有限 DESIGN v372、SOURCE v374 均 PASS／零功能 findings，根已完整消费。原 d7de7fdd 主 CI 与 Windows 的 24 次 Worker 失败完整保留；环境继承原因仍为推断，新回归未运行，不把检视通过代签修复成功。本候选在 SOURCE 后只执行一次原 scoped census：四个原规则、6863 份非本片提交源码与并行候选保持，十三份配套只更新源摘要、当前来源 SHA 与规范内容摘要，统计人口／图边／许可账本原值不变，无新增增长许可。有限 MATCHING、精确上库与新 SHA 的完整主 CI／Windows另验；Phase2 周期计算复用及主阶段实测继续，AW／CS 两 RFC 尚未完成。相关共享文档包含另一会话完整的终态 CI 证据，以下旧正文与所有并行输出保留。
+
+## 2026-10-12 RFC-370：Task 原 119 次实际通过，报告 Worker 总绿仍待修
+
+联合源码 `ca63fc9b`、紧邻许可退役 `d7de7fdd46e46ab3784820f04dc114bfcc236d27` 已上库并核对精确同步；SOURCE、唯一原 scoped census 与 MATCHING 的结论保留。该确切 SHA 主 CI `38184373091` 正式 failure，72 作业为 69 success／3 failure；仅两个报告 Worker 分片和因此失败的汇总作业。默认完整 Windows `38184373106` 仍 failure，原平台步骤 1,396 pass／3 skip／6 fail。
+
+根已完整核对 73 作业与 46 份原日志 EOF（18,274,338 B）。Task 原 119 次目标实际全部 pass（Ubuntu 59／macOS 30／Windows 30），无缺失、额外、重复或非 pass；原生命周期 211 次及实际登记平台的配置透传／W7／W8／升级判据亦 pass。主 Lint 四包 typecheck 实际 code 0；本次 Windows 无 typecheck 步骤，不记八条。全部 24 个真实失败只属于 RFC-371 Worker 同六案例，已把完整证据必要交接给「设计运行观测统计全景」。累计用量／持久化缓存与原生历史事实链路仍由它负责，不接管其实现或削减原预言。
+
+本会话无本机 AW 执行、额外 census 或完整源码门重跑。等待该会话独立 SOURCE 修正，按实际生产输入判定必要配套后串行发布，再验新 SHA 完整主 CI＋默认完整 Windows；后续 RFC 生产实施继续坚持总绿门槛。Maintenance 六份候选及累计用量两份设计资料保持。完整 H7／十九 owner／三根、A-T7／A-G、各层 CS adapter 与先 M0 实际部署再 M1～M4 仍开放，AW 尚未部署 CS、RFC 未完成。详见[实际 CI 修复](design/RFC-370-crewstation-hosted-deployment/ci-task-provider-host-fixture-and-original-oracles.md)。以下旧 STATE 与全部并行正文完整保留。
+
 ## 2026-10-12 RFC-370：1752 完整 CI 失败定位与联合必要修复
 
 确切 `1752f02e868ff58ea443ed89efc1af0bb9381075` 的主 CI `38178251313` 已终态 failure，72 作业为 64 success／8 failure；完整 Windows `38178251326` 亦终态 failure，原平台步骤为 1,393 pass／3 skip／9 fail。44 份 backend 分片和完整 Lint、Windows 原日志均已取得。Task 原 119 次目标实际出现，116 pass／3 fail，无缺失／额外／重复；主 CI 的 25 项真实测试失败只属于原 Task lifecycle inverse／P08 finalize ACK 或 RFC-371 Worker，Typecheck 的原测试声明问题分别修正。原失败与此前 SOURCE／MATCHING、生成及发布证据均保留。

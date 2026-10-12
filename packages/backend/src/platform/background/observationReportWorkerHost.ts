@@ -42,7 +42,13 @@ async function runOriginalObservationWorker(
   snapshot?: OriginalReportSnapshot,
 ): Promise<OriginalObservationWorkerResult> {
   signal.throwIfAborted()
-  const worker = new Worker(entry)
+  // Capture the current daemon environment explicitly for this original Worker.
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (variable): variable is [string, string] => variable[1] !== undefined,
+    ),
+  )
+  const worker = new Worker(entry, { env: environment })
   const pending = new Set<Promise<void>>()
   let accepting = true,
     completed = false,
