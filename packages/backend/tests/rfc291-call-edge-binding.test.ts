@@ -1,3 +1,4 @@
+import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-291 面 E —— call 边在 dump 里可映射到 handle，且回写不丢绑定（AC-18 / AC-19）。
 //
 // 设计门 P1-a：dump 此前对非 agent-single 节点原样返回，于是 call 节点连同
@@ -289,7 +290,7 @@ describeEachProvider('resolve 侧：回写不丢绑定（AC-19）', (harness) =>
               name: 'parent-flow',
               description: 'edited',
               definition: {
-                $schema_version: 6, // RFC-354: the authoring boundary takes the current schema
+                $schema_version: WORKFLOW_SCHEMA_VERSION, // authoring uses the current schema
                 inputs: [],
                 nodes: [
                   {
@@ -343,7 +344,7 @@ describeNativeCallEdgeCases('resolve 侧：回写不丢绑定（AC-19）', () =>
               name: 'caller-flow',
               description: '',
               definition: {
-                $schema_version: 6, // RFC-354: the authoring boundary takes the current schema
+                $schema_version: WORKFLOW_SCHEMA_VERSION, // authoring uses the current schema
                 inputs: [],
                 nodes: [{ id: 'c1', kind: 'call-workflow', workflowName: 'some-target' }],
                 edges: [],
@@ -370,7 +371,7 @@ describeNativeCallEdgeCases('resolve 侧：回写不丢绑定（AC-19）', () =>
               name: 'caller-flow',
               description: '',
               definition: {
-                $schema_version: 6, // RFC-354: the authoring boundary takes the current schema
+                $schema_version: WORKFLOW_SCHEMA_VERSION, // authoring uses the current schema
                 inputs: [],
                 nodes: [
                   {

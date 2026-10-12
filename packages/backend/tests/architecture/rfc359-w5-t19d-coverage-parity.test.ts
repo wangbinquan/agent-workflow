@@ -279,7 +279,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // so this direct-import census does not claim to count all behavior coverage.
   // W19: the hosted SQL regression directly constructs the actual PG source
   // with a controlled connection; this is a driver count, not a real-PG claim.
-  'platform/persistence/LogicalSource: sqlite 12/8, postgresql 7/5',
+  // RFC-372: retained clarify rows and retired-table absence are read through
+  // both real source implementations; the existing reference gap is unchanged.
+  'platform/persistence/LogicalSource: sqlite 13/9, postgresql 8/6',
   // W55 CI：原 SQLite 迁移器全文逐字移入既有 PostgreSQL 迁移器所在目录，
   // 同目录判据首次识别这两个原文件；补录原 ref/drive，不代表新增实现或行覆盖。
   // RFC-359 W8（2026-09-11）：两侧各 +1（2/1 → 3/2、11/10 → 12/11），来自
@@ -336,7 +338,7 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次一）：12 → 11，来源同上（注释里的提及被计入引用数）。
   // RFC-359 AC-1（plan §5hn 批次二 ④）：**退出名单**——差额 3 → 2，跌破阈值
   //（新基线 `rfc359-w5hn-workflow-route-launch-provider-parity` 归在 SQLite 一侧）。
-  'platform/persistence/LogicalSource: 12 vs 7',
+  'platform/persistence/LogicalSource: 13 vs 8',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
   'platform/persistence/Migrator: 4 vs 12',
 ]

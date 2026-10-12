@@ -235,6 +235,35 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
 
 describe('GET /api/clarify/:nodeRunId — branches by node kind', () => {
   registerProviderApplication((buildApp, seedTask, seedCrossClarifySession) => {
+    // RFC-372: both failure paths must use the original ACL and transport errors.
+    test('follow-up refuses malformed requests and ordinary rounds without changing the round', async () => {
+      const { db, app } = await buildApp()
+      const { intermediaryNodeRunId } = await seedCrossClarifySession(db)
+      const path = `/api/clarify/${intermediaryNodeRunId}`
+      const before = await (await req(app, path)).json()
+      for (const [body, code, status] of [
+        [{}, 'clarify-followup-invalid', 422],
+        [
+          {
+            requestId: '84f7d478-e89b-4b55-95df-a43e3687fa23',
+            parentQuestionId: 'q1',
+            basis: 'v1:basis',
+          },
+          'clarify-followup-mode',
+          409,
+        ],
+      ] as const) {
+        const response = await req(app, path + '/followup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        expect(response.status).toBe(status)
+        expect(await response.json()).toMatchObject({ code })
+      }
+      expect(await (await req(app, path)).json()).toEqual(before)
+    })
+
     test('returns ClarifyRound (with kind="cross" + intermediaryNodeId) for cross-clarify node_run', async () => {
       // RFC-058 T14: detail endpoint now emits a single ClarifyRound shape;
       // cross-clarify rows surface as `kind: 'cross'` + `intermediaryNodeId`

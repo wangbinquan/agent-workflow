@@ -105931,7 +105931,7 @@
   "denominator": {
     "architectureExceptions": 6231,
     "implementationSccs": 0,
-    "observedEdges": 7123,
+    "observedEdges": 7122,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -109634,22 +109634,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/restore.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/restore.ts#$file"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "id": "import:07d7326f47b3459e9b53",
-      "owner": "task-execution",
-      "removeAfterWave": null,
-      "role": "offered-consumption",
-      "specifier": "@/modules/runtime-management/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "RuntimeKind",
-      "toContext": "runtime-management",
-      "toFile": "packages/backend/src/modules/runtime-management/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeKind"
     },
     {
       "edgeKind": "value",
@@ -220799,7 +220783,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31",
+  "sourceDigest": "sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

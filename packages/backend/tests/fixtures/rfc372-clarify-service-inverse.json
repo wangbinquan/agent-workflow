@@ -1,0 +1,22 @@
+{
+  "base": "95ec4a8^",
+  "path": "packages/backend/src/modules/collaboration/infrastructure/clarify/service.ts",
+  "changes": [
+    {
+      "previous": "//     'canceled' / cross 'abandoned' terminal statuses.\n\nimport {\n  CLARIFY_INPUT_PORT_NAME,\n  CLARIFY_SOURCE_PORT_NAME,\n  CROSS_CLARIFY_INPUT_PORT_NAME,\n",
+      "introduced": "//     'canceled' / cross 'abandoned' terminal statuses.\n\nimport {\n  validateClarifyMindmap,\n  CLARIFY_INPUT_PORT_NAME,\n  CLARIFY_SOURCE_PORT_NAME,\n  CROSS_CLARIFY_INPUT_PORT_NAME,\n"
+    },
+    {
+      "previous": "  // must NOT re-run this schema: RFC-056 §4.1 lifts the 5-question cap for\n  // cross-clarify and the cross parser at the runner is the validation\n  // authority (locked by scheduler-cross-clarify-dispatch '5-question cap').\n  const questions =\n    args.kind === 'self'\n      ? ClarifyEnvelopeBodySchema.parse({ questions: args.questions }).questions\n      : args.questions.map((question) => ClarifyQuestionSchema.parse(question))\n",
+      "introduced": "  // must NOT re-run this schema: RFC-056 §4.1 lifts the 5-question cap for\n  // cross-clarify and the cross parser at the runner is the validation\n  // authority (locked by scheduler-cross-clarify-dispatch '5-question cap').\n  let questions =\n    args.kind === 'self'\n      ? ClarifyEnvelopeBodySchema.parse({ questions: args.questions }).questions\n      : args.questions.map((question) => ClarifyQuestionSchema.parse(question))\n"
+    },
+    {
+      "previous": "  )[0]\n  if (taskRow === undefined) {\n    throw new ValidationError('clarify-task-not-found', `task ${args.taskId} not found`)\n  }\n  const questionsJson = JSON.stringify(questions)\n  const sourceSnapshotDigest = sha256Hex(\n",
+      "introduced": "  )[0]\n  if (taskRow === undefined) {\n    throw new ValidationError('clarify-task-not-found', `task ${args.taskId} not found`)\n  }\n  const frozenDefinition = JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition\n  const frozenGate = frozenDefinition.nodes.find((node) => node.id === args.intermediaryNodeId)\n  if (frozenGate?.interactionMode === 'mindmap') {\n    const graphError = validateClarifyMindmap(questions, true)\n    if (graphError) throw new ValidationError('clarify-questions-malformed', graphError)\n    questions = questions.map((q) => ({\n      ...q,\n      mindmap: {\n        categoryPath: q.mindmap!.categoryPath,\n        ...(q.mindmap!.parentQuestionId ? { parentQuestionId: q.mindmap!.parentQuestionId } : {}),\n      },\n    }))\n  } else {\n    questions = questions.map(({ mindmap: _mindmap, ...q }) => q)\n  }\n  const questionsJson = JSON.stringify(questions)\n  const sourceSnapshotDigest = sha256Hex(\n"
+    },
+    {
+      "previous": "      selectedOptionIndices: indices,\n      selectedOptionLabels: labels,\n      customText: a.customText,\n    })\n  }\n  return sealed\n",
+      "introduced": "      selectedOptionIndices: indices,\n      selectedOptionLabels: labels,\n      customText: a.customText,\n      ...(a.confirmedBasis ? { confirmedBasis: a.confirmedBasis } : {}),\n    })\n  }\n  return sealed\n"
+    }
+  ]
+}

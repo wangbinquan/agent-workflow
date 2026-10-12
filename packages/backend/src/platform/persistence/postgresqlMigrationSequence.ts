@@ -145,6 +145,31 @@ export interface PostgresqlMigrationHistory {
   readonly head: PostgresqlMigrationVersion
 }
 
+/** V4 retirement artifacts retain logical FK names. Resolve their physical
+ * identifiers from the verified preceding CREATE plan (which bounds names to
+ * PostgreSQL's 63-byte limit), without rewriting immutable migration artifacts. */
+export function postgresqlUpgradeStatementSql(
+  previous: PostgresqlMigrationVersion,
+  statement: PostgresqlSchemaStatement,
+): string {
+  if (statement.kind !== 'constraint' || !statement.logicalId.startsWith('retire:'))
+    return statement.sql
+  const logical = statement.logicalId.slice('retire:'.length)
+  const separator = logical.indexOf(':')
+  const id = `${logical.slice(0, separator)}:fk:${logical.slice(separator + 1)}`
+  const original = previous.plan.statements.find(
+    (item) => item.kind === 'constraint' && item.logicalId === id,
+  )
+  const physical = original?.sql.match(
+    /^(ALTER TABLE .+) ADD CONSTRAINT ("(?:[^"]|"")+") FOREIGN KEY /,
+  )
+  requireSequence(
+    physical !== undefined && physical !== null,
+    'retired foreign key is absent from the preceding plan',
+  )
+  return `${physical[1]} DROP CONSTRAINT ${physical[2]}`
+}
+
 /** The existing schema_migrations row shape; its original baseline stays intact. */
 export interface PostgresqlCompletedUpgrade {
   readonly baselineId: string

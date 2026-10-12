@@ -417,9 +417,12 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
         toContractDigest: next.contract.digest,
       }),
     ).toThrow('historical row, codec, key or disposition changed')
+    // A later index-only edge can follow additive/retirement edges. Filtering all
+    // V1 entries would leave sequence gaps and silently cease testing a prefix.
+    const firstRowChange = committed.steps.findIndex((step) => step.version !== 1)
     const prefix = replayPostgresqlMigrationHistory(
       committed.root,
-      committed.steps.filter((step) => step.version === 1),
+      committed.steps.slice(0, firstRowChange < 0 ? committed.steps.length : firstRowChange),
     )
     expect(
       resolvePostgresqlIndexOnlyRowBridge(prefix, {

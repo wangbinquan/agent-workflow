@@ -14,6 +14,7 @@ import { loadPostgresqlMigrationHistory } from './postgresqlMigrationHistory'
 import {
   planPostgresqlUpgrade,
   postgresqlUpgradeReceipt,
+  postgresqlUpgradeStatementSql,
   type PostgresqlCompletedUpgrade,
   type PostgresqlMigrationHistory,
 } from './postgresqlMigrationSequence'
@@ -405,7 +406,9 @@ export async function migratePostgresqlSchema(input: {
         for (const statement of step.executableStatements) {
           let rows: readonly Record<string, unknown>[]
           try {
-            rows = await connection.unsafe(statement.sql)
+            rows = await connection.unsafe(
+              postgresqlUpgradeStatementSql(history!.versions[step.sequence - 1]!, statement),
+            )
           } catch {
             throw new PostgresqlMigrationError(
               'postgresql-schema-prepare-failed',

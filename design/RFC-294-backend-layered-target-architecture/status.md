@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -32,10 +32,10 @@
 | `ambientWiring` | 508 |
 | `architectureExceptions` | 6231 |
 | `backgroundJobs` | 385 |
-| `crossContextImports` | 7123 |
+| `crossContextImports` | 7122 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 28249 |
+| `moduleSymbolOwners` | 28250 |
 | `mutationEntrypoints` | 2011 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1283 |
@@ -210,7 +210,7 @@
 | --- | --- |
 | legacy-outbound | 3975 |
 | legacy-inbound | 2026 |
-| offered-consumption | 382 |
+| offered-consumption | 381 |
 | infrastructure-external | 355 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 102 |

@@ -1,3 +1,4 @@
+import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-359 W9 —— System Operations「应用侧资产」读面的双引擎对拍。
 //
 // 这一族此前的形态
@@ -191,7 +192,7 @@ describeEachProvider('RFC-359 W9 System Operations application-asset reads', (ha
       name: 'Portable workflow',
       description: 'seeded by the W9 conformance harness',
       // 存的是 $schema_version 1，导出的必须是迁移到最新版之后的定义。
-      definition: { $schema_version: 6, inputs: [], nodes: [], edges: [] },
+      definition: { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes: [], edges: [] },
     })
     expect(existsSync(join(destination, '01ARZ3NDEKTSV4RRFFQ69G5FB2.yaml'))).toBe(true)
     cleanupRoots()

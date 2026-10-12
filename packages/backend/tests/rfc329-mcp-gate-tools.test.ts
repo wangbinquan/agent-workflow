@@ -10,7 +10,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { SubmitClarifyAnswersSchema } from '@agent-workflow/shared'
+import {
+  SubmitClarifyAnswersSchema,
+  ClarifyRoundSchema,
+  clarifyQuestionSetKey,
+} from '@agent-workflow/shared'
 import { ALL_TOOLS, type McpToolContext } from '@/mcp/tools'
 import {
   forwardingOperationHandles,
@@ -49,6 +53,70 @@ async function dispatchOf(
 }
 
 describe('RFC-329 AC-5 — answer_clarify can express the control channel', () => {
+  test('mindmap round reads expose the same question-set identity that submission requires', async () => {
+    const round = ClarifyRoundSchema.parse({
+      id: 'round',
+      taskId: 'task',
+      kind: 'self',
+      askingNodeId: 'ask',
+      askingNodeRunId: 'ask-run',
+      intermediaryNodeId: 'gate',
+      intermediaryNodeRunId: 'gate-run',
+      iteration: 0,
+      status: 'awaiting_human',
+      createdAt: 1,
+      questions: [
+        {
+          id: 'q1',
+          title: 'Scope?',
+          kind: 'single',
+          options: ['yes', 'no'],
+          mindmap: { categoryPath: ['Scope'] },
+        },
+      ],
+    })
+    const calls: RecordedOperationCall[] = []
+    const ctx: McpToolContext = {
+      actor: {} as McpToolContext['actor'],
+      operations: recordingOperationHandles('get_clarify_session', calls, () => round),
+      progress: async () => {},
+      signal: new AbortController().signal,
+    }
+    const detail = await toolNamed('get_clarify_session').handler({ nodeRunId: 'gate-run' }, ctx)
+    expect(detail).toEqual({ ...round, questionSetKey: clarifyQuestionSetKey(round.questions) })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.path).toBe('/api/clarify/gate-run')
+  })
+
+  // RFC-372: the original MCP submission must carry the same-round append guard.
+  test('mindmap question-set identity and answer confirmation reach the original route unchanged', async () => {
+    const answers = [
+      {
+        questionId: 'q1',
+        selectedOptionIndices: [0],
+        customText: '',
+        confirmedBasis: 'v1:confirmed',
+      },
+    ]
+    const calls = await dispatchOf('answer_clarify', {
+      nodeRunId: 'NR1',
+      answers,
+      questionSetKey: 'v1:questions',
+      ifMatchIteration: 2,
+    })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.path).toBe('/api/clarify/NR1/answers')
+    expect(calls[0]?.body).toMatchObject({
+      answers,
+      questionSetKey: 'v1:questions',
+      ifMatchIteration: 2,
+    })
+    const field = toolNamed('answer_clarify').inputSchema.questionSetKey!
+    expect(field.safeParse(undefined).success).toBe(true)
+    expect(field.safeParse('v1:questions').success).toBe(true)
+    expect(field.safeParse('x'.repeat(129)).success).toBe(false)
+  })
+
   test('the three control-channel fields reach the route', async () => {
     const calls = await dispatchOf('answer_clarify', {
       nodeRunId: 'NR1',

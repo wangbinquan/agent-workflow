@@ -23,6 +23,10 @@
 
 import { z } from 'zod'
 import {
+  ClarifyRoundSchema,
+  type ClarifyRound,
+  clarifyQuestionSetKey,
+  isMindmapRound,
   type MatrixResource,
   type Permission,
   REVIEW_ANCHOR_QUOTE_MAX_CHARS,
@@ -35,7 +39,7 @@ import {
   ReviewDecisionKindSchema,
   type Role,
   type StartTaskSchema,
-  type SubmitClarifyAnswersSchema,
+  SubmitClarifyAnswersSchema,
   type SubmitReviewDecisionSchema,
   type WorkflowInput,
 } from '@agent-workflow/shared'
@@ -645,15 +649,22 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     title: 'Read a clarifying question round',
     description:
       'The questions a node is waiting on, plus the current `iterationIndex` — pass that back to answer_clarify ' +
-      'so a concurrent answer from someone else is detected instead of overwritten.',
+      'so a concurrent answer from someone else is detected instead of overwritten. In mindmap mode, also ' +
+      'pass the returned `questionSetKey`; branch follow-up can append questions within the same iteration.',
     permissions: [],
     inputSchema: { nodeRunId: z.string().min(1) },
-    handler: async (args, ctx) =>
-      unwrap(
-        await ctx.operations.clarifyGet({
-          params: { nodeRunId: String(args.nodeRunId) },
-        }),
-      ),
+    handler: async (args, ctx) => {
+      const detail = unwrap(
+        await ctx.operations.clarifyGet({ params: { nodeRunId: String(args.nodeRunId) } }),
+      )
+      const round = ClarifyRoundSchema.safeParse(detail)
+      return round.success && isMindmapRound(round.data.questions)
+        ? {
+            ...(detail as object),
+            questionSetKey: clarifyQuestionSetKey((detail as ClarifyRound).questions),
+          }
+        : detail
+    },
   },
   {
     name: 'answer_clarify',
@@ -683,6 +694,9 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
         .optional()
         .describe('The iterationIndex you read; mismatched answers are refused with 409'),
       directive: z.enum(['continue', 'stop']).optional(),
+      questionSetKey: SubmitClarifyAnswersSchema.shape.questionSetKey.describe(
+        'In mindmap mode, send the questionSetKey from get_clarify_session to confirm the complete current question set.',
+      ),
       // RFC-329 —— the control channel. The REST route has had these three since
       // RFC-128/136; this tool could not express any of them, so "answer some
       // questions now and let a colleague take the rest" was web-only. Note this
@@ -726,19 +740,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
             defer: args.defer,
             questionIds: args.questionIds,
             resubmitQuestionIds: args.resubmitQuestionIds,
+            ...(args.questionSetKey === undefined ? {} : { questionSetKey: args.questionSetKey }),
           },
         }),
       ),
   },
-  // ---------------------------------------------------------------------------
-  // RFC-329 —— the clarify board (per-question routing), the node switch, and the
-  // collaborative draft. All of these existed on REST since RFC-120/122/128; none
-  // had a tool, so "answer some now, hand the rest to a colleague, dispatch when
-  // ready" was reachable only from the web UI.
-  //
-  // Every description says whether the step ADVANCES THE RUN, because only one of
-  // them does and a model cannot tell from the verb.
-  // ---------------------------------------------------------------------------
   {
     name: 'list_task_questions',
     title: 'List the questions on a task’s board',

@@ -13,7 +13,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { join } from 'node:path'
-import { parseIntentChangeset, type IntentChangeset } from '@agent-workflow/shared'
+import {
+  parseIntentChangeset,
+  WORKFLOW_SCHEMA_VERSION,
+  type IntentChangeset,
+} from '@agent-workflow/shared'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -129,7 +133,7 @@ async function runGraph(changeset: IntentChangeset) {
 /** 一条最小的「input → agent → output」定义，图校验下是绿的。 */
 function linearDefinition(agentRef: string) {
   return {
-    $schema_version: 6,
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [{ key: 'task', kind: 'text', label: 'Task', required: true }],
     nodes: [
       { id: 'n_in', kind: 'input', inputKey: 'task' },
@@ -200,7 +204,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
             name: 'e2e-nested-cycle-workflow',
             description: 'nested wrapper and legal loop cycle fixture',
             definition: {
-              $schema_version: 6,
+              $schema_version: WORKFLOW_SCHEMA_VERSION,
               inputs: [],
               nodes: [
                 {
@@ -260,7 +264,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
 
     test('P0-1：覆盖层带 outputKinds 才不会误报 review-input-source-not-markdown', async () => {
       const reviewDefinition = (agentRef: string) => ({
-        $schema_version: 6,
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
         inputs: [{ key: 'task', kind: 'text', label: 'Task', required: true }],
         nodes: [
           { id: 'n_in', kind: 'input', inputKey: 'task' },
@@ -323,7 +327,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
 
     test('AC-9：同批新建的被调工作流不产生 call-workflow-ref-missing 假阳性', async () => {
       const caller = {
-        $schema_version: 6,
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
         inputs: [{ key: 'task', kind: 'text', label: 'Task', required: true }],
         nodes: [
           { id: 'n_in', kind: 'input', inputKey: 'task' },
@@ -347,7 +351,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
 
     test('AC-10：畸形定义给一条可读的 op 级 error，而不是让整轮崩', async () => {
       const malformed = {
-        $schema_version: 6,
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
         inputs: [],
         nodes: [{ id: 'n_agent', kind: 'agent-single', agentRef: '$new:auditor' }],
         // 校验器第一件事就解引用 edge.target.nodeId —— 这种边会让它抛。
@@ -714,7 +718,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
       const { session } = await seedSession()
       // 一条边指向 agent 上并不存在的端口 —— 图校验才看得见的那类错误。
       const badDefinition = {
-        $schema_version: 6,
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
         inputs: [{ key: 'task', kind: 'text', label: 'Task', required: true }],
         nodes: [
           { id: 'n_in', kind: 'input', inputKey: 'task' },
@@ -864,7 +868,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
         name: 'downstream-pipeline',
         description: '',
         definition: JSON.stringify({
-          $schema_version: 6,
+          $schema_version: WORKFLOW_SCHEMA_VERSION,
           inputs: [],
           nodes: [{ id: 'n', kind: 'agent-single', agentId: stored.id }],
           edges: [],

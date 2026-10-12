@@ -1,3 +1,4 @@
+import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-359 W12: execute the complete classic catalog bundle before consolidating
 // its daemon wiring. A renamed factory alone cannot prove that its ports work.
 import { afterEach, expect, test } from 'bun:test'
@@ -203,7 +204,7 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
     expect(await recomposed.skill.queries.get(authority, { id: skill.id })).toMatchObject(skill)
     expect(await recomposed.workflow.queries.get(authority, { id: workflow.id })).toMatchObject({
       ...workflow,
-      definition: { $schema_version: 6, inputs: [], nodes: [], edges: [] },
+      definition: { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes: [], edges: [] },
     })
     const otherHome = join(home, 'other-root')
     expect(await compose(otherHome).skillContent.isAvailable(skill)).toBe(false)

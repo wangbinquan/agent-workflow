@@ -37,6 +37,16 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: 'GET /.well-known/mcp', group: '(infrastructure)', category: 'deliberate' },
   { leaf: 'GET /health', group: '(infrastructure)', category: 'deliberate' },
   { leaf: 'GET /api/clarify/pending-count', group: '/api/clarify', category: 'deliberate' },
+  {
+    leaf: 'POST /api/clarify/:id/followup',
+    group: '/api/clarify/followup',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'DELETE /api/clarify/:id/followup/:id',
+    group: '/api/clarify/followup',
+    category: 'not-in-scope',
+  },
   { leaf: 'GET /api/docs/api', group: '/api/docs', category: 'deliberate' },
   { leaf: 'GET /api/fusions/pending-count', group: '/api/fusions', category: 'deliberate' },
   { leaf: 'POST /api/fusions', group: '/api/fusions', category: 'deliberate' },
@@ -1166,6 +1176,8 @@ export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
   '/api/cached-repos': '三类 / 四类：该做但不在 RFC-329 范围（proposal §2.3 / §2.4），等后续 RFC。',
   '/api/capability-templates':
     '三类 / 四类：该做但不在 RFC-329 范围（proposal §2.3 / §2.4），等后续 RFC。',
+  '/api/clarify/followup':
+    'RFC-372（Codex，2026-10-12）：用户批准范围是现有反问的脑图工作区；按当前分支和共享草稿发起/取消追问的两个新接口先由该工作区消费，本次不扩展 Agent MCP 追问工具。原反问读取与回答工具继续复用，题集校验字段已透传。',
   '/api/clarify':
     '够得着也不给：pending-count 只是数字，模型要的是行（list_pending_gates 给行）；POST /api/fusions 是发起不是门，与 launch_task 同类、归三类；whoami / overview / docs 由 describe_capabilities 与 describe_resource 覆盖同一需求。',
   '/api/code': '三类 / 四类：该做但不在 RFC-329 范围（proposal §2.3 / §2.4），等后续 RFC。',

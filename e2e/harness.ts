@@ -28,6 +28,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { type Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
+import { WORKFLOW_SCHEMA_VERSION } from '../packages/shared/src/schemas/workflow'
 
 import { captureRouteHits, harnessLogLevel } from './route-journal'
 
@@ -724,6 +725,11 @@ async function startDaemonWithPortAllocator(
             AGENT_WORKFLOW_HOME: home,
             LANG: 'en_US.UTF-8',
             ...mockNpmRegistryEnv(home),
+            // Intent authoring requires the current schema. Legacy stub
+            // recordings retain their version unless the harness opts in.
+            ...(runtimeMode === 'stub' && stubMode === 'intent'
+              ? { STUB_INTENT_WORKFLOW_SCHEMA_VERSION: String(WORKFLOW_SCHEMA_VERSION) }
+              : {}),
             ...(opts.extraEnv ?? {}),
             // LAST, so it wins. Placed first it was overridable by `extraEnv`,
             // which is the one remaining way to run a different stub than the

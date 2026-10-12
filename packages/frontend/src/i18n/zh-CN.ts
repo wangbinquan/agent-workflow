@@ -14001,6 +14001,7 @@ export const zhCN: Resources = {
       'boundary-output-source-not-inner': '包装器出界边的源头不在包装器内。',
       'boundary-output-target-not-wrapper': '包装器出界边的目标不是扇出包装器。',
       'clarify-questions-port-missing': '反问节点的 questions 端口缺少入边。',
+      'clarify-config-invalid': '反问界面设置不合法，请检查模式、提问分类和追问指引。',
       'clarify-answers-port-disconnected':
         '反问节点的 answers 端口没有出边（答案仍会经内部通道注入）。',
       'clarify-input-source-missing': '反问节点的入边引用了不存在的节点。',

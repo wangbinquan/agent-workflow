@@ -236,6 +236,24 @@ function intentDocText(): string {
   }
 }
 
+// Current-schema browser fixtures opt in explicitly. The default remains the
+// byte-identical RFC-254 recording, including its historical workflow version.
+function withWorkflowSchemaVersion(changeset: string): string {
+  const configured = process.env.STUB_INTENT_WORKFLOW_SCHEMA_VERSION
+  if (configured === undefined) return changeset
+  const version = Number(configured)
+  if (!Number.isSafeInteger(version) || version < 1) {
+    throw new Error('STUB_INTENT_WORKFLOW_SCHEMA_VERSION must be a positive integer')
+  }
+  const parsed = JSON.parse(changeset)
+  for (const operation of parsed.ops) {
+    if (operation.resourceType === 'workflow' && operation.payload?.definition) {
+      operation.payload.definition.$schema_version = version
+    }
+  }
+  return JSON.stringify(parsed)
+}
+
 export async function run(argv: readonly string[]): Promise<void> {
   const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
@@ -247,7 +265,7 @@ export async function run(argv: readonly string[]): Promise<void> {
   const workflowVariant = process.env.STUB_INTENT_VARIANT === 'workflow'
   const layoutFixture = process.env.STUB_INTENT_LAYOUT_FIXTURE
   const updateVariant = process.env.STUB_INTENT_VARIANT === 'update'
-  const changeset = updateVariant
+  const recordedChangeset = updateVariant
     ? updateChangeset(call.prompt)
     : workflowVariant
       ? layoutFixture === 'overlap'
@@ -256,6 +274,7 @@ export async function run(argv: readonly string[]): Promise<void> {
           ? NESTED_CYCLE_WORKFLOW_CHANGESET
           : WORKFLOW_CHANGESET
       : AGENT_CHANGESET
+  const changeset = withWorkflowSchemaVersion(recordedChangeset)
   const summary = updateVariant
     ? 'stub intent build: one agent update'
     : workflowVariant

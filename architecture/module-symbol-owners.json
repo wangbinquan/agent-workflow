@@ -6,7 +6,7 @@
     "moduleFiles": 1896,
     "productionFiles": 3350,
     "sharedFiles": 174,
-    "symbolsIncludingFileRoots": 28249
+    "symbolsIncludingFileRoots": 28250
   },
   "entries": [
     {
@@ -187378,6 +187378,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#postgresqlUpgradeStatementSql",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "postgresqlUpgradeStatementSql",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
       "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#renderPostgresqlUpgradeSql",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -339729,5 +339741,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31"
+  "sourceDigest": "sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8"
 }

@@ -47720,7 +47720,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:674",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:678",
       "missingControls": [
         "audit",
         "authority",
@@ -47730,7 +47730,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:674",
+      "symbol": "$http:delete:678",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47745,7 +47745,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:709",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:713",
       "missingControls": [
         "audit",
         "authority",
@@ -47755,7 +47755,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:709",
+      "symbol": "$http:delete:713",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47770,7 +47770,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:714",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:718",
       "missingControls": [
         "audit",
         "authority",
@@ -47780,7 +47780,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:714",
+      "symbol": "$http:delete:718",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47795,7 +47795,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:742",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:746",
       "missingControls": [
         "audit",
         "authority",
@@ -47805,7 +47805,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:742",
+      "symbol": "$http:delete:746",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47820,7 +47820,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:747",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:751",
       "missingControls": [
         "audit",
         "authority",
@@ -47830,7 +47830,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:747",
+      "symbol": "$http:delete:751",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -48121,7 +48121,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31",
+  "sourceDigest": "sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

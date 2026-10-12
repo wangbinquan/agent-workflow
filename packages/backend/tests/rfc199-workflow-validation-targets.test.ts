@@ -256,7 +256,8 @@ describe('RFC-199 strict workflow validation targets', () => {
     // are edges, covered once by the generic edge rule): 14 retired, plus one
     // new `wrapper-fanout-shard-source-missing` site (the named shard port has
     // no feeding edge) ⇒ 145 − 14 + 1 = 132.
-    expect(emissions).toHaveLength(132)
+    // RFC-372 adds one node-targeted clarify configuration emission for both topologies.
+    expect(emissions).toHaveLength(133)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

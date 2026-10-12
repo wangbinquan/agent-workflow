@@ -443,6 +443,12 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-371: this one real file is the external OpenCode SQLite format;
   // System persistence, EOF, resume and CNY are covered by both AW providers.
   'rfc371-system-native-provider.test.ts: 2',
+  // RFC-372: the native CLI scheduler harness uses the existing SQLite runtime;
+  // original round persistence and submission are separately driven on both providers.
+  'rfc372-task-engine.test.ts: 1',
+  // Immutable historical SQLite artifacts require native serialization; current
+  // retained-row reads now also drive the real PostgreSQL source in this suite.
+  'rfc372-task-schema.test.ts: 2',
   'runner-subagent-live-capture.test.ts: 6',
   // RFC-371：runner 本身仍用 describeEachProvider；唯一 new Database 是原生模型证据夹具。
   'runner.test.ts: 1',

@@ -26,6 +26,39 @@ imports.
 | `src/scip/`          | One executable compatible with every configured SCIP indexer argv shape                                                            |
 | `src/core/`          | Shared request journal, bounded body parsing, process discipline, and deterministic fault injection                                |
 
+## Complete mindmap clarification task (RFC-372)
+
+`e2e/rfc372-mindmap-journey.spec.ts` runs a real task from three predefined
+question directions through self clarification, two levels of branch follow-up,
+cross-agent clarification, confirmed answers, a final Markdown document and
+TaskEngine completion. It also exercises cancellation, invalid model output and
+retry, shared panorama/focus state, edits invalidating confirmation, collapsed
+branch status and refresh after durable save. Application routes, persistence,
+question generation orchestration and task outputs are never intercepted.
+
+The `clarify` runtime has an explicit fixture opt-in:
+`CLARIFY_STUB_MINDMAP_SCENARIO=complete-design`. Its implementation is
+`src/runtime/mindmapDesignScenario.ts`; default `clarify` behavior and RFC-254
+recordings remain unchanged. The model fixture reads the actual injected Q&A
+and fails if a deep or cross-agent answer is missing. Cancellation and malformed
+output are injected only at the model boundary using the documented scenario
+instructions in the spec.
+
+After `bun run build:binary:e2e`, run:
+
+```sh
+bun x playwright test e2e/rfc372-mindmap-journey.spec.ts --project=chromium --workers=1
+```
+
+The normal suite removes its temporary home. To preserve a local acceptance
+task, set `RFC372_ACCEPTANCE_HOME` to a fresh absolute directory. The spec stops
+its daemon after completion but retains the database, worktree, model journal,
+`rfc372-acceptance.json` (task/workflow IDs and evidence, no credentials), and
+`会议室预约系统设计.md`. Start the regular local daemon against that home to inspect
+the completed task. The companion `rfc372-mindmap.spec.ts` retains responsive,
+theme and 5,000-question canvas/virtual-outline coverage; that scale case supplies
+only the display payload and does not claim backend or model load coverage.
+
 ## Playwright lifecycle
 
 `e2e/global-setup.ts` starts one HTTP gateway on an ephemeral loopback port and

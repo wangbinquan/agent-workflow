@@ -19,6 +19,8 @@ import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
+import ts from 'typescript'
+import { inverseRfc372ClarifyRootBinding } from './helpers/rfc372ClarifyRootInverse'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_RUNTIME = resolve(import.meta.dir, 'fixtures', 'rfc372-native-runtime.ts')
@@ -36,6 +38,24 @@ test('both daemon bootstraps bind follow-up generation into the original clarify
     expect(source).toMatch(
       /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?observations: \(\) => systemAgentObservations,/,
     )
+    const fileName = new URL(path, import.meta.url).pathname
+    const parse = (text: string) =>
+      ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true)
+    const restored = inverseRfc372ClarifyRootBinding(parse(source))
+    expect(restored.text).not.toContain('composeClarifyFollowupGenerator')
+    expect(inverseRfc372ClarifyRootBinding(parse(source + '\n// unknown root change\n')).text).toBe(
+      restored.text + '\n// unknown root change\n',
+    )
+    expect(() =>
+      inverseRfc372ClarifyRootBinding(
+        parse(
+          source.replace(
+            'followupGenerator: composeClarifyFollowupGenerator({',
+            'followupGenerator: unrelatedGenerator({',
+          ),
+        ),
+      ),
+    ).toThrow('clarify root inverse unreviewed')
   }
 })
 

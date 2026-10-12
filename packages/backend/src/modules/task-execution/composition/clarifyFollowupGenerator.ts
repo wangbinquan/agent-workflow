@@ -1,9 +1,8 @@
 import { eq } from 'drizzle-orm'
-import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
+import { DEFAULT_CONFIG_DIR_PROFILE, RuntimeStatusEntrySchema } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns } from '@/db/schema'
 import type { ClarifyFollowupGenerator } from '@/modules/collaboration/public/participants'
-import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import { createLogger } from '@/util/log'
 import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
@@ -42,17 +41,18 @@ export function composeClarifyFollowupGenerator(input: {
         /* Legacy rows may have no usable frozen parameters. */
       }
       const config = params.__configDir as { env?: unknown; name?: unknown } | undefined
+      const protocol = RuntimeStatusEntrySchema.shape.protocol.safeParse(row?.protocol)
       const runtime = binding.bindRuntime(
-        row && (row.protocol === 'opencode' || row.protocol === 'claude-code')
+        row && protocol.success
           ? {
-              protocol: row.protocol as RuntimeKind,
+              protocol: protocol.data,
               binaryPath: row.binaryPath,
               model: typeof params.model === 'string' ? params.model : null,
               isSandbox: params.isSandbox === true,
               configDir:
                 config && typeof config.env === 'string' && typeof config.name === 'string'
                   ? { env: config.env, name: config.name }
-                  : DEFAULT_CONFIG_DIR_PROFILE[row.protocol],
+                  : DEFAULT_CONFIG_DIR_PROFILE[protocol.data],
             }
           : await input.registry.resolveRuntimeByName(undefined),
       )

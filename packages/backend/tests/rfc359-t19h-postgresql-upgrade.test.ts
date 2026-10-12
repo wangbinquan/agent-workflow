@@ -4,6 +4,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
+import { postgresqlUpgradeStatementSql } from '@/platform/persistence/postgresqlMigrationSequence'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
 import {
   POSTGRESQL_BASELINE_ID,
@@ -156,8 +157,18 @@ function fixture(
         for (const row of matched) row.contract_digest = String(parameters[0])
         return rows(matched)
       }
-      const matched = upgrades.find(({ statement }) => statement.sql === sql)
+      const matched = upgrades.find(
+        ({ statement, step }) =>
+          postgresqlUpgradeStatementSql(history.versions[step.sequence - 1]!, statement) === sql,
+      )
       if (matched?.statement.kind === 'table') {
+        // RFC-372 V4 retires tables in the same transaction. A DROP is not a CREATE.
+        if (matched.statement.sql.startsWith('DROP TABLE')) {
+          const id = matched.statement.logicalId.slice('retire:'.length)
+          expect(pending.tables).toContain(id)
+          pending.tables = pending.tables.filter((table) => table !== id)
+          return rows([])
+        }
         pending.tables.push(matched.statement.logicalId)
         return rows([])
       }
@@ -272,6 +283,12 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
       },
     })
     expect(result).toMatchObject({ applied: true, planDigest: history.head.plan.digest })
+    expect([...db.committed().tables].sort()).toEqual(
+      history.head.plan.statements
+        .filter((statement) => statement.kind === 'table')
+        .map((statement) => statement.logicalId)
+        .sort(),
+    )
     expect(db.committed().migrations[0]).toEqual(original.migrations[0])
     expect(db.committed().migrations).toHaveLength(1 + history.steps.length)
     expect(db.committed().installed).toEqual(indexStatements().map((statement) => statement.sql))

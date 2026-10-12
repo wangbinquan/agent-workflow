@@ -22,13 +22,14 @@ import {
   requireEnvelopeOpen,
   sanitizeStateKey,
 } from './skeleton'
+import { runMindmapDesignScenario } from './mindmapDesignScenario'
 
 const NAME = 'stub-opencode-clarify'
 
 const QUESTIONS =
   '{"questions":[{"id":"q-db","title":"Which database should we use?","kind":"single","recommended":true,"options":["Postgres","SQLite"]},{"id":"q-lang","title":"Pick languages","kind":"multi","recommended":false,"options":["TypeScript","Python"]}]}'
 
-export function run(argv: readonly string[]): void {
+export function run(argv: readonly string[]): void | Promise<void> {
   const call = parseInvocation(argv, NAME)
   if (call.kind === 'version') {
     process.stdout.write('stub-opencode 1.17.9\n')
@@ -36,6 +37,9 @@ export function run(argv: readonly string[]): void {
   }
   const stateDir = ensureStateDir(process.env.CLARIFY_STUB_STATE, '/tmp/aw-e2e-clarify-state')
   emitPromptForContractTest(call.prompt)
+  if (process.env.CLARIFY_STUB_MINDMAP_SCENARIO === 'complete-design') {
+    return runMindmapDesignScenario(call.prompt, stateDir)
+  }
   // RFC-372 fixture opt-in; ordinary clarify stub output remains byte-for-byte.
   const mindmap = process.env.CLARIFY_STUB_MINDMAP === '1'
   if (mindmap && call.prompt.startsWith('Ask 1–4 consequential follow-up questions')) {

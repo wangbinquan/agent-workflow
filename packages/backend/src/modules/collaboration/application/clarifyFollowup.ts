@@ -93,13 +93,21 @@ export function createClarifyFollowupOperations(
             'clarify-followup-context-too-large',
             'This branch exceeds the follow-up context limit.',
           )
-        const text = await generator.generate({
-          askingNodeRunId: snapshot.askingNodeRunId,
-          taskId: snapshot.taskId,
-          requestId: request.requestId,
-          prompt,
-          signal: abort.signal,
-        })
+        const text = await generator
+          .generate({
+            askingNodeRunId: snapshot.askingNodeRunId,
+            taskId: snapshot.taskId,
+            requestId: request.requestId,
+            prompt,
+            signal: abort.signal,
+          })
+          .catch((error: unknown) => {
+            // A real native CLI rejects when canceled. Preserve the same
+            // recoverable cancellation result as a late resolved response.
+            if (abort.signal.aborted)
+              throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
+            throw error
+          })
         if (abort.signal.aborted)
           throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
         const match = /^\s*<workflow-clarify>\s*([\s\S]*?)\s*<\/workflow-clarify>\s*$/.exec(text)

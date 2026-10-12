@@ -1,3 +1,9 @@
+## 2026-10-12 RFC-372：完整本地任务 done，System Mock E2E 已固化
+
+用户追加的真实完整任务已运行：`01M4R5XY9X39Q89X0PF13R8Y83`，预置三个方向，自反问 6 题（含两层深入）、跨 Agent 3 题，回答/确认/修改失效/取消/失败重试/刷新恢复/原提交/最终文档/TaskEngine 全程完成。最终正式二进制浏览器验收 1 pass / 21.7s；任务与输出保留于 `.agent-workflow/rfc372-acceptance-20261012-final/`。`e2e/rfc372-mindmap-journey.spec.ts` 已纳入默认发现集合，System Mock 仅替代模型 CLI，文档从实际注入答案构造。大图/窄屏/主题及并发/双 provider 边界由既有用例补齐。
+
+`b9cf343f` 精确 CI 失败已按日志归因；本会话修复 MCP 问题集合键、v7 fixtures、翻译/协议接线、原启动逆向证明与双 provider 清单。真实 PG 升级修复退役外键的物理截断名解析（7 pass）；完整流程发现原生生成取消误记 500，已修为原 409 canceled 并补回归（11 pass）。最终 build/smoke 与完整任务通过，独立功能检视 PASS。并发观测投影/Bun/helper 等失败不代改；本次提交、远端精确 CI 仍待关闭，未部署、未发送跨 session 消息。详见 [完整验收与证据](design/RFC-372-mindmap-clarify/lightweight-acceptance.md)。
+
 ## 2026-10-12 RFC-372：产品已上库，首轮 CI 归因与修复
 
 轻量实现和必要共享产出已提交推送 `95ec4a8ee9698792c148d6cadf4d241db73474d9`，推送后 `main` 与 `origin/main` 为 0/0。本地集中验证结果保留，未部署。该 SHA 首轮 CI 在冻结依赖安装失败，确切差分显示本会话清理时误漏原功能仍使用的 Mermaid/happy-dom workspace 引用，现已补回；并发 Bun 1.4.3 类型升级完整保留，冻结安装已通过。早期 RFC-372 复核文档 20 个本机绝对链接亦有原 Lychee 失败证据，已改为历史源码链接及相对链接。无源码增长的后继修复只退役八条已消费的增长声明，不重跑或改写 census。相关修复提交与其完整 CI 仍待核对；观测统计并发类型错误由责任会话处理，本会话不代改、不发跨 session 信息。详见 [轻量验收](design/RFC-372-mindmap-clarify/lightweight-acceptance.md)。

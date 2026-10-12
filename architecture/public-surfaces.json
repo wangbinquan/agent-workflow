@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 1376,
+    "consumers": 1375,
     "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
     "methods": 1778,
@@ -161246,7 +161246,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:07d7326f47b3459e9b53",
         "import:19ddf6478b7589118284",
         "import:3f2e12faadb3dcc18ca7",
         "import:6c18f52e82a79a51acd6",
@@ -161280,12 +161279,6 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeKind",
       "productionConsumers": [
-        {
-          "context": "task-execution",
-          "edgeId": "import:07d7326f47b3459e9b53",
-          "file": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file"
-        },
         {
           "context": "legacy",
           "edgeId": "import:19ddf6478b7589118284",
@@ -234179,7 +234172,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31",
+  "sourceDigest": "sha256:7abc33f785cf93c72c2c248470d40a3e53c9543a5476efb2b830a9d1dead7ab8",
   "targetContexts": [
     "collaboration",
     "development-automation",

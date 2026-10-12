@@ -1,9 +1,11 @@
 import ts from 'typescript'
 import reviewed from '../fixtures/rfc370-task-provider-host-assembly-original-sources.json'
 import { inverseRfc371NativeFactRootHooks } from './rfc371NativeFactRootInverse'
+import { inverseRfc372ClarifyRootBinding } from './rfc372ClarifyRootInverse'
 
 /** Compose exact shared root hooks before the finite Task provider host assembly inverse. */
 export function inverseTaskProviderHostAssembly(source: ts.SourceFile): ts.SourceFile {
+  source = inverseRfc372ClarifyRootBinding(source)
   source = inverseRfc371NativeFactRootHooks(source)
   const entry = reviewed.sources.find((row) =>
     source.fileName.endsWith(row.path.slice('packages/backend/src/'.length)),

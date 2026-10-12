@@ -7747,6 +7747,8 @@ export const enUS: Resources = {
       'boundary-output-target-not-wrapper':
         'The wrapper-output edge target is not a fan-out wrapper.',
       'clarify-questions-port-missing': 'The clarify node questions port has no inbound edge.',
+      'clarify-config-invalid':
+        'Check the question interface, category names and follow-up guidance.',
       'clarify-answers-port-disconnected':
         'The clarify node answers port has no outbound edge (answers still flow via the internal channel).',
       'clarify-input-source-missing': 'A clarify inbound edge references an unknown node.',

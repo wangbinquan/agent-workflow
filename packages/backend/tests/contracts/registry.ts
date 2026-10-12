@@ -783,6 +783,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/clarify/pending-count' },
   { method: 'GET', path: '/api/clarify/:nodeRunId' },
   { method: 'POST', path: '/api/clarify/:nodeRunId/answers' },
+  { method: 'POST', path: '/api/clarify/:nodeRunId/followup' },
+  { method: 'DELETE', path: '/api/clarify/:nodeRunId/followup/:requestId' },
   // RFC-099 (D8): collaborative per-question answer draft.
   { method: 'PUT', path: '/api/clarify/:nodeRunId/draft' },
 

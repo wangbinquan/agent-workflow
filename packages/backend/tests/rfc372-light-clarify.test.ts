@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
+import { Hono, type Context } from 'hono'
+import { buildActor } from '@/auth/actor'
+import { errorHandler } from '@/util/errors'
+import { mountClarifyRoutes } from '@/routes/clarify'
+import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
 import {
   ClarifyQuestionSchema,
   clarifyAnswerBasis,
@@ -41,6 +46,50 @@ const answer = (question: ClarifyQuestion): ClarifyAnswer => {
 }
 const generated =
   '<workflow-clarify>' + JSON.stringify({ questions: [q('new')] }) + '</workflow-clarify>'
+
+test('a route composition without a follow-up generator returns a structured unavailable error', async () => {
+  const app = new Hono()
+  const actor = buildActor({
+    user: {
+      id: 'reviewer',
+      username: 'reviewer',
+      displayName: 'Reviewer',
+      role: 'admin',
+      status: 'active',
+    },
+    source: 'session',
+  })
+  let accessReads = 0
+  app.use('*', async (c: Context, next) => {
+    c.set('actor', actor)
+    await next()
+  })
+  app.onError(errorHandler)
+  mountClarifyRoutes(app, {
+    clarify: {},
+    access: {
+      async resolveClarifyTask() {
+        accessReads++
+        return {
+          roundExists: true,
+          nodeRunExists: true,
+          taskId: 'task',
+          task: {},
+          actorRole: 'owner',
+          visible: true,
+        }
+      },
+    },
+  } as unknown as CollaborationRouteOperations)
+  const response = await app.request('/api/clarify/gate/followup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requestId: randomUUID(), parentQuestionId: 'q1', basis: 'v1:basis' }),
+  })
+  expect(accessReads).toBe(1)
+  expect(response.status).toBe(422)
+  expect(await response.json()).toMatchObject({ code: 'clarify-followup-unavailable' })
+})
 
 async function seed(h: ProviderHarness, kind: 'self' | 'cross' = 'self', mindmap = true) {
   const taskId = randomUUID(),
@@ -221,7 +270,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         basis: clarifyContentKey(clarifyFollowupContext(snap.questions, snap.drafts, 'b')),
       }
     }
-    for (const effect of ['edit', 'cancel', 'submit', 'failure'] as const) {
+    for (const effect of ['edit', 'cancel', 'cancel-reject', 'submit', 'failure'] as const) {
       if (effect === 'failure') continue // Failure recovery has its own open round below.
       let release!: () => void, started!: () => void
       const start = new Promise<void>((resolve) => {
@@ -231,9 +280,10 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         release = resolve
       })
       const ops = createClarifyFollowupOperations(store, {
-        generate: async () => {
+        generate: async ({ signal }) => {
           started()
           await gate
+          if (effect === 'cancel-reject' && signal.aborted) throw new Error('native CLI aborted')
           return generated
         },
       })
@@ -254,7 +304,8 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           editor,
           draftEvents: events,
         })
-      if (effect === 'cancel') await ops.cancel(fixture.nodeRunId, request.requestId)
+      if (effect === 'cancel' || effect === 'cancel-reject')
+        await ops.cancel(fixture.nodeRunId, request.requestId)
       if (effect === 'submit') {
         // The centralized/deferred route calls the same seal without wholeRound.
         await expect(
@@ -283,7 +334,10 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         })
       }
       release()
-      expect(await outcome).toBeInstanceOf(Error)
+      const error = await outcome
+      expect(error).toBeInstanceOf(Error)
+      if (effect === 'cancel-reject')
+        expect(error).toMatchObject({ code: 'clarify-followup-canceled', status: 409 })
       expect(JSON.parse((await fixture.read()).questionsJson)).toHaveLength(2)
     }
     const other = await seed(h)

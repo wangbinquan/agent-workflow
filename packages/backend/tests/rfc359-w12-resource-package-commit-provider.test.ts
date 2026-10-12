@@ -14,6 +14,7 @@ import {
   CreateAgentSchema,
   PackageImportReceiptSchema,
   PackagePreviewSchema,
+  WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
@@ -849,7 +850,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     // 导入会把定义升到当前 schema 版本——这正是要两个引擎逐字一致的东西（升级发生在共用的
     // 中立代码里，但落库经的是两条各自的 commit 臂）。
     expect(JSON.parse(row.definition)).toEqual({
-      $schema_version: 6,
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
       nodes: [{ id: 'inp', kind: 'input', inputKey: 'docs' }],
       edges: [],
       inputs: [],

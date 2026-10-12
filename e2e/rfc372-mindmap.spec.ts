@@ -203,6 +203,9 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
   await page.keyboard.press('ArrowRight')
   await page.keyboard.press('0')
   const zoom = page.getByLabel('Zoom level')
+  // The worker layout must have fitted the graph before capturing a baseline.
+  // A placeholder captured here would misattribute initialization to dblclick.
+  await expect(zoom).toHaveText(/^\d+(?:\.\d+)?%$/)
   const oldZoom = await zoom.textContent()
   await surface.dblclick({ position: { x: 50, y: 90 } })
   await expect(zoom).toHaveText(oldZoom!)

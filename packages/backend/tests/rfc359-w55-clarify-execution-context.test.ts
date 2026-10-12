@@ -54,7 +54,8 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
           return query
         },
         async limit() {
-          if (table === taskTable) return [{ name: 'task', lifecycleEventRevision: 7 }]
+          if (table === taskTable)
+            return [{ name: 'task', workflowSnapshot: '{"nodes":[]}', lifecycleEventRevision: 7 }]
           return parks.length > 0 ? [stored] : []
         },
       }
