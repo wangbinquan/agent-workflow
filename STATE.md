@@ -1,3 +1,7 @@
+## 2026-10-12 RFC-372：完整任务及固定 E2E 已推送 c166c340a
+
+本机完整任务 `01M4R5XY9X39Q89X0PF13R8Y83` 为 done，9 题及最终设计文档已保留，完整 System Mock E2E 与修复已推送 `c166c340aa9438ae23cba1806f9dd90cc78a7b63`（随后 fetch 核对 0/0）。该 SHA 三系统 binary/smoke、真实 PG 和脑图前端回归通过；共享 CI 仍存在并发观测统计等失败。新接线用例被 CI 指出文件 URL 路径不跨平台，已使用标准转换并通过原路径守卫/两种启动接线复验；后继仅测试/文档与消费完的三条增长许可退役，无生产源码变化，复用已完成本地完整任务验证。RFC 保留 In Progress，未部署、未跨 session 通信。详细任务入口与证据见 [轻量验收](design/RFC-372-mindmap-clarify/lightweight-acceptance.md)。
+
 ## 2026-10-12 RFC-372：完整本地任务 done，System Mock E2E 已固化
 
 用户追加的真实完整任务已运行：`01M4R5XY9X39Q89X0PF13R8Y83`，预置三个方向，自反问 6 题（含两层深入）、跨 Agent 3 题，回答/确认/修改失效/取消/失败重试/刷新恢复/原提交/最终文档/TaskEngine 全程完成。最终正式二进制浏览器验收 1 pass / 21.7s；任务与输出保留于 `.agent-workflow/rfc372-acceptance-20261012-final/`。`e2e/rfc372-mindmap-journey.spec.ts` 已纳入默认发现集合，System Mock 仅替代模型 CLI，文档从实际注入答案构造。大图/窄屏/主题及并发/双 provider 边界由既有用例补齐。

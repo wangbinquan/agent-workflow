@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
 import { clarifyRounds, agents, tasks, workflows } from '../src/db/schema'
@@ -38,7 +39,7 @@ test('both daemon bootstraps bind follow-up generation into the original clarify
     expect(source).toMatch(
       /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?observations: \(\) => systemAgentObservations,/,
     )
-    const fileName = new URL(path, import.meta.url).pathname
+    const fileName = fileURLToPath(new URL(path, import.meta.url))
     const parse = (text: string) =>
       ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true)
     const restored = inverseRfc372ClarifyRootBinding(parse(source))

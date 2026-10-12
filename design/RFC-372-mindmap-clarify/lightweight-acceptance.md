@@ -107,3 +107,10 @@
 原 scanner 按本次明确候选重新生成 13 份元数据，未纳入无关 WIP，也不更改 scanner 判据。三项一次性增长逐项解释两个原 followup HTTP 入口、两个原生存储测试文件、一个 PG 物理名称解析符号；跨域导入基线同时下降一项。并发观测投影、provider helper、触发器/WS/类型等既有 CI 失败继续保留责任边界，不代改、不回退。完整远端 CI 尚待本次修复提交的精确 SHA 结果，不能将本地功能验证当成整仓 CI 通过。
 
 末次静态复核：本次提交源码 format/lint 均 exit 0；highwater 40 pass / 64 expect、生成状态投影 3 pass / 12 expect、双 provider 备份快照类型收尾 2 pass / 30 expect。后台 typecheck 的本次两个测试类型错误已消除，仍有 13 条并发来源错误（identityPackets、既有 CLI signal/Bun SQLite helper、RFC-371 测试、既有 mutation 脚本），证据 `backend-types-final2.log`。
+
+
+## 完整任务已上库与追加跨平台修复
+
+完整任务、System Mock 场景及上述 CI 修复已推送 `c166c340aa9438ae23cba1806f9dd90cc78a7b63`，推送后本地/远端为 0/0。该提交 [主 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38259719292) 的 Windows/macOS/Ubuntu binary build + smoke、真实 PostgreSQL 和性能 job 已通过；三个系统脑图前端回归均通过。共享 CI 已出现并发观测统计格式、报表、物化、provider 清单等失败，其源码和断言相对前序提交未被本次修复改变，继续保留责任边界。
+
+该 CI 另发现本会话新接线用例使用文件 URL 的 `.pathname`，不兼容 Windows/空格路径；修复为 `fileURLToPath`，原 RFC-254 路径守卫 5 pass / 11 expect、两种 bootstrap 接线检视 1 pass / 8 expect，格式检查通过。该后继只改测试路径读取和记录，生产候选与完整任务结果不变；按原规则移除 c166 已消费的三条一次性增长许可，全部基线与 src-only census 保持。不能据已通过的单项 job 声称整个 CI 通过，RFC 状态仍保留 In Progress。
