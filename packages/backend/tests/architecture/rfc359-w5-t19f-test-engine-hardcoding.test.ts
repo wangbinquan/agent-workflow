@@ -94,6 +94,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   //（t109 全旅程 / pr5 java 端到端 / pr4 工作区旅程 / pr7b 冲突收敛 / pr3 外部适配器）
   // 全部迁到 `describeEachProvider`，回退随之消失。
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2',
+  // RFC-370: exercise Bun SQLite's native Statement.run()/changes() contract,
+  // trigger/cascade counts and both DB factories; the existing $client classifier applies.
+  'helpers/rfc370SqliteAffectedRowsCases.ts: 1',
   // RFC-371：OpenCode 原生磁盘 SQLite/WAL 文件的 Worker 基线夹具；
   // 原 Task/账本/基线由 rfc371-native-baseline-worker-provider 的双 provider 用例验证。
   'helpers/rfc371NativeBaselineWorkerFixture.ts: 1',

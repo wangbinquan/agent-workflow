@@ -40,3 +40,15 @@
 原十个双工厂案例保留，新增 alias-finalize、cache-clear 和 cached-probe bigint 三项真实数据库回归，静态登记预期为每平台 26 次，尚未执行。测试注册移入 `tests/helpers/rfc370SqliteAffectedRowsCases.ts`，由默认完整 Windows 已选择的原 `rfc349-daemon-provider-runtime-session.test.ts` 显式调用一次；原 session 测试正文保留，不改共享 workflow 在制品。原本会话未追踪的 standalone test 已迁移，冻结 R1 原件保持。
 
 本候选仍未发布，也没有新的功能门、census 或实际测试通过记录。遵守今日 `CLAUDE.md` / `AGENTS.md` 硬规则：CI 先按提交和依赖归因，他人引入的回归由其原会话修复，不再接管；不发送跨 session 信息。当前修正自身已写候选并保留历史，不据此替他人业务签收或恢复未获总绿的 RFC 生产推进。后续实现门集中进行，不再逐个小切面反复开门。
+
+## 2026-10-12 共享发布、实际回归与本会话遗漏
+
+上述 SQLite 实现、十三个双工厂案例及原 session 注册已完整保留，并随共享提交 `95ec4a8ee9698792c148d6cadf4d241db73474d9` 上库；本次起始核对的 `fdbaec7b68251a4e1dd8d8d5b4a6c3ffd8200d01` 仍含同一实现。上节“未发布／尚未执行”是当时快照，不是当前状态。共享发布还含 RFC-371／RFC-372 的独立产出，不转移其 CI 责任。
+
+包含同一 SQLite 实现的 `c166c340aa9438ae23cba1806f9dd90cc78a7b63` 已有实际 hosted 回归：Ubuntu job `114846823233`、macOS job `114846823133`、默认 Windows job `114846820454` 分别完整出现十三案例 × 两工厂的 26 次 pass，共 78 次，包含原 finalize／cache-clear／bigint 回归。只证明这些具体用例通过，各 job 和总 CI 仍存在其它失败。
+
+该 SHA 的 macOS job `114846823077` 在原单引擎清单检查处失败，日志 1368／1386 明确多出 `helpers/rfc370SqliteAffectedRowsCases.ts: 1`。这份夹具由本会话新增，遗漏精确登记是本会话的 CI 配套缺陷。本次只新增这一条和就近理由，原 `$client` 机械分类已覆盖其真实裸驱动操作；原扫描器、全部 344 条记录、sanction 判据、OPEN_MIGRATION_DEBT 两条和 EXEMPT 一条保持。高水位对应行从 344 调整为 345，按原规则登记并在紧邻无增长后继退役一次声明；内容摘要随原 canonical JSON 规则同步，不运行新生产 census。
+
+同一批两项带 RFC-370 名称的启动根失败均报 `task-launch inverse unreviewed statement: observationReports`；提交差异显示后续新增 observation projection 实参改变了完整原语句。格式失败的三份文件也来自该增量。它们不因名称、共同提交或本会话负责过 push 而归入本片，相关原证据保留，不修改其他会话生产或测试，也不发送跨 session 信息。
+
+本片只补齐自身登记遗漏并记录已发生的 hosted 证据；没有新增实现门、本机 AW test／typecheck／build／服务／E2E。起始核对的主 CI `38261966315` 当时尚未终态，后继确切 SHA 的完整主 CI和默认完整 Windows仍须核对，不恢复尚未获总绿的 RFC 生产推进。准备发布期间，并行架构配套已完整提交到 `304c4108c84d46ef3e8b5d82d49cb4cd530249da`，包含本会话追加的 STATE 记录；本片在其新账本上只合入自身的一行，保留全部并行配套和来源，不重复提交已上库的 STATE。
