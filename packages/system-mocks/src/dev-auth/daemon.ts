@@ -8,12 +8,14 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 
 export interface DaemonInfo {
   readonly pid: number
   readonly host: string
   readonly port: number
   readonly baseUrl: string
+  readonly startedAt?: string
 }
 
 export class DaemonApiError extends Error {
@@ -54,6 +56,7 @@ export function readDaemonInfo(home: string): DaemonInfo | null {
       host?: string
       port?: number
       url?: string
+      startedAt?: string
     }
     if (typeof parsed.pid !== 'number' || !pidAlive(parsed.pid)) return null
     const host = typeof parsed.host === 'string' && parsed.host !== '' ? parsed.host : '127.0.0.1'
@@ -62,7 +65,7 @@ export function readDaemonInfo(home: string): DaemonInfo | null {
       typeof parsed.url === 'string' && parsed.url !== ''
         ? parsed.url.replace(/\/$/, '')
         : `http://${host}:${port}`
-    return { pid: parsed.pid, host, port, baseUrl }
+    return { pid: parsed.pid, host, port, baseUrl, startedAt: parsed.startedAt }
   } catch {
     return null
   }
@@ -76,9 +79,13 @@ export function readDaemonToken(home: string): string | null {
 }
 
 export interface WaitForDaemonOptions {
-  readonly timeoutMs?: number
+  /** null lets the dev launcher wait until startup succeeds, exits or is canceled. */
+  readonly timeoutMs?: number | null
   readonly intervalMs?: number
   readonly onWait?: (attempt: number) => void
+  readonly signal?: AbortSignal
+  /** Ignore a still-live daemon record from before this launch. */
+  readonly notBefore?: number
 }
 
 /** Block until the daemon publishes a live `.daemon.info` and answers /health. */
@@ -86,25 +93,39 @@ export async function waitForDaemon(
   home: string,
   options: WaitForDaemonOptions = {},
 ): Promise<DaemonInfo> {
-  const timeoutMs = options.timeoutMs ?? 120_000
+  const timeoutMs = options.timeoutMs === null ? null : (options.timeoutMs ?? 120_000)
   const intervalMs = options.intervalMs ?? 500
-  const deadline = Date.now() + timeoutMs
+  const deadline = timeoutMs === null ? Infinity : Date.now() + timeoutMs
   let attempt = 0
   for (;;) {
+    options.signal?.throwIfAborted()
     const info = readDaemonInfo(home)
-    if (info !== null && (await healthy(info.baseUrl))) return info
+    const currentLaunch =
+      options.notBefore === undefined || Date.parse(info?.startedAt ?? '') >= options.notBefore
+    if (info !== null && currentLaunch && (await healthy(info.baseUrl, options.signal))) {
+      options.signal?.throwIfAborted()
+      return info
+    }
     if (Date.now() >= deadline) {
       throw new Error(`dev-auth: daemon did not become ready within ${timeoutMs}ms (home=${home})`)
     }
     options.onWait?.(++attempt)
-    await new Promise<void>((resolve) => setTimeout(resolve, intervalMs))
+    await delay(intervalMs, undefined, { signal: options.signal })
   }
 }
 
-async function healthy(baseUrl: string): Promise<boolean> {
+async function healthy(baseUrl: string, signal?: AbortSignal): Promise<boolean> {
   try {
-    const response = await fetch(`${baseUrl}/health`)
-    return response.ok
+    const requestSignal = AbortSignal.timeout(2_000)
+    const response = await fetch(`${baseUrl}/health`, {
+      signal: signal === undefined ? requestSignal : AbortSignal.any([signal, requestSignal]),
+    })
+    if (!response.ok) {
+      await response.body?.cancel()
+      return false
+    }
+    const body = (await response.json()) as { ok?: unknown } | null
+    return body !== null && body.ok === true
   } catch {
     return false
   }

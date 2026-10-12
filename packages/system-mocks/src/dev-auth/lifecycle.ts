@@ -1,9 +1,8 @@
 // Orphan detection for the dev auth process.
 //
-// `bun run --filter '*' dev` puts the daemon, vite and this service in one
-// process group, so a terminal Ctrl-C (group SIGINT) reaches all three and this
-// one shuts down with them — measured, not assumed. What does NOT reach it is
-// the parent dying without passing anything on: `kill -9` on the filter runner,
+// The root dev launcher forwards shutdown to its owned service trees. A
+// standalone service also needs to handle its immediate parent disappearing
+// without forwarding a signal: `kill -9` on the package runner,
 // a crashed parent, a closed terminal on some setups. The child is then
 // reparented to pid 1 and keeps holding the login port, so the next `bun dev`
 // meets EADDRINUSE from a process nobody remembers starting.

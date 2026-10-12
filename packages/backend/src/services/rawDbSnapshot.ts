@@ -130,14 +130,6 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
       if (copySize !== srcSize || copySize === 0) {
         throw new Error(`raw db copy verification failed (src=${srcSize}B copy=${copySize}B)`)
       }
-      if (checkpointed) {
-        const chk = sqliteRawDbSnapshotMechanisms.quickCheck(join(stagingDir, 'db.sqlite'))
-        if (!chk.ok) {
-          log.warn('raw db copy fails quick_check (copying anyway — may be the point)', {
-            errors: chk.errors.slice(0, 3),
-          })
-        }
-      }
     }
     // -wal / -shm may or may not exist depending on checkpoint success and
     // whether the daemon closed cleanly. Copy whatever is there.
@@ -148,6 +140,15 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
     if (existsSync(`${dbPath}-shm`)) {
       cpSync(`${dbPath}-shm`, join(stagingDir, 'db.sqlite-shm'))
       copied.shm = true
+    }
+    // Check the complete copy, including any WAL/SHM files, before archiving.
+    if (copied.db && checkpointed) {
+      const chk = sqliteRawDbSnapshotMechanisms.quickCheck(join(stagingDir, 'db.sqlite'))
+      if (!chk.ok) {
+        log.warn('raw db copy fails quick_check (copying anyway — may be the point)', {
+          errors: chk.errors.slice(0, 3),
+        })
+      }
     }
     // RFC-223 PR-5: DB paths and skills/ are one migration generation. Once
     // 0116 renames skills/{name} to skills/{id}, a DB-only pre-migration

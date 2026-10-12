@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 // `bun dev` entry for the dev auth service (see ./server.ts).
 //
-// Runs as a peer of the daemon and vite under `bun run --filter '*' dev`, so it
-// inherits AGENT_WORKFLOW_HOME from the same shell and therefore always seeds
-// the database `bun dev` is actually serving. Set AW_DEV_AUTH=0 to skip it.
+// The root dev launcher starts this after the daemon is healthy. It inherits
+// AGENT_WORKFLOW_HOME from the same shell and seeds the database `bun dev` is
+// actually serving. Set AW_DEV_AUTH=0 to skip it.
 
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'

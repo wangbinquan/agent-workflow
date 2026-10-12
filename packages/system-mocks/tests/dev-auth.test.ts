@@ -647,7 +647,7 @@ describe('production isolation', () => {
     const root = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as {
       scripts?: Record<string, string>
     }
-    expect(root.scripts?.dev).toBe("bun run --filter '*' dev")
+    expect(root.scripts?.dev).toBe('bun run scripts/dev.ts')
   })
 })
 

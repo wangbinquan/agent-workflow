@@ -4328,6 +4328,9 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
 
 ## dev-env / daemon
 
+- **2026-10-12：根 `bun dev` 按真实后端就绪排序启动。** `scripts/dev.ts` 先启动 backend 原 dev 脚本，等待本轮 `.daemon.info` 和 `/health` 的 `ok: true`，再启动 Vite 与开发登录服务。迁移前备份可能耗时数分钟，等待支持取消、后端退出即结束，不设 30/120 秒总启动期限。`AW_DEV_AUTH=0` 跳过登录服务；服务失败或 SIGINT/SIGTERM/SIGHUP 会收回本轮进程树。下文旧的三个包无联动启动描述仅代表修复前事实。
+- **WAL 备份副本缺少辅助文件不代表数据库损坏。** 原始备份先复制数据库及现有 WAL/SHM，再执行真实 `quick_check`；仅副本校验允许 SQLite 创建所需辅助文件且不创建缺失的数据库。默认完整性检查仍只读，损坏文件仍报告失败并可按原字节备份。
+
 - **本地 backend 并行只能用 `bun run test:backend` 的“完整 shard + 独立命名空间”，不能直接加 `bun test --parallel`**：历史实测后者让多个真实 daemon 争同一单实例 flock，跑满 420s 零结果；2026-08-07 的四 shard 原型给每个进程独立 `AGENT_WORKFLOW_HOME` + `TMPDIR/TMP/TEMP`，仍逐文件 `--isolate --randomize`，1051/1051 文件、9170 测试全绿，墙钟 264s（原串行 1030s）。隐藏的 `AGENT_WORKFLOW_TEST_SHARD_HOME/TMP` 由 preload 在每个隔离文件开头恢复，防某测试删除公开 env 后让下一文件落回用户真实 home。排查顺序依赖时用 `bun run test:backend:serial`；完整 push 门是 `bun run gate:local`，不要自己拼一条少门的快命令。
 - **`bun dev` 中编辑 `packages/backend/src/**`触发`--watch` 重启**，race 30s graceful-shutdown flock → daemon 常 **DOWN\*\*（浏览器空白 + 503 + 误导「token 无权限」横幅），非崩溃；重启复活。纯前端编辑不掉。
 - **claude-code 运行时直连 Anthropic**：daemon 从普通 shell 起若缺 `HTTP(S)_PROXY` → 403 被 smoke 误报「缺鉴权」；报缺鉴权先查 daemon 代理再查凭据。

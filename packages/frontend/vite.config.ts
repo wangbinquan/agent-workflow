@@ -9,8 +9,8 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const appHome = process.env.AGENT_WORKFLOW_HOME ?? path.join(homedir(), '.agent-workflow')
 const infoPath = path.join(appHome, '.daemon.info')
 
-// `bun run --filter '*' dev` launches backend and frontend in parallel. Vite
-// resolves its proxy target once at config-load time, so if it reads
+// The root dev launcher starts Vite after backend health succeeds. Standalone
+// package dev still resolves its proxy target once at config-load time; reading
 // .daemon.info before the daemon has (re)written it, it would lock onto the
 // hardcoded fallback (port 7456) for the whole session even though the daemon
 // is actually on a different port. We block here until the file exists AND

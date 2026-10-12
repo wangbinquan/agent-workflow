@@ -15,13 +15,15 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
 import { extractTarGz } from '../src/util/archive'
 import { readDbMigrationIdentity, readManifest } from '../src/services/backupManifest'
 import { rawCopyDb } from '../src/services/rawDbSnapshot'
+import { quickCheckDbFile } from '../src/db/integrity'
+import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -32,6 +34,7 @@ function tmp(prefix: string): string {
   return d
 }
 afterEach(() => {
+  resetLoggerForTest()
   for (const d of tmps.splice(0)) removeTempDirSync(d)
 })
 
@@ -47,6 +50,50 @@ function seedFileDb(appHome: string): string {
 }
 
 describe('RFC-213 rawCopyDb — healthy DB', () => {
+  // Regression: the bare WAL-mode backup was checked readonly before its
+  // auxiliary files were copied, printing a false SQLITE_CANTOPEN warning.
+  test('a checkpointed bare WAL copy validates without warnings or rewriting database bytes', async () => {
+    const appHome = tmp('rfc213-raw-bare-wal-')
+    const dbPath = seedFileDb(appHome)
+    for (const suffix of ['-wal', '-shm']) rmSync(`${dbPath}${suffix}`, { force: true })
+    const bytes = readFileSync(dbPath)
+    expect(bytes[18]).toBe(2)
+    const logs: string[] = []
+    setLoggerStdoutWriterForTest((line) => logs.push(line))
+    const result = await rawCopyDb({ kind: 'pre-migration', appHome, dbPath })
+    const out = tmp('rfc213-bare-wal-out-')
+    await extractTarGz(result.path, out)
+    const copiedPath = join(out, 'db.sqlite')
+    expect(logs.some((line) => line.includes('fails quick_check'))).toBe(false)
+    expect(readFileSync(dbPath)).toEqual(bytes)
+    expect(readFileSync(copiedPath)).toEqual(bytes)
+    expect(quickCheckDbFile(copiedPath, { allowWalSidecarCreation: true }).ok).toBe(true)
+    expect(readFileSync(copiedPath)).toEqual(bytes)
+  })
+
+  test('copies a live WAL/SHM pair before validation and preserves the checkpointed bytes', async () => {
+    const appHome = tmp('rfc213-raw-live-wal-')
+    const dbPath = join(appHome, 'db.sqlite')
+    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const sqlite = (db as unknown as { $client: Database }).$client
+    try {
+      sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+      const bytes = readFileSync(dbPath)
+      const logs: string[] = []
+      setLoggerStdoutWriterForTest((line) => logs.push(line))
+      const result = await rawCopyDb({ kind: 'pre-migration', appHome, dbPath })
+      expect(result.copied.wal).toBe(true)
+      expect(result.copied.shm).toBe(true)
+      expect(logs.some((line) => line.includes('fails quick_check'))).toBe(false)
+      const out = tmp('rfc213-live-wal-out-')
+      await extractTarGz(result.path, out)
+      expect(readFileSync(join(out, 'db.sqlite'))).toEqual(bytes)
+      expect(readFileSync(dbPath)).toEqual(bytes)
+    } finally {
+      sqlite.close()
+    }
+  })
+
   test('byte-copies db.sqlite and writes a manifest with migration identity', async () => {
     const appHome = tmp('rfc213-raw-')
     const dbPath = seedFileDb(appHome)
@@ -73,6 +120,40 @@ describe('RFC-213 rawCopyDb — healthy DB', () => {
 })
 
 describe('RFC-213 rawCopyDb — corrupt DB (the whole point)', () => {
+  test('sidecar creation never creates a missing database', () => {
+    const path = join(tmp('rfc213-missing-check-'), 'absent.sqlite')
+    expect(quickCheckDbFile(path, { allowWalSidecarCreation: true }).ok).toBe(false)
+    expect(existsSync(path)).toBe(false)
+  })
+
+  test('real page corruption remains reported and its original bytes remain recoverable', async () => {
+    const appHome = tmp('rfc213-page-corrupt-copy-')
+    const dbPath = join(appHome, 'db.sqlite')
+    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const sqlite = (db as unknown as { $client: Database }).$client
+    const root = sqlite
+      .query("SELECT rootpage FROM sqlite_schema WHERE name = 'workflows'")
+      .get() as {
+      rootpage: number
+    }
+    sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+    sqlite.close()
+    const bytes = readFileSync(dbPath)
+    const encoded = bytes.readUInt16BE(16)
+    const pageSize = encoded === 1 ? 65_536 : encoded
+    bytes[(root.rootpage - 1) * pageSize] = 0xff
+    writeFileSync(dbPath, bytes)
+    expect(quickCheckDbFile(dbPath, { allowWalSidecarCreation: true }).ok).toBe(false)
+    expect(readFileSync(dbPath)).toEqual(bytes)
+    const logs: string[] = []
+    setLoggerStdoutWriterForTest((line) => logs.push(line))
+    const result = await rawCopyDb({ kind: 'pre-restore', appHome, dbPath })
+    expect(logs.some((line) => line.includes('fails quick_check'))).toBe(true)
+    const out = tmp('rfc213-corrupt-copy-out-')
+    await extractTarGz(result.path, out)
+    expect(readFileSync(join(out, 'db.sqlite'))).toEqual(bytes)
+  })
+
   test('a non-sqlite / corrupt file is still snapshotted, identity is null, bytes preserved', async () => {
     const appHome = tmp('rfc213-raw-corrupt-')
     const dbPath = join(appHome, 'db.sqlite')

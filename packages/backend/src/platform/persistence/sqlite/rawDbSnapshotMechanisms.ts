@@ -30,5 +30,7 @@ export const sqliteRawDbSnapshotMechanisms: SqliteRawDbSnapshotMechanisms = {
     }
   },
   readMigrationIdentity: readDbMigrationIdentity,
-  quickCheck: quickCheckDbFile,
+  // This is an owned, checkpointed backup copy; a bare WAL-mode copy needs
+  // writable auxiliary files even though quick_check does not rewrite DB bytes.
+  quickCheck: (dbPath) => quickCheckDbFile(dbPath, { allowWalSidecarCreation: true }),
 }
