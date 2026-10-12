@@ -1,3 +1,9 @@
+## 2026-10-13 RFC-370：CI 责任复核与真实观察器结算诊断
+
+本会话 SQLite fixture 登记修复 `9fabf705f` 与增长退役 `861833a65` 已发布并取得 hosted 证据：原单引擎清单八项及 T17 退役检查通过，Windows 二十六项直接计数回归通过；该提交总 CI 为 23 success／49 failure，默认完整 Windows failure，未签总绿。最新已同步主干 `1d380944b` 的默认 Windows 为 1491 pass／3 skip／15 fail，其中十四项与上一轮相同；自定义观察脚本第一处真实 validate 再次 `timeout/1`，缺少实际进程结算信息，责任与根因尚不能确定。
+
+本轮仅在原集成测试包围原默认 selector 返回的完整 native 家族的 `run`，失败时记录实际返回值的固定进程字段与输出字符数，原 input／receiver／workspace／program／effects／结果对象均保留。完整源码 inverse 恢复原文件，十五个原用例、109 处 expect、四次真实执行及原 10 秒／50 秒预算不变；语法、格式和 diff 静态检查通过，无本机 AW 功能验证或逐片门。原实现与失败历史保持，精确发布本测试、[诊断记录](design/RFC-370-crewstation-hosted-deployment/ci-custom-observer-native-timeout-diagnostics.md)及本 STATE；新 SHA 的 hosted 结果仍待核对，诊断不冒称超时修复。总 CI 与默认完整 Windows 全绿后才继续 RFC 生产适配；无跨 session 信息，以下历史与并发产出完整保留。
+
 ## 2026-10-13 RFC-372：逐项完成审计与终态 CI 归档
 
 当前 64 份脑图相关实现/fixture 与已验证最终源码 `304c4108c` 字节一致；只读保留任务数据库核实 Task done、self 6/cross 3 全部 answered/confirmed，两层深入和最终 1268 字节文档与原输出一致。独立源码检视原消息、完整本地日志、冗余清理（86 个旧文件删除、一个同名工作区适配）与三平台脑图 E2E 均有现行证据。L01～L15 完成，L16 的功能/检视/发布/终态 CI 记录完成；全仓质量门仍失败，RFC 保持 In Progress，见 [完成审计](design/RFC-372-mindmap-clarify/completion-audit.md)。

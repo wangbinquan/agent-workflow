@@ -6,6 +6,7 @@ import { encodeDevelopmentApprovalSubject } from '@/modules/development-automati
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import {
   composeEventCenter,
+  selectLocalCustomObserverProgramFactory,
   type ComposeEventCenterOptions,
   type EventCenterAutomationCapability,
 } from '@/modules/event-center/composition'
@@ -1212,7 +1213,41 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
   test('a global custom source validates its real script, publishes exact events, polls on subscription, and dedupes storage', async () => {
     let now = Date.parse('2026-08-21T08:00:00.000Z')
     let ordinal = 0
+    const nativePrograms = selectLocalCustomObserverProgramFactory(undefined)
     const eventCenter = await composeForProvider(harness, {
+      // RFC-370: retain the actual native family and every original reference;
+      // report its failed settlement without changing the result or its budget.
+      customObserverPrograms: {
+        create(input) {
+          const effects = nativePrograms.create(input)
+          const originalRun = effects.run
+          effects.run = async function (workspace, program) {
+            const result = await originalRun.call(effects, workspace, program)
+            if (result.outcome !== 'exited' || result.exitCode !== 0) {
+              const fields = new Set([
+                'outcome',
+                'exitCode',
+                'spawnBinaryPath',
+                'pid',
+                'lifecycle',
+                'launchNonce',
+                'spawnError',
+                'pumpError',
+                'drainTimedOut',
+                'launcherOutputBytes',
+                'truncated',
+              ])
+              console.error('RFC-370 native observer failed settlement', {
+                ...Object.fromEntries(Object.entries(result).filter(([key]) => fields.has(key))),
+                stdoutChars: result.rawStdout.length,
+                stderrChars: result.stderrTail.length,
+              })
+            }
+            return result
+          }
+          return effects
+        },
+      },
       // The source is global: no digital-employee type package is required.
       typePackageDescriptorJsons: [],
       automation: { kind: 'observation-only' },

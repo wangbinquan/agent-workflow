@@ -21,3 +21,13 @@
 ## 设计门后补充
 
 上述继续到终态的主 CI `38143668661` 已正式 completed／success，根已核对同一 `9c792382` 的全部 72 个作业。Ubuntu／macOS 的 W8 各十个实际 case 均 pass，原 macOS commit stub case 在原预算内实际 pass／17.74ms；同 SHA 默认完整 Windows 仍为 failure，不能代签本批总绿、八条 typecheck 或 637 次验收。有限设计门已有效、稳定 PASS／零 findings，原设计全文及失败保持；本次两条 stderr 诊断尚未在 hosted CI 运行，实施门与新 SHA 验证继续。
+
+## 2026-10-13 实际进程结算的有限诊断
+
+最新已同步主干 `1d380944b70ec834d9aacd86682ba0efbda451ff` 的默认完整 Windows run `38287855187`、job `114940424702` 已终态 failure：1491 pass、3 skip、15 fail。原真实全局自定义源用例在第一处 validate 报 `observer script failed: timeout/1`，耗时 15590.83ms；原始日志 572573 bytes，SHA256 `add07adc8bae0280abf5098299600917757bde2d2ee61885318e073e4445a09f`，实际故障上下文在原始行 589–622。其余十四项失败与上一轮相同；本会话 SQLite 的二十六项直接计数回归在原始行 654–679 全部通过。主 CI `38287855347` 尚未终态，已有观测格式和 UI 失败，不能签总绿。
+
+该原生观察器、managed-process、process 和 platformExec 四个实现文件与此前诊断提交 `0d43da993` 逐字一致；事件脚本运行的完整 argv、cwd、环境、timeoutMs 和 stdout 捕获选项与适配前原实现相同。本次错误没有两条原脚本 stderr 标记，也没有实际 PID、binary、reap 或 drain 信息；不能据此确定子进程未开始、解释器故障、主机故障或本次适配已经排除。先前一次成功不解决当前超时，当前超时也不能仅凭 RFC 名称归属其他会话。
+
+本轮只在该原用例通过原默认 selector 获取同一真实 native factory，并把它显式交回原 `composeEventCenter` 入口。每次 `create` 原样转发同一 input，返回同一完整 effects 对象；只包围其原 `run`，以原 effects receiver 和原 workspace/program 引用调用一次，原结果对象原样返回。失败时记录该真实返回值已具有的固定结算字段及 stdout/stderr 字符数，不另开程序、不探测解释器、不读取程序引用、不改变其他六个成员、异常、清理、正文或进程预算。既有 selector 家族用例仍检查 undefined 默认选择；本次集成用例明确使用该 selector 返回的真实 native 家族，不能把它称为另一个执行实现。
+
+新增诊断不包含原脚本内容、输入文件正文、环境值或完整 stdout/stderr；原验证错误及现有两条 stderr 标记保持。所有原用例名称、全部断言、四次真实执行、10000ms 程序预算和 50000ms 整段预算不变。以完整源码 inverse、语法和格式静态检查记录候选，不运行本机 AW 功能验证，不新增逐片设计或实现门。只有新确切提交的 hosted 日志可以说明实际 PID、所用 binary、进程结算时间及捕获是否为空；这项诊断本身不是超时根因修复或 CI 全绿。
