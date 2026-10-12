@@ -1,4 +1,4 @@
-// RFC-349 T2/T8 — locks the exact 254-table source census, the 248-table
+// RFC-349 T2/T8 — locks the exact 258-table source census, the 252-table
 // PostgreSQL parity set, and the only six archive-then-omit tables approved by
 // D9. New/missing/ownerless tables and revived legacy consumers must fail here
 // before any migration can prepare a target.
@@ -27,9 +27,9 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(254)
-    expect(contract.sourceTableCount).toBe(254)
-    expect(contract.activeTableCount).toBe(248)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(258)
+    expect(contract.sourceTableCount).toBe(258)
+    expect(contract.activeTableCount).toBe(252)
     expect(contract.archiveOnlyTableCount).toBe(6)
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
     const binding = contract.tables.find(
@@ -51,22 +51,17 @@ describe('RFC-349 canonical schema contract', () => {
       'run-observability',
     ])
     expect(pages.foreignKeys[0]!.foreignTable).toBe('observation_native_fact_roots')
-    // Published 0245/0021 and 0246/0022 add exactly these eight KEEP relations.
+    // Retain published observation relations while retiring RFC-372 companion tables.
+    expect(contract.tables.filter((t) => /^(clarify_mindmap_|task_clarify_)/.test(t.id))).toEqual(
+      [],
+    )
+    expect(contract.tables.filter((t) => t.id.startsWith('observation_projection_'))).toHaveLength(
+      14,
+    )
     const additions = [
       ['observation_calculation_rows', 'run-observability', ['cache_key', 'namespace', 'key']],
       ['observation_calculation_versions', 'run-observability', ['cache_key']],
       ['observation_source_revisions', 'run-observability', ['source_id']],
-      ['clarify_mindmap_command_receipts', 'collaboration', ['session_id', 'request_id']],
-      ['clarify_mindmap_node_revisions', 'collaboration', ['node_id', 'session_revision']],
-      ['clarify_mindmap_nodes', 'collaboration', ['id']],
-      ['clarify_mindmap_sessions', 'collaboration', ['id']],
-      ['clarify_mindmap_snapshots', 'collaboration', ['id']],
-      // RFC-372 0247/0023 append five Task-owned relations to that published set.
-      ['task_clarify_channels', 'task-execution', ['id']],
-      ['task_clarify_consumptions', 'task-execution', ['node_run_id']],
-      ['task_clarify_entries', 'task-execution', ['id']],
-      ['task_clarify_host_runs', 'task-execution', ['node_run_id']],
-      ['task_clarify_materials', 'task-execution', ['id']],
     ] as const
     for (const [id, owner, key] of additions) {
       const table = contract.tables.find((table) => table.id === id)!
@@ -152,7 +147,7 @@ describe('RFC-349 canonical schema contract', () => {
         .map((unit) => unit.path)
       expect(consumers, `${id} regained a production consumer`).toEqual([])
     }
-    // 语料扫描在 macOS runner 上量到 5.3s（CI run 33888112485，macos shard 3/4 超时红）：这是一条扫源码的
+    // 语料扫描在 macOS runner 上量到 5.3s（CI run 33888112525，macos shard 3/4 超时红）：这是一条扫源码的
     // 守卫，不是被测行为；给它扫描量级的预算，别让 5s 缺省把它判成 flaky。
   }, 60_000)
 

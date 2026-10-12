@@ -135,7 +135,7 @@ export async function buildCompleteObservationCohort(
         rows: taskRows,
         task,
         namespace: taskSpace,
-        trace: input.task !== undefined,
+        trace: input.task !== undefined || input.projectionCohort === true,
         ...(input.query.cohort === 'usage' && input.task === undefined
           ? {
               occurrenceVersions: async function* (source: string, stepId: string) {
@@ -309,6 +309,7 @@ export async function buildCompleteObservationCohort(
         qualityPopulation !== BigInt(build.unallocatedQualityCount)
       )
         throw new Error('Complete original model contribution population changed')
+      let taskCaptures = 0n
       for (const [section, namespace] of [
         ['attempts', build.attemptsNamespace],
         ['native-captures', build.nativeCapturesNamespace],
@@ -318,6 +319,7 @@ export async function buildCompleteObservationCohort(
           if (section !== 'attempts') {
             await output.append(section, task.id, item.key, item.document)
             inventory.nativeCaptures++
+            taskCaptures++
             await output.append(section, null, input.keyOf(JSON.stringify([task.id, item.key])), {
               ...(item.document as object),
               taskId: task.id,
@@ -329,6 +331,11 @@ export async function buildCompleteObservationCohort(
           }
         }
       }
+      await input.retainTaskInventory?.(task.id, {
+        numericRecords: build.originalNumericRecords,
+        nativeCaptures: String(taskCaptures),
+      })
+      await input.retainTaskSourceGaps?.(task, build.sourceGaps)
       if (build.trace) {
         for (const [section, namespace] of [
           ['span-facts', build.trace.spansNamespace],
@@ -608,7 +615,7 @@ export async function buildCompleteObservationCohort(
     taskSource,
   }
   input.observePhase?.('cohort-folded')
-  return input.query.cohort === 'usage' && input.task === undefined
+  return !input.projectionCohort && input.query.cohort === 'usage' && input.task === undefined
     ? buildCompleteObservationUsageWindow(input, result)
     : result
 }

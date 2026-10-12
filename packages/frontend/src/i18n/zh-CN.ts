@@ -13,8 +13,10 @@ import type {
 import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingZh, type ObservationPricingMessages } from './observationPricing'
 import { runObservabilityZh, type RunObservabilityMessages } from './runObservability'
+import { mindmapZh, type MindmapMessages } from './mindmap'
 
 export interface Resources {
+  mindmap: MindmapMessages
   observationPricing: ObservationPricingMessages
   runObservability: RunObservabilityMessages
   permissions: ReturnType<typeof buildPermissionCatalogResources>
@@ -6785,6 +6787,7 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  mindmap: mindmapZh,
   observationPricing: observationPricingZh,
   runObservability: runObservabilityZh,
   presence: {

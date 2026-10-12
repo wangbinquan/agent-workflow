@@ -94,8 +94,8 @@ describeEachProvider('RFC-311 C2 — /api/workflows list projection', (harness) 
     test('the detail endpoint still returns the full definition (external scripts migrate here)', async () => {
       const item = (await get('/api/workflows/wf1')) as Record<string, unknown>
       // 读路径把定义迁到当前 $schema_version(5);节点/结构不变。
-      // RFC-354: stored definitions are served at the current schema (v6).
-      expect(item.definition).toEqual({ ...DEFINITION, $schema_version: 6 })
+      // RFC-372: stored definitions are served at the current schema (v7).
+      expect(item.definition).toEqual({ ...DEFINITION, $schema_version: 7 })
     })
   })
 })

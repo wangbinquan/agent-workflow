@@ -230,6 +230,10 @@ class PerQuestionSingleFlightServerQueue {
     }
   }
 
+  addBaseline(answer: ClarifyAnswer): void {
+    this.ensureEntry(answer.questionId, answer)
+  }
+
   enqueue(write: ClarifyServerWrite): void {
     if (this.stopped) return
     const entry = this.ensureEntry(write.questionId, write.answer)
@@ -424,6 +428,8 @@ export interface ClarifyDraftDurabilityController {
     currentAnswer: ClarifyAnswer,
     remoteAnswer: ClarifyAnswer,
   ) => boolean
+  addQuestions: (answers: readonly ClarifyAnswer[]) => void
+  flushServer: () => Promise<void>
   flushLocal: () => Promise<void>
   retryLocal: () => Promise<void>
   retryServer: (questionId?: string) => void
@@ -513,6 +519,18 @@ class ClarifyDraftDurabilityControllerImpl implements ClarifyDraftDurabilityCont
     }
   }
 
+  addQuestions(answers: readonly ClarifyAnswer[]): void {
+    if (this.sealed) return
+    for (const answer of answers) {
+      if (this.persistedQuestionIds.has(answer.questionId)) continue
+      this.persistedQuestionIds.add(answer.questionId)
+      this.questionOrder.push(answer.questionId)
+      this.serverQueue.addBaseline(answer)
+      this.latestAnswers.set(answer.questionId, cloneAnswer(answer))
+      this.latestQuestionGeneration[answer.questionId] = 0
+    }
+  }
+
   recordChange(answers: readonly ClarifyAnswer[], changedQuestionId: string): void {
     if (this.sealed || !this.persistedQuestionIds.has(changedQuestionId)) return
     const changed = answers.find((answer) => answer.questionId === changedQuestionId)
@@ -563,6 +581,21 @@ class ClarifyDraftDurabilityControllerImpl implements ClarifyDraftDurabilityCont
       this.emit()
     }
     return adopted
+  }
+
+  async flushServer(): Promise<void> {
+    this.serverQueue.retry()
+    await new Promise<void>((resolve, reject) => {
+      const check = () => {
+        const state = this.getState()
+        if (state.serverPending) return
+        this.listeners.delete(check)
+        if (state.serverError !== null) reject(state.serverError)
+        else resolve()
+      }
+      this.listeners.add(check)
+      check()
+    })
   }
 
   async flushLocal(): Promise<void> {

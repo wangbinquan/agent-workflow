@@ -22,6 +22,7 @@ import {
   completeCalculationSourceProof,
   completeTaskCalculationCollector,
   completeCalculationFactFileSpool,
+  historicalObservationPreparationCollector,
 } from '@/modules/run-observability/composition/completeCalculations'
 import { originalSqliteFileReportSnapshot } from '../persistence/reportSqliteSnapshot'
 import { reportReadonlyChannelClient } from '../persistence/reportReadonlyChannelClient'
@@ -111,6 +112,16 @@ async function run(input: OriginalObservationWorkerStart) {
           signal: stop.signal,
         })
       : undefined
+    const preparation = calculationContext
+      ? historicalObservationPreparationCollector({
+          db: snapshot.executor,
+          rows: snapshot.workspace,
+          namespace: 'report/' + input.report.id,
+          snapshotId: snapshot.snapshotId,
+          context: calculationContext,
+          signal: stop.signal,
+        })
+      : undefined
     let result: Awaited<ReturnType<typeof composeCompleteObservationSnapshot>>,
       cleanupFailed = false,
       cleanupFailure: unknown
@@ -131,6 +142,7 @@ async function run(input: OriginalObservationWorkerStart) {
         },
         report: input.report,
         ...(calculations ? { numericCache: calculations.cache } : {}),
+        ...(preparation ? { historicalPreparation: preparation.cache } : {}),
         spool: completeObservationFileSpool(input.appHome),
         signal: stop.signal,
       })
@@ -159,7 +171,10 @@ async function run(input: OriginalObservationWorkerStart) {
           reportId: input.report.id,
           owner: input.report.owner,
           context: calculationContext!,
-          items: calculations.items(),
+          items: (async function* () {
+            yield* calculations.items()
+            if (preparation) yield* preparation.items()
+          })(),
           signal: stop.signal,
         })
       : undefined
@@ -172,9 +187,10 @@ async function run(input: OriginalObservationWorkerStart) {
       ...(calculationManifest
         ? {
             calculationFacts: {
-              usedCache: calculations!.usedCache,
+              usedCache: calculations!.usedCache || preparation?.usedCache === true,
               manifest: calculationManifest,
               statistics: calculations!.statistics,
+              ...(preparation ? { historicalPreparation: preparation.statistics } : {}),
             },
           }
         : {}),

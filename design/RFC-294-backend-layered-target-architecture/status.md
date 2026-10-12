@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,18 +10,18 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2458 |
+| backend production TS 文件 | 2503 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1857 / 18 |
+| `modules/**` 文件 / 非空 context | 1896 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
-| production ambient wiring seam | 505 |
-| background work entries | 382 |
-| direct native `setInterval`（call / files） | 23 / 19 |
-| direct native timers（全部） | 80 |
-| RFC-317 boundary census（inbound / outbound） | 313 / 46 |
+| production ambient wiring seam | 508 |
+| background work entries | 385 |
+| direct native `setInterval`（call / files） | 24 / 20 |
+| direct native timers（全部） | 82 |
+| RFC-317 boundary census（inbound / outbound） | 322 / 46 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -29,17 +29,17 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 505 |
-| `architectureExceptions` | 6100 |
-| `backgroundJobs` | 382 |
-| `crossContextImports` | 6977 |
+| `ambientWiring` | 508 |
+| `architectureExceptions` | 6231 |
+| `backgroundJobs` | 385 |
+| `crossContextImports` | 7123 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27967 |
-| `mutationEntrypoints` | 2005 |
+| `moduleSymbolOwners` | 28249 |
+| `mutationEntrypoints` | 2011 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1282 |
-| `transactionExternalEffects` | 277 |
+| `publicSurfaces` | 1283 |
+| `transactionExternalEffects` | 284 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -50,29 +50,29 @@
 | task-execution / infrastructure | 180 |
 | task-execution / application | 157 |
 | resource-catalog / infrastructure | 132 |
-| task-execution / composition | 97 |
+| task-execution / composition | 98 |
 | resource-catalog / application | 78 |
 | development-automation / application | 67 |
+| run-observability / application | 51 |
+| collaboration / infrastructure | 48 |
 | development-automation / infrastructure | 48 |
-| collaboration / infrastructure | 47 |
+| run-observability / infrastructure | 45 |
 | resource-catalog / composition | 40 |
-| run-observability / application | 39 |
-| collaboration / application | 36 |
+| collaboration / application | 39 |
 | source-control / infrastructure | 36 |
 | task-execution / domain | 36 |
 | development-automation / domain | 34 |
-| run-observability / infrastructure | 34 |
 | integration / application | 32 |
+| run-observability / domain | 32 |
 | runtime-management / application | 32 |
 | runtime-management / infrastructure | 31 |
 | intent / application | 30 |
 | source-control / application | 30 |
 | system-operations / infrastructure | 30 |
-| run-observability / domain | 29 |
 | system-operations / application | 29 |
 | integration / infrastructure | 26 |
+| run-observability / ports | 26 |
 | identity-access / application | 25 |
-| run-observability / ports | 21 |
 | code-capability / application | 20 |
 | task-execution / engine | 20 |
 | integration / composition | 19 |
@@ -85,6 +85,7 @@
 | source-control / composition | 14 |
 | runtime-management / composition | 13 |
 | identity-access / infrastructure | 12 |
+| run-observability / composition | 12 |
 | code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
 | intent / infrastructure | 11 |
@@ -94,7 +95,6 @@
 | event-center / application | 10 |
 | intent / composition | 9 |
 | memory / domain | 9 |
-| run-observability / composition | 9 |
 | collaboration / composition | 8 |
 | knowledge-evolution / domain | 8 |
 | memory / infrastructure | 8 |
@@ -148,7 +148,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| platform | 227 |
+| platform | 233 |
 | task-execution | 74 |
 | resource-catalog | 51 |
 | runtime-management | 48 |
@@ -208,42 +208,42 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3864 |
-| legacy-inbound | 2010 |
-| offered-consumption | 380 |
-| infrastructure-external | 342 |
+| legacy-outbound | 3975 |
+| legacy-inbound | 2026 |
+| offered-consumption | 382 |
+| infrastructure-external | 355 |
 | temporary-internal-debt | 112 |
-| off-dag-offered | 101 |
+| off-dag-offered | 102 |
 | required-implementation | 83 |
 | authority-type-only | 78 |
-| external-layer-debt | 5 |
+| external-layer-debt | 8 |
 | provider-mirror | 2 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3864 |
-| legacy-inbound | 2010 |
+| legacy-outbound | 3975 |
+| legacy-inbound | 2026 |
 | temporary-internal-debt | 112 |
-| off-dag-offered | 101 |
+| off-dag-offered | 102 |
+| external-layer-debt | 8 |
 | no-circular | 6 |
-| external-layer-debt | 5 |
 | no-util-to-upper | 2 |
 
 ### 5.3 exact exceptions 按清偿波次
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3258 |
-| W9-D | 1108 |
-| W4-E1 | 836 |
+| W9 | 3366 |
+| W9-D | 1114 |
+| W4-E1 | 843 |
 | W5 | 203 |
-| W4 | 201 |
+| W4 | 202 |
 | W4-B | 187 |
 | W4-E8 | 175 |
 | W4-E9 | 83 |
-| RFC-371 | 23 |
+| RFC-371 | 32 |
 | W2-D/W3/W5 | 12 |
 | W9-E | 8 |
 | W4-E10 | 3 |
@@ -257,7 +257,7 @@
 | --- | --- |
 | task-execution | 306 |
 | resource-catalog | 243 |
-| collaboration | 122 |
+| collaboration | 123 |
 | source-control | 104 |
 | system-operations | 89 |
 | runtime-management | 87 |
@@ -274,7 +274,7 @@
 | intent | 11 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 143 / 1282）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 143 / 1283）
 
 | context | 数量 |
 | --- | --- |

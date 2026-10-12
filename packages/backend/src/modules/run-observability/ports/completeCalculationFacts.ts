@@ -1,5 +1,6 @@
 import type { HistoricalNativeSourceProof } from '@/modules/runtime-management/public/participants'
 import type { CompleteObservationTaskNumeric } from './completeObservationTask'
+import type { HistoricalObservationPreparationVersion } from './historicalObservationPreparation'
 
 export interface CompleteCalculationSourceProof {
   readonly version: 1
@@ -26,7 +27,10 @@ export interface CompleteTaskCalculationVersion {
   readonly contentDigest: string
 }
 export type CompleteCalculationFactItem =
-  | { readonly kind: 'version'; readonly version: CompleteTaskCalculationVersion }
+  | {
+      readonly kind: 'version'
+      readonly version: CompleteTaskCalculationVersion | HistoricalObservationPreparationVersion
+    }
   | {
       readonly kind: 'row'
       readonly cacheKey: string

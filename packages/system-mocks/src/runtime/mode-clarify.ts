@@ -36,6 +36,25 @@ export function run(argv: readonly string[]): void {
   }
   const stateDir = ensureStateDir(process.env.CLARIFY_STUB_STATE, '/tmp/aw-e2e-clarify-state')
   emitPromptForContractTest(call.prompt)
+  // RFC-372 fixture opt-in; ordinary clarify stub output remains byte-for-byte.
+  const mindmap = process.env.CLARIFY_STUB_MINDMAP === '1'
+  if (mindmap && call.prompt.startsWith('Ask 1–4 consequential follow-up questions')) {
+    emitClarifyEvent(
+      '<workflow-clarify>',
+      JSON.stringify({
+        questions: [
+          {
+            id: 'child',
+            title: 'Which consistency guarantee?',
+            kind: 'single',
+            options: ['Strong', 'Eventual'],
+            mindmap: { categoryPath: ['Architecture'] },
+          },
+        ],
+      }),
+    )
+    process.exit(0)
+  }
   const open = requireEnvelopeOpen(call.prompt, NAME)
 
   // The shell dropped the leading `run` before walking flags; the same slice is
@@ -68,7 +87,14 @@ export function run(argv: readonly string[]): void {
   const alreadyCalled = markCalled(`${stateDir}/${sanitizeStateKey(`${agent}.${shard}`)}`)
 
   if (!alreadyCalled && shouldAsk) {
-    emitClarifyEvent(open.clarify, QUESTIONS)
+    const body = mindmap
+      ? JSON.stringify({
+          questions: (JSON.parse(QUESTIONS) as { questions: object[] }).questions.map(
+            (question) => ({ ...question, mindmap: { categoryPath: ['Architecture'] } }),
+          ),
+        })
+      : QUESTIONS
+    emitClarifyEvent(open.clarify, body)
     process.exit(0)
   }
 

@@ -996,7 +996,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
         $schema_version: number
         nodes: Array<Record<string, unknown>>
       }
-      expect(swapped.$schema_version).toBe(6) // RFC-354: stored definitions are upgraded to the current schema
+      expect(swapped.$schema_version).toBe(7) // RFC-372: stored definitions are upgraded to the current schema
       expect(swapped.nodes.map((n) => n.id)).toEqual(['p1'])
       expect(swapped.nodes[0]?.agentId).toBe((await getAgent(db, 'wg-planner'))?.id)
       expect((await loadWorkgroupTaskState(db, taskId)).dwState?.phase).toBe('executing')
@@ -1058,7 +1058,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       expect(res.status).toBe(200)
       const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
       expect(JSON.parse(row?.workflowSnapshot ?? '{}')).toMatchObject({
-        $schema_version: 6,
+        $schema_version: 7,
         nodes: [{ promptTemplate: 'Handle {{trigger.webhook.comment_text}}' }],
       })
       await settleTask(taskId)

@@ -31,6 +31,7 @@ export function createClarifyDecisionCommand(
         originNodeRunId: command.nodeRunId,
         answers: [...command.answers],
         directive: command.directive,
+        ...(command.questionSetKey ? { questionSetKey: command.questionSetKey } : {}),
         actor: { userId: command.actor.user.id, role: command.actorRole },
         memoryDistillEnqueuer,
         ...(command.ifMatchIteration === undefined

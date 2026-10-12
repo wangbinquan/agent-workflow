@@ -136,6 +136,7 @@ export function completeHistoricalObservationAllocation(
   }
   async function candidates(recordKey: string, native: HistoricalWorkingNativeRecord) {
     const target = space('record-candidates/' + recordKey)
+    if (stage.candidateIndex) return target
     let exact = false
     for await (const row of completeWorkingTraversal<{ referenceId: string; sessionId: string }>(
       input.rows,

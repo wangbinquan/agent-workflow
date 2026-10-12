@@ -5,8 +5,10 @@ import type { Resources } from './zh-CN'
 import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingEn } from './observationPricing'
 import { runObservabilityEn } from './runObservability'
+import { mindmapEn } from './mindmap'
 
 export const enUS: Resources = {
+  mindmap: mindmapEn,
   observationPricing: observationPricingEn,
   runObservability: runObservabilityEn,
   permissions: buildPermissionCatalogResources('en-US'),

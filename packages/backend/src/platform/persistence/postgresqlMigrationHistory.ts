@@ -258,7 +258,8 @@ const RootSchema: z.ZodType<PostgresqlMigrationRoot> = z
   .strict()
 const UpgradeSchema: z.ZodType<PostgresqlIndexUpgrade> = z
   .object({
-    version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    retiredTables: z.array(z.string()).optional(),
     logicalTables: z
       .array(
         z

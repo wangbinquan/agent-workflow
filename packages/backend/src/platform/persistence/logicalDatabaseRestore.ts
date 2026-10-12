@@ -520,12 +520,24 @@ export async function restoreLogicalDatabaseArtifact(input: {
     )
   }
   const now = input.now ?? Date.now
+  const targetIds = new Set(targetContract.tables.map((table) => table.id))
+  const chunksTotal = verified.manifest.payload.tables.reduce(
+    (total, table) =>
+      total +
+      (table.disposition !== 'ARCHIVE_THEN_OMIT' && targetIds.has(table.table)
+        ? table.chunkCount
+        : 0),
+    0,
+  )
   await input.target.prepare(now())
   let chunksRestored = 0
   let rowsRestored = 0
   for (const table of input.contract.tables) {
     if (table.disposition === 'ARCHIVE_THEN_OMIT') continue
     const targetTable = targetContract.tables.find((candidate) => candidate.id === table.id)
+    // The verified history bridge above is the sole authority for table retirement.
+    // The complete source artifact was verified first, including retired rows.
+    if (targetTable === undefined && targetContract !== input.contract) continue
     if (targetTable === undefined) corrupt(`restore target is missing ${table.id}`)
     const entry = verified.manifest.payload.tables.find((candidate) => candidate.table === table.id)
     if (entry === undefined) corrupt(`logical manifest is missing ${table.id}`)
@@ -558,7 +570,7 @@ export async function restoreLogicalDatabaseArtifact(input: {
         table: table.id,
         chunk: chunkIndex + 1,
         chunksRestored,
-        chunksTotal: verified.activeChunks,
+        chunksTotal,
         rowsRestored,
       })
     }

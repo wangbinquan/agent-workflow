@@ -55,6 +55,8 @@ import {
   callWorkflowSelector,
   canonicalJson,
   CLARIFY_SOURCE_PORT_NAME,
+  ClarifyNodeSchema,
+  ClarifyCrossAgentNodeSchema,
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
   countFanoutAggregators,
@@ -2367,6 +2369,26 @@ export function validateWorkflowDef(
   // nodes (no self-clarify) where an agent attached to ≥ 2 cross-clarify
   // previously slipped through silently.
   issues.push(...validateAgentClarifyMultiplicity({ nodes, edges }))
+
+  // The permissive workflow draft remains editable. Execution/validation uses
+  // the same strict content contract for both clarify channel topologies.
+  for (const node of nodes) {
+    if (node.kind !== 'clarify' && node.kind !== 'clarify-cross-agent') continue
+    if (node.interactionMode === undefined && node.mindmap === undefined) continue
+    const parsed = (
+      node.kind === 'clarify' ? ClarifyNodeSchema : ClarifyCrossAgentNodeSchema
+    ).safeParse(node)
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        issues.push({
+          code: 'clarify-config-invalid',
+          message: `${issue.path.join('.')}: ${issue.message}`,
+          pointer: node.id,
+          target: target.node(node.id),
+        })
+      }
+    }
+  }
 
   // 4c. clarify (RFC-023) -----------------------------------------------------
   // - exactly one inbound edge on the `questions` port (the reverse-drag mints

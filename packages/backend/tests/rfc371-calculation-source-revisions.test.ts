@@ -1,6 +1,8 @@
 // RFC-371: every approved source has transactional I/U/D revisions. These real
 // engines exercise the generated trigger bodies against isolated probe relations;
 // production schema identity, provider mappings and immutable history are checked separately.
+// Canonical contract JSON orders keys independently of the authored descriptor;
+// equivalent descriptors must retain the exact original SQL on both providers.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -18,6 +20,31 @@ import {
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { describeEachProvider } from './helpers/eachProvider'
+
+test('canonical JSON key order preserves the exact source revision projection, while material descriptor changes remain rejected', () => {
+  const original = buildLogicalSchemaContract()
+  const roundTrip: LogicalSchemaContract = JSON.parse(canonicalSchemaJson(original))
+  expect(observationSourceRevisionStatements(roundTrip)).toEqual(
+    observationSourceRevisionStatements(original),
+  )
+  for (const mutate of [
+    (projection: Record<string, unknown>) => Reflect.set(projection, 'kind', 'other'),
+    (projection: Record<string, unknown>) => Reflect.set(projection, 'sourceColumn', 'other'),
+    (projection: Record<string, unknown>) => Reflect.set(projection, 'revisionColumn', 'other'),
+    (projection: Record<string, unknown>) =>
+      Reflect.set(projection, 'sources', [...OBSERVATION_SOURCE_REVISION.sources].reverse()),
+    (projection: Record<string, unknown>) => Reflect.set(projection, 'extra', true),
+  ]) {
+    const changed: LogicalSchemaContract = JSON.parse(canonicalSchemaJson(original))
+    const projection = changed.tables.find(
+      (table) => table.id === 'observation_source_revisions',
+    )!.sourceRevisionProjection!
+    mutate(projection as unknown as Record<string, unknown>)
+    expect(() => observationSourceRevisionStatements(changed)).toThrow(
+      'Unsupported observation-source-revision schema projection',
+    )
+  }
+})
 
 test('all 55 approved source identities and physical provider mappings are registered, with no derived self-invalidation', () => {
   const approved = JSON.parse(

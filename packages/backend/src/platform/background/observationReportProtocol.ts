@@ -54,6 +54,10 @@ export type OriginalObservationWorkerResult =
           readonly calculatedTasks: string
           readonly cachedRows: string
         }
+        readonly historicalPreparation?: {
+          readonly cachedRows: string
+          readonly prepared: boolean
+        }
       }
     }
   | { readonly kind: 'native-facts-invalid'; readonly reason: string }
@@ -84,6 +88,13 @@ export type ObservationReportRequest =
       readonly size?: number
     }
   | { readonly kind: 'clear-working'; readonly namespace: string }
+  | {
+      readonly kind: 'copy-working-prefix'
+      readonly from: string
+      readonly to: string
+      readonly excluded: readonly string[]
+    }
+  | { readonly kind: 'clear-working-prefix'; readonly prefix: string }
 export type ObservationReportWorkerEvent =
   | { readonly kind: 'request'; readonly id: string; readonly request: ObservationReportRequest }
   | OriginalObservationWorkerResult

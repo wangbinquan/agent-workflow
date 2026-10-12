@@ -11,7 +11,7 @@ export function answersEqual(a: ClarifyAnswer, b: ClarifyAnswer): boolean {
   const ai = [...a.selectedOptionIndices].sort((x, y) => x - y)
   const bi = [...b.selectedOptionIndices].sort((x, y) => x - y)
   if (ai.length !== bi.length || ai.some((v, i) => v !== bi[i])) return false
-  return a.customText === b.customText
+  return a.customText === b.customText && a.confirmedBasis === b.confirmedBasis
 }
 
 /** True when a ClarifyAnswer carries a real user decision (an option pick OR custom

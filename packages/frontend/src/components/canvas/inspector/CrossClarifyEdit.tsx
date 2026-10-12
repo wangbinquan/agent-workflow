@@ -1,3 +1,4 @@
+import { ClarifyModeEdit } from './ClarifyModeEdit'
 // RFC-056 cross-clarify node inspector — title + description (same as
 // RFC-023) plus a segmented `sessionModeForQuestioner` selector. Mirrors
 // the RFC-023 same-node clarify inspector's read-only status fields so the
@@ -63,6 +64,7 @@ export function CrossClarifyEdit({ node, definition, onPatch, onHistoryBoundary 
   return (
     <div className="form-grid" data-testid="cross-clarify-inspector">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
+      <ClarifyModeEdit node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field
         label={t('inspector.fieldClarifyDescription')}
         hint={t('inspector.fieldClarifyDescriptionHint')}

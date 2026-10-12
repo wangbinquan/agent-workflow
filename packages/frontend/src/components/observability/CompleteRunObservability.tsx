@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   CompleteObservationDimension,
@@ -48,6 +48,8 @@ import {
 import { ObservationFilters } from './ObservationFilters'
 import { CompleteObservationTimeDetails } from './CompleteObservationTimeDetails'
 import type { ObservationSearch } from './RunObservability'
+import { observationPresetRange } from './observationPresetRange'
+import { useObservationProjectionVersion } from './useObservationProjectionVersion'
 import './RunObservability.css'
 import './ObservationAnalysis.css'
 import './CompleteRunObservability.css'
@@ -153,6 +155,25 @@ export function CompleteRunObservability({
   const { t, i18n } = useTranslation(),
     pageRef = useRef<HTMLDivElement | null>(null)
   const [revision, setRevision] = useState(0)
+  const projectionVersion = useObservationProjectionVersion(!search.task)
+  const lastProjectionRevision = useRef<string | null>(null)
+  useEffect(() => {
+    if (!projectionVersion) return
+    const previous = lastProjectionRevision.current
+    lastProjectionRevision.current = projectionVersion.revision
+    if (
+      previous !== null &&
+      previous !== projectionVersion.revision &&
+      !search.task &&
+      search.period !== 'custom' &&
+      projectionVersion.asOf >= search.to
+    )
+      onChange({
+        ...search,
+        ...observationPresetRange(search.period ?? 'week', projectionVersion.asOf + 1),
+        after: undefined,
+      })
+  }, [projectionVersion, search, onChange])
   const [timeDetails, setTimeDetails] = useState(false)
   const timeTrigger = useRef<HTMLElement | null>(null)
   const [taskRevisions, setTaskRevisions] = useState<ReadonlyMap<string, number>>(() => new Map())
@@ -263,7 +284,15 @@ export function CompleteRunObservability({
     if (search.task) {
       const id = search.task
       setTaskRevisions((value) => new Map(value).set(id, (value.get(id) ?? 0) + 1))
-    } else setRevision((value) => value + 1)
+    } else {
+      setRevision((value) => value + 1)
+      if (search.period !== 'custom')
+        onChange({
+          ...search,
+          ...observationPresetRange(search.period ?? 'week', Date.now() + 1),
+          after: undefined,
+        })
+    }
   }
   const selectedDimensionKey = dimension?.kind === 'dimension' ? dimension.row.key : undefined
   const selectedQualityKey = dimension?.kind === 'quality' ? dimension.row.key : undefined

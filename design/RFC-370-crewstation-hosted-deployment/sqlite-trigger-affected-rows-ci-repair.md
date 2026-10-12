@@ -1,0 +1,42 @@
+# SQLite 触发器参与写入后的受影响行数修复
+
+## 已定位的问题
+
+主 CI `38218462107` 的确切提交 `134603ad5658c0a45ebbc4a12881cf504e9b75e9` 中，多处原有更新失败。Ubuntu 12/32 的 Agent rename 在 `affectedRows(result) !== 1` 处报 `resource-operation-stale`；Ubuntu 1/32 的用户更新在相同判据处报 `user-access-stale`，Ubuntu 16/32 的已有账户资料同步也回滚。它们的 PostgreSQL 对应路径没有同一计数回归。
+
+主 CI 和 Windows 均固定使用 Bun `1.4.0`。该版本的 `src/jsc/bindings/sqlite/JSSQLStatement.cpp` 在 prepared statement 的 run 中以执行前后 `sqlite3_total_changes` 的差值填写 `changes`；Drizzle `bun-sqlite` session 将原生 `.run()` 结果直接返回。已发布迁移 0245 给 `agents`、`users` 等原表增加事务内修订触发器，单个原表更新同时产生一行修订写入。因此总变化数不能作为原 SQL 直接命中的行数。
+
+问题位于 SQLite 驱动边界的结果语义。原有业务层“必须恰好一行”的更新判据应保留。计算缓存、修订表、已发布迁移及累计使用量业务继续由其原会话维护；本修复只恢复数据库结果合同。
+
+## 实现合同
+
+在 `packages/backend/src/db/client.ts` 的两个原 SQLite 创建点 `openDb()`、`createInMemoryDb()` 中各安装一次内部 prepared-statement 结果适配。复用同一原生连接，覆盖 Drizzle 实际使用的 `prepare` 和 `query` 两入口；缓存原生 statement 对应的包装对象，保留 query 的复用身份。原有语句守卫、迁移顺序和慢语句观测继续执行原正文。
+
+包装的 `run` 同步调用原方法，原方法抛出的错误直接传播。原 `changes` 为零时直接返回原结果，使未命中更新、读取语句和 DDL 保持零，避免读取到上一条写语句的 `changes()`。原总变化数大于零时，在返回之前同步读取同一连接上的 `SELECT changes()`，用其直接行数替换结果的 `changes`；保留原 `lastInsertRowid` 和其余结果字段。中间不等待、不写数据库、不切连接，也不重新执行原 SQL。SQLite 的直接行数排除触发器和外键级联的额外写入，仍保留真正直接命中多行的数量。
+
+原生 statement 的其他方法仍绑定原 receiver，属性读取仍使用原对象，以保留原生私有字段访问、`all/get/values`、列信息、参数信息和 finalize 的行为。适配为 db client 的内部实现，不新增业务层 API，不对 `affectedRows()` 做截断或放宽。
+
+## 必须覆盖的回归
+
+新增限定的真实 SQLite 数据库用例，并通过两个原创建点分别验证：
+
+- 一行更新加触发器副写仍返回直接行数 1，原表数据和修订副写均实际存在；两行更新返回 2，不能把多行结果压成 1。
+- 未命中条件的更新返回 0，且不产生修订副写；已成功写入后的读取和 DDL 仍返回 0。
+- insert 保留原生 `lastInsertRowid`；delete 排除外键级联的子表行数，同时子表删除实际发生。
+- 事务回滚保留原数据和副写的一致性；原 SQL 错误仍抛出；包装对象和原生读取方法仍可正常复用。
+
+已有 Agent rename、账户资料更新及业务更新的 hosted 用例继续作为端到端回归判据，不改其原有断言。受影响行数的 provider 中立入口和 PostgreSQL 驱动保持原正文。
+
+## 门槛与证据边界
+
+先对本设计做独立功能检视，再落限定实现与回归用例，完成独立实现检视及必要的源码清单同步后精确上库。仅执行限定格式、lint、纯语法解析和必要的清单生成；不在本机运行 AW test、typecheck、build、服务或 E2E。测试只由 GitHub 的确切提交执行。
+
+本片的退出条件是新提交的主 CI 与默认完整 Windows 终态均 success。当前源代码推导和检视不能代签修复实际通过，也不能关闭 H7、CS adapter、部署或 M0～M4。RFC-370 的后续实施继续等待总流水线全绿。
+
+## 2026-10-12 既存候选自身缺陷与现行执行边界
+
+原 SOURCE-R1 是有效、稳定 FAIL，唯一 P2 为本会话新增固定 probe 被公开 exact-SQL `query().finalize()` 或 `clearQueryCache()` 失效后，将已成功写入报告为失败；正式失败与根消费记录保留。当前只修正这项自身缺陷：提前绑定原 native query，每次正写后重新取得有效的 query-owned probe，直接读取标量并保留 number 行数，仍早于旁观者副写且不经过外层观测。零结果、原 lastInsertRowid、异常、业务 SQL 与 PostgreSQL 正文保持。
+
+原十个双工厂案例保留，新增 alias-finalize、cache-clear 和 cached-probe bigint 三项真实数据库回归，静态登记预期为每平台 26 次，尚未执行。测试注册移入 `tests/helpers/rfc370SqliteAffectedRowsCases.ts`，由默认完整 Windows 已选择的原 `rfc349-daemon-provider-runtime-session.test.ts` 显式调用一次；原 session 测试正文保留，不改共享 workflow 在制品。原本会话未追踪的 standalone test 已迁移，冻结 R1 原件保持。
+
+本候选仍未发布，也没有新的功能门、census 或实际测试通过记录。遵守今日 `CLAUDE.md` / `AGENTS.md` 硬规则：CI 先按提交和依赖归因，他人引入的回归由其原会话修复，不再接管；不发送跨 session 信息。当前修正自身已写候选并保留历史，不据此替他人业务签收或恢复未获总绿的 RFC 生产推进。后续实现门集中进行，不再逐个小切面反复开门。

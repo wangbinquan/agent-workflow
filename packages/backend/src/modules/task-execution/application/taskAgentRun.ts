@@ -535,6 +535,7 @@ export async function runNode(
           // renderer projects mandatory-ask-back and the RFC-122 stop notice
           // from it.
           ...(opts.clarifyChannel !== undefined ? { clarifyChannel: opts.clarifyChannel } : {}),
+          ...(opts.clarifyMindmap ? { clarifyMindmap: opts.clarifyMindmap } : {}),
           // RFC-313: 会话升级后的告知。只可能出现在这条完整 prompt 路径上——
           // followup 分支在上面的三元里，两者天然互斥。
           ...(opts.priorSessionAbandonedReason !== undefined
@@ -1904,7 +1905,13 @@ export async function runNode(
         // parsing — but the anchor stays the kind: an optional cross round
         // still parses with the lifted cap.
         const parseOpts = channel.kind === 'cross' ? { maxQuestions: Number.POSITIVE_INFINITY } : {}
-        const parsed = body !== null ? parseClarifyEnvelopeBody(body, parseOpts) : null
+        const parsed =
+          body !== null
+            ? parseClarifyEnvelopeBody(body, {
+                ...parseOpts,
+                mindmap: opts.clarifyMindmap !== undefined,
+              })
+            : null
         if (parsed === null || parsed.body === null) {
           const firstErr = parsed?.errors[0]
           status = 'failed'

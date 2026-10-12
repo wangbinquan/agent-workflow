@@ -1,5 +1,5 @@
 // RFC-359 W12 —— workflow 的 legacy / 中立投影先在旧实现上对拍，再合成一份。
-// 真数据库存量行覆盖 v1–v6、坏行错误、迁移后的详情/修订、普通保存与外层回滚。
+// 真数据库存量行覆盖 v1–v7、坏行错误、迁移后的详情/修订、普通保存与外层回滚。
 // 两个 hash 入口原来处于不同输入阶段：legacy 先迁移，neutral raw hash 直接编码；
 // 这条区别也锁住，不能为了去重改变已有输入语义。
 // 461f299f4 的 PG CI 暴露：外层事务内必须用回调 tx 观察未提交行；root client
@@ -39,9 +39,11 @@ import { DomainError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
-const VERSIONS = [1, 2, 3, 4, 5, 6] as const
+const VERSIONS = [1, 2, 3, 4, 5, 6, 7] as const
 
-function emptyDefinition(version: (typeof VERSIONS)[number] = 6): WorkflowDefinition {
+function emptyDefinition(
+  version: (typeof VERSIONS)[number] = WORKFLOW_SCHEMA_VERSION,
+): WorkflowDefinition {
   return { $schema_version: version, inputs: [], nodes: [], edges: [] }
 }
 
@@ -222,13 +224,14 @@ describeEachProvider('RFC-359 W12 —— workflow codec', (harness) => {
   })
 
   test('legacy 先迁移再 hash，neutral raw hash 保持原始草稿输入阶段', () => {
-    const latestHash = 'b0a1b4c7bec987e752802f012797f83b09e9acac314799be94bd538701492cf2'
+    const latestHash = 'e75aa11915c08092d6e0fbe751d0711a20d73fd52d5b59080fa840b39d8ab652'
     const rawHashes = [
       'cf3a666ae11b138d81691c1cf27299ec708b68ac22a537ec6077de5797cd26b2',
       'b1be4083af8ea2c1abc7abf3e8848dc7b3c181ed0b20c87dc9c0cc5dfb403874',
       'c167f800d553d64f65f6ddde0e763aca4edfbe96002d3b3c2f7eb5110b1359d9',
       '69d83ac0b1f88f0ad17bd8dcd3de059af5436da988abca7e0300ae450e3d4695',
       '98d1c072952a57b284b9fd5ebedd5c59f939ad42eda0becc93958d1a963d9688',
+      'b0a1b4c7bec987e752802f012797f83b09e9acac314799be94bd538701492cf2',
       latestHash,
     ]
     for (const version of VERSIONS) {

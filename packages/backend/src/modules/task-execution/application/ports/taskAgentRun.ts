@@ -1,3 +1,4 @@
+import type { ClarifyMindmapConfig } from '@agent-workflow/shared'
 // Runner: spawn ONE opencode subprocess for one node_run, stream its output
 // into the DB, persist the parsed envelope, and clean up.
 //
@@ -241,6 +242,7 @@ export interface TaskAgentRunPolicy {
    * the RFC-123 clarify-forbidden rejection ('stopped'), and the render
    * projections. Absent ⇒ { kind: 'none' } semantics.
    */
+  clarifyMindmap?: ClarifyMindmapConfig
   clarifyChannel?: ClarifyChannel
   /**
    * RFC-181 C — envelope-time hard-suppression oracle for workgroup host

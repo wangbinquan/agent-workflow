@@ -13,6 +13,7 @@ import {
   nativeHistoryFingerprint,
   type NativeHistoryProgress,
 } from '../domain/nativeUsageHistory'
+import { identityPacketPage } from '@/platform/persistence/identityPackets'
 
 function decode(row: {
   document: string
@@ -50,30 +51,40 @@ export async function readUsageCapturePage(
   db: ProviderNeutralDatabase,
   taskId: string,
   page: { readonly limit: number; readonly after?: string },
+  invocationIds?: readonly string[],
 ) {
   if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 500)
     throw new RangeError('Capture page size must be 1 through 500')
-  const rows = await db
-    .select({
-      invocationId: observationUsageCaptures.invocationId,
-      document: observationUsageCaptures.document,
-      sourceId: observationUsageCaptures.sourceId,
-      sourceCursor: observationUsageCaptures.sourceCursor,
-      nativeRootKey: observationUsageCaptures.nativeRootKey,
-      priorRevisionGap: observationUsageCaptures.priorRevisionGap,
-    })
-    .from(observationUsageCaptures)
-    .where(
-      and(
-        eq(observationUsageCaptures.taskId, taskId),
-        page.after === undefined
-          ? undefined
-          : gt(observationUsageCaptures.invocationId, page.after),
-      ),
-    )
-    .orderBy(asc(observationUsageCaptures.invocationId))
-    .limit(page.limit + 1)
-    .all()
+  const rows = await identityPacketPage({
+    ids: invocationIds,
+    limit: page.limit,
+    key: (row) => row.invocationId,
+    read: (ids, limit) =>
+      db
+        .select({
+          invocationId: observationUsageCaptures.invocationId,
+          document: observationUsageCaptures.document,
+          sourceId: observationUsageCaptures.sourceId,
+          sourceCursor: observationUsageCaptures.sourceCursor,
+          nativeRootKey: observationUsageCaptures.nativeRootKey,
+          priorRevisionGap: observationUsageCaptures.priorRevisionGap,
+        })
+        .from(observationUsageCaptures)
+        .where(
+          and(
+            eq(observationUsageCaptures.taskId, taskId),
+            ids === undefined
+              ? undefined
+              : inArray(observationUsageCaptures.invocationId, [...ids]),
+            page.after === undefined
+              ? undefined
+              : gt(observationUsageCaptures.invocationId, page.after),
+          ),
+        )
+        .orderBy(asc(observationUsageCaptures.invocationId))
+        .limit(limit)
+        .all(),
+  })
   const selected = rows.slice(0, page.limit)
   const roots = [
     ...new Set(selected.flatMap((row) => (row.nativeRootKey === null ? [] : [row.nativeRootKey]))),

@@ -51,6 +51,9 @@ export function observationReportChannel(
       page: <T>(namespace: string, after: string | null, size?: number) =>
         request<ReportWorkingPage<T>>({ kind: 'page-working', namespace, after, size }),
       clear: (namespace) => request<void>({ kind: 'clear-working', namespace }),
+      copyNamespacePrefix: (from, to, excluded) =>
+        request<void>({ kind: 'copy-working-prefix', from, to, excluded }),
+      clearNamespacePrefix: (prefix) => request<void>({ kind: 'clear-working-prefix', prefix }),
     } satisfies ReportWorkspace,
     receive(event: Extract<ObservationReportWorkerInput, { kind: 'response' }>) {
       const value = pending.get(event.id)

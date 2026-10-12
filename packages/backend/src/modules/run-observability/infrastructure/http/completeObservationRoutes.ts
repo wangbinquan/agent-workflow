@@ -27,6 +27,17 @@ export function mountCompleteObservationRoutes(
   reports: CompleteObservationReportQueries,
 ) {
   const gate = { permissions: ['tasks:read'] as const, tokenAccess: 'allow' as const }
+  if (reports.projectionVersion)
+    registerRoute(
+      app,
+      {
+        ...gate,
+        method: 'GET',
+        path: '/api/observability/projection-version',
+        summary: 'Read the committed observation projection version without recalculation',
+      },
+      async (c) => c.json(await reports.projectionVersion!()),
+    )
   registerRoute(
     app,
     {

@@ -1,4 +1,4 @@
-import { and, asc, eq, gt } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import {
   RuntimeStatusEntrySchema,
   type HistoricalObservationOwnerQuery,
@@ -6,6 +6,7 @@ import {
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { intentSessions, intentTurns, intentTurnEvents } from '@/db/schema'
+import { identityScopePage } from '@/platform/persistence/identityPackets'
 
 function originalObject(raw: string | null): Record<string, unknown> {
   try {
@@ -20,9 +21,18 @@ function originalObject(raw: string | null): Record<string, unknown> {
 /** Agent turns and their original roots are never manufactured as Task or NodeRun rows. */
 export function createHistoricalIntentObservationFacts(
   db: ProviderNeutralDatabase,
+  scope?: { readonly ownerIds?: readonly string[]; readonly roots?: readonly string[] },
 ): HistoricalObservationOwnerQuery {
   return {
     async owners(input) {
+      if (scope && Object.values(scope).reduce((n, ids) => n + (ids?.length ?? 0), 0) > 200)
+        return identityScopePage({
+          scope,
+          limit: input.limit,
+          key: (owner) => owner.ownerId,
+          read: (packet, limit) =>
+            createHistoricalIntentObservationFacts(db, packet).owners({ ...input, limit }),
+        })
       const rows = await db
         .select({
           id: intentTurns.id,
@@ -38,6 +48,16 @@ export function createHistoricalIntentObservationFacts(
         .where(
           and(
             eq(intentTurns.role, 'agent'),
+            scope === undefined
+              ? undefined
+              : or(
+                  scope.ownerIds?.length
+                    ? inArray(intentTurns.id, [...scope.ownerIds])
+                    : sql`false`,
+                  scope.roots?.length
+                    ? inArray(intentTurns.captureRootSessionId, [...scope.roots])
+                    : sql`false`,
+                ),
             input.after === undefined ? undefined : gt(intentTurns.id, input.after),
           ),
         )

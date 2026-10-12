@@ -1,4 +1,3 @@
-import type { Actor } from '@/auth/actor'
 import type {
   AcceptedObservationInvocation,
   ObservationAttemptFacts,
@@ -14,6 +13,7 @@ import type { UsageCaptureReceipt } from './usageLedger'
 import type { CompleteSourceReader } from './completeReport'
 import type { ObservationNativeScopeSource } from '../public/participants'
 import type { HistoricalObservationSources } from './historicalObservationSources'
+import type { Actor } from '@/auth/actor'
 
 /** All readers are bound to one original snapshot. No method takes a total-record budget. */
 export interface CompleteObservationSources {
@@ -21,7 +21,7 @@ export interface CompleteObservationSources {
   readonly nativeScopes?: ObservationNativeScopeSource
   readonly snapshotId: string
   tasks(
-    actor: Actor,
+    actor: Actor | null,
     query: Omit<ObservationTaskPageQuery, 'after' | 'limit'>,
   ): CompleteSourceReader<ObservationTaskFacts>
   attempts(taskId: string): CompleteSourceReader<ObservationAttemptFacts>

@@ -112,6 +112,14 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
       mergeCompleteObservationFold(membership.fold, fold)
       await cache.put(key, value)
       await memberships.put(member, membership)
+      await input.retainDimensionContribution?.({
+        identity: 'invocation/' + invocation.invocationId,
+        ownerComponent: JSON.stringify(['invocation', invocation.invocationId]),
+        task,
+        cohortAt: task.startedAt,
+        fold,
+        dimension: { key, kind, selection, label },
+      })
     }
   }
   async function addModel(
@@ -130,7 +138,8 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
     }
     const { key, value, member, membership } = await group('model', { model }, model.model, task)
     const identity = input.keyOf(JSON.stringify([key, i.invocationId]))
-    if (!(await models.get(identity))) {
+    const first = !(await models.get(identity))
+    if (first) {
       await models.put(identity, true)
       value.fold.invocations = String(BigInt(value.fold.invocations) + 1n)
       value.fold.observedInvocations = String(BigInt(value.fold.observedInvocations) + 1n)
@@ -160,6 +169,30 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
     }
     await cache.put(key, value)
     await memberships.put(member, membership)
+    const next = contributionFold
+      ? {
+          ...contributionFold,
+          tokens: { ...contributionFold.tokens },
+          gaps: [...contributionFold.gaps],
+        }
+      : emptyCompleteObservationFold()
+    if (!contributionFold) addCompleteObservationAllocation(next, contribution, cost, qualified)
+    if (first) {
+      next.invocations = '1'
+      next.observedInvocations = '1'
+    }
+    if (invocationMetrics.state === 'not-ready')
+      for (const gap of invocationMetrics.gaps) completeObservationGap(next, gap)
+    await input.retainDimensionContribution?.({
+      identity:
+        'model/' +
+        input.keyOf(JSON.stringify([i.invocationId, allocation.sourceId, allocation.recordId])),
+      ownerComponent: JSON.stringify(['invocation', i.invocationId]),
+      task,
+      cohortAt: task.startedAt,
+      fold: next,
+      dimension: { key, kind: 'model', selection: { model }, label: model.model },
+    })
   }
   return {
     namespace,
@@ -217,6 +250,14 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
         }
         mergeCompleteObservationFold(value.fold, fold)
         await cache.put(key, value)
+        await input.retainDimensionContribution?.({
+          identity: 'reference/' + input.keyOf(e.referenceId),
+          ownerComponent: JSON.stringify([e.sourceKind, e.ownerId]),
+          task: task?.task ?? null,
+          cohortAt: task?.task.startedAt ?? row.cohortAt,
+          fold,
+          dimension: { key, kind, selection, label },
+        })
         if (!task) continue
         const member = input.keyOf(JSON.stringify([key, task.task.id]))
         let membership = await memberships.get(member)
@@ -255,6 +296,7 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
           historicalReferences: '0',
           observedHistoricalReferences: '0',
         }
+        const contribution = { ...next, tokens: { ...next.tokens }, gaps: [...next.gaps] }
         const member =
           allocation.task === null ? null : input.keyOf(JSON.stringify([key, allocation.task.id]))
         let membership = member === null ? undefined : await memberships.get(member)
@@ -268,6 +310,12 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
           const identity = input.keyOf(JSON.stringify([key, reference.referenceId]))
           if (await historicalReferences.get(identity)) continue
           await historicalReferences.put(identity, true)
+          contribution.historicalReferences = String(
+            BigInt(contribution.historicalReferences ?? '0') + 1n,
+          )
+          contribution.observedHistoricalReferences = String(
+            BigInt(contribution.observedHistoricalReferences ?? '0') + 1n,
+          )
           value.fold.historicalReferences = String(
             BigInt(value.fold.historicalReferences ?? '0') + 1n,
           )
@@ -285,6 +333,18 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
         }
         await cache.put(key, value)
         if (member !== null && membership) await memberships.put(member, membership)
+        await input.retainDimensionContribution?.({
+          identity:
+            'record/' +
+            input.keyOf(
+              JSON.stringify([allocation.record.nativeSource, allocation.record.recordId]),
+            ),
+          ownerComponent: JSON.stringify(['root', allocation.record.sessionId]),
+          task: allocation.task,
+          cohortAt: allocation.cohortAt,
+          fold: contribution,
+          dimension: { key, kind: entry.kind, selection: entry.selection, label: entry.label },
+        })
       }
     },
     async flush() {

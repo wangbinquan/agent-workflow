@@ -1,3 +1,4 @@
+import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
@@ -3913,6 +3914,12 @@ function composeSqliteApiRouteMounts(
     artifacts: deps.evidenceArtifacts,
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
+    followupGenerator: composeClarifyFollowupGenerator({
+      db: deps.db,
+      appHome: systemAgentAppHome,
+      registry: deps.runtimeRegistry,
+      observations: () => systemAgentObservations,
+    }),
     db: deps.db,
     context: deps.collaborationContext,
   })

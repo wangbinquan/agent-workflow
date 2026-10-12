@@ -10,6 +10,7 @@
 // keep working; only the import path changed.
 
 import { z } from 'zod'
+import { validateClarifyMindmap } from './clarifyMindmap'
 
 import type {
   ClarifyCrossAgentNode,
@@ -65,6 +66,7 @@ export interface ParseClarifyEnvelopeOptions {
    *  Defaults to {@link CLARIFY_MAX_QUESTIONS} (5). Pass
    *  `Number.POSITIVE_INFINITY` for the RFC-056 cross-clarify path. */
   maxQuestions?: number
+  mindmap?: boolean
 }
 
 /**
@@ -189,6 +191,13 @@ export function parseClarifyEnvelopeBody(
     return { body: null, warnings, errors }
   }
 
+  const graphError = validateClarifyMindmap(result.data.questions, opts.mindmap)
+  if (graphError)
+    return {
+      body: null,
+      warnings,
+      errors: [{ code: 'clarify-questions-malformed', detail: graphError }],
+    }
   return { body: result.data, warnings, errors }
 }
 

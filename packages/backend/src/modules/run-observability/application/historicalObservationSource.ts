@@ -17,15 +17,19 @@ import { completeWorkingTraversal } from './completeWorkingTraversal'
 import { completeWorkingCache } from './completeWorkingCache'
 import type { HistoricalNativeFactReader } from '../ports/historicalNativeFacts'
 import { HistoricalNativeFactInvalidation } from '../domain/historicalNativeFacts'
+import type { HistoricalObservationStage } from '../ports/historicalObservationPreparation'
+import {
+  indexHistoricalObservationCandidate,
+  indexHistoricalObservationCandidates,
+} from './historicalObservationIndex'
+import {
+  qualifyPreparedHistoricalExecutions,
+  trackHistoricalPreparationGroups,
+} from './historicalObservationPreparationStage'
+
+export type { HistoricalObservationStage } from '../ports/historicalObservationPreparation'
 
 const PAGE = 100
-export interface HistoricalObservationStage {
-  readonly namespace: string
-  readonly executionsNamespace: string
-  readonly nativeRecordsNamespace: string
-  readonly receiptsNamespace: string
-  readonly sourceRows: string
-}
 function ownerReader<T>(
   snapshotId: string,
   read: (after: string | undefined) => Promise<{ items: readonly T[]; nextCursor: string | null }>,
@@ -37,8 +41,8 @@ function ownerReader<T>(
     },
   }
 }
-function membership(
-  input: CompleteObservationCohortInput,
+export function historicalObservationMembership(
+  input: Pick<CompleteObservationCohortInput, 'query' | 'task'>,
   execution: HistoricalObservationExecution,
   parentTask: ObservationTaskFacts | null,
   taskSelected: boolean,
@@ -108,10 +112,36 @@ function membership(
 
 /** All visible owner/attempt/root references are staged before any numeric or selected-range allocation. */
 export async function stageHistoricalObservationSources(
-  input: CompleteObservationCohortInput,
+  originalInput: CompleteObservationCohortInput,
 ): Promise<HistoricalObservationStage | null> {
-  const sources = input.sources.historical
+  const sources = originalInput.sources.historical
   if (!sources) return null
+  const prepared = await originalInput.historicalPreparation?.read()
+  if (prepared) {
+    await qualifyPreparedHistoricalExecutions(originalInput, prepared, membership)
+    // A preparation preserves every original gap; each unreadable root is retried on this report.
+    for await (const root of completeWorkingTraversal<{
+      rootSessionId: string
+      eof: unknown
+      issues: readonly string[]
+    }>(originalInput.rows, prepared.namespace + '/root-results', originalInput.signal))
+      if (
+        root.document.eof === null ||
+        root.document.issues.includes('historical-native-unavailable')
+      )
+        await retainHistoricalNativeRoot(
+          originalInput,
+          prepared,
+          root.key,
+          root.document.rootSessionId,
+        )
+    originalInput.observePhase?.('historical-preparation-reused')
+    return prepared
+  }
+  const tracking = originalInput.historicalPreparation
+    ? trackHistoricalPreparationGroups(originalInput)
+    : undefined
+  const input = tracking ? { ...originalInput, rows: tracking.rows } : originalInput
   const namespace = input.namespace + '/historical',
     executionsNamespace = namespace + '/executions',
     nativeRecordsNamespace = namespace + '/native-records',
@@ -165,11 +195,11 @@ export async function stageHistoricalObservationSources(
       }
     }
     const parentTask = parent.task
-    const privileged = input.actor.permissions.has('tasks:read:all')
+    const privileged = input.actor === null || input.actor.permissions.has('tasks:read:all')
     const visible =
-      privileged || parentTask !== null || execution.ownerUserId === input.actor.user.id
+      privileged || parentTask !== null || execution.ownerUserId === input.actor?.user.id
     if (!visible) return null
-    const value = membership(input, execution, parentTask, parent.selected)
+    const value = historicalObservationMembership(input, execution, parentTask, parent.selected)
     await executions.put(executionKey, value)
     return value
   }
@@ -302,7 +332,21 @@ export async function stageHistoricalObservationSources(
   ))
     await retainHistoricalNativeRoot(input, stage, row.key, row.document.sessionId)
   input.observePhase?.('native-collected')
-  return { ...stage, sourceRows: String(sourceRows) }
+  const retained = { ...stage, sourceRows: String(sourceRows) }
+  if (tracking) {
+    const indexed = { ...retained, candidateIndex: true as const }
+    await indexHistoricalObservationCandidates({
+      rows: input.rows,
+      stage: indexed,
+      keyOf: input.keyOf,
+      signal: input.signal,
+    })
+    await tracking.flush()
+    await originalInput.historicalPreparation!.retain(indexed)
+    input.observePhase?.('historical-preparation-sealed')
+    return indexed
+  }
+  return retained
 }
 
 async function retainHistoricalNativeRoot(
@@ -372,6 +416,11 @@ async function retainHistoricalNativeRoot(
           key,
           document: { rootKey: key },
         })
+        if (stage.candidateIndex)
+          await indexHistoricalObservationCandidate(
+            { rows: input.rows, stage, keyOf: input.keyOf, signal: input.signal },
+            { key: recordKey, document: value },
+          )
       }
       await input.rows.put(stage.receiptsNamespace, {
         key: 'native-page/' + key + '/' + page.ordinal,

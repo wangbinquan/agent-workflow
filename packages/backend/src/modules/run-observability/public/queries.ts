@@ -13,6 +13,7 @@ import type { Actor } from '@/auth/actor'
 
 /** Pages select output from a completed original report, never its statistical population. */
 export interface CompleteObservationReportQueries {
+  projectionVersion?(): Promise<{ readonly revision: string; readonly asOf: number } | null>
   request(
     actor: Actor,
     query: ObservationOverviewQuery,

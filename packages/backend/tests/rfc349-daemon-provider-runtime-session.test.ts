@@ -7,6 +7,10 @@ import {
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
 } from '../src/cli/daemonProviderRuntimeSession'
+import { registerRfc370SqliteAffectedRowsCases } from './helpers/rfc370SqliteAffectedRowsCases'
+
+// This suite is already selected by the complete Windows platform workflow.
+registerRfc370SqliteAffectedRowsCases()
 
 const lifecycle: DaemonProviderSessionLifecycleInput = {
   operationId: 'operation-1',

@@ -1,142 +1,178 @@
-// RFC-372: official migrations own Task host/entry and immutable consumer versions.
-// No fixture DDL is allowed here; both providers start from their full migration chain.
-import { expect, test } from 'bun:test'
-import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+// RFC-372 lightweight revision: obsolete tables retire through official forward migrations.
+import { describe, expect, test } from 'bun:test'
+import type { Database } from 'bun:sqlite'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { createInMemoryDb } from '@/db/client'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import {
-  tasks,
-  nodeRuns,
-  taskClarifyHostRuns,
-  taskClarifyChannels,
-  taskClarifyEntries,
-  taskClarifyMaterials,
-  taskClarifyConsumptions,
-} from '@/db/schema'
-import { describeEachProvider } from './helpers/eachProvider'
+  postgresqlMigrationDigest,
+  replayPostgresqlMigrationHistory,
+  resolvePostgresqlAdditiveRowBridge,
+  resolvePostgresqlIndexOnlyRowBridge,
+} from '@/platform/persistence/postgresqlMigrationSequence'
+import { freezeAt, MIGRATIONS } from './migration-freeze'
+import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
+import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
+import { restoreLogicalDatabaseBackup } from '@/platform/persistence/logicalDatabaseRestore'
 
-describeEachProvider('RFC-372 official Task companion schema', (harness) => {
-  test('preserves material versions, enforces one acceptance per business run, and deletes companions with the original task', async () => {
-    const taskId = randomUUID(),
-      runId = randomUUID(),
-      channelId = randomUUID(),
-      entryId = randomUUID()
-    await harness.db
-      .insert(tasks)
-      .values({
-        id: taskId,
-        name: 'Schema fixture',
-        workflowId: 'frozen',
-        workflowSnapshot: '{}',
-        repoPath: '/tmp/rfc372-schema',
-        baseBranch: 'main',
-        branch: 'fixture',
-        status: 'pending',
-        inputs: '{}',
-      })
-      .run()
-    await harness.db
-      .insert(nodeRuns)
-      .values({ id: runId, taskId, nodeId: 'writer', status: 'pending', iteration: 0 })
-      .run()
-    await harness.db
-      .insert(taskClarifyHostRuns)
-      .values({
-        nodeRunId: runId,
-        taskId,
-        occurrenceRef: 'occurrence',
-        slotKey: 'slot',
-        createdAt: 1,
-      })
-      .run()
-    await harness.db
-      .insert(taskClarifyChannels)
-      .values({
-        id: channelId,
-        taskId,
-        logicalKey: 'logical',
-        askingNodeId: 'writer',
-        clarifyNodeId: 'clarify',
-        bindingDigest: 'binding',
-        hostJson: '{}',
-        createdAt: 1,
-        updatedAt: 1,
-      })
-      .run()
-    await harness.db
-      .insert(taskClarifyEntries)
-      .values({
-        id: entryId,
-        channelId,
-        entryRevision: 1,
-        hostEntryKey: 'host',
-        hostJson: '{}',
-        sourceAskingRunId: runId,
-        sourceContextDigest: 'source',
-        sourceContextJson: '{}',
-        configSnapshotRef: 'config',
-        triggerJson: '{}',
-        disposition: 'completed',
-        createdAt: 1,
-        updatedAt: 1,
-      })
-      .run()
-    const firstId = randomUUID(),
-      secondId = randomUUID()
-    const material = {
-      taskId,
-      entryScopeRef: entryId,
-      consumerNodeId: 'writer',
-      planId: 'plan',
-      sourceContextDigest: 'source',
-      snapshotSetDigest: 'set',
-      materialJson: '{}',
-      createdAt: 2,
+const retired = [
+  'clarify_mindmap_command_receipts',
+  'clarify_mindmap_node_revisions',
+  'clarify_mindmap_nodes',
+  'clarify_mindmap_sessions',
+  'clarify_mindmap_snapshots',
+  'task_clarify_channels',
+  'task_clarify_consumptions',
+  'task_clarify_entries',
+  'task_clarify_host_runs',
+  'task_clarify_materials',
+]
+describe('RFC-372 companion retirement', () => {
+  test('SQLite forward migration preserves original tasks, rounds and answer JSON', () => {
+    const prefix = freezeAt(246)
+    const db = createInMemoryDb(prefix)
+    const native = Reflect.get(db, '$client') as Database
+    try {
+      native.exec(
+        "INSERT INTO tasks (id,name,workflow_id,workflow_snapshot,repo_path,worktree_path,base_branch,branch,status,inputs,started_at) VALUES ('keep','keep','wf','{}','/r','','main','main','awaiting_human','{}',1)",
+      )
+      native.exec(
+        "INSERT INTO node_runs (id,task_id,node_id,status,iteration) VALUES ('ask','keep','ask','done',0),('gate','keep','gate','awaiting_human',0)",
+      )
+      native.exec(
+        "INSERT INTO clarify_rounds (id,task_id,kind,asking_node_id,asking_node_run_id,intermediary_node_id,intermediary_node_run_id,iteration,status,questions_json,created_at) VALUES ('round','keep','self','ask','ask','gate','gate',0,'awaiting_human','[{\"id\":\"original\"}]',1)",
+      )
+      const before = native.query('SELECT * FROM clarify_rounds').all()
+      for (const id of retired)
+        expect(
+          native.query("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(id),
+        ).not.toBeNull()
+      native.exec(readFileSync(resolve(MIGRATIONS, '0248_rfc372_light_clarify.sql'), 'utf8'))
+      expect(native.query('SELECT * FROM clarify_rounds').all()).toEqual(before)
+      expect(native.query("SELECT id FROM tasks WHERE id='keep'").get()).toEqual({ id: 'keep' })
+      for (const id of retired)
+        expect(
+          native.query("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(id),
+        ).toBeNull()
+    } finally {
+      native.close()
+      rmSync(prefix, { recursive: true, force: true })
     }
-    await harness.db
-      .insert(taskClarifyMaterials)
-      .values({ ...material, id: firstId, materialRevision: 1 })
-      .run()
-    await harness.db
-      .insert(taskClarifyMaterials)
-      .values({ ...material, id: secondId, materialRevision: 2 })
-      .run()
-    await expect(
-      harness.db
-        .insert(taskClarifyMaterials)
-        .values({ ...material, id: randomUUID(), materialRevision: 2 })
-        .run(),
-    ).rejects.toThrow()
-    const accepted = {
-      nodeRunId: runId,
-      taskId,
-      materialId: firstId,
-      acceptanceRef: 'invocation',
-      sourceContextDigest: 'source',
-      snapshotSetDigest: 'set',
-      finalizedPromptDigest: 'prompt',
-      acceptedAt: 3,
-      consumedAt: null,
-    }
-    await harness.db.insert(taskClarifyConsumptions).values(accepted).run()
-    await expect(
-      harness.db
-        .insert(taskClarifyConsumptions)
-        .values({ ...accepted, acceptanceRef: 'other', materialId: secondId })
-        .run(),
-    ).rejects.toThrow()
-    expect(await harness.db.select().from(taskClarifyMaterials).all()).toHaveLength(2)
-    expect(await harness.db.select().from(taskClarifyConsumptions).get()).toMatchObject({
-      materialId: firstId,
-      consumedAt: null,
-    })
-    await harness.db.delete(tasks).where(eq(tasks.id, taskId)).run()
-    for (const table of [
-      taskClarifyHostRuns,
-      taskClarifyChannels,
-      taskClarifyEntries,
-      taskClarifyMaterials,
-      taskClarifyConsumptions,
-    ])
-      expect(await harness.db.select().from(table).all()).toHaveLength(0)
   })
+  test('PostgreSQL V4 replays the exact removal and concurrent additions, admitting only the verified row bridge', async () => {
+    const history = await loadPostgresqlMigrationHistory()
+    const step = history.steps.find((x) => x.id === '0024_rfc372_light_clarify')!
+    expect(step.version).toBe(4)
+    expect([...step.retiredTables!].sort()).toEqual(retired)
+    expect(step.logicalTables).toHaveLength(14)
+    expect(step.executableStatements.filter((s) => s.sql.startsWith('DROP TABLE'))).toHaveLength(10)
+    expect(step.executableStatements.every((s) => !/\bCASCADE\b/.test(s.sql))).toBe(true)
+    expect(history.head.contract).toEqual(buildLogicalSchemaContract())
+    const before = history.versions[history.steps.indexOf(step)]!
+    expect(
+      resolvePostgresqlAdditiveRowBridge(history, {
+        fromContractDigest: before.contract.digest,
+        toContractDigest: history.head.contract.digest,
+      }).target,
+    ).toEqual(history.head.contract)
+    expect(() =>
+      resolvePostgresqlIndexOnlyRowBridge(history, {
+        fromContractDigest: before.contract.digest,
+        toContractDigest: history.head.contract.digest,
+      }),
+    ).toThrow()
+    const { digest: _digest, ...bad } = {
+      ...step,
+      retiredTables: [...step.retiredTables!, 'clarify_rounds'],
+    }
+    expect(() =>
+      replayPostgresqlMigrationHistory(history.root, [
+        ...history.steps.slice(0, history.steps.indexOf(step)),
+        { ...bad, digest: postgresqlMigrationDigest(bad) },
+      ]),
+    ).toThrow()
+  })
+  test('a historical backup restores retained rows, skips retired rows and preserves the original artifact', async () => {
+    const history = await loadPostgresqlMigrationHistory()
+    const previous =
+      history.versions[history.steps.findIndex((step) => step.id === '0024_rfc372_light_clarify')]!
+    const prefix = freezeAt(previous.sqliteMigration.last.index)
+    const root = mkdtempSync(join(tmpdir(), 'rfc372-retired-backup-'))
+    const db = createInMemoryDb(prefix)
+    const native = Reflect.get(db, '$client') as Database
+    try {
+      native.exec(
+        "INSERT INTO tasks (id,name,workflow_id,workflow_snapshot,repo_path,worktree_path,base_branch,branch,status,inputs,started_at) VALUES ('keep','keep','wf','{}','/r','','main','main','awaiting_human','{}',1)",
+      )
+      native.exec(
+        "INSERT INTO node_runs (id,task_id,node_id,status,iteration) VALUES ('ask','keep','ask','done',0),('gate','keep','gate','awaiting_human',0)",
+      )
+      native.exec(
+        "INSERT INTO clarify_rounds (id,task_id,kind,asking_node_id,asking_node_run_id,intermediary_node_id,intermediary_node_run_id,iteration,status,questions_json,created_at) VALUES ('round','keep','self','ask','ask','gate','gate',0,'awaiting_human','[]',1)",
+      )
+      native.exec(
+        "INSERT INTO clarify_mindmap_sessions VALUES ('retire','keep','round','entry',1,'{}','{}',1,1)",
+      )
+      const sourcePath = join(root, 'old.sqlite')
+      writeFileSync(sourcePath, native.serialize())
+      const source = openSqliteLogicalSource({ path: sourcePath, contract: previous.contract })
+      try {
+        const snapshot = await source.preflight()
+        const artifactRoot = join(root, 'artifact')
+        const exported = await exportLogicalDatabaseArtifact({
+          operationId: 'dbm_rfc372_old',
+          sourceProvider: 'sqlite',
+          sourceGenerationId: 'dbg_rfc372_old',
+          source: {
+            provider: 'sqlite',
+            assertUnchanged: () => source.assertUnchanged(snapshot),
+            readChunk: (table, key, limit) => source.readChunk(table, key, limit),
+          },
+          expectedTableRows: snapshot.tableRows,
+          contract: previous.contract,
+          artifactRoot,
+        })
+        const originalManifest = readFileSync(join(artifactRoot, 'logical-manifest.json'), 'utf8')
+        const copied: string[] = []
+        const progress: { chunksRestored: number; chunksTotal: number }[] = []
+        const receipt = await restoreLogicalDatabaseBackup({
+          artifactRoot,
+          expectedEnvelopeFileDigest: exported.envelopeFileDigest,
+          restoreOperationId: 'dbm_rfc372_restore',
+          contract: previous.contract,
+          targetContract: history.head.contract,
+          target: {
+            provider: 'sqlite',
+            operationId: 'dbm_rfc372_restore',
+            async prepare() {},
+            async copyChunk(table) {
+              copied.push(table.id)
+            },
+            async finalizeSchema(_now, tables) {
+              expect(tables.some((table) => retired.includes(table.table))).toBe(false)
+              expect(tables.find((table) => table.table === 'tasks')?.rowCount).toBe(1)
+            },
+          },
+          onProgress: (value) => progress.push(value),
+        })
+        expect(copied).toContain('clarify_rounds')
+        expect(copied).toContain('tasks')
+        expect(copied.some((id) => retired.includes(id))).toBe(false)
+        expect(receipt.rowsRestored).toBe(exported.envelope.payload.activeRows - 1)
+        expect(progress.at(-1)?.chunksRestored).toBe(progress.at(-1)?.chunksTotal)
+        expect(readFileSync(join(artifactRoot, 'logical-manifest.json'), 'utf8')).toBe(
+          originalManifest,
+        )
+      } finally {
+        await source.close()
+      }
+    } finally {
+      native.close()
+      rmSync(prefix, { recursive: true, force: true })
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 20_000)
 })

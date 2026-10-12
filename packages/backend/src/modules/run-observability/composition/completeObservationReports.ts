@@ -26,6 +26,10 @@ export function composeCompleteObservationReports(input: {
     signal: AbortSignal,
   ) => Promise<CompleteObservationBuildResult>
   readonly closeBuild?: () => Promise<void>
+  readonly projection?: {
+    readonly queries: CompleteObservationReportQueries
+    readonly worker: { start(): void; stop(): Promise<void> }
+  }
 }) {
   const spool = completeObservationFileSpool(input.appHome)
   const service = completeObservationReportService({
@@ -41,5 +45,32 @@ export function composeCompleteObservationReports(input: {
     build: (report, signal) => input.build(report, spool, signal),
     ...(input.closeBuild ? { closeBuild: input.closeBuild } : {}),
   })
-  return { queries: service satisfies CompleteObservationReportQueries, worker: service.worker }
+  const queries: CompleteObservationReportQueries = input.projection
+    ? {
+        ...input.projection.queries,
+        status: (actor, id) =>
+          id.startsWith('projection-')
+            ? input.projection!.queries.status(actor, id)
+            : service.status(actor, id),
+        page: (actor, id, query) =>
+          id.startsWith('projection-')
+            ? input.projection!.queries.page(actor, id, query)
+            : service.page(actor, id, query),
+      }
+    : service
+  return {
+    queries,
+    auditQueries: service satisfies CompleteObservationReportQueries,
+    worker: input.projection
+      ? {
+          start() {
+            input.projection!.worker.start()
+          },
+          async stop() {
+            await input.projection!.worker.stop()
+            await service.worker.stop()
+          },
+        }
+      : service.worker,
+  }
 }

@@ -1,12 +1,18 @@
-import { and, asc, eq, gt } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray } from 'drizzle-orm'
 import { AcceptedObservationInvocationSchema } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { observationInvocations } from '@/db/schema'
+import { observationInvocations, observationUsageCurrent } from '@/db/schema'
+import { jsonPathText } from '@/platform/persistence/jsonPathText'
+import { identityPacketPage } from '@/platform/persistence/identityPackets'
+import type { UsageLedgerRecord } from '../domain/usageLedger'
 import { sha256Hex } from '@/util/hash'
 import { completeSourceCursor, completeSourcePosition } from '../domain/completeSourceCursor'
 import type { CompleteSourceReader } from '../ports/completeReport'
 import type { CompleteObservationSources } from '../ports/completeObservationSources'
-import type { ObservationTaskSource } from '../ports/taskObservations'
+import type {
+  ObservationTaskSource,
+  ProjectionObservationTaskSource,
+} from '../ports/taskObservations'
 import { readUsageCapturePage } from './usageCapturePersistence'
 import { createUsageLedgerStore } from './usageLedgerPersistence'
 import {
@@ -17,9 +23,10 @@ import {
 /** The caller owns the dedicated original snapshot connection; this adapter opens no transactions. */
 export function createCompleteObservationSources(input: {
   readonly db: ProviderNeutralDatabase
-  readonly tasks: ObservationTaskSource
+  readonly tasks: ObservationTaskSource | ProjectionObservationTaskSource
   readonly snapshotId: string
   readonly pageSize?: number
+  readonly invocationIds?: readonly string[]
 }): CompleteObservationSources {
   const { db, tasks, snapshotId } = input,
     pageSize = input.pageSize ?? 100
@@ -51,14 +58,21 @@ export function createCompleteObservationSources(input: {
     snapshotId,
     tasks: (actor, query) => {
       const parent = sha256Hex(
-        JSON.stringify([actor.user.id, [...actor.permissions].sort(), query]),
+        JSON.stringify([
+          actor?.user.id ?? 'original-daemon-projection',
+          actor ? [...actor.permissions].sort() : null,
+          query,
+        ]),
       )
-      return reader('tasks', parent, (after) =>
-        tasks.list({
-          actor,
-          query: { ...query, limit: pageSize, ...(after === undefined ? {} : { after }) },
-        }),
-      )
+      return reader('tasks', parent, (after) => {
+        const page = { ...query, limit: pageSize, ...(after === undefined ? {} : { after }) }
+        if (actor === null) {
+          if (!('projectionList' in tasks))
+            throw new Error('Original projection Task capability missing')
+          return tasks.projectionList(page)
+        }
+        return tasks.list({ actor, query: page })
+      })
     },
     attempts: (taskId) =>
       reader('attempts', taskId, (after) => {
@@ -70,18 +84,25 @@ export function createCompleteObservationSources(input: {
       }),
     invocations: (taskId) =>
       reader('invocations', taskId, async (after) => {
-        const rows = await db
-          .select({ id: observationInvocations.id, document: observationInvocations.document })
-          .from(observationInvocations)
-          .where(
-            and(
-              eq(observationInvocations.taskId, taskId),
-              after === undefined ? undefined : gt(observationInvocations.id, after),
-            ),
-          )
-          .orderBy(asc(observationInvocations.id))
-          .limit(pageSize + 1)
-          .all()
+        const rows = await identityPacketPage({
+          ids: input.invocationIds,
+          limit: pageSize,
+          key: (row) => row.id,
+          read: (ids, limit) =>
+            db
+              .select({ id: observationInvocations.id, document: observationInvocations.document })
+              .from(observationInvocations)
+              .where(
+                and(
+                  eq(observationInvocations.taskId, taskId),
+                  ids === undefined ? undefined : inArray(observationInvocations.id, [...ids]),
+                  after === undefined ? undefined : gt(observationInvocations.id, after),
+                ),
+              )
+              .orderBy(asc(observationInvocations.id))
+              .limit(limit)
+              .all(),
+        })
         const selected = rows.slice(0, pageSize)
         return {
           items: selected.map((row) =>
@@ -91,15 +112,58 @@ export function createCompleteObservationSources(input: {
         }
       }),
     usage: (taskId) =>
-      reader('usage', taskId, (after) =>
-        ledger.records(taskId, { limit: pageSize, ...(after === undefined ? {} : { after }) }),
-      ),
+      reader('usage', taskId, async (after) => {
+        if (input.invocationIds === undefined)
+          return ledger.records(taskId, {
+            limit: pageSize,
+            ...(after === undefined ? {} : { after }),
+          })
+        const rows = await identityPacketPage({
+          ids: input.invocationIds,
+          limit: pageSize,
+          key: (row) => row.id,
+          read: (ids, limit) =>
+            db
+              .select({
+                id: observationUsageCurrent.id,
+                document: observationUsageCurrent.document,
+              })
+              .from(observationUsageCurrent)
+              .where(
+                and(
+                  eq(observationUsageCurrent.taskId, taskId),
+                  inArray(
+                    jsonPathText(db, observationUsageCurrent.document, [
+                      'measurement',
+                      'invocationId',
+                    ]),
+                    [...ids!],
+                  ),
+                  after === undefined ? undefined : gt(observationUsageCurrent.id, after),
+                ),
+              )
+              .orderBy(asc(observationUsageCurrent.id))
+              .limit(limit)
+              .all(),
+        })
+        return {
+          items: rows
+            .slice(0, pageSize)
+            .map((row) => JSON.parse(row.document) as UsageLedgerRecord),
+          nextCursor: rows.length > pageSize ? rows[pageSize - 1]!.id : null,
+        }
+      }),
     captures: (taskId) =>
       reader('captures', taskId, (after) =>
-        readUsageCapturePage(db, taskId, {
-          limit: pageSize,
-          ...(after === undefined ? {} : { after }),
-        }),
+        readUsageCapturePage(
+          db,
+          taskId,
+          {
+            limit: pageSize,
+            ...(after === undefined ? {} : { after }),
+          },
+          input.invocationIds,
+        ),
       ),
     platform: (binding) =>
       reader('platform', JSON.stringify(binding), (after) =>
@@ -114,8 +178,8 @@ export function createCompleteObservationSources(input: {
         if (!tasks.spanSources) throw new Error('Complete span source is not installed')
         const page = await tasks.spanSources({
           taskId,
-          carrierInvocationIds: [],
-          allTaskCarriers: true,
+          carrierInvocationIds: input.invocationIds ?? [],
+          allTaskCarriers: input.invocationIds === undefined,
           sourceNamespace: null,
           scopeHash: sha256Hex(JSON.stringify(['complete-spans', snapshotId, taskId])),
           after,

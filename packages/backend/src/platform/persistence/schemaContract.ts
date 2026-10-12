@@ -35,11 +35,6 @@ export const RFC349_SOURCE_TABLES = [
   'automation_policy_revisions',
   'cached_repos',
   'capability_templates',
-  'clarify_mindmap_command_receipts',
-  'clarify_mindmap_node_revisions',
-  'clarify_mindmap_nodes',
-  'clarify_mindmap_sessions',
-  'clarify_mindmap_snapshots',
   'clarify_rounds',
   'code_ai_attempts',
   'code_artifacts',
@@ -163,6 +158,20 @@ export const RFC349_SOURCE_TABLES = [
   'observation_platform_sources',
   'observation_price_heads',
   'observation_price_versions',
+  'observation_projection_bindings',
+  'observation_projection_bootstrap',
+  'observation_projection_changes',
+  'observation_projection_components',
+  'observation_projection_current',
+  'observation_projection_dependencies',
+  'observation_projection_heads',
+  'observation_projection_history',
+  'observation_projection_memberships',
+  'observation_projection_prepared',
+  'observation_projection_versions',
+  'observation_projection_views',
+  'observation_projection_work',
+  'observation_projection_work_components',
   'observation_native_fact_pages',
   'observation_native_fact_roots',
   'observation_report_counts',
@@ -220,11 +229,6 @@ export const RFC349_SOURCE_TABLES = [
   'system_host_execution_write_contexts',
   'task_archive_audit',
   'task_collaborators',
-  'task_clarify_channels',
-  'task_clarify_consumptions',
-  'task_clarify_entries',
-  'task_clarify_host_runs',
-  'task_clarify_materials',
   'task_execution_effect_attempts',
   'task_execution_effect_fences',
   'task_execution_effects',
@@ -499,7 +503,6 @@ function ownerFor(table: string): OwnerContext {
   if (
     table.startsWith('collaboration_') ||
     table.startsWith('review_') ||
-    table.startsWith('clarify_mindmap_') ||
     table === 'clarify_rounds' ||
     table === 'task_collaborators' ||
     table === 'task_feedback' ||

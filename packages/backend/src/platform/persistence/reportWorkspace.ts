@@ -15,6 +15,8 @@ export interface ReportWorkspace {
   getMany<T>(namespace: string, keys: readonly string[]): Promise<ReadonlyMap<string, T>>
   page<T>(namespace: string, after: string | null, size?: number): Promise<ReportWorkingPage<T>>
   clear(namespace: string): Promise<void>
+  copyNamespacePrefix?(from: string, to: string, excluded: readonly string[]): Promise<void>
+  clearNamespacePrefix?(prefix: string): Promise<void>
 }
 export interface ReportWorkingStatements {
   all(
@@ -103,6 +105,26 @@ export function privateReportWorkspace(
     async clear(namespace) {
       check(namespace)
       await statements.run(`DELETE FROM ${REPORT_WORKING_TABLE} WHERE namespace=?`, [namespace])
+    },
+    async copyNamespacePrefix(from, to, excluded) {
+      check(from)
+      check(to)
+      if (from === to || excluded.some((name) => !name.startsWith('/')))
+        throw new Error('Report workspace copy prefix invalid')
+      await statements.run(
+        `INSERT INTO ${REPORT_WORKING_TABLE} (namespace,key,document) ` +
+          `SELECT ? || substr(namespace,length(?)+1),key,document FROM ${REPORT_WORKING_TABLE} ` +
+          `WHERE namespace>=? AND namespace<?` +
+          (excluded.length ? ` AND namespace NOT IN (${excluded.map(() => '?').join(',')})` : ''),
+        [to, from, from + '/', from + '0', ...excluded.map((name) => from + name)],
+      )
+    },
+    async clearNamespacePrefix(prefix) {
+      check(prefix)
+      await statements.run(
+        `DELETE FROM ${REPORT_WORKING_TABLE} WHERE namespace=? OR (namespace>=? AND namespace<?)`,
+        [prefix, prefix + '/', prefix + '0'],
+      )
     },
   }
 }

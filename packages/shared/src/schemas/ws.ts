@@ -540,6 +540,7 @@ export type WsControlMessage = z.infer<typeof WsControlMessageSchema>
 // -----------------------------------------------------------------------------
 
 export const WS_PATHS = {
+  observability: '/ws/observability',
   /** Authenticated app-wide authority revision stream. */
   authority: '/ws/authority',
   /** Per-task detail stream (`?since=N` replays node_run_events). */

@@ -23,6 +23,7 @@ import type { TaskObservationFactsQuery } from '../public/queries'
 import { createObservationSpanSources } from './observationSpanSources'
 import { createObservationNativeScopes } from './observationNativeScopes'
 import { observationAttemptKinds } from './taskObservationKinds'
+import { identityPacketPage } from '@/platform/persistence/identityPackets'
 
 const canRead = (actor: Actor) =>
   actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
@@ -91,7 +92,10 @@ function attemptFields() {
 }
 
 /** Bind to the snapshot handle supplied by bootstrap; do not open another transaction. */
-export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObservationFactsQuery {
+export function createTaskObservationFacts(
+  db: ProviderNeutralDatabase,
+  projectionAttemptIds?: readonly string[],
+): TaskObservationFactsQuery {
   const taskFields = {
     id: tasks.id,
     name: tasks.name,
@@ -110,7 +114,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
     })
   return {
     nativeScopes: createObservationNativeScopes(db),
-    spanSources: createObservationSpanSources(db),
+    spanSources: createObservationSpanSources(db, projectionAttemptIds),
     async sourceBacklog(taskIds) {
       if (taskIds.length > 200)
         throw new RangeError('Observation source cohort exceeds read budget')
@@ -226,18 +230,25 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
       if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 1000)
         throw new RangeError('Attempt page size must be 1 through 1000')
       const after = attemptContinuation(taskId, page.after)
-      const rows = await db
-        .select(attemptFields())
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, taskId),
-            after === undefined ? undefined : gt(nodeRuns.id, after),
-          ),
-        )
-        .orderBy(asc(nodeRuns.id))
-        .limit(page.limit + 1)
-        .all()
+      const rows = await identityPacketPage({
+        ids: projectionAttemptIds,
+        limit: page.limit,
+        key: (row) => row.id,
+        read: (ids, limit) =>
+          db
+            .select(attemptFields())
+            .from(nodeRuns)
+            .where(
+              and(
+                eq(nodeRuns.taskId, taskId),
+                ids === undefined ? undefined : inArray(nodeRuns.id, [...ids]),
+                after === undefined ? undefined : gt(nodeRuns.id, after),
+              ),
+            )
+            .orderBy(asc(nodeRuns.id))
+            .limit(limit)
+            .all(),
+      })
       const items = rows.slice(0, page.limit),
         last = items.at(-1)
       return {

@@ -1,4 +1,5 @@
 // RFC-371: exact application source revisions; derived report/cache writes are excluded.
+import { isDeepStrictEqual } from 'node:util'
 import type { PostgresqlSchemaStatement } from './postgresqlSchema'
 import type { LogicalSchemaContract } from './schemaContract'
 import { sha256Hex } from '@/util/hash'
@@ -87,8 +88,7 @@ export function observationSourceRevisionStatements(contract: LogicalSchemaContr
   if (
     revisions.length !== 1 ||
     revisions[0]!.id !== TABLE ||
-    JSON.stringify(revisions[0]!.sourceRevisionProjection) !==
-      JSON.stringify(OBSERVATION_SOURCE_REVISION)
+    !isDeepStrictEqual(revisions[0]!.sourceRevisionProjection, OBSERVATION_SOURCE_REVISION)
   )
     throw new Error('Unsupported observation-source-revision schema projection')
   const physical = (id: string, provider: 'sqlite' | 'postgresql') => {

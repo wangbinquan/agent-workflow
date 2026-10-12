@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 248 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 252 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -22,36 +22,24 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(248)
+    expect(tables).toHaveLength(252)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       true,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(248)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(252)
     expect(
       tables
         .map((statement) => statement.logicalId)
         .filter((id) => id.startsWith('task_clarify_'))
         .sort(),
-    ).toEqual([
-      'task_clarify_channels',
-      'task_clarify_consumptions',
-      'task_clarify_entries',
-      'task_clarify_host_runs',
-      'task_clarify_materials',
-    ])
-    // RFC-372 adds five collaboration companions after the preserved RFC-371 delta.
+    ).toEqual([])
+    // RFC-372 lightweight mode retires the ten independent companion tables.
     expect(
       tables
         .map((statement) => statement.logicalId)
         .filter((id) => id.startsWith('clarify_mindmap_'))
         .sort(),
-    ).toEqual([
-      'clarify_mindmap_command_receipts',
-      'clarify_mindmap_node_revisions',
-      'clarify_mindmap_nodes',
-      'clarify_mindmap_sessions',
-      'clarify_mindmap_snapshots',
-    ])
+    ).toEqual([])
     expect(
       tables.some((table) => table.logicalId === 'task_execution_native_usage_store_bindings'),
     ).toBe(true)
@@ -73,6 +61,20 @@ describe('RFC-349 PostgreSQL schema projection', () => {
       'observation_platform_sources',
       'observation_price_heads',
       'observation_price_versions',
+      'observation_projection_bindings',
+      'observation_projection_bootstrap',
+      'observation_projection_changes',
+      'observation_projection_components',
+      'observation_projection_current',
+      'observation_projection_dependencies',
+      'observation_projection_heads',
+      'observation_projection_history',
+      'observation_projection_memberships',
+      'observation_projection_prepared',
+      'observation_projection_versions',
+      'observation_projection_views',
+      'observation_projection_work',
+      'observation_projection_work_components',
       'observation_report_counts',
       'observation_report_pages',
       'observation_report_receipts',

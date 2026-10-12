@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 28,
-    "transactionCallbacks": 277
+    "transactionCallbacks": 284
   },
   "entries": [
     {
@@ -110,8 +110,8 @@
       ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#transaction:202",
-      "line": 202,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#transaction:208",
+      "line": 208,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#sealRoundQuestions",
       "status": "co-located-risk",
       "symbol": "sealRoundQuestions",
@@ -120,10 +120,22 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupStore.ts#transaction:103",
+      "line": 103,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupStore.ts#createClarifyFollowupStore",
+      "status": "clear",
+      "symbol": "createClarifyFollowupStore",
+      "targetContext": "collaboration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#transaction:608",
-      "line": 608,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#transaction:611",
+      "line": 611,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts#saveClarifyDraft",
       "status": "clear",
       "symbol": "saveClarifyDraft",
@@ -2653,13 +2665,25 @@
       "transactionCallee": "withTransaction"
     },
     {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactStore.ts#transaction:56",
+      "line": 56,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactStore.ts#importCompleteTaskCalculations",
+      "status": "clear",
+      "symbol": "importCompleteTaskCalculations",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
       "effectTokens": [
         "push"
       ],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactStore.ts#transaction:49",
-      "line": 49,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactStore.ts#transaction:74",
+      "line": 74,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactStore.ts#importCompleteTaskCalculations",
       "status": "co-located-risk",
       "symbol": "importCompleteTaskCalculations",
@@ -2749,6 +2773,66 @@
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts#importHistoricalNativeFacts",
       "status": "clear",
       "symbol": "importHistoricalNativeFacts",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#transaction:19",
+      "line": 19,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#incrementalObservationPreparedStore",
+      "status": "clear",
+      "symbol": "incrementalObservationPreparedStore",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#transaction:29",
+      "line": 29,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#incrementalObservationPreparedStore",
+      "status": "clear",
+      "symbol": "incrementalObservationPreparedStore",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#transaction:35",
+      "line": 35,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#incrementalObservationPreparedStore",
+      "status": "clear",
+      "symbol": "incrementalObservationPreparedStore",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#transaction:50",
+      "line": 50,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts#incrementalObservationPreparedStore",
+      "status": "clear",
+      "symbol": "incrementalObservationPreparedStore",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationViews.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationViews.ts#transaction:26",
+      "line": 26,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationViews.ts#incrementalObservationViews",
+      "status": "clear",
+      "symbol": "incrementalObservationViews",
       "targetContext": "run-observability",
       "transactionCallee": "transaction"
     },
@@ -3390,7 +3474,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095",
+  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4359,9 +4443,9 @@
         "effectKind": "process",
         "file": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#1441:process",
+        "id": "task-effect:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#1442:process",
         "journaledBy": "createProcessEffectAttemptObserver",
-        "line": 1441,
+        "line": 1442,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#runNode",
         "recoveryClass": "managed-process-preactivation",

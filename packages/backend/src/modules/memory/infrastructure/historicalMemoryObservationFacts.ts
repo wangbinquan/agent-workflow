@@ -1,10 +1,11 @@
-import { and, asc, eq, gt } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import type {
   HistoricalObservationOwnerQuery,
   HistoricalObservationEvent,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { memoryDistillEvents, memoryDistillJobs } from '@/db/schema'
+import { identityScopePage } from '@/platform/persistence/identityPackets'
 
 function originalStep(payload: string): string | null {
   try {
@@ -27,9 +28,22 @@ function originalStep(payload: string): string | null {
 /** Every job and every original attempt event is retained; a newer System group never hides old attempts. */
 export function createHistoricalMemoryObservationFacts(
   db: ProviderNeutralDatabase,
+  scope?: {
+    readonly ownerIds?: readonly string[]
+    readonly taskIds?: readonly string[]
+    readonly roots?: readonly string[]
+  },
 ): HistoricalObservationOwnerQuery {
   return {
     async owners(input) {
+      if (scope && Object.values(scope).reduce((n, ids) => n + (ids?.length ?? 0), 0) > 200)
+        return identityScopePage({
+          scope,
+          limit: input.limit,
+          key: (owner) => owner.ownerId,
+          read: (packet, limit) =>
+            createHistoricalMemoryObservationFacts(db, packet).owners({ ...input, limit }),
+        })
       const rows = await db
         .select({
           id: memoryDistillJobs.id,
@@ -42,7 +56,24 @@ export function createHistoricalMemoryObservationFacts(
           rootSessionId: memoryDistillJobs.opencodeSessionId,
         })
         .from(memoryDistillJobs)
-        .where(input.after === undefined ? undefined : gt(memoryDistillJobs.id, input.after))
+        .where(
+          and(
+            input.after === undefined ? undefined : gt(memoryDistillJobs.id, input.after),
+            scope === undefined
+              ? undefined
+              : or(
+                  scope.ownerIds?.length
+                    ? inArray(memoryDistillJobs.id, [...scope.ownerIds])
+                    : sql`false`,
+                  scope.taskIds?.length
+                    ? inArray(memoryDistillJobs.taskId, [...scope.taskIds])
+                    : sql`false`,
+                  scope.roots?.length
+                    ? inArray(memoryDistillJobs.opencodeSessionId, [...scope.roots])
+                    : sql`false`,
+                ),
+          ),
+        )
         .orderBy(asc(memoryDistillJobs.id))
         .limit(input.limit + 1)
         .all()

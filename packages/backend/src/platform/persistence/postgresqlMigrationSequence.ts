@@ -7,6 +7,7 @@ import { sha256Hex } from '@/util/hash'
 import {
   buildPostgresqlSchemaPlan,
   renderPostgresqlBaselineSql,
+  POSTGRESQL_APPLICATION_SCHEMA,
   type PostgresqlSchemaPlan,
   type PostgresqlSchemaStatement,
 } from './postgresqlSchema'
@@ -102,7 +103,9 @@ export interface PostgresqlCheckReplacement {
 }
 
 export interface PostgresqlIndexUpgrade {
-  readonly version: 1 | 2 | 3
+  /** V4 explicitly retires obsolete whole tables; existing migration artifacts stay immutable. */
+  readonly retiredTables?: readonly string[]
+  readonly version: 1 | 2 | 3 | 4
   /** V2 adds whole new active tables; V1 artifacts remain byte-for-byte unchanged. */
   readonly logicalTables?: readonly LogicalTableAddition[]
   /** V3 replaces named CHECK expressions; V1/V2 artifacts never carry this key. */
@@ -599,6 +602,66 @@ function appendLogicalTables(
   return { ...payload, digest: digestSchemaContract(payload) }
 }
 
+function retireLogicalTables(
+  contract: LogicalSchemaContract,
+  ids: readonly string[],
+): LogicalSchemaContract {
+  if (ids.length === 0) return contract
+  const removed = new Set(ids)
+  requireSequence(removed.size === ids.length, 'duplicate retired table')
+  for (const id of ids)
+    requireSequence(
+      contract.tables.some((t) => t.id === id && t.disposition === 'KEEP'),
+      'retirement requires an existing active table',
+    )
+  const tables = contract.tables.filter((t) => !removed.has(t.id))
+  requireSequence(
+    tables.every((t) => t.foreignKeys.every((fk) => !removed.has(fk.foreignTable))),
+    'retained table references a retired table',
+  )
+  const payload = {
+    ...contractPayload(contract),
+    tables,
+    sourceTableCount: contract.sourceTableCount - ids.length,
+    activeTableCount: contract.activeTableCount - ids.length,
+  }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+function retirementStatements(
+  contract: LogicalSchemaContract,
+  ids: readonly string[],
+): PostgresqlSchemaStatement[] {
+  const quote = (s: string) => '"' + s.replaceAll('"', '""') + '"'
+  const tables = ids.map((id) => contract.tables.find((t) => t.id === id)!)
+  // Remove only constraints owned by retired tables; DROP TABLE never uses CASCADE.
+  return [
+    ...tables.flatMap((t) =>
+      t.foreignKeys.map((fk) => ({
+        kind: 'constraint' as const,
+        logicalId: `retire:${t.id}:${fk.name}`,
+        sql: `ALTER TABLE ${quote(POSTGRESQL_APPLICATION_SCHEMA)}.${quote(t.providerTables.postgresql!)} DROP CONSTRAINT ${quote(fk.name)}`,
+      })),
+    ),
+    ...tables.map((t) => ({
+      kind: 'table' as const,
+      logicalId: `retire:${t.id}`,
+      sql: `DROP TABLE ${quote(POSTGRESQL_APPLICATION_SCHEMA)}.${quote(t.providerTables.postgresql!)}`,
+    })),
+  ]
+}
+function retainedStatements(
+  version: PostgresqlMigrationVersion,
+  ids: readonly string[],
+): readonly PostgresqlSchemaStatement[] {
+  if (!ids.length) return version.plan.statements
+  const keys = new Set(
+    buildPostgresqlSchemaPlan(retireLogicalTables(version.contract, ids)).statements.map(
+      statementKey,
+    ),
+  )
+  return version.plan.statements.filter((statement) => keys.has(statementKey(statement)))
+}
+
 function contractUpdate(
   from: PostgresqlSchemaPlan,
   to: PostgresqlSchemaPlan,
@@ -655,10 +718,21 @@ export function createPostgresqlCheckUpgrade(
   return createPostgresqlUpgrade(input, true, true)
 }
 
+/** User-approved retirement, with any independent additive delta preserved. */
+export function createPostgresqlRetirementUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  const remaining = new Set(input.to.contract.tables.map((t) => t.id))
+  const retired = input.from.contract.tables.filter((t) => !remaining.has(t.id)).map((t) => t.id)
+  requireSequence(retired.length > 0, 'retirement has no removed tables')
+  return createPostgresqlUpgrade(input, true, false, retired)
+}
+
 function createPostgresqlUpgrade(
   input: PostgresqlUpgradeInput,
   allowNewTables: boolean,
   allowCheckReplacement: boolean,
+  retiredTables: readonly string[] = [],
 ): PostgresqlIndexUpgrade {
   const { from, to } = input
   validateVersion(from)
@@ -669,7 +743,9 @@ function createPostgresqlUpgrade(
         oldTableIds.has(table.id) ? [] : [{ position, table }],
       )
     : []
-  const withTables = appendLogicalTables(from.contract, logicalTables)
+  const retained = retireLogicalTables(from.contract, retiredTables)
+  const oldStatements = retainedStatements(from, retiredTables)
+  const withTables = appendLogicalTables(retained, logicalTables)
   const logicalChecks = allowCheckReplacement
     ? logicalCheckReplacements(withTables, to.contract)
     : []
@@ -682,7 +758,7 @@ function createPostgresqlUpgrade(
   )
   const logicalIndexes = logicalIndexAdditions(expanded, to.contract)
   requireSequence(
-    logicalTables.length + logicalIndexes.length + logicalChecks.length > 0,
+    logicalTables.length + logicalIndexes.length + logicalChecks.length + retiredTables.length > 0,
     'schema upgrade has no new indexes or tables',
   )
   requireSequence(
@@ -699,13 +775,13 @@ function createPostgresqlUpgrade(
     to.sqliteMigrations.length > from.sqliteMigrations.length,
     'index upgrade requires an appended SQLite migration',
   )
-  const old = new Map(from.plan.statements.map((statement) => [statementKey(statement), statement]))
+  const old = new Map(oldStatements.map((statement) => [statementKey(statement), statement]))
   const next = new Map(to.plan.statements.map((statement) => [statementKey(statement), statement]))
   const checkReplacements = checkReplacementStatements(from.plan, to.plan, logicalChecks)
   const replacedKeys = new Set<string>(
     checkReplacements.map((item) => `constraint:${item.logicalId}`),
   )
-  for (const statement of from.plan.statements) {
+  for (const statement of oldStatements) {
     requireSequence(
       next.has(statementKey(statement)),
       'schema upgrade removed an existing statement',
@@ -730,13 +806,16 @@ function createPostgresqlUpgrade(
   // The drop must sit immediately before its own re-add so a partially applied
   // file never leaves a table with neither the old nor the new domain.
   const executableStatements = [
+    ...retirementStatements(from.contract, retiredTables),
     ...checkReplacements.flatMap((item) => [item.drop, item.after]),
     ...indexAdditions.map((addition) => addition.statement),
     contractUpdate(from.plan, to.plan),
   ]
   const payload = {
-    version:
-      logicalChecks.length > 0
+    ...(retiredTables.length ? { retiredTables } : {}),
+    version: retiredTables.length
+      ? (4 as const)
+      : logicalChecks.length > 0
         ? (3 as const)
         : logicalTables.length === 0
           ? (1 as const)
@@ -778,7 +857,7 @@ function applyPostgresqlIndexUpgrade(
 ): PostgresqlMigrationVersion {
   const { digest, ...payload } = step
   requireSequence(
-    (step.version === 1 || step.version === 2 || step.version === 3) &&
+    (step.version === 1 || step.version === 2 || step.version === 3 || step.version === 4) &&
       digest === postgresqlMigrationDigest(payload),
     'upgrade entry digest differs',
   )
@@ -796,6 +875,11 @@ function applyPostgresqlIndexUpgrade(
     step.to.baselineId === previous.plan.baselineId,
     'upgrade baseline identity changed',
   )
+  const retiredTables = step.retiredTables ?? []
+  requireSequence(
+    step.version === 4 ? retiredTables.length > 0 : step.retiredTables === undefined,
+    'retirement does not match upgrade version',
+  )
   const logicalTables = step.logicalTables ?? []
   const logicalChecks = step.logicalChecks ?? []
   const checkReplacements = step.checkReplacements ?? []
@@ -807,7 +891,9 @@ function applyPostgresqlIndexUpgrade(
       ? step.logicalTables === undefined && step.logicalChecks === undefined
       : step.version === 2
         ? logicalTables.length > 0 && step.logicalChecks === undefined
-        : logicalChecks.length > 0,
+        : step.version === 4
+          ? logicalChecks.length === 0
+          : logicalChecks.length > 0,
     'upgrade table additions do not match its version',
   )
   requireSequence(
@@ -823,10 +909,17 @@ function applyPostgresqlIndexUpgrade(
     'upgrade column enum replacements require a value-domain upgrade',
   )
   requireSequence(
-    step.logicalIndexes.length + logicalTables.length + logicalChecks.length > 0,
+    step.logicalIndexes.length +
+      logicalTables.length +
+      logicalChecks.length +
+      retiredTables.length >
+      0,
     'schema upgrade has no new indexes or tables',
   )
-  const withTables = appendLogicalTables(previous.contract, logicalTables)
+  const withTables = appendLogicalTables(
+    retireLogicalTables(previous.contract, retiredTables),
+    logicalTables,
+  )
   const expanded = applyLogicalColumnEnums(
     applyLogicalCheckReplacements(withTables, logicalChecks),
     logicalEnums,
@@ -851,7 +944,7 @@ function applyPostgresqlIndexUpgrade(
   const replacedByKey = new Map<string, PostgresqlCheckReplacement>(
     checkReplacements.map((item) => [`constraint:${item.logicalId}`, item]),
   )
-  const original = previous.plan.statements.map((statement) => {
+  const original = retainedStatements(previous, retiredTables).map((statement) => {
     const key = statementKey(statement)
     if (key === 'metadata:contract-row') return step.contractRow.after
     const replacement = replacedByKey.get(key)
@@ -923,6 +1016,7 @@ function applyPostgresqlIndexUpgrade(
   exact(
     step.executableStatements,
     [
+      ...retirementStatements(previous.contract, retiredTables),
       ...checkReplacements.flatMap((item) => [item.drop, item.after]),
       ...step.indexAdditions.map((addition) => addition.statement),
       contractUpdate(previous.plan, plan),
@@ -1074,7 +1168,10 @@ function resolvePostgresqlRowBridge(
               (contract, step) =>
                 applyLogicalColumnEnums(
                   applyLogicalCheckReplacements(
-                    appendLogicalTables(contract, step.logicalTables ?? []),
+                    appendLogicalTables(
+                      retireLogicalTables(contract, step.retiredTables ?? []),
+                      step.logicalTables ?? [],
+                    ),
                     step.logicalChecks ?? [],
                   ),
                   step.logicalEnums ?? [],

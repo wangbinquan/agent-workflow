@@ -9,6 +9,7 @@ import {
 } from '@/db/observationSystem'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { ObservationAttemptFacts } from '@agent-workflow/shared'
+import { identityPacketPage } from '@/platform/persistence/identityPackets'
 
 export const systemObservationFields = {
   id: groups.id,
@@ -42,7 +43,10 @@ export function systemObservationVisibility(db: ProviderNeutralDatabase, actor: 
   )
 }
 
-export function createSystemObservationFacts(db: ProviderNeutralDatabase) {
+export function createSystemObservationFacts(
+  db: ProviderNeutralDatabase,
+  projectionAttemptIds?: readonly string[],
+) {
   return {
     async originalAgentName(id: string) {
       const rows = await db
@@ -112,15 +116,25 @@ export function createSystemObservationFacts(db: ProviderNeutralDatabase) {
           throw new Error('System attempt cursor changed its original group')
         after = value[2]
       }
-      const rows = await db
-        .select()
-        .from(owners)
-        .where(
-          and(eq(owners.groupId, taskId), after === undefined ? undefined : gt(owners.id, after)),
-        )
-        .orderBy(asc(owners.id))
-        .limit(page.limit + 1)
-        .all()
+      const rows = await identityPacketPage({
+        ids: projectionAttemptIds,
+        limit: page.limit,
+        key: (row) => row.id,
+        read: (ids, limit) =>
+          db
+            .select()
+            .from(owners)
+            .where(
+              and(
+                eq(owners.groupId, taskId),
+                ids === undefined ? undefined : inArray(owners.id, [...ids]),
+                after === undefined ? undefined : gt(owners.id, after),
+              ),
+            )
+            .orderBy(asc(owners.id))
+            .limit(limit)
+            .all(),
+      })
       const items: ObservationAttemptFacts[] = rows.slice(0, page.limit).map((row) => {
         const memoryAttempt = /^(\d+):(\d+)$/.exec(row.originalAttempt)
         return {

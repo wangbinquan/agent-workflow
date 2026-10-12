@@ -1,3 +1,4 @@
+import { assertClarifyFollowupIdle } from '../../application/clarifyFollowupActivity'
 // RFC-128 / RFC-349 — SQLite per-question answer seal primitive.
 //
 // This is the storage-layer vehicle the per-question answer endpoints (P2) and the
@@ -52,6 +53,9 @@ import { setNodeClarifyDirectiveTx } from '@/services/taskClarifyDirective'
 import { freezeAnswerAttributions } from '../clarifyRounds'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
+  clarifyQuestionSetKey,
+  isClarifyAnswerConfirmed,
+  isMindmapRound,
   mergeSealedAnswers,
   type ClarifyAnswer,
   type ClarifyAnswerAttributions,
@@ -67,6 +71,8 @@ import { committedEventGroupId, type CommittedEventRef } from '@/platform/events
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
 export interface SealRoundQuestionsArgs {
+  questionSetKey?: string
+  wholeRound?: boolean
   db: ProviderNeutralDatabase
   /** The clarify round's intermediary node_run id (= clarify_rounds.intermediaryNodeRunId
    *  = task_questions.originNodeRunId). Locates the round to seal into. */
@@ -251,6 +257,9 @@ export async function sealRoundQuestions(
       }
 
       const questions = parseQuestions(round.questionsJson)
+      // Both quick submission and centralized per-question sealing change the
+      // branch context. Neither may race an active follow-up for this round.
+      if (isMindmapRound(questions)) assertClarifyFollowupIdle(args.originNodeRunId)
       const questionIds = new Set(questions.map((q) => q.id))
 
       // Seal the passed answers (option-label forgery defense + unknown-question drop), then
@@ -290,6 +299,26 @@ export async function sealRoundQuestions(
       const alreadySealed = new Set<string>()
       if (round.status === 'answered') for (const q of questions) alreadySealed.add(q.id)
       for (const e of existingEntries) if (e.sealedAt !== null) alreadySealed.add(e.questionId)
+      if (isMindmapRound(questions) && args.wholeRound) {
+        if (args.questionSetKey !== clarifyQuestionSetKey(questions)) {
+          throw new ConflictError(
+            'clarify-question-set-changed',
+            'Questions changed. Refresh and review the new questions before submitting.',
+          )
+        }
+        const provided = new Map(args.answers.map((answer) => [answer.questionId, answer]))
+        for (const question of questions) {
+          if (
+            !alreadySealed.has(question.id) &&
+            !isClarifyAnswerConfirmed(question, provided.get(question.id))
+          ) {
+            throw new ConflictError(
+              'clarify-confirmation-required',
+              `Review and confirm question ${question.id} before submitting.`,
+            )
+          }
+        }
+      }
       const declaredReseal = new Set(args.allowResealFor ?? [])
       const resealSet = new Set<string>()
       for (const id of sealingSet) {

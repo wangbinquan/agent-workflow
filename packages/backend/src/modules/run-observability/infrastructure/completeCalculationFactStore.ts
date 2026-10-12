@@ -14,6 +14,12 @@ import type {
   CompleteCalculationFactItem,
 } from '../ports/completeCalculationFacts'
 import { updateCalculationRowDigest } from './completeCalculationFactReader'
+import {
+  HISTORICAL_PREPARATION_ALGORITHM,
+  historicalPreparationKey,
+  parseHistoricalPreparationVersion,
+} from '../domain/historicalObservationPreparation'
+import { importHistoricalObservationPreparation } from './historicalObservationPreparationImport'
 
 function* items(
   spool: CompleteCalculationFactSpool,
@@ -41,6 +47,25 @@ export async function importCompleteTaskCalculations(input: {
     input.signal?.throwIfAborted()
     if (next.value.kind !== 'version')
       throw new CompleteCalculationInvalid('Task calculation header missing')
+    if (next.value.version.algorithm === HISTORICAL_PREPARATION_ALGORITHM) {
+      const version = parseHistoricalPreparationVersion(
+        next.value.version,
+        sourceKey,
+        historicalPreparationKey(sourceKey),
+      )
+      const importedPreparation = await databaseSessionFor(input.db).transaction((tx) =>
+        importHistoricalObservationPreparation({
+          tx,
+          version,
+          iterator,
+          signal: input.signal,
+        }),
+      )
+      next = importedPreparation.next
+      population += importedPreparation.rows
+      imported++
+      continue
+    }
     const version = parseTaskCalculationVersion(
       next.value.version,
       sourceKey,

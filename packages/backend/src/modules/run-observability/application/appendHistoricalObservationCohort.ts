@@ -90,6 +90,27 @@ export async function appendHistoricalObservationCohort(
     }
     if (record.scopeMatch !== 'excluded') {
       const assigned = allocation.task !== null && (await addTask(allocation.task.id, fold))
+      if (input.retainHistoricalContribution) {
+        const visibility = [],
+          scopes = []
+        for await (const reference of history.references(record)) {
+          visibility.push({
+            taskId: reference.execution.parentTaskId,
+            ownerUserId: reference.execution.ownerUserId ?? null,
+          })
+          scopes.push(reference.execution)
+        }
+        await input.retainHistoricalContribution({
+          key: 'record/' + key,
+          ownerComponent: JSON.stringify(['root', record.sessionId]),
+          task: allocation.task,
+          cohortAt: allocation.cohortAt,
+          assigned,
+          fold,
+          visibility,
+          scopes,
+        })
+      }
       if (!assigned) {
         mergeCompleteObservationFold(standalone, fold)
         if (allocation.cohortAt !== null && record.scopeMatch === 'matched')
@@ -123,6 +144,18 @@ export async function appendHistoricalObservationCohort(
     if (relevant) await dimensions.addHistoricalReference(row, next)
     if (!relevant && next.gaps.length === 0) continue
     const assigned = execution.task !== null && (await addTask(execution.task.id, next))
+    await input.retainHistoricalContribution?.({
+      key: 'reference/' + key,
+      ownerComponent: JSON.stringify([row.execution.sourceKind, row.execution.ownerId]),
+      task: execution.task,
+      cohortAt: execution.cohortAt,
+      assigned,
+      fold: next,
+      visibility: [
+        { taskId: row.execution.parentTaskId, ownerUserId: row.execution.ownerUserId ?? null },
+      ],
+      scopes: [row.execution],
+    })
     if (!assigned) {
       mergeCompleteObservationFold(standalone, next)
       if (execution.cohortAt !== null && row.scopeMatch === 'matched')

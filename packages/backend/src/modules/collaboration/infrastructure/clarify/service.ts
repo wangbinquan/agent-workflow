@@ -39,6 +39,7 @@
 //     'canceled' / cross 'abandoned' terminal statuses.
 
 import {
+  validateClarifyMindmap,
   CLARIFY_INPUT_PORT_NAME,
   CLARIFY_SOURCE_PORT_NAME,
   CROSS_CLARIFY_INPUT_PORT_NAME,
@@ -256,7 +257,7 @@ export async function createClarifyRound(
   // must NOT re-run this schema: RFC-056 §4.1 lifts the 5-question cap for
   // cross-clarify and the cross parser at the runner is the validation
   // authority (locked by scheduler-cross-clarify-dispatch '5-question cap').
-  const questions =
+  let questions =
     args.kind === 'self'
       ? ClarifyEnvelopeBodySchema.parse({ questions: args.questions }).questions
       : args.questions.map((question) => ClarifyQuestionSchema.parse(question))
@@ -323,6 +324,21 @@ export async function createClarifyRound(
   )[0]
   if (taskRow === undefined) {
     throw new ValidationError('clarify-task-not-found', `task ${args.taskId} not found`)
+  }
+  const frozenDefinition = JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition
+  const frozenGate = frozenDefinition.nodes.find((node) => node.id === args.intermediaryNodeId)
+  if (frozenGate?.interactionMode === 'mindmap') {
+    const graphError = validateClarifyMindmap(questions, true)
+    if (graphError) throw new ValidationError('clarify-questions-malformed', graphError)
+    questions = questions.map((q) => ({
+      ...q,
+      mindmap: {
+        categoryPath: q.mindmap!.categoryPath,
+        ...(q.mindmap!.parentQuestionId ? { parentQuestionId: q.mindmap!.parentQuestionId } : {}),
+      },
+    }))
+  } else {
+    questions = questions.map(({ mindmap: _mindmap, ...q }) => q)
   }
   const questionsJson = JSON.stringify(questions)
   const sourceSnapshotDigest = sha256Hex(
@@ -742,6 +758,7 @@ export function sealAnswersServerSide(
       selectedOptionIndices: indices,
       selectedOptionLabels: labels,
       customText: a.customText,
+      ...(a.confirmedBasis ? { confirmedBasis: a.confirmedBasis } : {}),
     })
   }
   return sealed

@@ -17,6 +17,7 @@ import {
   observationReportWasRejected,
 } from './completeReportBookmark'
 import { rememberObservationDefaultRange } from './observationDefaultRange'
+import { useObservationProjectionVersion } from './useObservationProjectionVersion'
 
 export type ReadableObservationReport = CompleteObservationReportContent
 export type ReadyObservationReport = Extract<CompleteObservationReport, { state: 'ready' }>
@@ -53,14 +54,23 @@ export function useCompleteObservationReport(
   enabled: boolean,
 ) {
   const client = useQueryClient()
-  const scope = JSON.stringify(['scope-metrics/13', filters, taskId ?? null, revision])
-  const refreshKey = useMemo(() => ({ scope, key: crypto.randomUUID() }), [scope]).key
-  const key = [
-    'run-observability-complete',
-    'scope-metrics/13',
+  const projection = useObservationProjectionVersion(enabled)
+  const projectionRevision = projection?.revision ?? null
+  const scope = JSON.stringify([
+    'scope-metrics/14',
     filters,
     taskId ?? null,
     revision,
+    projectionRevision,
+  ])
+  const refreshKey = useMemo(() => ({ scope, key: crypto.randomUUID() }), [scope]).key
+  const key = [
+    'run-observability-complete',
+    'scope-metrics/14',
+    filters,
+    taskId ?? null,
+    revision,
+    projectionRevision,
   ] as const
   const retainedIds = useRef(new Map<string, string>())
   const [previous, setPrevious] = useState<{
@@ -76,9 +86,10 @@ export function useCompleteObservationReport(
     refetchOnMount: 'always',
     queryFn: async ({ signal }) => {
       const cached = client.getQueryData<CompleteObservationReport>(key)
-      const id =
+      const candidateId =
         (cached?.state === 'ready' ? cached.header.reportId : cached?.reportId) ??
         retainedIds.current.get(scope)
+      const id = candidateId === 'projection-bootstrap' ? undefined : candidateId
       const bookmark = await observationReportBookmark(filters, taskId)
       const assertCurrent = () => {
         signal.throwIfAborted()
@@ -87,7 +98,7 @@ export function useCompleteObservationReport(
       let restoredId: string | null = null
       try {
         assertCurrent()
-        if (!id && revision === 0) {
+        if (!id && revision === 0 && projectionRevision === null) {
           restoredId = bookmark.read()
           if (restoredId) {
             try {

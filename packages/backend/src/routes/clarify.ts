@@ -13,6 +13,7 @@
 // 409, not 412; we keep 409 to match the rest of the API surface.)
 
 import {
+  ClarifyFollowupSchema,
   ClarifyDraftSaveBodySchema,
   ListClarifyQuerySchema,
   SubmitClarifyAnswersSchema,
@@ -110,6 +111,54 @@ async function filterRoundsByTaskVisibility<T extends { taskId: string }>(
 }
 
 export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOperations): void {
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/clarify/:nodeRunId/followup',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Append classified follow-up questions to this open round',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      const actor = actorOf(c)
+      const role = await ensureClarifyMember(operations, nodeRunId, actor)
+      const parsed = ClarifyFollowupSchema.safeParse(await c.req.json().catch(() => null))
+      if (!parsed.success)
+        throw new ValidationError('clarify-followup-invalid', 'Invalid follow-up request.')
+      const followup = operations.clarify.followup
+      if (!followup)
+        throw new ValidationError(
+          'clarify-followup-unavailable',
+          'Follow-up generation is not configured.',
+        )
+      return c.json(
+        await followup.append(nodeRunId, parsed.data, {
+          userId: actor.user.id,
+          displayName: actor.user.displayName,
+          role,
+        }),
+      )
+    },
+  )
+  registerRoute(
+    app,
+    {
+      method: 'DELETE',
+      path: '/api/clarify/:nodeRunId/followup/:requestId',
+      permissions: ['tasks:execute'],
+      tokenAccess: 'allow',
+      summary: 'Cancel an in-progress follow-up',
+    },
+    async (c) => {
+      const nodeRunId = c.req.param('nodeRunId')
+      await ensureClarifyMember(operations, nodeRunId, actorOf(c))
+      await operations.clarify.followup?.cancel(nodeRunId, c.req.param('requestId'))
+      return c.json({ ok: true })
+    },
+  )
+
   registerRoute(
     app,
     {
@@ -298,6 +347,7 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
           actorRole: role,
           nodeRunId,
           answers: parsed.data.answers,
+          ...(parsed.data.questionSetKey ? { questionSetKey: parsed.data.questionSetKey } : {}),
           directive: parsed.data.directive,
           // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
           ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
@@ -358,6 +408,7 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
         value: {
           selectedOptionIndices: parsed.data.selectedOptionIndices,
           customText: parsed.data.customText,
+          ...(parsed.data.confirmedBasis ? { confirmedBasis: parsed.data.confirmedBasis } : {}),
         },
         editor: { userId: actor.user.id, displayName: actor.user.displayName, role },
       })

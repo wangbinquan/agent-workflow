@@ -288,7 +288,14 @@ export function migrateWorkflowDefinitionV5ToV6(
   return { ...definition, nodes, edges, $schema_version: 6 }
 }
 
-/** Cascading v1 -> ... -> v6 migration. Pure and idempotent. */
+/** RFC-372: no node is opted into mindmap mode by a format upgrade. */
+export function migrateWorkflowDefinitionV6ToV7(
+  definition: WorkflowDefinition,
+): WorkflowDefinition {
+  return definition.$schema_version === 6 ? { ...definition, $schema_version: 7 } : definition
+}
+
+/** Cascading v1 -> ... -> v7 migration. Pure and idempotent. */
 export function migrateWorkflowDefinitionToLatest(
   definition: WorkflowDefinition,
 ): WorkflowDefinition {
@@ -303,6 +310,7 @@ export function migrateWorkflowDefinitionToLatest(
     current = { ...current, $schema_version: 5 }
   }
   if (current.$schema_version === 5) current = migrateWorkflowDefinitionV5ToV6(current)
+  if (current.$schema_version === 6) current = migrateWorkflowDefinitionV6ToV7(current)
   if (current.$schema_version !== WORKFLOW_SCHEMA_VERSION) return current
   return current
 }

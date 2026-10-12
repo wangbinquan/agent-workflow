@@ -46,6 +46,7 @@ import { createLocalVerificationCommandEffectsFactory } from '@/modules/developm
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
+import { composeOriginalObservationProjection } from '@/platform/background/observationProjection'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
 import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
@@ -3440,6 +3441,15 @@ async function composeSqliteProviderSession(
     { taskCalculations: true },
   )
   const observationReports = composeCompleteObservationReports({
+    projection: composeOriginalObservationProjection({
+      db,
+      binding: {
+        provider: 'sqlite',
+        db,
+        generationId: databaseProvider.generation.payload.generationId,
+      },
+      generation: databaseProvider.generation.payload.generationId,
+    }),
     taskSource: createCompleteTaskObservationFacts,
     db,
     generation: databaseProvider.generation.payload.generationId,

@@ -1,10 +1,11 @@
-import { and, asc, eq, gt } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import type {
   HistoricalObservationOwnerQuery,
   HistoricalObservationEvent,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { mcpRuntimeTestSessions, mcpRuntimeTestTurns, mcpRuntimeTestEvents } from '@/db/schema'
+import { identityScopePage } from '@/platform/persistence/identityPackets'
 
 function stepId(payload: string): string | null {
   try {
@@ -27,9 +28,18 @@ function stepId(payload: string): string | null {
 /** Actual turn boundaries and all first-seen events, including a resumed multi-turn session. */
 export function createHistoricalMcpObservationFacts(
   db: ProviderNeutralDatabase,
+  scope?: { readonly ownerIds?: readonly string[]; readonly roots?: readonly string[] },
 ): HistoricalObservationOwnerQuery {
   return {
     async owners(input) {
+      if (scope && Object.values(scope).reduce((n, ids) => n + (ids?.length ?? 0), 0) > 200)
+        return identityScopePage({
+          scope,
+          limit: input.limit,
+          key: (owner) => owner.ownerId,
+          read: (packet, limit) =>
+            createHistoricalMcpObservationFacts(db, packet).owners({ ...input, limit }),
+        })
       const rows = await db
         .select({
           turn: mcpRuntimeTestTurns,
@@ -47,7 +57,21 @@ export function createHistoricalMcpObservationFacts(
           mcpRuntimeTestSessions,
           eq(mcpRuntimeTestSessions.id, mcpRuntimeTestTurns.sessionId),
         )
-        .where(input.after === undefined ? undefined : gt(mcpRuntimeTestTurns.id, input.after))
+        .where(
+          and(
+            input.after === undefined ? undefined : gt(mcpRuntimeTestTurns.id, input.after),
+            scope === undefined
+              ? undefined
+              : or(
+                  scope.ownerIds?.length
+                    ? inArray(mcpRuntimeTestTurns.id, [...scope.ownerIds])
+                    : sql`false`,
+                  scope.roots?.length
+                    ? inArray(mcpRuntimeTestSessions.runtimeSessionId, [...scope.roots])
+                    : sql`false`,
+                ),
+          ),
+        )
         .orderBy(asc(mcpRuntimeTestTurns.id))
         .limit(input.limit + 1)
         .all()

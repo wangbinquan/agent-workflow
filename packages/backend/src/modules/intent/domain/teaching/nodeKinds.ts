@@ -166,6 +166,18 @@ export const INTENT_NODE_TEACHING = {
       description: { form: 'description', required: false },
       sessionMode: { form: "sessionMode:'isolated'|'inline'", required: false },
       clarifyMode: { form: "clarifyMode:'optional'", required: false },
+      interactionMode: {
+        form: "interactionMode:'questions'|'mindmap'",
+        required: false,
+      },
+      mindmap: {
+        form: 'mindmap:{categories:string[],instructions:string} (required for mindmap mode)',
+        required: false,
+        nested: {
+          categories: { form: 'categories:[category]', required: false },
+          instructions: { form: 'instructions', required: false },
+        },
+      },
       assignee: {
         omit: true,
         why: 'reserved schema slot; the UI does not surface it (schemas/workflow.ts)',
@@ -185,6 +197,18 @@ export const INTENT_NODE_TEACHING = {
     availability: { kind: 'public' },
     fields: {
       description: { form: 'description', required: false },
+      interactionMode: {
+        form: "interactionMode:'questions'|'mindmap'",
+        required: false,
+      },
+      mindmap: {
+        form: 'mindmap:{categories:string[],instructions:string} (required for mindmap mode)',
+        required: false,
+        nested: {
+          categories: { form: 'categories:[category]', required: false },
+          instructions: { form: 'instructions', required: false },
+        },
+      },
       sessionModeForQuestioner: {
         form: "sessionModeForQuestioner:'isolated'|'inline'",
         required: false,

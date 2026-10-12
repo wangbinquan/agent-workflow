@@ -8,6 +8,7 @@ import { FilterBar, FilterField } from '@/components/FilterBar'
 import { TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
 import type { ObservationSearch } from './RunObservability'
+import { observationPresetRange } from './observationPresetRange'
 
 export function ObservationFilters({
   search,
@@ -102,12 +103,9 @@ export function ObservationFilters({
           ).map((value) => ({ value, label: t(`runObservability.${value}`) }))}
           onChange={(period) => {
             if (period === 'custom') return
-            const to = Date.now() + 1
             update({
               period,
-              from:
-                period === 'all' ? 0 : Math.max(0, to - (period === 'week' ? 7 : 30) * 86400000),
-              to,
+              ...observationPresetRange(period, search.to),
             })
           }}
         />

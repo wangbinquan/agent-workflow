@@ -4315,6 +4315,7 @@ export async function runAgentSingleNode(
             (n) => n.id === crossQuestionerNodeId && n.kind === 'clarify-cross-agent',
           ) as ClarifyCrossAgentNode | undefined)
         : undefined
+      const mindmapGate = crossQuestionerNode ?? clarifyNodeObjForGate
       const sessionMode = crossQuestionerNode
         ? resolveCrossClarifySessionMode(crossQuestionerNode)
         : clarifyNodeObjForGate
@@ -4729,6 +4730,9 @@ export async function runAgentSingleNode(
           // RFC-148: the clarify quartet is ONE ClarifyChannel value now —
           // wiring family (parser cap) × this-run directive (enforcement)
           // × stop-notice injection.
+          ...(mindmapGate?.interactionMode === 'mindmap' && mindmapGate.mindmap
+            ? { clarifyMindmap: mindmapGate.mindmap }
+            : {}),
           clarifyChannel: !hasClarifyChannel
             ? { kind: 'none' as const }
             : {

@@ -193,8 +193,8 @@ describe('RFC-292 workflow template inventory and migration', () => {
 
   test('v4 -> v5 is sink-aware, canonical and idempotent', () => {
     const migrated = migrateWorkflowDefinitionToLatest(v4)
-    // RFC-354: the cascade now lands on v6 (the v5 template rewrite is unchanged).
-    expect(migrated.$schema_version).toBe(6)
+    // RFC-372: the cascade now lands on v7 (the v5 template rewrite is unchanged).
+    expect(migrated.$schema_version).toBe(7)
     const surfaces = Object.fromEntries(
       collectWorkflowTemplateSurfaces(migrated).map((item) => [item.pointer, item.text]),
     )

@@ -28,9 +28,9 @@ describe('RFC-056 NodeKind union + $schema_version bump', () => {
     expect(NodeKindSchema.safeParse('clarify-cross-agent').success).toBe(true)
   })
 
-  test('RFC-354 keeps v4 / v5 readable while v6 is the latest schema', () => {
-    expect(WORKFLOW_SCHEMA_VERSION).toBe(6)
-    expect(WORKFLOW_SCHEMA_VERSIONS).toEqual([1, 2, 3, 4, 5, 6])
+  test('RFC-372 keeps v4 / v5 / v6 readable while v7 is the latest schema', () => {
+    expect(WORKFLOW_SCHEMA_VERSION).toBe(7)
+    expect(WORKFLOW_SCHEMA_VERSIONS).toEqual([1, 2, 3, 4, 5, 6, 7])
   })
 
   test('WorkflowDefinitionSchema accepts $schema_version = 4', () => {
@@ -53,9 +53,9 @@ describe('RFC-056 NodeKind union + $schema_version bump', () => {
     expect(res.success).toBe(true)
   })
 
-  test('WorkflowDefinitionSchema rejects $schema_version = 7 (unknown future version)', () => {
+  test('WorkflowDefinitionSchema rejects $schema_version = 8 (unknown future version)', () => {
     const res = WorkflowDefinitionSchema.safeParse({
-      $schema_version: 7,
+      $schema_version: 8,
       inputs: [],
       nodes: [],
       edges: [],

@@ -1,22 +1,22 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 505,
-    "architectureExceptions": 6100,
-    "backgroundJobs": 382,
-    "crossContextImports": 6977,
+    "ambientWiring": 508,
+    "architectureExceptions": 6231,
+    "backgroundJobs": 385,
+    "crossContextImports": 7123,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27967,
-    "mutationEntrypoints": 2005,
+    "moduleSymbolOwners": 28249,
+    "mutationEntrypoints": 2011,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1282,
-    "transactionExternalEffects": 277
+    "publicSurfaces": 1283,
+    "transactionExternalEffects": 284
   },
   "metrics": {
-    "ambientWiringEntries": 505,
+    "ambientWiringEntries": 508,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2458,
+    "backendProductionFiles": 2503,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 382,
+    "backgroundEntries": 385,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -33,6 +33,7 @@
       "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
       "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
+      "packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts",
       "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "packages/backend/src/platform/background/maintenanceService.ts",
@@ -47,9 +48,9 @@
       "packages/backend/src/services/scheduledTaskScheduler.ts",
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
-    "directNativeIntervals": 23,
-    "directNativeTimers": 80,
-    "inboundBoundaryEdges": 313,
+    "directNativeIntervals": 24,
+    "directNativeTimers": 82,
+    "inboundBoundaryEdges": 322,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -58,7 +59,7 @@
       },
       {
         "context": "collaboration",
-        "files": 110
+        "files": 114
       },
       {
         "context": "development-automation",
@@ -102,7 +103,7 @@
       },
       {
         "context": "run-observability",
-        "files": 134
+        "files": 168
       },
       {
         "context": "runtime-management",
@@ -122,10 +123,10 @@
       },
       {
         "context": "task-execution",
-        "files": 498
+        "files": 499
       }
     ],
-    "moduleFiles": 1857,
+    "moduleFiles": 1896,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +162,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095"
+  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31"
 }

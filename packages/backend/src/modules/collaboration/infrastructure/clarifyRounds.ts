@@ -1,3 +1,5 @@
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { isMindmapRound } from '@agent-workflow/shared'
 // RFC-349 SQLite compatibility adapter for the RFC-058 clarify-round helpers.
 // Provider-neutral callers enter through services/clarify/rounds.ts or the
 // collaboration public query/command surface; database mechanisms stay here.
@@ -432,6 +434,7 @@ function rowToDetail(
     loopIter: row.loopIter,
     iteration: row.iteration,
     questions,
+    ...(isMindmapRound(questions) ? { interactionMode: 'mindmap' as const } : {}),
     ...(answers !== undefined ? { answers } : {}),
     directive: (row.directive ?? null) as ClarifyDirective | null,
     status: row.status as 'awaiting_human' | 'answered' | 'canceled' | 'abandoned',
@@ -606,6 +609,7 @@ export async function saveClarifyDraft(
   }
   const now = Date.now()
   await databaseSessionFor(args.db).transaction(async (tx) => {
+    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, row.taskId)
     const fresh = (
       await tx
         .select({

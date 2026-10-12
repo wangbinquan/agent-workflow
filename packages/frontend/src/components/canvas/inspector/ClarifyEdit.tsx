@@ -1,3 +1,4 @@
+import { ClarifyModeEdit } from './ClarifyModeEdit'
 // RFC-023 — only `title` and `description` are user-editable; the
 // asking agent is linked via reverse-drag in the canvas (the system
 // ports `__clarify__` / `__clarify_response__` carry that link).
@@ -55,6 +56,7 @@ export function ClarifyEdit({ node, definition, onPatch, onHistoryBoundary }: Ed
   return (
     <div className="form-grid">
       <NodeTitleField node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
+      <ClarifyModeEdit node={node} onPatch={onPatch} onHistoryBoundary={onHistoryBoundary} />
       <Field
         label={t('inspector.fieldClarifyDescription')}
         hint={t('inspector.fieldClarifyDescriptionHint')}

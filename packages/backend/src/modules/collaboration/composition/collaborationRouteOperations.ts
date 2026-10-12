@@ -1,3 +1,6 @@
+import { createClarifyFollowupOperations } from '../application/clarifyFollowup'
+import { createClarifyFollowupStore } from '../infrastructure/clarifyFollowupStore'
+import type { ClarifyFollowupGenerator } from '../application/ports/clarifyFollowup'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   CollaborationRouteOperations,
@@ -56,12 +59,25 @@ function bindCollaborationRouteContext(
 export function composeCollaborationRouteOperations(input: {
   readonly db: ProviderNeutralDatabase
   readonly context: CollaborationRouteContext
+  readonly followupGenerator?: ClarifyFollowupGenerator
 }): CollaborationRouteOperations {
-  return bindCollaborationRouteContext(
-    input.context,
-    createCollaborationRouteOperations({
-      db: input.db,
-      clarifyDraftEvents: createCollaborationClarifyDraftEventPublisher(),
-    }),
-  )
+  const events = createCollaborationClarifyDraftEventPublisher()
+  const persistence = createCollaborationRouteOperations({
+    db: input.db,
+    clarifyDraftEvents: events,
+  })
+  return bindCollaborationRouteContext(input.context, {
+    ...persistence,
+    clarify: {
+      ...persistence.clarify,
+      ...(input.followupGenerator
+        ? {
+            followup: createClarifyFollowupOperations(
+              createClarifyFollowupStore(input.db, events),
+              input.followupGenerator,
+            ),
+          }
+        : {}),
+    },
+  })
 }

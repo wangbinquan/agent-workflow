@@ -1,2 +1,5 @@
 export { createTaskObservationFacts } from '../infrastructure/taskObservationFacts'
-export { createCompleteTaskObservationFacts } from '../infrastructure/completeTaskObservationFacts'
+export {
+  createCompleteTaskObservationFacts,
+  createProjectionTaskObservationFacts,
+} from '../infrastructure/completeTaskObservationFacts'

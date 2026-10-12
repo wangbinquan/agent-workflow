@@ -1,0 +1,137 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:aeaf35a854b78e2a6afa7c4d8c0b5fe8412dda9dcc742388defeff8ff5c29c0f', 252, 6)"
+    },
+    "beforeDigest": "sha256:b7987598ee19fb4d363438873d38783e6cd78a418dea6fcd30514c19e68bf71a"
+  },
+  "digest": "sha256:c0987d796053453802ea5ea2e3966ab0bd35da7b4b8d48addf0e4ed0caeea2c0",
+  "executableStatements": [
+    {
+      "kind": "index",
+      "logicalId": "observation_projection_changes:index:observation_projection_changes_ready",
+      "sql": "CREATE INDEX \"observation_projection_changes_ready\" ON \"agent_workflow\".\"observation_projection_changes\" (\"completed\", \"retry_at\", \"created_at\", \"id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_projection_history:index:observation_projection_history_scope_day",
+      "sql": "CREATE INDEX \"observation_projection_history_scope_day\" ON \"agent_workflow\".\"observation_projection_history\" (\"kind\", \"section\", \"component\", \"cohort_at\", \"key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_projection_work:index:observation_projection_work_unapplied",
+      "sql": "CREATE INDEX \"observation_projection_work_unapplied\" ON \"agent_workflow\".\"observation_projection_work\" (\"applied_revision\", \"id\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:aeaf35a854b78e2a6afa7c4d8c0b5fe8412dda9dcc742388defeff8ff5c29c0f', active_table_count = 252, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:6bd17728b5c120475ca8955d629b9c669a89087371adddeb2ee59da58585e1d7' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:6bd17728b5c120475ca8955d629b9c669a89087371adddeb2ee59da58585e1d7",
+    "planDigest": "sha256:442af8b060c796b3d97c78f8d18781923b9d9bd2d44f0481f4d335cbacf4d7c9"
+  },
+  "id": "0025_rfc371_observation_indexes",
+  "indexAdditions": [
+    {
+      "position": 492,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_projection_changes:index:observation_projection_changes_ready",
+        "sql": "CREATE INDEX \"observation_projection_changes_ready\" ON \"agent_workflow\".\"observation_projection_changes\" (\"completed\", \"retry_at\", \"created_at\", \"id\")"
+      }
+    },
+    {
+      "position": 499,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_projection_history:index:observation_projection_history_scope_day",
+        "sql": "CREATE INDEX \"observation_projection_history_scope_day\" ON \"agent_workflow\".\"observation_projection_history\" (\"kind\", \"section\", \"component\", \"cohort_at\", \"key\")"
+      }
+    },
+    {
+      "position": 502,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_projection_work:index:observation_projection_work_unapplied",
+        "sql": "CREATE INDEX \"observation_projection_work_unapplied\" ON \"agent_workflow\".\"observation_projection_work\" (\"applied_revision\", \"id\")"
+      }
+    }
+  ],
+  "logicalIndexes": [
+    {
+      "index": {
+        "columns": ["completed", "retry_at", "created_at", "id"],
+        "name": "observation_projection_changes_ready",
+        "unique": false,
+        "where": null
+      },
+      "position": 1,
+      "tableId": "observation_projection_changes"
+    },
+    {
+      "index": {
+        "columns": ["kind", "section", "component", "cohort_at", "key"],
+        "name": "observation_projection_history_scope_day",
+        "unique": false,
+        "where": null
+      },
+      "position": 4,
+      "tableId": "observation_projection_history"
+    },
+    {
+      "index": {
+        "columns": ["applied_revision", "id"],
+        "name": "observation_projection_work_unapplied",
+        "unique": false,
+        "where": null
+      },
+      "position": 1,
+      "tableId": "observation_projection_work"
+    }
+  ],
+  "previousEntryDigest": "sha256:15b2a2d67288c8f43ffe75833fbabf5057ecd7d03cf6bbbcb132910ff968d9e1",
+  "sequence": 25,
+  "sqlDigest": "sha256:aca021549a70a72861a6fce45d88d7ecdd5f9fa62d0586b854309dd3a42228b6",
+  "sqlFile": "0025_rfc371_observation_indexes.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791807023093,
+        "hash": "09fcb275b8735927e40c7c8f95325dbea8753d96a5d6dd277f7e5d23b863659f",
+        "index": 248,
+        "tag": "0249_rfc371_incremental_observation"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:66f3222a0bcae36e8898f4b3d17c69deddc82d4c720cc7066df48b1597aeb414",
+      "count": 248,
+      "last": {
+        "folderMillis": 1791804462865,
+        "hash": "2a5bc7d82b6f6548e9035785d5504e28398625e4f2a0bb4d0ad430b604ff2bf9",
+        "index": 247,
+        "tag": "0248_rfc372_light_clarify"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:02cb11b0b43105a1cc4ed50c62e0a1c5e0fcc18c15abf63832696ba30cfa354c",
+      "count": 249,
+      "last": {
+        "folderMillis": 1791807023093,
+        "hash": "09fcb275b8735927e40c7c8f95325dbea8753d96a5d6dd277f7e5d23b863659f",
+        "index": 248,
+        "tag": "0249_rfc371_incremental_observation"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:aeaf35a854b78e2a6afa7c4d8c0b5fe8412dda9dcc742388defeff8ff5c29c0f",
+    "planDigest": "sha256:3646e03947248344354e9eb8df8eba440189bdf96d10eb53da419e53948da6a3"
+  },
+  "version": 1
+}

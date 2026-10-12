@@ -74,6 +74,7 @@ function fixture(
     ],
     installed: [] as string[],
     nativeInstalled: [] as string[],
+    revisionSeeds: [] as string[],
   }
   if (input.missingBaseline) initial.migrations = []
   let committed = structuredClone(initial)
@@ -161,6 +162,13 @@ function fixture(
         return rows([])
       }
       if (matched?.statement.kind === 'constraint') return rows([])
+      if (
+        matched?.statement.kind === 'metadata' &&
+        matched.statement.logicalId === 'observation_source_revisions:initial-revisions'
+      ) {
+        pending.revisionSeeds.push(sql)
+        return rows([])
+      }
       if (matched?.statement.kind === 'function' || matched?.statement.kind === 'trigger') {
         pending.nativeInstalled.push(sql)
         return rows([])
@@ -233,6 +241,18 @@ function nativeStatements(): readonly PostgresqlSchemaStatement[] {
   )
 }
 
+function revisionSeedStatement(): PostgresqlSchemaStatement {
+  const seeds = history.steps.flatMap((step) =>
+    step.executableStatements.filter(
+      (statement) =>
+        statement.kind === 'metadata' &&
+        statement.logicalId === 'observation_source_revisions:initial-revisions',
+    ),
+  )
+  expect(seeds).toHaveLength(1)
+  return seeds[0]!
+}
+
 describe('RFC-359 T19h schema transaction and pointer continuation', () => {
   test('advances the schema and active generation together while preserving the original receipt', async () => {
     const db = fixture()
@@ -258,12 +278,33 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     expect(db.committed().nativeInstalled).toEqual(
       nativeStatements().map((statement) => statement.sql),
     )
+    expect(db.committed().revisionSeeds).toEqual([revisionSeedStatement().sql])
     expect(db.committed().generations[0]).toEqual({
       ...original.generations[0]!,
       contract_digest: history.head.contract.digest,
     })
     expect(db.committed().generations[1]).toEqual(original.generations[1])
     expect(callbacks).toBe(1)
+    expect(db.releases()).toBe(1)
+  })
+
+  test('a source revision seed failure rolls back the original schema transaction and every metadata change', async () => {
+    const statement = revisionSeedStatement()
+    const db = fixture({ failSql: statement.sql })
+    let callbacks = 0
+    await expect(
+      migratePostgresqlSchema({
+        runtime: db.runtime,
+        history,
+        afterCommitted: () => {
+          callbacks += 1
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'postgresql-schema-prepare-failed' })
+    expect(db.calls.some((call) => call.sql === statement.sql)).toBe(true)
+    expect(db.calls.some((call) => call.sql === 'ROLLBACK')).toBe(true)
+    expect(db.committed()).toEqual(db.initial)
+    expect(callbacks).toBe(0)
     expect(db.releases()).toBe(1)
   })
 
@@ -348,6 +389,7 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     expect(repairedDigest).toBe(history.head.contract.digest)
     expect(db.committed()).toEqual(first)
     expect(db.calls.filter((call) => call.sql === 'BEGIN')).toHaveLength(1)
+    expect(db.calls.filter((call) => call.sql === revisionSeedStatement().sql)).toHaveLength(1)
     expect(db.releases()).toBe(2)
   })
 

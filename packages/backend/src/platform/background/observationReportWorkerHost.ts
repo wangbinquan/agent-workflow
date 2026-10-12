@@ -33,6 +33,14 @@ async function execute(snapshot: OriginalReportSnapshot, request: ObservationRep
       return snapshot.workspace.page(request.namespace, request.after, request.size)
     case 'clear-working':
       return snapshot.workspace.clear(request.namespace)
+    case 'copy-working-prefix':
+      if (!snapshot.workspace.copyNamespacePrefix)
+        throw new Error('Original report workspace prefix copy unavailable')
+      return snapshot.workspace.copyNamespacePrefix(request.from, request.to, request.excluded)
+    case 'clear-working-prefix':
+      if (!snapshot.workspace.clearNamespacePrefix)
+        throw new Error('Original report workspace prefix clear unavailable')
+      return snapshot.workspace.clearNamespacePrefix(request.prefix)
   }
 }
 /** No pool/URL crosses IPC. In-flight native reads finish before the original reservation is released. */

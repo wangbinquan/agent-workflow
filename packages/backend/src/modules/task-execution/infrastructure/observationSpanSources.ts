@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, lte, max } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, lte, max, inArray } from 'drizzle-orm'
 import {
   parseObservationCapturedUsage,
   type ObservationSpanSourceInput,
@@ -8,15 +8,21 @@ import {
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, taskExecutionObservationSources as sources } from '@/db/schema'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { identityPacketPage } from '@/platform/persistence/identityPackets'
 
 /** Retained facts include acknowledged rows. Neither ACK nor logical-session retag deletes them. */
-export function createObservationSpanSources(db: ProviderNeutralDatabase) {
+export function createObservationSpanSources(
+  db: ProviderNeutralDatabase,
+  projectionAttemptIds?: readonly string[],
+) {
   return async (input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage> => {
     if (
       !Number.isInteger(input.limit) ||
       input.limit < 1 ||
       input.limit > 200 ||
-      (!input.allTaskCarriers && input.carrierInvocationIds.length > 1000) ||
+      (projectionAttemptIds === undefined &&
+        !input.allTaskCarriers &&
+        input.carrierInvocationIds.length > 1000) ||
       !input.scopeHash
     )
       throw new RangeError('Invalid observation span page')
@@ -62,29 +68,39 @@ export function createObservationSpanSources(db: ProviderNeutralDatabase) {
     const rows =
       watermark === 0
         ? []
-        : await db
-            .select({
-              id: sources.id,
-              nodeRunId: sources.nodeRunId,
-              document: sources.evidenceJson,
+        : (
+            await identityPacketPage({
+              ids: projectionAttemptIds,
+              limit: 200,
+              key: (row) => String(row.id),
+              compare: (a, b) => a.id - b.id,
+              read: (ids, limit) =>
+                db
+                  .select({
+                    id: sources.id,
+                    nodeRunId: sources.nodeRunId,
+                    document: sources.evidenceJson,
+                  })
+                  .from(sources)
+                  .innerJoin(
+                    nodeRuns,
+                    and(eq(sources.nodeRunId, nodeRuns.id), eq(sources.taskId, nodeRuns.taskId)),
+                  )
+                  .where(
+                    and(
+                      eq(sources.taskId, input.taskId),
+                      ids === undefined ? undefined : inArray(sources.nodeRunId, [...ids]),
+                      lte(sources.id, watermark),
+                      input.after && itemIndex !== 1000
+                        ? gte(sources.id, sourceId)
+                        : gt(sources.id, sourceId),
+                    ),
+                  )
+                  .orderBy(asc(sources.id))
+                  .limit(limit)
+                  .all(),
             })
-            .from(sources)
-            .innerJoin(
-              nodeRuns,
-              and(eq(sources.nodeRunId, nodeRuns.id), eq(sources.taskId, nodeRuns.taskId)),
-            )
-            .where(
-              and(
-                eq(sources.taskId, input.taskId),
-                lte(sources.id, watermark),
-                input.after && itemIndex !== 1000
-                  ? gte(sources.id, sourceId)
-                  : gt(sources.id, sourceId),
-              ),
-            )
-            .orderBy(asc(sources.id))
-            .limit(200)
-            .all()
+          ).slice(0, 200)
     let scannedSources = 0,
       nextCursor: string | null = null
     const continuation = (id: number, index: number) =>

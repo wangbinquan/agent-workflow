@@ -45,6 +45,10 @@ export interface CompleteObservationUnallocatedQuality {
   readonly visible: boolean
 }
 export interface CompleteObservationTaskInput {
+  readonly retainInvocationInventory?: (
+    invocationId: string,
+    inventory: { readonly numericRecords: string; readonly nativeCaptures: string },
+  ) => Promise<void>
   /** A version-qualified numeric contribution; timing and trace remain current. */
   readonly numericCache?: CompleteObservationTaskNumericCache
   /** Full original trace evidence is retained for a requested Task, separately from display pages. */

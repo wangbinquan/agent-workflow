@@ -6,7 +6,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor } from '@/auth/actor'
-import { nodeRuns, observationCalculationRows, observationReportCounts } from '@/db/schema'
+import {
+  nodeRuns,
+  observationCalculationRows,
+  observationCalculationVersions,
+  observationReportCounts,
+} from '@/db/schema'
 import { configureLogger, resetLoggerForTest } from '@/util/log'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
@@ -127,12 +132,9 @@ function numerical(report: Awaited<ReturnType<typeof complete>>) {
     groups: report.groups.filter((group) => group.section !== 'receipts'),
   }
 }
-function reused(fixture: Fixture, reportId: string) {
+function reused(fixture: Fixture, reportId: string, message = 'original task calculation reuse') {
   const lines = readFileSync(join(fixture.appHome, 'logs', 'daemon.log'), 'utf8').split('\n')
-  const line = lines.find(
-    (line) =>
-      line.includes('original task calculation reuse') && line.includes('reportId=' + reportId),
-  )
+  const line = lines.find((line) => line.includes(message) && line.includes('reportId=' + reportId))
   if (!line) throw new Error('Actual Worker numerical cache diagnostic missing')
   return line
 }
@@ -200,7 +202,32 @@ describeEachProvider('RFC-371 Task calculations through actual original Workers'
         expect(reused(fixture, hot.content.header.reportId)).toContain('calculatedTasks=0')
         const rows = await fixture.db.select().from(observationCalculationRows).all()
         expect(rows.length).toBeGreaterThan(0)
-        expect(reused(fixture, hot.content.header.reportId)).toContain('cachedRows=' + rows.length)
+        const versions = await fixture.db.select().from(observationCalculationVersions).all()
+        const taskKeys = new Set(
+          versions
+            .filter((row) => JSON.parse(row.document).algorithm === 'task-numeric-20261012-v1')
+            .map((row) => row.cacheKey),
+        )
+        const historyKeys = new Set(
+          versions
+            .filter(
+              (row) => JSON.parse(row.document).algorithm === 'historical-preparation-20261012-v1',
+            )
+            .map((row) => row.cacheKey),
+        )
+        const taskRows = rows.filter((row) => taskKeys.has(row.cacheKey))
+        const historyRows = rows.filter((row) => historyKeys.has(row.cacheKey))
+        expect(taskRows.length).toBeGreaterThan(0)
+        expect(historyRows.length).toBeGreaterThan(0)
+        expect(reused(fixture, hot.content.header.reportId)).toContain(
+          'cachedRows=' + taskRows.length,
+        )
+        expect(
+          reused(fixture, cold.content.header.reportId, 'original historical preparation reuse'),
+        ).toContain('prepared=true')
+        expect(
+          reused(fixture, hot.content.header.reportId, 'original historical preparation reuse'),
+        ).toContain('cachedRows=' + historyRows.length)
         if (fixture.binding.provider === 'postgresql') {
           const release = fixture.events.indexOf('reader-released')
           expect(release).toBeGreaterThanOrEqual(0)
@@ -235,6 +262,9 @@ describeEachProvider('RFC-371 Task calculations through actual original Workers'
         )
         expect(reused(fixture, hot.content.header.reportId)).toContain('cachedTasks=1')
         expect(numerical(hot)).toEqual(numerical(oracle))
+        expect(
+          reused(fixture, hot.content.header.reportId, 'original historical preparation reuse'),
+        ).not.toContain('cachedRows=0')
         const back = await complete(
           cached,
           fixture,
@@ -249,6 +279,9 @@ describeEachProvider('RFC-371 Task calculations through actual original Workers'
         )
         expect(numerical(back)).toEqual(numerical(originalBack))
         expect(reused(fixture, back.content.header.reportId)).toContain('cachedTasks=1')
+        expect(
+          reused(fixture, back.content.header.reportId, 'original historical preparation reuse'),
+        ).not.toContain('cachedRows=0')
       } finally {
         await cached.worker.stop()
         await original.worker.stop()

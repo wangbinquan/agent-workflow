@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 2005,
+    "entries": 2011,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1053,29 +1053,6 @@
       "symbol": "runUserCommand",
       "targetContext": "identity-access",
       "targetLayer": "inbound"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/db/clarifyMindmap.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/db/clarifyMindmap.ts#createClarifyMindmapTables",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/db/clarifyMindmap.ts#createClarifyMindmapTables",
-      "symbol": "createClarifyMindmapTables",
-      "targetContext": "platform",
-      "targetLayer": "application"
     },
     {
       "controls": {
@@ -2626,6 +2603,29 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/application/clarifyFollowup.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/application/clarifyFollowup.ts#createClarifyFollowupOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowup.ts#createClarifyFollowupOperations",
+      "symbol": "createClarifyFollowupOperations",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": true,
         "fenceOrOcc": false,
@@ -3620,6 +3620,27 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDirectiveStore.ts#createClarifyDirectiveStore",
       "symbol": "createClarifyDirectiveStore",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupStore.ts#createClarifyFollowupStore",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupStore.ts#createClarifyFollowupStore",
+      "symbol": "createClarifyFollowupStore",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -21972,6 +21993,27 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/application/incrementalObservationProjection.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/incrementalObservationProjection.ts#createIncrementalObservationProjection",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/incrementalObservationProjection.ts#createIncrementalObservationProjection",
+      "symbol": "createIncrementalObservationProjection",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": true,
@@ -22481,6 +22523,49 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/crewstation/observationSource.ts#createCrewStationObservationSource",
       "symbol": "createCrewStationObservationSource",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationProjectionStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationProjectionStore.ts#createIncrementalObservationProjectionStore",
+      "missingControls": [
+        "audit",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationProjectionStore.ts#createIncrementalObservationProjectionStore",
+      "symbol": "createIncrementalObservationProjectionStore",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#createIncrementalObservationQueryStore",
+      "missingControls": [
+        "audit",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#createIncrementalObservationQueryStore",
+      "symbol": "createIncrementalObservationQueryStore",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -32411,7 +32496,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -32422,12 +32507,38 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/completeTaskObservationFacts.ts#createCompleteTaskObservationFacts",
       "symbol": "createCompleteTaskObservationFacts",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/completeTaskObservationFacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/completeTaskObservationFacts.ts#createProjectionTaskObservationFacts",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/completeTaskObservationFacts.ts#createProjectionTaskObservationFacts",
+      "symbol": "createProjectionTaskObservationFacts",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -39508,6 +39619,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlMigrationRoot",
       "symbol": "createPostgresqlMigrationRoot",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlRetirementUpgrade",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlRetirementUpgrade",
+      "symbol": "createPostgresqlRetirementUpgrade",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -47585,7 +47720,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:658",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:674",
       "missingControls": [
         "audit",
         "authority",
@@ -47595,7 +47730,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:658",
+      "symbol": "$http:delete:674",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47610,7 +47745,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:693",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:709",
       "missingControls": [
         "audit",
         "authority",
@@ -47620,7 +47755,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:693",
+      "symbol": "$http:delete:709",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47635,7 +47770,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:698",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:714",
       "missingControls": [
         "audit",
         "authority",
@@ -47645,7 +47780,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:698",
+      "symbol": "$http:delete:714",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47660,7 +47795,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:726",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:742",
       "missingControls": [
         "audit",
         "authority",
@@ -47670,7 +47805,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:726",
+      "symbol": "$http:delete:742",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47685,7 +47820,7 @@
       },
       "file": "packages/backend/src/ws/registry.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:731",
+      "id": "mutation:packages/backend/src/ws/registry.ts#$http:delete:747",
       "missingControls": [
         "audit",
         "authority",
@@ -47695,7 +47830,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
-      "symbol": "$http:delete:731",
+      "symbol": "$http:delete:747",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -47986,7 +48121,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095",
+  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -48112,8 +48247,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#428:nodeRuns",
-        "line": 428,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#457:nodeRuns",
+        "line": 457,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#sealRoundQuestions",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",

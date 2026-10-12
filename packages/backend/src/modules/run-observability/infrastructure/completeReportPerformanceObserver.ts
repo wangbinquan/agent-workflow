@@ -158,6 +158,22 @@ export function measureCompleteReportSources(
     page: <T>(...args: [namespace: string, after: string | null, size?: number]) =>
       observer.measure('workspace.page', () => rows.page<T>(...args)),
     clear: (...args) => observer.measure('workspace.clear', () => rows.clear(...args)),
+    ...(rows.copyNamespacePrefix
+      ? {
+          copyNamespacePrefix: (from: string, to: string, excluded: readonly string[]) =>
+            observer.measure('workspace.copyNamespacePrefix', () =>
+              rows.copyNamespacePrefix!(from, to, excluded),
+            ),
+        }
+      : {}),
+    ...(rows.clearNamespacePrefix
+      ? {
+          clearNamespacePrefix: (prefix: string) =>
+            observer.measure('workspace.clearNamespacePrefix', () =>
+              rows.clearNamespacePrefix!(prefix),
+            ),
+        }
+      : {}),
   }
   const measuredHistorical: HistoricalObservationSources | undefined = historical
     ? {

@@ -47,8 +47,6 @@ import {
 } from 'drizzle-orm/sqlite-core'
 import { providerAwareSqliteTable } from './providerSchema'
 import { createNativeUsageTables } from './observationNative'
-import { createClarifyMindmapTables } from './clarifyMindmap'
-import { createTaskClarifyTables } from './taskClarify'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
@@ -68,6 +66,22 @@ export {
   observationCalculationVersions,
   observationCalculationRows,
 } from './observationCalculations'
+export {
+  observationProjectionHeads,
+  observationProjectionBindings,
+  observationProjectionBootstrap,
+  observationProjectionComponents,
+  observationProjectionPrepared,
+  observationProjectionViews,
+  observationProjectionVersions,
+  observationProjectionWork,
+  observationProjectionWorkComponents,
+  observationProjectionCurrent,
+  observationProjectionHistory,
+  observationProjectionMemberships,
+  observationProjectionChanges,
+  observationProjectionDependencies,
+} from './observationProjection'
 
 // RFC-371: platform snapshot generations and their cursor are swapped atomically.
 export const observationPlatformSources = sqliteTable('observation_platform_sources', {
@@ -8605,20 +8619,3 @@ export const {
   nativeUsageEmissions: systemNativeUsageEmissions,
   nativeUsageRevisionHeads: systemNativeUsageRevisionHeads,
 } = systemAgentNativeUsage
-
-export const {
-  clarifyMindmapSessions,
-  clarifyMindmapNodes,
-  clarifyMindmapNodeRevisions,
-  clarifyMindmapCommandReceipts,
-  clarifyMindmapSnapshots,
-} = createClarifyMindmapTables(tasks, clarifyRounds)
-
-// RFC-372: Task host/entry and immutable material/consumption companions.
-export const {
-  taskClarifyHostRuns,
-  taskClarifyChannels,
-  taskClarifyEntries,
-  taskClarifyMaterials,
-  taskClarifyConsumptions,
-} = createTaskClarifyTables(tasks, nodeRuns)

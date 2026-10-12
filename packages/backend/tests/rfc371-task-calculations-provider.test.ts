@@ -1,5 +1,7 @@
 // RFC-371: real snapshots seal every Task numeric row; the hot path must actually
 // avoid preparation, preserve original receipts, and recompute current open timing.
+// Independent trace snapshots have independent receipt identities; each must
+// match its own original source before all other receipt fields are compared.
 import { afterEach, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
@@ -375,17 +377,26 @@ describeEachProvider('RFC-371 sealed Task numerical calculations', (harness) => 
     })
     expect(trace.statistics).toEqual({ cachedTasks: '0', calculatedTasks: '0', cachedRows: '0' })
     expect(trace.result.trace).toBeDefined()
-    expect({
-      ...trace.result.trace!.projection,
-      spansNamespace: '<namespace>',
-      capturesNamespace: '<namespace>',
-      repairsNamespace: '<namespace>',
-    }).toEqual({
-      ...oracle.result.trace!.projection,
-      spansNamespace: '<namespace>',
-      capturesNamespace: '<namespace>',
-      repairsNamespace: '<namespace>',
-    })
+    const projection = (calculation: typeof trace) => {
+      const { projection, receipt } = calculation.result.trace!
+      expect(receipt).not.toBeNull()
+      if (!receipt) throw new Error('Original trace receipt missing')
+      expect(receipt.snapshotId).toBe(calculation.snapshotId)
+      expect(receipt.source).toBe(
+        projection.spansNamespace.slice(0, -'projected-spans'.length) + 'original-spans',
+      )
+      expect(receipt.eof).toBe(true)
+      expect(Reflect.get(projection, 'receipt')).toEqual(receipt)
+      return {
+        ...projection,
+        spansNamespace: '<namespace>',
+        capturesNamespace: '<namespace>',
+        repairsNamespace: '<namespace>',
+        receipt: { ...receipt, source: '<original-source>', snapshotId: '<original-snapshot>' },
+      }
+    }
+    expect(trace.snapshotId).not.toBe(oracle.snapshotId)
+    expect(projection(trace)).toEqual(projection(oracle))
     expect(numeric(trace)).toEqual(numeric(oracle))
     expect(trace.groups).toEqual(oracle.groups)
   })

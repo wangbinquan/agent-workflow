@@ -1,3 +1,15 @@
+import {
+  clarifyAnswerBasis,
+  clarifyContentKey,
+  clarifyFollowupContext,
+  effectiveClarifyAnswers,
+  clarifyQuestionSetKey,
+  isClarifyAnswerConfirmed,
+  isMindmapRound,
+  type ClarifyQuestion,
+  type ClarifyDraftValue,
+} from '@agent-workflow/shared'
+import { MindmapWorkspace } from '@/components/clarify/mindmap/MindmapWorkspace'
 // /clarify/$nodeRunId — RFC-023 PR-C T23.
 //
 // Detail page for one clarify session. Renders:
@@ -43,6 +55,7 @@ import { ClarifyQuestionHandler } from '@/components/clarify/ClarifyQuestionHand
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import type { TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { answersEqual, isAnswerFilled } from '@/lib/clarify/answers'
+import { useClarifyFollowup } from '@/lib/clarify/useClarifyFollowup'
 import { useActor } from '@/hooks/useActor'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { Dialog } from '@/components/Dialog'
@@ -300,6 +313,8 @@ export function ClarifyDetailPage() {
       initialLocalPersisted: boolean,
     ): void => {
       if (cancelled) return
+      initial = effectiveClarifyAnswers(initial, s.answers)
+      serverBaseline = effectiveClarifyAnswers(serverBaseline, s.answers)
       // Capture the concrete writers for this controller. Its queues deliberately
       // outlive React subscriptions/unmount, so later module/mock replacement must
       // not redirect already-enqueued work to a different writer.
@@ -319,6 +334,7 @@ export function ClarifyDetailPage() {
             questionId: answer.questionId,
             selectedOptionIndices: answer.selectedOptionIndices,
             customText: answer.customText,
+            ...(answer.confirmedBasis ? { confirmedBasis: answer.confirmedBasis } : {}),
           })
         },
       })
@@ -348,6 +364,7 @@ export function ClarifyDetailPage() {
             selectedOptionIndices: v.selectedOptionIndices ?? [],
             selectedOptionLabels: [],
             customText: v.customText ?? '',
+            ...(v.confirmedBasis ? { confirmedBasis: v.confirmedBasis } : {}),
           }
         }
       }
@@ -374,9 +391,36 @@ export function ClarifyDetailPage() {
     }
   }, [draftLoaded, session.data])
 
+  useEffect(() => {
+    const current = session.data
+    const controller = durabilityRef.current
+    if (!current || !draftLoaded || !controller) return
+    const additions = current.questions
+      .filter((q) => !answersRef.current[q.id])
+      .map((q) => ({
+        ...emptyAnswer(q.id),
+        ...(current.draftAnswers?.[q.id] ?? {}),
+      }))
+    if (!additions.length) return
+    controller.addQuestions(additions)
+    const next = { ...answersRef.current }
+    for (const answer of additions) next[answer.questionId] = answer
+    answersRef.current = next
+    setAnswers(next)
+  }, [session.data, draftLoaded])
+
   const updateAnswer = (questionId: string, nextAnswer: ClarifyAnswer): void => {
     const s = session.data
     if (s === undefined || s.status !== 'awaiting_human') return
+    const question = s.questions.find((q) => q.id === questionId)
+    if (
+      nextAnswer.confirmedBasis &&
+      question &&
+      nextAnswer.confirmedBasis !== clarifyAnswerBasis(question, nextAnswer)
+    ) {
+      const { confirmedBasis: _confirmed, ...changed } = nextAnswer
+      nextAnswer = changed
+    }
     const next = { ...answersRef.current, [questionId]: nextAnswer }
     answersRef.current = next
     setAnswers(next)
@@ -394,11 +438,11 @@ export function ClarifyDetailPage() {
   useEffect(() => {
     const s = session.data
     if (s === undefined || !draftLoaded || s.status !== 'awaiting_human') return
-    const serverDrafts = s.draftAnswers ?? null
-    if (serverDrafts === null) return
+    const serverDrafts = effectiveClarifyAnswers<ClarifyDraftValue>(s.draftAnswers ?? {}, s.answers)
     const controller = durabilityRef.current
     if (controller === null) return
     const current = answersRef.current
+    const submitted = new Set(s.answers?.map((answer) => answer.questionId) ?? [])
     let changed = false
     const next = { ...current }
     for (const [qid, v] of Object.entries(serverDrafts)) {
@@ -409,8 +453,9 @@ export function ClarifyDetailPage() {
         selectedOptionIndices: v.selectedOptionIndices ?? [],
         selectedOptionLabels: [],
         customText: v.customText ?? '',
+        ...(v.confirmedBasis ? { confirmedBasis: v.confirmedBasis } : {}),
       }
-      if (!controller.tryAdoptRemote(qid, local, remote)) continue
+      if (!submitted.has(qid) && !controller.tryAdoptRemote(qid, local, remote)) continue
       if (!answersEqual(local, remote)) {
         next[qid] = remote
         changed = true
@@ -483,11 +528,35 @@ export function ClarifyDetailPage() {
   // here so the banner renders even after navigation back to this page (the
   // list refetch fills in the data otherwise). For self-clarify this stays
   // false and the legacy redirect-to-task-detail behavior is preserved.
+  const followup = useClarifyFollowup(nodeRunId, (originNodeRunId) =>
+    qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(originNodeRunId) }),
+  )
+  const followupPending = followup.pending
+  const startFollowup = async (questionId: string, instruction: string) => {
+    const current = session.data
+    const controller = durabilityRef.current
+    if (!current || !controller || followupPending) return
+    // Capture this round's answers before awaiting its durable writers. Never
+    // read a shared answersRef after navigation may have replaced its contents.
+    const basis = clarifyContentKey(
+      clarifyFollowupContext(
+        current.questions,
+        effectiveClarifyAnswers(answersRef.current, current.answers),
+        questionId,
+      ),
+    )
+    await followup.start({ parentQuestionId: questionId, basis, instruction }, async () => {
+      await controller.flushLocal()
+      await controller.flushServer()
+    })
+  }
+  const cancelFollowup = followup.cancel
   const [crossWaiting, setCrossWaiting] = useState<{ pending: string[] } | null>(null)
   const submitMut = useMutation<SubmitClarifyAnswersResponse, Error, ClarifyDirective>({
     mutationFn: async (directive) => {
       const s = session.data
       if (s === undefined) throw new Error('no session loaded')
+      if (followupPending) throw new Error(t('mindmap.generating'))
       // RFC-128 P4 (T10): exclude any question already sealed/dispatched via another channel
       // (the centralized pane / board) so this quick-channel submit never re-seals it. We do
       // NOT send `questionIds` here: that subset cap is gated to defer=true on the backend
@@ -509,6 +578,9 @@ export function ClarifyDetailPage() {
       const body: SubmitClarifyAnswers = {
         answers: arr,
         ifMatchIteration: s.iteration,
+        ...(isMindmapRound(s.questions)
+          ? { questionSetKey: clarifyQuestionSetKey(s.questions) }
+          : {}),
         directive,
       }
       // RFC-162: no questionScopes — cross unified with self.
@@ -604,7 +676,12 @@ export function ClarifyDetailPage() {
   }
 
   useEffect(() => {
-    if (!draftLoaded || initialFocusedRef.current) return
+    if (
+      !draftLoaded ||
+      initialFocusedRef.current ||
+      (session.data && isMindmapRound(session.data.questions))
+    )
+      return
     const s = session.data
     if (s === undefined) return
     if (s.status !== 'awaiting_human') return
@@ -665,6 +742,75 @@ export function ClarifyDetailPage() {
   // RFC-128 P4 (T10): every question already sealed/dispatched elsewhere → nothing left
   // to submit here. Disable the submit buttons (the form is all read-only anyway).
   const allLocked = s.questions.length > 0 && s.questions.every((q) => lockedQuestionIds.has(q.id))
+  const mindmapMode = isMindmapRound(s.questions)
+  const mindmapIncomplete =
+    mindmapMode &&
+    s.questions.some(
+      (q) => !lockedQuestionIds.has(q.id) && !isClarifyAnswerConfirmed(q, answers[q.id]),
+    )
+  const renderQuestion = (q: ClarifyQuestion, idx: number) => {
+    const a = answers[q.id]
+    if (a === undefined) return null
+    // RFC-128 P4 (T10): this question was already sealed/dispatched via another
+    // channel (the centralized pane / board) → read-only here + excluded from submit.
+    const locked = lockedQuestionIds.has(q.id)
+    return (
+      <div
+        key={q.id}
+        className={'clarify-question-wrapper' + (locked ? ' clarify-question-wrapper--locked' : '')}
+        data-question-wrapper-id={q.id}
+        data-locked={locked ? 'true' : undefined}
+      >
+        {/* RFC-120 D12: per-question handler echo + picker. Self-filters to
+                  designer-domain questions (renders null otherwise) and reads the
+                  same override SoT the board edits. */}
+        <ClarifyQuestionHandler
+          taskId={s.taskId}
+          questionId={q.id}
+          originNodeRunId={s.intermediaryNodeRunId}
+        />
+        {/* RFC-128 P4 (T10): coordination notice for an already-handled question. */}
+        {locked && (
+          <p className="muted" data-testid={`clarify-locked-note-${q.id}`}>
+            {t('clarify.detail.lockedNote')}
+          </p>
+        )}
+        {/* RFC-162: per-question scope picker removed (scope deleted). */}
+        <QuestionForm
+          ref={(h) => {
+            if (h === null) questionRefs.current.delete(q.id)
+            else questionRefs.current.set(q.id, h)
+          }}
+          question={q}
+          value={a}
+          index={idx + 1}
+          disabled={readonly || submitMut.isPending || locked}
+          onChange={(next) => updateAnswer(q.id, next)}
+          onAdvance={() => advanceFromQuestion(q.id)}
+        />
+        {/* RFC-099 (D7/D8): per-question last editor, live while
+                  drafting and frozen after submit. Audit display only. */}
+        {(() => {
+          const attr = s.answerAttributions?.[q.id]
+          if (attr === undefined) return null
+          return (
+            <div
+              className="clarify-question__attribution"
+              data-testid={`clarify-attribution-${q.id}`}
+            >
+              {t('attribution.lastEditedBy')}:{' '}
+              <AttributionChip
+                userId={attr.userId}
+                role={attr.role}
+                user={attributionLookup.get(attr.userId)}
+              />
+            </div>
+          )
+        })()}
+      </div>
+    )
+  }
+
   // RFC-058: ClarifyRound unified — intermediary == clarify / clarify-cross
   // node, asking == source agent / questioner, iteration == round counter.
   const nodeId = s.intermediaryNodeId
@@ -930,70 +1076,23 @@ export function ClarifyDetailPage() {
         </p>
       )}
       <section className="clarify-questions">
-        {s.questions.map((q, idx) => {
-          const a = answers[q.id]
-          if (a === undefined) return null
-          // RFC-128 P4 (T10): this question was already sealed/dispatched via another
-          // channel (the centralized pane / board) → read-only here + excluded from submit.
-          const locked = lockedQuestionIds.has(q.id)
-          return (
-            <div
-              key={q.id}
-              className={
-                'clarify-question-wrapper' + (locked ? ' clarify-question-wrapper--locked' : '')
-              }
-              data-question-wrapper-id={q.id}
-              data-locked={locked ? 'true' : undefined}
-            >
-              {/* RFC-120 D12: per-question handler echo + picker. Self-filters to
-                  designer-domain questions (renders null otherwise) and reads the
-                  same override SoT the board edits. */}
-              <ClarifyQuestionHandler
-                taskId={s.taskId}
-                questionId={q.id}
-                originNodeRunId={s.intermediaryNodeRunId}
-              />
-              {/* RFC-128 P4 (T10): coordination notice for an already-handled question. */}
-              {locked && (
-                <p className="muted" data-testid={`clarify-locked-note-${q.id}`}>
-                  {t('clarify.detail.lockedNote')}
-                </p>
-              )}
-              {/* RFC-162: per-question scope picker removed (scope deleted). */}
-              <QuestionForm
-                ref={(h) => {
-                  if (h === null) questionRefs.current.delete(q.id)
-                  else questionRefs.current.set(q.id, h)
-                }}
-                question={q}
-                value={a}
-                index={idx + 1}
-                disabled={readonly || submitMut.isPending || locked}
-                onChange={(next) => updateAnswer(q.id, next)}
-                onAdvance={() => advanceFromQuestion(q.id)}
-              />
-              {/* RFC-099 (D7/D8): per-question last editor, live while
-                  drafting and frozen after submit. Audit display only. */}
-              {(() => {
-                const attr = s.answerAttributions?.[q.id]
-                if (attr === undefined) return null
-                return (
-                  <div
-                    className="clarify-question__attribution"
-                    data-testid={`clarify-attribution-${q.id}`}
-                  >
-                    {t('attribution.lastEditedBy')}:{' '}
-                    <AttributionChip
-                      userId={attr.userId}
-                      role={attr.role}
-                      user={attributionLookup.get(attr.userId)}
-                    />
-                  </div>
-                )
-              })()}
-            </div>
-          )
-        })}
+        {mindmapMode ? (
+          <MindmapWorkspace
+            key={s.id}
+            title={nodeTitle ?? s.intermediaryNodeId}
+            questions={s.questions}
+            answers={answers}
+            locked={lockedQuestionIds}
+            disabled={readonly || submitMut.isPending}
+            followupPending={followupPending}
+            onChange={updateAnswer}
+            onFollowup={startFollowup}
+            onCancelFollowup={cancelFollowup}
+            renderQuestion={renderQuestion}
+          />
+        ) : (
+          s.questions.map(renderQuestion)
+        )}
       </section>
 
       <footer className="clarify-detail__footer">
@@ -1011,7 +1110,9 @@ export function ClarifyDetailPage() {
             ref={submitContinueRef}
             type="button"
             className="btn btn--primary"
-            disabled={readonly || submitMut.isPending || allLocked}
+            disabled={
+              readonly || submitMut.isPending || allLocked || followupPending || mindmapIncomplete
+            }
             onClick={() => submitMut.mutate('continue')}
             data-testid="clarify-submit-continue"
             data-directive="continue"
@@ -1027,7 +1128,9 @@ export function ClarifyDetailPage() {
           <button
             type="button"
             className="btn btn--ghost"
-            disabled={readonly || submitMut.isPending || allLocked}
+            disabled={
+              readonly || submitMut.isPending || allLocked || followupPending || mindmapIncomplete
+            }
             onClick={() => setStopModalOpen(true)}
             data-testid="clarify-submit-stop"
             data-directive="stop"
@@ -1101,6 +1204,7 @@ export function ClarifyDetailPage() {
                 setStopModalOpen(false)
                 submitMut.mutate('stop')
               }}
+              disabled={followupPending || mindmapIncomplete || submitMut.isPending}
               data-testid="clarify-stop-confirm"
             >
               {t(isCross ? 'crossClarify.rejectModal.confirm' : 'clarify.detail.stopModal.confirm')}

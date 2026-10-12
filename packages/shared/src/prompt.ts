@@ -1,3 +1,4 @@
+import type { ClarifyMindmapConfig } from './schemas/clarifyMindmap'
 // Prompt assembly logic shared between the backend runner and the frontend
 // preview pane (NodeInspector). Pure functions — no Bun / Node / DB
 // imports. Mirrors design.md §7.2.
@@ -361,6 +362,7 @@ export interface RenderPromptInput {
    * differences live in the runner's parse layer — which consumes the SAME
    * classifier — not in prompt bytes).
    */
+  clarifyMindmap?: ClarifyMindmapConfig
   clarifyChannel?: ClarifyChannel
   /**
    * RFC-119 / RFC-141: prior-output context for a NON-cross-clarify rerun. When
@@ -794,6 +796,18 @@ export function renderUserPrompt(input: RenderPromptInput): string {
     input.priorSessionAbandoned !== undefined
       ? renderSessionRestartNotice(input.priorSessionAbandoned.reason)
       : ''
+  if (input.clarifyMindmap && (mandatoryAskBack || optionalAskBack)) {
+    trailing +=
+      '\n\n## Classified questions for the mindmap workspace\n' +
+      'Keep the same workflow-clarify envelope, nonce, question fields and question/option limits. ' +
+      'Every question must include mindmap: {"categoryPath":["Category","Subcategory"]}. ' +
+      'Choose concise, useful categories in the user language. Group related decisions, avoid duplicate questions, and ask the most consequential unresolved points first. ' +
+      'For a dependent question include "parentQuestionId" inside mindmap; it must name another question in THIS envelope. IDs must be unique and parents must not form cycles. ' +
+      'Do not emit confirmations, request IDs, delivery documents or a second output envelope.\n' +
+      fence('clarify-categories', JSON.stringify(input.clarifyMindmap.categories)) +
+      '\n' +
+      fence('clarify-guidance', input.clarifyMindmap.instructions)
+  }
   const rendered = body + sections + trailing + restartNotice
   if (
     nonce.length === 0 ||

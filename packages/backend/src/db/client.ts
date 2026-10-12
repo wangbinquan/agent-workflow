@@ -1,7 +1,7 @@
 // SQLite + Drizzle client + auto-migration on startup.
 // Used by the daemon's main entry; tests use createInMemoryDb().
 
-import { Database } from 'bun:sqlite'
+import { Database, type Changes } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { chmodSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -86,6 +86,44 @@ function cpuMicros(): number | null {
     return u.user + u.system
   } catch {
     return null
+  }
+}
+
+/**
+ * Bun 1.4.0 reports total_changes deltas, including trigger/cascade side writes.
+ * Drizzle's run result must retain the directly affected rows for business CAS
+ * predicates. Capture changes() before outer telemetry can execute another SQL.
+ */
+function normalizeDirectStatementChanges(sqlite: Database): void {
+  // Capture the native entry point, not one cached statement: public finalize()
+  // or clearQueryCache() may invalidate the probe between ordinary writes.
+  // Query-owned statements remain finalized by Database.close() after eviction.
+  const nativeQuery = sqlite.query.bind(sqlite)
+  const normalized = new WeakMap<object, object>()
+  for (const method of ['prepare', 'query'] as const) {
+    const original = (sqlite[method] as (...args: unknown[]) => object).bind(sqlite)
+    ;(sqlite as unknown as Record<string, unknown>)[method] = (...args: unknown[]) => {
+      const statement = original(...args)
+      const cached = normalized.get(statement)
+      if (cached !== undefined) return cached
+      const wrapped = new Proxy(statement, {
+        get(target, prop) {
+          const value = Reflect.get(target, prop) as unknown
+          if (typeof value !== 'function') return value
+          const bound = (value as (...args: unknown[]) => unknown).bind(target)
+          if (prop !== 'run') return bound
+          return (...params: unknown[]) => {
+            const result = bound(...params) as Changes
+            // Reads/DDL must not inherit the preceding DML's changes() value.
+            if (result.changes === 0) return result
+            const direct = nativeQuery('SELECT changes() AS changes').values()[0]![0]
+            return { ...result, changes: Number(direct) }
+          }
+        },
+      })
+      normalized.set(statement, wrapped)
+      return wrapped
+    }
   }
 }
 
@@ -255,6 +293,7 @@ export function openDb(opts: OpenDbOptions): DbClient {
     }
   }
 
+  normalizeDirectStatementChanges(sqlite)
   const db = drizzle(sqlite, { schema })
   guardForeignStatements(sqlite, db as object)
   try {
@@ -402,6 +441,7 @@ export function createInMemoryDb(
       )
     }
   }
+  normalizeDirectStatementChanges(sqlite)
   const db = drizzle(sqlite, { schema })
   guardForeignStatements(sqlite, db as object)
   if (opts.bootstrap !== 'required') registerLegacyDaemonTestFixture(db)

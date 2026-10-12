@@ -82,6 +82,7 @@ export const WORKGROUPS_CHANNEL: ChannelKey = 'workgroups'
 export const REPO_IMPORT_CHANNEL = (batchId: string): ChannelKey => `repo-import:${batchId}`
 /** RFC-041: platform-wide memory candidate / promotion stream. */
 export const MEMORY_CHANNEL: ChannelKey = 'memories'
+export const OBSERVABILITY_CHANNEL: ChannelKey = 'observability'
 /** RFC-041/RFC-305: capability-gated distill queue monitor. */
 export const MEMORY_DISTILL_JOB_CHANNEL: ChannelKey = 'memory-distill-jobs'
 export const SCHEDULED_TASK_CHANNEL: ChannelKey = 'scheduled-tasks' // RFC-159
@@ -95,6 +96,7 @@ import type {
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
+  ObservationProjectionWsMessage,
   PresenceWsMessage,
   RepoImportWsMessage,
   TaskWsMessage,
@@ -180,6 +182,7 @@ export const workgroupsBroadcaster = new TypedBroadcaster<
 >()
 export const repoImportsBroadcaster = new TypedBroadcaster<RepoImportWsMessage>()
 export const memoryBroadcaster = new TypedBroadcaster<MemoryWsMessage>()
+export const observabilityBroadcaster = new TypedBroadcaster<ObservationProjectionWsMessage>()
 export const memoryDistillJobBroadcaster = new TypedBroadcaster<MemoryDistillJobWsMessage>()
 export const scheduledTaskBroadcaster = new TypedBroadcaster<ScheduledTaskWsMessage>() // RFC-159
 export const intentSessionsBroadcaster = new TypedBroadcaster<IntentSessionWsMessage>() // RFC-234

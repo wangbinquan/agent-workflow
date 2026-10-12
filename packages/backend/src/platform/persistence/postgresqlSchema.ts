@@ -5,6 +5,7 @@
 import { sha256Hex } from '@/util/hash'
 import { retainedOutputRevisionStatements } from './retainedOutputRevisionSchema'
 import { observationSourceRevisionStatements } from './observationSourceRevisionSchema'
+import { observationProjectionChangeStatements } from './observationProjectionChangeSchema'
 import {
   buildLogicalSchemaContract,
   canonicalSchemaJson,
@@ -295,6 +296,7 @@ export function buildPostgresqlSchemaPlan(
     ...constraintStatements(contract),
     ...retainedOutputRevisionStatements(contract).postgresql,
     ...observationSourceRevisionStatements(contract).postgresql,
+    ...observationProjectionChangeStatements(contract).postgresql,
     ...metadataStatements(contract),
   ]
   const withoutDigest = {

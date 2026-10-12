@@ -1,0 +1,44 @@
+{
+  "$schema_version": 7,
+  "inputs": [],
+  "nodes": [
+    {
+      "id": "writer",
+      "kind": "agent-single",
+      "agentId": "fixture-writer"
+    },
+    {
+      "id": "design",
+      "kind": "clarify",
+      "interactionMode": "mindmap",
+      "mindmap": {
+        "categories": ["目标与验收", "判断与依赖"],
+        "instructions": "优先明确影响方案的决策，再按分支深入。"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "ask",
+      "source": {
+        "nodeId": "writer",
+        "portName": "__clarify__"
+      },
+      "target": {
+        "nodeId": "design",
+        "portName": "questions"
+      }
+    },
+    {
+      "id": "answer",
+      "source": {
+        "nodeId": "design",
+        "portName": "answers"
+      },
+      "target": {
+        "nodeId": "writer",
+        "portName": "__clarify_response__"
+      }
+    }
+  ]
+}

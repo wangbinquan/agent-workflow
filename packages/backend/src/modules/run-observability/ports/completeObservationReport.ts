@@ -12,6 +12,7 @@ import type { CompleteWorkingRows } from './completeWorkingRows'
 import type { CompleteObservationSources } from './completeObservationSources'
 import type { CompleteObservationTaskInput } from './completeObservationTask'
 import type { CompleteSourceReceipt } from './completeReport'
+import type { HistoricalObservationPreparationCache } from './historicalObservationPreparation'
 
 export interface CompleteObservationReportRow {
   readonly section: CompleteObservationSection
@@ -25,12 +26,32 @@ export interface CompleteObservationReportCount {
   readonly total: string
 }
 export interface CompleteObservationCohortInput extends Omit<CompleteObservationTaskInput, 'task'> {
-  readonly actor: Actor
+  readonly actor: Actor | null
   readonly query: ObservationOverviewQuery
   readonly task?: ObservationTaskFacts
   readonly agentName?: (id: string | null) => Promise<string | null>
   /** Composition supplies a synchronous, non-throwing diagnostic observer only when requested. */
   readonly observePhase?: (phase: string) => void
+  readonly historicalPreparation?: HistoricalObservationPreparationCache
+  /** Original qualified historical contributions for the persistent projection;
+   * this observer does not allocate, reprice, or change report population. */
+  readonly retainHistoricalContribution?: (
+    input: import('./incrementalObservationQualified').QualifiedObservationHistoricalContribution,
+  ) => Promise<void>
+  /** Preserve the qualified all-time cohort and its occurrence evidence for
+   * materialization. Ordinary report requests retain their existing semantics. */
+  readonly projectionCohort?: boolean
+  readonly retainTaskInventory?: (
+    taskId: string,
+    inventory: { readonly numericRecords: string; readonly nativeCaptures: string },
+  ) => Promise<void>
+  readonly retainTaskSourceGaps?: (
+    task: ObservationTaskFacts,
+    gaps: readonly string[],
+  ) => Promise<void>
+  readonly retainDimensionContribution?: (
+    input: import('./incrementalObservationQualified').QualifiedObservationDimensionContribution,
+  ) => Promise<void>
 }
 export interface CompleteObservationCohortBuild {
   readonly summary: CompleteObservationReportSummary

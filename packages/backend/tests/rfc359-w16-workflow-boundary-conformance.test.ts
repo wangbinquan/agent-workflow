@@ -181,7 +181,7 @@ function repository(db: ProviderNeutralDatabase, events: string[], clock: () => 
 }
 
 describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => {
-  test('stored v1–v6 definitions resolve the same real input/output ports without rewriting rows', async () => {
+  test('stored v1–v7 definitions resolve the same real input/output ports without rewriting rows', async () => {
     const rawChild = child()
     const latest = migrateWorkflowDefinitionToLatest(rawChild)
     await seedWorkflow(harness.db, W1, JSON.stringify(latest))
@@ -189,8 +189,12 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
     const candidate = { definition: calling(), currentWorkflow: ROOT }
     const expected = await port.validate(candidate)
     expect(expected.result).toEqual({ ok: true, issues: [] })
-    for (const version of [1, 2, 3, 4, 5, 6]) {
-      const raw = JSON.stringify(version === 6 ? latest : { ...rawChild, $schema_version: version })
+    for (const version of [1, 2, 3, 4, 5, 6, 7]) {
+      const raw = JSON.stringify(
+        version >= 6
+          ? { ...latest, $schema_version: version }
+          : { ...rawChild, $schema_version: version },
+      )
       await harness.db.update(workflows).set({ definition: raw }).where(eq(workflows.id, W1))
       const before = await readRow(harness.db, W1)
       expect(await port.validate(candidate)).toEqual(expected)
@@ -297,7 +301,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
       description: '',
       definition: definition({ $schema_version: 1 }),
     })
-    expect(JSON.parse((await readRow(harness.db, created.id)).definition).$schema_version).toBe(6)
+    expect(JSON.parse((await readRow(harness.db, created.id)).definition).$schema_version).toBe(7)
     await harness.db
       .update(workflows)
       .set({ name: 'Legacy Name With Spaces' })

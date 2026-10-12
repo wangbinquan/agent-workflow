@@ -136,7 +136,8 @@ describe('createBackup', () => {
       sourceProvider: 'sqlite',
       sourceGenerationId: 'dbg_legacy_sqlite',
       schemaDigest: manifest.database.schemaDigest,
-      activeTableCount: 235,
+      // RFC-372 removes ten companions; the shared RFC-371 projection adds fourteen.
+      activeTableCount: 252,
       archiveOnlyTableCount: 6,
     })
   })

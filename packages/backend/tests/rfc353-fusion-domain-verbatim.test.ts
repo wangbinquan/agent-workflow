@@ -64,10 +64,11 @@ describe('RFC-353 T4 — 内建文本的字节级绊线', () => {
       mergerAgentId: 'a',
       mergerAgentName: 'm',
     })
-    // RFC-354 PR-2（有意改）：`WORKFLOW_SCHEMA_VERSION` 5 → 6，图的节点 / 边 / 文本
-    // 一字未动——只有 `$schema_version` 这个字段的值变了，digest 随之从
-    // 6de90c3c24f5b59a 变成 8dde70c43dad6eba。
-    expect(digest(JSON.stringify(def))).toBe('8dde70c43dad6eba')
+    // RFC-372 only advances the format metadata to v7. Keep the original v6
+    // byte oracle for every node/edge/text field; existing fusion still uses
+    // the questionnaire mode and must never acquire a mindmap implicitly.
+    expect(def.$schema_version).toBe(7)
+    expect(digest(JSON.stringify({ ...def, $schema_version: 6 }))).toBe('8dde70c43dad6eba')
   })
 })
 

@@ -1,3 +1,4 @@
+import type { ClarifyFollowupOperations } from './clarifyFollowup'
 import type {
   ClarifyAnswer,
   ClarifyDirective,
@@ -271,6 +272,7 @@ export interface CollaborationRouteOperations {
     dispatch(input: DispatchTaskQuestionsCommandInput): Promise<DispatchTaskQuestionsCommandResult>
   }>
   readonly clarify: Readonly<{
+    followup?: ClarifyFollowupOperations
     list(input: ListClarifySummariesInput): Promise<readonly ClarifyRoundSummary[]>
     countPending(actor: CollaborationRouteActor): Promise<number>
     detail(intermediaryNodeRunId: string): Promise<ClarifyRound>

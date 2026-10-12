@@ -14,7 +14,7 @@ import { parseWsChannel, WS_CHANNELS, type WsChannelKind } from '../src/ws/regis
 const parse = (path: string) => parseWsChannel(new URL(path, 'http://daemon.test'))
 
 describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
-  test('WS_PATHS key set is exactly the twelve channels (bijection lock)', () => {
+  test('WS_PATHS key set is exactly the registered channels (bijection lock)', () => {
     expect(Object.keys(WS_PATHS).sort()).toEqual(
       // RFC-159 added `scheduledTasks`; RFC-234 added `intentSessions`;
       // RFC-312 added `presence`（独立通道，带 users:presence 升级门）。
@@ -31,6 +31,7 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
         'intentSessions',
         'mcpRuntimeTests',
         'presence',
+        'observability',
       ].sort(),
     )
   })

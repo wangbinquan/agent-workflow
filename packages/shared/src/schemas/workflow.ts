@@ -25,11 +25,12 @@ import { z } from 'zod'
 import { ImportRefSelectionSchema } from './importRef'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { WORKGROUP_NAME_RE, WorkgroupNameSchema } from './workgroup'
+import { ClarifyInteractionModeSchema, ClarifyMindmapConfigSchema } from './clarifyMindmap'
 
 /** Currently-written schema version. New writes always set this value. */
-export const WORKFLOW_SCHEMA_VERSION = 6
+export const WORKFLOW_SCHEMA_VERSION = 7
 /** Older versions are read-only and auto-upgraded at canonical boundaries. */
-export const WORKFLOW_SCHEMA_VERSIONS = [1, 2, 3, 4, 5, 6] as const
+export const WORKFLOW_SCHEMA_VERSIONS = [1, 2, 3, 4, 5, 6, 7] as const
 
 // --- enums shared across multiple shapes ---
 
@@ -367,6 +368,7 @@ export const WorkflowDefinitionSchema = z.object({
     z.literal(4),
     z.literal(5),
     z.literal(6),
+    z.literal(7),
   ]),
   inputs: z.array(WorkflowInputSchema).default([]),
   nodes: z.array(WorkflowNodeSchema).default([]),
@@ -772,10 +774,27 @@ export const CLARIFY_RESPONSE_TARGET_PORT_NAME = '__clarify_response__' as const
 export const ClarifySessionModeSchema = z.enum(['isolated', 'inline'])
 export type ClarifySessionMode = z.infer<typeof ClarifySessionModeSchema>
 
+/** Missing mode preserves historical questionnaire behavior, including old task snapshots. */
+const clarifyInteractionFields = {
+  interactionMode: ClarifyInteractionModeSchema.optional(),
+  mindmap: ClarifyMindmapConfigSchema.optional(),
+}
+function validateClarifyInteraction(
+  node: { interactionMode?: 'questions' | 'mindmap'; mindmap?: unknown },
+  ctx: z.RefinementCtx,
+): void {
+  if (node.interactionMode === 'mindmap' && node.mindmap === undefined) {
+    ctx.addIssue({ code: 'custom', path: ['mindmap'], message: 'mindmap-config-required' })
+  }
+  // A retained template is an authoring draft when the explicit mode is questions.
+  // Switching modes need not destroy the author's configured branches.
+}
+
 export const ClarifyNodeSchema = z
   .object({
     id: z.string().min(1),
     kind: z.literal('clarify'),
+    ...clarifyInteractionFields,
     position: XYSchema.optional(),
     /** Display title in the canvas / inspector. */
     title: z.string().default(''),
@@ -800,6 +819,7 @@ export const ClarifyNodeSchema = z
     clarifyMode: z.enum(['optional']).optional(),
   })
   .passthrough()
+  .superRefine(validateClarifyInteraction)
 export type ClarifyNode = z.infer<typeof ClarifyNodeSchema>
 
 // --- RFC-056 Cross-Agent Clarify node ---------------------------------------
@@ -848,6 +868,7 @@ export const ClarifyCrossAgentNodeSchema = z
   .object({
     id: z.string().min(1),
     kind: z.literal('clarify-cross-agent'),
+    ...clarifyInteractionFields,
     position: XYSchema.optional(),
     /** Display title in the canvas / inspector. */
     title: z.string().default(''),
@@ -864,6 +885,7 @@ export const ClarifyCrossAgentNodeSchema = z
     sessionModeForQuestioner: ClarifyCrossAgentSessionModeSchema.optional(),
   })
   .passthrough()
+  .superRefine(validateClarifyInteraction)
 export type ClarifyCrossAgentNode = z.infer<typeof ClarifyCrossAgentNodeSchema>
 
 // --- RFC-060 Wrapper-Fanout node --------------------------------------------

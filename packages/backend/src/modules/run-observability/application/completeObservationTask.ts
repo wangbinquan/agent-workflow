@@ -64,6 +64,10 @@ export async function buildCompleteObservationTaskNumeric(
     const retained = []
     for (const row of page) {
       const entry = row.document
+      await input.retainInvocationInventory?.(entry.invocation.invocationId, {
+        numericRecords: entry.rawRecords,
+        nativeCaptures: entry.nativeCaptureCount,
+      })
       if (entry.invocation.authority.kind === 'local') {
         if (
           entry.expectedNativeRecords != null &&

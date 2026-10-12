@@ -9,7 +9,7 @@
 //     a body port that had no binding is promoted under its own name
 //     (suffixed when that return name is already taken);
 //   • fanout `inputs[]` → `shardSourcePort`;
-//   • idempotent: a v6 document passes through byte-identical; a v5 document
+//   • idempotent: a current document passes through byte-identical; a v5 document
 //     upgraded twice equals once; edge ids never collide with existing ones.
 
 import { describe, expect, test } from 'bun:test'
@@ -38,10 +38,10 @@ function nodeById(d: WorkflowDefinition, id: string): Record<string, unknown> {
 }
 
 describe('RFC-354 — v5 → v6 upgrader', () => {
-  test('WORKFLOW_SCHEMA_VERSION is 6 and the cascade lands there', () => {
-    expect(WORKFLOW_SCHEMA_VERSION).toBe(6)
+  test('the cascade lands on the current schema after the v6 step', () => {
+    expect(WORKFLOW_SCHEMA_VERSION).toBe(7)
     const upgraded = migrateWorkflowDefinitionToLatest(def([]))
-    expect(upgraded.$schema_version).toBe(6)
+    expect(upgraded.$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
   })
 
   test('review: inputSource becomes the __review_input__ edge, added only when missing', () => {
@@ -185,7 +185,7 @@ describe('RFC-354 — v5 → v6 upgrader', () => {
     expect('inputs' in fan).toBe(false)
   })
 
-  test('idempotent: upgrading twice equals once; a v6 document is untouched by the cascade', () => {
+  test('idempotent: upgrading twice equals once; a current document is untouched by the cascade', () => {
     const d = def(
       [
         { id: 'writer', kind: 'agent-single', agentName: 'w' },
@@ -211,7 +211,7 @@ describe('RFC-354 — v5 → v6 upgrader', () => {
     const once = migrateWorkflowDefinitionToLatest(d)
     const twice = migrateWorkflowDefinitionToLatest(once)
     expect(twice).toEqual(once)
-    expect(once.$schema_version).toBe(6)
+    expect(once.$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
     const ids = once.edges.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect(ids).toContain('writer_doc_to_rv___review_input___2')

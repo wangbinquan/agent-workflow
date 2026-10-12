@@ -3,6 +3,7 @@ import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composi
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
+import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import {
   composeLocalTaskRunRootSelection,
   composeTaskWorkspaceExcludeProfilesFor,
@@ -52,6 +53,7 @@ import { composeLocalInvocationObservations } from '@/modules/run-observability/
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
+import { composeOriginalObservationProjection } from '@/platform/background/observationProjection'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
 import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
@@ -1483,6 +1485,12 @@ export async function composePostgresqlApplication(
       (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
+    followupGenerator: composeClarifyFollowupGenerator({
+      db: input.db,
+      appHome: systemAgentAppHome,
+      registry: core.runtimeRegistry,
+      observations: () => systemAgentObservations,
+    }),
     db: input.db,
     context: boundCollaborationContext,
   })
@@ -2327,6 +2335,15 @@ export async function composePostgresqlApplication(
     { taskCalculations: true },
   )
   const observationReports = composeCompleteObservationReports({
+    ...(phase.kind === 'daemon'
+      ? {
+          projection: composeOriginalObservationProjection({
+            db: input.db,
+            binding: { provider: 'postgresql', runtime: input.provider.runtime },
+            generation: input.provider.runtime.generationId,
+          }),
+        }
+      : {}),
     taskSource: createCompleteTaskObservationFacts,
     db: input.db,
     generation: input.provider.runtime.generationId,

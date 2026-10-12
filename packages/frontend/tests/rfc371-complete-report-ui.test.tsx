@@ -241,6 +241,55 @@ test('formal route uses the complete report surface and keeps the legacy regress
   expect(route).toContain('<CompleteRunObservability')
   expect(route).not.toContain('<RunObservability')
 })
+test('period changes share the real cutoff and returning to a finished period reads the same report without another build', async () => {
+  const f = fixture({ ...initial, period: 'week', from: initial.to - 7 * 86400000 })
+  await screen.findByRole('button', { name: '任务 0' })
+  const original = [...f.reports.values()][0]!
+  vi.spyOn(Date, 'now').mockReturnValue(NOW + 3600_000)
+  fireEvent.click(screen.getByRole('combobox', { name: i18n.t('runObservability.period') }))
+  fireEvent.click(screen.getByRole('option', { name: i18n.t('runObservability.month') }))
+  await waitFor(() => expect(f.reports.size).toBe(2))
+  expect(f.changes.at(-1)).toMatchObject({
+    period: 'month',
+    from: initial.to - 30 * 86400000,
+    to: initial.to,
+  })
+  vi.mocked(Date.now).mockReturnValue(NOW + 7200_000)
+  fireEvent.click(screen.getByRole('combobox', { name: i18n.t('runObservability.period') }))
+  fireEvent.click(screen.getByRole('option', { name: i18n.t('runObservability.week') }))
+  await waitFor(() =>
+    expect(
+      f.requests.some(
+        (request) =>
+          request.method === 'GET' &&
+          request.path === '/api/observability/reports/' + original.header.reportId,
+      ),
+    ).toBe(true),
+  )
+  expect(f.reports.size).toBe(2)
+  expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
+  expect(f.changes.at(-1)).toMatchObject({
+    period: 'week',
+    from: initial.to - 7 * 86400000,
+    to: initial.to,
+  })
+})
+test.each(['week', 'month', 'all'] as const)(
+  'formal %s refresh advances its cutoff, clears pagination and builds current data',
+  async (period) => {
+    const f = fixture({ ...initial, period, after: 'old-page' })
+    await screen.findByRole('button', { name: '任务 0' })
+    vi.spyOn(Date, 'now').mockReturnValue(NOW + 7200_000)
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    await waitFor(() => expect(f.reports.size).toBe(2))
+    expect(f.changes.at(-1)).toMatchObject({
+      to: NOW + 7200_001,
+      after: undefined,
+      from: period === 'all' ? 0 : NOW + 7200_001 - (period === 'week' ? 7 : 30) * 86400000,
+    })
+    expect([...f.reports.values()].at(-1)!.header.filters.to).toBe(NOW + 7200_001)
+  },
+)
 test('all 1001 Tasks remain reachable with frozen exact totals, four buckets and CNY', async () => {
   const f = fixture({ ...initial, tab: 'overview' })
   const total = BigInt(metrics.tokens.total).toLocaleString('zh')

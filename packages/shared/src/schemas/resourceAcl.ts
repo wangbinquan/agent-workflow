@@ -283,6 +283,7 @@ export type ClarifyAnswerAttributions = z.infer<typeof ClarifyAnswerAttributions
  * server-side at submit like the answers path.
  */
 export const ClarifyDraftSaveBodySchema = z.object({
+  confirmedBasis: z.string().max(128).optional(),
   roundId: z.string().min(1),
   questionId: z.string().min(1),
   selectedOptionIndices: z.array(z.number().int().nonnegative()).max(64).default([]),
@@ -292,6 +293,7 @@ export type ClarifyDraftSaveBody = z.infer<typeof ClarifyDraftSaveBodySchema>
 
 /** Per-question draft value stored in clarify_rounds.draft_answers_json. */
 export const ClarifyDraftValueSchema = z.object({
+  confirmedBasis: z.string().max(128).optional(),
   selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
   customText: z.string().default(''),
 })

@@ -134,6 +134,15 @@ export function observationReportBuild(
             pass: String(pass),
             ...result.calculationFacts.statistics,
           })
+        if (
+          result.calculationFacts?.historicalPreparation &&
+          report.request.refreshKey.startsWith('load-performance-')
+        )
+          log.info('original historical preparation reuse', {
+            reportId: report.id,
+            pass: String(pass),
+            ...result.calculationFacts.historicalPreparation,
+          })
         if (result.nativeFacts && report.request.refreshKey.startsWith('load-performance-'))
           log.info('original native numeric page reuse', {
             reportId: report.id,

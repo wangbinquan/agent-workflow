@@ -1,4 +1,4 @@
-import { and, asc, eq, gt } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import {
   NodeKindSchema,
   RuntimeStatusEntrySchema,
@@ -7,6 +7,7 @@ import {
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, nodeRunEvents, tasks } from '@/db/schema'
+import { identityScopePage } from '@/platform/persistence/identityPackets'
 
 const object = (raw: string | null): Record<string, unknown> => {
   try {
@@ -25,9 +26,22 @@ const count = (value: number | null) =>
 /** Whole original NodeRun population, including soft-deleted Tasks and unknown execution times. */
 export function createHistoricalTaskObservationFacts(
   db: ProviderNeutralDatabase,
+  scope?: {
+    readonly ownerIds?: readonly string[]
+    readonly taskIds?: readonly string[]
+    readonly roots?: readonly string[]
+  },
 ): HistoricalObservationOwnerQuery {
   return {
     async owners(input) {
+      if (scope && Object.values(scope).reduce((n, ids) => n + (ids?.length ?? 0), 0) > 200)
+        return identityScopePage({
+          scope,
+          limit: input.limit,
+          key: (owner) => owner.ownerId,
+          read: (packet, limit) =>
+            createHistoricalTaskObservationFacts(db, packet).owners({ ...input, limit }),
+        })
       const rows = await db
         .select({
           run: nodeRuns,
@@ -35,7 +49,20 @@ export function createHistoricalTaskObservationFacts(
         })
         .from(nodeRuns)
         .leftJoin(tasks, eq(tasks.id, nodeRuns.taskId))
-        .where(input.after === undefined ? undefined : gt(nodeRuns.id, input.after))
+        .where(
+          and(
+            input.after === undefined ? undefined : gt(nodeRuns.id, input.after),
+            scope === undefined
+              ? undefined
+              : or(
+                  scope.ownerIds?.length ? inArray(nodeRuns.id, [...scope.ownerIds]) : sql`false`,
+                  scope.taskIds?.length ? inArray(nodeRuns.taskId, [...scope.taskIds]) : sql`false`,
+                  scope.roots?.length
+                    ? inArray(nodeRuns.opencodeSessionId, [...scope.roots])
+                    : sql`false`,
+                ),
+          ),
+        )
         .orderBy(asc(nodeRuns.id))
         .limit(input.limit + 1)
         .all()

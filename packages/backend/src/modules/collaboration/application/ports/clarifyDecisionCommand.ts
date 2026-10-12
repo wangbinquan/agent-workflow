@@ -13,6 +13,7 @@ export interface SubmitClarifyDecisionCommandInput {
   readonly nodeRunId: string
   readonly answers: readonly ClarifyAnswer[]
   readonly directive: ClarifyDirective
+  readonly questionSetKey?: string
   readonly ifMatchIteration?: number
   readonly expectedTaskRevision?: number
   readonly expectedGateRevision?: number

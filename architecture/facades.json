@@ -5873,7 +5873,8 @@
         "import:511af838198ce69d4b85",
         "import:6cd9f9cf0bfd72aea144",
         "import:788e1b53c25af15910cd",
-        "import:d310135ba2e15f6dacc8"
+        "import:d310135ba2e15f6dacc8",
+        "import:eb2037fa35f5d6490e3c"
       ],
       "exportedSymbols": [
         "gcTaskWriteSem",
@@ -6485,5 +6486,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4c219856fd19b2026e07d65b02d2b1cfcd4478080d47c3c6d6364fe47fba1095"
+  "sourceDigest": "sha256:1236b55bf59b080c959e8bac66b9b3c5da21d61b4c2b93ebf67e30f1155b6a31"
 }

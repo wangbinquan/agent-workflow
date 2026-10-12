@@ -45,6 +45,23 @@ export interface CompleteObservationTaskSource extends ObservationTaskSource {
   visibleIds(actor: Actor, sourceIds: readonly string[]): Promise<readonly string[]>
   originalAgentName?(id: string): Promise<string | null>
 }
+/** Original owner capability available only to the daemon composition. */
+export interface ProjectionObservationTaskSource extends CompleteObservationTaskSource {
+  projectionList(query: ObservationTaskPageQuery): ReturnType<ObservationTaskSource['list']>
+  projectionGet(id: string): Promise<ObservationTaskFacts | null>
+  projectionSelectors(
+    ids: readonly string[],
+  ): Promise<
+    ReadonlyMap<
+      string,
+      {
+        readonly workflowId: string | null
+        readonly repositories: readonly string[]
+        readonly visibilityKey?: string
+      }
+    >
+  >
+}
 export interface ObservationSnapshotSources {
   readonly tasks: ObservationTaskSource
   invocations(taskId: string): Promise<{

@@ -22,4 +22,7 @@ export interface CompleteWorkingRows {
     readonly nextCursor: string | null
   }>
   clear(namespace: string): Promise<void>
+  /** Whole connection-private populations; these operations have no row-count boundary. */
+  copyNamespacePrefix?(from: string, to: string, excluded: readonly string[]): Promise<void>
+  clearNamespacePrefix?(prefix: string): Promise<void>
 }

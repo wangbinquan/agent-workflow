@@ -8,6 +8,8 @@ export * from './schemas/apiError'
 export * from './schemas/changeNarrative' // RFC-239
 export * from './schemas/cachedRepo'
 export * from './schemas/clarify'
+export * from './schemas/clarifyMindmap'
+export * from './clarifyMindmap'
 export * from './schemas/config'
 export * from './schemas/maintenance' // RFC-338
 export * from './schemas/databaseMigration' // RFC-349
@@ -184,6 +186,7 @@ export * from './uploadNaming'
 export * from './developmentConfigCreate'
 export * from './schemas/observationTasks'
 export * from './schemas/observationReport'
+export * from './schemas/observationProjectionWs'
 export * from './schemas/observationComplete'
 export * from './schemas/observationHistorical'
 

@@ -269,6 +269,7 @@ export interface AutoDispatchClarifyRoundArgs {
    *  and != the round's current iteration, reject (clarify-iteration-mismatch), mirroring the
    *  immediate path (submitClarifyAnswers / submitCrossClarifyAnswers); the /clarify page always
    *  sends it. */
+  questionSetKey?: string
   ifMatchIteration?: number
   /** Audit-only actor; NEVER enters a prompt (RFC-099). */
   actor: { userId: string; role: TaskActorRole }
@@ -362,6 +363,8 @@ async function sealRoundAsWholeFinalize(
     db,
     originNodeRunId,
     answers: sealAnswers,
+    ...(args.questionSetKey ? { questionSetKey: args.questionSetKey } : {}),
+    wholeRound: true,
     ...(args.directive !== undefined ? { directive: args.directive } : {}),
     sealedBy: args.actor.userId,
     sealedByRole: args.actor.role,

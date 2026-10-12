@@ -1,0 +1,264 @@
+.mindmap-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--space-3);
+}
+.mindmap-workspace__toolbar,
+.mindmap-workspace__progress,
+.mindmap-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.mindmap-workspace__toolbar > .form-input {
+  flex: 1;
+  min-width: 160px;
+  max-width: 320px;
+}
+.mindmap-workspace__body {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr) minmax(260px, 320px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  height: clamp(480px, 72vh, 960px);
+  background: var(--panel);
+}
+.mindmap-workspace__outline,
+.mindmap-workspace__detail {
+  min-width: 0;
+  overflow: auto;
+}
+.mindmap-workspace__outline {
+  border-right: 1px solid var(--border);
+}
+.mindmap-workspace__detail {
+  padding: var(--space-4);
+  border-left: 1px solid var(--border);
+}
+.mindmap-workspace__detail h3 {
+  overflow-wrap: anywhere;
+  margin-top: 0;
+}
+.mindmap-workspace__map {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+.mindmap-workspace__branch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-3);
+  background: transparent;
+  color: var(--text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.mindmap-workspace__branch:hover,
+.mindmap-workspace__branch[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+.mindmap-workspace__branch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.mindmap-workspace__focus {
+  height: 100%;
+  overflow: auto;
+  padding: var(--space-3);
+}
+.mindmap-workspace__breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+.mindmap-workspace .mindmap-workspace__mobile {
+  display: none;
+}
+.mindmap-status {
+  font-size: var(--font-sm);
+  white-space: nowrap;
+}
+.mindmap-status--done {
+  color: var(--success-fg);
+}
+.mindmap-status--needs_detail {
+  color: var(--warn-fg);
+}
+.mindmap-status--needs_confirmation {
+  color: var(--accent);
+}
+.mindmap-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  background: var(--bg);
+}
+.mindmap-canvas__surface {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+.mindmap-canvas__surface.is-dragging {
+  cursor: grabbing;
+}
+.mindmap-canvas__surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.mindmap-canvas__controls {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
+}
+.mindmap-canvas__controls output {
+  min-width: 48px;
+  text-align: center;
+  font-size: var(--font-sm);
+}
+.mindmap-canvas__minimap {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  padding: 0;
+  width: 152px;
+  height: 94px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  cursor: crosshair;
+}
+.mindmap-canvas__minimap canvas {
+  width: 150px;
+  height: 92px;
+  display: block;
+}
+.mindmap-canvas__help {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-2);
+  right: var(--space-3);
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--muted);
+  pointer-events: none;
+}
+.mindmap-canvas__notice {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-6);
+  left: var(--space-3);
+  right: var(--space-3);
+}
+@media (max-width: 1200px) {
+  .mindmap-workspace__body {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-rows: 110px minmax(0, 1fr);
+  }
+  .mindmap-workspace__outline {
+    grid-column: 1 / -1;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .mindmap-canvas__minimap {
+    bottom: 64px;
+  }
+}
+@media (min-width: 701px) {
+  .mindmap-workspace__body--overview {
+    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .mindmap-workspace__body--overview .mindmap-workspace__outline {
+    grid-column: auto;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+  }
+  .mindmap-workspace__body--overview .mindmap-workspace__detail {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .mindmap-workspace__body {
+    display: block;
+    height: 68vh;
+    min-height: 400px;
+  }
+  .mindmap-workspace .mindmap-workspace__mobile {
+    display: flex;
+    max-width: 100%;
+  }
+  .mindmap-workspace__mobile .segmented__option {
+    min-width: 0;
+    flex: 1 1 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding: 6px;
+  }
+  .mindmap-workspace__map,
+  .mindmap-workspace__outline,
+  .mindmap-workspace__detail {
+    display: none;
+    height: 100%;
+    border: 0;
+  }
+  .mindmap-workspace--map .mindmap-workspace__map,
+  .mindmap-workspace--outline .mindmap-workspace__outline,
+  .mindmap-workspace--detail .mindmap-workspace__detail {
+    display: block;
+  }
+  .mindmap-workspace__toolbar > .form-input {
+    max-width: none;
+    width: 100%;
+  }
+  .mindmap-canvas__minimap {
+    width: 112px;
+    height: 69px;
+  }
+  .mindmap-canvas__minimap canvas {
+    width: 110px;
+    height: 67px;
+  }
+}
+
+.mindmap-workspace__detail .form-field {
+  margin-block: var(--space-3);
+}
+.mindmap-workspace__breadcrumbs {
+  max-height: 100px;
+  overflow: auto;
+}
+.mindmap-workspace__breadcrumbs .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.mindmap-workspace__focus {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.mindmap-workspace__focus h3 {
+  overflow-wrap: anywhere;
+}

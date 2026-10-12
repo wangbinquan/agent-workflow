@@ -21,6 +21,7 @@ import type {
 import type { CompleteObservationTaskSource } from '../ports/taskObservations'
 import type { HistoricalObservationSources } from '../ports/historicalObservationSources'
 import type { CompleteObservationTaskNumericCache } from '../ports/completeObservationTask'
+import type { HistoricalObservationPreparationCache } from '../ports/historicalObservationPreparation'
 
 /** Bootstrap supplies the Task owner's original full-population query on this exact reader. */
 export async function composeCompleteObservationSnapshot(input: {
@@ -28,6 +29,7 @@ export async function composeCompleteObservationSnapshot(input: {
   readonly tasks: CompleteObservationTaskSource
   readonly historical?: HistoricalObservationSources
   readonly numericCache?: CompleteObservationTaskNumericCache
+  readonly historicalPreparation?: HistoricalObservationPreparationCache
   readonly report: CompleteObservationStoredReport
   readonly spool: CompleteObservationSpool
   readonly signal?: AbortSignal
@@ -106,6 +108,7 @@ async function assembleCompleteObservationSnapshot(
     value: value.value,
     agentName: names.name,
     ...(input.numericCache ? { numericCache: input.numericCache } : {}),
+    ...(input.historicalPreparation ? { historicalPreparation: input.historicalPreparation } : {}),
     ...(observePhase ? { observePhase } : {}),
   })
   observePhase?.('cohort-complete')

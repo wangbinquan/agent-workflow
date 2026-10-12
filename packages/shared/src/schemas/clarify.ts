@@ -10,6 +10,7 @@
 // node fails with the standard retries path.
 
 import { z } from 'zod'
+import { ClarifyQuestionMindmapSchema } from './clarifyMindmap'
 import { TaskActorRoleSchema } from './resourceAcl'
 import {
   GateDecisionDeferredEntrySchema,
@@ -62,6 +63,7 @@ const ClarifyOptionInputSchema = z.preprocess((v) => {
 /** One question the agent asked. The framework appends a 5th "free-text" row
  *  in the UI automatically; agents must NOT include a free-text option here. */
 export const ClarifyQuestionSchema = z.object({
+  mindmap: ClarifyQuestionMindmapSchema.optional(),
   /** Stable identifier chosen by the agent. ≤ 64 chars. */
   id: z.string().min(1).max(64),
   /** Question text (≤ 512 chars). */
@@ -107,6 +109,7 @@ export type ClarifyEnvelopeBody = z.infer<typeof ClarifyEnvelopeBodySchema>
 
 /** One user answer for one question. */
 export const ClarifyAnswerSchema = z.object({
+  confirmedBasis: z.string().max(128).optional(),
   questionId: z.string().min(1),
   /** Indices into question.options. Empty array means "no candidate selected". */
   selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
@@ -140,6 +143,7 @@ export type ClarifyDirective = z.infer<typeof ClarifyDirectiveSchema>
 // flag. `ClarifyQuestionScope` / `CLARIFY_QUESTION_SCOPE_DEFAULT` / `questionScopes` removed.
 
 export const SubmitClarifyAnswersSchema = z.object({
+  questionSetKey: z.string().max(128).optional(),
   answers: z.array(ClarifyAnswerSchema),
   /** Optimistic-lock guard: must equal the session's current iterationIndex
    *  or the server returns 409 Conflict `clarify-iteration-mismatch` (defends against two-tab
@@ -396,6 +400,7 @@ export function clarifyNavKindForRoundStatus(
  */
 export const ClarifyRoundSchema = z.object({
   id: z.string(),
+  interactionMode: z.enum(['questions', 'mindmap']).optional(),
   taskId: z.string(),
   kind: ClarifyRoundKindSchema,
 
@@ -470,6 +475,7 @@ export const ClarifyRoundSchema = z.object({
       z.object({
         selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
         customText: z.string().default(''),
+        confirmedBasis: z.string().max(128).optional(),
       }),
     )
     .nullable()
@@ -488,6 +494,7 @@ export type ClarifyRound = z.infer<typeof ClarifyRoundSchema>
  *  CrossClarifySessionSummary). */
 export const ClarifyRoundSummarySchema = z.object({
   id: z.string(),
+  interactionMode: z.enum(['questions', 'mindmap']).optional(),
   taskId: z.string(),
   /** Owning task name (RFC-037 parity). */
   taskName: z.string(),
