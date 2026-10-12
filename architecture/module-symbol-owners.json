@@ -6,7 +6,7 @@
     "moduleFiles": 1850,
     "productionFiles": 3277,
     "sharedFiles": 171,
-    "symbolsIncludingFileRoots": 27897
+    "symbolsIncludingFileRoots": 27905
   },
   "entries": [
     {
@@ -173470,10 +173470,58 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#ColdMaintenanceService",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ColdMaintenanceService",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#ColdMaintenanceServiceOptions",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ColdMaintenanceServiceOptions",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#createColdMaintenanceService",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createColdMaintenanceService",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#createMaintenanceAdmissionController",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "createMaintenanceAdmissionController",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#createMaintenanceService",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createMaintenanceService",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -173594,6 +173642,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "MaintenanceAdmissionTimerApi",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#MaintenanceExecutionLifetime",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "MaintenanceExecutionLifetime",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -174806,6 +174866,42 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "AW_COMPILED_BUILD",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#ColdMaintenanceWorkerSupervisor",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ColdMaintenanceWorkerSupervisor",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#createColdMaintenanceWorkerSupervisor",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createColdMaintenanceWorkerSupervisor",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#createSupervisor",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createSupervisor",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -335505,5 +335601,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fa8f88d9b545cc4bce01964087e55385e86a2b3cb8282db7f2ba761419c58b4f"
+  "sourceDigest": "sha256:350ac68b51c7cf53d476402338a0dff2afad3f3acbc593f051a80473f742e01e"
 }

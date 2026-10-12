@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1998,
+    "entries": 2002,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -36718,6 +36718,31 @@
       },
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/maintenanceService.ts#createColdMaintenanceService",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#createColdMaintenanceService",
+      "symbol": "createColdMaintenanceService",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/background/maintenanceService.ts#createMaintenanceAdmissionController",
       "missingControls": [
         "audit",
@@ -36736,8 +36761,28 @@
       "controls": {
         "audit": true,
         "authority": "system",
-        "authorization": false,
+        "authorization": true,
         "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/maintenanceService.ts#createMaintenanceService",
+      "missingControls": [
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceService.ts#createMaintenanceService",
+      "symbol": "createMaintenanceService",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -36745,7 +36790,10 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService",
       "missingControls": [
+        "audit",
+        "authority",
         "authorization",
+        "event",
         "fenceOrOcc",
         "transaction"
       ],
@@ -36952,6 +37000,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#createColdMaintenanceWorkerSupervisor",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#createColdMaintenanceWorkerSupervisor",
+      "symbol": "createColdMaintenanceWorkerSupervisor",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": true,
@@ -36960,9 +37033,34 @@
       },
       "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#createSupervisor",
+      "missingControls": [
+        "audit",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#createSupervisor",
+      "symbol": "createSupervisor",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#startMaintenanceWorkerSupervisor",
       "missingControls": [
         "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerSupervisor.ts#startMaintenanceWorkerSupervisor",
@@ -47815,7 +47913,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fa8f88d9b545cc4bce01964087e55385e86a2b3cb8282db7f2ba761419c58b4f",
+  "sourceDigest": "sha256:350ac68b51c7cf53d476402338a0dff2afad3f3acbc593f051a80473f742e01e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

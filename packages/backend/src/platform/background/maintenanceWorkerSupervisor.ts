@@ -97,6 +97,15 @@ export interface MaintenanceWorkerSupervisor {
   drain(timeoutMs?: number): Promise<void>
 }
 
+export interface ColdMaintenanceWorkerSupervisor extends MaintenanceWorkerSupervisor {
+  /** Create the first Worker only here, and wait for its actual catalog handshake. */
+  start(): Promise<void>
+  /** Close wake/restart admission synchronously and request the same Worker's drain. */
+  quiesce(): void
+  /** A timeout rejects the caller; only the protocol's drained event settles this receipt. */
+  awaitDrained(timeoutMs?: number): Promise<void>
+}
+
 // In source execution an absolute file URL is reliable. In a standalone Bun
 // executable the Worker remains a separately bundled entry and MUST be opened
 // by its relative entry name: resolving it through new URL(...).href produces
@@ -120,6 +129,27 @@ function messageOf(error: unknown): string {
 export function startMaintenanceWorkerSupervisor(
   options: MaintenanceWorkerSupervisorOptions,
 ): MaintenanceWorkerSupervisor {
+  return createSupervisor(options, false)
+}
+
+export function createColdMaintenanceWorkerSupervisor(
+  options: MaintenanceWorkerSupervisorOptions,
+): ColdMaintenanceWorkerSupervisor {
+  return createSupervisor(options, true)
+}
+
+function createSupervisor(
+  options: MaintenanceWorkerSupervisorOptions,
+  cold: false,
+): MaintenanceWorkerSupervisor
+function createSupervisor(
+  options: MaintenanceWorkerSupervisorOptions,
+  cold: true,
+): ColdMaintenanceWorkerSupervisor
+function createSupervisor(
+  options: MaintenanceWorkerSupervisorOptions,
+  cold: boolean,
+): MaintenanceWorkerSupervisor | ColdMaintenanceWorkerSupervisor {
   const now = options.now ?? Date.now
   const heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? 60_000
   const watchdogIntervalMs = Math.max(250, Math.min(5_000, Math.floor(heartbeatTimeoutMs / 3)))
@@ -130,7 +160,7 @@ export function startMaintenanceWorkerSupervisor(
 
   let worker: WorkerLike | null = null
   let stopped = false
-  let paused = false
+  let paused = cold
   let restartAttempt = 0
   let restartTimer: unknown | null = null
   let handshakeTimer: unknown | null = null
@@ -140,10 +170,33 @@ export function startMaintenanceWorkerSupervisor(
   let drainResolve: (() => void) | null = null
   let lifecycleDrain: Promise<void> | null = null
   let live: MaintenanceWorkerLiveState = {
-    state: 'starting',
+    state: cold ? 'stopped' : 'starting',
     lastHeartbeatAt: null,
     error: null,
     active: null,
+  }
+
+  interface ColdWorkerReceipt {
+    readonly worker: WorkerLike
+    readonly ready: Promise<void>
+    readonly drained: Promise<void>
+    readonly resolveReady: () => void
+    readonly rejectReady: (error: Error) => void
+    readonly resolveDrained: () => void
+    readySettled: boolean
+    drainRequested: boolean
+  }
+  let coldReceipt: ColdWorkerReceipt | null = null
+  let coldStart: Promise<void> | null = null
+  let coldStartAttempt: { quiesced: boolean } | null = null
+  let coldStarted = false
+  const outstandingColdReceipts = new Set<ColdWorkerReceipt>()
+
+  const rejectColdReady = (reason: string): void => {
+    const receipt = coldReceipt
+    if (receipt === null || receipt.readySettled) return
+    receipt.readySettled = true
+    receipt.rejectReady(new Error(reason))
   }
 
   const post = (request: MaintenanceWorkerRequest): void => worker?.postMessage(request)
@@ -159,7 +212,43 @@ export function startMaintenanceWorkerSupervisor(
     if (failureDrainTimer !== null) clearTimer(failureDrainTimer)
     failureDrainTimer = null
   }
+  const quiesce = (): void => {
+    paused = true
+    if (coldStartAttempt !== null) coldStartAttempt.quiesced = true
+    if (restartTimer !== null) clearTimer(restartTimer)
+    restartTimer = null
+    clearHandshake()
+    clearWatchdog()
+    clearFailureDrain()
+    restartAfterDrainReason = null
+    rejectColdReady('maintenance worker quiesced before ready')
+    const receipt = coldReceipt
+    if (receipt === null || worker !== receipt.worker || receipt.drainRequested) return
+    receipt.drainRequested = true
+    try {
+      post({ type: 'drain', version: MAINTENANCE_PROTOCOL_VERSION })
+    } catch (error) {
+      // Keep both the Worker and its receipt so a later quiesce can retry the frame.
+      receipt.drainRequested = false
+      live = { ...live, state: 'degraded', error: messageOf(error) }
+    }
+  }
+  const awaitDrained = (timeoutMs = 10_000): Promise<void> => {
+    const receipts = [...outstandingColdReceipts]
+    if (receipts.length === 0) return Promise.resolve()
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimer(() => {
+        reject(new Error('maintenance worker actual drain timed out'))
+      }, timeoutMs)
+      ;(timeout as { unref?: () => void } | null)?.unref?.()
+      void Promise.all(receipts.map((receipt) => receipt.drained)).then(() => {
+        clearTimer(timeout)
+        resolve()
+      })
+    })
+  }
   const scheduleSpawn = (): void => {
+    if (cold) return
     if (stopped || paused || worker !== null || restartTimer !== null) return
     if (restartAttempt >= 6) return
     const delay = Math.min(10_000, 250 * 2 ** restartAttempt)
@@ -179,6 +268,12 @@ export function startMaintenanceWorkerSupervisor(
     scheduleSpawn()
   }
   const scheduleRestart = (reason: string, force = false): void => {
+    if (cold) {
+      rejectColdReady(reason)
+      live = { ...live, state: 'degraded', error: reason }
+      quiesce()
+      return
+    }
     if (stopped || paused) return
     clearHandshake()
     clearWatchdog()
@@ -248,6 +343,10 @@ export function startMaintenanceWorkerSupervisor(
         clearHandshake()
         restartAttempt = 0
         live = { state: 'ready', lastHeartbeatAt: event.at, error: null, active: null }
+        if (coldReceipt !== null && !coldReceipt.readySettled && !stopped && !paused) {
+          coldReceipt.readySettled = true
+          coldReceipt.resolveReady()
+        }
         scheduleWatchdog()
         // A generation that finished its handshake after pause/stop already
         // requested a drain. Waking it would admit a slice this supervisor is
@@ -278,6 +377,11 @@ export function startMaintenanceWorkerSupervisor(
         clearFailureDrain()
         const restartReason = restartAfterDrainReason
         restartAfterDrainReason = null
+        if (coldReceipt !== null && coldReceipt.worker === worker) {
+          rejectColdReady('maintenance worker drained before ready')
+          outstandingColdReceipts.delete(coldReceipt)
+          coldReceipt.resolveDrained()
+        }
         worker?.terminate()
         worker = null
         if (!stopped && !paused && restartReason !== null) {
@@ -304,6 +408,31 @@ export function startMaintenanceWorkerSupervisor(
     try {
       const next = factory()
       worker = next
+      if (cold) {
+        let resolveReady!: () => void
+        let rejectReady!: (error: Error) => void
+        let resolveDrained!: () => void
+        const ready = new Promise<void>((resolve, reject) => {
+          resolveReady = resolve
+          rejectReady = reject
+        })
+        // quiesce/error can reject before the start caller attaches its await.
+        void ready.catch(() => undefined)
+        const drained = new Promise<void>((resolve) => {
+          resolveDrained = resolve
+        })
+        coldReceipt = {
+          worker: next,
+          ready,
+          drained,
+          resolveReady,
+          rejectReady,
+          resolveDrained,
+          readySettled: false,
+          drainRequested: false,
+        }
+        outstandingColdReceipts.add(coldReceipt)
+      }
       live = { ...live, state: 'starting', error: null, active: null }
       next.onmessage = (event) => {
         if (worker !== next) return
@@ -341,6 +470,7 @@ export function startMaintenanceWorkerSupervisor(
         clearFailureDrain()
         const pendingRestartReason = restartAfterDrainReason
         restartAfterDrainReason = null
+        if (cold) rejectColdReady('maintenance worker closed before ready')
         worker = null
 
         if (stopped || paused) {
@@ -369,6 +499,7 @@ export function startMaintenanceWorkerSupervisor(
       }
       if (options.effectsBootstrap === undefined) post(init)
       else next.postMessage(createMaintenanceWorkerEffectsInit(init, options.effectsBootstrap))
+      if (cold && (stopped || paused || coldReceipt?.readySettled)) return
       handshakeTimer = setTimer(
         () => scheduleRestart('maintenance worker handshake timed out', true),
         10_000,
@@ -379,7 +510,7 @@ export function startMaintenanceWorkerSupervisor(
     }
   }
 
-  spawn()
+  if (!cold) spawn()
 
   const drainWorker = (timeoutMs: number): Promise<void> => {
     if (lifecycleDrain !== null) return lifecycleDrain
@@ -394,13 +525,14 @@ export function startMaintenanceWorkerSupervisor(
       return Promise.resolve()
     }
     const pending = new Promise<void>((resolve) => {
+      const drainingWorker = worker
       let timeout: unknown | null = null
       drainResolve = () => {
         if (timeout !== null) clearTimer(timeout)
         resolve()
       }
-      post({ type: 'drain', version: MAINTENANCE_PROTOCOL_VERSION })
-      timeout = setTimer(() => {
+      const onTimeout = (): void => {
+        if (cold && worker !== drainingWorker) return
         worker?.terminate()
         worker = null
         live = {
@@ -412,7 +544,12 @@ export function startMaintenanceWorkerSupervisor(
         const finish = drainResolve
         drainResolve = null
         finish?.()
-      }, timeoutMs)
+      }
+      // A synchronous test Worker may ACK postMessage. Arm first in the cold
+      // path so a stale normal-pause timeout cannot terminate a later Worker.
+      if (cold) timeout = setTimer(onTimeout, timeoutMs)
+      post({ type: 'drain', version: MAINTENANCE_PROTOCOL_VERSION })
+      if (!cold) timeout = setTimer(onTimeout, timeoutMs)
       ;(timeout as { unref?: () => void } | null)?.unref?.()
     }).finally(() => {
       if (lifecycleDrain === pending) lifecycleDrain = null
@@ -421,10 +558,51 @@ export function startMaintenanceWorkerSupervisor(
     return pending
   }
 
-  return {
+  const start = (): Promise<void> => {
+    if (stopped) return Promise.reject(new Error('maintenance worker supervisor stopped'))
+    if (coldStart !== null) return coldStart
+    if (!paused && worker !== null && live.state === 'ready') return Promise.resolve()
+    coldStarted = true
+    const attempt = { quiesced: false }
+    coldStartAttempt = attempt
+    const pending = (async () => {
+      // The old ready state must stay fenced while its actual ACK is pending,
+      // including after a rejected wait. Only then may a fresh Worker start.
+      await awaitDrained()
+      if (stopped || attempt.quiesced) throw new Error('maintenance worker start quiesced')
+      paused = false
+      spawn()
+      const receipt = coldReceipt
+      if (receipt === null || worker !== receipt.worker) {
+        throw new Error(live.error ?? 'maintenance worker failed to start')
+      }
+      // The synchronous factory may have fenced the attempt before this new
+      // receipt existed. Request its actual drain before awaiting readiness.
+      if (stopped || paused || attempt.quiesced) {
+        quiesce()
+        throw new Error('maintenance worker start quiesced')
+      }
+      await receipt.ready
+      if (stopped || paused || attempt.quiesced || worker !== receipt.worker) {
+        throw new Error('maintenance worker start quiesced')
+      }
+    })()
+      .catch((error: unknown) => {
+        quiesce()
+        throw error
+      })
+      .finally(() => {
+        if (coldStart === pending) coldStart = null
+        if (coldStartAttempt === attempt) coldStartAttempt = null
+      })
+    coldStart = pending
+    return pending
+  }
+
+  const supervisor: MaintenanceWorkerSupervisor = {
     wake() {
       if (stopped || paused) return
-      if (worker === null && restartTimer === null) {
+      if (!cold && worker === null && restartTimer === null) {
         restartAttempt = Math.min(restartAttempt, 5)
         spawn()
       }
@@ -432,12 +610,20 @@ export function startMaintenanceWorkerSupervisor(
     },
     live: () => live,
     pause(timeoutMs = 10_000) {
+      if (coldStartAttempt !== null) coldStartAttempt.quiesced = true
       if (stopped || paused) return lifecycleDrain ?? Promise.resolve()
       paused = true
+      if (cold) rejectColdReady('maintenance worker paused before ready')
       return drainWorker(timeoutMs)
     },
     async resume() {
       if (stopped || !paused) return
+      if (cold) {
+        // Publish the cold attempt before any normal-pause ACK wait so loss
+        // during that wait cannot be forgotten by a later deferred start.
+        if (coldStarted) await start()
+        return
+      }
       await lifecycleDrain
       if (stopped || !paused) return
       paused = false
@@ -445,16 +631,21 @@ export function startMaintenanceWorkerSupervisor(
       spawn()
     },
     stop(timeoutMs = 10_000) {
+      if (coldStartAttempt !== null) coldStartAttempt.quiesced = true
       if (stopped) return lifecycleDrain ?? Promise.resolve()
       stopped = true
       paused = false
+      if (cold) rejectColdReady('maintenance worker stopped before ready')
       return drainWorker(timeoutMs)
     },
     drain(timeoutMs = 10_000) {
+      if (coldStartAttempt !== null) coldStartAttempt.quiesced = true
       if (stopped) return lifecycleDrain ?? Promise.resolve()
       stopped = true
       paused = false
+      if (cold) rejectColdReady('maintenance worker stopped before ready')
       return drainWorker(timeoutMs)
     },
   }
+  return cold ? { ...supervisor, start, quiesce, awaitDrained } : supervisor
 }

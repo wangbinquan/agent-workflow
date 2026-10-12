@@ -3,12 +3,12 @@
   "manifestDenominators": {
     "ambientWiring": 505,
     "architectureExceptions": 6080,
-    "backgroundJobs": 380,
+    "backgroundJobs": 382,
     "crossContextImports": 6953,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27897,
-    "mutationEntrypoints": 1998,
+    "moduleSymbolOwners": 27905,
+    "mutationEntrypoints": 2002,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1279,
     "transactionExternalEffects": 276
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 380,
+    "backgroundEntries": 382,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -48,7 +48,7 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 23,
-    "directNativeTimers": 79,
+    "directNativeTimers": 80,
     "inboundBoundaryEdges": 312,
     "knownViolations": 8,
     "moduleContexts": [
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fa8f88d9b545cc4bce01964087e55385e86a2b3cb8282db7f2ba761419c58b4f"
+  "sourceDigest": "sha256:350ac68b51c7cf53d476402338a0dff2afad3f3acbc593f051a80473f742e01e"
 }
