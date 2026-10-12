@@ -114,3 +114,10 @@
 完整任务、System Mock 场景及上述 CI 修复已推送 `c166c340aa9438ae23cba1806f9dd90cc78a7b63`，推送后本地/远端为 0/0。该提交 [主 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38259719292) 的 Windows/macOS/Ubuntu binary build + smoke、真实 PostgreSQL 和性能 job 已通过；三个系统脑图前端回归均通过。共享 CI 已出现并发观测统计格式、报表、物化、provider 清单等失败，其源码和断言相对前序提交未被本次修复改变，继续保留责任边界。
 
 该 CI 另发现本会话新接线用例使用文件 URL 的 `.pathname`，不兼容 Windows/空格路径；修复为 `fileURLToPath`，原 RFC-254 路径守卫 5 pass / 11 expect、两种 bootstrap 接线检视 1 pass / 8 expect，格式检查通过。该后继只改测试路径读取和记录，生产候选与完整任务结果不变；按原规则移除 c166 已消费的三条一次性增长许可，全部基线与 src-only census 保持。不能据已通过的单项 job 声称整个 CI 通过，RFC 状态仍保留 In Progress。
+
+
+## Windows 完整任务与验证清单收尾
+
+`c166c340a` 的 [Windows 浏览器 shard 3/4](https://github.com/wangbinquan/agent-workflow/actions/runs/38259719292/job/114849550722) 实际执行新增完整任务，37.4s 通过；同分片原工作区 13.4s、大图 2.2s 通过。整个分片因其他用例失败，以上仅为具体测试的通过证据。日志保存在 `/private/tmp/rfc372-ci-final/c166-job-114849550722.log`。
+
+后继路径修复 `fdbaec7b68251a4e1dd8d8d5b4a6c3ffd8200d01` 已推送并核对远端同步；[对应 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38261966315) 尚未给出最终结果。继续归因发现双 provider 清单遗漏了本次实际备份回归文件：在 LogicalSource 的原有条目中补充 `rfc372-task-schema.test.ts`，与自动扫描出的事实一致，条目总数、配对范围和守卫实现保持。定向原守卫 12 pass / 27 expect，format/lint 通过，证据 `/private/tmp/rfc372-ci-last/provider-pair-final.log`。本次没有生产源码变化，复用完整任务及原生流程验证。

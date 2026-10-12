@@ -1,3 +1,7 @@
+## 2026-10-12 RFC-372：Windows 完整任务 E2E 已通过，补齐备份验证清单
+
+`c166c340a` 的 Windows 浏览器 shard 3/4 已实际执行并通过新增完整任务（37.4s）、原脑图工作区（13.4s）及 5000 题大图（2.2s）；该分片仍因其他用例失败，不能报整分片通过。后继 `fdbaec7b6` 已推送、远端同步，修复文件 URL 跨平台读取；其 CI 尚在排队。继续核对旧 SHA 完成分片时确认本会话新增 `rfc372-task-schema.test.ts` 的双 provider 备份对拍漏登在 LogicalSource 的既有见证清单中，已补精确一项。原清单守卫 12 pass / 27 expect，format/lint 通过，不改条目数或判据，也无生产变化。并发观测统计、provider/WS/原启动源码断言等失败保留归属，未知的超时不擅自认领。RFC 的整体 CI 收口仍未完成。
+
 ## 2026-10-12 RFC-372：完整任务及固定 E2E 已推送 c166c340a
 
 本机完整任务 `01M4R5XY9X39Q89X0PF13R8Y83` 为 done，9 题及最终设计文档已保留，完整 System Mock E2E 与修复已推送 `c166c340aa9438ae23cba1806f9dd90cc78a7b63`（随后 fetch 核对 0/0）。该 SHA 三系统 binary/smoke、真实 PG 和脑图前端回归通过；共享 CI 仍存在并发观测统计等失败。新接线用例被 CI 指出文件 URL 路径不跨平台，已使用标准转换并通过原路径守卫/两种启动接线复验；后继仅测试/文档与消费完的三条增长许可退役，无生产源码变化，复用已完成本地完整任务验证。RFC 保留 In Progress，未部署、未跨 session 通信。详细任务入口与证据见 [轻量验收](design/RFC-372-mindmap-clarify/lightweight-acceptance.md)。
