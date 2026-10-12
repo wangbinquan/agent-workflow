@@ -1,3 +1,15 @@
+## 2026-10-12 RFC-372：实施获批
+
+用户已批准开始实现，全景脑图与聚焦工作区必须共用数据、草稿和确认事实，审阅留在工作区。正式画布取消“放大此分支”和双击放大，保持编辑/确认期间视口稳定，打磨平移、指针锚定缩放、定位与键盘操作。沿 RFC-372 的 M1～M5 推进，生产完成与实际验证分别记账。
+
+用户随后明确要求完整实现 RFC、提交推送到远端，并完成完整本地功能验证，覆盖此前本会话不运行本地 AW 的限制。最新执行顺序为“先把设计上传上库，然后以最快速度完成整体的开发，然后再进行功能验证”：先发布已批准设计，再完成 M1～M5 整体开发，最后集中验证。回归用例随实现补齐，最终候选只运行一次完整本地门禁并另验 exact-SHA CI。此前已执行检查保留实际结果，不冒充整体 RFC 完成。
+
+当前已接入 shared v7、纯领域聚合/分页/快照、共享草稿双视图 Canvas/Worker、正式 HTTP/详情/WS、原 TaskPark v2，以及同事务宿主 entry。Finish、durable continuation、正常材料等待、native 业务运行器前的完整提示词检查、材料刷新与原成功输出/merge 事务消费已写入。此前正式双 provider 开门 18/18、运行器/预算/消费/续跑 17/17 和原生 Chromium IndexedDB 检查已有证据；native 使用 fixture CLI，不代表完整 TaskEngine、正式页面或模型验收。完成页面恢复、状态更新与冻结 runtime 预算接点正在修复；M1 及完整 RFC 均未关闭。0246/PG 0022 十文件已随 134603ad 发布释放，新增 Task 0247/PG 0023 待独立发布。共享 WIP 原样保留，跨会话只协调绝对必要的共享文件/发布依赖。详见 [实施记录](design/RFC-372-mindmap-clarify/implementation.md)；尚未运行最终完整 gate 或部署。
+
+## 2026-10-12 RFC-372：脑图反问设计与原型
+
+用户要求完善方案并提供原型，后续明确工作区与审阅合并、支持广深大树，并新增一张完整全景脑图。[RFC-372](design/RFC-372-mindmap-clarify/proposal.md) 第五版在单一工作区上增加全景/聚焦双视图，共用节点与确认；全景提供完整轻量拓扑、语义缩放和分支状态，保留就地确认、简短完成及原任务内异常恢复；保留确定性开图、共同交付顺序与正式模板应用合同。共 112 条目标验收，尚未实施或运行产品验收。独立功能设计检视与原型浏览器检查记录见 [原型说明](design/RFC-372-mindmap-clarify/prototype.md)。本次无产品代码改动、提交、推送或部署；以下并行状态完整保留。
+
 ## 2026-10-12 RFC-371：原报告 Worker 当前环境修复候选
 
 正式页面切换到 30 天仍需约 13 秒的观察上界，性能未达标；已显示 189 个任务、16,154,874 已记录 Token（输入 4,566,519／缓存读取 11,039,168／缓存写入 0／输出 549,187）和人民币估值 ¥18.545628，完整／缺口标签保留。此次仅修复报告 Worker 原创建点：同步复制后端当前全部已定义环境字符串并显式传入 Worker，三个原入口和生命周期保持。旧七项用例逐字节保留，新增两个真实 WAL 原生库之间切换的完整四桶／历史行／cold-hot 回归；未运行本机 AW test／typecheck／build／新服务或 E2E。
@@ -121,24 +133,31 @@ SOURCE1-R2独立功能PASS／零findings已逐项消费；R1正式FAIL和两项�
 # RFC-370 CI：先清算原 driver 再验证不附着
 
 精确102919a4的默认完整Windows仍为failure，九个原not-attached case触及30秒；旧失败和旧功能门结论分别保留。源码确认selected attach在Task status前等待原host lifetime；夹具现先调用原releaseAndFinalize、确认pending由存在到清除，再以完整Task／owner／event快照和原累计ACK差额验证原not-attached、reporter／drive／新增ACK均零。原52个provider case、一个全量原调用者case及全部预算保持，生产／fixture／Windows／架构规则和产物不改，无新census／本机AW运行。独立有限功能门、精确四路径发布与后继SHA总主CI／默认Windows／211例另验；ECR限流的未执行测试分片独立处理。HumanGate实现仍等总绿，H7／A-G／CS M0～M4和RFC继续，AW未部署CS。详见[原driver清算夹具](design/RFC-370-crewstation-hosted-deployment/ci-not-attached-driver-finalization.md)。以下全部共享旧全文与并行输出保留。
+
 # RFC-370：生命周期切面 CI 修复候选
 
 精确981ae0f的默认完整Windows正式failure，主CI的typecheck和相关backend分片失败，旧失败保留。仅修新测试的事务作用域／reporter单次差值／真实not-attached前置及两处可空Task类型，补六个生命周期调用的精确原根逆变换和两处insert账本行号；原52个provider用例、一个全量原调用者case与全部预算保持。T17漏附当次增长声明在原账本note据实记录，不补造后继许可、不降分母／改规则或改写历史，130行整字节语义保持。14个生产文件和四原生成规则保持，无新census／本机AW运行。有限功能门、精确发布及新SHA全仓CI／完整Windows／211例实际验收另验；HumanGate设计PASS但实现等总绿，完整H7／A-G／CS M0～M4和RFC继续，AW未部署CS。详见[本次CI修复](design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md)。以下旧共享全文与并行输出保留。
+
 # RFC-370：生命周期写切面配套候选
 
 精确 `5a0e315c` 的主 CI 72/72 与默认完整 Windows 全部终态 success，73 个作业逐项消费；原路由类型与源码注释投影超时已修绿。SOURCE18-R2 的 69 项固定候选继续保持，211 个新增用例尚未签收。唯一原算法已按固定 16 个 TS 覆盖及提交内全量其余源码生成 13 项私有配套，原四规则保持；本片 14 个生产文件 classic R1 同一 35 条／R2 空集合不变。Windows 路径与用例登记、独立配套门、精确发布和新 SHA 全仓 CI 分别验收。HumanGate 等剩余 H7／A-T7／A-G、各层 CS adapter、M0～M4 和 RFC 仍开放，AW 未部署 CS。详见[生命周期配套发布](design/RFC-370-crewstation-hosted-deployment/host-authority-task-runtime-lifecycle-publication.md)。以下旧共享全文与并行输出逐字保持。
+
 # RFC-370 CI：复用原源码的注释投影
 
 精确13a58441的主CI已终态69/72成功；原Mac1源码锁case在6608.86ms触及默认5000ms，原失败完整保留。该原测试模块已固定完整源码快照，六次原查询重复去注释；只将原注释函数的同一全量投影生成一次并复用，原路径／排序／raw查询、8个case与70个expect及全部预算逐字保持。前台搜索输入类型修复属于并行输出并完整保留。有限独立设计PASS已实际消费，实现门、精确三文件发布与新SHA主CI／完整默认Windows另验；不代签总绿。零本机AW运行／新census，生命周期L69项仍保持、211新case未签收，H7／A-G／各层CS adapter、M0～M4及RFC继续开放，AW未部署CS。详见[原注释投影复用](design/RFC-370-crewstation-hosted-deployment/ci-source-comment-projection-reuse.md)。以下共享旧全文与并行输出完整保留。
+
 # RFC-370 CI：PostgreSQL 服务镜像来源
 
 精确 bfd76107 主 CI 的 Ubuntu7 在初始化容器时先遇 Docker Hub token 超时、后遇匿名拉取限额，测试尚未开始；旧失败保留。实时读取两站完整 OCI index／Linux amd64 manifest，分别10,237／3,628字节及digest逐字一致；仅把原32个Ubuntu分片和独立真实PG服务的两处镜像改为 Docker Official Images 的 ECR Public 来源，原17标签、macOS空分支、连接探针／不可skip判据／全部命令和预算保持。完整默认Windows及四工作区typecheck已成功，不代签主CI总绿。有限独立设计PASS已实际消费，实现门、精确三文件发布和新SHA完整CI另验；零本机AW运行／新census，生命周期L69项保持、211新case未签收，H7／A-G／CS适配与部署及RFC仍开放。详见[镜像来源配套](design/RFC-370-crewstation-hosted-deployment/ci-postgres-service-registry.md)。以下共享旧正文与并行输出完整保留。
+
 # RFC-370 CI：等待 handoff 的真实后续 readiness
 
 ab457f9c 的原 PostgreSQL HTTP handover case 在 handoff 后立即 resume，原 200 断言实际收到 409；Ubuntu7 分片 819 pass／1 fail，失败日志保留且不虚构未记录的 body/code。源码确认 null policy 使原异步 drive 走 blocked，再最后写 readiness／revision并停止。只在原同一 mission 的两命令间观察首次 readiness，原全部断言、case与120秒预算保持，无 HTTP 重试、后台 stub、生产改动或 census。该 SHA 完整默认 Windows 与四工作区 typecheck 已成功，主 CI 总绿尚未达成；有限独立功能门、精确发布与新 SHA CI 另验。L 生命周期69项仍保持，211新case未签收，AW未部署CS，RFC继续。详见[HTTP时序配套](design/RFC-370-crewstation-hosted-deployment/ci-handover-readiness.md)。以下共享旧全文和并行输出完整保留。
+
 ## 2026-10-10 RFC-370 原 SQL 方言语料重复解析修复
 
 精确 f54fa4a 的 Mac shard 12 原 J2 反向 case 在5245.93ms触及默认5000ms预算，1472 pass／2 skip／1 fail，原失败保留。复用模块采数时同一 sqlFunctionNames 的完整语料集合，在渲染器 continue 之前收集，原非渲染器 J2 仍使用同一函数数组；原语料／方言词汇／账本／shim、13 case／全部 matcher／负 fixture及5秒预算保持。未改生产／metadata／四个原census规则，无本机AW执行或新census。独立有限功能门、精确发布及新SHA主CI／完整Windows另验；生命周期L SOURCE18-R2保持、L census未启动，H7／A-G／CS M0～M4及RFC仍开放。详见[语料复用修复](design/RFC-370-crewstation-hosted-deployment/ci-dialect-corpus-reuse.md)。以下旧STATE和全部并行输出完整保留。
+
 ## 2026-10-10 RFC-370 原 E2E 进程归属与超时取证候选
 
 精确 2e671510 的主 CI 37965012479 正式 failure、完整 Windows 37965611777 success，四工作区 typecheck 实际 exit 0，总绿门槛仍未满足。独立 R1 功能门发现串行启动超过原 hook 预算，正式 FAIL 与失败正文保留；现保持三个原 daemon 并行启动，逐一登记真实成功句柄，afterAll 先标记清理并立即 stop 已登记 child，同时等待 pending 启动，由其回调收回 late-success。原 ready 默认 POSIX 30_000ms／Windows 90_000ms、两个 hook 独立 90_000ms／case 300_000ms 保持；两个原 Task waiter 只在超时错误附加现有进程诊断，原断言／轮询／预算保持。前台 502 后旧 snapshot、Enter 钻取和焦点修复由并行 owner 接续；Windows 原超时原因未签收。无本机 AW 执行或新 census，独立有限 R2 功能门／精确发布／新 hosted CI 另验。生命周期 L SOURCE18-R2 已实际消费并保持、L census 尚未启动，完整 H7／A-G／CS M0～M4仍开放，RFC继续。详见[原 E2E 取证](design/RFC-370-crewstation-hosted-deployment/ci-e2e-process-diagnostics.md)。以下旧 STATE 与全部并行输出完整保留。
@@ -11197,7 +11216,6 @@ c73756628b9ee2705918889067ac991e48861274 的 Windows 37868217983、视觉检查 
 ## 2026-10-09 CI 原 Git 夹具残锁等待
 
 c7375662 的 Mac backend6 job113619940054 中，原 RFC303 两例之一在残锁上重复启动 Git，日志明确 5131.62ms/原5000ms 超时。本有限批只改其测试 helper：第一次原 Git add 和非锁错误传播保持，原十九次25ms最大显式等待改为原夹具 ref lock 的文件检查，随后沿原路径移除残锁并真实重试一次。原 runGit 已先等待 proc.exited 再进同一钩子；生产取消/清理、原两个case全部断言和预算保持。详见 ci-git-fixture-ref-lock-wait.md。限定独立功能检视、精确发布与 hosted 总绿/真实两例逐项验收；无本机AW执行或新census。所有旧文档正文与并行内容保留。N2/H7/A-T7/A-G/CS M0～M4仍开放，AW未部署CS。
-
 
 ## 2026-10-09 当前 main 总绿与 N2 调用者设计
 
