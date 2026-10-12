@@ -25,8 +25,9 @@ export interface IntegrityResult {
  * (restore refuses, boot fails closed, doctor reports).
  *
  * The default connection is read-only. A checkpointed backup copy may lack
- * WAL/SHM sidecars; its owner can allow SQLite to create those auxiliary files.
- * That check still only reads the database and never creates a missing DB.
+ * WAL/SHM sidecars; its owner can allow SQLite to create those auxiliary files
+ * only when there is no copied WAL to replay/checkpoint on connection close.
+ * The default preserves existing DB/WAL bytes and never creates a missing DB.
  */
 export function quickCheckDbFile(
   dbPath: string,

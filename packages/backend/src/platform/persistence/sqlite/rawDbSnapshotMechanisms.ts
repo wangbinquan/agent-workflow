@@ -12,7 +12,7 @@ import { readDbMigrationIdentity, type MigrationIdentity } from './systemBackupM
 export interface SqliteRawDbSnapshotMechanisms {
   checkpoint(dbPath: string): boolean
   readMigrationIdentity(dbPath: string): MigrationIdentity | null
-  quickCheck(dbPath: string): IntegrityResult
+  quickCheck(dbPath: string, hasWal: boolean): IntegrityResult
 }
 
 export const sqliteRawDbSnapshotMechanisms: SqliteRawDbSnapshotMechanisms = {
@@ -30,7 +30,7 @@ export const sqliteRawDbSnapshotMechanisms: SqliteRawDbSnapshotMechanisms = {
     }
   },
   readMigrationIdentity: readDbMigrationIdentity,
-  // This is an owned, checkpointed backup copy; a bare WAL-mode copy needs
-  // writable auxiliary files even though quick_check does not rewrite DB bytes.
-  quickCheck: (dbPath) => quickCheckDbFile(dbPath, { allowWalSidecarCreation: true }),
+  // Existing WAL frames must remain untouched: a readwrite connection can
+  // checkpoint them on close. Only a bare copy needs writable auxiliary files.
+  quickCheck: (dbPath, hasWal) => quickCheckDbFile(dbPath, { allowWalSidecarCreation: !hasWal }),
 }

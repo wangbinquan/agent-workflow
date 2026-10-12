@@ -8,7 +8,7 @@
 
 根 `dev` 脚本改为开发启动器：先沿 backend 原 `dev` 入口启动，等待本轮新发布、pid 存活的 `.daemon.info` 且该地址 `/health` 返回成功及 `ok: true`，再沿 frontend 和 system-mocks 原 `dev` 入口启动。等待不设固定启动期限，后端退出或用户取消会立即中断；HTTP 探测有单次上限且支持取消。`AW_DEV_AUTH=0` 继续跳过开发登录服务。任何已启动服务失败或退出，启动器收回本轮进程树；SIGINT/SIGTERM/SIGHUP 与有界退出保持，不影响其它服务进程。
 
-原始备份先完成数据库与现有 WAL/SHM 文件的复制，再校验副本。仅副本校验显式允许 SQLite 创建空 WAL/SHM 辅助文件，仍不创建缺失的数据库，不重写原数据库字节，不省略 `quick_check`。原完整性检查默认只读；真实页损坏仍返回失败，原始损坏字节仍可保存。
+原始备份先完成数据库与现有 WAL/SHM 文件的复制，再校验副本。已有 WAL 的副本保持只读校验，只有裸副本显式允许 SQLite 创建空 WAL/SHM 辅助文件，仍不创建缺失的数据库，不重写原数据库字节，不省略 `quick_check`。原完整性检查默认只读；真实页损坏仍返回失败，原始损坏字节仍可保存。
 
 开发编排只在 `scripts/` 和 system-mocks 的开发客户端中，不进入产品运行链。SQLite 打开模式留在既有 provider-private adapter；原始备份保持字节复制、manifest、归档与 fsync 行为。
 
@@ -36,3 +36,11 @@
 原四个架构规则文件不改。仅对本次三个后端生产文件覆盖已批准内容，其余完整源码读取该基底的 Git blob；原 `architecture-census.ts --write --snapshot-sha <base> --seed-ref <base>` 只执行一次，生成完整十三项配套。3352 份源码读取已核对，三个覆盖输入均被原扫描器消费；所有 report metrics 保持，八项 canonical 仅源摘要变化，四项治理正文/账本/原来源保持，只刷新规范投影与当前 provenance，状态页由原渲染器同步。没有新增长许可、例外或规则更改。
 
 发布明确路径共 28 项：15 项任务实现、回归、说明及共享状态，另 13 项原算法配套；共享 index、完整暂存 diff、路径集合、实际 co-author、提交后路径与消息均需核对。发布前基底 Windows run `38267051045` 已因原平台步骤失败，原日志保留；本次提交的 CI 必须按其确切 SHA 单独判定，不能用旧失败或部分成功代签。
+
+## 2026-10-13 发布后归因与 WAL 字节补修正
+
+首个提交 `0f0b10bccb66bfa1871546071022ce15efe5f713` 已精确推送，推送后本地/远端 0/0。可视回归 `38272909793` 通过；Windows 平台 `38272909699` 的 14 个失败与基底相同。主 CI `38272909655` 的已完成失败按原日志/同 job 基底日志/提交源码 blob 逐项归因：原三个观测文件的格式失败、RFC-371 报告 UI 断言、原根逆向清单缺少 `observationReports`、观测页签 ARIA 面板问题均保留，未代改他人。格式失败导致本次 system-mocks 回归在 hosted CI 中跳过，不能用本地通过代替远端执行。
+
+核对未 checkpoint 的 WAL 副本时发现本次读写校验引入缺陷：SQLite 在连接关闭时会 checkpoint 既有 WAL，改变副本 DB/WAL 字节；原回归仅覆盖已 checkpoint 场景。补修正将复制阶段已有 `copied.wal` 事实传入 provider-private 校验，已有 WAL 使用原只读模式；裸 WAL-mode 主文件才允许辅助文件创建。补齐 SHM 存在/不存在的非 checkpoint 校验与真实 busy checkpoint 原始归档三项回归，验证 DB/WAL 字节及 WAL 中实际数据可读。完整补实现和三项用例后集中验证，启动器候选未变，原有效启动/登录结果复用。
+
+补修正集中验证：raw snapshot、boot/doctor、pre-migration backup、restore 四文件 39 pass / 0 fail / 123 个断言；新增三项均通过，包含真实 busy checkpoint 后归档 DB/WAL 字节保持与数据可读。四项 TS 文件 lint 通过；原四个 census 规则继续不改，只按新基底与本片三个后端覆盖由原算法生成配套。启动器、开发登录和实际启动验收结果复用，服务维持关闭。原提交的完整 hosted gate 不取消，新补修正将以新确切 SHA 跟进。

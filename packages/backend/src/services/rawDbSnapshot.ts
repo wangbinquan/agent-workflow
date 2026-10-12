@@ -143,7 +143,10 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
     }
     // Check the complete copy, including any WAL/SHM files, before archiving.
     if (copied.db && checkpointed) {
-      const chk = sqliteRawDbSnapshotMechanisms.quickCheck(join(stagingDir, 'db.sqlite'))
+      const chk = sqliteRawDbSnapshotMechanisms.quickCheck(
+        join(stagingDir, 'db.sqlite'),
+        copied.wal,
+      )
       if (!chk.ok) {
         log.warn('raw db copy fails quick_check (copying anyway — may be the point)', {
           errors: chk.errors.slice(0, 3),

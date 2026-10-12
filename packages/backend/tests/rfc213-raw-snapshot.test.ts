@@ -14,8 +14,8 @@
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
-import type { Database } from 'bun:sqlite'
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { Database } from 'bun:sqlite'
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync, copyFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
@@ -23,6 +23,7 @@ import { extractTarGz } from '../src/util/archive'
 import { readDbMigrationIdentity, readManifest } from '../src/services/backupManifest'
 import { rawCopyDb } from '../src/services/rawDbSnapshot'
 import { quickCheckDbFile } from '../src/db/integrity'
+import { sqliteRawDbSnapshotMechanisms } from '../src/platform/persistence/sqlite/rawDbSnapshotMechanisms'
 import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -91,6 +92,81 @@ describe('RFC-213 rawCopyDb — healthy DB', () => {
       expect(readFileSync(dbPath)).toEqual(bytes)
     } finally {
       sqlite.close()
+    }
+  })
+
+  for (const hasShm of [true, false]) {
+    test(`validating uncheckpointed WAL preserves DB/WAL bytes with SHM=${hasShm}`, () => {
+      const home = tmp('rfc213-uncheckpointed-check-')
+      const source = join(home, 'source.sqlite')
+      const copy = join(home, 'copy.sqlite')
+      const writer = new Database(source, { create: true })
+      try {
+        writer.exec(
+          "PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0; CREATE TABLE evidence(value TEXT); INSERT INTO evidence VALUES ('uncheckpointed');",
+        )
+        for (const suffix of hasShm ? ['', '-wal', '-shm'] : ['', '-wal']) {
+          copyFileSync(source + suffix, copy + suffix)
+        }
+        const dbBytes = readFileSync(copy)
+        const walBytes = readFileSync(copy + '-wal')
+        expect(sqliteRawDbSnapshotMechanisms.quickCheck(copy, true).ok).toBe(true)
+        expect(readFileSync(copy)).toEqual(dbBytes)
+        expect(readFileSync(copy + '-wal')).toEqual(walBytes)
+        const reader = new Database(copy, { readonly: true })
+        try {
+          expect(reader.query('SELECT value FROM evidence').get()).toEqual({
+            value: 'uncheckpointed',
+          })
+        } finally {
+          reader.close()
+        }
+        expect(readFileSync(copy)).toEqual(dbBytes)
+        expect(readFileSync(copy + '-wal')).toEqual(walBytes)
+      } finally {
+        writer.close()
+      }
+    })
+  }
+
+  test('a busy checkpoint preserves the complete raw DB/WAL bytes during copy validation', async () => {
+    const home = tmp('rfc213-busy-checkpoint-copy-')
+    const dbPath = join(home, 'db.sqlite')
+    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const writer = (db as unknown as { $client: Database }).$client
+    let reader: Database | null = null
+    try {
+      writer.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+      reader = new Database(dbPath, { readonly: true })
+      reader.exec('BEGIN; SELECT count(*) FROM workflows;')
+      writer.exec(
+        "CREATE TABLE raw_copy_evidence(value TEXT); INSERT INTO raw_copy_evidence VALUES ('pending WAL');",
+      )
+      const dbBytes = readFileSync(dbPath)
+      const walBytes = readFileSync(dbPath + '-wal')
+      expect(walBytes.length).toBeGreaterThan(32)
+      const logs: string[] = []
+      setLoggerStdoutWriterForTest((line) => logs.push(line))
+      const result = await rawCopyDb({ kind: 'pre-migration', appHome: home, dbPath })
+      expect(result.copied.wal).toBe(true)
+      const out = tmp('rfc213-busy-copy-out-')
+      await extractTarGz(result.path, out)
+      expect(logs.some((line) => line.includes('fails quick_check'))).toBe(false)
+      expect(readFileSync(join(out, 'db.sqlite'))).toEqual(dbBytes)
+      expect(readFileSync(join(out, 'db.sqlite-wal'))).toEqual(walBytes)
+      const archived = new Database(join(out, 'db.sqlite'), { readonly: true })
+      try {
+        expect(archived.query('SELECT value FROM raw_copy_evidence').get()).toEqual({
+          value: 'pending WAL',
+        })
+      } finally {
+        archived.close()
+      }
+      expect(readFileSync(dbPath)).toEqual(dbBytes)
+      expect(readFileSync(dbPath + '-wal')).toEqual(walBytes)
+    } finally {
+      reader?.close()
+      writer.close()
     }
   })
 

@@ -1,3 +1,9 @@
+## 2026-10-13 开发启动与备份校验修复：首提交已推送，补齐未 checkpoint WAL 字节保持
+
+首提交 `0f0b10bccb66bfa1871546071022ce15efe5f713` 推送后 0/0，可视回归通过；已完成 CI 失败按同 job 基底日志、失败断言和原源码 blob 归因，原观测格式/UI/根逆向清单/页签 ARIA 问题完整保留，不代改。格式失败使 hosted system-mocks 步骤跳过，未冒充远端通过。额外核对发现本次读写校验会在关闭连接时 checkpoint 既有 WAL 并改变备份副本字节；补修正把 `copied.wal` 传给 SQLite 私有校验，已有 WAL 继续只读，裸副本才允许辅助文件创建。SHM 两种情况及真实 busy checkpoint 三项用例与完整修复已写完，随后集中验证；未改变启动器，已有启动/登录验收复用，服务仍关闭。见 [修复与归因](design/RFC-213-disaster-recovery/dev-startup-and-backup-readiness.md)。
+
+补修正四文件集中验证 39 pass / 0 fail / 123 个断言，新增三项 DB/WAL 字节保持及数据可读全部通过，本次四项 TS 文件 lint 通过；未变的 38 项启动/登录与真实启动验收复用。原规则文件保持，用新基底和本片三个后端输入生成配套，不取消原 SHA 的门禁；补修正发布与新确切 SHA 的 CI 单独验收。
+
 ## 2026-10-12 开发启动与备份校验修复：授权上库，原清单配套完成
 
 用户明确要求本次提交上库并跟进对应 SHA 的 GitHub CI，失败先归因，只修本次引入的问题。原 74 项本地回归、15 项受影响复验及真实启动结果按未变候选复用。以 `861833a65718a2b7bf0efbe7b666b257cbb5b287` 的完整 Git 源码及本片三个后端输入执行唯一一次原 census，十三项配套已同步；3352 份源码读取与三个覆盖消费核对，全部 metrics、治理正文/账本/原来源保持，没有新增长许可或规则修改。明确发布 28 路径，暂存区与 co-author 单独核对，精确推送和新 SHA 的 hosted CI 另验。基底既有 Windows 失败作为归因证据保留；并发在制品及此前未关闭范围完整保持，无跨 session 通信。见 [发布与验收记录](design/RFC-213-disaster-recovery/dev-startup-and-backup-readiness.md)。
