@@ -1,3 +1,9 @@
+## 2026-10-13 RFC-372：逐项完成审计与终态 CI 归档
+
+当前 64 份脑图相关实现/fixture 与已验证最终源码 `304c4108c` 字节一致；只读保留任务数据库核实 Task done、self 6/cross 3 全部 answered/confirmed，两层深入和最终 1268 字节文档与原输出一致。独立源码检视原消息、完整本地日志、冗余清理（86 个旧文件删除、一个同名工作区适配）与三平台脑图 E2E 均有现行证据。L01～L15 完成，L16 的功能/检视/发布/终态 CI 记录完成；全仓质量门仍失败，RFC 保持 In Progress，见 [完成审计](design/RFC-372-mindmap-clarify/completion-audit.md)。
+
+`304c4108c` 的精确 CI 含 Markdown 单项重试已终态 22 success / 50 failure；脑图 9 次三平台 E2E、每平台 11 项前端回归、双 provider 清单与依赖检查通过。观测并发失败、跳过步骤、未定因 Windows wrapper 超时均保留原日志，不代修、不回退。历史审阅 blob 页面反复 503，本次经 Git 字节比对使用四份仓内不可变迁移与六份固定 commit 原文链接，原结论/指纹保持。仅文档候选，另验精确 CI，不重跑全量本地 gate；本轮无跨 session 消息。以下历史与并发产出完整保留。
+
 ## 2026-10-13 开发启动与备份校验修复：首提交已推送，补齐未 checkpoint WAL 字节保持
 
 首提交 `0f0b10bccb66bfa1871546071022ce15efe5f713` 推送后 0/0，可视回归通过；已完成 CI 失败按同 job 基底日志、失败断言和原源码 blob 归因，原观测格式/UI/根逆向清单/页签 ARIA 问题完整保留，不代改。格式失败使 hosted system-mocks 步骤跳过，未冒充远端通过。额外核对发现本次读写校验会在关闭连接时 checkpoint 既有 WAL 并改变备份副本字节；补修正把 `copied.wal` 传给 SQLite 私有校验，已有 WAL 继续只读，裸副本才允许辅助文件创建。SHM 两种情况及真实 busy checkpoint 三项用例与完整修复已写完，随后集中验证；未改变启动器，已有启动/登录验收复用，服务仍关闭。见 [修复与归因](design/RFC-213-disaster-recovery/dev-startup-and-backup-readiness.md)。

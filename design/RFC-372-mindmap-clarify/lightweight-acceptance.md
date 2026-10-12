@@ -1,6 +1,6 @@
 # RFC-372 v6 轻量实现与验收
 
-日期：2026-10-12。当前状态：生产与用例完成，集中功能验证通过；产品已提交并推送 `95ec4a8ee9698792c148d6cadf4d241db73474d9`，推送后本地与 `origin/main` 精确一致。精确 SHA CI 尚未通过。未部署。
+日期：2026-10-13。当前状态：生产、用例及完整本地功能验收已完成并上库，最后源码修正 `304c4108c84d46ef3e8b5d82d49cb4cd530249da` 已核对远端可达。对应精确 SHA CI 已终态 failure，72 个 job 为 22 success / 50 failure；脑图专项通过，全仓质量门未通过，RFC 保持 In Progress。未部署。当前逐项复核见 [完成审计](./completion-audit.md)。
 
 ## 有效范围
 
@@ -108,13 +108,11 @@
 
 末次静态复核：本次提交源码 format/lint 均 exit 0；highwater 40 pass / 64 expect、生成状态投影 3 pass / 12 expect、双 provider 备份快照类型收尾 2 pass / 30 expect。后台 typecheck 的本次两个测试类型错误已消除，仍有 13 条并发来源错误（identityPackets、既有 CLI signal/Bun SQLite helper、RFC-371 测试、既有 mutation 脚本），证据 `backend-types-final2.log`。
 
-
 ## 完整任务已上库与追加跨平台修复
 
 完整任务、System Mock 场景及上述 CI 修复已推送 `c166c340aa9438ae23cba1806f9dd90cc78a7b63`，推送后本地/远端为 0/0。该提交 [主 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38259719292) 的 Windows/macOS/Ubuntu binary build + smoke、真实 PostgreSQL 和性能 job 已通过；三个系统脑图前端回归均通过。共享 CI 已出现并发观测统计格式、报表、物化、provider 清单等失败，其源码和断言相对前序提交未被本次修复改变，继续保留责任边界。
 
 该 CI 另发现本会话新接线用例使用文件 URL 的 `.pathname`，不兼容 Windows/空格路径；修复为 `fileURLToPath`，原 RFC-254 路径守卫 5 pass / 11 expect、两种 bootstrap 接线检视 1 pass / 8 expect，格式检查通过。该后继只改测试路径读取和记录，生产候选与完整任务结果不变；按原规则移除 c166 已消费的三条一次性增长许可，全部基线与 src-only census 保持。不能据已通过的单项 job 声称整个 CI 通过，RFC 状态仍保留 In Progress。
-
 
 ## Windows 完整任务与验证清单收尾
 
@@ -131,3 +129,9 @@
 修复移除该反向依赖，由执行适配器声明原五项输入，bootstrap 注入时继续经 collaboration 内部端口检查类型兼容；不再有外部消费者的 public 类型导出同时删除。两个受影响文件在相同 TypeScript 编译选项下输出的 JavaScript 逐字一致。原 DAG 守卫作为已抓住缺陷的回归继续保持全部判据，8 pass；公共消费者 6 pass、状态投影 3 pass、lint 通过。原高水位 39 pass / 1 fail，唯一差异是其他会话同期新增的 SQLite helper 登记（在制源码 345，当前提交候选基线 344），未移走或修改它来制造通过。后台类型检查仍有 13 条既有/并发来源错误，没有本次适配器和两个 bootstrap 的类型错误。证据：`/private/tmp/rfc372-closeout-20261012/architecture-fix.log`、`backend-types.log`、`type-only.log`。
 
 原候选 census 的 13 份输出同步更新；四个扫描规则保持，非本次在制文件不作为新提交源码。实测跨域边 7122→7121、兼容项 6231→6230、公共符号 1283→1282，其余账本、全部债务与 why 保持，不新增增长许可。此类型边界修正复用此前实际运行结果，最终仍核对后继精确 SHA CI。
+
+## 终态 CI 与当前完成审计（2026-10-13）
+
+`304c4108c` 的 [CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38266097678) 已跟到最终汇总，含 Markdown 单项重试；最终 22 success / 50 failure。新增完整任务在 Ubuntu/macOS/Windows 分别为 39.0s / 49.1s / 32.0s 通过，同平台工作区与深宽图两例也通过，共 9 次通过；前端每平台 11 项通过。原 provider-pair 两平台各 12 项、offered DAG 各 8 项、公共消费者各 6 项通过。未放宽原规则。
+
+全仓失败和跳过步骤、观察源码指纹、未知 Windows wrapper 超时及两次 HTTP 503 已完整归档到本地保留任务的 `evidence/ci-closeout/`，135 份日志具有 SHA-256 清单。本次从当前源码、实际任务数据库和独立检视原消息做了 [L01～L16 完成审计](./completion-audit.md)，未重跑未变的全量候选。旧“CI 正在执行”段落保留为历史记录；当前状态以本节与完成审计为准。历史源码链接进一步改为四份字节相同的仓内不可变迁移及六份固定原 commit 的原文链接，原审阅结论和指纹不改，随后观察纯文档提交的精确 CI。
