@@ -1,4 +1,4 @@
-// RFC-349 T2/T8 — locks the exact 241-table source census, the 235-table
+// RFC-349 T2/T8 — locks the exact 254-table source census, the 248-table
 // PostgreSQL parity set, and the only six archive-then-omit tables approved by
 // D9. New/missing/ownerless tables and revived legacy consumers must fail here
 // before any migration can prepare a target.
@@ -27,9 +27,9 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(241)
-    expect(contract.sourceTableCount).toBe(241)
-    expect(contract.activeTableCount).toBe(235)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(254)
+    expect(contract.sourceTableCount).toBe(254)
+    expect(contract.activeTableCount).toBe(248)
     expect(contract.archiveOnlyTableCount).toBe(6)
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
     const binding = contract.tables.find(
@@ -51,6 +51,30 @@ describe('RFC-349 canonical schema contract', () => {
       'run-observability',
     ])
     expect(pages.foreignKeys[0]!.foreignTable).toBe('observation_native_fact_roots')
+    // Published 0245/0021 and 0246/0022 add exactly these eight KEEP relations.
+    const additions = [
+      ['observation_calculation_rows', 'run-observability', ['cache_key', 'namespace', 'key']],
+      ['observation_calculation_versions', 'run-observability', ['cache_key']],
+      ['observation_source_revisions', 'run-observability', ['source_id']],
+      ['clarify_mindmap_command_receipts', 'collaboration', ['session_id', 'request_id']],
+      ['clarify_mindmap_node_revisions', 'collaboration', ['node_id', 'session_revision']],
+      ['clarify_mindmap_nodes', 'collaboration', ['id']],
+      ['clarify_mindmap_sessions', 'collaboration', ['id']],
+      ['clarify_mindmap_snapshots', 'collaboration', ['id']],
+      // RFC-372 0247/0023 append five Task-owned relations to that published set.
+      ['task_clarify_channels', 'task-execution', ['id']],
+      ['task_clarify_consumptions', 'task-execution', ['node_run_id']],
+      ['task_clarify_entries', 'task-execution', ['id']],
+      ['task_clarify_host_runs', 'task-execution', ['node_run_id']],
+      ['task_clarify_materials', 'task-execution', ['id']],
+    ] as const
+    for (const [id, owner, key] of additions) {
+      const table = contract.tables.find((table) => table.id === id)!
+      expect(table.disposition, id).toBe('KEEP')
+      expect(table.ownerContext, id).toBe(owner)
+      expect(table.migrationKey, id).toEqual([...key])
+      expect(table.providerTables, id).toEqual({ sqlite: id, postgresql: id })
+    }
   })
 
   test('every source table has one owner, stable key, codec and provider mapping', () => {

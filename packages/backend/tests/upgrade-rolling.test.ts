@@ -569,7 +569,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-371: 0244 adds durable original native numerical fact roots and pages.
     // RFC-371: 0245 adds three derived calculation/source-revision relations.
     // RFC-372: 0246 adds five mindmap companions, preserving the preceding migration chain.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(246)
+    // RFC-372: 0247 adds Task host/entry, immutable materials and business consumption stamps.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(247)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

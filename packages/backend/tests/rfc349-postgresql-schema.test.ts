@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 243 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 248 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -22,11 +22,23 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(243)
+    expect(tables).toHaveLength(248)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       true,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(243)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(248)
+    expect(
+      tables
+        .map((statement) => statement.logicalId)
+        .filter((id) => id.startsWith('task_clarify_'))
+        .sort(),
+    ).toEqual([
+      'task_clarify_channels',
+      'task_clarify_consumptions',
+      'task_clarify_entries',
+      'task_clarify_host_runs',
+      'task_clarify_materials',
+    ])
     // RFC-372 adds five collaboration companions after the preserved RFC-371 delta.
     expect(
       tables

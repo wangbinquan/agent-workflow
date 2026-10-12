@@ -1,0 +1,1882 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:92f680cc5dacd69f83f87650ec1b6a9e7b21189911ade7780a8f507525c1a68d', 248, 6)"
+    },
+    "beforeDigest": "sha256:fad85ff930d723a31a2789d5d5410ac221c0515f920d1e3b91a9ce9124e348c2"
+  },
+  "digest": "sha256:6cbcd92ec3964cdcbfa1f04baa0fa800e906189fc59ad81caaa523857d2fd4aa",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "task_clarify_channels",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_channels\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"logical_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"asking_node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"clarify_node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"binding_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"host_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"head_entry_ref\" TEXT COLLATE \"C\",\n  \"entry_revision\" BIGINT NOT NULL DEFAULT 0,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_channels_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_clarify_consumptions",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_consumptions\" (\n  \"node_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"material_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"acceptance_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"snapshot_set_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"finalized_prompt_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"accepted_at\" BIGINT NOT NULL,\n  \"consumed_at\" BIGINT,\n  CONSTRAINT \"task_clarify_consumptions_pkey\" PRIMARY KEY (\"node_run_id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_clarify_entries",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_entries\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"channel_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"entry_revision\" BIGINT NOT NULL,\n  \"host_entry_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"host_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_asking_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"config_snapshot_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"trigger_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_id\" TEXT COLLATE \"C\",\n  \"request_json\" TEXT COLLATE \"C\",\n  \"previous_snapshot_id\" TEXT COLLATE \"C\",\n  \"disposition\" TEXT COLLATE \"C\" NOT NULL,\n  \"round_id\" TEXT COLLATE \"C\",\n  \"gate_node_run_id\" TEXT COLLATE \"C\",\n  \"snapshot_id\" TEXT COLLATE \"C\",\n  \"completion_operation_id\" TEXT COLLATE \"C\",\n  \"delivery_json\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_entries_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_clarify_host_runs",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_host_runs\" (\n  \"node_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"occurrence_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"slot_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"inherited_from_run_id\" TEXT COLLATE \"C\",\n  \"shard_instance_ref\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_host_runs_pkey\" PRIMARY KEY (\"node_run_id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "task_clarify_materials",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_materials\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"entry_scope_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"consumer_node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"material_revision\" BIGINT NOT NULL,\n  \"plan_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"snapshot_set_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"material_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_materials_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_channels:index:idx_task_clarify_channel_key",
+      "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_channel_key\" ON \"agent_workflow\".\"task_clarify_channels\" (\"task_id\", \"logical_key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_consumptions:index:idx_task_clarify_consumption_acceptance",
+      "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_consumption_acceptance\" ON \"agent_workflow\".\"task_clarify_consumptions\" (\"acceptance_ref\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_consumptions:index:idx_task_clarify_consumption_material",
+      "sql": "CREATE INDEX \"idx_task_clarify_consumption_material\" ON \"agent_workflow\".\"task_clarify_consumptions\" (\"material_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_entries:index:idx_task_clarify_entry_request",
+      "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_entry_request\" ON \"agent_workflow\".\"task_clarify_entries\" (\"channel_id\", \"request_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_entries:index:idx_task_clarify_entry_round",
+      "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_entry_round\" ON \"agent_workflow\".\"task_clarify_entries\" (\"round_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_entries:index:idx_task_clarify_entry_source",
+      "sql": "CREATE INDEX \"idx_task_clarify_entry_source\" ON \"agent_workflow\".\"task_clarify_entries\" (\"source_asking_run_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_host_runs:index:idx_task_clarify_host_occurrence",
+      "sql": "CREATE INDEX \"idx_task_clarify_host_occurrence\" ON \"agent_workflow\".\"task_clarify_host_runs\" (\"task_id\", \"occurrence_ref\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_host_runs:index:idx_task_clarify_host_slot",
+      "sql": "CREATE INDEX \"idx_task_clarify_host_slot\" ON \"agent_workflow\".\"task_clarify_host_runs\" (\"task_id\", \"slot_key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_materials:index:idx_task_clarify_material_version",
+      "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_material_version\" ON \"agent_workflow\".\"task_clarify_materials\" (\"entry_scope_ref\", \"consumer_node_id\", \"material_revision\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "task_clarify_materials:index:idx_task_clarify_material_consumer",
+      "sql": "CREATE INDEX \"idx_task_clarify_material_consumer\" ON \"agent_workflow\".\"task_clarify_materials\" (\"task_id\", \"consumer_node_id\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_channels:fk:task_clarify_channels_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_channels\" ADD CONSTRAINT \"task_clarify_channels_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_consumptions:fk:task_clarify_consumptions_node_run_id_node_runs_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_consumptions\" ADD CONSTRAINT \"task_clarify_consumptions_node_run_id_node_runs_id_fk\" FOREIGN KEY (\"node_run_id\") REFERENCES \"agent_workflow\".\"node_runs\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_consumptions:fk:task_clarify_consumptions_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_consumptions\" ADD CONSTRAINT \"task_clarify_consumptions_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_consumptions:fk:task_clarify_consumptions_material_id_task_clarify_materials_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_consumptions\" ADD CONSTRAINT \"task_clarify_consumptions_material_id_task_clarify_349fa4a8348e\" FOREIGN KEY (\"material_id\") REFERENCES \"agent_workflow\".\"task_clarify_materials\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_entries:fk:task_clarify_entries_channel_id_task_clarify_channels_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_entries\" ADD CONSTRAINT \"task_clarify_entries_channel_id_task_clarify_channels_id_fk\" FOREIGN KEY (\"channel_id\") REFERENCES \"agent_workflow\".\"task_clarify_channels\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_host_runs:fk:task_clarify_host_runs_node_run_id_node_runs_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_host_runs\" ADD CONSTRAINT \"task_clarify_host_runs_node_run_id_node_runs_id_fk\" FOREIGN KEY (\"node_run_id\") REFERENCES \"agent_workflow\".\"node_runs\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_host_runs:fk:task_clarify_host_runs_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_host_runs\" ADD CONSTRAINT \"task_clarify_host_runs_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_materials:fk:task_clarify_materials_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_materials\" ADD CONSTRAINT \"task_clarify_materials_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_clarify_materials:fk:task_clarify_materials_entry_scope_ref_task_clarify_entries_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_materials\" ADD CONSTRAINT \"task_clarify_materials_entry_scope_ref_task_clarif_52d757845e9c\" FOREIGN KEY (\"entry_scope_ref\") REFERENCES \"agent_workflow\".\"task_clarify_entries\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:92f680cc5dacd69f83f87650ec1b6a9e7b21189911ade7780a8f507525c1a68d', active_table_count = 248, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:f093173a29f7875afcbd167fae1d2687cc3118431348a2f3a848acb8cb929d49' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:f093173a29f7875afcbd167fae1d2687cc3118431348a2f3a848acb8cb929d49",
+    "planDigest": "sha256:afc512395b04264ad08309600fe1bfa07d2956c809ddb57b19f20fd8769d9f06"
+  },
+  "id": "0023_rfc372_task_clarify",
+  "indexAdditions": [
+    {
+      "position": 197,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_clarify_channels",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_channels\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"logical_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"asking_node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"clarify_node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"binding_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"host_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"head_entry_ref\" TEXT COLLATE \"C\",\n  \"entry_revision\" BIGINT NOT NULL DEFAULT 0,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_channels_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 198,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_clarify_consumptions",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_consumptions\" (\n  \"node_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"material_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"acceptance_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"snapshot_set_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"finalized_prompt_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"accepted_at\" BIGINT NOT NULL,\n  \"consumed_at\" BIGINT,\n  CONSTRAINT \"task_clarify_consumptions_pkey\" PRIMARY KEY (\"node_run_id\")\n)"
+      }
+    },
+    {
+      "position": 199,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_clarify_entries",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_entries\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"channel_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"entry_revision\" BIGINT NOT NULL,\n  \"host_entry_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"host_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_asking_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"config_snapshot_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"trigger_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_id\" TEXT COLLATE \"C\",\n  \"request_json\" TEXT COLLATE \"C\",\n  \"previous_snapshot_id\" TEXT COLLATE \"C\",\n  \"disposition\" TEXT COLLATE \"C\" NOT NULL,\n  \"round_id\" TEXT COLLATE \"C\",\n  \"gate_node_run_id\" TEXT COLLATE \"C\",\n  \"snapshot_id\" TEXT COLLATE \"C\",\n  \"completion_operation_id\" TEXT COLLATE \"C\",\n  \"delivery_json\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_entries_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 200,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_clarify_host_runs",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_host_runs\" (\n  \"node_run_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"occurrence_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"slot_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"inherited_from_run_id\" TEXT COLLATE \"C\",\n  \"shard_instance_ref\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_host_runs_pkey\" PRIMARY KEY (\"node_run_id\")\n)"
+      }
+    },
+    {
+      "position": 201,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_clarify_materials",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_clarify_materials\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"entry_scope_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"consumer_node_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"material_revision\" BIGINT NOT NULL,\n  \"plan_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_context_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"snapshot_set_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"material_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"task_clarify_materials_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 544,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_channels:index:idx_task_clarify_channel_key",
+        "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_channel_key\" ON \"agent_workflow\".\"task_clarify_channels\" (\"task_id\", \"logical_key\")"
+      }
+    },
+    {
+      "position": 545,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_consumptions:index:idx_task_clarify_consumption_acceptance",
+        "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_consumption_acceptance\" ON \"agent_workflow\".\"task_clarify_consumptions\" (\"acceptance_ref\")"
+      }
+    },
+    {
+      "position": 546,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_consumptions:index:idx_task_clarify_consumption_material",
+        "sql": "CREATE INDEX \"idx_task_clarify_consumption_material\" ON \"agent_workflow\".\"task_clarify_consumptions\" (\"material_id\")"
+      }
+    },
+    {
+      "position": 547,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_entries:index:idx_task_clarify_entry_request",
+        "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_entry_request\" ON \"agent_workflow\".\"task_clarify_entries\" (\"channel_id\", \"request_id\")"
+      }
+    },
+    {
+      "position": 548,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_entries:index:idx_task_clarify_entry_round",
+        "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_entry_round\" ON \"agent_workflow\".\"task_clarify_entries\" (\"round_id\")"
+      }
+    },
+    {
+      "position": 549,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_entries:index:idx_task_clarify_entry_source",
+        "sql": "CREATE INDEX \"idx_task_clarify_entry_source\" ON \"agent_workflow\".\"task_clarify_entries\" (\"source_asking_run_id\")"
+      }
+    },
+    {
+      "position": 550,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_host_runs:index:idx_task_clarify_host_occurrence",
+        "sql": "CREATE INDEX \"idx_task_clarify_host_occurrence\" ON \"agent_workflow\".\"task_clarify_host_runs\" (\"task_id\", \"occurrence_ref\")"
+      }
+    },
+    {
+      "position": 551,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_host_runs:index:idx_task_clarify_host_slot",
+        "sql": "CREATE INDEX \"idx_task_clarify_host_slot\" ON \"agent_workflow\".\"task_clarify_host_runs\" (\"task_id\", \"slot_key\")"
+      }
+    },
+    {
+      "position": 552,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_materials:index:idx_task_clarify_material_version",
+        "sql": "CREATE UNIQUE INDEX \"idx_task_clarify_material_version\" ON \"agent_workflow\".\"task_clarify_materials\" (\"entry_scope_ref\", \"consumer_node_id\", \"material_revision\")"
+      }
+    },
+    {
+      "position": 553,
+      "statement": {
+        "kind": "index",
+        "logicalId": "task_clarify_materials:index:idx_task_clarify_material_consumer",
+        "sql": "CREATE INDEX \"idx_task_clarify_material_consumer\" ON \"agent_workflow\".\"task_clarify_materials\" (\"task_id\", \"consumer_node_id\")"
+      }
+    },
+    {
+      "position": 917,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_channels:fk:task_clarify_channels_task_id_tasks_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_channels\" ADD CONSTRAINT \"task_clarify_channels_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 918,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_consumptions:fk:task_clarify_consumptions_node_run_id_node_runs_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_consumptions\" ADD CONSTRAINT \"task_clarify_consumptions_node_run_id_node_runs_id_fk\" FOREIGN KEY (\"node_run_id\") REFERENCES \"agent_workflow\".\"node_runs\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 919,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_consumptions:fk:task_clarify_consumptions_task_id_tasks_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_consumptions\" ADD CONSTRAINT \"task_clarify_consumptions_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 920,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_consumptions:fk:task_clarify_consumptions_material_id_task_clarify_materials_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_consumptions\" ADD CONSTRAINT \"task_clarify_consumptions_material_id_task_clarify_349fa4a8348e\" FOREIGN KEY (\"material_id\") REFERENCES \"agent_workflow\".\"task_clarify_materials\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+      }
+    },
+    {
+      "position": 921,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_entries:fk:task_clarify_entries_channel_id_task_clarify_channels_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_entries\" ADD CONSTRAINT \"task_clarify_entries_channel_id_task_clarify_channels_id_fk\" FOREIGN KEY (\"channel_id\") REFERENCES \"agent_workflow\".\"task_clarify_channels\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 922,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_host_runs:fk:task_clarify_host_runs_node_run_id_node_runs_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_host_runs\" ADD CONSTRAINT \"task_clarify_host_runs_node_run_id_node_runs_id_fk\" FOREIGN KEY (\"node_run_id\") REFERENCES \"agent_workflow\".\"node_runs\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 923,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_host_runs:fk:task_clarify_host_runs_task_id_tasks_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_host_runs\" ADD CONSTRAINT \"task_clarify_host_runs_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 924,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_materials:fk:task_clarify_materials_task_id_tasks_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_materials\" ADD CONSTRAINT \"task_clarify_materials_task_id_tasks_id_fk\" FOREIGN KEY (\"task_id\") REFERENCES \"agent_workflow\".\"tasks\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 925,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_clarify_materials:fk:task_clarify_materials_entry_scope_ref_task_clarify_entries_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_clarify_materials\" ADD CONSTRAINT \"task_clarify_materials_entry_scope_ref_task_clarif_52d757845e9c\" FOREIGN KEY (\"entry_scope_ref\") REFERENCES \"agent_workflow\".\"task_clarify_entries\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 193,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "logical_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "asking_node_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "clarify_node_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "binding_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "host_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "head_entry_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "entry_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["task_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "tasks",
+            "name": "task_clarify_channels_task_id_tasks_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_clarify_channels",
+        "indexes": [
+          {
+            "columns": ["task_id", "logical_key"],
+            "name": "idx_task_clarify_channel_key",
+            "unique": true,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "task_clarify_channels",
+          "sqlite": "task_clarify_channels"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "taskClarifyChannels",
+        "sourceTable": "task_clarify_channels",
+        "unique": [
+          {
+            "columns": ["task_id", "logical_key"],
+            "expression": null,
+            "name": "idx_task_clarify_channel_key"
+          }
+        ]
+      }
+    },
+    {
+      "position": 194,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "node_run_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "material_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "acceptance_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "source_context_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "snapshot_set_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "finalized_prompt_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "accepted_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "consumed_at",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["node_run_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "node_runs",
+            "name": "task_clarify_consumptions_node_run_id_node_runs_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          },
+          {
+            "columns": ["task_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "tasks",
+            "name": "task_clarify_consumptions_task_id_tasks_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          },
+          {
+            "columns": ["material_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "task_clarify_materials",
+            "name": "task_clarify_consumptions_material_id_task_clarify_materials_id_fk",
+            "onDelete": "no action",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_clarify_consumptions",
+        "indexes": [
+          {
+            "columns": ["acceptance_ref"],
+            "name": "idx_task_clarify_consumption_acceptance",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["material_id"],
+            "name": "idx_task_clarify_consumption_material",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["node_run_id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["node_run_id"],
+        "providerTables": {
+          "postgresql": "task_clarify_consumptions",
+          "sqlite": "task_clarify_consumptions"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "taskClarifyConsumptions",
+        "sourceTable": "task_clarify_consumptions",
+        "unique": [
+          {
+            "columns": ["acceptance_ref"],
+            "expression": null,
+            "name": "idx_task_clarify_consumption_acceptance"
+          }
+        ]
+      }
+    },
+    {
+      "position": 195,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "channel_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "entry_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "host_entry_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "host_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "source_asking_run_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "source_context_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "source_context_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "config_snapshot_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "trigger_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "request_json",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "previous_snapshot_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["opening", "open", "completed", "not_requested", "superseded"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "disposition",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "round_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "gate_node_run_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "snapshot_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "completion_operation_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "delivery_json",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["channel_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "task_clarify_channels",
+            "name": "task_clarify_entries_channel_id_task_clarify_channels_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_clarify_entries",
+        "indexes": [
+          {
+            "columns": ["channel_id", "request_id"],
+            "name": "idx_task_clarify_entry_request",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["round_id"],
+            "name": "idx_task_clarify_entry_round",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["source_asking_run_id"],
+            "name": "idx_task_clarify_entry_source",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "task_clarify_entries",
+          "sqlite": "task_clarify_entries"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "taskClarifyEntries",
+        "sourceTable": "task_clarify_entries",
+        "unique": [
+          {
+            "columns": ["channel_id", "request_id"],
+            "expression": null,
+            "name": "idx_task_clarify_entry_request"
+          },
+          {
+            "columns": ["round_id"],
+            "expression": null,
+            "name": "idx_task_clarify_entry_round"
+          }
+        ]
+      }
+    },
+    {
+      "position": 196,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "node_run_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "occurrence_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "slot_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "inherited_from_run_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "shard_instance_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["node_run_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "node_runs",
+            "name": "task_clarify_host_runs_node_run_id_node_runs_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          },
+          {
+            "columns": ["task_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "tasks",
+            "name": "task_clarify_host_runs_task_id_tasks_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_clarify_host_runs",
+        "indexes": [
+          {
+            "columns": ["task_id", "occurrence_ref"],
+            "name": "idx_task_clarify_host_occurrence",
+            "unique": false,
+            "where": null
+          },
+          {
+            "columns": ["task_id", "slot_key"],
+            "name": "idx_task_clarify_host_slot",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["node_run_id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["node_run_id"],
+        "providerTables": {
+          "postgresql": "task_clarify_host_runs",
+          "sqlite": "task_clarify_host_runs"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "taskClarifyHostRuns",
+        "sourceTable": "task_clarify_host_runs",
+        "unique": []
+      }
+    },
+    {
+      "position": 197,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "entry_scope_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "consumer_node_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "material_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "plan_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "source_context_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "snapshot_set_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "material_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["task_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "tasks",
+            "name": "task_clarify_materials_task_id_tasks_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          },
+          {
+            "columns": ["entry_scope_ref"],
+            "foreignColumns": ["id"],
+            "foreignTable": "task_clarify_entries",
+            "name": "task_clarify_materials_entry_scope_ref_task_clarify_entries_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_clarify_materials",
+        "indexes": [
+          {
+            "columns": ["entry_scope_ref", "consumer_node_id", "material_revision"],
+            "name": "idx_task_clarify_material_version",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["task_id", "consumer_node_id"],
+            "name": "idx_task_clarify_material_consumer",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "task_clarify_materials",
+          "sqlite": "task_clarify_materials"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "taskClarifyMaterials",
+        "sourceTable": "task_clarify_materials",
+        "unique": [
+          {
+            "columns": ["entry_scope_ref", "consumer_node_id", "material_revision"],
+            "expression": null,
+            "name": "idx_task_clarify_material_version"
+          }
+        ]
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:ccd76bc82796d4a2836e35fcae3632d866a2128228f77a89124355ca62dc3721",
+  "sequence": 23,
+  "sqlDigest": "sha256:a4a656c95f8e0f8a472ef82fb80358a1cd7031b90967b4d8d339dc4ec7bdbaca",
+  "sqlFile": "0023_rfc372_task_clarify.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791791089664,
+        "hash": "5aebe05759ff6dcc45bf58e0dad9aebdde4218c2e5b24d8f29b6810635c671e5",
+        "index": 246,
+        "tag": "0247_rfc372_task_clarify"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:ac2581bb69c3bbfccce097179cce252e3b1bb3a6a31cf5fb93360852ac8631b2",
+      "count": 246,
+      "last": {
+        "folderMillis": 1791778977481,
+        "hash": "9278ad7ffcca681f047a49d3efedbcd837950c0e5e5944ba5d84e7ce2e9863c3",
+        "index": 245,
+        "tag": "0246_rfc372_mindmap_workspace"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:4a400713bdf038016db91ca38e6742988c48bdd229b6d5f07cfa1291bc2c97ad",
+      "count": 247,
+      "last": {
+        "folderMillis": 1791791089664,
+        "hash": "5aebe05759ff6dcc45bf58e0dad9aebdde4218c2e5b24d8f29b6810635c671e5",
+        "index": 246,
+        "tag": "0247_rfc372_task_clarify"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:92f680cc5dacd69f83f87650ec1b6a9e7b21189911ade7780a8f507525c1a68d",
+    "planDigest": "sha256:b6fec71e9bf4d70cf211ea59456604656b0faf5a0c908c02e45db200ee07eb3e"
+  },
+  "version": 2
+}

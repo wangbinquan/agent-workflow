@@ -48,6 +48,7 @@ import {
 import { providerAwareSqliteTable } from './providerSchema'
 import { createNativeUsageTables } from './observationNative'
 import { createClarifyMindmapTables } from './clarifyMindmap'
+import { createTaskClarifyTables } from './taskClarify'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
@@ -8612,3 +8613,12 @@ export const {
   clarifyMindmapCommandReceipts,
   clarifyMindmapSnapshots,
 } = createClarifyMindmapTables(tasks, clarifyRounds)
+
+// RFC-372: Task host/entry and immutable material/consumption companions.
+export const {
+  taskClarifyHostRuns,
+  taskClarifyChannels,
+  taskClarifyEntries,
+  taskClarifyMaterials,
+  taskClarifyConsumptions,
+} = createTaskClarifyTables(tasks, nodeRuns)
