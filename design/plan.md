@@ -402,7 +402,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-369](./RFC-369-node-run-supersession-derived/proposal.md) | node_run 旧代作废改由读侧推导：根治同一任务内并发铸 run 在 PostgreSQL SERIALIZABLE 下的页级谓词锁冲突（`nodeRunMintParticipant` 铸造事务里的同帧范围读，本地实验 8→0 次冲突），「旧代作废」改由 merge 状态机迁移与入口重放按同一判据推导（RFC-144 的保证逐条保留；用户接受「新一代存在即旧代不合并」的收紧）；工作组一轮内部错误按这一轮失败收场、终结孤儿 run、不再被当崩溃恢复重来；调度器跳过已被取代的 pending 行。设计门三轮（r1 FAIL / r2 FAIL / r3 PASS-WITH-FINDINGS），findings 全部回写。 **2026-09-23 两刀落地**：铸造只 insert、旧代作废由 merge 迁移围栏与入口重放按同一判据推导（SQL / 纯函数双引擎对拍），调度器跳过已被取代的 pending 行；工作组内部错误按这一轮失败收场、孤儿 run 经 `fail-host-run` 终结；实现门 PASS-WITH-FINDINGS 已全部处置。 | Done |
 | [RFC-370](./RFC-370-crewstation-hosted-deployment/proposal.md) | CrewStation完整托管部署：A先补中立端口／local adapter并独立验收；B按必须能力先部署，再逐项收编CS独立adapter，最终完整能力等价。 | In Progress · 2026-09-28 · 已批准实现／部署／远端发布；A-T1普查及A-T2配置切面首批进行中，独立设计门未执行。 |
 | [RFC-371](./RFC-371-run-observability/proposal.md) | 运行观测与统计：独立入口、任务 / Agent / 尝试分层用量、执行泳道、人民币成本与性能异常；同时覆盖独立部署与 CS 托管。 | In Progress · 2026-09-30 · 正式入口、账本、人民币价格与托管 v2 已实施；CI 收口、真实来源/联动及其他未闭环项见 [剩余工作](./RFC-371-run-observability/remaining-work.md)。 |
-| [RFC-372](./RFC-372-mindmap-clarify/proposal.md) | 现有反问的脑图模式：分类提问、同轮分支追问、全景/聚焦共享草稿与确认，复用原提交续跑；退役扩大实现。 | In Progress · 2026-10-12 · 用户批准 v6 轻量范围，设计已先发布，生产及用例完成、集中功能验证通过，产品发布与精确 SHA CI 待关闭，见 [轻量验收](./RFC-372-mindmap-clarify/lightweight-acceptance.md)。 |
+| [RFC-372](./RFC-372-mindmap-clarify/proposal.md) | 现有反问的脑图模式：分类提问、同轮分支追问、全景/聚焦共享草稿与确认，复用原提交续跑；退役扩大实现。 | In Progress · 2026-10-12 · 设计先发布，生产及用例完成、集中功能验证通过；产品已发布 `95ec4a8e`，首轮 CI 修复与总绿待关闭，见 [轻量验收](./RFC-372-mindmap-clarify/lightweight-acceptance.md)。 |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

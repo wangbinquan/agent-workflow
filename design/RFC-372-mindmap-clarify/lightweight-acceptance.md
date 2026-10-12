@@ -1,6 +1,6 @@
 # RFC-372 v6 轻量实现与验收
 
-日期：2026-10-12。当前状态：生产与用例完成，集中功能验证通过；产品提交、远端同步和精确 SHA CI 待关闭。未部署。
+日期：2026-10-12。当前状态：生产与用例完成，集中功能验证通过；产品已提交并推送 `95ec4a8ee9698792c148d6cadf4d241db73474d9`，推送后本地与 `origin/main` 精确一致。精确 SHA CI 尚未通过。未部署。
 
 ## 有效范围
 
@@ -74,3 +74,11 @@
 必要共享文件及其依赖将保留共同产出按明确路径提交，提交说明必须覆盖观测投影/迁移与 SQLite affected-row 修复。原 cold after-commit pump 等无关在制品保持，不纳入本次提交。未发送跨 session 信息。只有核对正式提交、远端同步以及对应 CI 后，才能关闭 L16 和 RFC 状态。
 
 最终源码候选的原 RFC-294 census 生成 13 份配套；此前生成发现未消费的 `ClarifyFollowupOperations` public 导出，移除后只针对变化候选重生成。原四个 scanner 规则保持，用主检出中的候选文件及 HEAD 的非候选只读数据构成提交语料，未创建分支、worktree 或替代检出。八项一次性增长记录分别解释本次原反问追问及并发观测投影的实际分母变化；不修改守卫、字段预算或原债务退役要求。备份用例计数更新不改变 src-only census。
+
+## 首次发布 CI 与本会话修复
+
+`95ec4a8e` 的 [主 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38250217082) 及辅助作业在依赖安装阶段报 `lockfile had changes, but lockfile is frozen`。对照确切差分，清理时误漏 `mermaid` 和 `happy-dom` 的 workspace 引用；原 manifest、Markdown 渲染和 Vitest 仍使用它们。这两处属于本会话清理错误，已恢复引用，完整保留并发 `@types/bun` / `bun-types` 1.4.3 升级。Bun 1.4.0 `bun install --frozen-lockfile --ignore-scripts` 验证通过：782 installs / 872 packages，no changes；证据 `frozen-install-fix.log` 位于上述临时证据目录。
+
+早期 schema 源码复核文档中的 20 个本机绝对链接已由 [设计提交 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/38240845009) 的 Lychee 日志确认失败。修复为已验证存在的首次发布 commit 源码链接和仓库内相对链接；临时证据保留路径文本。保留原历史结论和指纹，不恢复已经退役的代码。
+
+随该无生产源码变化的后继修复，按原 highwater 规则退役八条已消费的一次性增长声明，所有基线、scanner 与 src-only census 保持。冻结安装后的全仓 typecheck 仍有 82 条错误，均在并发观测统计实现/测试及既有 Bun 类型调用处，记录于 `typecheck-installed-final.log`。后继确切 SHA CI 需重新观察，不把冻结安装通过当成所有功能通过；不代修并发观测统计代码。

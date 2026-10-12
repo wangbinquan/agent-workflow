@@ -829,10 +829,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 2011,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-372 adds the existing-round follow-up application/store and verified retirement creator; concurrent RFC-371 adds original projection stores and Task qualification. Preserve all original transport/control inventories; generated +6 entries are explicitly enumerated in this commit."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,40 +843,28 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 284,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-372 appends questions inside the original Task lock and database transaction; concurrent RFC-371 stores projection/current/history/version facts atomically. Record the original scanner +7 callbacks without changing its external-effect predicate."
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 385,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "Concurrent RFC-371 original projection worker and qualification heartbeat add three observed background sites. Their exact owner and lifecycle records remain in the canonical manifest; no blanket scanner exemption is introduced by RFC-372 publication."
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 508,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-372 adds POST and DELETE follow-up routes on the original clarify transport; concurrent RFC-371 adds the original report route registration. Record three exact registrations; the scanner and W6/W9 retirement criteria stay unchanged."
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 7123,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-372 exposes only the generator contract and composes it in both original daemon roots; concurrent RFC-371 adds projection owner/query/worker dependencies. Record the exact generated symbol edges, preserving all public boundaries and unchanged scanner rules."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -900,10 +885,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 6231,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-372 original-round persistence and bootstrap composition plus concurrent RFC-371 projection adapters produce the exact canonical exception delta. Every generated edge retains concrete paths, symbols, owner and retirement wave; no directory exemption or new Task execution chain is added."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -917,10 +899,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1283,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-372 adds one consumed ClarifyFollowupGenerator contract through collaboration/public/participants, implemented by Task execution composition. Remove the unused operations re-export; keep original method/field/consumer budgets unchanged."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -941,10 +920,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 28249,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-372 adds classified question projection, shared confirmation and Canvas/Worker plus original-round follow-up, while retiring two independent companion modules. Concurrent RFC-371 projection source and original producer changes are included intact; register the exact new production symbols, not a generic growth allowance."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。 RFC-370 历史记录：981ae0f4dd28f6711adac2bec65c96fb231fd77d 相对父提交5a0e315c51ffa51ec56fc5c626049296d944dc67增加生命周期双 purpose 切面：mutation-entrypoints 1988→1989、cross-context observed imports 6902→6905、architecture exceptions 6044→6047、public surfaces 1259→1260、module symbol owners 27775→27782；遗漏当次allowGrowth声明，主CI的RFC-317 T17正式失败。已有批准覆盖一个新公开selector、三个bootstrap消费边、七个owner及一个观测写入口；原规则和其他125个baseline保持。此处记录遗漏，不补造后继未增长提交的许可，不改旧历史，不把后继CI追记为981ae0f准入通过；详见design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md。",
@@ -953,7 +929,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "39d2c7b841013a41dcb8f3d3fac4cae6cc398c7c",
-    "contentDigest": "sha256:5e8c256b065873f0c3ca8c416c85552b9900dcb4b25b1024e3a3c32b8e672d72",
+    "contentDigest": "sha256:8f3580ef93c9b89a60dd356623e9958cbb4cfac3654b1dd2a47a333a12e5cdd0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
