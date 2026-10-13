@@ -45,3 +45,13 @@
 并发 `f3ab372d9` 改动的澄清根 class 与 MindmapWorkspace Dialog 对应 header-compaction / overlay 清单失败，已按源码差异归因；RFC-371 观测报告失败保留原基线证据。不得将这些失败与上述本 RFC 的两项自有问题混为一谈。
 
 上述生产修复与补充用例完成后，定向 ESLint / Prettier 通过，独立功能复检 **PASS**；未关闭 P1/P2 为零。重新检查整个本地前端类型时，报告共享工作树未提交的 `components/shell/HostExecutionBanner.tsx:53` 缺少 `ErrorBannerProps.error`，该组件不在本 RFC 差异内，原语 `ErrorBanner` 也未被本次修改。保留并发文件与错误证据，不将这次全前端类型检查宣称为通过。
+
+## 未操作默认值与加载时序
+
+公共控件修复已发布为 `6d60aacda608fd07ddb8823e5db330f1f8b6a3c1`，对应 [CI 38366975170](https://github.com/wangbinquan/agent-workflow/actions/runs/38366975170)。该 SHA 的 Windows 构建、30 项 Markdown 布局/交互、27 项 Segmented 合同、22 项 UI 原语规则、3 项主题规则、6 项移动布局及 3 项 Prose 检查已通过，其余结果继续按各作业实际执行记录判断。
+
+前一 SHA `4888202bb` 的 Windows Skill 完整真实流程已通过；Agent 编辑首轮在容器回退时实际为 preview、预期 edit，重试通过。不能忽略这次波动：源码确认一条同现象触发路径——Agent 页面信息加载时可暂时传入只读，而旧实现把这一刻的默认单栏在挂载时直接保存，后续可编辑状态不会再修正默认值。
+
+修复将有效的已存/用户偏好与未操作默认值分离：无有效已存偏好且尚未操作时，默认值跟随当前只读状态，不写入 localStorage；用户实际操作后持久化，之后仍尊重明确选择。新增只读转可编辑的默认跟随及显式选择保留回归，损坏偏好仍整体回退。Agent E2E 在拖动前先确认正文可编辑并聚焦源码，明确“最近使用编辑区”这一回退前置条件，保留原几何、保存与刷新断言。新增布局/交互共 31 项，后继候选执行结果尚须 exact-SHA CI 证明。
+
+该修复完成生产与用例编写后，定向 ESLint / Prettier 通过，独立只读功能复检 **PASS**，默认跟随、明确选择保留、原焦点与比例行为无未关闭 P1/P2。保留先前失败和重试通过的证据，源码检视不代替执行结果。

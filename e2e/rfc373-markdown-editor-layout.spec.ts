@@ -130,6 +130,10 @@ test('Agent edit: drag limits, container fallback, draft preservation, save and 
   const separator = root.getByRole('separator')
   await expect(root).toHaveAttribute('data-mode', 'split')
   await expect(separator).toHaveAttribute('aria-valuenow', '50')
+  // Establish the pane the user was editing after page metadata has settled;
+  // automatic compact fallback deliberately follows the last interacted pane.
+  await expect(source).toBeEditable()
+  await source.focus()
   await assertNoCrowding(page, true)
   const bounds = (await separator.boundingBox())!
   await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)

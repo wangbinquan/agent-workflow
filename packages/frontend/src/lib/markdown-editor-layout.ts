@@ -15,20 +15,11 @@ export interface MarkdownLayoutPreference {
   singlePane: MarkdownSinglePane
 }
 
-export function parseMarkdownLayout(
-  raw: string | null,
-  readOnly = false,
-): MarkdownLayoutPreference {
-  const fallback: MarkdownLayoutPreference = {
-    version: 1,
-    mode: 'split',
-    ratio: 0.5,
-    singlePane: readOnly ? 'preview' : 'edit',
-  }
-  if (raw === null) return fallback
+export function parseSavedMarkdownLayout(raw: string | null): MarkdownLayoutPreference | null {
+  if (raw === null) return null
   try {
     const value: unknown = JSON.parse(raw)
-    if (typeof value !== 'object' || value === null) return fallback
+    if (typeof value !== 'object' || value === null) return null
     const candidate = value as Partial<MarkdownLayoutPreference>
     if (
       candidate.version !== 1 ||
@@ -39,7 +30,7 @@ export function parseMarkdownLayout(
       candidate.ratio < 0 ||
       candidate.ratio > 1
     ) {
-      return fallback
+      return null
     }
     return {
       version: 1,
@@ -48,8 +39,22 @@ export function parseMarkdownLayout(
       singlePane: candidate.singlePane as MarkdownSinglePane,
     }
   } catch {
-    return fallback
+    return null
   }
+}
+
+export function parseMarkdownLayout(
+  raw: string | null,
+  readOnly = false,
+): MarkdownLayoutPreference {
+  return (
+    parseSavedMarkdownLayout(raw) ?? {
+      version: 1,
+      mode: 'split',
+      ratio: 0.5,
+      singlePane: readOnly ? 'preview' : 'edit',
+    }
+  )
 }
 
 export function markdownSplitBounds(width: number) {

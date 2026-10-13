@@ -3,6 +3,7 @@ import {
   MARKDOWN_SPLIT_MIN_WIDTH,
   markdownEditorLayout,
   parseMarkdownLayout,
+  parseSavedMarkdownLayout,
 } from '@/lib/markdown-editor-layout'
 
 describe('Markdown layout preferences and available space', () => {
@@ -53,6 +54,7 @@ describe('Markdown layout preferences and available space', () => {
     '{"version":1,"mode":"split","ratio":1e309,"singlePane":"edit"}',
     '{"version":1,"mode":"split","ratio":"0.5","singlePane":"edit"}',
   ])('invalid storage has a complete usable fallback: %s', (raw) => {
+    expect(parseSavedMarkdownLayout(raw)).toBeNull()
     expect(parseMarkdownLayout(raw)).toEqual(parseMarkdownLayout(null))
   })
 })

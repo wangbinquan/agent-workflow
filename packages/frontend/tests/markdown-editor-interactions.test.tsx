@@ -152,7 +152,7 @@ describe('Markdown editor layout interactions', () => {
     const edit = screen.getByRole('radio', { name: 'Edit' })
     const split = screen.getByRole('radio', { name: 'Split' })
     const preview = screen.getByRole('radio', { name: 'Preview' })
-    expect(stored().mode).toBe('split')
+    expect(localStorage.getItem(MARKDOWN_LAYOUT_STORAGE_KEY)).toBeNull()
     expect(edit.getAttribute('aria-checked')).toBe('true')
     expect((split as HTMLButtonElement).disabled).toBe(true)
     const description = document.getElementById(split.getAttribute('aria-describedby')!)
@@ -212,8 +212,10 @@ describe('Markdown editor layout interactions', () => {
       const separator = screen.getByRole('separator')
       pointerCapture(separator)
       fireEvent.pointerDown(separator, { button: 0, pointerId: 7 })
+      const before = localStorage.getItem(MARKDOWN_LAYOUT_STORAGE_KEY)
       fireEvent.pointerMove(separator, { pointerId: 8, clientX: 900 })
-      expect(stored().ratio).toBe(0.5)
+      expect(localStorage.getItem(MARKDOWN_LAYOUT_STORAGE_KEY)).toBe(before)
+      expect(separator.getAttribute('aria-valuenow')).toBe('50')
       fireEvent.pointerMove(separator, { pointerId: 7, clientX: 900 })
       expect(stored().ratio * 988).toBeCloseTo(668)
       fireEvent[end](separator, { pointerId: 7 })
@@ -247,6 +249,26 @@ describe('Markdown editor layout interactions', () => {
     expect(source().readOnly).toBe(true)
     expect(source().value).toBe('# Reference')
     expect(changed).not.toHaveBeenCalled()
+  })
+
+  test('an untouched default follows resolved editability without replacing a user choice', () => {
+    containerWidth = 390
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <MarkdownEditor value="# Draft" onChange={onChange} fill readOnly />,
+    )
+    expect(editorMode()).toBe('preview')
+    expect(localStorage.getItem(MARKDOWN_LAYOUT_STORAGE_KEY)).toBeNull()
+    rerender(<MarkdownEditor value="# Draft" onChange={onChange} fill readOnly={false} />)
+    expect(editorMode()).toBe('edit')
+    expect(source().readOnly).toBe(false)
+    expect(localStorage.getItem(MARKDOWN_LAYOUT_STORAGE_KEY)).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: 'Preview' }))
+    rerender(<MarkdownEditor value="# Draft" onChange={onChange} fill readOnly />)
+    rerender(<MarkdownEditor value="# Draft" onChange={onChange} fill readOnly={false} />)
+    expect(editorMode()).toBe('preview')
+    expect(stored().mode).toBe('preview')
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   test('a remount restores user layout, while rejected storage remains usable', () => {

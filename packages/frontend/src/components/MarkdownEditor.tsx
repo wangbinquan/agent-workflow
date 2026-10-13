@@ -22,7 +22,9 @@ import {
   MARKDOWN_LAYOUT_STORAGE_KEY,
   markdownEditorLayout,
   parseMarkdownLayout,
+  parseSavedMarkdownLayout,
   type MarkdownEditorMode,
+  type MarkdownLayoutPreference,
   type MarkdownSinglePane,
 } from '@/lib/markdown-editor-layout'
 import { Prose } from './prose/Prose'
@@ -59,22 +61,29 @@ export function MarkdownEditor({
   const dragRef = useRef<{ pointerId: number; target: HTMLDivElement } | null>(null)
   const [dragging, setDragging] = useState(false)
   const [width, setWidth] = useState(0)
-  const [preference, setPreference] = useState(() => {
+  const [savedPreference, setSavedPreference] = useState(() => {
     try {
-      return parseMarkdownLayout(localStorage.getItem(MARKDOWN_LAYOUT_STORAGE_KEY), readOnly)
+      return parseSavedMarkdownLayout(localStorage.getItem(MARKDOWN_LAYOUT_STORAGE_KEY))
     } catch {
-      return parseMarkdownLayout(null, readOnly)
+      return null
     }
   })
+  // Loading resource metadata can temporarily make a writable page read-only.
+  // Defaults follow that live state until the user actually chooses a layout
+  // or interacts with a pane; mounting must not persist a transient default.
+  const preference = savedPreference ?? parseMarkdownLayout(null, readOnly)
+  const setPreference = (update: (current: MarkdownLayoutPreference) => MarkdownLayoutPreference) =>
+    setSavedPreference((current) => update(current ?? parseMarkdownLayout(null, readOnly)))
   const layout = markdownEditorLayout(preference, width)
 
   useEffect(() => {
+    if (savedPreference === null) return
     try {
-      localStorage.setItem(MARKDOWN_LAYOUT_STORAGE_KEY, JSON.stringify(preference))
+      localStorage.setItem(MARKDOWN_LAYOUT_STORAGE_KEY, JSON.stringify(savedPreference))
     } catch {
       // Layout still works when browser storage is unavailable or full.
     }
-  }, [preference])
+  }, [savedPreference])
 
   useLayoutEffect(() => {
     const panes = panesRef.current
