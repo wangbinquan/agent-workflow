@@ -1302,6 +1302,9 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
               model: options.model ?? null,
               isSandbox: options.isSandbox === true,
               workspaceScope,
+              ...(round > 0 && lastResult !== undefined
+                ? { resumeRetainedRef: lastResult.retainedRef }
+                : {}),
               ...(options.executionSession === undefined
                 ? {}
                 : {
@@ -1313,6 +1316,9 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
                       envelopeNonce,
                       prompt,
                       runtimeBinding: options.runtimeBinding ?? null,
+                      ...(options.runtimeObservationIdentity
+                        ? { runtimeObservationIdentity: options.runtimeObservationIdentity }
+                        : {}),
                       model: options.model ?? null,
                       isSandbox: options.isSandbox === true,
                       timeoutMs,

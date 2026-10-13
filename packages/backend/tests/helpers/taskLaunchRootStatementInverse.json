@@ -83,7 +83,8 @@
         {
           "name": "observationReports",
           "introducedSha256": "39d15c2cb2b38a3942f35713f448fbe58b06c2c7d9f6259ab2bec4dbe991016f",
-          "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db,\n    generation: databaseProvider.generation.payload.generationId,\n    appHome: Paths.root,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});"
+          "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db,\n    generation: databaseProvider.generation.payload.generationId,\n    appHome: Paths.root,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});",
+          "approvedPreexistingHookInverseSha256": "553ab56399ce12b6b16fc7e54c3e0f2dba281c8c3707ea8954dfb2e962bd3d54"
         }
       ]
     },
@@ -171,7 +172,8 @@
         {
           "name": "observationReports",
           "introducedSha256": "ce095b14ca339cfa2748f6ccdd4a0d9786b52b7e98c93381a0e1d8a75aac6bf0",
-          "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db: input.db,\n    generation: input.provider.runtime.generationId,\n    appHome: input.appHome,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});"
+          "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db: input.db,\n    generation: input.provider.runtime.generationId,\n    appHome: input.appHome,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});",
+          "approvedPreexistingHookInverseSha256": "db17ce9f28972118a4e950dbfd2c4b62111a77b8af55a95dcb3bb1c5269f8f42"
         }
       ]
     },

@@ -1,5 +1,6 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { EventCenterService } from './application/eventCenterService'
+import { createEventCenterNotificationWake } from './application/notificationWake'
 import {
   createEventResponseDeliveryConsumer,
   createEventResponseRoutingDirectory,
@@ -96,6 +97,9 @@ export interface EventCenterModule {
     }
   }
   readonly worker: {
+    /** Transport fast path: native consumes immediately; selected mode only wakes its owner. */
+    notify(deliveryId: string): Promise<unknown>
+    readonly waitForWake?: (intervalMs: number, signal: AbortSignal) => Promise<void>
     runOneDueObserver(): Promise<'completed' | 'failed' | 'obsolete' | 'idle'>
     runOneNotification(
       deliveryId?: string,
@@ -197,6 +201,7 @@ export function deferEventCenterModule(pending: Promise<EventCenterModule>): Eve
       },
     },
     worker: {
+      notify: async (deliveryId) => await (await resolve()).worker.notify(deliveryId),
       runOneDueObserver: async () => await (await resolve()).worker.runOneDueObserver(),
       runOneNotification: async (deliveryId) =>
         await (await resolve()).worker.runOneNotification(deliveryId),
@@ -245,6 +250,7 @@ export type EventCenterAutomationCapability =
     }>
 
 export interface ComposeEventCenterOptions {
+  readonly executionMode?: 'host'
   readonly db: ProviderNeutralDatabase
   readonly typePackageDescriptorJsons: readonly string[]
   /**
@@ -284,6 +290,8 @@ export async function composeEventCenterWithPorts(
   options: ComposeEventCenterWithPortsOptions,
 ): Promise<EventCenterModule> {
   const eventStore = options.persistence.events
+  const notificationWake =
+    options.executionMode === 'host' ? createEventCenterNotificationWake() : undefined
   const customSources = options.persistence.customSources
   const responseRuleStore = options.persistence.responseRules
   const responseRules = new EventResponseRuleService({
@@ -490,6 +498,11 @@ export async function composeEventCenterWithPorts(
       },
     },
     worker: {
+      notify: (deliveryId) =>
+        notificationWake === undefined
+          ? service.runOneNotification(deliveryId)
+          : Promise.resolve(notificationWake.wake()),
+      ...(notificationWake === undefined ? {} : { waitForWake: notificationWake.wait }),
       runOneDueObserver: () => service.runOneDueObserver(),
       runOneNotification: (deliveryId) => service.runOneNotification(deliveryId),
     },

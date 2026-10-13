@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hostname } from 'node:os'
 import { createLocalSystemAgentRetainedContents } from '../src/modules/runtime-management/infrastructure/local/systemAgentRetainedContents'
+import { composeLocalSystemAgentRunFamily } from '../src/modules/task-execution/composition/localSystemAgentRunFamily'
 import {
   createLocalAgentExecutionRecoveryReferences,
   encodeLocalAgentExecutionRecoveryReference,
@@ -104,6 +105,107 @@ test('material inspection proves the original generation without releasing it', 
     }),
   ).toEqual({ available: true })
   expect(existsSync(replacement.locations.root)).toBe(true)
+})
+
+// RFC-370 implementation gate: preparing an uncommitted follow-up must not
+// invalidate the only material reference already persisted in the journal.
+test('a follow-up keeps the original durable material generation across a recreated owner', async () => {
+  const root = home(),
+    owner = createLocalSystemAgentRetainedContents({ appHome: () => root })
+  const scope = owner.workspaces.capture({ namespace: 'shared', name: 'original-protocol-chain' })
+  const first = owner.open({ scope, feature: () => 'memory-distill', seedFiles: () => undefined })
+  await first.workspace.prepare()
+  const marker = join(first.locations.root, '.aw-system-content-owner.json')
+  const originalMarker = readFileSync(marker, 'utf8')
+  const next = owner.open({
+    scope,
+    resumeRetainedRef: first.workspace.retainedRef,
+    feature: () => 'memory-distill',
+    seedFiles: () => undefined,
+  })
+  await next.workspace.prepare()
+  expect(next.workspace.runContent).not.toEqual(first.workspace.runContent)
+  expect(next.workspace.retainedRef).toBe(first.workspace.retainedRef)
+  expect(readFileSync(marker, 'utf8')).toBe(originalMarker)
+  const rebuilt = createLocalSystemAgentRetainedContents({ appHome: () => root })
+  const restoredScope = rebuilt.workspaces.capture({ namespace: 'shared', name: scope.name })
+  expect(
+    await rebuilt.contents.inspect({
+      scope: restoredScope,
+      retainedRef: first.workspace.retainedRef,
+    }),
+  ).toEqual({ available: true })
+  const resumed = rebuilt.open({
+    scope: restoredScope,
+    resumeRetainedRef: first.workspace.retainedRef,
+    feature: () => 'memory-distill',
+    seedFiles: () => undefined,
+  })
+  await resumed.workspace.prepare()
+  expect(readFileSync(marker, 'utf8')).toBe(originalMarker)
+  expect(
+    await rebuilt.contents.release({
+      scope: restoredScope,
+      retainedRef: resumed.workspace.retainedRef,
+    }),
+  ).toEqual({ removed: true })
+})
+
+test('a failed real System continuation preserves the replacement material generation during setup cleanup', async () => {
+  const root = home(),
+    owner = createLocalSystemAgentRetainedContents({ appHome: () => root })
+  const scope = owner.workspaces.capture({ namespace: 'shared', name: 'replaced-protocol-chain' })
+  const first = owner.open({ scope, feature: () => 'memory-distill', seedFiles: () => undefined })
+  await first.workspace.prepare()
+  const replacement = owner.open({
+    scope,
+    feature: () => 'memory-distill',
+    seedFiles: () => [{ path: 'original.txt', content: 'replacement material remains' }],
+  })
+  await replacement.workspace.prepare()
+  const marker = join(replacement.locations.root, '.aw-system-content-owner.json')
+  const originalMarker = readFileSync(marker, 'utf8')
+  let preparedReceipts = 0,
+    observations = 0
+  const native = composeLocalSystemAgentRunFamily({
+    appHome: () => root,
+    observations: () => {
+      observations += 1
+      throw new Error('failed setup may not start an invocation')
+    },
+  })
+  const selectedScope = native.family.workspaces.capture({ namespace: 'shared', name: scope.name })
+  const result = await native.family.run({
+    feature: 'memory-distill',
+    agentName: 'aw-memory-distiller',
+    systemPrompt: 'original system prompt',
+    prompt: 'original follow-up',
+    protocol: 'opencode',
+    workspaceScope: selectedScope,
+    resumeRetainedRef: first.workspace.retainedRef,
+    executionReceipts: {
+      async prepared() {
+        preparedReceipts += 1
+      },
+      async started() {
+        throw new Error('failed setup may not activate an invocation')
+      },
+    },
+  })
+  expect(result.status).toBe('spawn-failed')
+  expect(result.stderrTail).toContain('system-content-resume-generation-unavailable')
+  expect(result.executionReceipt).toBeUndefined()
+  expect({ preparedReceipts, observations }).toEqual({ preparedReceipts: 0, observations: 0 })
+  expect(readFileSync(marker, 'utf8')).toBe(originalMarker)
+  expect(readFileSync(join(replacement.locations.workingDirectory, 'original.txt'), 'utf8')).toBe(
+    'replacement material remains',
+  )
+  expect(
+    await native.family.retainedContents.inspect({
+      scope: selectedScope,
+      retainedRef: replacement.workspace.retainedRef,
+    }),
+  ).toEqual({ available: true })
 })
 
 test.each(['foreign-installation', 'wrong-name', 'wrong-namespace', 'missing-owner-file'] as const)(

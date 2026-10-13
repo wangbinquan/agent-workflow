@@ -671,7 +671,7 @@ export async function composePostgresqlApplication(
   if (
     input.hostExecution &&
     (phase.kind !== 'daemon' ||
-      input.hostExecution.scope.provider !== 'postgresql' ||
+      input.hostExecution.scope.provider !== input.provider.runtime.provider ||
       input.hostExecution.scope.generation !== input.provider.runtime.generationId)
   )
     throw new Error('postgresql-host-execution-scope-mismatch')
@@ -1717,6 +1717,7 @@ export async function composePostgresqlApplication(
   )
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composeEventCenter({
+    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),
     db: input.db,
     customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
     typePackageDescriptorJsons: [

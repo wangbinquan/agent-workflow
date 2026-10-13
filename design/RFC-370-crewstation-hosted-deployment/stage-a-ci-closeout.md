@@ -1,5 +1,21 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 授权修复与完整实现门结果
+
+用户已明确授权接手限定历史 CI 修复，并授权本任务内只读审阅完整阶段 A。原实现门返回 1 个 P1、2 个 P2；三个 finding 和材料失败清理尾项均已修复，原审阅者必要续审结论为 PASS／0 findings。该结论只代表当前源码候选的独立功能门，不能代签 A-G、GitHub 总绿或 CS 部署。没有跨独立 session 消息。
+
+- webhook 的所选宿主 fast path 只唤醒 Event Center 原 owner，同一 polling lifetime 串行消费和排空；native 立即消费保持。两处 daemon 装配显式选择 host 模式，真实 HTTP 入站覆盖 resource-only、standby、激活、失权、原在途 ACK 和 idle wake。
+- Memory 补问显式携带原 retained material reference，跨轮保持同一材料 generation，各轮 executionRef 仍独立。journal 提交前／后中断均可冷恢复原补问；续接检查尚未成功时，准备失败清理不会删除同路径替代材料。真实 System family 失败链回归覆盖 marker、seed 内容和未发执行。
+- 原 runtime observation identity 三字段进入原 durable context；冷补问还原原身份和 model，不重新解析当前配置。旧记录缺字段仍兼容；当前 profile 改名、revision 和 model 改变后的请求与真实 System observation owner row 均核对原身份。
+- 限定旧 CI 修复使用 Bun.Subprocess 的 signalCode 合同、两个原 root 的有限精确逆变换及样式计数 155→154。原 whole-source／whole-body 指纹没有改写；原变异、未知后缀和完整调用者断言保留。既有 dev／clarify inverse 现在同时识别绝对、相对和 Windows 文件名。
+- 确切旧主 CI `38465814183`／job `115532229852` 暴露本阶段新增的 provider-name 分支；原根现在比较所选 owner 与实际 runtime 的 provider／generation。三条真实根入口拒绝回归及原 provider 分支守卫通过，未抬高预算或登记品牌豁免。
+
+集中诊断有效结果：backend Typecheck 通过（原 Node 默认堆 4 GiB OOM 是无效执行；8 GiB 的同命令 exit 0）；Memory 业务恢复／P12／System root 3 文件 29 pass；原 System caller／polling／Event Center 4 文件 46 pass；材料 generation 两条定向用例 2 pass；真实根／provider 守卫／三个原 native 正文／P12 最后 11 pass。此前 webhook 3、journal 8、bounded owner 11 的有效结果复用。新增 webhook／Memory 用例已登记 Windows 专项。未运行全仓本地 gate；双 provider 和完整流水线最终以发布后确切 SHA GitHub 为准。
+
+旧 `3472c9fc2` 主 CI 为 failure，72 jobs 中有 39 个失败，不能称为总绿。旧 job `115532230349` 的剩余两处占位计数在 `cli/dev.ts` 与原 completeObservationReports；其实际源码变化不属于本阶段，保留证据并按 AGENTS 等原责任修复。未将这两项自动并入本次限定历史例外。并发 RFC-371 在制文件保持，已提交的并发 main 祖先完整保留；最终 canonical 从本次提交的 Git source-ref 统一生成。
+
+当前尚余完整提交及架构配套、远端同步和新确切 SHA 总 CI 终态验收。阶段 A／A-G 仍待 GitHub 总绿，B/M0 未启动，AW 尚未部署 CS。
+
 2026-10-14。本文件记录候选和确切证据，不能替代 GitHub 总绿、独立 Codex 实现门或实际 CS 部署。
 
 ## 后续确切 CI 缺陷收口

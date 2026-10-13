@@ -30,6 +30,7 @@ export interface AuthorityPollingDaemonRuntimeHandleBindingInput {
   readonly group: DaemonProviderHostExecutionHandleBinding['group']
   readonly intervalMs: number
   readonly runImmediately?: boolean
+  readonly waitForNextRun?: (intervalMs: number, signal: AbortSignal) => Promise<void>
   readonly beforeStart?: (input: AuthorityPollingDaemonRuntimeRunInput) => MaybePromise<void>
   readonly afterActive?: (input: AuthorityPollingDaemonRuntimeRunInput) => MaybePromise<void>
   readonly run: (input: AuthorityPollingDaemonRuntimeRunInput) => Promise<void>
@@ -48,6 +49,7 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
   const afterActive = input.afterActive
   const run = input.run
   const onError = input.onError
+  const waitForNextRun = input.waitForNextRun?.bind(input) ?? waitForPollingInterval
   if (
     typeof id !== 'string' ||
     id.length === 0 ||
@@ -129,7 +131,7 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
                 await onError.call(input, error, dispatchInput)
               }
               if (runImmediately !== true) {
-                await waitForPollingInterval(intervalMs, controller.signal)
+                await waitForNextRun(intervalMs, controller.signal)
               }
               while (!retired && !controller.signal.aborted && dispatchInput.current()) {
                 try {
@@ -138,7 +140,7 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
                   await onError.call(input, error, dispatchInput)
                 }
                 if (retired || controller.signal.aborted || !current()) break
-                await waitForPollingInterval(intervalMs, controller.signal)
+                await waitForNextRun(intervalMs, controller.signal)
               }
             })()
       // The owner may fail before RuntimeSession has received this handle.

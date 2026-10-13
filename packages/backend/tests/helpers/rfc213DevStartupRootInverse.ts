@@ -69,7 +69,7 @@ function inverseRevision(text: string, changes: readonly Change[]): string {
 // Test-only inverse of the approved development preparation and static self-check
 // imports. Preserve every other byte, including concurrent host/observation edits.
 export function inverseRfc213DevStartupRoot(source: ts.SourceFile): ts.SourceFile {
-  if (!source.fileName.replaceAll('\\', '/').endsWith('/cli/start.ts')) return source
+  if (!('/' + source.fileName.replaceAll('\\', '/')).endsWith('/cli/start.ts')) return source
   const text = inverseRevision(inverseRevision(source.text, declarationCheck), preparation)
   if (text === source.text) return source
   return ts.createSourceFile(source.fileName, text, ts.ScriptTarget.Latest, true)

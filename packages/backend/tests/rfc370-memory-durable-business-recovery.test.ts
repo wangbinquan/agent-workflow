@@ -11,7 +11,16 @@ import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastruct
 import { DrizzleMemoryDistillExecutionJournal } from '../src/modules/memory/infrastructure/memoryDistillExecutionJournal'
 import { MemoryDistillSettlementPendingError } from '../src/modules/memory/application/distill/settlement'
 import { IndeterminateRuntimeProcessError } from '../src/modules/memory/application/distill/memoryDistiller'
-import { memories, memoryDistillJobs, memoryDistillExecutionReceipts } from '../src/db/schema'
+import {
+  memories,
+  memoryDistillJobs,
+  memoryDistillExecutionReceipts,
+  runtimes,
+} from '../src/db/schema'
+import { systemAgentObservationOwners } from '../src/db/observationSystem'
+import { composeSystemAgentObservations } from '../src/modules/task-execution/composition/systemAgentObservations'
+import { composeLocalInvocationObservations } from '../src/modules/run-observability/composition/localInvocations'
+import { composeObservationUsageSource } from '../src/modules/task-execution/composition/observationUsageSource'
 import { deferred } from './helpers/taskHostExecution'
 
 const roots: string[] = []
@@ -230,66 +239,164 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
     expect(restored.state.calls).toBe(0)
   })
 
-  test('original protocol continuation is handed to a fresh active owner without replaying the completed round', async () => {
-    const db = scope.db,
-      root = home(),
-      first = memoryJournalOperations(db, root, {
-        preparedRecovery: true,
-        respond: async () => ({ text: 'Original non-envelope answer' }),
+  test.each(['before-commit', 'after-commit'] as const)(
+    'original protocol continuation survives %s of next-round preparation without replaying the completed round',
+    async (crash) => {
+      const db = scope.db,
+        root = home(),
+        first = memoryJournalOperations(db, root, {
+          preparedRecovery: true,
+          respond: async () => ({ text: 'Original non-envelope answer' }),
+        })
+      const queued = await first.operations.distillCommands.enqueue({
+        sourceKind: 'clarify',
+        sourceEventId: 'original-continuation',
+        taskId: null,
+        debounceMs: 0,
       })
+      if (!queued) throw new Error('original job missing')
+      const prepare = DrizzleMemoryDistillExecutionJournal.prototype.prepare
+      let prepared = 0
+      const interrupted = spyOn(
+        DrizzleMemoryDistillExecutionJournal.prototype,
+        'prepare',
+      ).mockImplementation(async function (this: DrizzleMemoryDistillExecutionJournal, input) {
+        prepared += 1
+        if (prepared === 2 && crash === 'before-commit')
+          throw new Error('daemon stopped before next-round journal COMMIT')
+        await prepare.call(this, input)
+        if (prepared === 2) throw new Error('daemon stopped after next-round journal COMMIT')
+      })
+      try {
+        await expect(
+          first.operations.distillWorker.tick({ execution: { current: () => true } }),
+        ).rejects.toBeInstanceOf(MemoryDistillSettlementPendingError)
+      } finally {
+        interrupted.mockRestore()
+      }
+      expect(first.state.calls).toBe(1)
+      const originalReceipts = await db.select().from(memoryDistillExecutionReceipts)
+      expect(originalReceipts).toHaveLength(crash === 'before-commit' ? 1 : 2)
+      expect(new Set(originalReceipts.map((row) => row.retainedRef)).size).toBe(1)
+      const originalRequest = first.state.requests[0]!
+      const restored = memoryJournalOperations(db, root)
+      if (crash === 'after-commit')
+        await expect(restored.operations.distillWorker.recoverRunning()).rejects.toBeInstanceOf(
+          IndeterminateRuntimeProcessError,
+        )
+      else
+        expect(await restored.operations.distillWorker.recoverRunning()).toEqual({ recovered: 0 })
+      expect(restored.state.calls).toBe(0)
+      expect(await restored.operations.distillCommands.recoverIssued(queued.jobId)).toBe(true)
+      expect(await restored.operations.distillWorker.recoverRunning()).toEqual({ recovered: 0 })
+      expect((await db.select().from(memoryDistillJobs))[0]).toMatchObject({
+        status: 'running',
+        attempts: 0,
+      })
+      await expect(restored.operations.distillWorker.tick()).rejects.toThrow(
+        'requires-execution-authority',
+      )
+      expect(
+        await restored.operations.distillWorker.tick({ execution: { current: () => true } }),
+      ).toMatchObject({ succeeded: 1 })
+      expect(restored.state.calls).toBe(1)
+      expect(restored.state.requests[0]).toMatchObject({
+        resumeSessionId: 'original-memory-native-session',
+        workspaceScope: originalRequest.workspaceScope,
+        protocol: originalRequest.protocol,
+        resumeRetainedRef: originalReceipts[0]!.retainedRef,
+      })
+      expect((await db.select().from(memoryDistillJobs))[0]).toMatchObject({
+        id: queued.jobId,
+        status: 'done',
+        attempts: 0,
+      })
+    },
+  )
+
+  test('cold continuation retains the registered runtime identity in its request and actual System observation row', async () => {
+    const db = scope.db,
+      root = home()
+    const identity = {
+      registrationId: 'original-memory-runtime',
+      configurationRevision: 17,
+      acceptedName: 'original-memory-profile',
+    }
+    await db.insert(runtimes).values({
+      id: identity.registrationId,
+      name: identity.acceptedName,
+      protocol: 'opencode',
+      probeFence: identity.configurationRevision,
+      model: 'original-model',
+    })
+    const observations = composeSystemAgentObservations({
+      db,
+      observations: composeLocalInvocationObservations(db, composeObservationUsageSource(db)),
+    })
+    const first = memoryJournalOperations(db, root, {
+      observations,
+      preparedRecovery: true,
+      respond: async () => ({ text: 'Original non-envelope answer' }),
+    })
     const queued = await first.operations.distillCommands.enqueue({
       sourceKind: 'clarify',
-      sourceEventId: 'original-continuation',
+      sourceEventId: 'registered-original-continuation',
       taskId: null,
       debounceMs: 0,
     })
     if (!queued) throw new Error('original job missing')
     const prepare = DrizzleMemoryDistillExecutionJournal.prototype.prepare
-    let prepared = 0
+    let rounds = 0
     const interrupted = spyOn(
       DrizzleMemoryDistillExecutionJournal.prototype,
       'prepare',
     ).mockImplementation(async function (this: DrizzleMemoryDistillExecutionJournal, input) {
+      if (++rounds === 2) throw new Error('daemon stopped before next-round journal COMMIT')
       await prepare.call(this, input)
-      if (++prepared === 2) throw new Error('daemon stopped before next round')
     })
     try {
       await expect(
-        first.operations.distillWorker.tick({ execution: { current: () => true } }),
+        first.operations.distillWorker.tick({
+          execution: { current: () => true },
+          runtimeName: identity.acceptedName,
+        }),
       ).rejects.toBeInstanceOf(MemoryDistillSettlementPendingError)
     } finally {
       interrupted.mockRestore()
     }
-    expect(first.state.calls).toBe(1)
-    const originalRequest = first.state.requests[0]!
-    const restored = memoryJournalOperations(db, root)
-    await expect(restored.operations.distillWorker.recoverRunning()).rejects.toBeInstanceOf(
-      IndeterminateRuntimeProcessError,
-    )
-    expect(restored.state.calls).toBe(0)
+    const journal = new DrizzleMemoryDistillExecutionJournal(db)
+    expect((await journal.findByJob(queued.jobId))[0]?.runtimeObservationIdentity).toEqual(identity)
+    await db
+      .update(runtimes)
+      .set({ name: 'renamed-current-profile', probeFence: 18, model: 'replacement-model' })
+      .where(eq(runtimes.id, identity.registrationId))
+    const restored = memoryJournalOperations(db, root, { observations })
     expect(await restored.operations.distillCommands.recoverIssued(queued.jobId)).toBe(true)
-    expect(await restored.operations.distillWorker.recoverRunning()).toEqual({ recovered: 0 })
-    expect((await db.select().from(memoryDistillJobs))[0]).toMatchObject({
-      status: 'running',
-      attempts: 0,
-    })
-    await expect(restored.operations.distillWorker.tick()).rejects.toThrow(
-      'requires-execution-authority',
-    )
     expect(
-      await restored.operations.distillWorker.tick({ execution: { current: () => true } }),
+      await restored.operations.distillWorker.tick({
+        execution: { current: () => true },
+        runtimeName: 'renamed-current-profile',
+      }),
     ).toMatchObject({ succeeded: 1 })
-    expect(restored.state.calls).toBe(1)
+    expect(restored.state.requests).toHaveLength(1)
     expect(restored.state.requests[0]).toMatchObject({
+      runtimeObservationIdentity: identity,
+      model: 'original-model',
       resumeSessionId: 'original-memory-native-session',
-      workspaceScope: originalRequest.workspaceScope,
-      protocol: originalRequest.protocol,
     })
-    expect((await db.select().from(memoryDistillJobs))[0]).toMatchObject({
-      id: queued.jobId,
-      status: 'done',
-      attempts: 0,
-    })
+    const owner = (
+      await db
+        .select()
+        .from(systemAgentObservationOwners)
+        .where(eq(systemAgentObservationOwners.id, restored.state.observationIds[0]!))
+    )[0]!
+    expect(JSON.parse(owner.runtime)).toEqual({ ...identity, protocol: 'opencode' })
+    expect(owner.originalAttempt).toBe('0:1')
+    expect(
+      (await journal.findByJob(queued.jobId)).every(
+        (row) => JSON.stringify(row.runtimeObservationIdentity) === JSON.stringify(identity),
+      ),
+    ).toBe(true)
   })
 
   test('an unactivated prepared follow-up is physically retired, then continued once by a new active owner', async () => {

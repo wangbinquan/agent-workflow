@@ -22,6 +22,31 @@ import type {
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { deferred } from './helpers/taskHostExecution'
 
+// 3472c9fc2 / job 115532229852: the root checks the selected owner's
+// actual graph identity, without another provider-name implementation branch.
+test.each(['provider', 'generation', 'unstarted'] as const)(
+  'the real PostgreSQL root rejects a mismatched %s before constructing resources',
+  async (mismatch) => {
+    const { composePostgresqlApplication } = await import('../src/cli/postgresqlDaemonApplication')
+    const input = {
+      hostExecution: {
+        scope: {
+          provider: mismatch === 'provider' ? 'sqlite' : 'postgresql',
+          generation: mismatch === 'generation' ? 'old-generation' : 'original-generation',
+        },
+      },
+      provider: { runtime: { provider: 'postgresql', generationId: 'original-generation' } },
+    } as unknown as Parameters<typeof composePostgresqlApplication>[0]
+    const phase = mismatch === 'unstarted' ? { kind: 'unstarted', scope: {} } : { kind: 'daemon' }
+    await expect(
+      composePostgresqlApplication(
+        input,
+        phase as Parameters<typeof composePostgresqlApplication>[1],
+      ),
+    ).rejects.toThrow('postgresql-host-execution-scope-mismatch')
+  },
+)
+
 function fixture(
   harness: ProviderHarness,
   mode: DaemonHostExecutionSelection['mode'] = 'execution',

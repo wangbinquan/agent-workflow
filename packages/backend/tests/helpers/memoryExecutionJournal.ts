@@ -12,6 +12,7 @@ import { composeNodeRunPromptOperations } from '@/modules/task-execution/composi
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { emptySystemAgentOutputEvidence } from '@/services/systemAgentRun'
+import type { SystemAgentObservationFactory } from '@/modules/task-execution/application/ports/systemAgentObservation'
 
 export function memoryJournalOperations(
   db: ProviderNeutralDatabase,
@@ -19,6 +20,7 @@ export function memoryJournalOperations(
   input: {
     readonly current?: () => boolean
     readonly preparedRecovery?: true
+    readonly observations?: SystemAgentObservationFactory
     readonly respond?: (
       request: SystemAgentRunRequest,
       call: number,
@@ -29,7 +31,13 @@ export function memoryJournalOperations(
   } = {},
 ) {
   const contents = createLocalSystemAgentRetainedContents({ appHome: () => root })
-  const state = { calls: 0, recoveries: 0, reaped: true, requests: [] as SystemAgentRunRequest[] }
+  const state = {
+    calls: 0,
+    recoveries: 0,
+    reaped: true,
+    requests: [] as SystemAgentRunRequest[],
+    observationIds: [] as string[],
+  }
   const family: SystemAgentRunFamily = {
     workspaces: contents.workspaces,
     retainedContents: contents.contents,
@@ -42,6 +50,9 @@ export function memoryJournalOperations(
     async run(request) {
       const opened = contents.open({
         scope: request.workspaceScope,
+        ...(request.resumeRetainedRef === undefined
+          ? {}
+          : { resumeRetainedRef: request.resumeRetainedRef }),
         feature: () => request.feature,
         seedFiles: () => request.seedFiles,
       })
@@ -86,9 +97,24 @@ export function memoryJournalOperations(
         }
       state.calls += 1
       state.requests.push(request)
+      const observation = await input.observations?.open({
+        feature: request.feature,
+        agentName: request.agentName,
+        protocol: request.protocol,
+        startedAt: started.startedAt,
+        ...(request.runtimeObservationIdentity
+          ? { runtimeObservationIdentity: request.runtimeObservationIdentity }
+          : {}),
+        ...(request.observationDemand ? { demand: request.observationDemand } : {}),
+      })
+      if (observation) {
+        state.observationIds.push(observation.invocationId)
+        await observation.accept({})
+      }
       const response = (await input.respond?.(request, state.calls)) ?? {
         text: memoryEnvelope(request),
       }
+      await observation?.settle(response.status ?? 'ok', Date.now())
       return {
         status: response.status ?? 'ok',
         exitCode: response.status === 'unreaped' ? null : 0,

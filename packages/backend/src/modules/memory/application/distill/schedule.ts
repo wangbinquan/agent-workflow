@@ -507,7 +507,7 @@ async function runDistillTick(
           runtimeBinding: restored.runtimeBinding ?? null,
           model: restored.model ?? null,
           isSandbox: restored.isSandbox === true,
-          observationIdentity: undefined,
+          observationIdentity: restored.runtimeObservationIdentity,
         }
   for (const head of heads) {
     if (current?.() === false) break

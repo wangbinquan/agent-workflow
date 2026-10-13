@@ -15,7 +15,7 @@ export function inverseRfc372ClarifyService(source: ts.SourceFile): ts.SourceFil
 // Test-only inverse of the two RFC-372 bootstrap bindings. Every other byte,
 // including concurrent observation hooks, remains visible to older source oracles.
 export function inverseRfc372ClarifyRootBinding(source: ts.SourceFile): ts.SourceFile {
-  const path = source.fileName.replaceAll('\\', '/')
+  const path = '/' + source.fileName.replaceAll('\\', '/')
   const receiver = path.endsWith('/cli/postgresqlDaemonApplication.ts')
     ? { db: 'input.db', registry: 'core.runtimeRegistry' }
     : path.endsWith('/server.ts')

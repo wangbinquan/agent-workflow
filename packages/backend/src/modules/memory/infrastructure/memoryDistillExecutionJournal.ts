@@ -64,6 +64,14 @@ const context = z
       .nullable()
       .optional(),
     model: z.string().nullable().optional(),
+    runtimeObservationIdentity: z
+      .object({
+        registrationId: z.string(),
+        configurationRevision: z.number(),
+        acceptedName: z.string().optional(),
+      })
+      .strict()
+      .optional(),
     isSandbox: z.boolean().optional(),
     timeoutMs: z.number().finite().positive().optional(),
     systemPrompt: z.string().optional(),

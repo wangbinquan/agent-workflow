@@ -1,5 +1,11 @@
 # RFC-370 阶段 A 退出清单
 
+## 2026-10-14 完整功能实现门已通过，等待提交与确切 CI
+
+用户授权的完整只读功能门发现三项问题，修复后必要续审全部关闭，结论 PASS／0 findings。webhook 原 owner 通知、Memory 材料 generation／失败清理和原 runtime observation identity 已补齐生产及真实回归；原完整 native 源码／正文指纹和变异断言均保持。限定历史 CI 例外与本阶段新增 provider 分支问题已修正。集中诊断、责任证据见 [阶段 A CI 修复](stage-a-ci-closeout.md)。
+
+生产接线和用例写作已完成，功能门通过；当前剩余为源码与 canonical 配套完整发布、main/origin 同步、新确切 SHA GitHub 总流水线终态全绿。旧失败和并发范围外治理计数继续保留，不能用局部测试或源码门签 A-G。阶段 B/M0 未启动，AW 尚未部署 CS。以下为历史执行记录，保留原结论及并发内容。
+
 ## 2026-10-14 集中验收修复与完整发布候选
 
 阶段 A 的完整生产／用例源码已发布为 `b9b27bfd84e0b39dac6b6f7dd76eee78343cc511`，配套架构投影为 `1e085af8e14bb6b7657fd6be9402f88ff78276d3`；两条确切 CI 已终态失败，不能据完整提交签 A-G。阶段 B 仍未启动，AW 尚未部署到 CS。

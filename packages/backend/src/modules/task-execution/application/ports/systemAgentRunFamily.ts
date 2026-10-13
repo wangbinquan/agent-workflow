@@ -27,6 +27,8 @@ export interface SystemAgentRunRequest extends SystemAgentRunPolicy {
   readonly isSandbox?: boolean
   readonly seedFiles?: readonly AgentMaterialSeedFile[]
   readonly workspaceScope: SystemAgentWorkspaceScope
+  /** Continue the same retained material generation across protocol rounds. */
+  readonly resumeRetainedRef?: string
   readonly timeoutMs?: number
   readonly maxEventTextBytes?: number
   readonly log?: Logger

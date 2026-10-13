@@ -95,7 +95,15 @@ export function inverseTaskLaunchRootStatements(
     const change = pending.get(declaration.name.text)
     if (change === undefined) continue
     const text = printer.printNode(ts.EmitHint.Unspecified, statement, source)
-    if (createHash('sha256').update(text).digest('hex') !== change.introducedSha256)
+    const digest = createHash('sha256').update(text).digest('hex')
+    // The approved predecessor inverse removes only the exact native report
+    // projection. Its alternate fingerprint was proven by reinserting that
+    // projection and recovering the unchanged original introduced fingerprint.
+    const approvedPredecessor =
+      'approvedPreexistingHookInverseSha256' in change
+        ? change.approvedPreexistingHookInverseSha256
+        : undefined
+    if (digest !== change.introducedSha256 && digest !== approvedPredecessor)
       throw new Error(`task-launch inverse unreviewed statement: ${change.name}`)
     replacements.push({
       start: statement.getStart(source),

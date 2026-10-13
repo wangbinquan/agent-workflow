@@ -18,6 +18,7 @@ export interface MemoryDistillExecutionContext {
   readonly envelopeNonce: string
   readonly prompt: string
   readonly runtimeBinding?: AgentMaterialContentReference | null
+  readonly runtimeObservationIdentity?: SystemAgentRunRequest['runtimeObservationIdentity']
   readonly model?: string | null
   readonly isSandbox?: boolean
   readonly timeoutMs?: number

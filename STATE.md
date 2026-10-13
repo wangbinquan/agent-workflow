@@ -1,3 +1,13 @@
+## 2026-10-14 RFC-370：完整实现门 PASS，限定旧 CI 修复与最终发布继续
+
+用户批准限定历史 CI 接手及本任务内只读功能审阅。完整阶段 A 实现门发现的 webhook 通知越过 owner、Memory 下一轮 marker 和冷恢复 runtime 观测身份三项已全部修复；材料失败清理尾项也经真实 System family 回归及同一审阅者复核关闭，最终 PASS／0 findings。CI 中本阶段新增的 provider 字面量判断改为与实际 runtime 身份比较，三条真实根拒绝回归与原守卫通过。原三个 native 正文和十一调用者完整指纹保持，五处 signalCode 类型／有限旧 root inverse 已修复，样式计数 155→154 待本次 canonical 统一配套。
+
+backend Typecheck exit 0；本轮相关集中诊断 29／46／2／11 pass 各自有独立范围，不代签双 provider、Windows 或总 CI。旧 `3472c9fc2` 主／Windows 为 failure；范围外 `cli/dev.ts` 和完整报告的原占位计数保留责任证据，不扩大用户限定例外、不代改或跨 session 发消息。并发在制品保持，main 已提交并发祖先保留。本批源码／架构清单完整上库、远端同步与新确切 SHA 主 CI／Windows 总绿仍须完成；A-G 未签，B/M0 未启动，AW 未部署 CS。详见 [阶段 A 修复](design/RFC-370-crewstation-hosted-deployment/stage-a-ci-closeout.md)。以下原共享和历史正文保持。
+
+## 2026-10-14 RFC-370：历史 CI 修复及完整只读实现门已获授权
+
+用户明确批准接手限定历史 CI 阻塞（五处 signalCode 类型、两 root 旧接线逆变换、样式计数 155→154），并批准当前任务内一次只读功能实现门。阶段 A 修复源码 `17fd0ac2a`／配套 `3472c9fc2` 已完整发布；此次继续应用已准备的类型／测试配套，不回退生产接线、原完整摘要或并发统计产出。完整只读子代理已启动，覆盖 H1～H8 的前后端／真实启动根及原恢复流程，不改文件、不运行门禁、不联系其他独立会话；尚未给出结论。阶段 A／A-G 未通过，B/M0 未启动，AW 尚未部署 CS。以下历史状态完整保留。
+
 ## 2026-10-14 RFC-370：阶段 A CI 缺陷收口继续
 
 完整阶段 A 与首轮修复已发布，原源码 inverse 组合修复源码 `1f1e9bd38`／配套 `1ab879452` 也已 push 并确认远端同步。最新主 CI `38459523717` 尚未终态、默认 Windows `38459523776` 已 failure；不能签 A-G。当前继续修复实际失败对应的本人 Promise 链、Memory public 类型依赖、CLI 装配分类、恢复 HTTP 合同和源码／异步夹具，候选完整后集中诊断和明确路径发布。三项剩余收口为本轮缺陷与配套完整提交、独立实现门、确切 SHA 主 CI／Windows 总绿。B 未启动，AW 尚未部署 CS；既有 CI 修复预览／只读子代理仍等用户明确答复，无跨 session 消息。以下历史和并发正文完整保留。

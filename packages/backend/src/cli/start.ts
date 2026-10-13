@@ -3434,6 +3434,7 @@ async function composeSqliteProviderSession(
     approvalGateway: developmentApprovalGateway,
   })
   const employeeHttpEventCenter = await composeEventCenter({
+    ...(hostExecution ? { executionMode: 'host' as const } : {}),
     db,
     customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
     typePackageDescriptorJsons: [

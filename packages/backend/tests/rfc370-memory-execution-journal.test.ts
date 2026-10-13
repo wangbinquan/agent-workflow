@@ -85,6 +85,7 @@ describeEachProvider('RFC-370 primary Memory execution journal', (scope) => {
       terminal: terminal(started()),
     })
     expect(open[0]?.original).toEqual(context().original)
+    expect(open[0]?.runtimeObservationIdentity).toBeUndefined()
     expect((await rebuilt.findByJob('original-job'))[0]?.prompt).toBe('原 prompt\0')
     expect(
       JSON.parse((await scope.db.select().from(memoryDistillExecutionReceipts))[0]!.contextJson)

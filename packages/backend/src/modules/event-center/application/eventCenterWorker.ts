@@ -1,6 +1,7 @@
 import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
 
 export interface EventCenterWorkerDependencies {
+  readonly waitForWake?: (intervalMs: number, signal: AbortSignal) => Promise<void>
   runOnePublication?(): Promise<'completed' | 'retried' | 'dead-letter' | 'idle'>
   runOneDueObserver(): Promise<'completed' | 'failed' | 'obsolete' | 'idle'>
   runOneNotification(): Promise<'completed' | 'retried' | 'dead-letter' | 'idle'>

@@ -739,6 +739,9 @@ export function bindEventCenterHostOwner(input: {
   return createAuthorityPollingDaemonRuntimeHandleBinding({
     id: 'event-center',
     group: 'event-dispatch',
+    ...(worker.waitForWake === undefined
+      ? {}
+      : { waitForNextRun: worker.waitForWake.bind(worker) }),
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
     runImmediately: true,
     async run({ current }) {

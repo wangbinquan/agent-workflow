@@ -428,7 +428,7 @@ describe('CLI subcommands (P-1-05)', () => {
 /** ` (exit=0 signal=SIGKILL)`；拿不到 child 或超时就返回空串，绝不把诊断变成新的挂起点。 */
 async function exitDetail(child?: {
   readonly exited: Promise<number>
-  readonly signalCode: string | null
+  readonly signalCode: Bun.Subprocess['signalCode']
 }): Promise<string> {
   if (child === undefined) return ''
   const code = await Promise.race([
@@ -444,7 +444,7 @@ async function waitForReady(
   stdout: ReadableStream<Uint8Array>,
   timeoutMs: number,
   stderr?: ReadableStream<Uint8Array>,
-  child?: { readonly exited: Promise<number>; readonly signalCode: string | null },
+  child?: { readonly exited: Promise<number>; readonly signalCode: Bun.Subprocess['signalCode'] },
 ): Promise<{ url: string; token: string }> {
   const reader = stdout.getReader()
   const decoder = new TextDecoder()

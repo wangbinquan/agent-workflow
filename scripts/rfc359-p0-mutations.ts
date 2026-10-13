@@ -731,7 +731,7 @@ async function runPhase(provider: Provider, phase: Phase, outputDir: string) {
   const descriptor = openSync(logPath, 'w')
   const started = Date.now()
   let exitCode: number
-  let signalCode: NodeJS.Signals | null
+  let signalCode: Bun.Subprocess['signalCode']
   try {
     const child = Bun.spawn(command, {
       cwd: repository,

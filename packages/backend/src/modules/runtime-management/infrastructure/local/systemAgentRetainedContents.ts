@@ -119,6 +119,7 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
   })
   function open(request: {
     readonly scope: SystemAgentWorkspaceScope
+    readonly resumeRetainedRef?: string
     readonly feature: () => string
     readonly seedFiles: () => readonly AgentMaterialSeedFile[] | undefined
   }) {
@@ -130,12 +131,15 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
       seedFiles: request.seedFiles,
     })
     const original = selected.workspace
-    const retainedRef = createDurableSystemRetainedReference({
-      reference: original.retainedRef,
-      root: selected.locations.root,
-      parent: parent(request.scope),
-      namespace: request.scope.namespace,
-    })
+    const retainedRef =
+      request.resumeRetainedRef ??
+      createDurableSystemRetainedReference({
+        reference: original.retainedRef,
+        root: selected.locations.root,
+        parent: parent(request.scope),
+        namespace: request.scope.namespace,
+      })
+    let materialSelected = request.resumeRetainedRef === undefined
     const workspace: AgentMaterialWorkspace = {
       get workspace() {
         return original.workspace
@@ -147,6 +151,16 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
         return retainedRef
       },
       prepare() {
+        // A protocol follow-up is a new invocation in the original material
+        // generation. Never replace its durable marker before the journal ACK.
+        if (request.resumeRetainedRef !== undefined) {
+          const existing = contents.inspect({ scope: request.scope, retainedRef })
+          if (existing instanceof Promise)
+            throw new Error('local-system-content-inspection-must-be-synchronous')
+          if (!existing.available) throw new Error('system-content-resume-generation-unavailable')
+          materialSelected = true
+          return original.prepare()
+        }
         const result = original.prepare()
         if (result !== undefined)
           return result.then(() => {
@@ -155,6 +169,9 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
         markDurableSystemRetainedReference(selected.locations.root, retainedRef)
       },
       discard() {
+        // A failed continuation check acquired no material. The common System
+        // setup-error cleanup must leave any replacement generation intact.
+        if (!materialSelected) return
         const discarded = original.discard()
         if (discarded !== undefined)
           return discarded.then(() => {
