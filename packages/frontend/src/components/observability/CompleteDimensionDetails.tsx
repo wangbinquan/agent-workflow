@@ -44,6 +44,7 @@ export function CompleteDimensionDetails({
   const runtime = row.selection.runtime
   return (
     <Dialog
+      panelClassName="observation-typography"
       open
       onClose={onClose}
       size="lg"

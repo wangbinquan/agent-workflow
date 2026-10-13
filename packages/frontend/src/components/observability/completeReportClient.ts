@@ -11,6 +11,7 @@ import {
   type ObservationOverviewQuery,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import {
   discardObservationReportBookmark,
   observationReportBookmark,
@@ -23,6 +24,16 @@ export type ReadableObservationReport = CompleteObservationReportContent
 export type ReadyObservationReport = Extract<CompleteObservationReport, { state: 'ready' }>
 const displayValidityKey = (reportId: string | null) =>
   ['run-observability-complete-display-valid', reportId] as const
+/** Every retained view observes its own immutable report's qualification. */
+export function useCompleteObservationDisplayValidity(reportId: string | null) {
+  return useQuery({
+    queryKey: displayValidityKey(reportId),
+    queryFn: async () => true,
+    initialData: true,
+    enabled: false,
+    gcTime: 0,
+  })
+}
 function checkedReportContent(
   report: CompleteObservationReport,
   filters: ObservationOverviewQuery,
@@ -52,7 +63,9 @@ export function useCompleteObservationReport(
   taskId: string | undefined,
   revision: number,
   enabled: boolean,
+  liveDisplayScope?: string,
 ) {
+  const execution = useHostExecutionAvailability('observation')
   const client = useQueryClient()
   const projection = useObservationProjectionVersion(enabled)
   const projectionRevision = projection?.revision ?? null
@@ -71,13 +84,25 @@ export function useCompleteObservationReport(
     taskId ?? null,
     revision,
     projectionRevision,
+    // A late selected-host readiness response must resume a blocked request.
+    // Keep it outside scope/refreshKey so retained report reads reuse the same handle.
+    execution.available,
   ] as const
   const retainedIds = useRef(new Map<string, string>())
+  // A first committed projection activates the original pending handle. Its
+  // identity excludes only the version, never filters or manual refreshes.
+  const pendingIds = useRef(new Map<string, string>())
+  const pendingScope = JSON.stringify([filters, taskId ?? null, revision])
   const [previous, setPrevious] = useState<{
     scope: string
     content: ReadableObservationReport
   } | null>(null)
-  const displayScope = JSON.stringify(['scope-metrics/13', filters, taskId ?? null])
+  const displayScope = JSON.stringify([
+    'scope-metrics/14',
+    liveDisplayScope ?? filters,
+    taskId ?? null,
+    revision,
+  ])
   const query = useQuery({
     queryKey: key,
     enabled,
@@ -88,8 +113,9 @@ export function useCompleteObservationReport(
       const cached = client.getQueryData<CompleteObservationReport>(key)
       const candidateId =
         (cached?.state === 'ready' ? cached.header.reportId : cached?.reportId) ??
-        retainedIds.current.get(scope)
-      const id = candidateId === 'projection-bootstrap' ? undefined : candidateId
+        retainedIds.current.get(scope) ??
+        pendingIds.current.get(pendingScope)
+      let id = candidateId === 'projection-bootstrap' ? undefined : candidateId
       const bookmark = await observationReportBookmark(filters, taskId)
       const assertCurrent = () => {
         signal.throwIfAborted()
@@ -116,6 +142,7 @@ export function useCompleteObservationReport(
               rememberObservationDefaultRange(content, bookmark.current)
               return restored
             } catch (error) {
+              if (signal.aborted || !bookmark.current()) throw error
               discardObservationReportBookmark(restoredId)
               if (!(error instanceof ApiError && error.status === 404)) throw error
               assertCurrent()
@@ -123,21 +150,40 @@ export function useCompleteObservationReport(
             }
           }
         }
-        const report = id
-          ? await api.get<CompleteObservationReport>(
-              '/api/observability/reports/' + encodeURIComponent(id),
-              undefined,
-              signal,
-            )
-          : await api.post<CompleteObservationReport>(
-              '/api/observability/reports',
-              { filters, refreshKey, ...(taskId ? { taskId } : {}) },
-              signal,
-            )
+        let report: CompleteObservationReport
+        try {
+          if (!id) execution.assertAvailable()
+          report = id
+            ? await api.get<CompleteObservationReport>(
+                '/api/observability/reports/' + encodeURIComponent(id),
+                undefined,
+                signal,
+              )
+            : await api.post<CompleteObservationReport>(
+                '/api/observability/reports',
+                { filters, refreshKey, ...(taskId ? { taskId } : {}) },
+                signal,
+              )
+        } catch (error) {
+          if (!id || !(error instanceof ApiError) || error.status !== 404) throw error
+          assertCurrent()
+          discardObservationReportBookmark(id)
+          retainedIds.current.delete(scope)
+          pendingIds.current.delete(pendingScope)
+          id = undefined
+          execution.assertAvailable()
+          report = await api.post<CompleteObservationReport>(
+            '/api/observability/reports',
+            { filters, refreshKey, ...(taskId ? { taskId } : {}) },
+            signal,
+          )
+        }
         assertCurrent()
         const content = checkedReportContent(report, filters, taskId, id)
         const reportId = report.state === 'ready' ? report.header.reportId : report.reportId
         retainedIds.current.set(scope, reportId)
+        if (report.state === 'building') pendingIds.current.set(pendingScope, reportId)
+        else pendingIds.current.delete(pendingScope)
         if (content) {
           bookmark.remember(reportId)
           rememberObservationDefaultRange(content, bookmark.current)
@@ -150,6 +196,9 @@ export function useCompleteObservationReport(
         }
         return report
       } catch (error) {
+        // A newer projection cancels the superseded read. It does not revoke
+        // the last accepted result, its bookmark or its displayed asOf.
+        if (signal.aborted || !bookmark.current()) throw error
         if (restoredId) discardObservationReportBookmark(restoredId)
         if (id) discardObservationReportBookmark(id)
         if (previous?.scope === displayScope)
@@ -170,13 +219,9 @@ export function useCompleteObservationReport(
   })
   const content = query.data ? completeObservationReportContent(query.data) : null
   const retained = previous?.scope === displayScope ? previous.content : null
-  const validity = useQuery({
-    queryKey: displayValidityKey(content?.header.reportId ?? retained?.header.reportId ?? null),
-    queryFn: async () => true,
-    initialData: true,
-    enabled: false,
-    gcTime: 0,
-  })
+  const validity = useCompleteObservationDisplayValidity(
+    content?.header.reportId ?? retained?.header.reportId ?? null,
+  )
   useEffect(() => {
     if (
       query.error ||

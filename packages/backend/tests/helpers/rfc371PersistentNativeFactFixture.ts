@@ -105,6 +105,7 @@ export function persistentNativeFixture(options: { steps?: number; depth?: numbe
   const original = createHistoricalNativeUsageQuery({ OPENCODE_DB: path })
   const query = {
     generation: original.generation,
+    connectedRoots: original.connectedRoots,
     async open(selection: Parameters<typeof original.open>[0]) {
       const selected = await original.open(selection)
       if (!selected) return null

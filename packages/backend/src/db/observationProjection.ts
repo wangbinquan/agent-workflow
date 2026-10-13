@@ -72,6 +72,8 @@ export const observationProjectionCurrent = table(
   (t) => [
     primaryKey({ columns: [t.kind, t.key] }),
     index('observation_projection_current_component').on(t.kind, t.component, t.key),
+    index('observation_projection_current_task').on(t.kind, t.section, t.taskId, t.key),
+    index('observation_projection_current_section').on(t.kind, t.section, t.key),
   ],
 )
 export const observationProjectionHistory = table(
@@ -92,6 +94,8 @@ export const observationProjectionHistory = table(
   (t) => [
     primaryKey({ columns: [t.kind, t.key, t.fromRevision] }),
     index('observation_projection_history_component').on(t.kind, t.component, t.key),
+    index('observation_projection_history_section_seek').on(t.kind, t.section, t.key),
+    index('observation_projection_history_parent_seek').on(t.kind, t.section, t.parent, t.key),
     index('observation_projection_history_section').on(t.kind, t.section, t.cohortAt, t.key),
     index('observation_projection_history_task').on(t.kind, t.taskId, t.section, t.parent, t.key),
     index('observation_projection_history_day').on(t.kind, t.section, t.taskId, t.cohortAt, t.key),
@@ -205,3 +209,29 @@ export const observationProjectionComponents = table('observation_projection_com
   component: text('component').primaryKey(),
   revision: text('revision').notNull(),
 })
+
+/** Retained query membership stores IDs only, never copied numeric facts. */
+export const observationProjectionQueryScopes = table('observation_projection_query_scopes', {
+  id: text('id').primaryKey(),
+  ready: integer('ready', { mode: 'boolean' }).notNull().default(false),
+})
+export const observationProjectionQueryScopeMembers = table(
+  'observation_projection_query_scope_members',
+  {
+    scope: text('scope').notNull(),
+    kind: text('kind').$type<'task' | 'component'>().notNull(),
+    identity: text('identity').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.scope, t.kind, t.identity] })],
+)
+
+/** Large immutable scope metadata is never used as a database index key. */
+export const observationProjectionDescriptors = table('observation_projection_descriptors', {
+  key: text('key').primaryKey(),
+  document: text('document').notNull(),
+})
+
+export const observationProjectionIndexedVersions = table(
+  'observation_projection_indexed_versions',
+  { revision: text('revision').primaryKey() },
+)

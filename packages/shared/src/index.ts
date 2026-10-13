@@ -196,3 +196,7 @@ export * from './schemas/observationNativeCompletion'
 export * from './schemas/observationNativeRootCompletion'
 export * from './schemas/observationNativeEmission'
 export * from './workflowOutputEvidence'
+
+export * from './schemas/observationAnalysis'
+export * from './schemas/observationStorage'
+export * from './schemas/hostExecutionStatus'

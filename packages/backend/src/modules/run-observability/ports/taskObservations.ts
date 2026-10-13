@@ -1,3 +1,4 @@
+import type { ObservationPhase } from '@agent-workflow/shared'
 import type {
   AcceptedObservationInvocation,
   ObservationAttemptFacts,
@@ -15,6 +16,13 @@ import type { ObservationNativeScopeSource } from '../public/participants'
 
 /** Structurally supplied by the TaskExecution owner, only at bootstrap. */
 export interface ObservationTaskSource {
+  phasePage?(
+    taskId: string,
+    input: { after?: string; limit: number },
+  ): Promise<{
+    items: readonly ObservationPhase[]
+    nextCursor: string | null
+  }>
   readonly nativeScopes?: ObservationNativeScopeSource
   spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
@@ -49,9 +57,7 @@ export interface CompleteObservationTaskSource extends ObservationTaskSource {
 export interface ProjectionObservationTaskSource extends CompleteObservationTaskSource {
   projectionList(query: ObservationTaskPageQuery): ReturnType<ObservationTaskSource['list']>
   projectionGet(id: string): Promise<ObservationTaskFacts | null>
-  projectionSelectors(
-    ids: readonly string[],
-  ): Promise<
+  projectionSelectors(ids: readonly string[]): Promise<
     ReadonlyMap<
       string,
       {

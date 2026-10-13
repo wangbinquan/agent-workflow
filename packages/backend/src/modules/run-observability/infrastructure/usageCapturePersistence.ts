@@ -58,7 +58,6 @@ export async function readUsageCapturePage(
   const rows = await identityPacketPage({
     ids: invocationIds,
     limit: page.limit,
-    key: (row) => row.invocationId,
     read: (ids, limit) =>
       db
         .select({
@@ -84,6 +83,7 @@ export async function readUsageCapturePage(
         .orderBy(asc(observationUsageCaptures.invocationId))
         .limit(limit)
         .all(),
+    key: (row) => row.invocationId,
   })
   const selected = rows.slice(0, page.limit)
   const roots = [

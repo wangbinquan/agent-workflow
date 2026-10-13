@@ -87,7 +87,6 @@ export function createCompleteObservationSources(input: {
         const rows = await identityPacketPage({
           ids: input.invocationIds,
           limit: pageSize,
-          key: (row) => row.id,
           read: (ids, limit) =>
             db
               .select({ id: observationInvocations.id, document: observationInvocations.document })
@@ -102,6 +101,7 @@ export function createCompleteObservationSources(input: {
               .orderBy(asc(observationInvocations.id))
               .limit(limit)
               .all(),
+          key: (row) => row.id,
         })
         const selected = rows.slice(0, pageSize)
         return {
@@ -121,7 +121,6 @@ export function createCompleteObservationSources(input: {
         const rows = await identityPacketPage({
           ids: input.invocationIds,
           limit: pageSize,
-          key: (row) => row.id,
           read: (ids, limit) =>
             db
               .select({
@@ -145,6 +144,7 @@ export function createCompleteObservationSources(input: {
               .orderBy(asc(observationUsageCurrent.id))
               .limit(limit)
               .all(),
+          key: (row) => row.id,
         })
         return {
           items: rows

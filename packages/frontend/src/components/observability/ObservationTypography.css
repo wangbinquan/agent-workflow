@@ -1,0 +1,50 @@
+/* Observation pages keep the product's title, control and table primitives.
+   Chart labels and collection notes share the small-text role; a data button
+   must not inherit the browser's larger body font or read like an action link. */
+.observation-typography {
+  font-size: var(--font-md);
+  line-height: 1.5;
+}
+.observation-typography :is(.muted, .hint) {
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+.observation-typography .observation-trend__button {
+  color: var(--text);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+}
+.observation-typography .observation-trend__scale strong {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.observation-typography .execution-swimlane__detail {
+  font-size: var(--font-sm);
+}
+.observation-typography .observation-trend__detail {
+  display: block;
+}
+.observation-trend__detail > p:first-child {
+  margin-bottom: var(--space-2);
+}
+.observation-trend__cost {
+  margin-top: var(--space-2);
+}
+.observation-metric-notes.form-section {
+  display: inline-block;
+  margin: 0 0 0 var(--space-2);
+  vertical-align: baseline;
+  max-width: 100%;
+}
+.observation-metric-notes[open] {
+  display: block;
+  margin: var(--space-1) 0;
+}
+.observation-metric-notes .form-section__title {
+  color: var(--warn);
+}
+.observation-metric-notes .observation-token-coverage {
+  margin-top: var(--space-1);
+  padding-top: 0;
+  border-top: 0;
+}

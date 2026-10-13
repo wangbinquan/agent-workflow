@@ -30,12 +30,13 @@ import { ObservationFilters } from './ObservationFilters'
 import { ObservationNativeCapture } from './ObservationNativeCapture'
 import { ObservationPlatformCapture } from './ObservationPlatformCapture'
 import './RunObservability.css'
+import './ObservationTypography.css'
 const ObservationTrace = lazy(() => import('./ObservationTrace'))
 
 export interface ObservationSearch {
   readonly from: number
   readonly to: number
-  readonly period: 'week' | 'month' | 'all' | 'custom'
+  readonly period: 'day' | 'week' | 'month' | 'all' | 'custom'
   readonly cohort?: 'started' | 'usage'
   readonly after?: string
   readonly task?: string
@@ -231,6 +232,7 @@ function TaskDetail({
       </Card>
       {chosen && (
         <Dialog
+          panelClassName="observation-typography"
           open
           onClose={() => onChange({ ...search, attempt: undefined, span: undefined })}
           title={t('runObservability.selected', { id: chosen.attempt.id })}
@@ -390,7 +392,10 @@ export function RunObservability({
       from:
         search.period === 'all'
           ? 0
-          : Math.max(0, to - (search.period === 'week' ? 7 : 30) * 86400000),
+          : Math.max(
+              0,
+              to - (search.period === 'day' ? 1 : search.period === 'week' ? 7 : 30) * 86400000,
+            ),
       to,
     })
   }
@@ -399,7 +404,7 @@ export function RunObservability({
     return t(`common.dur.${token.key}`, token.opts)
   }
   return (
-    <div className="page" ref={pageRef}>
+    <div className="page observation-typography" ref={pageRef}>
       <PageHeader
         title={search.task && detail.data ? detail.data.task.name : t('runObservability.title')}
         meta={

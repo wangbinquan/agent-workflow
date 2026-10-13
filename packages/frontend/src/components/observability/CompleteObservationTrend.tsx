@@ -133,9 +133,9 @@ export function CompleteObservationTrend({
           {new Date(active.to).toLocaleString(i18n.language)}
         </p>
         <CompleteTokens value={active.metrics} recordedUsage={active.recordedUsage} />
-        <p className="muted">
+        <div className="muted observation-trend__cost">
           {t('runObservability.cost')} · <CompleteCost value={active.metrics} />
-        </p>
+        </div>
       </div>
     </div>
   )

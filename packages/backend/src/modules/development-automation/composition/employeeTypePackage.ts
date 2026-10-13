@@ -92,7 +92,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 10 } as const
+const typeRef = { typeId: 'development', revision: 11 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 const runtimeEmployeeTypeRefSchema = z
   .object({ typeId: z.string().min(1), revision: z.number().int().positive() })

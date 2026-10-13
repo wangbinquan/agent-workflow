@@ -106,7 +106,15 @@ export async function appendHistoricalObservationCohort(
           task: allocation.task,
           cohortAt: allocation.cohortAt,
           assigned,
-          fold,
+          fold: {
+            ...fold,
+            inventory: {
+              tasks: '0',
+              attempts: '0',
+              numericRecords: record.coveredByAcceptedRecords ? '0' : '1',
+              nativeCaptures: '0',
+            },
+          },
           visibility,
           scopes,
         })

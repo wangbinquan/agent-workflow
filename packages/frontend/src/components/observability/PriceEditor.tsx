@@ -109,6 +109,7 @@ export function PriceEditor(props: {
         }}
       />
       <Dialog
+        panelClassName="observation-typography"
         open={props.open}
         title={t('observationPricing.editTitle', { name: runtime.name })}
         onClose={props.onClose}

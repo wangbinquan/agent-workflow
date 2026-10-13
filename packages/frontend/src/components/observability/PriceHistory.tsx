@@ -28,6 +28,7 @@ export function PriceHistory({
   const rows = query.data?.items ?? []
   return (
     <Dialog
+      panelClassName="observation-typography"
       open
       onClose={onClose}
       title={runtime.name + ' · ' + t('observationPricing.history')}

@@ -72,8 +72,6 @@ export function createObservationSpanSources(
             await identityPacketPage({
               ids: projectionAttemptIds,
               limit: 200,
-              key: (row) => String(row.id),
-              compare: (a, b) => a.id - b.id,
               read: (ids, limit) =>
                 db
                   .select({
@@ -99,6 +97,8 @@ export function createObservationSpanSources(
                   .orderBy(asc(sources.id))
                   .limit(limit)
                   .all(),
+              key: (row) => String(row.id),
+              compare: (a, b) => a.id - b.id,
             })
           ).slice(0, 200)
     let scannedSources = 0,

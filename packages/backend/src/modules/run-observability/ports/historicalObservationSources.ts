@@ -13,6 +13,7 @@ export interface HistoricalObservationSources {
     readonly query: HistoricalObservationOwnerQuery
   }[]
   readonly native: {
+    connectedRoots?(roots: readonly string[]): Promise<readonly string[] | null>
     open(input: {
       readonly referenceId: string
       readonly rootSessionId: string

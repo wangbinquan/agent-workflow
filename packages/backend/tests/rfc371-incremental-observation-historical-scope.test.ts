@@ -128,7 +128,7 @@ test('a root shared by included/excluded owners exposes an unresolved gap withou
 test('owner search/status and project filters preserve the original exclusions', () => {
   const f = fixture([owner('memory')])
   for (const query of [
-    { ...f.query, status: 'failed' },
+    { ...f.query, status: 'failed' as const },
     { ...f.query, q: 'unrelated' },
     { ...f.query, workflow: 'other' },
     { ...f.query, repository: 'other' },

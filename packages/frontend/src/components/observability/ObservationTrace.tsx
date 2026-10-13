@@ -77,7 +77,7 @@ export default function ObservationTrace(props: {
   return (
     <div className="stack--md observation-trace" ref={panel}>
       <div className="observation-trace__header">
-        <h3>{t('runObservability.traceTitle')}</h3>
+        <h3 className="card__title">{t('runObservability.traceTitle')}</h3>
       </div>
       {query.isError && <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />}
       <p className="muted">{t('runObservability.traceHint')}</p>

@@ -4433,6 +4433,56 @@ export const memoryDistillJobs = sqliteTable(
 // recursively-spawned subagent) session. attempt_index groups events by
 // distill retry round so the detail page can offer an attempt picker.
 // -----------------------------------------------------------------------------
+/** RFC-370: primary execution receipts outlive a process and its auxiliary
+ * session projection. No cascade from a job may erase an unresolved attempt. */
+export const memoryDistillExecutionReceipts = sqliteTable(
+  'memory_distill_execution_receipts',
+  {
+    executionRef: text('execution_ref').primaryKey(),
+    jobId: text('job_id').notNull(),
+    attemptIndex: integer('attempt_index').notNull(),
+    roundIndex: integer('round_index').notNull(),
+    contextJson: text('context_json').notNull(),
+    retainedRef: text('retained_ref').notNull(),
+    recoveryRef: text('recovery_ref'),
+    startedAt: integer('started_at'),
+    preparedAt: integer('prepared_at').notNull(),
+    state: text('state', {
+      enum: ['prepared', 'started', 'terminal', 'reaped', 'closed'],
+    }).notNull(),
+    terminalJson: text('terminal_json'),
+    settlement: text('settlement'),
+  },
+  (t) => ({
+    jobAttemptIdx: index('idx_distill_execution_job_attempt').on(
+      t.jobId,
+      t.attemptIndex,
+      t.roundIndex,
+    ),
+    openIdx: index('idx_distill_execution_state_prepared').on(t.state, t.preparedAt),
+    stateEnum: check(
+      'memory_distill_execution_receipts_state_enum',
+      sql`${t.state} IN ('prepared', 'started', 'terminal', 'reaped', 'closed')`,
+    ),
+    attemptIndexNonnegative: check(
+      'memory_distill_execution_receipts_attempt_nonnegative',
+      sql`${t.attemptIndex} >= 0`,
+    ),
+    roundIndexNonnegative: check(
+      'memory_distill_execution_receipts_round_nonnegative',
+      sql`${t.roundIndex} >= 0`,
+    ),
+    contextJsonValid: check(
+      'memory_distill_execution_receipts_context_json_valid',
+      sql`json_valid(${t.contextJson})`,
+    ),
+    terminalJsonValid: check(
+      'memory_distill_execution_receipts_terminal_json_valid',
+      sql`${t.terminalJson} IS NULL OR json_valid(${t.terminalJson})`,
+    ),
+  }),
+)
+
 export const memoryDistillEvents = sqliteTable(
   'memory_distill_events',
   {
@@ -8619,3 +8669,27 @@ export const {
   nativeUsageEmissions: systemNativeUsageEmissions,
   nativeUsageRevisionHeads: systemNativeUsageRevisionHeads,
 } = systemAgentNativeUsage
+
+export {
+  observationAnomalyStates,
+  observationAnomalyHistory,
+  observationMaintenanceOperations,
+  observationMaintenanceMembers,
+  observationInvocationPricePolicies,
+  observationInvocationPriceAudit,
+} from './observationAnalysis'
+
+export { observationInvocationPriceRecords } from './observationAnalysis'
+export {
+  observationWorkRetention,
+  observationReportLeases,
+  observationScopeRefs,
+  observationStorageState,
+  observationStorageSamples,
+} from './observationStorage'
+export {
+  observationProjectionIndexedVersions,
+  observationProjectionQueryScopes,
+  observationProjectionQueryScopeMembers,
+  observationProjectionDescriptors,
+} from './observationProjection'

@@ -1,5 +1,7 @@
 import type { Hono } from 'hono'
 import {
+  ObservationMaintenanceRequestSchema,
+  ObservationMaintenanceConfirmSchema,
   CompleteObservationReportRequestSchema,
   CompleteObservationPageQuerySchema,
 } from '@agent-workflow/shared'
@@ -27,6 +29,134 @@ export function mountCompleteObservationRoutes(
   reports: CompleteObservationReportQueries,
 ) {
   const gate = { permissions: ['tasks:read'] as const, tokenAccess: 'allow' as const }
+  if (reports.storage)
+    registerRoute(
+      app,
+      {
+        permissions: ['settings:write'],
+        tokenAccess: 'allow',
+        method: 'GET',
+        path: '/api/observability/storage',
+        summary: 'Read observed capacity and durable projection backlog',
+      },
+      async (c) => c.json(await reports.storage!()),
+    )
+  if (reports.compare)
+    registerRoute(
+      app,
+      {
+        ...gate,
+        method: 'GET',
+        path: '/api/observability/reports/:id/comparison',
+        summary: 'Compare two visible execution subtrees at the same original projection version',
+      },
+      async (c) => {
+        const { left, right } = c.req.query()
+        if (!left || !right || left.length > 512 || right.length > 512)
+          throw new ValidationError('invalid-query', 'Select two original Tasks')
+        return c.json(
+          await completeObservationHttpRead(() =>
+            reports.compare!(actorOf(c), c.req.param('id'), left, right),
+          ),
+        )
+      },
+    )
+
+  if (reports.maintenance) {
+    const maintenance = reports.maintenance,
+      admin = { permissions: ['settings:write'] as const, tokenAccess: 'allow' as const }
+    registerRoute(
+      app,
+      {
+        ...admin,
+        method: 'POST',
+        path: '/api/observability/maintenance',
+        summary: 'Prepare an explicit frozen observation maintenance preview',
+      },
+      async (c) => {
+        const request = ObservationMaintenanceRequestSchema.safeParse(
+          await c.req.json().catch(() => null),
+        )
+        if (!request.success)
+          throw new ValidationError('invalid-query', 'Invalid maintenance request')
+        return c.json(
+          await completeObservationHttpRead(() => maintenance.prepare(actorOf(c), request.data)),
+          202,
+        )
+      },
+    )
+    registerRoute(
+      app,
+      {
+        ...admin,
+        method: 'GET',
+        path: '/api/observability/maintenance/:id',
+        summary: 'Read durable observation maintenance progress',
+      },
+      async (c) =>
+        c.json(
+          await completeObservationHttpRead(() =>
+            maintenance.status(actorOf(c), c.req.param('id')),
+          ),
+        ),
+    )
+    registerRoute(
+      app,
+      {
+        ...admin,
+        method: 'POST',
+        path: '/api/observability/maintenance/:id/confirm',
+        summary: 'Confirm an exact observation maintenance preview',
+      },
+      async (c) => {
+        const request = ObservationMaintenanceConfirmSchema.safeParse(
+          await c.req.json().catch(() => null),
+        )
+        if (!request.success)
+          throw new ValidationError('invalid-query', 'Invalid maintenance confirmation')
+        return c.json(
+          await completeObservationHttpRead(() =>
+            maintenance.confirm(actorOf(c), c.req.param('id'), request.data),
+          ),
+        )
+      },
+    )
+  }
+
+  if (reports.anomalies)
+    registerRoute(
+      app,
+      {
+        ...gate,
+        method: 'GET',
+        path: '/api/observability/anomalies',
+        summary: 'Read authorized durable anomaly lifecycle records',
+      },
+      async (c) => {
+        const raw = c.req.query(),
+          from = Number(raw.from),
+          to = Number(raw.to),
+          pageSize = raw.pageSize === undefined ? 200 : Number(raw.pageSize)
+        if (
+          !Number.isSafeInteger(from) ||
+          !Number.isSafeInteger(to) ||
+          from < 0 ||
+          from >= to ||
+          !Number.isInteger(pageSize) ||
+          pageSize < 1 ||
+          pageSize > 200
+        )
+          throw new ValidationError('invalid-query', 'Invalid anomaly window/page')
+        return c.json(
+          await reports.anomalies!(actorOf(c), {
+            from,
+            to,
+            pageSize,
+            ...(raw.after ? { after: raw.after } : {}),
+          }),
+        )
+      },
+    )
   if (reports.projectionVersion)
     registerRoute(
       app,
@@ -44,6 +174,7 @@ export function mountCompleteObservationRoutes(
       ...gate,
       method: 'POST',
       path: '/api/observability/reports',
+      executionGroup: 'observation',
       summary: 'Build complete visible original observation report without population caps',
     },
     async (c) => {

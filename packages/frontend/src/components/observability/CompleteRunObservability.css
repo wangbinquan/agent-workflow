@@ -25,7 +25,10 @@
   white-space: nowrap;
 }
 .complete-observation-trend {
-  grid-auto-columns: minmax(7rem, 1fr);
+  grid-auto-columns: minmax(max-content, 1fr);
+}
+.complete-observation-trend > li {
+  min-width: 7rem;
 }
 .complete-observation-trend .observation-trend__button {
   height: 100%;

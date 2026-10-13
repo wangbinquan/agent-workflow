@@ -86,6 +86,7 @@ export function ObservationPlatformCapture({
         <Card title={t('runObservability.platformCaptureTitle')}>{content}</Card>
       )}
       <Dialog
+        panelClassName="observation-typography"
         open={chosen !== undefined}
         triggerRef={trigger}
         onClose={() => select(null)}

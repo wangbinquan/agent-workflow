@@ -105,6 +105,7 @@ export async function importHistoricalObservationPreparation(input: {
     if (String(groupRows) !== expected.rows || hash.digest('hex') !== expected.digest)
       throw new CompleteCalculationInvalid('Historical preparation original group incomplete')
   }
+  const readPrevious = (): { namespace: string; key: string } | null => previous
   for (let ordinal = 0n; ordinal < population; ordinal++) {
     const row = read()
     if (
@@ -114,7 +115,7 @@ export async function importHistoricalObservationPreparation(input: {
           (row.namespace === previous.namespace && row.key <= previous.key)))
     )
       throw new CompleteCalculationInvalid('Historical preparation original row order changed')
-    if (row.namespace !== previous?.namespace) {
+    if (row.namespace !== readPrevious()?.namespace) {
       finish()
       const declaration = await tx
         .select()

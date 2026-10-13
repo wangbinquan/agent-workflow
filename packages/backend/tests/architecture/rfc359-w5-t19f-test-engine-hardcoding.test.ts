@@ -446,6 +446,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-371：SQLite 专用 FILE TEMP 与连接页缓存；报告 staging 和计数由双 provider 套件覆盖。
   'rfc371-report-snapshot-file-performance.test.ts: 1',
   'rfc371-report-snapshot-file.test.ts: 1',
+  // RFC-371: physical SQLite dbstat/WAL capacity and cancellation use actual readonly files;
+  // neutral capacity and durable hourly samples remain covered by both application providers.
+  'rfc371-storage-sampling-worker.test.ts: 2',
   // RFC-371: this one real file is the external OpenCode SQLite format;
   // System persistence, EOF, resume and CNY are covered by both AW providers.
   'rfc371-system-native-provider.test.ts: 2',

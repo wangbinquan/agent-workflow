@@ -1,3 +1,5 @@
+import { observationWorkRetention } from '@/db/observationStorage'
+import { admitObservationStorage } from './observationStorageLifetime'
 import { and, asc, eq, gt, inArray, isNull } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -7,6 +9,7 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import {
+  observationProjectionHeads,
   observationProjectionPrepared,
   observationProjectionWork,
   observationProjectionWorkComponents,
@@ -39,6 +42,12 @@ export function incrementalObservationPreparedStore(db: ProviderNeutralDatabase)
     async begin(work: IncrementalObservationWork) {
       const claimed = { ...work, preparationToken: crypto.randomUUID() }
       await databaseSessionFor(db).transaction(async (tx) => {
+        await admitObservationStorage(tx)
+        const head = await tx
+          .select()
+          .from(observationProjectionHeads)
+          .where(eq(observationProjectionHeads.id, 'incremental-20261012-v1'))
+          .get()
         await engineOf(tx).lockAggregateRoot(
           tx,
           observationProjectionWork,
@@ -61,6 +70,14 @@ export function incrementalObservationPreparedStore(db: ProviderNeutralDatabase)
             leaseUntil: Date.now() + LEASE_MS,
           })
           .where(eq(observationProjectionWork.id, work.id))
+          .run()
+        await tx
+          .insert(observationWorkRetention)
+          .values({ id: work.id, revision: head?.revision ?? '0', queuedAt: Date.now() })
+          .onConflictDoUpdate({
+            target: observationWorkRetention.id,
+            set: { revision: head?.revision ?? '0' },
+          })
           .run()
         await tx
           .delete(observationProjectionPrepared)

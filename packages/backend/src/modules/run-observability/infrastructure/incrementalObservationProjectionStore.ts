@@ -1,3 +1,8 @@
+import type { QualifiedObservationContribution } from '../ports/incrementalObservationQualified'
+import {
+  observeProjectionTaskAnomalies,
+  observeProjectionOwnerAnomalies,
+} from './observationAnomalies'
 import { and, asc, eq, gt, isNull, ne } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
@@ -6,6 +11,8 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import {
+  observationProjectionIndexedVersions,
+  observationProjectionDescriptors,
   observationProjectionBootstrap,
   observationProjectionChanges,
   observationProjectionComponents,
@@ -41,10 +48,15 @@ export function createIncrementalObservationProjectionStore(
     pending: (packetSize) => pendingIncrementalObservationWork(db, packetSize),
     change: (work) =>
       databaseSessionFor(db).serializable(async (reader) => {
-        let ready = false
+        let ready = false,
+          indexedDetails = false
+        const affectedTasks = new Set<string>()
         async function coverage(item: IncrementalObservationWork) {
           const channels = await reader
-            .select({ done: observationProjectionBootstrap.done })
+            .select({
+              channel: observationProjectionBootstrap.channel,
+              done: observationProjectionBootstrap.done,
+            })
             .from(observationProjectionBootstrap)
             .where(eq(observationProjectionBootstrap.generation, generation))
             .all()
@@ -66,6 +78,10 @@ export function createIncrementalObservationProjectionStore(
             .where(eq(observationProjectionChanges.completed, false))
             .limit(1)
             .get()
+          indexedDetails =
+            channels.some((channel) => channel.channel === 'indexed-details-v1') &&
+            !pending &&
+            !changes
           return !pending && !changes
         }
         const tx: IncrementalObservationProjectionTransaction = {
@@ -116,18 +132,19 @@ export function createIncrementalObservationProjectionStore(
                   key: observationProjectionCurrent.key,
                   document: observationProjectionCurrent.document,
                 })
-                .from(observationProjectionCurrent)
-                .innerJoin(
-                  observationProjectionWorkComponents,
-                  eq(
-                    observationProjectionWorkComponents.component,
-                    observationProjectionCurrent.component,
-                  ),
-                )
+                // SQLite preserves this outer-to-inner CROSS JOIN order. Seek
+                // the exact changed components before their indexed rows;
+                // retain the global key order required by the merge allocator.
+                .from(observationProjectionWorkComponents)
+                .crossJoin(observationProjectionCurrent)
                 .where(
                   and(
-                    eq(observationProjectionCurrent.kind, 'contribution'),
                     eq(observationProjectionWorkComponents.workId, item.id),
+                    eq(observationProjectionCurrent.kind, 'contribution'),
+                    eq(
+                      observationProjectionCurrent.component,
+                      observationProjectionWorkComponents.component,
+                    ),
                     after === undefined ? undefined : gt(observationProjectionCurrent.key, after),
                   ),
                 )
@@ -143,14 +160,34 @@ export function createIncrementalObservationProjectionStore(
               after = last
             }
           },
-          putContribution: (key, value, version) =>
-            retainIncrementalObservationVersion(reader, {
+          async putContribution(key, value, version) {
+            await retainIncrementalObservationVersion(reader, {
               kind: 'contribution',
               key,
               component: value?.component ?? null,
               document: value,
               version,
-            }),
+            })
+            if (value) {
+              const detail = value.detail as { taskId?: string | null }
+              if (detail.taskId) affectedTasks.add(detail.taskId)
+              if ((value.detail as { section: string }).section === 'span-facts')
+                await observeProjectionOwnerAnomalies(
+                  reader,
+                  value as QualifiedObservationContribution,
+                  version,
+                )
+            }
+          },
+          async retainDescriptors(descriptors) {
+            const entries = Object.entries(descriptors)
+            for (let at = 0; at < entries.length; at += 150)
+              await reader
+                .insert(observationProjectionDescriptors)
+                .values(entries.slice(at, at + 150).map(([key, document]) => ({ key, document })))
+                .onConflictDoNothing()
+                .run()
+          },
           async aggregate(key) {
             const row = await reader
               .select({ document: observationProjectionCurrent.document })
@@ -164,14 +201,16 @@ export function createIncrementalObservationProjectionStore(
               .get()
             return row ? (JSON.parse(row.document) as IncrementalObservationFold) : null
           },
-          putAggregate: (key, document, version) =>
-            retainIncrementalObservationVersion(reader, {
+          async putAggregate(key, document, version) {
+            await retainIncrementalObservationVersion(reader, {
               kind: 'aggregate',
               key,
               component: null,
               document,
               version,
-            }),
+            })
+            if (key.startsWith('task/')) affectedTasks.add(key.slice(5))
+          },
           async coverageChanged(item) {
             ready = await coverage(item)
             const head = await reader
@@ -190,8 +229,19 @@ export function createIncrementalObservationProjectionStore(
             // Readiness describes initial enumeration. Once all original facts
             // have been accounted for, normal queued updates do not erase data.
             ready ||= previous?.bootstrapComplete === true
+            const priorIndexed = previous
+              ? !!(await reader
+                  .select()
+                  .from(observationProjectionIndexedVersions)
+                  .where(eq(observationProjectionIndexedVersions.revision, previous.revision))
+                  .get())
+              : false
+            indexedDetails ||= priorIndexed
             return (
-              previous === null || previous === undefined || previous.bootstrapComplete !== ready
+              previous === null ||
+              previous === undefined ||
+              previous.bootstrapComplete !== ready ||
+              priorIndexed !== indexedDetails
             )
           },
           async complete(item) {
@@ -232,6 +282,56 @@ export function createIncrementalObservationProjectionStore(
               .run()
           },
           async publish(version) {
+            if (indexedDetails)
+              await reader
+                .insert(observationProjectionIndexedVersions)
+                .values({ revision: version.revision })
+                .onConflictDoNothing()
+                .run()
+            for (const taskId of affectedTasks) {
+              const rows = await reader
+                .select({ document: observationProjectionCurrent.document })
+                .from(observationProjectionCurrent)
+                .where(
+                  and(
+                    eq(observationProjectionCurrent.kind, 'contribution'),
+                    eq(observationProjectionCurrent.section, 'tasks'),
+                    eq(observationProjectionCurrent.taskId, taskId),
+                  ),
+                )
+                .all()
+              for (const row of rows)
+                await observeProjectionOwnerAnomalies(
+                  reader,
+                  JSON.parse(row.document) as QualifiedObservationContribution,
+                  version,
+                )
+              const aggregate = await reader
+                .select({ document: observationProjectionCurrent.document })
+                .from(observationProjectionCurrent)
+                .where(
+                  and(
+                    eq(observationProjectionCurrent.kind, 'aggregate'),
+                    eq(observationProjectionCurrent.key, 'task/' + taskId),
+                  ),
+                )
+                .get()
+              if (aggregate)
+                await observeProjectionTaskAnomalies(
+                  reader,
+                  'task/' + taskId,
+                  JSON.parse(aggregate.document) as IncrementalObservationFold,
+                  version,
+                  rows.length
+                    ? (
+                        JSON.parse(rows[0]!.document) as {
+                          detail: { document: { task: { name: string } } }
+                        }
+                      ).detail.document.task.name
+                    : null,
+                )
+            }
+
             await reader
               .insert(observationProjectionVersions)
               .values({ ...version, bootstrapComplete: ready })

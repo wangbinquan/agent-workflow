@@ -1335,24 +1335,23 @@ test('a completed default cannot replace any explicit URL field or a user-select
   expect(f.reports).toHaveLength(1)
 })
 
-test('the formal period control still selects a fresh month instead of the remembered default week', async () => {
+test('the formal month shortcut keeps the shared cutoff instead of resetting to the remembered default week', async () => {
   const f = fixture()
   setToken('sidebar-period-' + fixtureSequence)
   const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
   const { router } = mountSidebarPage()
   await screen.findByRole('button', { name: /1 个任务.*102 Token/ })
   clock.mockReturnValue(NOW + 3600000)
-  fireEvent.click(screen.getByRole('combobox', { name: i18n.t('runObservability.period') }))
-  fireEvent.mouseDown(await screen.findByRole('option', { name: i18n.t('runObservability.month') }))
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.month') }))
   await waitFor(() => expect(f.reports).toHaveLength(2))
   expect(f.reports[1]!.header.filters).toEqual({
-    from: NOW + 3600001 - 30 * 86400000,
-    to: NOW + 3600001,
+    from: NOW + 1 - 30 * 86400000,
+    to: NOW + 1,
     timezone: defaultWeek().timezone,
   })
   expect(router.state.location.search).toMatchObject({
-    from: NOW + 3600001 - 30 * 86400000,
-    to: NOW + 3600001,
+    from: NOW + 1 - 30 * 86400000,
+    to: NOW + 1,
     period: 'month',
   })
   expect(screen.queryByRole('button', { name: /1 个任务.*102 Token/ })).toBeNull()

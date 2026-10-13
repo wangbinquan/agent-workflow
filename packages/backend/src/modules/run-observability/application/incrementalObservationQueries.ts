@@ -1,3 +1,7 @@
+import type {
+  CompleteHistoricalObservationExecution,
+  CompleteObservationInvocation,
+} from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import {
   CompleteObservationPageQuerySchema,
@@ -45,6 +49,8 @@ export function incrementalObservationQueries(input: {
   readonly keyOf: (value: string) => string
 }): CompleteObservationReportQueries {
   const metadataCache = new Map<string, Promise<QualifiedObservationContribution[]>>()
+  let latestMetadata: { revision: string; rows: QualifiedObservationContribution[] } | undefined
+  let metadataLoading: Promise<void> = Promise.resolve()
   const builds = new Map<string, Promise<Awaited<ReturnType<typeof build>>>>()
   const detailCache = new Map<string, Promise<QualifiedObservationContribution[]>>()
   const countCache = new Map<string, Promise<Partial<Record<CompleteObservationSection, string>>>>()
@@ -82,21 +88,45 @@ export function incrementalObservationQueries(input: {
       )
     )
   }
-  async function assemble(actor: Actor, view: ObservationProjectionView) {
+  async function assemble(actor: Actor, view: ObservationProjectionView, retainedViewId = view.id) {
     if (view.generation !== input.generation)
       throw new CompleteObservationError(
         'generation-changed',
         'Original projection generation changed',
       )
     const metadata = await memo(metadataCache, view.version.revision, async () => {
-      const rows: QualifiedObservationContribution[] = []
-      for await (const row of input.source.details({
-        version: view.version,
-        section: 'tasks',
-        parent: null,
-      }))
-        rows.push(row)
-      return rows
+      let result: QualifiedObservationContribution[] = []
+      const load = metadataLoading.then(async () => {
+        const newer =
+          latestMetadata &&
+          (view.version.revision.length > latestMetadata.revision.length ||
+            (view.version.revision.length === latestMetadata.revision.length &&
+              view.version.revision >= latestMetadata.revision))
+        if (newer && input.source.metadataChanges) {
+          const byKey = new Map(latestMetadata!.rows.map((row) => [row.key, row]))
+          let changed = false
+          for await (const item of input.source.metadataChanges(
+            latestMetadata!.revision,
+            view.version,
+          )) {
+            changed = true
+            if (item.row) byKey.set(item.key, item.row)
+            else byKey.delete(item.key)
+          }
+          result = changed ? [...byKey.values()] : latestMetadata!.rows
+        } else
+          for await (const row of input.source.details({
+            version: view.version,
+            section: 'tasks',
+            parent: null,
+          }))
+            result.push(row)
+        if (!latestMetadata || newer)
+          latestMetadata = { revision: view.version.revision, rows: result }
+      })
+      metadataLoading = load.catch(() => {})
+      await load
+      return result
     })
     const population = incrementalObservationPopulation(metadata, view.query, view.taskId),
       ids = new Set<string>(),
@@ -112,7 +142,7 @@ export function incrementalObservationQueries(input: {
     return memo(
       builds,
       input.keyOf(JSON.stringify([view.id, input.scopeOf(actor), [...visibilityIds].sort()])),
-      () => build(actor, view, population, ids, visibilityIds),
+      () => build(actor, view, population, ids, visibilityIds, retainedViewId),
     )
   }
   async function build(
@@ -121,6 +151,7 @@ export function incrementalObservationQueries(input: {
     population: ReturnType<typeof incrementalObservationPopulation>,
     ids: Set<string>,
     visibilityIds: Set<string>,
+    retainedViewId: string,
   ) {
     const entries: QualifiedObservationContribution[] = []
     let tasks: CompleteObservationTask[] = []
@@ -163,7 +194,7 @@ export function incrementalObservationQueries(input: {
       coverage = { readyTasks: 0n, missingTasks: 0n, notApplicableTasks: 0n }
     const historicalComponents = new Set<string>()
     if (view.taskId === undefined)
-      for await (const row of input.source.details({
+      for await (const row of (input.source.groupedDetails ?? input.source.details)({
         version: view.version,
         section: 'cohort-fold',
         parent: null,
@@ -180,7 +211,8 @@ export function incrementalObservationQueries(input: {
         })
         if (
           scoped &&
-          (scoped.detail.scopes?.length ||
+          (view.query.cohort === 'usage' ||
+            scoped.detail.scopes?.length ||
             scoped.detail.cohortAt === null ||
             (scoped.detail.cohortAt >= view.query.from && scoped.detail.cohortAt < view.query.to))
         ) {
@@ -226,28 +258,57 @@ export function incrementalObservationQueries(input: {
     const selection = parseObservationSelection(view.query.selection)
     if ((view.query.cohort === 'usage' || selection !== null) && view.taskId === undefined) {
       let occurrences: QualifiedObservationContribution[] = []
-      for (let at = 0, all = [...ids]; at < all.length; at += 200)
+      const standaloneComponents = new Set(
+        entries.filter((row) => row.detail.section === 'cohort-fold').map((row) => row.component),
+      )
+      if (input.source.windowCells) {
+        for await (const row of input.source.windowCells({
+          version: view.version,
+          taskIds: [...ids],
+          components: [...standaloneComponents],
+          from: view.query.from,
+          to: view.query.to,
+          timezone: view.query.timezone,
+        }))
+          occurrences.push(row)
+      } else {
+        for (let at = 0, all = [...ids]; at < all.length; at += 200)
+          for await (const row of input.source.details({
+            version: view.version,
+            section: 'time-partitions',
+            parent: null,
+            taskIds: all.slice(at, at + 200),
+          }))
+            occurrences.push(row)
         for await (const row of input.source.details({
           version: view.version,
           section: 'time-partitions',
           parent: null,
-          taskIds: all.slice(at, at + 200),
+          standalone: true,
         }))
-          occurrences.push(row)
-      const standaloneComponents = new Set(
-        entries.filter((row) => row.detail.section === 'cohort-fold').map((row) => row.component),
-      )
-      for await (const row of input.source.details({
-        version: view.version,
-        section: 'time-partitions',
-        parent: null,
-        standalone: true,
-      }))
-        if (
-          allowedStandalone(actor, row, visibilityIds) &&
-          (view.query.cohort === 'usage' || standaloneComponents.has(row.component))
-        )
-          occurrences.push(row)
+          if (
+            allowedStandalone(actor, row, visibilityIds) &&
+            (view.query.cohort === 'usage' || standaloneComponents.has(row.component))
+          )
+            occurrences.push(row)
+      }
+      // Every bucket retains its original candidate set. Selecting a Task or
+      // status must not turn a shared, unresolved native record into known usage.
+      occurrences = occurrences.flatMap((row) => {
+        const scoped = incrementalObservationHistoricalScope(row, {
+          query: view.query,
+          ids,
+          originals: population.originals,
+        })
+        return scoped === null
+          ? []
+          : [
+              {
+                ...scoped,
+                detail: { ...scoped.detail, cohortAt: row.detail.cohortAt },
+              },
+            ]
+      })
       const captureCounts = new Map<string, string>()
       let invocations = (await records(
           actor,
@@ -259,11 +320,10 @@ export function incrementalObservationQueries(input: {
           [],
           population.originals,
           (row) => {
-            const call = row.detail
-              .document as import('@agent-workflow/shared').CompleteObservationInvocation
+            const call = row.detail.document as CompleteObservationInvocation
             captureCounts.set(call.invocationId, row.fold.inventory?.nativeCaptures ?? '0')
           },
-        )) as import('@agent-workflow/shared').CompleteObservationInvocation[],
+        )) as CompleteObservationInvocation[],
         historical = (await records(
           actor,
           view,
@@ -273,7 +333,7 @@ export function incrementalObservationQueries(input: {
           visibilityIds,
           [...historicalComponents],
           population.originals,
-        )) as import('@agent-workflow/shared').CompleteHistoricalObservationExecution[]
+        )) as CompleteHistoricalObservationExecution[]
       if (selection !== null) {
         const qualified = incrementalObservationSelection({
           selection,
@@ -301,7 +361,12 @@ export function incrementalObservationQueries(input: {
                 (row.detail.cohortAt >= view.query.from && row.detail.cohortAt < view.query.to),
             )
           : occurrences
-      if (view.query.cohort === 'usage' && selection === null) {
+      if (
+        view.query.cohort === 'usage' &&
+        selection === null &&
+        !input.source.windowCells &&
+        !occurrences.some((row) => row.detail.scopes?.length)
+      ) {
         const numeric = emptyCompleteObservationFold(),
           fullFrom = Math.ceil(view.query.from / 86400000) * 86400000,
           fullTo = Math.floor(view.query.to / 86400000) * 86400000
@@ -423,11 +488,13 @@ export function incrementalObservationQueries(input: {
       sections.set(rowSource('trends', null), window.trends)
       sections.set(rowSource('invocations', null), window.invocations)
       sections.set(rowSource('historical-executions', null), window.historical)
-      sections.set(rowSource('time-partitions', null), window.timeRows)
-      sections.set(
-        rowSource('time-unassigned', null),
-        window.timeRows.filter((row) => row.partition === 'unassigned-time'),
-      )
+      if (!input.source.windowCells)
+        sections.set(rowSource('time-partitions', null), window.timeRows)
+      if (!input.source.windowCells)
+        sections.set(
+          rowSource('time-unassigned', null),
+          window.timeRows.filter((row) => row.partition === 'unassigned-time'),
+        )
       for (const task of window.tasks)
         sections.set(
           rowSource('invocations', task.task.id),
@@ -487,7 +554,7 @@ export function incrementalObservationQueries(input: {
           groups.set(original.key, group)
         }
         for (let at = 0, all = [...ids]; at < all.length; at += 200)
-          for await (const row of input.source.details({
+          for await (const row of (input.source.groupedDetails ?? input.source.details)({
             version: view.version,
             section,
             taskIds: all.slice(at, at + 200),
@@ -495,7 +562,10 @@ export function incrementalObservationQueries(input: {
             add(row)
           }
         if (view.taskId === undefined)
-          for await (const row of input.source.details({ version: view.version, section })) {
+          for await (const row of (input.source.groupedDetails ?? input.source.details)({
+            version: view.version,
+            section,
+          })) {
             if (
               (row.detail.taskId !== null && ids.has(row.detail.taskId)) ||
               !allowedStandalone(actor, row, visibilityIds)
@@ -508,7 +578,8 @@ export function incrementalObservationQueries(input: {
             })
             if (
               scoped &&
-              (scoped.detail.scopes?.length ||
+              (view.query.cohort === 'usage' ||
+                scoped.detail.scopes?.length ||
                 scoped.detail.cohortAt === null ||
                 (scoped.detail.cohortAt >= view.query.from &&
                   scoped.detail.cohortAt < view.query.to))
@@ -610,42 +681,31 @@ export function incrementalObservationQueries(input: {
         notApplicableTasks: String(coverage.notApplicableTasks),
       },
     }
-    if (window)
-      for (const section of [
-        'attempts',
-        'allocations',
-        'native-captures',
-        'platform-captures',
-        'historical-records',
-        'span-facts',
-        'span-captures',
-        'span-statuses',
-      ] as const) {
-        const original = await records(
-          actor,
-          view,
-          ids,
-          section,
-          null,
-          visibilityIds,
-          [...historicalComponents],
-          population.originals,
-        )
-        sections.set(
-          rowSource(section, null),
-          incrementalObservationWindowRows(
-            original,
-            section,
-            null,
-            window,
-            tasks,
-            view.version.asOf,
-          ),
-        )
-      }
+    const standaloneComponents = [
+      ...new Set(
+        entries.filter((row) => row.detail.section === 'cohort-fold').map((row) => row.component),
+      ),
+    ]
+    const scopeKey = input.keyOf(
+      JSON.stringify([
+        view.version.revision,
+        [...ids].sort(),
+        [...historicalComponents, ...standaloneComponents].sort(),
+      ]),
+    )
+    const indexedDetails = (await input.source.indexedDetails?.(view.version)) ?? false
+    if (indexedDetails)
+      await input.source.retainScope?.(
+        scopeKey,
+        [...ids],
+        [...new Set([...historicalComponents, ...standaloneComponents])],
+        retainedViewId,
+      )
     return {
       sections,
       summary,
+      scopeKey,
+      indexedDetails,
       ids,
       visibilityIds,
       fold,
@@ -740,6 +800,52 @@ export function incrementalObservationQueries(input: {
       countCache,
       input.keyOf(JSON.stringify([view.id, [...build.visibilityIds].sort()])),
       async () => {
+        if (build.indexedDetails && input.source.countGroups) {
+          const totals: Partial<Record<CompleteObservationSection, string>> = {},
+            windowCalls = new Set(build.window?.invocations.map((call) => call.invocationId) ?? [])
+          for await (const group of input.source.countGroups(build.scopeKey, view.version)) {
+            const section = group.detail.section
+            if (
+              section === 'cohort-fold' ||
+              group.detail.parent !== null ||
+              build.sections.has(rowSource(section, null))
+            )
+              continue
+            if (
+              build.window &&
+              ['allocations', 'historical-records', 'time-partitions', 'time-unassigned'].includes(
+                section,
+              )
+            )
+              continue
+            const row = {
+              key: group.detail.key,
+              component: group.component,
+              detail: group.detail,
+              aggregates: [],
+              fold: emptyCompleteObservationFold(),
+            }
+            if (
+              (row.detail.taskId === null || !build.ids.has(row.detail.taskId)) &&
+              !allowedStandalone(actor, row, build.visibilityIds)
+            )
+              continue
+            if (
+              !incrementalObservationHistoricalScope(row, {
+                query: view.query,
+                ids: build.ids,
+                originals: build.originals,
+                ...(view.taskId ? { taskId: view.taskId } : {}),
+              })
+            )
+              continue
+            const invocation = (row.detail.document as { invocationId?: string } | null)
+              ?.invocationId
+            if (build.window && invocation && !windowCalls.has(invocation)) continue
+            totals[section] = String(BigInt(totals[section] ?? '0') + BigInt(group.total))
+          }
+          return totals
+        }
         const unique = new Map<string, Set<string>>()
         const add = (row: {
           readonly section: string
@@ -814,6 +920,32 @@ export function incrementalObservationQueries(input: {
       : { state: 'ready', header, summary: build.summary, counts }
   }
   return {
+    async compare(actor, id, left, right) {
+      const view = await input.source.view(id, input.scopeOf(actor)),
+        original = await assemble(actor, view)
+      if (!original.ids.has(left) || !original.ids.has(right))
+        throw new CompleteObservationError('not-found', 'Comparison Tasks are outside this report')
+      const a = await assemble(
+          actor,
+          { ...view, id: view.id + '/compare/' + left, taskId: left },
+          view.id,
+        ),
+        b = await assemble(
+          actor,
+          { ...view, id: view.id + '/compare/' + right, taskId: right },
+          view.id,
+        )
+      if (!a.summary.rootTask || !b.summary.rootTask)
+        throw new CompleteObservationError('not-ready', 'Original comparison Task is unavailable')
+      return {
+        revision: view.version.revision,
+        asOf: view.version.asOf,
+        basis: 'task-subtree-lifecycle',
+        left: a.summary.rootTask,
+        right: b.summary.rootTask,
+        criticalPath: { state: 'not-ready', reasons: ['causal-dependencies-unobserved'] },
+      }
+    },
     async request(actor, query, _refreshKey, taskId) {
       const filters = CompleteObservationReportQuerySchema.parse(query),
         head = await input.source.snapshot()
@@ -852,6 +984,122 @@ export function incrementalObservationQueries(input: {
         build = await assemble(actor, view),
         parent = query.parent ?? null
       const prepared = build.sections.get(rowSource(query.section, parent))
+      if (
+        !prepared &&
+        build.indexedDetails &&
+        input.source.detailPacket &&
+        input.source.countGroups
+      ) {
+        const scope = input.keyOf(JSON.stringify([id, query.section, parent, input.scopeOf(actor)]))
+        let after: string | undefined
+        if (query.after) {
+          const value: unknown = JSON.parse(query.after)
+          if (
+            !Array.isArray(value) ||
+            value.length !== 3 ||
+            value[0] !== 2 ||
+            value[1] !== scope ||
+            typeof value[2] !== 'string'
+          )
+            throw new RangeError('Projection page cursor changed scope')
+          after = value[2]
+        }
+        const sourceSection =
+            query.section === 'time-unassigned' ? 'time-partitions' : query.section,
+          sourceParent = parent?.startsWith('["task-tree",') ? null : parent,
+          items: T[] = [],
+          keys: string[] = [],
+          window = build.window
+        const convert = (row: QualifiedObservationContribution): unknown[] => {
+          if (
+            (row.detail.taskId === null || !build.ids.has(row.detail.taskId)) &&
+            !allowedStandalone(actor, row, build.visibilityIds)
+          )
+            return []
+          const scoped = incrementalObservationHistoricalScope(row, {
+            query: view.query,
+            ids: build.ids,
+            originals: build.originals,
+            ...(view.taskId ? { taskId: view.taskId } : {}),
+          })
+          if (!scoped) return []
+          return window
+            ? incrementalObservationWindowRows(
+                [scoped.detail.document],
+                query.section,
+                parent,
+                window,
+                build.sections.get(rowSource('tasks', null)) as CompleteObservationTask[],
+                view.version.asOf,
+              )
+            : [scoped.detail.document]
+        }
+        let cursor = after,
+          tail = false
+        for (;;) {
+          const packet = await input.source.detailPacket({
+            version: view.version,
+            scope: build.scopeKey,
+            section: sourceSection,
+            parent: sourceParent,
+            limit: 200,
+            ...(cursor ? { after: cursor } : {}),
+          })
+          for (const row of packet.rows) {
+            for (const value of convert(row)) {
+              items.push(value as T)
+              keys.push(row.key)
+              if (items.length > query.limit) {
+                tail = true
+                break
+              }
+            }
+            if (tail) break
+          }
+          if (tail || packet.next === null) break
+          cursor = packet.next
+        }
+        let total = 0n
+        if (!window) {
+          for await (const group of input.source.countGroups(build.scopeKey, view.version)) {
+            if (group.detail.section !== sourceSection || group.detail.parent !== sourceParent)
+              continue
+            const row = {
+              key: group.detail.key,
+              component: group.component,
+              detail: group.detail,
+              aggregates: [],
+              fold: emptyCompleteObservationFold(),
+            }
+            if (convert(row).length) total += BigInt(group.total)
+          }
+        } else {
+          // Exact requested-output count; large numerical populations are never copied into the report.
+          let countCursor: string | undefined
+          for (;;) {
+            const packet = await input.source.detailPacket({
+              version: view.version,
+              scope: build.scopeKey,
+              section: sourceSection,
+              parent: sourceParent,
+              limit: 200,
+              ...(countCursor ? { after: countCursor } : {}),
+            })
+            for (const row of packet.rows) total += BigInt(convert(row).length)
+            if (packet.next === null) break
+            countCursor = packet.next
+          }
+        }
+        const selected = items.slice(0, query.limit)
+        return {
+          reportId: id,
+          section: query.section,
+          parent,
+          items: selected,
+          total: String(total),
+          nextCursor: tail ? JSON.stringify([2, scope, keys[query.limit - 1]]) : null,
+        }
+      }
       const original =
         prepared ??
         (await records(

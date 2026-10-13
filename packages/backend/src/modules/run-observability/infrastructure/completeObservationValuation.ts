@@ -1,3 +1,4 @@
+import { createObservationPriceCorrectionStore } from './priceCorrections'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { AcceptedObservationInvocation, ObservationPriceVersion } from '@agent-workflow/shared'
 import { sha256Hex } from '@/util/hash'
@@ -50,6 +51,7 @@ export function completeObservationValuation(input: {
           return retained.value ?? undefined
         },
       },
+      createObservationPriceCorrectionStore(input.db),
     ),
     async flush() {
       await accepted.flush()

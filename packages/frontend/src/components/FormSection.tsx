@@ -17,6 +17,9 @@ import { useEffect, useRef, useState, type ReactElement, type ReactNode } from '
 
 export interface FormSectionProps {
   title: string
+  /** Compact information disclosure without a new section heading. */
+  size?: 'default' | 'compact'
+  className?: string
   /** Collapsible (details/summary) shape. Default false = static section. */
   collapsible?: boolean
   /** Controlled open state (collapsible only; pair with onToggle). */
@@ -33,13 +36,17 @@ export function FormSection(props: FormSectionProps): ReactElement {
   const ref = useRef<HTMLDetailsElement>(null)
   const controlled = props.open !== undefined
   const open = controlled ? props.open === true : uncontrolledOpen
+  const Title = props.size === 'compact' ? 'span' : 'h2'
+  const classes = ['form-section']
+  if (props.size === 'compact') classes.push('form-section--compact')
+  if (props.className) classes.push(props.className)
   useEffect(() => {
     if (ref.current !== null && ref.current.open !== open) ref.current.open = open
   })
   if (props.collapsible !== true) {
     return (
-      <section className="form-section" data-testid={props['data-testid']}>
-        <h2 className="form-section__title">{props.title}</h2>
+      <section className={classes.join(' ')} data-testid={props['data-testid']}>
+        <Title className="form-section__title">{props.title}</Title>
         <div className="form-section__body">{props.children}</div>
       </section>
     )
@@ -47,7 +54,7 @@ export function FormSection(props: FormSectionProps): ReactElement {
   return (
     <details
       ref={ref}
-      className="form-section form-section--collapsible"
+      className={[...classes, 'form-section--collapsible'].join(' ')}
       open={open}
       data-testid={props['data-testid']}
       onToggle={(e) => {
@@ -58,7 +65,7 @@ export function FormSection(props: FormSectionProps): ReactElement {
       }}
     >
       <summary className="form-section__summary">
-        <h2 className="form-section__title">{props.title}</h2>
+        <Title className="form-section__title">{props.title}</Title>
       </summary>
       <div className="form-section__body">{props.children}</div>
     </details>

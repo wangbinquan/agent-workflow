@@ -54,12 +54,14 @@ for (const language of ['zh', 'en'])
       [...page.container.querySelectorAll('[data-token-bucket] dd')].map(
         (node) => node.textContent,
       ),
-    ).toEqual([
-      '120 · 1 / 1',
-      i18n.t('runObservability.unknown') + ' · 0 / 1',
-      '0 · 1 / 1',
-      i18n.t('runObservability.unknown') + ' · 0 / 1',
-    ])
+    ).toEqual(['120', i18n.t('runObservability.unknown'), '0', i18n.t('runObservability.unknown')])
+    const coverage = page.getByRole('group', {
+      name: i18n.t('runObservability.bucketCoverage'),
+      hidden: true,
+    })
+    expect(
+      [...coverage.querySelectorAll('[data-token-coverage] dd')].map((row) => row.textContent),
+    ).toEqual(['1 / 1', '0 / 1', '1 / 1', '0 / 1'])
     expect(page.container.querySelector('.notice-banner')).toBeNull()
   })
 test('actual partial zero is visible and does not become a full estimate', () => {

@@ -1,0 +1,114 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:eb43cc8054f008f9a44ea7cc7e67464b09cebfa15ae2db08d09b65b9ccd519af', 268, 6)"
+    },
+    "beforeDigest": "sha256:cb198fc2a4001e8b8e4a3a8a0a971d5dd4bb89eb28bd0bcd3e29255dfd221c4e"
+  },
+  "digest": "sha256:9201a87aeaf02c954ba451505b374e70555b49d625775c4f53b32e3ab63b08a0",
+  "executableStatements": [
+    {
+      "kind": "index",
+      "logicalId": "observation_projection_history:index:observation_projection_history_section_seek",
+      "sql": "CREATE INDEX \"observation_projection_history_section_seek\" ON \"agent_workflow\".\"observation_projection_history\" (\"kind\", \"section\", \"key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_projection_history:index:observation_projection_history_parent_seek",
+      "sql": "CREATE INDEX \"observation_projection_history_parent_seek\" ON \"agent_workflow\".\"observation_projection_history\" (\"kind\", \"section\", \"parent\", \"key\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:eb43cc8054f008f9a44ea7cc7e67464b09cebfa15ae2db08d09b65b9ccd519af', active_table_count = 268, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:a467469ed6c6b065395211bd72c2c6434ad1155ed5cd3a528ad1f65f623dac7b' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:a467469ed6c6b065395211bd72c2c6434ad1155ed5cd3a528ad1f65f623dac7b",
+    "planDigest": "sha256:508713eae2d368e7f226d54f7e09b80f8e776bb155abd6d097c5a60a12edb81d"
+  },
+  "id": "0029_rfc371_history_seek_indexes",
+  "indexAdditions": [
+    {
+      "position": 516,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_projection_history:index:observation_projection_history_section_seek",
+        "sql": "CREATE INDEX \"observation_projection_history_section_seek\" ON \"agent_workflow\".\"observation_projection_history\" (\"kind\", \"section\", \"key\")"
+      }
+    },
+    {
+      "position": 517,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_projection_history:index:observation_projection_history_parent_seek",
+        "sql": "CREATE INDEX \"observation_projection_history_parent_seek\" ON \"agent_workflow\".\"observation_projection_history\" (\"kind\", \"section\", \"parent\", \"key\")"
+      }
+    }
+  ],
+  "logicalIndexes": [
+    {
+      "index": {
+        "columns": ["kind", "section", "key"],
+        "name": "observation_projection_history_section_seek",
+        "unique": false,
+        "where": null
+      },
+      "position": 1,
+      "tableId": "observation_projection_history"
+    },
+    {
+      "index": {
+        "columns": ["kind", "section", "parent", "key"],
+        "name": "observation_projection_history_parent_seek",
+        "unique": false,
+        "where": null
+      },
+      "position": 2,
+      "tableId": "observation_projection_history"
+    }
+  ],
+  "previousEntryDigest": "sha256:d37bd9e8d275f734ab8917e8c225d3c1dea37fe4bde9025cdb6785a3028a97e5",
+  "sequence": 29,
+  "sqlDigest": "sha256:f3ccab93102c993744ad31abf71d1827bdb83acce43dd22d495b0c08c8e4947c",
+  "sqlFile": "0029_rfc371_history_seek_indexes.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791862443354,
+        "hash": "e1686c026bc0bb10e3e4794a529b5903edf9a7871fc308fd8aed241aa90ae080",
+        "index": 252,
+        "tag": "0253_rfc371_history_seek_indexes"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:e6dbcfdd086b3c6f8e6de89643b607ae7e87470abb7253b13e5d2bcb3d4986df",
+      "count": 252,
+      "last": {
+        "folderMillis": 1791860292275,
+        "hash": "775a72e0245e3a07871334d350fb6562025dac50c09f53803fdd954b467ae14e",
+        "index": 251,
+        "tag": "0252_rfc371_incremental_lookup_indexes"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:ae4295795d6a0197d0bd62c7fe0acf5046a7876e502809927db3006e6ada680d",
+      "count": 253,
+      "last": {
+        "folderMillis": 1791862443354,
+        "hash": "e1686c026bc0bb10e3e4794a529b5903edf9a7871fc308fd8aed241aa90ae080",
+        "index": 252,
+        "tag": "0253_rfc371_history_seek_indexes"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:eb43cc8054f008f9a44ea7cc7e67464b09cebfa15ae2db08d09b65b9ccd519af",
+    "planDigest": "sha256:0be4b421bfda542624c78ad30ebbc1c634098224163002859419867eef872e13"
+  },
+  "version": 1
+}

@@ -1,0 +1,486 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:3cc614cfbea2a089604a914d4a6f19f54c47ed160ba369ad823e78f1994dd58b', 269, 6)"
+    },
+    "beforeDigest": "sha256:c4c829c92f7eedfd0459ed1f9b12c0432a5deda5b928f90fbb78c3bbc8d529ca"
+  },
+  "digest": "sha256:c0e03aea263c734ffa42cd3a857243cc0c37bd54bfa07f655bf92f63ffa48a15",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "memory_distill_execution_receipts",
+      "sql": "CREATE TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" (\n  \"execution_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"job_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"attempt_index\" BIGINT NOT NULL,\n  \"round_index\" BIGINT NOT NULL,\n  \"context_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"retained_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"recovery_ref\" TEXT COLLATE \"C\",\n  \"started_at\" BIGINT,\n  \"prepared_at\" BIGINT NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL,\n  \"terminal_json\" TEXT COLLATE \"C\",\n  \"settlement\" TEXT COLLATE \"C\",\n  CONSTRAINT \"memory_distill_execution_receipts_pkey\" PRIMARY KEY (\"execution_ref\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "memory_distill_execution_receipts:index:idx_distill_execution_job_attempt",
+      "sql": "CREATE INDEX \"idx_distill_execution_job_attempt\" ON \"agent_workflow\".\"memory_distill_execution_receipts\" (\"job_id\", \"attempt_index\", \"round_index\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "memory_distill_execution_receipts:index:idx_distill_execution_state_prepared",
+      "sql": "CREATE INDEX \"idx_distill_execution_state_prepared\" ON \"agent_workflow\".\"memory_distill_execution_receipts\" (\"state\", \"prepared_at\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_state_enum",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_state_enum\" CHECK (\"state\" IN ('prepared', 'started', 'terminal', 'reaped', 'closed'))"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_attempt_nonnegative",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_attempt_nonnegative\" CHECK (\"attempt_index\" >= 0)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_round_nonnegative",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_round_nonnegative\" CHECK (\"round_index\" >= 0)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_context_json_valid",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_context_json_valid\" CHECK (json_valid(\"context_json\"))"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_terminal_json_valid",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_terminal_json_valid\" CHECK (\"terminal_json\" IS NULL OR json_valid(\"terminal_json\"))"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:3cc614cfbea2a089604a914d4a6f19f54c47ed160ba369ad823e78f1994dd58b', active_table_count = 269, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:eb43cc8054f008f9a44ea7cc7e67464b09cebfa15ae2db08d09b65b9ccd519af' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:eb43cc8054f008f9a44ea7cc7e67464b09cebfa15ae2db08d09b65b9ccd519af",
+    "planDigest": "sha256:0be4b421bfda542624c78ad30ebbc1c634098224163002859419867eef872e13"
+  },
+  "id": "0030_rfc370_memory_execution_receipts",
+  "indexAdditions": [
+    {
+      "position": 122,
+      "statement": {
+        "kind": "table",
+        "logicalId": "memory_distill_execution_receipts",
+        "sql": "CREATE TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" (\n  \"execution_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"job_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"attempt_index\" BIGINT NOT NULL,\n  \"round_index\" BIGINT NOT NULL,\n  \"context_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"retained_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"recovery_ref\" TEXT COLLATE \"C\",\n  \"started_at\" BIGINT,\n  \"prepared_at\" BIGINT NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL,\n  \"terminal_json\" TEXT COLLATE \"C\",\n  \"settlement\" TEXT COLLATE \"C\",\n  CONSTRAINT \"memory_distill_execution_receipts_pkey\" PRIMARY KEY (\"execution_ref\")\n)"
+      }
+    },
+    {
+      "position": 486,
+      "statement": {
+        "kind": "index",
+        "logicalId": "memory_distill_execution_receipts:index:idx_distill_execution_job_attempt",
+        "sql": "CREATE INDEX \"idx_distill_execution_job_attempt\" ON \"agent_workflow\".\"memory_distill_execution_receipts\" (\"job_id\", \"attempt_index\", \"round_index\")"
+      }
+    },
+    {
+      "position": 487,
+      "statement": {
+        "kind": "index",
+        "logicalId": "memory_distill_execution_receipts:index:idx_distill_execution_state_prepared",
+        "sql": "CREATE INDEX \"idx_distill_execution_state_prepared\" ON \"agent_workflow\".\"memory_distill_execution_receipts\" (\"state\", \"prepared_at\")"
+      }
+    },
+    {
+      "position": 865,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_state_enum",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_state_enum\" CHECK (\"state\" IN ('prepared', 'started', 'terminal', 'reaped', 'closed'))"
+      }
+    },
+    {
+      "position": 866,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_attempt_nonnegative",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_attempt_nonnegative\" CHECK (\"attempt_index\" >= 0)"
+      }
+    },
+    {
+      "position": 867,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_round_nonnegative",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_round_nonnegative\" CHECK (\"round_index\" >= 0)"
+      }
+    },
+    {
+      "position": 868,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_context_json_valid",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_context_json_valid\" CHECK (json_valid(\"context_json\"))"
+      }
+    },
+    {
+      "position": 869,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_execution_receipts:check:memory_distill_execution_receipts_terminal_json_valid",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_execution_receipts\" ADD CONSTRAINT \"memory_distill_execution_receipts_terminal_json_valid\" CHECK (\"terminal_json\" IS NULL OR json_valid(\"terminal_json\"))"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 118,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"memory_distill_execution_receipts\".\"state\" IN ('prepared', 'started', 'terminal', 'reaped', 'closed')",
+            "name": "memory_distill_execution_receipts_state_enum"
+          },
+          {
+            "columns": [],
+            "expression": "\"memory_distill_execution_receipts\".\"attempt_index\" >= 0",
+            "name": "memory_distill_execution_receipts_attempt_nonnegative"
+          },
+          {
+            "columns": [],
+            "expression": "\"memory_distill_execution_receipts\".\"round_index\" >= 0",
+            "name": "memory_distill_execution_receipts_round_nonnegative"
+          },
+          {
+            "columns": [],
+            "expression": "json_valid(\"memory_distill_execution_receipts\".\"context_json\")",
+            "name": "memory_distill_execution_receipts_context_json_valid"
+          },
+          {
+            "columns": [],
+            "expression": "\"memory_distill_execution_receipts\".\"terminal_json\" IS NULL OR json_valid(\"memory_distill_execution_receipts\".\"terminal_json\")",
+            "name": "memory_distill_execution_receipts_terminal_json_valid"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "execution_ref",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "job_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "attempt_index",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "round_index",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "context_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "retained_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "recovery_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "started_at",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "prepared_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["prepared", "started", "terminal", "reaped", "closed"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "terminal_json",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "settlement",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "memory_distill_execution_receipts",
+        "indexes": [
+          {
+            "columns": ["job_id", "attempt_index", "round_index"],
+            "name": "idx_distill_execution_job_attempt",
+            "unique": false,
+            "where": null
+          },
+          {
+            "columns": ["state", "prepared_at"],
+            "name": "idx_distill_execution_state_prepared",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["execution_ref"],
+        "ownerContext": "knowledge-evolution",
+        "primaryKey": ["execution_ref"],
+        "providerTables": {
+          "postgresql": "memory_distill_execution_receipts",
+          "sqlite": "memory_distill_execution_receipts"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "knowledge-evolution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "memoryDistillExecutionReceipts",
+        "sourceTable": "memory_distill_execution_receipts",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:9201a87aeaf02c954ba451505b374e70555b49d625775c4f53b32e3ab63b08a0",
+  "sequence": 30,
+  "sqlDigest": "sha256:8bceb381e746ea9e0ba417bd1a3c35b830f8ff9626dd8f5400777d10f045d9c9",
+  "sqlFile": "0030_rfc370_memory_execution_receipts.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791897639001,
+        "hash": "1b492c581eb48ecb417366213a3afe255f53fc3cf1f4a5b6d8d3adc29fa696f6",
+        "index": 253,
+        "tag": "0254_rfc370_memory_execution_receipts"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:ae4295795d6a0197d0bd62c7fe0acf5046a7876e502809927db3006e6ada680d",
+      "count": 253,
+      "last": {
+        "folderMillis": 1791862443354,
+        "hash": "e1686c026bc0bb10e3e4794a529b5903edf9a7871fc308fd8aed241aa90ae080",
+        "index": 252,
+        "tag": "0253_rfc371_history_seek_indexes"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:78ed518f4b1db7af86a617d88ec2891c0f033bdd85e764c98f743f531bb13388",
+      "count": 254,
+      "last": {
+        "folderMillis": 1791897639001,
+        "hash": "1b492c581eb48ecb417366213a3afe255f53fc3cf1f4a5b6d8d3adc29fa696f6",
+        "index": 253,
+        "tag": "0254_rfc370_memory_execution_receipts"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:3cc614cfbea2a089604a914d4a6f19f54c47ed160ba369ad823e78f1994dd58b",
+    "planDigest": "sha256:6e1bba977637aa72ea28249f397ef95a991fc212ed35aaeabe4d0d7466b0e592"
+  },
+  "version": 2
+}

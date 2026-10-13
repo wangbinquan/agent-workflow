@@ -28,6 +28,7 @@ import {
   ErrorResponseSchema,
   McpSchema,
   MaintenanceStatusSchema,
+  HostExecutionStatusSchema,
   OverviewResponseSchema,
   ObservationPriceVersionSchema,
   ScheduledTaskListItemSchema,
@@ -845,6 +846,8 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- daemon effective binding (settings:read; Network tab readout) ----
   { method: 'GET', path: '/api/daemon' },
+  { method: 'GET', path: '/api/execution/status', happy: { schema: HostExecutionStatusSchema } },
+  { method: 'POST', path: '/api/mcps/:id/runtime-test-sessions/:sessionId/recover' },
 
   // ---- plantuml proxy (RFC-105 WP-B; any logged-in user) ----
   // No endpoint configured in the contract harness → 200 { unconfigured: true }.
@@ -936,9 +939,16 @@ export const ENDPOINTS: EndpointSpec[] = [
   },
   { method: 'GET', path: '/api/observability/tasks/:id' },
   { method: 'GET', path: '/api/observability/tasks/:id/spans' },
+  { method: 'GET', path: '/api/observability/projection-version' },
   { method: 'POST', path: '/api/observability/reports' },
   { method: 'GET', path: '/api/observability/reports/:id' },
   { method: 'GET', path: '/api/observability/reports/:id/pages' },
+  { method: 'GET', path: '/api/observability/reports/:id/comparison' },
+  { method: 'GET', path: '/api/observability/storage' },
+  { method: 'GET', path: '/api/observability/anomalies' },
+  { method: 'POST', path: '/api/observability/maintenance' },
+  { method: 'GET', path: '/api/observability/maintenance/:id' },
+  { method: 'POST', path: '/api/observability/maintenance/:id/confirm' },
   {
     method: 'GET',
     path: '/api/observability/pricing/runtimes',

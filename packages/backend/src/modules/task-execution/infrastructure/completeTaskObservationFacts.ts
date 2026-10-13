@@ -1,3 +1,5 @@
+import { originalObservationLifecyclePhases } from './observationLifecyclePhases'
+import type { ObservationTaskFacts } from '@agent-workflow/shared'
 import { and, desc, eq, exists, gte, inArray, lt, or, sql } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
@@ -31,12 +33,13 @@ export function createProjectionTaskObservationFacts(
   const facts = completeTaskObservationFacts(db, undefined, { ids, attemptIds })
   return {
     ...facts,
+    phasePage: originalObservationLifecyclePhases(db),
     async projectionList(query: ObservationTaskPageQuery) {
       if (ids === undefined || ids.length <= 200) return facts.list({ actor: null, query })
       const selected = new Map<
         string,
         {
-          task: import('@agent-workflow/shared').ObservationTaskFacts
+          task: ObservationTaskFacts
           position: { taskId: string; cursor: string }
         }
       >()

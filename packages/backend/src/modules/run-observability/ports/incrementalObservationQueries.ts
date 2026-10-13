@@ -1,5 +1,6 @@
+import type { IncrementalObservationFold } from '../domain/incrementalObservationFold'
 import type { Actor } from '@/auth/actor'
-import type { ObservationOverviewQuery, ObservationTaskFacts } from '@agent-workflow/shared'
+import type { ObservationOverviewQuery } from '@agent-workflow/shared'
 import type { IncrementalObservationVersion } from './incrementalObservationProjection'
 import type { QualifiedObservationContribution } from './incrementalObservationQualified'
 
@@ -16,13 +17,11 @@ export interface IncrementalObservationQuerySource {
   aggregate(
     key: string,
     version: IncrementalObservationVersion,
-  ): Promise<import('../domain/incrementalObservationFold').IncrementalObservationFold | null>
+  ): Promise<IncrementalObservationFold | null>
   aggregates(
     keys: readonly string[],
     version: IncrementalObservationVersion,
-  ): Promise<
-    ReadonlyMap<string, import('../domain/incrementalObservationFold').IncrementalObservationFold>
-  >
+  ): Promise<ReadonlyMap<string, IncrementalObservationFold>>
   bootstrapComplete(version: IncrementalObservationVersion): Promise<boolean>
   days(input: {
     readonly version: IncrementalObservationVersion
@@ -30,7 +29,49 @@ export interface IncrementalObservationQuerySource {
     readonly components: readonly string[]
     readonly from: number
     readonly to: number
-  }): AsyncIterable<import('../domain/incrementalObservationFold').IncrementalObservationFold>
+  }): AsyncIterable<IncrementalObservationFold>
+  /** Hour buckets for complete interiors; exact boundary rows retain their actual clocks. */
+  windowCells?(input: {
+    readonly version: IncrementalObservationVersion
+    readonly taskIds: readonly string[]
+    readonly components: readonly string[]
+    readonly from: number
+    readonly to: number
+    readonly timezone: string
+  }): AsyncIterable<QualifiedObservationContribution>
+  groupedDetails?(input: {
+    version: IncrementalObservationVersion
+    section: string
+    taskIds?: readonly string[]
+    parent?: string | null
+  }): AsyncIterable<QualifiedObservationContribution>
+  metadataChanges?(
+    from: string,
+    version: IncrementalObservationVersion,
+  ): AsyncIterable<{ key: string; row: QualifiedObservationContribution | null }>
+  retainScope?(
+    id: string,
+    taskIds: readonly string[],
+    components: readonly string[],
+    viewId?: string,
+  ): Promise<void>
+  indexedDetails?(version: IncrementalObservationVersion): Promise<boolean>
+  countGroups?(
+    scope: string,
+    version: IncrementalObservationVersion,
+  ): AsyncIterable<{
+    detail: QualifiedObservationContribution['detail']
+    component: string
+    total: string
+  }>
+  detailPacket?(input: {
+    version: IncrementalObservationVersion
+    scope: string
+    section: string
+    parent: string | null
+    after?: string
+    limit: number
+  }): Promise<{ rows: readonly QualifiedObservationContribution[]; next: string | null }>
   identities(input: {
     readonly version: IncrementalObservationVersion
     readonly taskIds?: readonly string[]
@@ -57,12 +98,8 @@ export interface IncrementalObservationQuerySource {
     readonly standalone?: boolean
     readonly from?: number
     readonly to?: number
+    readonly includeUnassigned?: boolean
   }): AsyncIterable<QualifiedObservationContribution>
-  visibleTasks(
-    actor: Actor,
-    query: ObservationOverviewQuery,
-    taskId?: string,
-  ): AsyncIterable<ObservationTaskFacts>
   visibleTaskIds(actor: Actor, ids: readonly string[]): Promise<readonly string[]>
   retainView(input: Omit<ObservationProjectionView, 'id'>): Promise<ObservationProjectionView>
   activateView(

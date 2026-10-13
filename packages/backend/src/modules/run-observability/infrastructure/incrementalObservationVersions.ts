@@ -1,6 +1,10 @@
+import { decodeQualifiedObservationGroup } from '../domain/qualifiedObservationIndexes'
+import { decodeObservationRowCount } from '../domain/observationRowCount'
+import { decodeObservationWindowCell } from '../domain/observationWindowCell'
 import { and, eq } from 'drizzle-orm'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import {
+  observationProjectionDescriptors,
   observationProjectionBindings,
   observationProjectionCurrent,
   observationProjectionHistory,
@@ -79,24 +83,88 @@ export async function retainIncrementalObservationVersion(
           number | null,
         ])
       : null
+  const descriptor =
+    kind === 'aggregate' && /^(row-count|qualified-group|occurrence-cell)\//.test(key)
+      ? (
+          await tx
+            .select({ document: observationProjectionDescriptors.document })
+            .from(observationProjectionDescriptors)
+            .where(eq(observationProjectionDescriptors.key, key))
+            .get()
+        )?.document
+      : undefined
+  if (
+    kind === 'aggregate' &&
+    /^(row-count|qualified-group|occurrence-cell)\//.test(key) &&
+    !descriptor
+  )
+    throw new Error('Qualified projection descriptor is unavailable')
+  const group =
+    kind === 'aggregate' && key.startsWith('qualified-group/')
+      ? decodeQualifiedObservationGroup(descriptor!)
+      : null
+  const count =
+    kind === 'aggregate' && key.startsWith('row-count/')
+      ? decodeObservationRowCount(descriptor!)
+      : null
+  const cell =
+    kind === 'aggregate' && key.startsWith('occurrence-cell/')
+      ? decodeObservationWindowCell(descriptor!)
+      : null
   const indexes = {
-    section: bucket
-      ? 'occurrence-day'
-      : typeof metadata.section === 'string'
-        ? metadata.section
-        : null,
+    section: group
+      ? 'qualified-group/' + group[1].section
+      : count
+        ? 'row-count'
+        : cell
+          ? 'occurrence-cell'
+          : bucket
+            ? 'occurrence-day'
+            : typeof metadata.section === 'string'
+              ? metadata.section
+              : null,
     originalKey: typeof metadata.key === 'string' ? metadata.key : null,
-    parent: typeof metadata.parent === 'string' ? metadata.parent : null,
-    taskId: bucket ? bucket[0] : typeof metadata.taskId === 'string' ? metadata.taskId : null,
-    cohortAt: bucket
-      ? bucket[2] === null
-        ? null
-        : bucket[2] * 86400000
-      : typeof metadata.cohortAt === 'number'
-        ? metadata.cohortAt
-        : null,
+    parent: group
+      ? group[1].parent
+      : count
+        ? count.detail.parent
+        : typeof metadata.parent === 'string'
+          ? metadata.parent
+          : null,
+    taskId: group
+      ? group[1].taskId
+      : count
+        ? count.detail.taskId
+        : cell
+          ? (cell.original.task?.id ?? null)
+          : bucket
+            ? bucket[0]
+            : typeof metadata.taskId === 'string'
+              ? metadata.taskId
+              : null,
+    cohortAt: group
+      ? group[1].cohortAt
+      : count
+        ? count.detail.cohortAt
+        : cell
+          ? cell.from
+          : bucket
+            ? bucket[2] === null
+              ? null
+              : bucket[2] * 86400000
+            : typeof metadata.cohortAt === 'number'
+              ? metadata.cohortAt
+              : null,
   }
-  const indexedComponent = bucket ? bucket[1] : component
+  const indexedComponent = group
+    ? group[0]
+    : count
+      ? count.owner
+      : cell
+        ? (JSON.parse(descriptor!.slice(16)) as [null, string])[1]
+        : bucket
+          ? bucket[1]
+          : component
   const live = {
     kind,
     key,
@@ -150,13 +218,11 @@ export async function retainIncrementalObservationVersion(
       await tx
         .insert(observationProjectionBindings)
         .values(
-          bindings
-            .slice(at, at + 150)
-            .map((binding) => ({
-              ...binding,
-              contributionKey: key,
-              component: contribution.component,
-            })),
+          bindings.slice(at, at + 150).map((binding) => ({
+            ...binding,
+            contributionKey: key,
+            component: contribution.component,
+          })),
         )
         .onConflictDoNothing()
         .run()

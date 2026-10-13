@@ -10,6 +10,11 @@ import {
 } from '@agent-workflow/shared'
 import { completeSourceCursor, completeSourcePosition } from '../domain/completeSourceCursor'
 import { CompleteObservationError } from '../domain/completeObservationError'
+import {
+  CompleteObservationExecution,
+  type CompleteObservationHostSelection,
+  type ObservationExecutionLifecycle,
+} from './completeObservationExecution'
 import type { CompleteObservationReportCache } from '../ports/completeObservationReportCache'
 import type {
   CompleteObservationBuildResult,
@@ -33,11 +38,23 @@ export function completeObservationReportService(input: {
     signal: AbortSignal,
   ) => Promise<CompleteObservationBuildResult>
   readonly closeBuild?: () => Promise<void>
+  readonly execution?: CompleteObservationHostSelection
   /** Optional diagnostics observe the main job; they never replace original work. */
   readonly observePhase?: (
     report: CompleteObservationStoredReport,
   ) => ((phase: string) => void) | undefined
 }) {
+  if (
+    input.execution &&
+    (input.execution.mode !== 'host' || typeof input.execution.deferUnissued !== 'function')
+  )
+    throw new Error('observation-report-host-selection-incomplete')
+  const execution = input.execution ? new CompleteObservationExecution() : undefined
+  type Frame = ReturnType<CompleteObservationExecution['admit']>
+  const settle = (frame: Frame | undefined, write: () => Promise<void>) =>
+    frame ? execution!.settle(frame, write) : write()
+  const defer = (report: CompleteObservationStoredReport, frame: Frame) =>
+    settle(frame, () => input.execution!.deferUnissued(report))
   let stop = new AbortController()
   const jobs = new Map<string, Promise<void>>()
   let tail = Promise.resolve()
@@ -56,7 +73,12 @@ export function completeObservationReportService(input: {
     await input.store.assertReadable(actor, report)
     return report
   }
-  async function run(report: CompleteObservationStoredReport) {
+  async function run(report: CompleteObservationStoredReport, frame?: Frame) {
+    let returningUnissued = false
+    const returnUnissued = () => {
+      returningUnissued = true
+      return defer(report, frame!)
+    }
     let observer: ((phase: string) => void) | undefined
     try {
       observer = input.observePhase?.(report)
@@ -93,9 +115,21 @@ export function completeObservationReportService(input: {
     try {
       mark('main-job-started')
       stop.signal.throwIfAborted()
+      if (frame && !execution!.accepting(frame)) {
+        await returnUnissued()
+        return
+      }
       await input.store.assertReadable(report.request.actor, report)
+      if (frame && !execution!.accepting(frame)) {
+        await returnUnissued()
+        return
+      }
       await input.store.phase(report.id, report.owner, 'collecting')
       mark('main-inputs-qualified')
+      if (frame && !execution!.accepting(frame)) {
+        await returnUnissued()
+        return
+      }
       if (input.heartbeatDuringRead) heartbeat()
       const result = await input.build(report, job.signal)
       mark('main-build-returned')
@@ -133,10 +167,13 @@ export function completeObservationReportService(input: {
       await input.store.publish(report.id, report.owner, manifest)
       mark('main-published')
     } catch (error) {
-      await input.store.fail(
-        report.id,
-        report.owner,
-        error instanceof Error ? error.message : String(error),
+      if (returningUnissued) throw error
+      await settle(frame, () =>
+        input.store.fail(
+          report.id,
+          report.owner,
+          error instanceof Error ? error.message : String(error),
+        ),
       )
     } finally {
       keepAlive = false
@@ -144,11 +181,11 @@ export function completeObservationReportService(input: {
       if (timer !== undefined) clearTimeout(timer)
       await pulse
       stop.signal.removeEventListener('abort', abort)
-      await input.spool.remove(report.id, report.owner)
+      await settle(frame, () => input.spool.remove(report.id, report.owner))
       mark('main-job-finished')
     }
   }
-  function schedule(report: CompleteObservationStoredReport) {
+  function schedule(report: CompleteObservationStoredReport, frame?: Frame) {
     if (
       stop.signal.aborted ||
       report.report.state !== 'building' ||
@@ -156,17 +193,90 @@ export function completeObservationReportService(input: {
       !report.owner.startsWith(input.owner + '/')
     )
       return
-    const job = tail.then(() => run(report))
+    const predecessor = tail
+    const job = frame
+      ? execution!.track(frame, () => predecessor.then(() => run(report, frame)))
+      : tail.then(() => run(report))
     jobs.set(report.id, job)
     tail = job.catch(() => {})
     void job.finally(() => jobs.delete(report.id)).catch(() => {})
   }
-  async function claim(report: CompleteObservationStoredReport) {
+  async function claim(report: CompleteObservationStoredReport, frame?: Frame) {
+    if (frame && !execution!.accepting(frame)) return report
     if (stop.signal.aborted)
       throw new CompleteObservationError('not-ready', 'Report worker is stopping')
     if (report.report.state !== 'building' && report.report.state !== 'failed') return report
     if (jobs.has(report.id)) return report
-    return input.store.claim(report.id, input.owner + '/' + input.newId())
+    const owner = input.owner + '/' + input.newId()
+    try {
+      return await input.store.claim(report.id, owner)
+    } catch (error) {
+      // The claim may have committed before its ACK failed. Only return that
+      // exact candidate owner; never retry claim/build during drain.
+      if (frame) await defer({ ...report, owner }, frame)
+      throw error
+    }
+  }
+  async function request(
+    actor: Actor,
+    query: ObservationOverviewQuery,
+    refreshKey: string,
+    taskId?: string,
+    frame?: Frame,
+  ): Promise<CompleteObservationReport> {
+    if (frame && !execution!.accepting(frame)) throw execution!.unavailable()
+    if (stop.signal.aborted)
+      throw new CompleteObservationError('not-ready', 'Report worker is stopping')
+    const parsed = CompleteObservationReportQuerySchema.parse(query)
+    if (taskId !== undefined && parsed.cohort === 'usage')
+      throw new RangeError('Task details show lifecycle usage; omit cohort=usage')
+    if (!refreshKey || refreshKey.length > 200)
+      throw new RangeError('Invalid complete report refresh identity')
+    const request: CompleteObservationReportRequest = {
+      actor,
+      query: parsed,
+      refreshKey,
+      ...(taskId === undefined ? {} : { taskId }),
+    }
+    const actorScope = input.scopeOf(actor),
+      requestKey = input.keyOf(
+        JSON.stringify([
+          2,
+          'scope-metrics/13',
+          input.store.generation,
+          actorScope,
+          parsed,
+          taskId ?? null,
+          refreshKey,
+        ]),
+      )
+    const owner = input.owner + '/' + input.newId(),
+      id = input.newId()
+    let report: CompleteObservationStoredReport = {
+      id,
+      owner,
+      request,
+      requestKey,
+      actorScope,
+      generation: input.store.generation,
+      report: { state: 'building', reportId: id, phase: 'queued' },
+      manifest: null,
+    }
+    try {
+      report = await input.store.ensure(request, requestKey, actorScope, owner, id)
+      await input.store.assertReadable(actor, report)
+      report = await claim(report, frame)
+      if (!frame || execution!.accepting(frame)) schedule(report, frame)
+      return report.report
+    } finally {
+      if (
+        frame &&
+        report.report.state === 'building' &&
+        report.owner.startsWith(input.owner + '/') &&
+        !jobs.has(report.id)
+      )
+        await defer(report, frame)
+    }
   }
   return {
     async request(
@@ -174,51 +284,26 @@ export function completeObservationReportService(input: {
       query: ObservationOverviewQuery,
       refreshKey: string,
       taskId?: string,
-    ): Promise<CompleteObservationReport> {
-      if (stop.signal.aborted)
-        throw new CompleteObservationError('not-ready', 'Report worker is stopping')
-      const parsed = CompleteObservationReportQuerySchema.parse(query)
-      if (taskId !== undefined && parsed.cohort === 'usage')
-        throw new RangeError('Task details show lifecycle usage; omit cohort=usage')
-      if (!refreshKey || refreshKey.length > 200)
-        throw new RangeError('Invalid complete report refresh identity')
-      const request: CompleteObservationReportRequest = {
-        actor,
-        query: parsed,
-        refreshKey,
-        ...(taskId === undefined ? {} : { taskId }),
-      }
-      const actorScope = input.scopeOf(actor),
-        requestKey = input.keyOf(
-          JSON.stringify([
-            2,
-            'scope-metrics/13',
-            input.store.generation,
-            actorScope,
-            parsed,
-            taskId ?? null,
-            refreshKey,
-          ]),
-        )
-      const existing = await input.store.ensure(
-        request,
-        requestKey,
-        actorScope,
-        input.owner + '/' + input.newId(),
-        input.newId(),
-      )
-      await input.store.assertReadable(actor, existing)
-      const report = await claim(existing)
-      schedule(report)
-      return report.report
+    ) {
+      if (!execution) return request(actor, query, refreshKey, taskId)
+      const frame = execution.admit()
+      return execution.track(frame, () => request(actor, query, refreshKey, taskId, frame))
     },
     async status(actor: Actor, id: string): Promise<CompleteObservationReport> {
       const original = await readable(actor, id)
       // A read must expose a terminal failure. Only an explicit request retries it.
       if (original.report.state === 'failed') return original.report
-      const report = await claim(original)
-      schedule(report)
-      return report.report
+      if (execution && !execution.accepting()) return original.report
+      const frame = execution?.admit()
+      const resume = async () => {
+        const report = await claim(original, frame)
+        if (frame && !execution!.accepting(frame)) {
+          if (report.owner.startsWith(input.owner + '/') && !jobs.has(report.id))
+            await defer(report, frame)
+        } else schedule(report, frame)
+        return report.report
+      }
+      return frame ? execution!.track(frame, resume) : resume()
     },
     async page<T>(
       actor: Actor,
@@ -262,6 +347,7 @@ export function completeObservationReportService(input: {
     },
     worker: {
       start() {
+        if (execution) throw new Error('observation-report-host-lifetime-required')
         if (stop.signal.aborted) stop = new AbortController()
       },
       async drain() {
@@ -273,5 +359,24 @@ export function completeObservationReportService(input: {
         await input.closeBuild?.()
       },
     },
+    ...(execution
+      ? {
+          execution: {
+            start(lifetime) {
+              execution.start(lifetime)
+              if (stop.signal.aborted) stop = new AbortController()
+            },
+            quiesce: execution.quiesce.bind(execution),
+            awaitDrained: execution.awaitDrained.bind(execution),
+            async pause(lifetime) {
+              const wasCurrent = execution.controlCurrent()
+              execution.quiesce(lifetime)
+              if (wasCurrent) stop.abort(new Error('Original report worker stopped'))
+              await execution.awaitDrained(lifetime)
+              await input.closeBuild?.()
+            },
+          } satisfies ObservationExecutionLifecycle,
+        }
+      : {}),
   }
 }

@@ -1,3 +1,6 @@
+import type { QualifiedObservationContribution } from '../ports/incrementalObservationQualified'
+import { qualifiedObservationIndexes } from '../domain/qualifiedObservationIndexes'
+import { observationRowCountFold } from '../domain/observationRowCount'
 import type {
   IncrementalObservationComponentSource,
   IncrementalObservationContribution,
@@ -16,6 +19,7 @@ export class IncrementalObservationSourceChanged extends Error {}
 async function* ordered(
   rows: AsyncIterable<IncrementalObservationContribution>,
   components: ReadonlySet<string>,
+  index = false,
 ) {
   let last: string | undefined
   for await (const row of rows) {
@@ -27,7 +31,7 @@ async function* ordered(
     )
       throw new Error('Incremental observation aggregate membership is invalid')
     last = row.key
-    yield row
+    yield index ? qualifiedObservationIndexes(row as QualifiedObservationContribution) : row
   }
 }
 
@@ -39,12 +43,21 @@ async function replace(
 ) {
   if (previous && next && JSON.stringify(previous) === JSON.stringify(next)) return false
   if (!previous && !next) return false
+  if (next?.descriptors) await tx.retainDescriptors?.(next.descriptors)
   for (const key of new Set([...(previous?.aggregates ?? []), ...(next?.aggregates ?? [])])) {
     const current = (await tx.aggregate(key)) ?? emptyIncrementalObservationFold()
     const updated = replaceIncrementalObservationContribution(
       current,
-      previous?.aggregates.includes(key) ? previous.fold : null,
-      next?.aggregates.includes(key) ? next.fold : null,
+      previous?.aggregates.includes(key)
+        ? key.startsWith('row-count/')
+          ? observationRowCountFold()
+          : previous.fold
+        : null,
+      next?.aggregates.includes(key)
+        ? key.startsWith('row-count/')
+          ? observationRowCountFold()
+          : next.fold
+        : null,
     )
     if (updated !== current) await tx.putAggregate(key, updated, version)
   }
@@ -78,7 +91,7 @@ export function createIncrementalObservationProjection(input: {
           asOf: Math.max(head.asOf, work.asOf ?? input.now()),
         }
         const old = ordered(tx.previous(work), components)[Symbol.asyncIterator]()
-        const next = ordered(input.source.contributions(tx, work), components)[
+        const next = ordered(input.source.contributions(tx, work), components, true)[
           Symbol.asyncIterator
         ]()
         let changed = false

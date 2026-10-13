@@ -1,6 +1,7 @@
 import { and, asc, eq, isNull } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
+  observationProjectionIndexedVersions,
   observationProjectionBootstrap,
   observationProjectionChanges,
   observationProjectionComponents,
@@ -13,10 +14,9 @@ import { sha256Hex } from '@/util/hash'
 import { enqueueIncrementalObservationWork } from './incrementalObservationWork'
 
 export interface ProjectionBootstrapChannel {
+  readonly refresh?: boolean
   readonly id: string
-  page(
-    after?: string,
-  ): Promise<{
+  page(after?: string): Promise<{
     readonly items: readonly {
       readonly identity: string
       readonly component: string
@@ -68,7 +68,15 @@ export function incrementalObservationBootstrap(
               .where(eq(observationProjectionVersions.revision, head.revision))
               .get()
           : undefined
-        if (version?.bootstrapComplete) return 0
+        if (
+          version?.bootstrapComplete &&
+          (await tx
+            .select()
+            .from(observationProjectionIndexedVersions)
+            .where(eq(observationProjectionIndexedVersions.revision, version.revision))
+            .get())
+        )
+          return 0
         if (
           await tx
             .select({ id: observationProjectionWork.id })
@@ -121,18 +129,19 @@ export function incrementalObservationBootstrap(
       if (current?.done || current?.cursor !== progress.cursor) return 0
       for (const item of page.items) {
         if (
-          await tx
+          !channel.refresh &&
+          (await tx
             .select()
             .from(observationProjectionComponents)
             .where(eq(observationProjectionComponents.component, item.component))
-            .get()
+            .get())
         )
           continue
         await enqueueIncrementalObservationWork(tx, {
           id:
             'bootstrap-component/' +
             sha256Hex(JSON.stringify([generation, channel.id, item.identity])),
-          source: 'original-bootstrap-component',
+          source: channel.refresh ? 'original-bootstrap-upgrade' : 'original-bootstrap-component',
           revision: generation,
           components: [...new Set(item.components)].sort(),
         })

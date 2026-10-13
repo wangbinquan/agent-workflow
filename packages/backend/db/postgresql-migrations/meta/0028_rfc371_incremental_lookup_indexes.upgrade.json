@@ -1,0 +1,114 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:a467469ed6c6b065395211bd72c2c6434ad1155ed5cd3a528ad1f65f623dac7b', 268, 6)"
+    },
+    "beforeDigest": "sha256:8acc2d83806b5493f100aeb952e64100c3fe78527e8ce9fde19220fd98f316b1"
+  },
+  "digest": "sha256:d37bd9e8d275f734ab8917e8c225d3c1dea37fe4bde9025cdb6785a3028a97e5",
+  "executableStatements": [
+    {
+      "kind": "index",
+      "logicalId": "observation_projection_current:index:observation_projection_current_task",
+      "sql": "CREATE INDEX \"observation_projection_current_task\" ON \"agent_workflow\".\"observation_projection_current\" (\"kind\", \"section\", \"task_id\", \"key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_projection_current:index:observation_projection_current_section",
+      "sql": "CREATE INDEX \"observation_projection_current_section\" ON \"agent_workflow\".\"observation_projection_current\" (\"kind\", \"section\", \"key\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:a467469ed6c6b065395211bd72c2c6434ad1155ed5cd3a528ad1f65f623dac7b', active_table_count = 268, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:756df370ab27436daa9e84cc9bf0c15db8eebc4a60bd0f04dbce903c247c8f1e' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:756df370ab27436daa9e84cc9bf0c15db8eebc4a60bd0f04dbce903c247c8f1e",
+    "planDigest": "sha256:96e87df4285d85a92c0e8467f23a7e84cb61cf3cd7329ac03abf4ca4d3a3cd79"
+  },
+  "id": "0028_rfc371_incremental_lookup_indexes",
+  "indexAdditions": [
+    {
+      "position": 512,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_projection_current:index:observation_projection_current_task",
+        "sql": "CREATE INDEX \"observation_projection_current_task\" ON \"agent_workflow\".\"observation_projection_current\" (\"kind\", \"section\", \"task_id\", \"key\")"
+      }
+    },
+    {
+      "position": 513,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_projection_current:index:observation_projection_current_section",
+        "sql": "CREATE INDEX \"observation_projection_current_section\" ON \"agent_workflow\".\"observation_projection_current\" (\"kind\", \"section\", \"key\")"
+      }
+    }
+  ],
+  "logicalIndexes": [
+    {
+      "index": {
+        "columns": ["kind", "section", "task_id", "key"],
+        "name": "observation_projection_current_task",
+        "unique": false,
+        "where": null
+      },
+      "position": 1,
+      "tableId": "observation_projection_current"
+    },
+    {
+      "index": {
+        "columns": ["kind", "section", "key"],
+        "name": "observation_projection_current_section",
+        "unique": false,
+        "where": null
+      },
+      "position": 2,
+      "tableId": "observation_projection_current"
+    }
+  ],
+  "previousEntryDigest": "sha256:bb624143021d5aaa64e6449edbdbac684b6a6a6b6bbabb44db74f1b1e5c14796",
+  "sequence": 28,
+  "sqlDigest": "sha256:dc659ee6dfc1798621dabce632d63e85121031f5b3df273f6b58f20a421e8789",
+  "sqlFile": "0028_rfc371_incremental_lookup_indexes.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791860292275,
+        "hash": "775a72e0245e3a07871334d350fb6562025dac50c09f53803fdd954b467ae14e",
+        "index": 251,
+        "tag": "0252_rfc371_incremental_lookup_indexes"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:6b234b1f10f42a3480da93e0e4bb5d9ba8f236f50fe535d9c296868a69f8d5cb",
+      "count": 251,
+      "last": {
+        "folderMillis": 1791857700675,
+        "hash": "03e5512d117645cbb8a0cc3aacecb81e529b0f4e06197dbd5ca91981bc163cc2",
+        "index": 250,
+        "tag": "0251_rfc371_storage_lifecycle"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:e6dbcfdd086b3c6f8e6de89643b607ae7e87470abb7253b13e5d2bcb3d4986df",
+      "count": 252,
+      "last": {
+        "folderMillis": 1791860292275,
+        "hash": "775a72e0245e3a07871334d350fb6562025dac50c09f53803fdd954b467ae14e",
+        "index": 251,
+        "tag": "0252_rfc371_incremental_lookup_indexes"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:a467469ed6c6b065395211bd72c2c6434ad1155ed5cd3a528ad1f65f623dac7b",
+    "planDigest": "sha256:508713eae2d368e7f226d54f7e09b80f8e776bb155abd6d097c5a60a12edb81d"
+  },
+  "version": 1
+}

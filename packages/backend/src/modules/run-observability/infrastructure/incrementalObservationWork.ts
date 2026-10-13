@@ -1,3 +1,4 @@
+import { observationWorkRetention } from '@/db/observationStorage'
 import { and, asc, eq, isNull, lte } from 'drizzle-orm'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { databaseTransactionIsActive } from '@/platform/persistence/databaseTransaction'
@@ -39,6 +40,11 @@ export async function enqueueIncrementalObservationWork(
     return
   }
   await tx.insert(observationProjectionWork).values({ id: work.id, document, fingerprint }).run()
+  await tx
+    .insert(observationWorkRetention)
+    .values({ id: work.id, queuedAt: Date.now() })
+    .onConflictDoNothing()
+    .run()
   // Each insertion packet bounds SQL parameters, never the connected population.
   for (let at = 0; at < work.components.length; at += 200)
     await tx

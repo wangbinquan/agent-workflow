@@ -11,6 +11,7 @@ import { TableViewport } from '@/components/TableViewport'
 import { PriceEditor } from './PriceEditor'
 import { PriceHistory } from './PriceHistory'
 import { PRICING_QUERY, runtimePrices } from './priceClient'
+import './ObservationTypography.css'
 
 export function RuntimePricing() {
   const { t } = useTranslation()
@@ -45,7 +46,7 @@ export function RuntimePricing() {
     setOpen(true)
   }
   return (
-    <section id="token-cost">
+    <section id="token-cost" className="observation-typography">
       <SettingsCard title={t('observationPricing.title')} hint={t('observationPricing.hint')}>
         {query.isLoading ? <LoadingState /> : null}
         {query.error ? (

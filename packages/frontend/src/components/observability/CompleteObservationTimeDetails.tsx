@@ -25,6 +25,7 @@ export function CompleteObservationTimeDetails({
   )
   return (
     <Dialog
+      panelClassName="observation-typography"
       open
       onClose={onClose}
       title={t('runObservability.unassignedTime')}

@@ -1,4 +1,9 @@
 import type {
+  CompleteObservationDimension,
+  HistoricalObservationExecution,
+  ObservationAttemptFacts,
+} from '@agent-workflow/shared'
+import type {
   CompleteObservationSection,
   CompleteObservationTask,
   ObservationTaskFacts,
@@ -25,8 +30,9 @@ export interface QualifiedObservationDetail {
     readonly taskId: string | null
     readonly ownerUserId: string | null
   }[]
-  readonly timingAttempts?: readonly import('@agent-workflow/shared').ObservationAttemptFacts[]
-  readonly scopes?: readonly import('@agent-workflow/shared').HistoricalObservationExecution[]
+  readonly timingAttempts?: readonly ObservationAttemptFacts[]
+  readonly scopes?: readonly HistoricalObservationExecution[]
+  readonly humanWaitingSince?: number | null
   readonly nativeRecord?: boolean
 }
 export interface QualifiedObservationHistoricalContribution {
@@ -35,12 +41,12 @@ export interface QualifiedObservationHistoricalContribution {
   readonly task: ObservationTaskFacts | null
   readonly cohortAt: number | null
   readonly assigned: boolean
-  readonly fold: CompleteObservationFold
+  readonly fold: IncrementalObservationContributionFold
   readonly visibility: readonly {
     readonly taskId: string | null
     readonly ownerUserId: string | null
   }[]
-  readonly scopes?: readonly import('@agent-workflow/shared').HistoricalObservationExecution[]
+  readonly scopes?: readonly HistoricalObservationExecution[]
 }
 export interface QualifiedObservationDimensionContribution {
   readonly identity: string
@@ -48,10 +54,7 @@ export interface QualifiedObservationDimensionContribution {
   readonly task: ObservationTaskFacts | null
   readonly cohortAt: number | null
   readonly fold: CompleteObservationFold
-  readonly dimension: Pick<
-    import('@agent-workflow/shared').CompleteObservationDimension,
-    'key' | 'kind' | 'label' | 'selection'
-  >
+  readonly dimension: Pick<CompleteObservationDimension, 'key' | 'kind' | 'label' | 'selection'>
 }
 export interface QualifiedObservationPrepared {
   readonly generation: string

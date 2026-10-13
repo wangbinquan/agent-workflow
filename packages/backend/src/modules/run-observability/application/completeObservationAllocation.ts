@@ -84,6 +84,8 @@ export async function allocateCompleteObservationUsage(
       else if (entry.invocation.authority.kind === 'local') {
         const value = await input.value({
           invocationId: record.invocationId,
+          sourceId: record.sourceId,
+          recordId: record.measurement.recordId,
           model: record.localModel,
           condition: null,
           usage: contribution,

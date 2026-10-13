@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 252 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 269 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -22,11 +22,11 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(252)
+    expect(tables).toHaveLength(269)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       true,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(252)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(269)
     expect(
       tables
         .map((statement) => statement.logicalId)
@@ -52,9 +52,16 @@ describe('RFC-349 PostgreSQL schema projection', () => {
         .filter((id) => id.startsWith('observation_'))
         .sort(),
     ).toEqual([
+      'observation_anomaly_history',
+      'observation_anomaly_states',
       'observation_calculation_rows',
       'observation_calculation_versions',
+      'observation_invocation_price_audit',
+      'observation_invocation_price_policies',
+      'observation_invocation_price_records',
       'observation_invocations',
+      'observation_maintenance_members',
+      'observation_maintenance_operations',
       'observation_native_fact_pages',
       'observation_native_fact_roots',
       'observation_platform_records',
@@ -67,26 +74,35 @@ describe('RFC-349 PostgreSQL schema projection', () => {
       'observation_projection_components',
       'observation_projection_current',
       'observation_projection_dependencies',
+      'observation_projection_descriptors',
       'observation_projection_heads',
       'observation_projection_history',
+      'observation_projection_indexed_versions',
       'observation_projection_memberships',
       'observation_projection_prepared',
+      'observation_projection_query_scope_members',
+      'observation_projection_query_scopes',
       'observation_projection_versions',
       'observation_projection_views',
       'observation_projection_work',
       'observation_projection_work_components',
       'observation_report_counts',
+      'observation_report_leases',
       'observation_report_pages',
       'observation_report_receipts',
       'observation_report_retained_revisions',
       'observation_report_rows',
       'observation_reports',
+      'observation_scope_refs',
       'observation_source_revisions',
+      'observation_storage_samples',
+      'observation_storage_state',
       'observation_usage_captures',
       'observation_usage_current',
       'observation_usage_events',
       'observation_usage_native_records',
       'observation_usage_sources',
+      'observation_work_retention',
     ])
     // RFC-371 0243 / PostgreSQL 0019 adds this exact original System table set.
     expect(

@@ -1,4 +1,5 @@
-import { asc, gt } from 'drizzle-orm'
+import { observationProjectionCurrent } from '@/db/observationProjection'
+import { and, asc, eq, gt, sql } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { observationInvocations } from '@/db/schema'
 import {
@@ -16,6 +17,35 @@ export function composeOriginalProjectionBootstrap(input: {
   readonly owners: HistoricalObservationSources['owners']
 }) {
   const channels: ProjectionBootstrapChannel[] = [
+    {
+      id: 'indexed-details-v1',
+      refresh: true,
+      async page(after) {
+        const rows = await input.db
+            .select({ component: observationProjectionCurrent.component })
+            .from(observationProjectionCurrent)
+            .where(
+              and(
+                eq(observationProjectionCurrent.kind, 'contribution'),
+                after ? gt(observationProjectionCurrent.component, after) : undefined,
+                sql`${observationProjectionCurrent.component} IS NOT NULL`,
+              ),
+            )
+            .groupBy(observationProjectionCurrent.component)
+            .orderBy(asc(observationProjectionCurrent.component))
+            .limit(201)
+            .all(),
+          items = rows.slice(0, 200)
+        return {
+          items: items.map((row) => ({
+            identity: row.component!,
+            component: row.component!,
+            components: [row.component!],
+          })),
+          nextCursor: rows.length > 200 ? items.at(-1)!.component : null,
+        }
+      },
+    },
     {
       id: 'task-metadata',
       async page(after) {

@@ -41,7 +41,7 @@
   outline-offset: var(--focus-ring-offset-inset);
 }
 .observation-trend__label {
-  font-size: var(--font-xs);
+  font-size: var(--font-sm);
   color: var(--muted);
 }
 .observation-trend__track {
@@ -80,7 +80,7 @@
   );
 }
 .observation-trend__value {
-  font-size: var(--font-xs);
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -117,7 +117,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-1) var(--space-3);
   margin: var(--space-2) 0 0;
-  font-size: var(--font-xs);
+  font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
   min-width: 0;
 }
@@ -138,18 +138,67 @@
   overflow-wrap: anywhere;
   font-weight: 600;
 }
+/* The summary reads as four values. Record coverage is a separate, labelled
+   group; it must not squeeze the values or be mistaken for token counts. */
+.observation-token-buckets--summary {
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(100%, max(8rem, var(--observation-token-value-width, 8rem))), 1fr)
+  );
+  gap: var(--space-3);
+  font-size: var(--font-sm);
+}
+.observation-token-buckets--summary > div {
+  display: grid;
+  justify-content: start;
+  align-items: start;
+  gap: var(--space-1);
+}
+.observation-token-buckets--summary dt {
+  font-size: var(--font-sm);
+}
+.observation-token-buckets--summary dd {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+.observation-token-coverage {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.observation-token-coverage p {
+  margin: 0;
+}
+.observation-token-coverage dl {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+}
+.observation-token-coverage dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.observation-token-coverage dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 td:has(> .observation-token-buckets) {
   min-width: 12rem;
 }
 .observation-token-hint {
-  font-size: var(--font-xs);
+  font-size: var(--font-sm);
   margin: var(--space-2) 0 0;
 }
 .observation-token-legend {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
-  font-size: var(--font-xs);
+  font-size: var(--font-sm);
 }
 .observation-token-legend > span {
   display: inline-flex;

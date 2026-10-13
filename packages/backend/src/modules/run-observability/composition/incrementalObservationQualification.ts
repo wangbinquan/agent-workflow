@@ -1,3 +1,11 @@
+import type { ObservationSpanDetail, ObservationPhase } from '@agent-workflow/shared'
+import { observationWindowCellKey } from '../domain/observationWindowCell'
+import { incrementalObservationPreparationSpool } from '../infrastructure/incrementalObservationPreparationSpool'
+import type {
+  CompleteHistoricalObservationRecord,
+  CompleteObservationAllocation,
+  CompleteObservationTimePartition,
+} from '@agent-workflow/shared'
 import { and, asc, eq, gt, inArray } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { observationInvocations } from '@/db/schema'
@@ -76,18 +84,14 @@ export function incrementalObservationQualification(input: {
 }) {
   const prepared = incrementalObservationPreparedStore(input.db)
   return async (originalWork: IncrementalObservationWork, signal: AbortSignal) => {
-    const work = await prepared.begin(originalWork)
+    const work = originalWork,
+      spool = incrementalObservationPreparationSpool(signal)
+    let claimed: IncrementalObservationWork | undefined
     let leaseFailure: unknown,
       renewal = Promise.resolve()
-    const timer = setInterval(() => {
-      renewal = renewal
-        .then(() => prepared.renew(work))
-        .catch((error: unknown) => {
-          leaseFailure = error
-        })
-    }, 15000)
+    let timer: ReturnType<typeof setInterval> | undefined
     try {
-      return await input.snapshot.run(async (snapshot) => {
+      const result = await input.snapshot.run(async (snapshot) => {
         const baseRevision =
           (
             await snapshot.executor
@@ -97,14 +101,13 @@ export function incrementalObservationQualification(input: {
               .get()
           )?.revision ?? '0'
         if (work.source === 'original-bootstrap-finish')
-          return prepared.seal(
+          return spool.seal(
             work,
             {
               generation: snapshot.generationId,
               snapshotId: snapshot.snapshotId,
               asOf: snapshot.asOf,
               baseRevision,
-              preparationToken: work.preparationToken!,
             },
             work.components,
           )
@@ -147,21 +150,20 @@ export function incrementalObservationQualification(input: {
                   .limit(200)
                   .all()
                 if (!rows.length) break
-                await prepared.append(
+                await spool.append(
                   work,
                   rows.map((row) => JSON.parse(row.document) as QualifiedObservationContribution),
                 )
                 after = rows.at(-1)!.key
               }
             }
-            return prepared.seal(
+            return spool.seal(
               work,
               {
                 generation: snapshot.generationId,
                 snapshotId: snapshot.snapshotId,
                 asOf: snapshot.asOf,
                 baseRevision,
-                preparationToken: work.preparationToken!,
               },
               work.components,
             )
@@ -257,6 +259,15 @@ export function incrementalObservationQualification(input: {
           if (!bootstrap)
             for (const root of await projectionCaptureRoots(snapshot.executor, [...invocationIds]))
               roots.add(root)
+          if (roots.size) {
+            const discovery = input.native()
+            try {
+              const related = await discovery.connectedRoots?.([...roots])
+              if (related) for (const root of related) roots.add(root)
+            } finally {
+              discovery.close()
+            }
+          }
           if (
             bootstrap ||
             size ===
@@ -331,7 +342,10 @@ export function incrementalObservationQualification(input: {
             ],
           })
           if (pending.length >= 150) {
-            await prepared.append(work, pending)
+            await snapshot.workspace.insert(
+              namespace + '/qualified-contributions',
+              pending.map((row) => ({ key: row.key, document: row })),
+            )
             pending.length = 0
           }
         }
@@ -396,14 +410,8 @@ export function incrementalObservationQualification(input: {
             callTasks = new Map<string, string>(),
             callRoots = new Map<string, Set<string>>()
           const recordReferences = new Map<string, string[]>(),
-            records = new Map<
-              string,
-              import('@agent-workflow/shared').CompleteHistoricalObservationRecord
-            >(),
-            allocations = new Map<
-              string,
-              import('@agent-workflow/shared').CompleteObservationAllocation
-            >()
+            records = new Map<string, CompleteHistoricalObservationRecord>(),
+            allocations = new Map<string, CompleteObservationAllocation>()
           for await (const row of completeWorkingTraversal<CompleteObservationReportRow>(
             snapshot.workspace,
             build.rowsNamespace,
@@ -439,13 +447,11 @@ export function incrementalObservationQualification(input: {
               recordReferences.set(item.parent, ids)
             }
             if (item.section === 'historical-records' && item.parent === null) {
-              const record =
-                item.document as import('@agent-workflow/shared').CompleteHistoricalObservationRecord
+              const record = item.document as CompleteHistoricalObservationRecord
               records.set(JSON.stringify([record.nativeSource, record.recordId]), record)
             }
             if (item.section === 'allocations' && item.parent === null) {
-              const allocation =
-                item.document as import('@agent-workflow/shared').CompleteObservationAllocation
+              const allocation = item.document as CompleteObservationAllocation
               allocations.set(
                 JSON.stringify([
                   allocation.sourceId,
@@ -505,6 +511,36 @@ export function incrementalObservationQualification(input: {
                 asOf: snapshot.asOf,
                 signal,
               })
+              let humanWaitingSince: number | null = null
+              if (metadataTasks.phasePage) {
+                let after: string | undefined
+                for (;;) {
+                  const phases = await metadataTasks.phasePage(task.id, {
+                    limit: 200,
+                    ...(after ? { after } : {}),
+                  })
+                  for (const phase of phases.items) {
+                    if (phase.status === 'active' && phase.startedAt !== null)
+                      humanWaitingSince =
+                        humanWaitingSince === null
+                          ? phase.startedAt
+                          : Math.min(humanWaitingSince, phase.startedAt)
+                    for (const parent of [null, task.id])
+                      await retain(component('task-metadata', task.id), {
+                        section: 'phases',
+                        parent,
+                        key: phase.id,
+                        taskId: task.id,
+                        cohortAt: task.startedAt,
+                        document: phase,
+                      })
+                  }
+                  if (phases.nextCursor === null) break
+                  if (phases.nextCursor === after)
+                    throw new Error('Original lifecycle phase EOF did not advance')
+                  after = phases.nextCursor
+                }
+              }
               await retain(
                 component('task-metadata', task.id),
                 {
@@ -515,6 +551,7 @@ export function incrementalObservationQualification(input: {
                   cohortAt: task.startedAt,
                   document: metadata.task,
                   timingAttempts: metadata.timingAttempts,
+                  humanWaitingSince,
                   ...(selectors.has(task.id) ? { selectors: selectors.get(task.id)! } : {}),
                 },
                 metadata.fold,
@@ -659,6 +696,36 @@ export function incrementalObservationQualification(input: {
               for (const root of callRoots.get(call.invocationId) ?? [])
                 bindings.push({ kind: 'root', identity: root })
             }
+            if (item.section === 'span-facts' && item.parent === null && taskId) {
+              const span = item.document as ObservationSpanDetail,
+                state = span.fact.state,
+                phase: ObservationPhase = {
+                  id: 'span/' + span.fact.spanKey,
+                  taskId,
+                  nodeRunId: attemptId ?? null,
+                  kind: span.fact.scope.kind,
+                  basis: 'original-span',
+                  startedAt: state.startedAt,
+                  endedAt: state.endedAt,
+                  status:
+                    state.endedAt !== null
+                      ? 'closed'
+                      : state.status === 'open' && snapshot.asOf - span.fact.capturedAt <= 60000
+                        ? 'active'
+                        : 'unknown',
+                  evidenceId: span.fact.spanKey,
+                  label: span.fact.label,
+                }
+              for (const parent of [null, taskId])
+                await retain(owner, {
+                  section: 'phases',
+                  parent,
+                  key: phase.id,
+                  taskId,
+                  cohortAt,
+                  document: phase,
+                })
+            }
             await retain(
               owner,
               {
@@ -702,8 +769,7 @@ export function incrementalObservationQualification(input: {
             signal,
           )) {
             if (row.document.section !== 'time-partitions' || row.document.parent !== null) continue
-            const time = row.document
-                .document as import('@agent-workflow/shared').CompleteObservationTimePartition,
+            const time = row.document.document as CompleteObservationTimePartition,
               taskId = time.task?.id ?? null
             const recordKey = JSON.stringify([time.sourceId, time.recordId]),
               record = records.get(recordKey)
@@ -714,6 +780,11 @@ export function incrementalObservationQualification(input: {
                     JSON.stringify([time.sourceId, time.recordId, time.invocation.invocationId]),
                   )
             const references = recordReferences.get(recordKey) ?? []
+            const originalScopes = historicalMetadata.get('record/' + sha256Hex(recordKey))?.scopes
+            const scopeEvidence =
+              time.invocation === null
+                ? { nativeRecord: true, ...(originalScopes ? { scopes: originalScopes } : {}) }
+                : {}
             const visibility =
               historicalMetadata.get('record/' + sha256Hex(recordKey))?.visibility ??
               (taskId ? [{ taskId, ownerUserId: null }] : [])
@@ -743,8 +814,10 @@ export function incrementalObservationQualification(input: {
                 key: time.identity,
                 taskId,
                 cohortAt: time.occurrence.occurredAt,
+                ...scopeEvidence,
                 document: {
                   ...time,
+                  ...scopeEvidence,
                   referenceIds: references,
                   visibility,
                   model: allocation?.model ?? record?.model ?? null,
@@ -759,6 +832,17 @@ export function incrementalObservationQualification(input: {
                 'occurrence',
                 'occurrence-day/' + (day ?? 'unknown'),
                 'occurrence-scope-day/' + JSON.stringify([taskId, owner, day]),
+                ...((cell) => (cell ? [cell] : []))(
+                  observationWindowCellKey(owner, {
+                    ...time,
+                    ...scopeEvidence,
+                    referenceIds: references,
+                    model: allocation?.model ?? record?.model ?? null,
+                    candidateCount: record?.candidateCount ?? '0',
+                    visibility,
+                    dimensions: nativeDimensions.get('record/' + sha256Hex(recordKey)) ?? [],
+                  }),
+                ),
               ],
             )
           }
@@ -776,20 +860,115 @@ export function incrementalObservationQualification(input: {
               emptyCompleteObservationFold(),
               ['cohort'],
             )
-          if (pending.length) await prepared.append(work, pending)
-          await renewal
-          if (leaseFailure) throw leaseFailure
+          if (pending.length)
+            await snapshot.workspace.insert(
+              namespace + '/qualified-contributions',
+              pending.map((row) => ({ key: row.key, document: row })),
+            )
           const retryNative = [...historicalMetadata.values()].some((entry) =>
             entry.fold.gaps.some((gap) => gap === 'historical-native-unavailable'),
           )
-          return prepared.seal(
+          if (retryNative) {
+            // An unreadable original root has no deletion EOF. Hold the entire
+            // connected numeric bundle until the allocator can resolve overlap
+            // again; metadata may still advance. Never add new accepted values
+            // to old native values whose overlap has become unverifiable.
+            const previousNamespace = namespace + '/previous-contributions'
+            let knownPrevious = false
+            for (let at = 0, selected = [...components]; at < selected.length; at += 200) {
+              let after: string | undefined
+              for (;;) {
+                const rows = await snapshot.executor
+                  .select({
+                    key: observationProjectionCurrent.key,
+                    document: observationProjectionCurrent.document,
+                  })
+                  .from(observationProjectionCurrent)
+                  .where(
+                    and(
+                      eq(observationProjectionCurrent.kind, 'contribution'),
+                      inArray(observationProjectionCurrent.component, selected.slice(at, at + 200)),
+                      after === undefined ? undefined : gt(observationProjectionCurrent.key, after),
+                    ),
+                  )
+                  .orderBy(asc(observationProjectionCurrent.key))
+                  .limit(200)
+                  .all()
+                if (!rows.length) break
+                const retained = rows.map((row) => ({
+                  key: row.key,
+                  document: JSON.parse(row.document) as QualifiedObservationContribution,
+                }))
+                if (retained.some((row) => BigInt(row.document.fold.records) > 0n))
+                  knownPrevious = true
+                await snapshot.workspace.insert(previousNamespace, retained)
+                after = rows.at(-1)!.key
+              }
+            }
+            if (knownPrevious) {
+              const metadataNamespace = namespace + '/current-metadata'
+              for await (const row of completeWorkingTraversal<QualifiedObservationContribution>(
+                snapshot.workspace,
+                namespace + '/qualified-contributions',
+                signal,
+              ))
+                if (row.document.detail.section === 'tasks')
+                  await snapshot.workspace.insert(metadataNamespace, [row])
+              await snapshot.workspace.clear(namespace + '/qualified-contributions')
+              for await (const row of completeWorkingTraversal<QualifiedObservationContribution>(
+                snapshot.workspace,
+                previousNamespace,
+                signal,
+              ))
+                if (row.document.detail.section !== 'tasks')
+                  await snapshot.workspace.insert(namespace + '/qualified-contributions', [row])
+              for await (const row of completeWorkingTraversal<QualifiedObservationContribution>(
+                snapshot.workspace,
+                metadataNamespace,
+                signal,
+              ))
+                await snapshot.workspace.insert(namespace + '/qualified-contributions', [row])
+              // A memory/MCP/intent-only bundle may have no Task owner. It still
+              // needs a cohort gap while its previous numeric facts are held.
+              for (const taskId of numericTaskIds.size ? numericTaskIds : [null]) {
+                const owner = component('root', [...roots][0] ?? work.id),
+                  key = sha256Hex(JSON.stringify(['native-retry-gap', owner, taskId]))
+                const gap: QualifiedObservationContribution = {
+                  key,
+                  component: owner,
+                  aggregates: taskId === null ? ['cohort'] : ['cohort', 'task/' + taskId],
+                  fold: {
+                    ...emptyCompleteObservationFold(),
+                    gaps: ['historical-native-unavailable'],
+                  },
+                  detail: {
+                    section: 'cohort-fold',
+                    parent: null,
+                    key: 'native-retry-gap/' + (taskId ?? 'standalone'),
+                    taskId,
+                    cohortAt: null,
+                    document: null,
+                  },
+                }
+                await snapshot.workspace.upsert(namespace + '/qualified-contributions', [
+                  { key, document: gap },
+                ])
+              }
+            }
+          }
+          for await (const row of completeWorkingTraversal<QualifiedObservationContribution>(
+            snapshot.workspace,
+            namespace + '/qualified-contributions',
+            signal,
+          ))
+            spool.append(work, [row.document])
+          return spool.seal(
             { ...work, retryNative },
             {
               generation: snapshot.generationId,
               snapshotId: snapshot.snapshotId,
               asOf: snapshot.asOf,
               baseRevision,
-              preparationToken: work.preparationToken!,
             },
             [...components],
           )
@@ -797,12 +976,40 @@ export function incrementalObservationQualification(input: {
           native.close()
         }
       }, signal)
+      signal.throwIfAborted()
+      claimed = await prepared.begin(result.work)
+      const current = claimed
+      timer = setInterval(() => {
+        renewal = renewal
+          .then(() => prepared.renew(current))
+          .catch((error: unknown) => {
+            leaseFailure = error
+          })
+      }, 15000)
+      const packet: QualifiedObservationContribution[] = []
+      for await (const row of spool.rows()) {
+        packet.push(row)
+        if (packet.length >= 150) {
+          await prepared.append(current, packet)
+          packet.length = 0
+        }
+      }
+      if (packet.length) await prepared.append(current, packet)
+      await renewal
+      if (leaseFailure) throw leaseFailure
+      signal.throwIfAborted()
+      return await prepared.seal(
+        current,
+        { ...result.identity, preparationToken: current.preparationToken! },
+        result.components,
+      )
     } catch (error) {
-      await prepared.releaseFailed(work, error)
+      if (claimed) await prepared.releaseFailed(claimed, error)
       throw error
     } finally {
-      clearInterval(timer)
+      if (timer) clearInterval(timer)
       await renewal
+      spool.close()
     }
   }
 }

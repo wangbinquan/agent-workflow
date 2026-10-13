@@ -233,7 +233,6 @@ export function createTaskObservationFacts(
       const rows = await identityPacketPage({
         ids: projectionAttemptIds,
         limit: page.limit,
-        key: (row) => row.id,
         read: (ids, limit) =>
           db
             .select(attemptFields())
@@ -248,6 +247,7 @@ export function createTaskObservationFacts(
             .orderBy(asc(nodeRuns.id))
             .limit(limit)
             .all(),
+        key: (row) => row.id,
       })
       const items = rows.slice(0, page.limit),
         last = items.at(-1)

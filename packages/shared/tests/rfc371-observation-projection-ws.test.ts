@@ -18,7 +18,7 @@ test('malformed clocks/revisions and extra numerical payloads are rejected', () 
   for (const value of [
     { ...base, revision: '01' },
     { ...base, revision: '-1' },
-    { ...base, revision: 9007199254740997 },
+    { ...base, revision: Number('9007199254740997') },
     { ...base, asOf: -1 },
     { ...base, asOf: Number.NaN },
     { ...base, tokens: '999' },

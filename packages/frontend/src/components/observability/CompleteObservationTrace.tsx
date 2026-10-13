@@ -130,6 +130,7 @@ export function CompleteObservationTrace({
       </CompleteObservationPage>
       {selected && (
         <Dialog
+          panelClassName="observation-typography"
           open
           onClose={() => setChosen(null)}
           title={title(selected)}

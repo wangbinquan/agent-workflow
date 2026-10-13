@@ -119,7 +119,6 @@ export function createSystemObservationFacts(
       const rows = await identityPacketPage({
         ids: projectionAttemptIds,
         limit: page.limit,
-        key: (row) => row.id,
         read: (ids, limit) =>
           db
             .select()
@@ -134,6 +133,7 @@ export function createSystemObservationFacts(
             .orderBy(asc(owners.id))
             .limit(limit)
             .all(),
+        key: (row) => row.id,
       })
       const items: ObservationAttemptFacts[] = rows.slice(0, page.limit).map((row) => {
         const memoryAttempt = /^(\d+):(\d+)$/.exec(row.originalAttempt)

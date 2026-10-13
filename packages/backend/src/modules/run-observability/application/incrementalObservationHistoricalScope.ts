@@ -62,6 +62,13 @@ export function incrementalObservationHistoricalScope(
     completeObservationGap(fold, 'historical-scope-unresolved')
   }
   let document = row.detail.document
+  if (
+    row.detail.nativeRecord &&
+    row.detail.section === 'time-partitions' &&
+    document &&
+    typeof document === 'object'
+  )
+    document = { ...document, metrics: completeObservationMetrics(fold) }
   if (document && typeof document === 'object' && 'scopeMatch' in document)
     document = {
       ...document,

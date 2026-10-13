@@ -423,7 +423,7 @@ test.each(['zh', 'en'])(
     expect(complete.textContent).toContain('¥')
     const unknown = (await screen.findByRole('button', { name: '执行事实 0001' })).closest('tr')!
     expect(unknown.textContent).not.toContain('¥')
-    expect(unknown.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(unknown.textContent).toContain(i18n.t('runObservability.usageIncomplete'))
     expect(document.querySelector('.observation-summary')).toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_overview') }))
     await screen.findByRole('heading', { name: i18n.t('runObservability.fullTasks') })
@@ -431,7 +431,7 @@ test.each(['zh', 'en'])(
     expect(summary.textContent).toContain('202')
     expect(summary.textContent).not.toContain('¥')
     expect(summary.textContent).not.toContain('48')
-    expect(summary.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(summary.textContent).toContain(i18n.t('runObservability.usageIncomplete'))
     expect(summary.textContent).toContain(
       i18n.t('runObservability.taskUsageCoverage', {
         ready: '1',
@@ -575,7 +575,7 @@ test.each(['zh', 'en'])(
     expect(detail.textContent).toContain(
       i18n.t('runObservability.recordedUsageCoverage', { records: '3', observed: '2', calls: '3' }),
     )
-    expect(detail.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(detail.textContent).toContain(i18n.t('runObservability.usageIncomplete'))
     expect(detail.textContent).not.toContain(i18n.t('runObservability.recordedUsageWarning'))
     const summary = document.querySelector('.observation-summary')!
     expect(summary.children).toHaveLength(3)
@@ -665,7 +665,7 @@ test.each(['zh', 'en'])(
 test('not-ready keeps every fact page and Task/attempt/call entry, four unknown buckets, and no numeric collection request', async () => {
   const f = fixture()
   await screen.findByRole('button', { name: '执行事实 0000' })
-  expect(screen.getAllByText(i18n.t('runObservability.reportNotReady')).length).toBeGreaterThan(0)
+  expect(screen.getAllByText(i18n.t('runObservability.usageIncomplete')).length).toBeGreaterThan(0)
   for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'])
     expect(screen.getAllByText(i18n.t('runObservability.' + bucket)).length).toBeGreaterThan(0)
   expect(document.querySelector('[data-complete-observation]')?.textContent).not.toContain('¥')

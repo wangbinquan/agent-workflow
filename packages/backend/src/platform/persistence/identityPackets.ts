@@ -1,16 +1,19 @@
 /** Bound SQL parameters and transfer sizes, never the selected population.
  * Independent identity packets share an original keyset continuation. The
  * merged extra row proves whether that continuation has an actual tail. */
-export async function identityPacketPage<T>(input: {
+export async function identityPacketPage<
+  Rows extends readonly unknown[] | Promise<readonly unknown[]>,
+>(input: {
   readonly ids?: readonly string[]
   readonly limit: number
-  readonly key: (row: T) => string
-  readonly compare?: (a: T, b: T) => number
-  readonly read: (ids: readonly string[] | undefined, limit: number) => Promise<readonly T[]>
-}): Promise<readonly T[]> {
-  if (input.ids === undefined) return input.read(undefined, input.limit + 1)
+  readonly key: (row: Awaited<Rows>[number]) => string
+  readonly compare?: (a: Awaited<Rows>[number], b: Awaited<Rows>[number]) => number
+  readonly read: (ids: readonly string[] | undefined, limit: number) => Rows
+}): Promise<readonly Awaited<Rows>[number][]> {
+  if (input.ids === undefined)
+    return (await input.read(undefined, input.limit + 1)) as readonly Awaited<Rows>[number][]
   const ids = [...new Set(input.ids)],
-    rows = new Map<string, T>()
+    rows = new Map<string, Awaited<Rows>[number]>()
   for (let at = 0; at < ids.length; at += 200) {
     for (const row of await input.read(ids.slice(at, at + 200), input.limit + 1))
       rows.set(input.key(row), row)

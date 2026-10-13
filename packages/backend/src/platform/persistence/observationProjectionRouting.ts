@@ -185,7 +185,36 @@ export function originalObservationProjectionRouter(): OriginalObservationChange
                   ),
                 )
               : 0
-          if (!bound) unresolved = true
+          if (!bound) {
+            // Bootstrap has not produced derived bindings yet. Resolve the
+            // original accepted authority instead of waiting for that cache.
+            const sourceTable = tables.get('observation_platform_sources')!
+            const callsTable = tables.get('observation_invocations')!
+            let sourceObserved = false
+            const routeSource = async (source: Readonly<Record<string, string | null>>) => {
+              const route = originalObservationRoute(sourceTable.id, source)
+              if (!route.$platformSource || !route.$platformProject || !route.$platformTask) return
+              sourceObserved = true
+              await rows(
+                tx,
+                callsTable,
+                sql`(
+                ${jsonPathText(tx, sql.raw('"document"'), ['authority', 'kind'])} = 'crewstation'
+                AND ${jsonPathText(tx, sql.raw('"document"'), ['authority', 'sourceId'])} = ${route.$platformSource}
+                AND ${jsonPathText(tx, sql.raw('"document"'), ['authority', 'projectId'])} = ${route.$platformProject}
+                AND ${jsonPathText(tx, sql.raw('"document"'), ['authority', 'taskId'])} = ${route.$platformTask}
+              )`,
+                async (row) => {
+                  pending.push({ table: callsTable, row, reverse: false })
+                },
+              )
+            }
+            if (entry.table.id === sourceTable.id) await routeSource(entry.row)
+            else if (identity) await rows(tx, sourceTable, sql`"id" = ${identity}`, routeSource)
+            // An observed source with no accepted execution is an empty
+            // contribution. Later acceptance has its own transactional outbox.
+            if (!sourceObserved) unresolved = true
+          }
         }
         if (entry.table.id === 'agents' && entry.row.id) await bindings('agent', entry.row.id)
         if (entry.table.id === 'observation_price_versions' && entry.row.registration_id)

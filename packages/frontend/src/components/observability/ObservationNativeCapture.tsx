@@ -129,6 +129,7 @@ export function ObservationNativeCapture({
     <>
       {embedded ? content : <Card title={t('runObservability.nativeCaptureTitle')}>{content}</Card>}
       <Dialog
+        panelClassName="observation-typography"
         open={chosen !== undefined}
         onClose={() => select(null)}
         title={t('runObservability.nativeRevisionDetails')}

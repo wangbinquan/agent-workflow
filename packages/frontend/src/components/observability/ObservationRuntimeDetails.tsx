@@ -32,6 +32,7 @@ export function ObservationRuntimeDetails({
   const { t } = useTranslation()
   return (
     <Dialog
+      panelClassName="observation-typography"
       open={open}
       onClose={onClose}
       title={t('runObservability.runtimeContributions', { name: title })}

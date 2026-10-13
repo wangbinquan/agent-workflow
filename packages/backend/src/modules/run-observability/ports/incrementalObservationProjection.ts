@@ -23,6 +23,7 @@ export interface IncrementalObservationContribution {
   /** Already allocated by the original complete ancestry/ownership rules. */
   readonly fold: IncrementalObservationContributionFold
   /** Stable dimension/time membership, including precise boundary fact indexes. */
+  readonly descriptors?: Readonly<Record<string, string>>
   readonly aggregates: readonly string[]
   readonly detail: unknown
 }
@@ -44,6 +45,7 @@ export interface IncrementalObservationProjectionTransaction {
     contribution: IncrementalObservationContribution | null,
     version: IncrementalObservationVersion,
   ): Promise<void>
+  retainDescriptors?(descriptors: Readonly<Record<string, string>>): Promise<void>
   aggregate(key: string): Promise<IncrementalObservationFold | null>
   putAggregate(
     key: string,

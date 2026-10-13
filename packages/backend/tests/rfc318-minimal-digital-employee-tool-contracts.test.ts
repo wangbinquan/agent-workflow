@@ -244,7 +244,7 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
     const descriptor = employeeTypePackageDescriptorSchema.parse(
       JSON.parse(developmentEmployeeTypePackage.descriptorJson) as unknown,
     )
-    expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 10 })
+    expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 11 })
     expect(developmentWorkContractsV2.map((contract) => contract.contractId)).toEqual([
       ...DEVELOPMENT_TOOL_CONTRACT_IDS_V2,
     ])

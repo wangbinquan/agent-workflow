@@ -205,9 +205,6 @@ function fixture() {
     counts: async () => {
       throw new Error('Packet DISTINCT counts must not be added together')
     },
-    async *visibleTasks() {
-      throw new Error('Never reopen original Task facts for a period query')
-    },
     visibleTaskIds: async (_actor, ids) => ids.filter((id) => visible.has(id)),
     retainView: async (value) => {
       const view = { ...value, id: sha256Hex(JSON.stringify(value)) }
@@ -302,7 +299,9 @@ test('usage periods consume reusable complete days with half-open edge records a
     }
   const report = content(await f.queries.request(actor, filters, 'week'))
   expect(report.summary.inventory.invocations).toBe('7')
-  expect(report.summary.inventory.nativeCaptures).toBe('7')
+  expect(
+    'nativeCaptures' in report.summary.inventory ? report.summary.inventory.nativeCaptures : null,
+  ).toBe('7')
   if (report.summary.metrics.state === 'ready')
     expect(report.summary.metrics.tokens.input).toBe('28')
   expect(f.days).toEqual([[filters.from, filters.to]])
@@ -411,13 +410,27 @@ test('a root merges descendant parallel intervals and recomputes open clocks at 
     attempts = [
       {
         task: original,
-        attempt: { id: 'a', nodeId: 'A', status: 'done' as const, startedAt: 10, finishedAt: 90 },
+        attempt: {
+          id: 'a',
+          nodeId: 'A',
+          retryIndex: 0,
+          iteration: 0,
+          wgRound: null,
+          reviewIteration: 0,
+          status: 'done' as const,
+          startedAt: 10,
+          finishedAt: 90,
+        },
       },
       {
         task: child,
         attempt: {
           id: 'b',
           nodeId: 'B',
+          retryIndex: 0,
+          iteration: 0,
+          wgRound: null,
+          reviewIteration: 0,
           status: 'running' as const,
           startedAt: 50,
           finishedAt: null,

@@ -1,3 +1,4 @@
+import { admitObservationStorage, renewObservationView } from './observationStorageLifetime'
 import { and, eq, gt, asc } from 'drizzle-orm'
 import { isDeepStrictEqual } from 'node:util'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -101,6 +102,17 @@ export function completeObservationReportCache(
   if (!generation) throw new Error('Original report database generation missing')
   const session = databaseSessionFor(db)
   const read = completeReportQualifiedReader(generation, taskSource)
+  const retainRead = async (id: string) =>
+    session.transaction(async (tx) => {
+      await admitObservationStorage(tx)
+      const row = await tx
+        .select({ id: observationReports.id })
+        .from(observationReports)
+        .where(eq(observationReports.id, id))
+        .get()
+      if (!row || !(await renewObservationView(tx, id, 'legacy')))
+        throw new CompleteObservationError('not-found', 'Original report expired')
+    })
   const dirty = async (tx: DatabaseTransaction, id: string) => {
     const row = await tx
       .select({ revision: observationReportRetainedRevisions.revision })
@@ -166,15 +178,21 @@ export function completeObservationReportCache(
   return {
     generation,
     async get(id) {
-      const row = await db
-        .select()
-        .from(observationReports)
-        .where(eq(observationReports.id, id))
-        .get()
-      return row ? decodeCompleteReport(row) : undefined
+      return session.transaction(async (tx) => {
+        await admitObservationStorage(tx)
+        const row = await tx
+          .select()
+          .from(observationReports)
+          .where(eq(observationReports.id, id))
+          .get()
+        return row && (await renewObservationView(tx, id, 'legacy'))
+          ? decodeCompleteReport(row)
+          : undefined
+      })
     },
     async ensure(request, requestKey, actorScope, owner, id) {
       return session.transaction(async (tx) => {
+        await admitObservationStorage(tx)
         await assertCompleteReportActor(tx, request.actor, taskSource(tx), request.taskId)
         const time = now()
         await tx
@@ -210,12 +228,16 @@ export function completeObservationReportCache(
           .get()
         if (!row || row.generation !== generation || row.actorScope !== actorScope)
           throw new Error('Complete original report request identity changed')
+        await renewObservationView(tx, row.id, 'legacy')
         if (row.state !== 'building' && (await dirty(tx, row.id))) return rebuild(tx, row.id, owner)
         return decodeCompleteReport(row)
       })
     },
     async claim(id, owner) {
       return session.transaction(async (tx) => {
+        await admitObservationStorage(tx)
+        if (!(await renewObservationView(tx, id, 'legacy')))
+          throw new CompleteObservationError('not-found', 'Original report expired')
         const acquired = await engineOf(tx).tryAdvisoryLock(tx, completeReportLeaseKey(id))
         await engineOf(tx).lockAggregateRoot(tx, observationReports, observationReports.id, id)
         const row = await tx
@@ -276,11 +298,15 @@ export function completeObservationReportCache(
       terminal(id, owner, { state: 'not-ready', reportId: id, gaps }),
     fail: (id, owner, error) =>
       terminal(id, owner, { state: 'failed', reportId: id, error, retryable: true }),
-    assertReadable: (actor, report) => session.snapshotRead((tx) => read(tx, actor, report)),
+    assertReadable: async (actor, report) => {
+      await retainRead(report.id)
+      return session.snapshotRead((tx) => read(tx, actor, report))
+    },
     async page<T>(
       report: Parameters<CompleteObservationReportCache['page']>[0],
       query: Parameters<CompleteObservationReportCache['page']>[1],
     ): Promise<CompleteObservationReportPage<T>> {
+      await retainRead(report.id)
       return session.snapshotRead(async (tx) => {
         await read(tx, report.request.actor, report)
         if (

@@ -1,4 +1,4 @@
-// RFC-349 T2/T8 — locks the exact 258-table source census, the 252-table
+// RFC-349 T2/T8 — locks the exact 275-table source census, the 269-table
 // PostgreSQL parity set, and the only six archive-then-omit tables approved by
 // D9. New/missing/ownerless tables and revived legacy consumers must fail here
 // before any migration can prepare a target.
@@ -27,9 +27,9 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(258)
-    expect(contract.sourceTableCount).toBe(258)
-    expect(contract.activeTableCount).toBe(252)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(275)
+    expect(contract.sourceTableCount).toBe(275)
+    expect(contract.activeTableCount).toBe(269)
     expect(contract.archiveOnlyTableCount).toBe(6)
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
     const binding = contract.tables.find(
@@ -56,8 +56,27 @@ describe('RFC-349 canonical schema contract', () => {
       [],
     )
     expect(contract.tables.filter((t) => t.id.startsWith('observation_projection_'))).toHaveLength(
-      14,
+      18,
     )
+    // RFC-371 0250 / PostgreSQL 0026: retain every original relation and lock every new analysis/index table.
+    for (const id of [
+      'observation_anomaly_states',
+      'observation_anomaly_history',
+      'observation_maintenance_operations',
+      'observation_maintenance_members',
+      'observation_invocation_price_policies',
+      'observation_invocation_price_audit',
+      'observation_invocation_price_records',
+      'observation_projection_descriptors',
+      'observation_projection_indexed_versions',
+      'observation_projection_query_scopes',
+      'observation_projection_query_scope_members',
+    ] as const) {
+      const table = contract.tables.find((table) => table.id === id)!
+      expect(table.disposition, id).toBe('KEEP')
+      expect(table.ownerContext, id).toBe('run-observability')
+      expect(table.providerTables, id).toEqual({ sqlite: id, postgresql: id })
+    }
     const additions = [
       ['observation_calculation_rows', 'run-observability', ['cache_key', 'namespace', 'key']],
       ['observation_calculation_versions', 'run-observability', ['cache_key']],

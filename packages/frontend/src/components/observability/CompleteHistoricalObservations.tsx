@@ -139,6 +139,7 @@ export function CompleteHistoricalRecords({
       </CompleteObservationPage>
       {selected && (
         <Dialog
+          panelClassName="observation-typography"
           open
           size="lg"
           title={t('runObservability.historicalRecords')}
@@ -358,6 +359,7 @@ export function CompleteHistoricalExecutions({
         </CompleteObservationPage>
         {selected && (
           <Dialog
+            panelClassName="observation-typography"
             open
             size="lg"
             title={selected.execution.name}

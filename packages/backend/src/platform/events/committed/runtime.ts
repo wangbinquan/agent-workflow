@@ -11,6 +11,13 @@ export function registerAfterCommitEventPump(pump: AfterCommitEventPump | null):
   activePump = pump
 }
 
+/** A late stop can release only the exact pump that its owning root registered. */
+export function releaseAfterCommitEventPump(pump: AfterCommitEventPump): boolean {
+  if (activePump !== pump) return false
+  activePump = null
+  return true
+}
+
 /**
  * Project and nudge one already-committed receipt. An absent pump is valid
  * during boot and isolated tests: durable deliveries remain the recovery path.

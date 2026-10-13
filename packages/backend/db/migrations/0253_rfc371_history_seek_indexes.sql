@@ -1,0 +1,2 @@
+CREATE INDEX `observation_projection_history_section_seek` ON `observation_projection_history` (`kind`,`section`,`key`);--> statement-breakpoint
+CREATE INDEX `observation_projection_history_parent_seek` ON `observation_projection_history` (`kind`,`section`,`parent`,`key`);

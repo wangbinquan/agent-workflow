@@ -7894,6 +7894,26 @@ details.form-section[open] > summary {
   margin-bottom: 12px;
 }
 
+.form-section.form-section--compact {
+  margin-top: var(--space-1);
+  font-size: var(--font-sm);
+}
+details.form-section--compact {
+  border: 0;
+  padding: 0;
+}
+.form-section--compact .form-section__title {
+  font-size: var(--font-sm);
+  font-weight: 400;
+  color: var(--muted);
+}
+.form-section--compact .form-section__body {
+  gap: var(--space-1);
+}
+details.form-section--compact[open] > summary {
+  margin-bottom: var(--space-1);
+}
+
 /* ---- Chips input ---- */
 
 .chips-input__row {
@@ -28355,6 +28375,35 @@ button.status-chip {
 
 .webhook-protection-grid {
   align-items: start;
+}
+
+/* RFC-371: the CS observation layout uses a date/action row above the task
+   criteria. Keep labels above their fields and all actions on the same baseline. */
+.observation-filters {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.observation-filters__row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.observation-filters__row > .form-field {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.observation-filters__shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* RFC-261 UI 修订 — 筛选栏公共原语（components/FilterBar.tsx）。视觉母本是

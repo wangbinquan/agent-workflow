@@ -1,3 +1,6 @@
+import type { ProjectionOccurrence } from './incrementalObservationWindow'
+import type { CompleteHistoricalObservationRecord } from '@agent-workflow/shared'
+import { modelDimensionMatch, parseObservationSelection } from '../domain/analysisDimensions'
 import type {
   CompleteHistoricalObservationExecution,
   CompleteObservationAllocation,
@@ -33,17 +36,42 @@ export function incrementalObservationWindowRows(
     })
   if (section === 'native-captures' || section === 'platform-captures')
     return rows.filter((row) => calls.has((row as { invocationId: string }).invocationId))
-  if (section === 'allocations') {
-    const selected = new Set(
-      window.timeRows
-        .filter((row) => row.partition === 'in-window' && row.invocation !== null)
-        .map((row) => JSON.stringify([row.sourceId, row.recordId, row.invocation!.invocationId])),
-    )
-    return rows.filter((raw) => {
-      const row = raw as CompleteObservationAllocation
-      return selected.has(JSON.stringify([row.sourceId, row.recordId, row.invocation.invocationId]))
+  const selection = parseObservationSelection(window.query.selection)
+  const inWindow = (at: number | null | undefined) =>
+    window.mode === 'cohort' ||
+    (typeof at === 'number' && at >= window.query.from && at < window.query.to)
+  if (section === 'time-partitions' || section === 'time-unassigned')
+    return rows.flatMap((raw) => {
+      const row = raw as ProjectionOccurrence,
+        at = row.occurrence.occurredAt
+      if (section === 'time-unassigned' && at !== null) return []
+      if (row.invocation && !calls.has(row.invocation.invocationId)) return []
+      const partition =
+        window.mode === 'cohort'
+          ? 'in-window'
+          : at === null
+            ? 'unassigned-time'
+            : inWindow(at)
+              ? 'in-window'
+              : 'outside-window'
+      return [{ ...row, partition }]
     })
-  }
+  if (section === 'allocations')
+    return rows.filter((raw) => {
+      const row = raw as CompleteObservationAllocation,
+        call = calls.get(row.invocation.invocationId)
+      if (!call || !inWindow(row.occurrence?.occurredAt)) return false
+      if (!selection) return true
+      const a = call.authority
+      return (
+        modelDimensionMatch(selection, {
+          authority: a.kind,
+          sourceId: a.kind === 'crewstation' ? a.sourceId : null,
+          provider: row.model?.provider ?? null,
+          model: row.model?.id ?? null,
+        }) !== 'excluded'
+      )
+    })
   if (section === 'attempts') {
     const folds = new Map<string, ReturnType<typeof emptyCompleteObservationFold>>()
     const add = (id: string, metrics: Parameters<typeof completeMetricsFold>[0]) => {
@@ -76,20 +104,18 @@ export function incrementalObservationWindowRows(
       const row = refs.get((raw as CompleteHistoricalObservationExecution).execution.referenceId)
       return row ? [row] : []
     })
-  if (section === 'historical-records' && parent !== 'original-source') {
-    const selected = new Set(
-      window.timeRows
-        .filter((row) => row.invocation === null && row.partition !== 'outside-window')
-        .map((row) => JSON.stringify([row.sourceId, row.recordId])),
-    )
-    return rows.filter((row) => {
-      const record = row as { nativeSource: string; recordId: string }
-      return selected.has(JSON.stringify([record.nativeSource, record.recordId]))
+  if (section === 'historical-records' && parent !== 'original-source')
+    return rows.filter((raw) => {
+      const row = raw as CompleteHistoricalObservationRecord
+      return row.occurredAt === null || inWindow(row.occurredAt)
     })
-  }
   if (section === 'historical-record-references')
     return rows.filter((row) => refs.has((row as { referenceId: string }).referenceId))
   if (section === 'span-facts' || section === 'span-captures' || section === 'span-statuses')
-    return []
+    return rows.filter((raw) => {
+      const row = raw as { invocationId?: string; taskId?: string; fact?: { invocationId: string } }
+      const id = row.invocationId ?? row.fact?.invocationId
+      return id ? calls.has(id) : !row.taskId || tasks.has(row.taskId)
+    })
   return [...rows]
 }

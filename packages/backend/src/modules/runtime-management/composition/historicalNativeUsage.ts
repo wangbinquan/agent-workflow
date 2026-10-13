@@ -1,6 +1,7 @@
 import { opencodeUsageDatabasePath } from '@/services/runtime'
 import { sha256Hex } from '@/util/hash'
 import { opencodeNativeStoreGeneration } from '../infrastructure/opencodeNativeStoreGeneration'
+import { opencodeConnectedSessions } from '../infrastructure/opencodeConnectedSessions'
 import {
   openHistoricalOpencodeUsagePass,
   createHistoricalOpencodeUsagePassFactory,
@@ -18,6 +19,8 @@ function assembleHistoricalNativeUsageQuery(
 ): HistoricalNativeUsageQuery {
   const path = opencodeUsageDatabasePath(env)
   return {
+    connectedRoots: async (roots) =>
+      path === null ? null : opencodeConnectedSessions(path, roots),
     generation: () => (path === null ? Promise.resolve(null) : opencodeNativeStoreGeneration(path)),
     async open(input) {
       if (path === null) return null
@@ -60,6 +63,7 @@ export function createReportHistoricalNativeUsageQuery(
   let closed = false
   return {
     generation: query.generation,
+    connectedRoots: query.connectedRoots,
     async open(input) {
       if (closed) throw new Error('Historical native reader factory closed')
       return query.open(input)

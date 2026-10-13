@@ -127,9 +127,20 @@ test('cached capability seven cannot suppress the original partial amount and it
       }),
     ),
   ).toBeTruthy()
-  expect(requests).toEqual([{ path: '/api/observability/reports', method: 'POST' }])
+  expect(requests).toEqual([
+    { path: '/api/observability/projection-version', method: 'GET' },
+    { path: '/api/observability/reports', method: 'POST' },
+  ])
   expect(JSON.stringify(client.getQueryData(oldKey))).toBe(original)
-  const newKey = ['run-observability-complete', 'scope-metrics/13', filters, null, 0] as const
+  const newKey = [
+    'run-observability-complete',
+    'scope-metrics/14',
+    filters,
+    null,
+    0,
+    null,
+    true,
+  ] as const
   expect(client.getQueryData(newKey)).toEqual(current)
 })
 
@@ -196,9 +207,20 @@ test('cached family twelve wall alias is retained while the actual hook requests
   )
   expect(coverage.parentElement?.textContent).toContain('—')
   expect(screen.queryByText(i18n.t('runObservability.recordedRunning'))).toBeNull()
-  expect(requests).toEqual([{ path: '/api/observability/reports', method: 'POST' }])
+  expect(requests).toEqual([
+    { path: '/api/observability/projection-version', method: 'GET' },
+    { path: '/api/observability/reports', method: 'POST' },
+  ])
   expect(JSON.stringify(client.getQueryData(oldKey))).toBe(original)
   expect(
-    client.getQueryData(['run-observability-complete', 'scope-metrics/13', filters, null, 0]),
+    client.getQueryData([
+      'run-observability-complete',
+      'scope-metrics/14',
+      filters,
+      null,
+      0,
+      null,
+      true,
+    ]),
   ).toEqual(corrected)
 })

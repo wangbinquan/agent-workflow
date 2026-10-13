@@ -1,4 +1,10 @@
 import type {
+  ObservationExecutionComparison,
+  ObservationAnomalyPage,
+  ObservationStorage,
+} from '@agent-workflow/shared'
+import type { ObservationMaintenanceCommands } from '../ports/observationMaintenance'
+import type {
   ObservationOverview,
   ObservationOverviewQuery,
   ObservationTaskDetail,
@@ -13,6 +19,18 @@ import type { Actor } from '@/auth/actor'
 
 /** Pages select output from a completed original report, never its statistical population. */
 export interface CompleteObservationReportQueries {
+  storage?(): Promise<ObservationStorage>
+  compare?(
+    actor: Actor,
+    id: string,
+    left: string,
+    right: string,
+  ): Promise<ObservationExecutionComparison>
+  maintenance?: ObservationMaintenanceCommands
+  anomalies?(
+    actor: Actor,
+    input: { from: number; to: number; after?: string; pageSize: number },
+  ): Promise<ObservationAnomalyPage>
   projectionVersion?(): Promise<{ readonly revision: string; readonly asOf: number } | null>
   request(
     actor: Actor,

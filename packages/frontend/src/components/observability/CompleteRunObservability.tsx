@@ -1,3 +1,7 @@
+import { ObservationExecutionAnalysis } from './ObservationExecutionAnalysis'
+import { ObservationStorage } from './ObservationStorage'
+import { ObservationMaintenance } from './ObservationMaintenance'
+import { ObservationAnomalies } from './ObservationAnomalies'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -41,6 +45,7 @@ import {
   CompleteObservationCapabilities,
 } from './CompleteObservationDetails'
 import {
+  useCompleteObservationDisplayValidity,
   useCompleteObservationPage,
   useCompleteObservationReport,
   type ReadableObservationReport,
@@ -53,6 +58,7 @@ import { useObservationProjectionVersion } from './useObservationProjectionVersi
 import './RunObservability.css'
 import './ObservationAnalysis.css'
 import './CompleteRunObservability.css'
+import './ObservationTypography.css'
 
 function DimensionCard({
   report,
@@ -155,6 +161,7 @@ export function CompleteRunObservability({
   const { t, i18n } = useTranslation(),
     pageRef = useRef<HTMLDivElement | null>(null)
   const [revision, setRevision] = useState(0)
+  const [editingTimeRange, setEditingTimeRange] = useState(false)
   const projectionVersion = useObservationProjectionVersion(!search.task)
   const lastProjectionRevision = useRef<string | null>(null)
   useEffect(() => {
@@ -164,6 +171,7 @@ export function CompleteRunObservability({
     if (
       previous !== null &&
       previous !== projectionVersion.revision &&
+      !editingTimeRange &&
       !search.task &&
       search.period !== 'custom' &&
       projectionVersion.asOf >= search.to
@@ -173,7 +181,7 @@ export function CompleteRunObservability({
         ...observationPresetRange(search.period ?? 'week', projectionVersion.asOf + 1),
         after: undefined,
       })
-  }, [projectionVersion, search, onChange])
+  }, [projectionVersion, search, onChange, editingTimeRange])
   const [timeDetails, setTimeDetails] = useState(false)
   const timeTrigger = useRef<HTMLElement | null>(null)
   const [taskRevisions, setTaskRevisions] = useState<ReadonlyMap<string, number>>(() => new Map())
@@ -183,11 +191,17 @@ export function CompleteRunObservability({
       string,
       | (
           | {
+              displayScope: string
               report: ReadableObservationReport
               row: CompleteObservationDimension
               kind: 'dimension'
             }
-          | { report: ReadableObservationReport; row: CompleteObservationQuality; kind: 'quality' }
+          | {
+              displayScope: string
+              report: ReadableObservationReport
+              row: CompleteObservationQuality
+              kind: 'quality'
+            }
         )
       | null
     >
@@ -210,7 +224,17 @@ export function CompleteRunObservability({
     ...(search.workflow ? { workflow: search.workflow } : {}),
     ...(search.selection ? { selection: search.selection } : {}),
   }
-  const whole = useCompleteObservationReport(filters, undefined, revision, !search.task)
+  const liveDisplayScope = JSON.stringify([
+    search.period ?? 'week',
+    search.period === 'custom' ? filters : { ...filters, from: undefined, to: undefined },
+  ])
+  const whole = useCompleteObservationReport(
+    filters,
+    undefined,
+    revision,
+    !search.task,
+    liveDisplayScope,
+  )
   // A contribution opens the full Task tree; returning keeps the parent selection in the URL.
   const task = useCompleteObservationReport(
     { ...filters, selection: undefined, cohort: undefined },
@@ -221,7 +245,14 @@ export function CompleteRunObservability({
   const mainReport = whole.displayContent
   const current = search.task ? task : whole,
     report = current.displayContent
-  const dimensionVisible = !!report && dimension?.report.header.reportId === report.header.reportId
+  // An open contribution keeps its immutable snapshot during a background
+  // publication. Its actual query/Task scope still gates visibility.
+  const dimensionDisplayScope = JSON.stringify([liveDisplayScope, search.task ?? null])
+  const dimensionValidity = useCompleteObservationDisplayValidity(
+    dimension?.report.header.reportId ?? null,
+  )
+  const dimensionVisible =
+    !!report && dimension?.displayScope === dimensionDisplayScope && dimensionValidity.data === true
   const tasks = useCompleteObservationPage<CompleteObservationTask>(
     mainReport,
     'tasks',
@@ -273,11 +304,21 @@ export function CompleteRunObservability({
   }
   const selectDimension = (row: CompleteObservationDimension, trigger: HTMLElement) => {
     dimensionTrigger.current = trigger
-    if (report) setDimension({ report, row, kind: 'dimension' })
+    if (report)
+      setDimension({ report, row, kind: 'dimension', displayScope: dimensionDisplayScope })
   }
   const selectQuality = (row: CompleteObservationQuality, trigger: HTMLElement) => {
     dimensionTrigger.current = trigger
-    if (report) setDimension({ report, row, kind: 'quality' })
+    if (report) setDimension({ report, row, kind: 'quality', displayScope: dimensionDisplayScope })
+  }
+  const closeDimension = () => {
+    if (dimension?.kind === 'dimension') {
+      const trigger = Array.from(
+        pageRef.current?.querySelectorAll<HTMLElement>('[data-observation-dimension]') ?? [],
+      ).find((node) => node.getAttribute('data-observation-dimension') === dimension.row.key)
+      if (trigger) dimensionTrigger.current = trigger
+    }
+    setDimension(null)
   }
   const refreshReport = () => {
     setDimension(null)
@@ -298,7 +339,7 @@ export function CompleteRunObservability({
   const selectedQualityKey = dimension?.kind === 'quality' ? dimension.row.key : undefined
   const parent = search.task ? JSON.stringify(['task-tree', search.task]) : null
   return (
-    <div className="page" ref={pageRef} data-complete-observation>
+    <div className="page observation-typography" ref={pageRef} data-complete-observation>
       <PageHeader
         title={
           search.task && report?.summary.rootTask
@@ -340,6 +381,7 @@ export function CompleteRunObservability({
         <>
           <ObservationFilters
             search={search}
+            onEditingTimeRange={setEditingTimeRange}
             onChange={(value) => {
               setDimension(null)
               onChange(value)
@@ -619,7 +661,12 @@ export function CompleteRunObservability({
                   <CompleteObservationAllocations report={report} />
                 </Card>
               )}
-              {BigInt(report.counts['historical-records'] ?? '0') > 0n && (
+              {BigInt(
+                report.counts['historical-records'] ??
+                  ('numericRecords' in report.summary.inventory
+                    ? report.summary.inventory.numericRecords
+                    : '0'),
+              ) > 0n && (
                 <Card title={t('runObservability.historicalRecords')}>
                   <CompleteHistoricalRecords report={report} />
                 </Card>
@@ -627,6 +674,10 @@ export function CompleteRunObservability({
             </>
           ) : (
             <>
+              <ObservationAnomalies from={filters.from} to={filters.to} />
+              <ObservationStorage />
+              <ObservationMaintenance report={report} />
+              <ObservationExecutionAnalysis key={report.header.reportId} report={report} />
               <Card title={t('runObservability.performance')}>
                 <CompleteObservationTiming report={report} />
               </Card>
@@ -644,10 +695,15 @@ export function CompleteRunObservability({
         (dimension.kind === 'quality' ? (
           <CompleteQualityDetails
             row={dimension.row}
-            onClose={() => setDimension(null)}
+            onClose={closeDimension}
             triggerRef={dimensionTrigger}
             fallbackRef={pageRef}
           >
+            <p className="muted">
+              {t('runObservability.asOf', {
+                time: new Date(dimension.report.header.asOf).toLocaleString(i18n.language),
+              })}
+            </p>
             <CompleteObservationPage query={contributions}>
               {(rows) => <CompleteTaskRows rows={rows} onTask={onTask} />}
             </CompleteObservationPage>
@@ -655,7 +711,7 @@ export function CompleteRunObservability({
         ) : (
           <CompleteDimensionDetails
             row={dimension.row}
-            onClose={() => setDimension(null)}
+            onClose={closeDimension}
             onRelatedTasks={
               !search.task && dimension.row.selection.model
                 ? () => {
@@ -681,6 +737,11 @@ export function CompleteRunObservability({
             triggerRef={dimensionTrigger}
             fallbackRef={pageRef}
           >
+            <p className="muted">
+              {t('runObservability.asOf', {
+                time: new Date(dimension.report.header.asOf).toLocaleString(i18n.language),
+              })}
+            </p>
             <CompleteObservationPage query={contributions}>
               {(rows) => <CompleteTaskRows rows={rows} onTask={onTask} />}
             </CompleteObservationPage>

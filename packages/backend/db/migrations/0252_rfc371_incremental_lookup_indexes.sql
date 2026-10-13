@@ -1,0 +1,2 @@
+CREATE INDEX `observation_projection_current_task` ON `observation_projection_current` (`kind`,`section`,`task_id`,`key`);--> statement-breakpoint
+CREATE INDEX `observation_projection_current_section` ON `observation_projection_current` (`kind`,`section`,`key`);

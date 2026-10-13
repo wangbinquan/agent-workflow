@@ -91,6 +91,7 @@ export function CompleteQualityDetails({
   const { t } = useTranslation()
   return (
     <Dialog
+      panelClassName="observation-typography"
       open
       onClose={onClose}
       size="lg"

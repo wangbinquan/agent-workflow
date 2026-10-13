@@ -1,3 +1,4 @@
+import type { ObservationPhase } from '@agent-workflow/shared'
 export { readPortArtifact } from '../composition/portArtifacts'
 export type { PortArtifactReader } from '../application/ports/portArtifactContent'
 export {
@@ -38,6 +39,13 @@ import type {
 
 /** RFC-371: actor-filtered execution facts, without runtime payloads or private rows. */
 export interface TaskObservationFactsQuery {
+  phasePage?(
+    taskId: string,
+    input: { after?: string; limit: number },
+  ): Promise<{
+    items: readonly ObservationPhase[]
+    nextCursor: string | null
+  }>
   readonly nativeScopes?: ObservationNativeScopeSource
   /** Retained span metadata, after the original actor-visible task lookup. */
   spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>

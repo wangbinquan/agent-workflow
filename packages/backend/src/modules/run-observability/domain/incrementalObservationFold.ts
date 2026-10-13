@@ -117,6 +117,8 @@ export function replaceIncrementalObservationContribution(
     after = next ? contribution(next) : emptyIncrementalObservationFold()
   if (JSON.stringify(before) === JSON.stringify(after)) return current
   function replace(value: string, oldValue: string, newValue: string) {
+    if (integer(value) < integer(oldValue))
+      throw new Error('Incremental observation contribution underflow')
     const result = integer(value) - integer(oldValue) + integer(newValue)
     if (result < 0n) throw new Error('Incremental observation contribution underflow')
     return String(result)

@@ -1,3 +1,4 @@
+import type { QualifiedObservationDimensionContribution } from '../ports/incrementalObservationQualified'
 import type {
   CompleteHistoricalObservationExecution,
   CompleteObservationInvocation,
@@ -19,11 +20,13 @@ import type { QualifiedObservationContribution } from '../ports/incrementalObser
 
 type Partition = CompleteObservationTimePartition['partition']
 export type ProjectionOccurrence = CompleteObservationTimePartition & {
+  /** Private aggregate cell; it is never returned as an original record. */
+  readonly projectionCell?: { readonly from: number; readonly to: number }
   readonly referenceIds: readonly string[]
   readonly candidateCount?: string
   readonly model: { readonly provider: string | null; readonly id: string } | null
-  readonly dimensions?: readonly import('../ports/incrementalObservationQualified').QualifiedObservationDimensionContribution[]
-  readonly unknownDimensions?: readonly import('../ports/incrementalObservationQualified').QualifiedObservationDimensionContribution[]
+  readonly dimensions?: readonly QualifiedObservationDimensionContribution[]
+  readonly unknownDimensions?: readonly QualifiedObservationDimensionContribution[]
 }
 const clearMemberships = (fold: CompleteObservationFold): CompleteObservationFold => ({
   ...fold,
@@ -106,7 +109,7 @@ export function incrementalObservationWindow(input: {
             : 'outside-window'
     const row = { ...original, partition },
       next = clearMemberships(contribution.fold)
-    timeRows.push(row)
+    if (!row.projectionCell) timeRows.push(row)
     mergeCompleteObservationFold(partitions[partition], next)
     if (row.invocation) {
       const id = row.invocation.invocationId,
@@ -272,6 +275,8 @@ export function incrementalObservationWindow(input: {
     ) as NonNullable<CompleteObservationReportSummary['usageWindow']>['partitions'],
   }
   return {
+    query: input.query,
+    mode: input.mode ?? 'usage',
     fold,
     tasks,
     invocations: selectedInvocations,

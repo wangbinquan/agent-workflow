@@ -165,7 +165,7 @@ describeEachProviderHttpApplication(
           (region) => region.regionId === 'delivery',
         )!
 
-        expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 10 })
+        expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 11 })
         expect(descriptor.authoringManifest.workItems).toHaveLength(20)
         expect(descriptor.authoringManifest.workIngresses).toEqual([
           {
@@ -827,7 +827,7 @@ describeEachProviderHttpApplication(
         })
         const classifierTools = JSON.parse(
           catalog.listJson(
-            JSON.stringify({ typeId: 'development', revision: 10 }),
+            JSON.stringify({ typeId: 'development', revision: 11 }),
             'classify-pipeline',
           ),
         ) as Array<{
@@ -845,7 +845,7 @@ describeEachProviderHttpApplication(
         ])
         const repairTools = JSON.parse(
           catalog.listJson(
-            JSON.stringify({ typeId: 'development', revision: 10 }),
+            JSON.stringify({ typeId: 'development', revision: 11 }),
             'repair-pipeline',
           ),
         ) as Array<{
@@ -862,7 +862,7 @@ describeEachProviderHttpApplication(
         ])
         const analyzeTools = JSON.parse(
           catalog.listJson(
-            JSON.stringify({ typeId: 'development', revision: 10 }),
+            JSON.stringify({ typeId: 'development', revision: 11 }),
             'analyze-implement',
           ),
         ) as Array<{
@@ -905,7 +905,7 @@ describeEachProviderHttpApplication(
 
       test('classifier tools own problem definitions and repair tools declare exact capabilities', async () => {
         const module = fixtureModule()
-        const typeRef = { typeId: 'development', revision: 10 }
+        const typeRef = { typeId: 'development', revision: 11 }
         const classifierBody = {
           displayName: '两类流水线问题识别工具',
           description: '工具版本拥有有序问题清单',
@@ -1190,7 +1190,7 @@ describeEachProviderHttpApplication(
       test('a job template cannot publish before every required graph node has a tool', async () => {
         const module = fixtureModule()
         const draft = await module.commands.createJobTemplate({
-          typeRef: { typeId: 'development', revision: 10 },
+          typeRef: { typeId: 'development', revision: 11 },
           actorUserId: 'author-1',
           body: {
             name: '不完整岗位',
@@ -1213,7 +1213,7 @@ describeEachProviderHttpApplication(
 
         await expect(
           module.commands.createJobTemplate({
-            typeRef: { typeId: 'development', revision: 10 },
+            typeRef: { typeId: 'development', revision: 11 },
             actorUserId: 'author-1',
             body: {
               name: '错误的泳道优先级',
@@ -1229,7 +1229,7 @@ describeEachProviderHttpApplication(
 
       test('unconfigured optional lanes stay disabled without blocking employee save', async () => {
         const module = fixtureModule()
-        const typeRef = { typeId: 'development', revision: 10 }
+        const typeRef = { typeId: 'development', revision: 11 }
         const typePackage = await module.queries.getType(typeRef)
         const optionalLanes = new Set(
           typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
@@ -1384,7 +1384,7 @@ describeEachProviderHttpApplication(
 
       test('type -> work item -> tool registration closes an exact employee definition', async () => {
         const module = fixtureModule()
-        const typeRef = { typeId: 'development', revision: 10 }
+        const typeRef = { typeId: 'development', revision: 11 }
         const manifest = await module.queries.getAuthoringManifest(typeRef)
         const typePackage = await module.queries.getType(typeRef)
         expect(manifest.lifecycleRegions.map((region) => region.regionId)).toEqual([
@@ -3189,7 +3189,7 @@ describeEachProviderHttpApplication(
       test('system nodes reject tools and employee retries are derived from global Limits', async () => {
         let limits = { defaultNodeRetries: 3, sessionRestartBudget: 1 }
         const module = fixtureModule({ current: () => limits })
-        const typeRef = { typeId: 'development', revision: 10 }
+        const typeRef = { typeId: 'development', revision: 11 }
         await expect(
           module.commands.createTool({
             typeRef,
@@ -3219,7 +3219,7 @@ describeEachProviderHttpApplication(
 
       test('new tools reject connectionRef because Adapter binding belongs to the lane', async () => {
         const module = fixtureModule()
-        const typeRef = { typeId: 'development', revision: 10 }
+        const typeRef = { typeId: 'development', revision: 11 }
         await expect(
           module.commands.createTool({
             typeRef,
@@ -3263,7 +3263,7 @@ describeEachProviderHttpApplication(
       // registration identity and successful republishes advance only its revision.
       test('tool corrections reuse one registration id and publish immutable revisions', async () => {
         const module = fixtureModule()
-        const typeRef = { typeId: 'development', revision: 10 }
+        const typeRef = { typeId: 'development', revision: 11 }
         const body = {
           displayName: '审批工具',
           description: '初始草稿。',
@@ -3316,7 +3316,7 @@ describeEachProviderHttpApplication(
 
       test('Program tool editor round-trips source and parameters from immutable artifacts', async () => {
         const module = fixtureModule()
-        const typeRef = { typeId: 'development', revision: 10 }
+        const typeRef = { typeId: 'development', revision: 11 }
         const created = await module.commands.createTool({
           typeRef,
           workItemRef: 'prepare-materials',

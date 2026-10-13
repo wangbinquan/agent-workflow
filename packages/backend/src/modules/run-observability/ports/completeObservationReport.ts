@@ -1,3 +1,7 @@
+import type {
+  QualifiedObservationDimensionContribution,
+  QualifiedObservationHistoricalContribution,
+} from './incrementalObservationQualified'
 import type { Actor } from '@/auth/actor'
 import type {
   ObservationOverviewQuery,
@@ -36,7 +40,7 @@ export interface CompleteObservationCohortInput extends Omit<CompleteObservation
   /** Original qualified historical contributions for the persistent projection;
    * this observer does not allocate, reprice, or change report population. */
   readonly retainHistoricalContribution?: (
-    input: import('./incrementalObservationQualified').QualifiedObservationHistoricalContribution,
+    input: QualifiedObservationHistoricalContribution,
   ) => Promise<void>
   /** Preserve the qualified all-time cohort and its occurrence evidence for
    * materialization. Ordinary report requests retain their existing semantics. */
@@ -50,7 +54,7 @@ export interface CompleteObservationCohortInput extends Omit<CompleteObservation
     gaps: readonly string[],
   ) => Promise<void>
   readonly retainDimensionContribution?: (
-    input: import('./incrementalObservationQualified').QualifiedObservationDimensionContribution,
+    input: QualifiedObservationDimensionContribution,
   ) => Promise<void>
 }
 export interface CompleteObservationCohortBuild {

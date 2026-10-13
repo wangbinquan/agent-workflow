@@ -88,6 +88,8 @@ export interface CompleteObservationTaskInput {
   /** The same original snapshot's accepted catalogue, never a mutable current rate. */
   readonly value: (input: {
     readonly invocationId: string
+    readonly sourceId?: string
+    readonly recordId?: string
     readonly model: CompleteObservationContribution['localModel']
     readonly condition: string | null
     readonly usage: ObservationTokenUsage

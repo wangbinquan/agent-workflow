@@ -61,6 +61,7 @@ export function CompleteObservationCalls({
       </CompleteObservationPage>
       {chosen?.reportId === report.header.reportId && (
         <Dialog
+          panelClassName="observation-typography"
           open
           onClose={() => setChosen(null)}
           title={chosen.call.agentName ?? t('runObservability.calls')}
@@ -276,6 +277,7 @@ export function CompleteObservationTimeline({
       </CompleteObservationPage>
       {selected?.scope === scope && selected.reportId === report.header.reportId && (
         <Dialog
+          panelClassName="observation-typography"
           open
           onClose={() => setSelected(null)}
           title={t('runObservability.attemptDialogTitle', { node: selected.attempt.nodeId })}

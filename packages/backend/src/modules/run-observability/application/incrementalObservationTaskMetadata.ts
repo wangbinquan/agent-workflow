@@ -57,15 +57,18 @@ export async function projectionTaskMetadata(input: {
   const [backlog] = await input.tasks.sourceBacklog([input.task.id])
   if (!backlog) throw new Error('Projection original backlog proof missing')
   if (backlog.pendingRecords !== 0) completeObservationGap(fold, 'source-projection-pending')
-  fold.inventory = {
-    tasks: '1',
-    attempts: String(attempts),
-    numericRecords: '0',
-    nativeCaptures: '0',
+  const contribution = {
+    ...fold,
+    inventory: {
+      tasks: '1',
+      attempts: String(attempts),
+      numericRecords: '0',
+      nativeCaptures: '0',
+    },
   }
   const task: CompleteObservationTask = {
     task: input.task,
-    metrics: completeObservationMetrics(fold),
+    metrics: completeObservationMetrics(contribution),
     attemptCount: String(attempts),
     timing: await buildCompleteObservationTiming({
       task: input.task,
@@ -76,5 +79,5 @@ export async function projectionTaskMetadata(input: {
       signal: input.signal,
     }),
   }
-  return { task, fold, timingAttempts }
+  return { task, fold: contribution, timingAttempts }
 }

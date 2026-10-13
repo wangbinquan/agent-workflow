@@ -1,3 +1,4 @@
+import type { AcceptedObservationInvocation } from '@agent-workflow/shared'
 import { and, asc, gt, inArray } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { observationInvocations, observationUsageCaptures } from '@/db/schema'
@@ -15,7 +16,7 @@ export async function projectionAcceptedScope(
     readonly roots: readonly string[]
   },
 ) {
-  const result = new Map<string, import('@agent-workflow/shared').AcceptedObservationInvocation>()
+  const result = new Map<string, AcceptedObservationInvocation>()
   const identities: { kind: 'invocation' | 'attempt' | 'root'; ids: readonly string[] }[] = [
     { kind: 'invocation', ids: input.invocationIds },
     { kind: 'attempt', ids: input.attemptIds },

@@ -1,3 +1,4 @@
+import type { ObservationPriceCorrectionStore } from '../ports/priceCorrections'
 import type { ObservationTokenUsage } from '@agent-workflow/shared'
 import { valueTokenUsage, type CnyValuation } from '../domain/cnyPricing'
 import { ObservationInvocationError } from '../domain/invocationError'
@@ -28,9 +29,12 @@ export type InvocationValuation =
 export function createInvocationValuation(
   invocations: Pick<ObservationInvocationStore, 'get'>,
   prices: Pick<ObservationPriceStore, 'priceAt'>,
+  corrections?: ObservationPriceCorrectionStore,
 ) {
   return async (input: {
     readonly invocationId: string
+    readonly sourceId?: string
+    readonly recordId?: string
     readonly model: { readonly provider: string | null; readonly id: string } | null
     readonly condition: string | null
     readonly usage: ObservationTokenUsage
@@ -50,6 +54,17 @@ export function createInvocationValuation(
     const runtime = accepted.authority.runtime
     if (runtime === null) return unavailable('registration-unknown')
     if (input.model === null || input.model.provider === null) return unavailable('model-unknown')
+    const correction = await corrections?.get(
+      input.invocationId,
+      input.sourceId && input.recordId
+        ? { sourceId: input.sourceId, recordId: input.recordId }
+        : undefined,
+    )
+    if (correction && JSON.stringify(correction.originalAccepted) !== JSON.stringify(accepted))
+      throw new ObservationInvocationError(
+        'invocation-conflict',
+        'Original accepted pricing identity changed',
+      )
     const price = await prices.priceAt(
       runtime.registrationId,
       {
@@ -59,8 +74,8 @@ export function createInvocationValuation(
         model: input.model.id,
         condition: input.condition,
       },
-      accepted.acceptedAt,
-      accepted.priceBookRevision!,
+      correction?.repriceAt ?? accepted.acceptedAt,
+      correction?.targetPriceBookRevision ?? accepted.priceBookRevision!,
     )
     if (!price) return unavailable('unpriced')
     const result = valueTokenUsage(input.usage, price.rates)

@@ -29,6 +29,7 @@ export function ObservationDimensionDetails({
   const { t } = useTranslation()
   return (
     <Dialog
+      panelClassName="observation-typography"
       open={open}
       onClose={onClose}
       title={t('runObservability.modelContributions', {

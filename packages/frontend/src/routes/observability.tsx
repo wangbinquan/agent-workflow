@@ -51,7 +51,10 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
     from,
     to,
     period:
-      raw.period === 'all' || raw.period === 'month' || raw.period === 'custom'
+      raw.period === 'day' ||
+      raw.period === 'all' ||
+      raw.period === 'month' ||
+      raw.period === 'custom'
         ? raw.period
         : 'week',
     tab:

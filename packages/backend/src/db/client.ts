@@ -5,6 +5,7 @@ import { Database, type Changes } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { chmodSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { createLogger } from '@/util/log'
 import * as schema from './schema'
 import {
   assertMigrationHistory,
@@ -194,7 +195,7 @@ export function instrumentSlowStatements(
   // RFC-322：`cpuMs` 是**尾参**，既有 2 参回调（tests/rfc311-perf-foundation.test.ts
   // 有 4 处）逐字不受影响。
   logSlow: (ms: number, sql: string, cpuMs: number) => void = (ms, sql, cpuMs) =>
-    console.warn(`[db-slow] ${ms}ms (cpu ${cpuMs < 0 ? 'n/a' : `${cpuMs}ms`}): ${sql}`),
+    createLogger('db-slow').warn(`${ms}ms (cpu ${cpuMs < 0 ? 'n/a' : `${cpuMs}ms`}): ${sql}`),
   observe?: (ms: number, sql?: string, cpuMs?: number) => void,
 ): void {
   if (thresholdMs <= 0 && observe === undefined) return
