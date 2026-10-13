@@ -29,6 +29,7 @@ export function mountDevelopmentMissionRoutes(
     descriptor: descriptor.launch,
     method: 'POST',
     path: '/api/code/missions',
+    executionGroup: 'development',
     tokenAccess: 'allow',
     decode: async (c) => ({ body: await recordBody(c.req.raw) }),
     context,
@@ -147,6 +148,7 @@ export function mountDevelopmentMissionRoutes(
     descriptor: descriptor.selectRequirementSource,
     method: 'POST',
     path: '/api/code/missions/:id/requirement-source',
+    executionGroup: 'development',
     tokenAccess: 'allow',
     decode: async (c) => ({
       missionId: c.req.param('id'),
@@ -162,6 +164,7 @@ export function mountDevelopmentMissionRoutes(
     descriptor: descriptor.submitAnswers,
     method: 'POST',
     path: '/api/code/missions/:id/answers',
+    executionGroup: 'development',
     tokenAccess: 'allow',
     decode: async (c) => ({
       missionId: c.req.param('id'),
@@ -195,6 +198,7 @@ export function mountDevelopmentMissionRoutes(
     descriptor: descriptor.applySourceRefresh,
     method: 'POST',
     path: '/api/code/missions/:id/source-refresh',
+    executionGroup: 'development',
     tokenAccess: 'allow',
     decode: (c) => ({ missionId: c.req.param('id') }),
     context,
@@ -213,6 +217,7 @@ export function mountDevelopmentMissionRoutes(
     descriptor: descriptor.retry,
     method: 'POST',
     path: '/api/code/missions/:id/retry',
+    executionGroup: 'development',
     tokenAccess: 'allow',
     decode: (c) => ({ missionId: c.req.param('id') }),
     context,
@@ -276,6 +281,7 @@ export function mountDevelopmentMissionRoutes(
     descriptor: descriptor.resume,
     method: 'POST',
     path: '/api/code/missions/:id/resume',
+    executionGroup: 'development',
     tokenAccess: 'allow',
     decode: async (c) => {
       await recordBody(c.req.raw)

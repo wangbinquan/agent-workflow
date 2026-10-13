@@ -39,7 +39,12 @@ import type {
 import { createLogger, type Logger } from '@/util/log'
 import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
-import type { SystemAgentObservationRun } from '@/modules/task-execution/public/participants'
+import type {
+  SystemAgentObservationRun,
+  SystemAgentExecutionRecovery,
+  SystemAgentExecutionReceipt,
+  SystemAgentExecutionReceiptSink,
+} from '@/modules/task-execution/public/participants'
 
 export interface SystemAgentSeedFile {
   /** Relative path under the scratch worktree; `..` and absolute are rejected. */
@@ -48,6 +53,8 @@ export interface SystemAgentSeedFile {
 }
 
 export interface SystemAgentRunOptions {
+  readonly admitExecution?: () => boolean
+  readonly executionReceipts?: SystemAgentExecutionReceiptSink
   /** The selected root binds original System ownership before its process starts. */
   readonly observe?: (startedAt: number) => Promise<SystemAgentObservationRun>
   /** Log/scratch prefix, e.g. 'intent-builder'. */
@@ -175,6 +182,8 @@ export interface SystemAgentRunResult {
   scratchDir: string
   /** True when the scratch dir was deliberately kept (failure diagnosis / GC). */
   scratchRetained: boolean
+  executionRecovery?: SystemAgentExecutionRecovery
+  executionReceipt?: SystemAgentExecutionReceipt
   /** Metadata-only stdout evidence; never contains assistant text. */
   outputEvidence: SystemAgentOutputEvidence
   /**

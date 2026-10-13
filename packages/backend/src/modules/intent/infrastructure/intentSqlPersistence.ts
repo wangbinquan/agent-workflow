@@ -39,6 +39,8 @@ import {
 } from '@/modules/intent/application/manifest'
 import type { IntentContextResourceReference } from '@/modules/resource-catalog/public/participants'
 import { applyIntentWorkingSetDelta } from '../application/intentWorkingSetDelta'
+import { intentExecutionCheckpointOf } from '../application/executionCheckpoint'
+import type { IntentExecutionCheckpoint } from '../application/ports/intentExecution'
 import type {
   IntentAgentPortNames,
   IntentResolvedRuntime,
@@ -713,6 +715,70 @@ function validateCurrentDecisions(
 export class IntentSqlPersistence implements IntentPersistence {
   constructor(private readonly runner: IntentSqlProgramRunner) {}
 
+  async readExecutionCheckpoint(turnId: string): Promise<IntentExecutionCheckpoint | null> {
+    return await this.runner.read(function* () {
+      const row = yield* firstRow<{ runMetaJson: string | null }>(sql`
+        SELECT ${intentTurns.runMetaJson} AS "runMetaJson" FROM ${intentTurns}
+        WHERE ${intentTurns.id} = ${turnId} LIMIT 1
+      `)
+      return intentExecutionCheckpointOf(row?.runMetaJson ?? null)
+    })
+  }
+
+  async listExecutionCheckpoints(): Promise<readonly IntentExecutionCheckpoint[]> {
+    return await this.runner.read(function* () {
+      const rows = yield* allRows<{ runMetaJson: string | null; kind: string }>(sql`
+        SELECT ${intentTurns.runMetaJson} AS "runMetaJson", ${intentTurns.kind} AS "kind"
+        FROM ${intentTurns} WHERE ${isNotNull(intentTurns.runMetaJson)}
+        ORDER BY ${intentTurns.createdAt}, ${intentTurns.id}
+      `)
+      return rows.flatMap((row) => {
+        const checkpoint = intentExecutionCheckpointOf(row.runMetaJson)
+        return checkpoint &&
+          checkpoint.phase !== 'closed' &&
+          (checkpoint.phase !== 'reserved' || row.kind === 'running')
+          ? [checkpoint]
+          : []
+      })
+    })
+  }
+
+  async writeExecutionCheckpoint(
+    input: Parameters<IntentPersistence['writeExecutionCheckpoint']>[0],
+  ): Promise<void> {
+    await this.runner.transaction(function* () {
+      const next = input.checkpoint
+      const row = yield* firstRow<IntentTurnRecord>(sql`
+        SELECT ${turnColumns} FROM ${intentTurns}
+        WHERE ${intentTurns.id} = ${next.reservation.turnId} LIMIT 1
+      `)
+      if (
+        !row ||
+        row.sessionId !== next.sessionId ||
+        row.envelopeNonce !== next.reservation.envelopeNonce
+      )
+        throw new Error('intent-original-execution-turn-mismatch')
+      const previous = intentExecutionCheckpointOf(row.runMetaJson)
+      if (previous && canonicalJson(previous) === canonicalJson(next)) return
+      if (
+        (previous?.revision ?? null) !== input.expectedRevision ||
+        next.revision !== (input.expectedRevision === null ? 0 : input.expectedRevision + 1) ||
+        previous?.phase === 'closed' ||
+        (previous?.receipt &&
+          next.receipt &&
+          previous.receipt.executionRef !== next.receipt.executionRef)
+      )
+        throw new Error('intent-original-execution-checkpoint-conflict')
+      const meta =
+        row.runMetaJson === null ? {} : (JSON.parse(row.runMetaJson) as Record<string, unknown>)
+      yield* mutation(sql`
+        UPDATE ${intentTurns}
+        SET ${columnIdentifier(intentTurns.runMetaJson)} = ${JSON.stringify({ ...meta, execution: next })}
+        WHERE ${intentTurns.id} = ${next.reservation.turnId}
+      `)
+    })
+  }
+
   async resolveIntentRuntime(name: string | null | undefined): Promise<IntentResolvedRuntime> {
     const selected = typeof name === 'string' && name.length > 0 ? name : 'opencode'
     const row = await this.runner.read(function* () {
@@ -1114,10 +1180,29 @@ export class IntentSqlPersistence implements IntentPersistence {
       // RFC-358 T6 —— 「本轮是不是图修复轮」的判据**持久在 turn 行里**：铸修复轮时
       // 它的 content 就带上标记。不靠内存状态，因此进程重启、boot 恢复之后读到的仍是
       // 同一判断；也不需要让 11 个 settle 调用点各自注入。
-      const ownRow = yield* firstRow<{ readonly contentJson: string }>(sql`
-        SELECT ${intentTurns.contentJson} AS "contentJson"
+      const ownRow = yield* firstRow<{
+        readonly contentJson: string
+        readonly runMetaJson: string | null
+      }>(sql`
+        SELECT ${intentTurns.contentJson} AS "contentJson", ${intentTurns.runMetaJson} AS "runMetaJson"
         FROM ${intentTurns} WHERE ${intentTurns.id} = ${input.turnId} LIMIT 1
       `)
+      const originalExecution = intentExecutionCheckpointOf(ownRow?.runMetaJson ?? null)
+      if (input.executionCheckpoint) {
+        if (
+          originalExecution?.phase === 'closed' &&
+          originalExecution.outcome &&
+          originalExecution.reservation.envelopeNonce ===
+            input.executionCheckpoint.reservation.envelopeNonce
+        )
+          return originalExecution.outcome
+        if (
+          !originalExecution ||
+          originalExecution.revision !== input.executionCheckpoint.revision ||
+          canonicalJson(originalExecution) !== canonicalJson(input.executionCheckpoint)
+        )
+          throw new Error('intent-original-execution-settlement-conflict')
+      }
       const isGraphRepairTurn = ((): boolean => {
         if (ownRow === null) return false
         try {
@@ -1266,6 +1351,21 @@ export class IntentSqlPersistence implements IntentPersistence {
           },
           budget: nextBudget,
         }
+        if (input.executionCheckpoint) {
+          const reserved: IntentExecutionCheckpoint = {
+            version: 1,
+            revision: 0,
+            phase: 'reserved',
+            sessionId: input.sessionId,
+            reservation: repairReservation,
+            configSnapshot: input.executionCheckpoint.configSnapshot,
+          }
+          yield* mutation(sql`
+            UPDATE ${intentTurns}
+            SET ${columnIdentifier(intentTurns.runMetaJson)} = ${JSON.stringify({ execution: reserved })}
+            WHERE ${intentTurns.id} = ${repairReservation.turnId}
+          `)
+        }
       }
       yield* mutation(sql`
         UPDATE ${intentSessions}
@@ -1281,7 +1381,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           ${columnIdentifier(intentSessions.updatedAt)} = ${input.now}
         WHERE ${intentSessions.id} = ${session.id}
       `)
-      return {
+      const outcome = {
         turnId: input.turnId,
         kind: finalKind,
         ...(finalKind === 'error'
@@ -1292,6 +1392,26 @@ export class IntentSqlPersistence implements IntentPersistence {
         ...(isGraphRepairTurn ? { graphRepairTurn: true } : {}),
         ...(repairReservation === undefined ? {} : { graphRepair: repairReservation }),
       }
+      if (input.executionCheckpoint) {
+        const meta =
+          input.runMetaJson === undefined
+            ? {}
+            : (JSON.parse(input.runMetaJson) as Record<string, unknown>)
+        yield* mutation(sql`
+          UPDATE ${intentTurns}
+          SET ${columnIdentifier(intentTurns.runMetaJson)} = ${JSON.stringify({
+            ...meta,
+            execution: {
+              ...input.executionCheckpoint,
+              revision: input.executionCheckpoint.revision + 1,
+              phase: 'closed',
+              outcome,
+            },
+          })}
+          WHERE ${intentTurns.id} = ${input.turnId}
+        `)
+      }
+      return outcome
     })
   }
 
@@ -1755,15 +1875,20 @@ export class IntentSqlPersistence implements IntentPersistence {
         )}
         ORDER BY ${intentSessions.id} ASC
       `)
+      let recovered = 0
       for (const session of orphaned) {
         if (session.turnId === null) continue
         const turn = yield* firstRow<{
           readonly captureState: IntentTurnRecord['captureState']
+          readonly runMetaJson: string | null
         }>(sql`
-          SELECT ${intentTurns.captureState} AS "captureState"
+          SELECT ${intentTurns.captureState} AS "captureState", ${intentTurns.runMetaJson} AS "runMetaJson"
           FROM ${intentTurns}
           WHERE ${intentTurns.id} = ${session.turnId}
         `)
+        // Selected primary receipts are reconciled by the actual Intent owner.
+        // A daemon-restart marker cannot stand in for a physical/business ACK.
+        if (intentExecutionCheckpointOf(turn?.runMetaJson ?? null)) continue
         yield* mutation(sql`
           UPDATE ${intentTurns}
           SET ${columnIdentifier(intentTurns.kind)} = 'error',
@@ -1788,8 +1913,9 @@ export class IntentSqlPersistence implements IntentPersistence {
             sql`${intentSessions.inFlightTurnId} = ${session.turnId}`,
           )}
         `)
+        recovered += 1
       }
-      return orphaned.length
+      return recovered
     })
   }
 

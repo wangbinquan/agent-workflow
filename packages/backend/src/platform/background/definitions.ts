@@ -15,6 +15,15 @@ export interface BackgroundHealth {
 export interface BackgroundLifecycleContext {
   readonly signal: AbortSignal
   readonly daemonGeneration: string
+  /** Present only for definitions that explicitly fence each new admission. */
+  readonly execution?: BackgroundExecutionLifetime
+}
+
+export interface BackgroundExecutionLifetime {
+  readonly reportFailure?: (error: unknown) => void
+  readonly current: () => boolean
+  readonly whenActive?: Promise<boolean>
+  readonly canDispatch?: () => boolean
 }
 
 interface ManagedBackgroundDefinition {
@@ -40,6 +49,10 @@ export interface ManagedWorkerDefinition extends ManagedBackgroundDefinition {
   readonly run: (context: BackgroundLifecycleContext) => Promise<void>
 }
 
+export interface AuthorityManagedWorkerDefinition extends ManagedWorkerDefinition {
+  readonly supportsExecutionLifetime: true
+}
+
 function freezeDefinition<T extends ManagedBackgroundDefinition>(definition: T): Readonly<T> {
   return Object.freeze({
     ...definition,
@@ -56,5 +69,11 @@ export function defineBackgroundJob(
 export function defineManagedWorker(
   definition: ManagedWorkerDefinition,
 ): Readonly<ManagedWorkerDefinition> {
+  return freezeDefinition(definition)
+}
+
+export function defineAuthorityManagedWorker(
+  definition: AuthorityManagedWorkerDefinition,
+): Readonly<AuthorityManagedWorkerDefinition> {
   return freezeDefinition(definition)
 }

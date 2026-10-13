@@ -11,6 +11,8 @@
 
 import type { FusionStatus, TaskStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
+import type { FusionWorkspaceFactory } from '../application/ports/fusionWorkspace'
+export type { FusionWorkspaceFactory, FusionWorkspace } from '../application/ports/fusionWorkspace'
 
 import type { MemoryCatalogOperations } from '../../memory/public/catalog'
 import type {
@@ -86,6 +88,7 @@ export interface FusionEngineTaskOperations {
 }
 
 export interface FusionOperations {
+  readonly workspaces: FusionWorkspaceFactory
   readonly persistence: FusionPersistence
   readonly memories: MemoryCatalogOperations
   readonly tasks: FusionEngineTaskOperations

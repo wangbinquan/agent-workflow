@@ -24,6 +24,8 @@ import { FeedbackStack } from '@/components/FeedbackStack'
 import { TextInput } from '@/components/Form'
 import { Select, type SelectOption } from '@/components/Select'
 import { resolveApiError } from '@/i18n/errors'
+import { NoticeBanner } from '@/components/NoticeBanner'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 export const RUNTIME_MODELS_QUERY_KEY = ['runtime', 'models'] as const
 /**
@@ -64,6 +66,7 @@ interface Props {
 
 export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName }: Props) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const isClaude = runtime === 'claude'
   // RFC-114: a named runtime wins; else the protocol namespace; else default.
@@ -84,13 +87,16 @@ export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName
     queryFn: ({ signal }) => api.get('/api/runtime/models', queryParam, signal),
     staleTime: Infinity,
     retry: false,
+    enabled: execution.available,
   })
   const refresh = useMutation({
-    mutationFn: () =>
-      api.get<RuntimeModelsResponse>('/api/runtime/models', {
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.get<RuntimeModelsResponse>('/api/runtime/models', {
         ...(queryParam ?? {}),
         refresh: '1',
-      }),
+      })
+    },
     onSuccess: (next) => {
       qc.setQueryData(queryKey, next)
     },
@@ -106,6 +112,21 @@ export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName
   useEffect(() => {
     if (isCustom) setCustomText(value ?? '')
   }, [value, isCustom])
+
+  if (!execution.available) {
+    return (
+      <div>
+        <TextInput
+          value={value ?? ''}
+          onChange={(v) => onChange(v === '' ? undefined : v)}
+          placeholder="anthropic/claude-sonnet-4-6"
+        />
+        <NoticeBanner tone="info" size="compact">
+          {execution.unavailableReason}
+        </NoticeBanner>
+      </div>
+    )
+  }
 
   if (failed) {
     return (

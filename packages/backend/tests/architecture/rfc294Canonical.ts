@@ -417,6 +417,9 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/cli/auth.ts': 'identity-access',
   'packages/backend/src/cli/backup.ts': 'system-operations',
   'packages/backend/src/cli/config-cli.ts': 'bootstrap',
+  'packages/backend/src/cli/daemonHostExecutionBootstrap.ts': 'bootstrap',
+  'packages/backend/src/cli/daemonHostExecutionOwners.ts': 'bootstrap',
+  'packages/backend/src/cli/daemonHostExecutionRecovery.ts': 'bootstrap',
   'packages/backend/src/cli/daemonProviderBootstrap.ts': 'bootstrap',
   'packages/backend/src/cli/daemonProviderMigrationAdmission.ts': 'bootstrap',
   'packages/backend/src/cli/daemonProviderRuntimeHandles.ts': 'runtime-management',
@@ -428,6 +431,7 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/cli/dbCompact.ts': 'bootstrap',
   'packages/backend/src/cli/dev.ts': 'bootstrap',
   'packages/backend/src/cli/doctor.ts': 'bootstrap',
+  'packages/backend/src/cli/embeddedHostExecutionApplication.ts': 'bootstrap',
   'packages/backend/src/cli/frameBackfill.ts': 'bootstrap',
   'packages/backend/src/cli/migrate.ts': 'bootstrap',
   'packages/backend/src/cli/migrationReport.ts': 'bootstrap',
@@ -3983,10 +3987,19 @@ function buildArchitectureExceptions(
   )
 }
 
-function sourceDigest(units: readonly SourceUnit[], repoRoot: string): string {
+function sourceDigest(
+  units: readonly SourceUnit[],
+  repoRoot: string,
+  readText?: (path: string) => string | undefined,
+): string {
   const extraPaths = ['.dependency-cruiser.cjs', 'scripts/depcheck.ts']
   const parts = units.map((unit) => `${unit.path}\0${digestText(unit.text)}`)
   for (const path of extraPaths) {
+    if (readText) {
+      const text = readText(path)
+      if (text !== undefined) parts.push(`${path}\0${digestText(text)}`)
+      continue
+    }
     const absolute = resolve(repoRoot, path)
     if (existsSync(absolute)) parts.push(`${path}\0${digestText(readFileSync(absolute, 'utf8'))}`)
   }
@@ -4075,10 +4088,22 @@ export interface CanonicalArtifacts {
   readonly report: Record<string, unknown>
 }
 
-export function buildCanonicalArtifacts(repoRoot: string): CanonicalArtifacts {
-  const backend = backendUnits(repoRoot)
-  const shared = packageSrcUnits(repoRoot, 'shared')
-  const frontend = packageSrcUnits(repoRoot, 'frontend')
+export function buildCanonicalArtifacts(
+  repoRoot: string,
+  source?: {
+    readonly units: readonly SourceUnit[]
+    readonly readText: (path: string) => string | undefined
+  },
+): CanonicalArtifacts {
+  const backend = source
+    ? source.units.filter((unit) => unit.path.startsWith('packages/backend/src/'))
+    : backendUnits(repoRoot)
+  const shared = source
+    ? source.units.filter((unit) => unit.path.startsWith('packages/shared/src/'))
+    : packageSrcUnits(repoRoot, 'shared')
+  const frontend = source
+    ? source.units.filter((unit) => unit.path.startsWith('packages/frontend/src/'))
+    : packageSrcUnits(repoRoot, 'frontend')
   const allUnits = [...backend, ...shared, ...frontend]
   const owners = buildOwnerEntries(allUnits)
   const observedEdges = observedContextEdges(backend, allUnits, owners)
@@ -4099,14 +4124,17 @@ export function buildCanonicalArtifacts(repoRoot: string): CanonicalArtifacts {
     observedEdges,
     new Set(owners.map((entry) => entry.id)),
   )
-  const digest = sourceDigest(allUnits, repoRoot)
+  const digest = sourceDigest(allUnits, repoRoot, source?.readText)
   const inbound = inboundBoundaryEdges(backend)
   const outbound = outboundBoundaryEdges(backend)
   const backendGraph = resolvedValueGraph(backend)
   const repoGraph = resolvedValueGraph(allUnits)
   const backendSccs = sccs(backendGraph.graph)
   const repoSccs = sccs(repoGraph.graph)
-  const depcheckText = readFileSync(resolve(repoRoot, 'scripts/depcheck.ts'), 'utf8')
+  const depcheckText = source
+    ? source.readText('scripts/depcheck.ts')
+    : readFileSync(resolve(repoRoot, 'scripts/depcheck.ts'), 'utf8')
+  if (depcheckText === undefined) throw new Error('canonical depcheck source is missing')
   const knownViolations = ledgerEntryCount(depcheckText, 'KNOWN_VIOLATIONS')
   const routeDbEdges = backend.flatMap((unit) =>
     unit.path.startsWith(`${BACKEND_PREFIX}routes/`)

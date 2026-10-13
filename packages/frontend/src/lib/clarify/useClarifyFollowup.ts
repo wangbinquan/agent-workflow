@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ClarifyFollowup } from '@agent-workflow/shared'
 import { api } from '@/api/client'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 interface Operation {
   canceled: boolean
@@ -16,6 +17,7 @@ export function useClarifyFollowup(
   nodeRunId: string,
   refresh: (originNodeRunId: string) => Promise<unknown>,
 ) {
+  const execution = useHostExecutionAvailability('task')
   const rounds = useRef(new Map<string, RoundRequest>())
   const visible = useRef(nodeRunId)
   visible.current = nodeRunId
@@ -31,12 +33,14 @@ export function useClarifyFollowup(
     pending: owner.operation !== null,
     async start(input: Omit<ClarifyFollowup, 'requestId'>, flush: () => Promise<void>) {
       if (owner.operation) return
+      execution.assertAvailable()
       const operation: Operation = { canceled: false }
       owner.operation = operation
       notify()
       try {
         await flush()
         if (operation.canceled) return
+        execution.assertAvailable()
         const previous = owner.request
         const request: ClarifyFollowup =
           previous?.basis === input.basis &&

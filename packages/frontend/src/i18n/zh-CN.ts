@@ -15,8 +15,10 @@ import { observationPricingZh, type ObservationPricingMessages } from './observa
 import { runObservabilityZh, type RunObservabilityMessages } from './runObservability'
 import { mindmapZh, type MindmapMessages } from './mindmap'
 import { markdownEditorZh, type MarkdownEditorMessages } from './markdownEditor'
+import { hostExecutionZh, type HostExecutionMessages } from './hostExecution'
 
 export interface Resources {
+  hostExecution: HostExecutionMessages
   markdownEditor: MarkdownEditorMessages
   mindmap: MindmapMessages
   observationPricing: ObservationPricingMessages
@@ -681,6 +683,9 @@ export interface Resources {
       endConfirmBody: string
       endingHint: string
       endedHint: string
+      recover: string
+      recovering: string
+      quarantinedHint: string
       dirtyBasis: string
       activeUsesSaved: string
       receiptReplaced: string
@@ -2903,6 +2908,7 @@ export interface Resources {
     profileTitle: string
     profileHint: string
     testBinary: string
+    probeBeforeSave: string
     testing: string
     fieldName: string
     fieldNameHint: string
@@ -6789,6 +6795,7 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  hostExecution: hostExecutionZh,
   markdownEditor: markdownEditorZh,
   mindmap: mindmapZh,
   observationPricing: observationPricingZh,
@@ -10086,6 +10093,7 @@ export const zhCN: Resources = {
     profileTitle: '执行配置',
     profileHint: '选择每次运行应用的模型行为与运行时专用参数。',
     testBinary: '测试二进制',
+    probeBeforeSave: '新建时先执行运行测试',
     testing: '测试中…',
     fieldName: '名称',
     fieldNameHint: '小写、URL 安全（a-z、0-9、-）。Agent 以此名称引用该运行时。',
@@ -10545,6 +10553,10 @@ export const zhCN: Resources = {
         '当前轮次会被终止，运行时进程与私有会话目录会被回收。此操作不同于仅关闭对话框。',
       endingHint: '正在终止运行时并回收会话状态；可以关闭对话框，后台会继续完成。',
       endedHint: '本次测试已结束。历史执行过程仍可查看，也可以从下方开始一条新测试。',
+      recover: '恢复原会话',
+      recovering: '正在恢复原会话…',
+      quarantinedHint:
+        '原执行的资源回收尚未确认，暂不能开始新测试。恢复会核对并收回原执行，保留原结果；不能确认时会继续保持隔离。',
       dirtyBasis: '当前表单有未保存改动。可先保存并开始，或明确使用已保存版本。',
       activeUsesSaved: '当前会话固定使用启动时的已保存配置；未保存改动不会进入该会话。',
       receiptReplaced:
@@ -14873,6 +14885,7 @@ export const zhCN: Resources = {
     },
     distillJobs: {
       empty: '当前没有提炼任务',
+      recoveredOriginal: '已确认原执行的恢复，可在顶部重试启动执行。任务结果以刷新后的状态为准。',
       emptyDescription: '反馈与评审事件会自动创建提炼任务，新的运行将在这里提供监控。',
       colId: '任务 ID',
       colStatus: '状态',
@@ -14891,6 +14904,7 @@ export const zhCN: Resources = {
       action: {
         retry: '重试',
         cancel: '取消',
+        recover: '恢复原执行',
       },
     },
     sourceKind: {

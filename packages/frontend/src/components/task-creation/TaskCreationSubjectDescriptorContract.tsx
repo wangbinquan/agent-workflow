@@ -39,6 +39,7 @@ import {
 import { TaskCreationRepositorySpace } from '@/components/task-creation/TaskCreationRepositorySpace'
 import { TaskCreationResourcePicker } from '@/components/task-creation/TaskCreationResourcePicker'
 import { useActor, usePermission } from '@/hooks/useActor'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 type IntakeKind = 'body' | 'files' | 'body-and-files' | 'external-id'
 
@@ -67,6 +68,7 @@ export function TaskCreationSubjectDescriptorContract(
   context: TaskCreationSubjectDescriptorContractProps,
 ) {
   const { t, i18n } = useTranslation()
+  const execution = useHostExecutionAvailability('digital-employee')
   const language = i18n.resolvedLanguage ?? i18n.language
   const zh = language.startsWith('zh')
   const navigate = useNavigate()
@@ -405,6 +407,7 @@ export function TaskCreationSubjectDescriptorContract(
 
   const launch = useMutation({
     mutationFn: async () => {
+      execution.assertAvailable()
       if (employee === null) throw new Error('digital employee is required')
       const completed: Array<{
         uploadRef: string
@@ -427,6 +430,7 @@ export function TaskCreationSubjectDescriptorContract(
             targetPath: draft.placement === 'repository' ? draft.targetPath.trim() : null,
           })
         }
+        execution.assertAvailable()
         return await api.post<LaunchProjection>(
           `/api/digital-employees/${encodeURIComponent(employee.id)}/cases`,
           {
@@ -570,7 +574,8 @@ export function TaskCreationSubjectDescriptorContract(
         <button
           type="button"
           className="btn btn--primary"
-          disabled={!ready || launch.isPending}
+          disabled={!ready || launch.isPending || !execution.available}
+          title={execution.unavailableReason}
           onClick={() => launch.mutate()}
           data-testid="wizard-launch"
         >

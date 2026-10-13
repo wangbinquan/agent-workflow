@@ -51,6 +51,7 @@ import { assertNonNegativeInteger, assertPositiveInteger, storedEventFromRow } f
 import type {
   CommittedEventDeliveryPageInput,
   CommittedEventDeliveryPersistencePort,
+  CommittedEventUnissuedClaimSettlement,
 } from './persistence'
 import type {
   ClaimedCommittedEventDelivery,
@@ -188,7 +189,7 @@ function leaseLost(eventId: string, consumerId: string): Error {
 
 export function createCommittedEventDeliveryPersistence(
   db: ProviderNeutralDatabase,
-): CommittedEventDeliveryPersistencePort {
+): CommittedEventDeliveryPersistencePort & CommittedEventUnissuedClaimSettlement {
   const session = databaseSessionFor(db)
   return {
     async getStored(eventIds) {
@@ -288,6 +289,57 @@ export function createCommittedEventDeliveryPersistence(
           } satisfies ClaimedCommittedEventDelivery
         }
         return null
+      })
+    },
+
+    async deferUnissued(input) {
+      const { claim } = input
+      const eventId = claim.event.envelope.eventId
+      assertPositiveInteger(claim.attemptCount, 'attemptCount')
+      await session.transaction(async (tx) => {
+        const deferred = await tx
+          .update(committedEventDeliveries)
+          .set({
+            state: 'pending',
+            attemptCount: claim.attemptCount - 1,
+            claimedBy: null,
+            claimExpiresAt: null,
+            nextAttemptAt: input.now,
+            updatedAt: input.now,
+          })
+          .where(
+            and(
+              eq(committedEventDeliveries.eventId, eventId),
+              eq(committedEventDeliveries.consumerId, claim.consumerId),
+              eq(committedEventDeliveries.state, 'claimed'),
+              eq(committedEventDeliveries.claimedBy, claim.claimedBy),
+              eq(committedEventDeliveries.leaseEpoch, claim.leaseEpoch),
+              eq(committedEventDeliveries.attemptCount, claim.attemptCount),
+            ),
+          )
+          .run()
+        if (affectedRows(deferred) === 1) return
+        // A repeat of this exact ACK is harmless. A newer epoch, an accepted
+        // delivery or another holder can never be released by the old claim.
+        const row = await tx
+          .select()
+          .from(committedEventDeliveries)
+          .where(
+            and(
+              eq(committedEventDeliveries.eventId, eventId),
+              eq(committedEventDeliveries.consumerId, claim.consumerId),
+            ),
+          )
+          .get()
+        if (
+          row?.state === 'pending' &&
+          row.leaseEpoch === claim.leaseEpoch &&
+          row.attemptCount === claim.attemptCount - 1 &&
+          row.claimedBy === null &&
+          row.claimExpiresAt === null
+        )
+          return
+        throw leaseLost(eventId, claim.consumerId)
       })
     },
 

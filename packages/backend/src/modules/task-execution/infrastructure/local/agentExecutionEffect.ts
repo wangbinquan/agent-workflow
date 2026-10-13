@@ -1,8 +1,10 @@
 import type { AgentExecutionParticipants } from '../../application/ports/agentExecutionBinding'
 import { ulid } from 'ulid'
+import { randomUUID } from 'node:crypto'
 import type {
   ExecutionEffectPort,
   ExecutionEffectResult,
+  ExecutionRecoveryResult,
   ExecutionStartReceipt,
 } from '../../application/ports/executionEffect'
 import type { ProcessEffectProjection } from '../../application/ports/processEffectProjection'
@@ -19,6 +21,11 @@ import {
 } from '@/platform/execution/local/agentProcess'
 import type { Logger } from '@/util/log'
 import type { ObservationNativeProcessFact } from '@agent-workflow/shared'
+import { recoverOriginalLocalAgentProcess } from './agentProcessRecovery'
+import {
+  encodeLocalAgentExecutionRecoveryReference,
+  encodeLocalPreparedExecutionRecoveryReference,
+} from './agentExecutionRecoveryReference'
 
 type NativeStartReceipt = Parameters<NonNullable<AgentProcessRequest['onSpawned']>>[0]
 
@@ -55,11 +62,49 @@ export function bindLocalAgentExecutionEffect(input: {
 }) {
   const executionRef = `aw-execution:${ulid()}`
   const workspaceRef = `aw-execution-workspace:${ulid()}`
+  const requiresReceipt =
+    input.requireSpawnReceipt === true ||
+    input.observeNativeProcess !== undefined ||
+    input.taskEffect?.observeNativeProcess !== undefined
+  const launchNonce = requiresReceipt && input.runNative === undefined ? randomUUID() : undefined
+  const preparedRecoveryRef =
+    launchNonce === undefined
+      ? undefined
+      : encodeLocalPreparedExecutionRecoveryReference(executionRef, launchNonce)
   const receipts = new WeakMap<ExecutionStartReceipt, NativeStartReceipt>()
   let terminal: AgentProcessResult | undefined
+  let originalStart: NativeStartReceipt | undefined
+  let nativeRecovery: (() => Promise<boolean>) | undefined
+  let recovery: Promise<ExecutionRecoveryResult> | undefined
+  let reaped = false
   let submitted = false
   const runNative = input.runNative ?? runAgentProcess
   const effect: ExecutionEffectPort = {
+    recoverOriginal(request) {
+      if (request.executionRef !== executionRef)
+        return Promise.reject(new Error('execution-binding-reference-unavailable'))
+      if (reaped) return Promise.resolve({ executionRef, state: 'reaped' })
+      if (recovery) return recovery
+      const pending = Promise.resolve()
+        .then(async (): Promise<ExecutionRecoveryResult> => {
+          if (terminal === undefined) return { executionRef, state: 'unknown' }
+          if (terminal.outcome !== 'unreaped') {
+            // The original runner's terminal reap, not absence of a PID, is proof.
+            reaped = terminal.outcome !== 'spawn-failed'
+          } else {
+            reaped =
+              nativeRecovery === undefined
+                ? await recoverOriginalLocalAgentProcess(originalStart, terminal)
+                : await nativeRecovery()
+          }
+          return { executionRef, state: reaped ? 'reaped' : 'unknown' }
+        })
+        .finally(() => {
+          if (recovery === pending) recovery = undefined
+        })
+      recovery = pending
+      return pending
+    },
     async submit(request) {
       if (
         request.executionRef !== executionRef ||
@@ -87,43 +132,43 @@ export function bindLocalAgentExecutionEffect(input: {
         ...(request.abortSignal !== undefined ? { abortSignal: request.abortSignal } : {}),
         ...(input.stdin()?.mode === 'pipe' ? { stdin: input.stdin() } : {}),
         ...(request.beforeStart !== undefined ? { beforeSpawn: request.beforeStart } : {}),
-        ...(request.onStarted !== undefined ||
-        input.taskEffect?.observeNativeProcess !== undefined ||
-        input.observeNativeProcess !== undefined
-          ? {
-              onSpawned: async (native: NativeStartReceipt) => {
-                const receipt: ExecutionStartReceipt = {
-                  executionRef,
-                  startedAt: native.spawnedAt,
-                }
-                receipts.set(receipt, native)
-                if (native.pid !== null)
-                  await observe({
-                    contract: 'native-process-facts-v2',
-                    phase: 'spawned',
-                    pid: native.pid,
-                    launchNonce: native.launchNonce ?? null,
-                    spawnedAt: native.spawnedAt,
-                    reapedAt: null,
-                    drainedAt: null,
-                    outcome: null,
-                    drainTimedOut: false,
-                    pumpError: false,
-                  })
-                await request.onStarted?.(receipt)
-              },
+        ...{
+          onSpawned: async (native: NativeStartReceipt) => {
+            originalStart = Object.freeze({ ...native })
+            const recoveryRef = encodeLocalAgentExecutionRecoveryReference(
+              executionRef,
+              originalStart,
+            )
+            const receipt: ExecutionStartReceipt = {
+              executionRef,
+              startedAt: native.spawnedAt,
+              ...(recoveryRef === undefined ? {} : { recoveryRef }),
             }
-          : {}),
-        ...(input.requireSpawnReceipt === true ||
-        input.observeNativeProcess !== undefined ||
-        input.taskEffect?.observeNativeProcess !== undefined
-          ? { requireSpawnReceipt: true }
-          : {}),
+            receipts.set(receipt, native)
+            if (native.pid !== null)
+              await observe({
+                contract: 'native-process-facts-v2',
+                phase: 'spawned',
+                pid: native.pid,
+                launchNonce: native.launchNonce ?? null,
+                spawnedAt: native.spawnedAt,
+                reapedAt: null,
+                drainedAt: null,
+                outcome: null,
+                drainTimedOut: false,
+                pumpError: false,
+              })
+            await request.onStarted?.(receipt)
+          },
+        },
+        ...(requiresReceipt ? { requireSpawnReceipt: true } : {}),
+        ...(launchNonce === undefined ? {} : { launchNonce }),
         ...(request.capture !== undefined ? { capture: request.capture } : {}),
         ...(request.cleanup !== undefined ? { cleanup: request.cleanup } : {}),
         ...(request.log !== undefined ? { log: request.log } : {}),
       })
       terminal = result
+      nativeRecovery = result.recoverOriginal?.bind(result)
       await observe({
         contract: 'native-process-facts-v2',
         phase: 'settled',
@@ -188,6 +233,7 @@ export function bindLocalAgentExecutionEffect(input: {
   return {
     effect,
     executionRef,
+    ...(preparedRecoveryRef === undefined ? {} : { preparedRecoveryRef }),
     materialRef: input.materialRef,
     workspaceRef,
     projection,

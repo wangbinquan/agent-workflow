@@ -40,6 +40,7 @@ import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { ReviewDocPane } from '@/components/review/ReviewDocPane'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { useTaskSync } from '@/hooks/useTaskSync'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { isReviewNodeAccessRevoked } from '@/lib/review/access'
 import { multiDocHotkeyAction, nextDocIndex } from '@/lib/review/multiDocHotkeys'
@@ -72,6 +73,7 @@ export function MultiDocReviewView({
   historicalRoundKey?: string | undefined
 }) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -212,6 +214,7 @@ export function MultiDocReviewView({
       rejectReason?: string
       reviewIteration: number
     }) => {
+      execution.assertAvailable()
       await api.post(`/api/reviews/${nodeRunId}/decision`, input)
     },
     onSuccess: async () => {
@@ -390,13 +393,19 @@ export function MultiDocReviewView({
                 type="button"
                 className="btn btn--sm btn--primary"
                 data-testid="multidoc-approve"
-                disabled={mode !== 'awaiting' || !allDecided || submitDecision.isPending}
+                disabled={
+                  !execution.available ||
+                  mode !== 'awaiting' ||
+                  !allDecided ||
+                  submitDecision.isPending
+                }
                 title={
-                  allDecided
+                  execution.unavailableReason ??
+                  (allDecided
                     ? undefined
                     : t('reviews.multiDoc.approveBlocked', {
                         count: documents.length - decidedCount,
-                      })
+                      }))
                 }
                 onClick={() => setDialog({ kind: 'approve' })}
               >
@@ -408,7 +417,8 @@ export function MultiDocReviewView({
               <button
                 type="button"
                 className="btn btn--sm"
-                disabled={mode !== 'awaiting' || submitDecision.isPending}
+                disabled={!execution.available || mode !== 'awaiting' || submitDecision.isPending}
+                title={execution.unavailableReason}
                 onClick={() => setDialog({ kind: 'iterate' })}
               >
                 {t('reviews.iterateButton')}
@@ -416,7 +426,8 @@ export function MultiDocReviewView({
               <button
                 type="button"
                 className="btn btn--sm btn--danger"
-                disabled={mode !== 'awaiting' || submitDecision.isPending}
+                disabled={!execution.available || mode !== 'awaiting' || submitDecision.isPending}
+                title={execution.unavailableReason}
                 onClick={() => setDialog({ kind: 'reject', reason: '', reasonError: false })}
               >
                 {t('reviews.rejectButton')}
@@ -663,7 +674,8 @@ export function MultiDocReviewView({
             <button
               type="button"
               className="btn btn--sm btn--primary"
-              disabled={submitDecision.isPending}
+              disabled={submitDecision.isPending || !execution.available}
+              title={execution.unavailableReason}
               aria-busy={submitDecision.isPending}
               onClick={confirmDecision}
             >

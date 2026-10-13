@@ -144,6 +144,13 @@ const OVERLAY_CALLSITES = {
     family: 'task-execution',
     count: 2,
   },
+  // RFC-371 analysis regressions cover original anomaly/phase details and nested maintenance confirmation.
+  'components/observability/ObservationAnomalies.tsx': { family: 'task-execution', count: 1 },
+  'components/observability/ObservationExecutionAnalysis.tsx': {
+    family: 'task-execution',
+    count: 1,
+  },
+  'components/observability/ObservationMaintenance.tsx': { family: 'task-execution', count: 2 },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;
   // rfc269-code-host-settings.test.tsx owns both rendered confirmations.
   'components/settings/CodeHostsSection.tsx': {

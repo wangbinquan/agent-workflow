@@ -393,7 +393,18 @@ export type {
   SystemAgentRunFamily,
   SystemAgentRunRequest,
 } from '../application/ports/systemAgentRunFamily'
-export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
+export type {
+  PreparedSystemAgentRunResult,
+  SystemAgentExecutionRecovery,
+  SystemAgentExecutionReceipt,
+  SystemAgentExecutionReceiptSink,
+} from '../application/ports/systemAgentRun'
+export type {
+  ExecutionEffectPort,
+  ExecutionRecoveryPort,
+  ExecutionRecoveryReferencePort,
+  ExecutionRecoveryResult,
+} from '../application/ports/executionEffect'
 export type { SystemAgentObservationRun } from '../application/ports/systemAgentObservation'
 export { classifyMissingEnvelope } from '../application/systemAgentRun'
 export type {

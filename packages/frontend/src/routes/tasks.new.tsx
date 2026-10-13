@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import type {
   Agent,
   CachedRepo,
@@ -331,6 +332,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     onSourceChange: context.onSourceChange,
   }
   const { t, i18n } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   const search = TaskWizardRoute.useSearch() as OrchestrationTaskWizardSearch
   const routeKind =
     search.kind === 'workflow' || search.kind === 'agent' || search.kind === 'workgroup'
@@ -1796,6 +1798,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
   }
 
   const runStart = (): void => {
+    if (!execution.available) return
     if (!beginSubmission('create-task')) return
     start.mutate()
   }
@@ -1879,7 +1882,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     !relaunchError &&
     !submitPending &&
     outcomeUnknown === null
-  const canStartNow = canSubmit && immediateGitIdentityReady
+  const canStartNow = canSubmit && immediateGitIdentityReady && execution.available
   // RFC-159: upload files can't be persisted into a schedule's JSON payload.
   // RFC-218 (impl-gate P2-7): agent path<ext> ports are upload inputs too —
   // scheduled fires are JSON-only, so scheduling them is refused server-side;
@@ -2240,6 +2243,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                 className="btn"
                 onClick={runStart}
                 disabled={!canStartNow}
+                title={execution.unavailableReason}
                 data-testid="wizard-launch"
                 data-tour="task-submit"
               >
@@ -2253,6 +2257,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
                 className="btn btn--primary"
                 onClick={runStart}
                 disabled={!canStartNow}
+                title={execution.unavailableReason}
                 data-testid="wizard-launch"
                 data-tour="task-submit"
               >

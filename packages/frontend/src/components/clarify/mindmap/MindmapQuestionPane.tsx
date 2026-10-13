@@ -9,6 +9,7 @@ import {
 } from '@agent-workflow/shared'
 import { Field, TextArea } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { VirtualList } from '@/components/VirtualList'
 import type { MindmapNodeSummary } from '@/lib/clarify/mindmap/projection'
 import { pendingMindmapDescendants } from '@/lib/clarify/mindmap/navigation'
@@ -46,6 +47,7 @@ interface Props {
 
 export function MindmapQuestionPane(props: Props) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   const heading = useRef<HTMLHeadingElement>(null)
   const reading = useRef<HTMLDivElement>(null)
   const followup = useRef<HTMLDivElement>(null)
@@ -82,7 +84,13 @@ export function MindmapQuestionPane(props: Props) {
           disabled={props.pendingHere}
         />
       </Field>
-      <button type="button" className="btn" disabled={props.pending} onClick={props.onFollowup}>
+      <button
+        type="button"
+        className="btn"
+        disabled={props.pending || !execution.available}
+        title={execution.unavailableReason}
+        onClick={props.onFollowup}
+      >
         {t(
           props.pendingHere
             ? 'mindmap.generating'

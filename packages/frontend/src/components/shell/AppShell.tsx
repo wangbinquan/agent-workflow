@@ -60,9 +60,10 @@ export function useCompactShell(): boolean {
 interface AppShellProps {
   pathname: string
   children: ReactNode
+  statusNotice?: ReactNode
 }
 
-export function AppShell({ pathname, children }: AppShellProps) {
+export function AppShell({ pathname, children, statusNotice }: AppShellProps) {
   useAuthoritySync()
   // RFC-312 —— 全站唯一的 presence 订阅点。无 users:presence 时不建立连接。
   usePresenceSubscription()
@@ -221,6 +222,7 @@ export function AppShell({ pathname, children }: AppShellProps) {
       )}
 
       <main ref={mainRef} className="content" tabIndex={-1} data-testid="app-shell-main">
+        {statusNotice}
         {mountDestination && (
           <Activity
             mode={destinationGranted ? 'visible' : 'hidden'}

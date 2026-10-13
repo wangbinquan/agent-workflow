@@ -16,6 +16,8 @@ import {
 } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
+import type { HostExecutionStatus } from '@agent-workflow/shared'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 
 vi.mock('../src/hooks/useScheduledTaskWs', () => ({ useScheduledTaskWs: () => undefined }))
 
@@ -76,7 +78,7 @@ function installFetch(
   return calls
 }
 
-async function renderDetail() {
+async function renderDetail(view: HostExecutionStatus = { mode: 'native', status: null }) {
   const mod = await import('../src/routes/scheduled.$id')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const detail = createRoute({
@@ -97,12 +99,31 @@ async function renderDetail() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
-      <RouterProvider router={router} />
+      <HostExecutionReadinessContext.Provider value={view}>
+        <RouterProvider router={router} />
+      </HostExecutionReadinessContext.Provider>
     </QueryClientProvider>,
   )
 }
 
 describe('RFC-159 T7 — Run now button', () => {
+  test('RFC-370 resource-only mode keeps the schedule visible without submitting an immediate run', async () => {
+    const calls = installFetch()
+    await renderDetail({
+      mode: 'resource-only',
+      status: {
+        phase: 'standby',
+        generation: 'schedule-resource-mode',
+        readyGroups: [],
+        reason: 'resource-only',
+      },
+    })
+    const button = (await screen.findByTestId('scheduled-run-now')) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(calls.some((call) => call.url.includes('/run-now'))).toBe(false)
+    expect(screen.getByText('nightly audit')).toBeTruthy()
+  })
   test('uses the same two-click confirmation as the list, then navigates on success', async () => {
     const calls = installFetch()
     await renderDetail()

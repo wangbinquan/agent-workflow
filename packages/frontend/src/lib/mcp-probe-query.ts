@@ -9,6 +9,7 @@
 // fresh result).
 
 import { useRef, useState } from 'react'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   McpOperationResource,
@@ -59,15 +60,18 @@ export function useMcpProbe(id: string) {
 }
 
 export function useProbeMcpMutation(id: string) {
+  const execution = useHostExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const current = useRef<{ requestId: string; expectedHash: string } | null>(null)
   const [resultStale, setResultStale] = useState(false)
   type Variables = { requestId: string; expectedConfigHash: string }
   const mutation = useMutation<McpProbeOperationReceipt, Error, Variables>({
-    mutationFn: (variables) =>
-      api.post<McpProbeOperationReceipt>(`/api/mcps/${encodeURIComponent(id)}/probe`, {
+    mutationFn: (variables) => {
+      execution.assertAvailable()
+      return api.post<McpProbeOperationReceipt>(`/api/mcps/${encodeURIComponent(id)}/probe`, {
         expectedConfigHash: variables.expectedConfigHash,
-      }),
+      })
+    },
     onMutate: (variables) => {
       current.current = {
         requestId: variables.requestId,

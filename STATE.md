@@ -1,3 +1,33 @@
+## 2026-10-14 RFC-370：阶段 A 完整候选进入集中验收与发布收口
+
+Intent 的实际 HTTP/queued/自动 turn 已并入同一 owner；主 prepared/started/result/业务回执使用原 Intent turn 存储，原 ACK 丢失暂停原 continuation，不重跑模型。冷恢复读原 manifest/runtime/结果，未知原执行必须物理/capture/材料 ACK 后结算；未激活原 helper 保留回执、原 turn/nonce/预算，下一次激活才继续。图修复预约与原结果同事务耐久保存。两 daemon、embedded 实际 owner 及原恢复 HTTP/UI 已接，资源草稿与 native 未选择分支保留。
+
+阶段 A 的生产接线和用例写作收齐，开始最终清单/生成物与集中验收、完整发布；此前新用例均未运行，278 份变动 TS/TSX 的语法解析零错误只属静态证据。夹具引用已按实际 ProviderHarness 修正，后续有效检查单独记录。独立 Codex 功能评审工具仍不可用，未记实现门 PASS。完整提交、确切 SHA GitHub 主 CI 与 Windows 总绿仍未取得；取得 A-G 之前不开始 B，RFC/AW 在 CS 部署仍未完成。此条以下并发与历史内容全部保留。
+
+## 2026-10-14 RFC-370：十九项覆盖及实际 Intent turn owner 待收口
+
+间接 usage/runtime-lease/managed 常量入口已沿实际公开合同核对；新增 idle timeout 的双 provider 原取消/原因/审计排空与未发 loss 用例、Fusion 实际根绑定 intake/drain 用例、两 daemon/embedded 的实际 roster 源码约束，启动 lease 原回归同步到同一 serving helper。四份 TS 仅语法/格式/diff 自查；用例未执行。
+
+实际 Intent 间接派发查到 H7 遗漏：queued resumption 只等待受理，dispatcher detached turn/working-set/graph continuation 不受该 drain 覆盖；turnEngine 对 unreaped 普通错误结算并忘记原 retained reference，narrow result 也未转交原 execution recovery。下一步先补真实 turn lifetime/主回执与恢复、并入既有 Intent owner 和各根，不增加空 owner、不借 Memory 表代签。见 [实际 turn 收口要求](design/RFC-370-crewstation-hosted-deployment/intent-issued-owner-closeout.md)。阶段 A/A-G、RFC/CS 部署未完成，本批未发布/部署，无跨 session 信息；原并发和历史内容保留。
+
+## 2026-10-14 RFC-370：资源 HTTP 启动、原恢复入口与调用者收口候选
+
+真实 daemon 原先在 listener 前等待执行启动，未结算旧执行会阻断恢复 API。两 provider 共同入口现在显式保留已 running 的 selected 资源会话；执行仍 standby/draining，native/资源失败保持原抛错。SO 原队列提供独立激活重试及 HTTP/UI，原业务回执未完成不能开新代；Memory 行级恢复与正常在途 tick 的拒绝冷接管已接。embedded 新增显式 serving 启动，原严格 resume 和实际 owner 集保留。Intent 应用层遗留 FS scratch helper 改用现有 IntentScratchStore，原文件回归保留。
+
+双 provider 实际 SO/resource/session 与 embedded HTTP、原 receiver、Pending/failure/draft、Memory 行级恢复和非文件 scratch 用例已写入，未执行。H1～H8 [当前调用者账本](design/RFC-370-crewstation-hosted-deployment/stage-a-caller-ledger.md) 已落档，仍须间接入口、完整根/十九 owner 与 A-T7 收口后集中验收，完整上库并取得确切 SHA GitHub 总绿后 B。本批未发布/部署，无跨 session 信息，RFC/AW 在 CS 部署未完成。详见 [接线和实际门](design/RFC-370-crewstation-hosted-deployment/resource-serving-and-original-recovery.md)；以下并发和历史内容完整保留。
+
+## 2026-10-13 RFC-370：Memory 主回执、重建恢复与新执行代接线候选
+
+Memory journal 已接实际调度/协议链、候选和固定业务结算，primary ACK 失败保留原继续且不重跑模型。冷恢复复用原输出/人审候选及原 session/scope/nonce/runtime/deadline；未激活原 helper 增加跨进程准备引用，物理确认后归还未执行首轮或继续原补问，预算保持。原 bundle 结算原子化，替代 attempt 拒绝、后续取消保留。冷启动未确定恢复持有未就绪 owner，原 ACK 完成后才允许 SO 退役并开启新 epoch。
+
+新增真实 native 崩溃窗口、primary 连续失败/并发排空和双 provider 业务/SO epoch 回归只编写未执行；43 份 TS 仅格式/语法/diff 静态自查。阶段 A 仍须全调用者、三根/十九 owner 覆盖及 A-T7 收口，再集中验收、完整上库与确切 SHA GitHub 总绿后进入 B；RFC 未完成、AW 未部署 CS。本批未发布/部署，无跨 session 信息。详见 [当前退出清单](design/RFC-370-crewstation-hosted-deployment/stage-a-exit-checklist.md)，以下并发和历史输出完整保留。
+
+## 2026-10-13 RFC-370：耐久原执行引用与数据库 journal 基础续推
+
+原 native 回执现在可由新恢复实例解析，System 材料原 generation 可由同安装新 owner 释放；替代/错 scope/缺标记拒绝。System 原 prepared/start ACK 合同与完整 recovery family 已接；新增独立 Memory 主回执 journal、双 provider adapter 与 SQLite 0254/PG 0030 生成配套，未用辅助会话 sink 代签原事实。真实跨 Bun 进程、材料版本、ACK 顺序及双 provider journal 用例均只编写未执行；31 份 TS 仅格式/语法/diff 自查，没有运行迁移或功能验证。
+
+实际 Memory 调度/协议链写入、primary ACK 失败后的原继续、重建业务结算与 SO 新 epoch 接线仍开放，全阶段 A/RFC/CS 部署均未完成；仍按完整 A 开发及用例、集中验证、完整上库与确切 SHA GitHub 总绿后再 B。共享 schema/生成合同含完整并发产出，本会话未发布本批候选，无跨 session 信息。见 [候选与实际剩余](design/RFC-370-crewstation-hosted-deployment/durable-system-recovery-reference.md)。以下全部并发和历史内容保持。
+
 ## 2026-10-13 RFC-372：按功能完成与自验证标准 Done
 
 用户明确允许功能完成且自验证通过后将 RFC 标记 Done 并推送。L01～L16 的轻量功能、追加 UX、多级分类配置与内置规则已完成，源码和 System Mock 固化已上库。三项日常 AW 真实模型任务均 done、四轮 answered、23 题全部确认，最终 29038/2070/1950 字符文档与三个录制逐字一致；最终 shared 8、双 provider 各 13、前端 34 项有效通过，七个 E2E 在三平台全部通过，独立功能门和实际视觉/交互验收通过。当前已提交的功能源码保持已验证候选，复用有效结果。

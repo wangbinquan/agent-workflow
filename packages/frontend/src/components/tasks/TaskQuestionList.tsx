@@ -18,6 +18,7 @@ import type { DispatchTaskQuestionsResponse } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { api, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -123,6 +124,7 @@ export function TaskQuestionList({
   focusTargetNode = null,
 }: TaskQuestionListProps) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   const qc = useQueryClient()
   const key = TASK_QUERY_KEYS.questions(taskId)
   const query = useQuery<TaskQuestionEntry[], ApiError>({
@@ -175,10 +177,12 @@ export function TaskQuestionList({
     setAuthorOpen(true)
   }
   const dispatchM = useMutation({
-    mutationFn: (entryIds: string[]) =>
-      api.post<DispatchTaskQuestionsResponse>(`/api/tasks/${taskId}/questions/dispatch`, {
+    mutationFn: (entryIds: string[]) => {
+      execution.assertAvailable()
+      return api.post<DispatchTaskQuestionsResponse>(`/api/tasks/${taskId}/questions/dispatch`, {
         entryIds,
-      }),
+      })
+    },
     onSuccess: () => {
       setDispatchError(null)
       invalidate()
@@ -356,7 +360,8 @@ export function TaskQuestionList({
                 type="button"
                 className="btn btn--sm btn--primary"
                 data-testid="tq-batch-dispatch"
-                disabled={dispatchM.isPending}
+                disabled={dispatchM.isPending || !execution.available}
+                title={execution.unavailableReason}
                 onClick={() => {
                   setDispatchError(null)
                   dispatchM.mutate(stagedDispatchIds)

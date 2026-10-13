@@ -7,6 +7,8 @@
  * stores instead of from a timer callback.
  */
 
+import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
+
 export interface DigitalEmployeeOsWorkerDependencies {
   readonly runtime: {
     runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
@@ -33,7 +35,9 @@ export interface DigitalEmployeeOsCycleResult {
 export async function runDigitalEmployeeOsCycle(
   deps: DigitalEmployeeOsWorkerDependencies,
   maxSteps = 32,
+  execution?: BackgroundExecutionLifetime,
 ): Promise<DigitalEmployeeOsCycleResult> {
+  const current = execution?.current.bind(execution)
   if (!Number.isSafeInteger(maxSteps) || maxSteps <= 0) {
     throw new Error('digital employee worker maxSteps must be a positive integer')
   }
@@ -45,22 +49,26 @@ export async function runDigitalEmployeeOsCycle(
   let channelResults = 0
   let steps = 0
   for (; steps < maxSteps; steps += 1) {
+    if (current?.() === false) break
     let progressed = false
     if ((await deps.runtime.publishOneChannelResult()) === 'completed') {
       channelResults += 1
       progressed = true
     }
 
+    if (current?.() === false) break
     if (await deps.runtime.pumpOneDelivery()) {
       deliveries += 1
       progressed = true
     }
 
+    if (current?.() === false) break
     if ((await deps.runtime.planOneReaction()) !== null) {
       plannedRounds += 1
       progressed = true
     }
 
+    if (current?.() === false) break
     const outbox = await deps.runtime.runOneOutbox()
     if (outbox !== 'idle') {
       outboxSettlements += 1
@@ -68,13 +76,15 @@ export async function runDigitalEmployeeOsCycle(
     }
 
     // 派发必须在 inspect 之前：刚派发出去的 round 本轮就能被看到。
+    if (current?.() === false) break
     if ((await deps.runtime.dispatchOneReaction()) !== 'idle') {
       reactionDispatches += 1
       progressed = true
     }
 
-    const execution = await deps.runtime.inspectOneExecution()
-    if (execution === 'completed' || execution === 'retried' || execution === 'failed') {
+    if (current?.() === false) break
+    const inspected = await deps.runtime.inspectOneExecution()
+    if (inspected === 'completed' || inspected === 'retried' || inspected === 'failed') {
       executionSettlements += 1
       progressed = true
     }

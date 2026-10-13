@@ -13,10 +13,11 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import type { MemoryDistillJob } from '@agent-workflow/shared'
+import type { MemoryDistillJob, HostExecutionStatus } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { MemoryDistillJobsTable } from '../src/components/memory/MemoryDistillJobsTable'
 import { meQueryOptions } from '../src/hooks/useActor'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 import '../src/i18n'
 
 function mkJob(overrides: Partial<MemoryDistillJob> = {}): MemoryDistillJob {
@@ -48,7 +49,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function renderTable(rows: MemoryDistillJob[], onPathChange: (p: string) => void) {
+async function renderTable(
+  rows: MemoryDistillJob[],
+  onPathChange: (p: string) => void,
+  execution: HostExecutionStatus = { mode: 'native', status: null },
+) {
   const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString()
     const method = init?.method ?? 'GET'
@@ -63,7 +68,10 @@ async function renderTable(rows: MemoryDistillJob[], onPathChange: (p: string) =
             status: 'active',
           },
           source: 'session',
-          permissions: ['memory-distill-jobs:manage'],
+          permissions: [
+            'memory-distill-jobs:manage',
+            ...(execution.mode === 'execution' ? ['memory:update', 'tasks:execute'] : []),
+          ],
           linkedIdentities: [],
           pats: [],
         }),
@@ -86,7 +94,11 @@ async function renderTable(rows: MemoryDistillJob[], onPathChange: (p: string) =
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/',
-    component: () => <MemoryDistillJobsTable />,
+    component: () => (
+      <HostExecutionReadinessContext.Provider value={execution}>
+        <MemoryDistillJobsTable />
+      </HostExecutionReadinessContext.Provider>
+    ),
   })
   const detailRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -111,6 +123,56 @@ async function renderTable(rows: MemoryDistillJob[], onPathChange: (p: string) =
 }
 
 describe('MemoryDistillJobsTable row interactions (RFC-043)', () => {
+  test('an unavailable host exposes original recovery without spending a retry or navigating away', async () => {
+    let path = '/'
+    const { fetchSpy } = await renderTable(
+      [mkJob({ status: 'running', attempts: 0, startedAt: 2 })],
+      (next) => {
+        path = next
+      },
+      {
+        mode: 'execution',
+        status: {
+          phase: 'draining',
+          generation: 'original',
+          readyGroups: [],
+          reason: 'host-execution-owner-failed',
+        },
+      },
+    )
+    const recover = await screen.findByTestId('distill-job-row-job-row-1-recover')
+    fireEvent.click(recover)
+    await waitFor(() => {
+      expect(
+        fetchSpy.mock.calls.some(
+          ([input, init]) =>
+            String(input).endsWith('/api/memory-distill-jobs/job-row-1/recover') &&
+            init?.method === 'POST',
+        ),
+      ).toBe(true)
+    })
+    expect(
+      fetchSpy.mock.calls.some(
+        ([input, init]) => String(input).endsWith('/retry') && init?.method === 'POST',
+      ),
+    ).toBe(false)
+    expect(path).toBe('/')
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toMatch(
+        /Original execution recovery|已确认原执行/,
+      )
+    })
+  })
+
+  test('normal active distillation does not expose an original-recovery action', async () => {
+    await renderTable([mkJob({ status: 'running', attempts: 0, startedAt: 2 })], () => {}, {
+      mode: 'execution',
+      status: { phase: 'active', generation: 'original', readyGroups: ['memory'], reason: null },
+    })
+    await screen.findByTestId('distill-job-row-job-row-1')
+    expect(screen.queryByTestId('distill-job-row-job-row-1-recover')).toBeNull()
+  })
+
   test('whole-row click navigates to /memory/distill-jobs/$jobId', async () => {
     let path = '/'
     await renderTable([mkJob()], (p) => {

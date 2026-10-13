@@ -6,6 +6,8 @@ import {
   type FusionSkillVersionCommit,
 } from '../infrastructure/fusionRepository'
 import type { MemoryCatalogOperations } from '../../memory/public/catalog'
+import type { FusionWorkspaceFactory } from '../application/ports/fusionWorkspace'
+import { selectFusionWorkspaceFactory } from './fusionWorkspace'
 import type {
   FusionEngineTaskOperations,
   FusionOperations,
@@ -13,6 +15,7 @@ import type {
 } from '../public/participants'
 
 interface FusionCompositionDependencies {
+  readonly fusionWorkspaces: FusionWorkspaceFactory
   readonly appHome: string
   readonly memories: MemoryCatalogOperations
   readonly tasks: FusionEngineTaskOperations
@@ -59,7 +62,9 @@ export function composeFusionOperationsFor(
     readonly db: ProviderNeutralDatabase
   } & FusionParticipants,
 ): FusionOperations {
+  const workspaces = selectFusionWorkspaceFactory(input.fusionWorkspaces)
   return Object.freeze({
+    workspaces,
     persistence: composeFusionPersistenceFor({
       db: input.db,
       appHome: input.appHome,

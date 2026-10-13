@@ -16,6 +16,8 @@ import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/o
 import { refreshCachedRepo } from '@/services/gitRepoCache'
 import { createLogger } from '@/util/log'
 import { createManagedPeriodicJob } from '@/services/managedPeriodicJob'
+import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
+import { waitForExecutionActivation } from '@/platform/background/activation'
 
 const log = createLogger('submodule-refresh')
 
@@ -87,8 +89,15 @@ export async function selectDueRepos(
 export async function refreshDueRepos(
   store: RepositoryWorkspaceStore,
   cfg: RefreshConfig,
-  opts?: { now?: () => number; appHome?: string; secretBox?: SecretBox },
+  opts?: {
+    now?: () => number
+    appHome?: string
+    secretBox?: SecretBox
+    execution?: BackgroundExecutionLifetime
+  },
 ): Promise<{ refreshed: number; failed: number }> {
+  const current = opts?.execution?.current.bind(opts.execution)
+  if (current?.() === false) return { refreshed: 0, failed: 0 }
   const enabled = cfg.submoduleAutoRefresh?.enabled ?? true
   if (!enabled) return { refreshed: 0, failed: 0 }
   const now = opts?.now ?? Date.now
@@ -100,7 +109,10 @@ export async function refreshDueRepos(
 
   let refreshed = 0
   let failed = 0
+  const attempted: string[] = []
   for (const repo of due) {
+    if (current?.() === false) break
+    attempted.push(repo.id)
     try {
       const res = await refreshCachedRepo(
         // Thread the tick's clock through so every timestamp in one sweep — the
@@ -142,10 +154,8 @@ export async function refreshDueRepos(
     }
   }
   // Stamp AFTER the sweep so a crash mid-sweep leaves the untouched repos due.
-  await store.stampAutoRefreshed(
-    due.map((r) => r.id),
-    now(),
-  )
+  if (current === undefined || attempted.length > 0)
+    await store.stampAutoRefreshed(current === undefined ? due.map((r) => r.id) : attempted, now())
   log.info('submodule auto-refresh tick', { due: due.length, refreshed, failed })
   return { refreshed, failed }
 }
@@ -173,12 +183,16 @@ export async function startConfiguredSubmoduleRefreshLoop(
   intervalMs: number = HOUR_MS,
   appHome?: string,
   secretBox?: SecretBox,
+  execution?: BackgroundExecutionLifetime,
 ): Promise<{
   stop: () => void
   reconfigure: () => Promise<boolean>
   awaitIdle: () => Promise<void>
 }> {
+  const current = execution?.current.bind(execution)
+  if (current?.() === false) throw new Error('submodule-refresh-execution-unavailable')
   const initial = intervalMs === HOUR_MS ? await configuration.read() : undefined
+  if (current?.() === false) throw new Error('submodule-refresh-execution-unavailable')
   const loop = createSubmoduleRefreshLoop(
     store,
     () => configuration.read(),
@@ -186,6 +200,13 @@ export async function startConfiguredSubmoduleRefreshLoop(
     appHome,
     secretBox,
     initial,
+    current === undefined
+      ? undefined
+      : {
+          current,
+          whenActive: execution?.whenActive,
+          canDispatch: execution?.canDispatch?.bind(execution),
+        },
   )
   return { ...loop, reconfigure: async () => await loop.reconfigure() }
 }
@@ -197,21 +218,30 @@ function createSubmoduleRefreshLoop(
   appHome?: string,
   secretBox?: SecretBox,
   initial?: RefreshConfig,
+  execution?: BackgroundExecutionLifetime,
 ): {
   stop: () => void
   reconfigure: () => boolean | Promise<boolean>
   awaitIdle: () => Promise<void>
 } {
+  const currentExecution = execution?.current.bind(execution)
+  const dispatch = execution?.canDispatch?.bind(execution) ?? currentExecution
+  const activationControl = new AbortController()
+  let activation: Promise<void> | undefined
   let stopped = false
   let revision = 0
   const pending = new Set<Promise<boolean>>()
   const job = createManagedPeriodicJob({
     run: async () => {
+      if (dispatch?.() === false) return
       const current = await loadConfig()
-      if (stopped) return
+      if (stopped || dispatch?.() === false) return
       await refreshDueRepos(store, current, {
         ...(appHome !== undefined ? { appHome } : {}),
         ...(secretBox !== undefined ? { secretBox } : {}),
+        ...(currentExecution === undefined
+          ? {}
+          : { execution: { current: () => !stopped && currentExecution() } }),
       })
     },
     minPositiveMs: intervalMs < 60_000 ? 1 : 60_000,
@@ -223,14 +253,14 @@ function createSubmoduleRefreshLoop(
     },
   })
   const apply = (current: RefreshConfig, ownerRevision: number): boolean => {
-    if (stopped || ownerRevision !== revision) return false
+    if (stopped || ownerRevision !== revision || currentExecution?.() === false) return false
     const refresh = current.submoduleAutoRefresh
     if (refresh?.enabled === false) return job.reconfigure(0)
     const configured = refresh?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
     return job.reconfigure(Math.min(configured, HOUR_MS))
   }
   const reconfigure = (): boolean | Promise<boolean> => {
-    if (stopped) return false
+    if (stopped || currentExecution?.() === false) return false
     const ownerRevision = ++revision
     const current = loadConfig()
     if (!(current instanceof Promise)) return apply(current, ownerRevision)
@@ -253,14 +283,27 @@ function createSubmoduleRefreshLoop(
       }
     } else apply(initial, ++revision)
   } else job.reconfigure(intervalMs)
+  if (execution?.whenActive !== undefined) {
+    activation = waitForExecutionActivation(execution.whenActive, activationControl.signal)
+      .then(async (active) => {
+        if (active && !stopped && currentExecution?.() !== false) await reconfigure()
+      })
+      .catch((error: unknown) => {
+        log.error('submodule refresh activation configuration failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+  }
   return {
     stop() {
       stopped = true
+      activationControl.abort()
       revision += 1
       job.stop()
     },
     reconfigure,
     async awaitIdle() {
+      await activation
       // Each reconfigure caller owns its read error. Drain every read before
       // awaiting the tick, including when one of those reads has rejected.
       while (pending.size > 0) await Promise.allSettled(pending)

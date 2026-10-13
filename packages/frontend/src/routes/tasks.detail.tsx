@@ -6,6 +6,7 @@ import { isWorkgroupTask } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import type {
   Agent,
   ClarifyDirective,
@@ -136,6 +137,7 @@ function bannerErrorSignature(error: unknown): string {
 
 function TaskDetailPage() {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   const { id } = Route.useParams()
   const search = Route.useSearch()
   const navigateTaskRoute = Route.useNavigate()
@@ -676,7 +678,8 @@ function TaskDetailPage() {
                 type="button"
                 className="btn btn--primary"
                 onClick={() => resume.mutate()}
-                disabled={resume.isPending}
+                disabled={resume.isPending || !execution.available}
+                title={execution.unavailableReason}
               >
                 {resume.isPending ? t('tasks.resuming') : t('tasks.resumeButton')}
               </button>
@@ -758,7 +761,8 @@ function TaskDetailPage() {
                 <button
                   type="button"
                   className="btn btn--sm btn--primary"
-                  disabled={retryRepoPrep.isPending}
+                  disabled={retryRepoPrep.isPending || !execution.available}
+                  title={execution.unavailableReason}
                   onClick={() => retryRepoPrep.mutate(repoPrepRetryRunId)}
                 >
                   {retryRepoPrep.isPending

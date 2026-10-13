@@ -535,6 +535,7 @@ describeEachProvider('RFC-370 Memory retained references across a terminal chain
         | Parameters<typeof native.family.retainedContents.release>[0]['scope']
         | undefined
       const retainedContents: SystemAgentRunFamily['retainedContents'] = {
+        inspect: (request) => native.family.retainedContents.inspect(request),
         release(request) {
           expect(this).toBe(retainedContents)
           releases.push(request.retainedRef)
@@ -551,6 +552,7 @@ describeEachProvider('RFC-370 Memory retained references across a terminal chain
       }
       const family: SystemAgentRunFamily = {
         workspaces: native.family.workspaces,
+        recovery: native.family.recovery,
         retainedContents,
         async run(request) {
           selectedScope ??= request.workspaceScope
@@ -632,6 +634,7 @@ test('a rejected invocation reads its reference once and retires that exact refe
         referenceReads = 0
       const forgotten: string[] = []
       const retainedContents: SystemAgentRunFamily['retainedContents'] = {
+        inspect: (request) => owner.contents.inspect(request),
         release: (request) => owner.contents.release(request),
         forget(request) {
           expect(this).toBe(retainedContents)
@@ -641,6 +644,11 @@ test('a rejected invocation reads its reference once and retires that exact refe
       }
       const family = composeSystemAgentRunFamily({
         workspaces: owner.workspaces,
+        recovery: {
+          recoverReference: async () => {
+            throw new Error('unselected recovery')
+          },
+        },
         retainedContents,
         invocations: {
           open() {

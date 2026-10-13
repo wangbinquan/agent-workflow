@@ -43,6 +43,7 @@ import { UserPicker } from '@/components/UserPicker'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { INTENT_QUERY_KEYS, useIntentSessionsWs } from '@/hooks/useIntentSessionsWs'
 import { intentFailureDiagnostic } from '@/lib/intent-failure-diagnostic'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -68,6 +69,7 @@ const REVIEW_FIRST_REASONS = new Set<IntentSessionDetail['session']['journey']['
 
 function IntentSessionDetailPage() {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('intent')
   const { sessionId } = Route.useParams()
   const qc = useQueryClient()
   useIntentSessionsWs()
@@ -101,6 +103,7 @@ function IntentSessionDetailPage() {
 
   const sendMessage = useMutation<unknown, ApiError, void>({
     mutationFn: () => {
+      execution.assertAvailable()
       if (detail === undefined) throw new Error('Intent detail is unavailable')
       const feedback = message.trim()
       if (detail.composerSource.kind === 'current-draft') {
@@ -135,6 +138,7 @@ function IntentSessionDetailPage() {
   })
   const retryTurn = useMutation<unknown, ApiError, void>({
     mutationFn: () => {
+      execution.assertAvailable()
       if (detail?.retrySource === null || detail?.retrySource === undefined) {
         throw new Error('Retry source is unavailable')
       }
@@ -149,6 +153,7 @@ function IntentSessionDetailPage() {
   })
   const regenerate = useMutation<unknown, ApiError, void>({
     mutationFn: () => {
+      execution.assertAvailable()
       if (detail?.currentDraft === null || detail?.currentDraft === undefined) {
         throw new Error('Current draft is unavailable')
       }
@@ -165,6 +170,7 @@ function IntentSessionDetailPage() {
   })
   const retryWorkingSet = useMutation<unknown, ApiError, void>({
     mutationFn: () => {
+      execution.assertAvailable()
       if (detail?.workingSetChange === null || detail?.workingSetChange === undefined) {
         throw new Error('Working-context update is unavailable')
       }
@@ -177,6 +183,22 @@ function IntentSessionDetailPage() {
   const cancelTurn = useMutation<unknown, ApiError, void>({
     mutationFn: () => api.post(`/api/intent-sessions/${sessionId}/cancel-turn`),
     onSuccess: invalidate,
+  })
+  const originalTurn = detail?.turns.find((turn) => {
+    const original = turn.runMeta?.originalExecution as { phase?: string } | undefined
+    return original !== undefined && original.phase !== 'closed' && original.phase !== 'reserved'
+  })
+  const recoverTurn = useMutation<{ acknowledged: boolean }, ApiError, void>({
+    mutationFn: () => {
+      execution.assertRecoveryAvailable()
+      if (!originalTurn) throw new Error('Original Intent turn is unavailable')
+      return api.post<{ acknowledged: boolean }>(
+        `/api/intent-sessions/${sessionId}/turns/${originalTurn.id}/recover`,
+      )
+    },
+    onSuccess: async () => {
+      await invalidate()
+    },
   })
   const updateStatus = useMutation<unknown, ApiError, 'archive' | 'reopen'>({
     mutationFn: (action) => api.post(`/api/intent-sessions/${sessionId}/${action}`),
@@ -291,6 +313,7 @@ function IntentSessionDetailPage() {
   const actionError =
     updateStatus.error ??
     cancelTurn.error ??
+    recoverTurn.error ??
     retryTurn.error ??
     regenerate.error ??
     retryWorkingSet.error ??
@@ -344,6 +367,32 @@ function IntentSessionDetailPage() {
       />
 
       {actionError !== null ? <ErrorBanner error={actionError} /> : null}
+      {canManageLifecycle && originalTurn && execution.canRecoverOriginal ? (
+        <NoticeBanner tone="warning">
+          <p>{t('hostExecution.intentRecoveryDescription')}</p>
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={recoverTurn.isPending}
+            onClick={() => recoverTurn.mutate()}
+          >
+            {t(
+              recoverTurn.isPending
+                ? 'hostExecution.recoveringIntent'
+                : 'hostExecution.recoverIntent',
+            )}
+          </button>
+        </NoticeBanner>
+      ) : null}
+      {recoverTurn.data ? (
+        <NoticeBanner tone={recoverTurn.data.acknowledged ? 'info' : 'warning'}>
+          {t(
+            recoverTurn.data.acknowledged
+              ? 'hostExecution.intentRecoveryAcknowledged'
+              : 'hostExecution.intentRecoveryPending',
+          )}
+        </NoticeBanner>
+      ) : null}
 
       <IntentJourneyProgress detail={detail} />
 
@@ -400,7 +449,10 @@ function IntentSessionDetailPage() {
               type="button"
               className="btn btn--sm"
               onClick={() => retryWorkingSet.mutate()}
-              disabled={retryWorkingSet.isPending || detail.session.inFlight}
+              disabled={
+                retryWorkingSet.isPending || detail.session.inFlight || !execution.available
+              }
+              title={execution.unavailableReason}
             >
               {t('intent.workingContextRetry')}
             </button>
@@ -601,6 +653,7 @@ function IntentSessionDetailPage() {
                   className="btn btn--primary"
                   disabled={
                     message.trim() === '' ||
+                    !execution.available ||
                     sendMessage.isPending ||
                     detail.session.inFlight ||
                     pendingQuestions.length > 0 ||
@@ -608,6 +661,7 @@ function IntentSessionDetailPage() {
                   }
                   onClick={() => sendMessage.mutate()}
                   data-testid="intent-composer-submit"
+                  title={execution.unavailableReason}
                 >
                   {detail.composerSource.kind === 'current-draft'
                     ? t('intent.refineDraft')
@@ -807,7 +861,10 @@ function IntentSessionDetailPage() {
                     <button
                       type="button"
                       className="btn"
-                      disabled={detail.session.inFlight || regenerate.isPending}
+                      disabled={
+                        detail.session.inFlight || regenerate.isPending || !execution.available
+                      }
+                      title={execution.unavailableReason}
                       onClick={() => regenerate.mutate()}
                       data-testid="intent-regenerate-draft"
                     >
@@ -1041,6 +1098,7 @@ function IntentCurrentAction(props: {
   onApplied: () => Promise<unknown>
 }) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('intent')
   const [answers, setAnswers] = useState<QuestionDraft>({})
   const [decisions, setDecisions] = useState<Record<string, MountSuggestionDecisionDraft>>({})
   const initializedSourceRef = useRef<string | null>(null)
@@ -1074,6 +1132,7 @@ function IntentCurrentAction(props: {
     })
   const apply = useMutation({
     mutationFn: async () => {
+      execution.assertAvailable()
       if (props.sourceTurn === null) throw new Error('Current action source is unavailable')
       return api.post<unknown>(`/api/intent-sessions/${props.sessionId}/current-action`, {
         clientMutationId: ulid(),
@@ -1235,7 +1294,8 @@ function IntentCurrentAction(props: {
         <button
           type="button"
           className="btn btn--primary"
-          disabled={props.disabled || apply.isPending || incomplete}
+          disabled={props.disabled || apply.isPending || incomplete || !execution.available}
+          title={execution.unavailableReason}
           onClick={() => apply.mutate()}
         >
           {t('intent.currentActionSubmit')}
@@ -1283,6 +1343,7 @@ function IntentTurnError(props: {
   onRetry: () => void
 }) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('intent')
   const diagnostic = intentFailureDiagnostic(props.turn, t)
   return (
     <div className="intent-turn-error" data-testid="intent-turn-error-diagnostic">
@@ -1306,7 +1367,8 @@ function IntentTurnError(props: {
           type="button"
           className="btn btn--xs"
           onClick={props.onRetry}
-          disabled={props.pending}
+          disabled={props.pending || !execution.available}
+          title={execution.unavailableReason}
         >
           {t('intent.retryTurn')}
         </button>

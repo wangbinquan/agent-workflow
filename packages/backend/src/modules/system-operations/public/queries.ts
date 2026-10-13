@@ -1,4 +1,4 @@
-import type { Config, OverviewResponse } from '@agent-workflow/shared'
+import type { Config, HostExecutionStatus, OverviewResponse } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type {
   DatabaseMigrationArtifactInput,
@@ -32,6 +32,11 @@ export interface SystemOverviewQuery {
  * dialect/query mechanics; the transport consumes only the closed count. */
 export interface HealthDatabaseReadModel {
   countRunningTasks(): Promise<number>
+}
+
+/** Read-only presentation of the exact controller selected by this root. */
+export interface HostExecutionStatusQuery {
+  readCurrent(): HostExecutionStatus
 }
 
 export interface PlanLocalRestoreQuery {

@@ -109,6 +109,7 @@ let workerEffects: MaintenanceWorkerEffectsSelections | null = null
 let appHome = ''
 let processing = false
 let draining = false
+let dispatchEnabled = true
 let initialising = false
 let initialised = false
 let active: { runId: string; leaseToken: string } | null = null
@@ -388,6 +389,7 @@ async function processQueue(): Promise<void> {
     currentPluginGenerationGcCommand === null ||
     currentMaintenanceExecutionFence === null ||
     processing ||
+    !dispatchEnabled ||
     draining
   ) {
     await drainIfReady()
@@ -575,6 +577,7 @@ async function initialise(
   effectsDescriptor?: MaintenanceWorkerEffectsDescriptor,
 ): Promise<void> {
   initialising = true
+  dispatchEnabled = parsed.dispatchPaused !== true
   try {
     if (parsed.catalogDigest !== MAINTENANCE_CATALOG_DIGEST) {
       throw new Error('maintenance-worker-catalog-digest-mismatch')
@@ -831,8 +834,7 @@ async function initialise(
     await drainIfReady()
     return
   }
-  pollTimer = setInterval(() => void processQueue(), IDLE_POLL_MS)
-  pollTimer.unref?.()
+  if (dispatchEnabled) armQueuePolling()
   heartbeatTimer = setInterval(() => {
     const at = Date.now()
     const current = active
@@ -878,7 +880,13 @@ async function initialise(
     catalogDigest: MAINTENANCE_CATALOG_DIGEST,
     at: Date.now(),
   })
-  void processQueue()
+  if (dispatchEnabled) void processQueue()
+}
+
+function armQueuePolling(): void {
+  if (pollTimer !== null || draining || !dispatchEnabled) return
+  pollTimer = setInterval(() => void processQueue(), IDLE_POLL_MS)
+  pollTimer.unref?.()
 }
 
 self.onmessage = (event: MessageEvent<unknown>) => {
@@ -904,6 +912,12 @@ self.onmessage = (event: MessageEvent<unknown>) => {
         })
         return
       case 'wake':
+        void processQueue()
+        return
+      case 'activate':
+        if (draining) return
+        dispatchEnabled = true
+        armQueuePolling()
         void processQueue()
         return
       case 'drain':

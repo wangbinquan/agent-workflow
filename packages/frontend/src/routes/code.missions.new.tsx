@@ -9,6 +9,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
@@ -163,6 +164,7 @@ export function buildMissionLaunchPayload(input: LaunchPayloadInput): Record<str
 
 function MissionLaunchPage(): ReactElement {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('development')
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const [step, setStep] = useState(0)
@@ -343,8 +345,9 @@ function MissionLaunchPage(): ReactElement {
   })
 
   const launch = useMutation({
-    mutationFn: () =>
-      api.post<{ missionId: string; status: string; created: boolean }>(
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post<{ missionId: string; status: string; created: boolean }>(
         '/api/code/missions',
         buildMissionLaunchPayload({
           idempotencyKey,
@@ -362,7 +365,8 @@ function MissionLaunchPage(): ReactElement {
           requestedEmployee,
           requestedPolicy,
         }),
-      ),
+      )
+    },
     onSuccess: (result) => {
       launchedRef.current = true
       void navigate({ to: '/code/missions/$missionId', params: { missionId: result.missionId } })
@@ -459,7 +463,8 @@ function MissionLaunchPage(): ReactElement {
                 <button
                   type="button"
                   className="btn btn--primary"
-                  disabled={!launchReady || busy}
+                  disabled={!launchReady || busy || !execution.available}
+                  title={execution.unavailableReason}
                   onClick={() => launch.mutate()}
                   data-testid="mission-launch-submit"
                 >

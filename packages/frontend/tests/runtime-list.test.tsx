@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { RuntimeList } from '../src/components/RuntimeList'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 
 // RFC-113: rows carry the execution profile + an isDefault flag (the server sets
 // isDefault = name === config.defaultRuntime). opencode is the default here.
@@ -128,6 +129,57 @@ afterEach(() => {
 })
 
 describe('RuntimeList (RFC-112 PR-D)', () => {
+  test('RFC-370 resource-only mode preserves editing and explicitly saves without a runtime probe', async () => {
+    wrap(
+      <HostExecutionReadinessContext.Provider
+        value={{
+          mode: 'resource-only',
+          status: {
+            phase: 'standby',
+            generation: 'runtime-resource-mode',
+            readyGroups: [],
+            reason: 'resource-only',
+          },
+        }}
+      >
+        <RuntimeList />
+      </HostExecutionReadinessContext.Provider>,
+    )
+    await screen.findByText('my-oc')
+    for (const testButton of screen.getAllByRole('button', { name: /^Test$/i })) {
+      expect((testButton as HTMLButtonElement).disabled).toBe(true)
+    }
+    fireEvent.click(screen.getByRole('button', { name: /add runtime/i }))
+    fireEvent.change(screen.getByTestId('runtime-name'), { target: { value: 'resource-profile' } })
+    fireEvent.change(screen.getByTestId('runtime-binary'), {
+      target: { value: '/retained/runtime' },
+    })
+    const dialog = within(screen.getByRole('dialog'))
+    expect((dialog.getByRole('button', { name: /^Save$/i }) as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    fireEvent.click(dialog.getByRole('switch', { name: /Run a test before creating/ }))
+    expect((screen.getByTestId('runtime-binary') as HTMLInputElement).value).toBe(
+      '/retained/runtime',
+    )
+    expect((dialog.getByRole('button', { name: /^Save$/i }) as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+    fireEvent.click(dialog.getByRole('button', { name: /^Save$/i }))
+    await waitFor(() => {
+      const posts = vi
+        .mocked(globalThis.fetch)
+        .mock.calls.filter(([, init]) => init?.method === 'POST')
+      expect(posts).toHaveLength(1)
+      expect(String(posts[0]![0])).toMatch(/\/api\/runtimes$/)
+      expect(JSON.parse(String(posts[0]![1]?.body))).toMatchObject({
+        name: 'resource-profile',
+        binaryPath: '/retained/runtime',
+        probe: false,
+      })
+    })
+    expect(fetchUrls.some((url) => url.includes('/probe'))).toBe(false)
+  })
   // RFC-118: a disabled runtime stays in the list — dimmed row + "disabled" chip +
   // an Enable button; the effective-default row's toggle is present but disabled.
   test('disabled runtime: dimmed row + disabled chip + Enable; default toggle is disabled', async () => {

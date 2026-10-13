@@ -1,5 +1,77 @@
 # H7：真实启动根与 owner 生命周期接线
 
+## 2026-10-13 三根选型、激活边界及状态接线续推
+
+两 daemon 根已写入完整十九项选型，嵌入式 HTTP 新入口复用其原 Task/MCP 所有权。实际原 boot recovery、冷 owner 初始化和资源生命周期接线保留；统一激活通知等待全部 start ACK，维护子 Worker 额外关闭原预存队列直至 activate。普通 pause 的新准入、原取消/结算与写入退役分开，构造失败等待原清理；PG webhook 收尾使用本根 Task registry。
+
+中立执行状态 API 读取同一控制器，前端复用原提示/表单与中英文资源。首批执行路由分组、Task 创建和 MCP 启动限制已写入候选，其余入口和全部功能仍需收口。新 root、控制、真实 Worker、shared/UI 回归均只编写；44 份 TS/TSX 静态语法零错误、限定格式/diff 自查不代签功能或 CI。无本机验证、逐片门、新发布/部署或跨 session 消息。完整 A-T7/A-G、不确定恢复、CS adapters、先 M0 后 M1～M4 仍开放，见 [本轮实现与剩余清单](root-activation-and-availability.md)。以下历史快照和并发输出保持。
+
+## 2026-10-13 十九项 owner 绑定候选已写齐
+
+最新补齐 memory distill、development wake、digital employee、event center、fusion 与 observation report；根侧十九项绑定代码已具备，仍需接入 SQLite daemon、PostgreSQL daemon 与 embedded HTTP 的实际构造、恢复和关闭路径。
+
+业务循环在实际候选读取后/下一项前使用捕获的准入函数。已受理的 memory bundle、mission wake 及 fusion reconcile 保留原业务结果；`fireWake` ACK 后失权会持久保留后续 drive hint，未回收的 memory runtime 仍使排空失败。公共轮询 owner 的调度关闭和实际排空分别确认，本轮关闭也参与逐项判断。报告 host 模式提供冷查询、明确构建受理、同 ID 未发 claim 归还和已发构建的原结果/清理排空；未确认的写入仅重试原结算。增量统计和存储维护保留并发业务实现，增加独立 loss quiesce/drain 接线，正常 stop 保持原业务取消。
+
+新增双 provider 实际报告缓存、snapshot/spool、领取与结算用例，以及业务循环/worker 生命周期用例均尚未执行。十五份业务 TS 与十一份报告 TS 语法解析零错误，格式/diff 静态自查不代签功能、实现门或 CI。三个根、执行状态 API/UI、不确定运行时恢复、A-T7/A-G、CS 独立 adapter、M0 首次实际部署及 M1～M4 仍未完成；新候选未提交/推送/部署。继续完整开发后集中验证，不逐片跑功能门，不发送跨 session 信息。以下历史快照与并发输出保持。
+
+## 2026-10-13 定时 owner 续推
+
+已写入 scheduled backup、submodule refresh、batch import GC、resource limits 与 idle timeout 五个独立根侧绑定，现合计十三项绑定代码，仍未表示三个根已完成真实选择。配置读取后和下一业务项之前使用同一捕获 lifetime；备份失权后不再发起新 prune wake，原请求仍排空；刷新只标记实际尝试的仓库，不把未发出的镜像错误标成已刷新。GC 是同步内存清理，停 ticker 后确无异步业务尾部；不能将此结论套到备份或刷新。
+
+额度清理等待原已发取消的原因及审计写回，失权后不取消下一任务。idle timeout 按原任务树准入，已受理树完成原 kill/cascade/audit，停止下一棵树；未受理候选不因失权落失败。新增同一 Task 取消绑定的中立 resource limit 装配入口，避免 selected SQLite 回退到旧进程默认取消器。双 provider 实际存储、受控定时器/配置通知/原调用 ACK、原真实 Git 刷新及 idle tree 用例已同步编写，全部未执行。十一份本批 TS 静态解析零错误，格式/diff 自查完成，不代表功能或 CI 通过。
+
+剩余 memory distill、development wake、digital employee、event center、fusion、report，三根整体接线及根关闭、状态 API/UI、A-T7/A-G 与 CS M0～M4 继续开发；不逐片执行功能门，不发送跨 session 信息。
+
+## 2026-10-13 webhook terminal control 续推
+
+已补 webhook terminal control 的显式冷宿主生命周期、第八个独立 owner 绑定与双 provider 用例。原 claim 在未发出任务终止前失权时归还为 pending；已经发出的操作等待原 receipt 写入，精确 CAS 结算领取，单调保留 claim attempt。数据库 ACK 未确认时保留原写入重试，不再次调用任务终止。原启动 guard 的 reservation、结果写回与 release 都计入同一 lifetime；失权不 abort，普通 pause 保留 abort，旧尾部未确认不得换代。额外补齐 webhook 准备阶段异常的 guard 收尾，避免新排空边界暴露永久等待。
+
+原 native 用例、完整端口和失败证据保留；新增九项双 provider 宿主/领取/启动/事务用例及原真实 dispatcher 的准备异常用例均只写入、未执行。十一份 TS 的语法解析零错误，必要格式与 diff 静态自查完成，不等同于功能验收。三个真实根与完整十九项仍待接线，报告、其余后台 owner、状态 API/UI、A-T7/A-G 和 CS adapter、M0～M4 仍开放；本候选尚未发布或部署，无跨 session 信息。
+
+## 2026-10-13 续推：MCP、continuation 与已提交事件
+
+继续完成生产候选与用例，未进入集中功能验证。本次新增 MCP 的显式 `executionMode: 'host'` 和完整 `start / quiesce / awaitDrained / pause` 生命周期；同一 application 的冷查询、资源修改及清理意图保留原存储，公开 host 装配使用 stored queries。执行请求、boot／reconcile、队列、通知、异步 deadline 查询和原运行时结算均归捕获的 lifetime。失权不会走原 shutdown；正常 pause 仍走原取消政策，并等待实际在途尾部。
+
+MCP 在尚未调用 `effects.runTurn` 前失权，将同一未执行 turn 恢复为 queued，保留 request／turn ID；原已发调用继续等待 capture、verification、lease release 和结果落库。首轮 `claimPending` 只重领本测试本轮未执行且已释放的原 lease。发生真实 spawn 收据、失权与用户 cancel／end 并发时，不覆盖实际执行或业务取消。未回收的 execution 或不能证明释放的 lease 保留实际诊断结果，并使 drain 失败；不能凭超时或日志替根确认释放。新的 lifetime 在旧尾部未确认前被拒绝，资源读取继续可用。失败结算的恢复与三个根的完整退役行为仍需在整体接线中收口。
+
+`human-gate-continuation` 已增加明确支持执行 lifetime 的 definition：配置／候选读取后再次判断，失权停止下一项，已发出的 drive 原样完成。`committed-event-dispatcher` 新增独立 authority dispatcher 与原数据库的 `deferUnissued` 结算；只对尚未调用 durable consumer 的原 claim 归还领取，不计失败、不消耗重试预算，保留事件与单调 lease epoch。已经调用的 consumer 仍使用原 accept／reject，不能把其真实失败改为失权延后。返回 ACK 的原事务、重复 ACK 和旧 epoch 无权释放新领取都有双 provider 用例。
+
+根侧独立绑定代码现为 Task、Intent、Maintenance、after-commit、MCP、human continuation、committed event 七项；这不是生产根已接入七项。三个真实根仍未选择完整十九项，report、其它 owner、状态 API／UI、A-T6／A-T7／A-G 及 CS adapter、M0～M4 继续开放。新增 MCP／事件真实存储用例和 continuation owner 用例均已编写，未执行。当前静态语法、格式自查与候选代码不等于 CI／RFC 验收。
+
+## 2026-10-13 恢复完整实现
+
+用户最新指示“先继续推进 RFC”后恢复生产开发；旧总绿等待记录保留为历史，不再阻止本次实现。仍按完整实现、接线和测试用例写完后集中验证的规则推进，不逐片执行功能门。
+
+当前新增 `cli/daemonHostExecutionBootstrap.ts`：同一 provider／generation 创建原 SO write context、write lifecycle、Task write adapter 与 admission，等待实际 factory 完成；真实 recovery／runtime 两个 family 通过同一 scope 一次安装后才交出 authority lifecycle。安装捕获原方法和 receiver，缺失或错误 scope／kind 在安装前拒绝。`installDaemonHostExecutionSession` 消费实际 session 的 host runtime，先等待资源 resume，再调用原 authority start。`start.ts` 的共同 session 组合入口已能转交完整 `hostExecutionRuntime` 选择。
+
+新增 `cli/daemonHostExecutionOwners.ts` 已实现 Task、Intent queued resumption、Maintenance 和 after-commit pump 四个 owner 的绑定代码：转交原 grant、原 callback 与实际 drain promise，普通关闭和失权分别调用各 owner 现有政策。after-commit 注销只释放同一 pump。它们还未替代三个真实启动入口中的十九个 native owner，不能把四个绑定或共同入口透传写成完整 H7 已接通。
+
+MCP 实例已补独立 `storedQueries` 合同及同一份 private 持久读取／投影，原 native 查询仍保留先 start／reconcile 的顺序。绑定、双 provider 写上下文与冷读回归已随实现编写；尚未执行。MCP 完整失权生命周期、报告构建受理／排空、其余 owner、三个根的实际选择、执行状态 API／UI、A-T7／A-G 和 CS M0～M4 继续开放。当前仅完成必要格式、语法与差异静态自查，未运行产品测试、typecheck、build、服务、E2E 或实现门，也未将新代码发布或部署。
+
+## 2026-10-13 当前基础与完整构造次序
+
+本节是在等待总 CI 修绿期间对已有合同的设计核对，不继续生产实施、不执行功能门，也不把下面的构造方案记为已实现。先前快照中的 Task provider 缺口已有发布产出：两个 provider 创建 persistence 时已转交同一 `host.writes`，selected SQLite 使用独立的 `HostTaskExecutionModule`，两侧均形成同一 module／persistence／driverLifecycle 的 drive binding；SQLite 的旧 launch／resume／cancel／fusion 消费者也已具备传递并消费这份 binding 的独立接线。当前工作应复用它们，完成真正启动根的选型和生命周期装配。
+
+源码依据为 `packages/backend/src/modules/task-execution/composition/providerRuntime.ts:295-319,535-571`、`packages/backend/src/modules/task-execution/composition/taskDriveBinding.ts:9-53` 和 `packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts:18-25,122-124`。原 native 分支仍按未指定选择保留。三个真实启动入口、十九个实际 handle、owner 的完整冷构造／失权排空、状态读面与完整 A-G 尚未完成；下方旧缺口是当时的设计快照，不是要求重新抽取已经发布的 Task 切面。
+
+真实构造有一个需要明确解决的依赖环：SO binding 要先收到 recovery／runtime family，Task provider 又要先收到该 binding 的 admission 与写入适配，session 的实际 runtime family 则要等 provider 图和十九个真实 handle 构造完成后才存在。不能用半份 selection、进程级 native 单例或立即成功的空 family 来填这个环。根内部使用延后转交的完整方法合同：构造时声明同一 provider／generation 的 family，实际回调在完整 owner 安装前不能执行；安装后只委托同一个真实对象、原方法和 receiver，等待其原结果，不另外生成 ACK。根只在安装完成后交出完整应用与启动控制，不能把尚未构造完的 lifecycle 暴露给外部启动。该转交只属于 bootstrap 构造，不新增业务状态机或跨模块 facade。
+
+完整 selected 根按以下顺序形成一份候选：
+
+1. 固定 provider、generation、mode 和完整宿主选择；复用已准备的资源数据库与配置，不运行 Task 执行恢复，也不启动任何执行 factory。
+2. 创建 SO write context／participant 与原 write lifecycle；为实际 recovery／runtime 声明上述延后转交合同，保持显式 recovery kind，并在安装实际 family 时核对同一 kind 和根归属。
+3. 等待完整 SO binding 构造完成，再从同一 context／participant 创建唯一 Task write adapter；用该 adapter 的 port 和 binding.admission 构造 Task admission。两者都只捕获原合同，此时不 acquire 或生成 receipt。
+4. 将这一份完整 Task host selection 交给 providerRuntime，创建该 provider 自己的 module／persistence／driverLifecycle 和全部真实调用者；实际 root-resume、human continuation、fusion、后台与 routes 共用其返回对象。
+5. 冷构造所有 owner，以真实十九个 ID 和原顺序形成完整 handle selection，转交到 `_createComposedDaemonProviderRuntimeSession`；七个关闭参与者、HTTP／WS 和实际 session 生命周期仍由同一根拥有。
+6. 将同一 Task 图的实际 recovery family 和该 session 的实际 hostExecutionRuntime 一次性安装到第 2 步的转交合同。不能混入另一 provider／generation，也不能在旧 lifetime 未结算时替换目标。
+7. 先通过 session 的资源 `resume` 等待 HTTP／WS admission ACK，使 selected session 进入 running，而执行仍为 disabled；然后才调用 SO authority 的 start。不能用 `execution.resume` 代替资源 resume，也不能在 session 仍 frozen 时直接启动 host runtime。
+
+第 7 步有现成的明确行为依据：`packages/backend/src/cli/daemonProviderRuntimeSession.ts:194-224,668-705` 在完整 selection 下初始关闭 execution，资源 resume 只在 enabled 时启动 handles，随后打开 HTTP／WS；`:481-496` 的 host runtime.start 要求 phase 已为 running。`packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts:330-375` 继续拥有原 write prepare → recovery prepare → driver activate → write activate → runtime start 的 ACK 顺序，全部完成后才发布 active／readyGroups；`:483-486` 在 resource-only 下不启动执行权流程。根只按原方法接线，不能提前宣称执行可用。
+
+完整用例需随根实现一起编写：构造期零 claim／恢复／执行、尚未安装 owner 时不返回假 ACK、所有 callback／receiver 和绑定身份一致、资源 resume 先于执行激活、resource-only 的真实编辑／保存／重建回读，以及原失败／失权／关闭各自的 cleanup 与 ACK。三根和十九个 owner 的全部实现、接线和用例齐备后再集中验证；不为上述构造步骤另开小批实现门。当前只做必要读码与本文格式自查，CI、A-G、CS adapter 和 M0～M4 的实际验收仍分别待完成。
+
+## 先前设计快照（保留）
+
 本实施图沿已批准的 [执行权设计](host-execution-authority.md)，以当前真实调用者为依据。它不把已有端口、十九个测试 handle 或 Task 写入切面的有限 PASS 当成完整 H7／A-G 通过。Task 资源恢复片仍先完成自己的配套门、发布及精确 SHA 的 GitHub 验收；本文件是后续接线的设计候选，尚未实施。
 
 ## 已核对的实际缺口

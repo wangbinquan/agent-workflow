@@ -10,6 +10,7 @@ import type { OpencodeModel, RuntimeModelsResponse } from '@agent-workflow/share
 import { groupByProvider, isCustomValue, ModelSelect } from '../src/components/ModelSelect'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 
 function wrap(node: React.ReactElement) {
   const qc = new QueryClient({
@@ -29,6 +30,37 @@ afterEach(() => {
   // removeChild and crashes happy-dom.
   cleanup()
   vi.restoreAllMocks()
+})
+
+test('RFC-370 unavailable diagnostics keeps model identifiers editable without launching inventory commands', async () => {
+  await i18n.changeLanguage('en-US')
+  const fetch = vi.spyOn(globalThis, 'fetch')
+  const changed = vi.fn()
+  wrap(
+    <HostExecutionReadinessContext.Provider
+      value={{
+        mode: 'resource-only',
+        status: {
+          phase: 'standby',
+          generation: 'model-resource-mode',
+          readyGroups: [],
+          reason: 'resource-only',
+        },
+      }}
+    >
+      <ModelSelect
+        value="provider/retained-model"
+        onChange={changed}
+        runtimeName="stored-profile"
+      />
+    </HostExecutionReadinessContext.Provider>,
+  )
+  const input = screen.getByRole('textbox') as HTMLInputElement
+  expect(input.value).toBe('provider/retained-model')
+  fireEvent.change(input, { target: { value: 'provider/edited-model' } })
+  expect(changed).toHaveBeenCalledWith('provider/edited-model')
+  expect(fetch).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: /refresh/i })).toBeNull()
 })
 
 describe('isCustomValue', () => {

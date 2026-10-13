@@ -52,3 +52,11 @@
 同一批两项带 RFC-370 名称的启动根失败均报 `task-launch inverse unreviewed statement: observationReports`；提交差异显示后续新增 observation projection 实参改变了完整原语句。格式失败的三份文件也来自该增量。它们不因名称、共同提交或本会话负责过 push 而归入本片，相关原证据保留，不修改其他会话生产或测试，也不发送跨 session 信息。
 
 本片只补齐自身登记遗漏并记录已发生的 hosted 证据；没有新增实现门、本机 AW test／typecheck／build／服务／E2E。起始核对的主 CI `38261966315` 当时尚未终态，后继确切 SHA 的完整主 CI和默认完整 Windows仍须核对，不恢复尚未获总绿的 RFC 生产推进。准备发布期间，并行架构配套已完整提交到 `304c4108c84d46ef3e8b5d82d49cb4cd530249da`，包含本会话追加的 STATE 记录；本片在其新账本上只合入自身的一行，保留全部并行配套和来源，不重复提交已上库的 STATE。
+
+## 2026-10-13 本会话登记修复的 hosted 结果
+
+精确登记已提交为 `9fabf705fd79c14f4597aa57737ebc723159d829`，紧邻的声明退役为 `861833a65718a2b7bf0efbe7b666b257cbb5b287`；推送后 fetch 核对 main／origin 同步。后者主 CI `38267051133` 的 macOS job `114871730683` 实际日志 3358～3365 完整出现原 T19f 八项 pass，含精确调用点数、排序／去重、完整分类、open 数量、语料下限及原负夹具。该分片另有三项失败，不以目标八项 pass 代签整个分片。Ubuntu job `114871730439` 的原 T17 相邻提交／增长／过期检查也实际 pass，登记和紧邻声明退役的自身 CI 缺陷据此闭合。
+
+同 SHA 默认 Windows `38267051045`／job `114871728604` 正式 failure；平台步骤实际 1492 pass／3 skip／14 fail，本片十三案例 × 两工厂的 26 次仍全部 pass。原日志 2227／2260 和两条实际 Worker 失败明确报 `membership is not defined`，指向历史准备增量将原 membership 函数改名后仍使用旧名称；其余启动根失败保留 observationReports 的新实参及完整旧根长度差异。当前格式失败仍仅为三份观测增量文件，Markdown 失败指向另一 RFC 的 schema-source-review 文档。按实际源差分归因并保留完整原日志，不因测试或日志中出现 RFC-370 就接管其它会话代码。
+
+完整主 CI仍在观察，已出现其它失败；总绿前不继续 RFC 生产实施。此段仅记录真实 hosted 结果，不运行本机 AW、不另开实现门或重采生产 census。全 H7、A-G、独立 CS adapter、实际 M0 部署及 M1～M4均未完成。

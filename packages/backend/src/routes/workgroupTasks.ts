@@ -139,6 +139,7 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/dw-confirm',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Confirm a generated dynamic workflow',
@@ -176,6 +177,7 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/messages',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Post a room message',
@@ -215,6 +217,7 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/confirm',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Confirm a workgroup task step',

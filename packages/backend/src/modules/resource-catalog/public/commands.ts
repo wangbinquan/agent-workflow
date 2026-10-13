@@ -126,4 +126,8 @@ export interface McpDiagnosticsCommands {
     context: CommandContext,
     input: McpDiagnosticsSessionRef,
   ): Promise<McpRuntimeTestMutationReceipt>
+  recover(
+    context: CommandContext,
+    input: McpDiagnosticsSessionRef,
+  ): Promise<McpRuntimeTestMutationReceipt>
 }

@@ -1,3 +1,5 @@
+import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'
+import { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
@@ -87,6 +89,10 @@ import type {
   DaemonRuntimeQueries,
 } from '@/modules/system-operations/public/queries'
 import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
+import {
+  bindHttpHostExecutionAvailability,
+  type HttpHostExecutionSelection,
+} from '@/platform/http/hostExecutionAvailability'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -360,6 +366,10 @@ import {
 } from '@/modules/intent/composition/auxiliaryQueries'
 import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
 import { composeIntentPersistence } from '@/modules/intent/composition/persistence'
+import {
+  configureIntentTurnExecutionRecovery,
+  type IntentTurnExecutionLifecycle,
+} from '@/modules/intent/composition/execution'
 import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import type { IntentApplyOperations } from '@/modules/intent/public/operations'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
@@ -903,6 +913,7 @@ export interface AppDeps {
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   nodeRunPrompts?: NodeRunPromptOperations
   portArtifactContentEffects?: PortArtifactContentEffects
+  fusionWorkspaces?: FusionWorkspaceFactory
   portArtifacts?: PortArtifactOperations
   taskRunSelection?: TaskRunRootSelection
   developmentPurposes?: DevelopmentPurposeSelection
@@ -979,6 +990,9 @@ export interface AppDeps {
   daemonInfoPath?: string
   /** Selected current host facts; shared with startup readiness publication. */
   daemonRuntime?: DaemonRuntimeQueries
+  /** Same selected host controller as Task and all automatic owners. */
+  hostExecutionHttp?: HttpHostExecutionSelection
+  intentTurnExecution?: IntentTurnExecutionLifecycle
   /**
    * Legacy-compatible health field. RFC-226 production startup never probes
    * optional OpenCode and therefore passes null; tests may inject a string to
@@ -1129,6 +1143,8 @@ export interface AppDeps {
   }
   /** RFC-349 bootstrap-selected MCP runtime-test service. */
   mcpRuntimeTests?: McpDiagnosticsRuntime
+  /** Explicit host roots construct the same diagnostic service cold. */
+  mcpExecutionMode?: 'native' | 'host'
 }
 
 /**
@@ -1340,6 +1356,7 @@ export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProv
   readonly core: TCore
   readonly publicRoutes: AppPublicRouteMounts
   readonly apiRoutes: AppApiRouteMounts
+  readonly hostExecutionHttp?: HttpHostExecutionSelection
 }
 
 /** The completed HTTP employee instance also serves this bootstrap WorkStart port. */
@@ -1571,6 +1588,7 @@ function freezeComposedAppDeps<TCore extends AppHttpProviderCore>(
     core: Object.freeze({ ...input.core }),
     publicRoutes: Object.freeze({ ...input.publicRoutes }),
     apiRoutes: Object.freeze({ ...input.apiRoutes }),
+    hostExecutionHttp: input.hostExecutionHttp,
   })
 }
 
@@ -1740,6 +1758,7 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
     configuration: input.configuration,
     authentication: input.authentication,
     core: input.core,
+    hostExecutionHttp: input.platform.daemon.execution,
     publicRoutes,
     apiRoutes,
   })
@@ -2221,7 +2240,7 @@ function composeFallbackDevelopmentAutomation(
   return automation
 }
 
-/** Owned finite initialization and runtime-test lifetime for one unstarted application. */
+/** Owned finite resource initialization and runtime-test composition for one application. */
 export interface UnstartedApplicationScope {
   readonly trackReady: <T>(ready: Promise<T>) => Promise<T>
   readonly createMcpRuntimeTests: (deps: McpDiagnosticsCompositionInput) => McpDiagnosticsRuntime
@@ -2640,6 +2659,7 @@ export function composeSqliteApplicationDeps(
             },
           }),
       ...composeMcpRuntimeTestProvider(effectiveDeps.db),
+      ...(effectiveDeps.mcpExecutionMode ? { executionMode: effectiveDeps.mcpExecutionMode } : {}),
       isRuntimeEligible: isRuntimeMcpTestEligible,
       coordinator: mcpOperationCoordinator,
       requestBinding: {
@@ -2811,6 +2831,7 @@ export function composeSqliteApplicationDeps(
   )
   const application = freezeComposedAppDeps({
     token: effectiveDeps.token,
+    hostExecutionHttp: effectiveDeps.hostExecutionHttp,
     configuration,
     authentication: composeLocalHttpAuthentication({
       auth: authRuntime,
@@ -3835,6 +3856,7 @@ function composeSqliteApiRouteMounts(
     intentApply,
     intentPersistence,
     intentTurnRuntime: Object.freeze({
+      ...(deps.intentTurnExecution ? { execution: deps.intentTurnExecution } : {}),
       runtimeResolver: composeIntentTurnRuntimeResolver(
         intentPersistence,
         intentSystemAgentBinding.bindRuntime,
@@ -3862,6 +3884,15 @@ function composeSqliteApiRouteMounts(
           }),
         }),
   } satisfies IntentSessionRouteDependencies)
+  if (deps.intentTurnExecution)
+    configureIntentTurnExecutionRecovery(deps.intentTurnExecution, {
+      persistence: intentPersistence,
+      appHome,
+      identityAccess: intentSessionRoutes.identityAccess,
+      ...intentSessionRoutes.intentTurnRuntime,
+      events: intentSessionRoutes.events,
+      resourceCatalogFor: intentResourceCatalogFor,
+    })
   // RFC-359 W4-D6c：employee_* 的 ACL 走目录的中立 foreign-owner 路径（与 development_adapter 同一条），
   // identity 行由 digital-employee 在目录写事务里交出。
   const digitalEmployeeAclIdentityProviders = createDigitalEmployeeResourceCatalogAclProviders(
@@ -3933,6 +3964,7 @@ function composeSqliteApiRouteMounts(
       (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
   } satisfies WorktreeFilesRouteDeps)
   const fusionOperations = composeSqliteFusionOperations({
+    fusionWorkspaces: deps.fusionWorkspaces ?? composeLocalFusionWorkspaces(),
     // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
     // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
@@ -4016,6 +4048,7 @@ function composeSqliteApiRouteMounts(
     daemon: (app) =>
       mountDaemonRoutes(app, {
         runtime: selectDaemonRuntimeQueries(deps.daemonRuntime, { infoPath: deps.daemonInfoPath }),
+        execution: deps.hostExecutionHttp,
       }),
     plantuml: (app) => mountPlantumlRoutes(app, { configuration }),
     runtime: (app) => mountRuntimeRoutes(app, runtimeManagement.models),
@@ -4196,6 +4229,7 @@ function composeSqliteApiRouteMounts(
     fusion: (app) =>
       mountFusionRoutes(app, {
         operations: fusionOperations,
+        appHome,
         ...(taskLaunchConfiguration.selectedQueries === undefined
           ? {}
           : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -4266,6 +4300,7 @@ function composeSqliteApiRouteMounts(
  * closed bindings, but cannot add, remove or reorder route domains.
  */
 export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
+  bindHttpHostExecutionAvailability(app, deps.hostExecutionHttp)
   const routes = deps.apiRoutes
   routes.observability(app)
   routes.config(app)

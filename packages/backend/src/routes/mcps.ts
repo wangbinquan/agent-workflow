@@ -170,6 +170,7 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/mcps/:id/runtime-test-sessions',
+      executionGroup: 'diagnostics',
       permissions: ['mcps:execute', 'tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Start an MCP runtime-test session (spawns a model run)',
@@ -219,6 +220,7 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/mcps/:id/runtime-test-sessions/:sessionId/messages',
+      executionGroup: 'diagnostics',
       permissions: ['mcps:execute', 'tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Send a runtime-test turn (spawns a model run)',
@@ -313,6 +315,31 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
       return c.json(
         await runtimeTests.queries.transcript(module.runtimeTestQueryContextFor(actor), {
           mcpId,
+          sessionId: c.req.param('sessionId'),
+        }),
+      )
+    },
+  )
+
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/mcps/:id/runtime-test-sessions/:sessionId/recover',
+      permissions: ['mcps:execute'],
+      tokenAccess: 'allow',
+      summary: 'Recover the original quarantined diagnostic execution',
+    },
+    async (c) => {
+      const parsed = McpRuntimeTestEndRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
+      if (!parsed.success)
+        throw new ValidationError('mcp-test-invalid', 'invalid diagnostic recovery payload', {
+          issues: parsed.error.issues,
+        })
+      const actor = actorOf(c)
+      return c.json(
+        await runtimeTests.commands.recover(module.runtimeTestCommandContextFor(actor), {
+          mcpId: c.req.param('id'),
           sessionId: c.req.param('sessionId'),
         }),
       )
@@ -467,6 +494,7 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/mcps/:id/probe',
+      executionGroup: 'diagnostics',
       permissions: ['mcps:execute'],
       tokenAccess: 'allow',
       summary: 'Probe an MCP server (network work, no resource write)',

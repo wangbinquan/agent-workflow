@@ -15,9 +15,21 @@ export interface IntentSystemWorkspaceScope {
   readonly name?: string
 }
 
+export interface IntentSystemExecutionReceipt {
+  readonly executionRef: string
+  readonly retainedRef: string
+  readonly startedAt: number | null
+  readonly recoveryRef: string | null
+}
+
 /** Intent's execution demand; the complete producer family satisfies it
  * directly, without a wrapper or a second execution/material implementation. */
 export interface IntentSystemAgentRunRequest {
+  readonly admitExecution?: () => boolean
+  readonly executionReceipts?: {
+    prepared(receipt: IntentSystemExecutionReceipt): Promise<void>
+    started(receipt: IntentSystemExecutionReceipt): Promise<void>
+  }
   readonly feature: string
   readonly agentName: string
   readonly systemPrompt: string
@@ -70,6 +82,12 @@ export interface IntentSystemAgentRunResult {
   readonly retainedRef: string
   readonly scratchRetained: boolean
   readonly outputEvidence: WorkflowOutputEvidence
+  readonly executionReceipt?: IntentSystemExecutionReceipt
+  readonly executionNotActivated?: boolean
+  readonly executionRecovery?: {
+    readonly executionRef: string
+    recoverOriginal(): Promise<boolean>
+  }
 }
 
 export interface IntentSystemAgentRunFamily {
@@ -78,6 +96,10 @@ export interface IntentSystemAgentRunFamily {
   }
   run(request: IntentSystemAgentRunRequest): Promise<IntentSystemAgentRunResult>
   readonly retainedContents: {
+    inspect?(input: {
+      readonly retainedRef: string
+      readonly scope: IntentSystemWorkspaceScope
+    }): { readonly available: boolean } | Promise<{ readonly available: boolean }>
     forget(input: { readonly retainedRef: string }): void
     release(input: {
       readonly retainedRef: string
@@ -85,5 +107,11 @@ export interface IntentSystemAgentRunFamily {
     }):
       | { readonly removed: boolean; readonly reason?: 'unsafe-path' | 'remove-failed' }
       | Promise<{ readonly removed: boolean; readonly reason?: 'unsafe-path' | 'remove-failed' }>
+  }
+  readonly recovery?: {
+    recoverReference(input: {
+      readonly executionRef: string
+      readonly recoveryRef: string
+    }): Promise<{ readonly executionRef: string; readonly state: 'reaped' | 'unknown' }>
   }
 }

@@ -28,6 +28,7 @@ export function composeOriginalObservationProjection(input: {
   readonly db: ProviderNeutralDatabase
   readonly binding: OriginalReportDatabaseBinding
   readonly generation: string
+  readonly executionMode?: 'native' | 'host'
 }) {
   const owners = (db: ProviderNeutralDatabase, scope?: ProjectionOriginalScope) => [
     {
@@ -68,6 +69,7 @@ export function composeOriginalObservationProjection(input: {
     },
   ]
   return composeIncrementalObservationProjection({
+    ...(input.executionMode ? { executionMode: input.executionMode } : {}),
     db: input.db,
     generation: input.generation,
     tasks: createCompleteTaskObservationFacts,

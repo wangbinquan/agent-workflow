@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 import type { CachedRepo, CaseMembers, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -482,6 +483,7 @@ function contextFacts(
 }
 
 function EmployeeCaseDetailPage(): ReactElement {
+  const execution = useHostExecutionAvailability('digital-employee')
   const { caseId } = Route.useParams()
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -541,8 +543,10 @@ function EmployeeCaseDetailPage(): ReactElement {
     queryFn: ({ signal }) => api.get('/api/digital-employees/launchable', undefined, signal),
   })
   const resume = useMutation({
-    mutationFn: (): Promise<EmployeeCaseProjection> =>
-      api.post(`/api/employee-cases/${encodeURIComponent(caseId)}/resume`),
+    mutationFn: (): Promise<EmployeeCaseProjection> => {
+      execution.assertAvailable()
+      return api.post(`/api/employee-cases/${encodeURIComponent(caseId)}/resume`)
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(['employee-case', caseId], updated)
       void queryClient.invalidateQueries({ queryKey: ['employee-case', caseId] })
@@ -902,7 +906,8 @@ function EmployeeCaseDetailPage(): ReactElement {
                     <button
                       type="button"
                       className="btn btn--sm btn--primary"
-                      disabled={resume.isPending}
+                      disabled={resume.isPending || !execution.available}
+                      title={execution.unavailableReason}
                       onClick={() => resume.mutate()}
                     >
                       {resume.isPending

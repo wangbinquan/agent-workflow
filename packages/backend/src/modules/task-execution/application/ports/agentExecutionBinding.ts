@@ -26,6 +26,8 @@ export interface AgentExecutionParticipants {
 export interface AgentExecutionBinding {
   readonly effect: ExecutionEffectPort
   readonly executionRef: string
+  /** Selected adapter's original pre-activation recovery identity. */
+  readonly preparedRecoveryRef?: string
   readonly materialRef: string
   readonly workspaceRef: string
   readonly projection?: ProcessEffectProjection<ExecutionStartReceipt, ExecutionEffectResult>

@@ -7,6 +7,7 @@ import type {
   HostExecutionAuthorityDriver,
   HostExecutionAuthorityObservation,
   HostExecutionAuthorityReference,
+  HostExecutionGrantContext,
   HostExecutionPreparation,
   HostExecutionRecoveryFamily,
   HostExecutionRuntimeFamily,
@@ -341,6 +342,59 @@ test('a grant observed during subscription close is retired before close returns
   expect(f.events.filter((x) => x === 'driver.release')).toHaveLength(1)
   expect(f.events).not.toContain('recovery.prepare')
   await f.lifecycle.settled()
+})
+
+test('closing admission cannot adopt a newly observed grant while an original request is settling', async () => {
+  const f = harness()
+  await f.lifecycle.start()
+  const acquired = f.lifecycle.admission.acquire('task')
+  if (acquired.kind !== 'admitted') throw new Error('expected original request admission')
+  try {
+    await f.lifecycle.quiesceAdmissions()
+    f.observe({ kind: 'granted', reference: f.references[1]! })
+    await f.waitFor('runtime.drain')
+    let paused = false
+    const pausing = f.lifecycle.pause().then(() => {
+      paused = true
+    })
+    await nextTurn()
+    expect(paused).toBe(false)
+    expect(f.lifecycle.admission.acquire('task').kind).toBe('unavailable')
+    expect(f.events.filter((event) => event === 'runtime.start')).toHaveLength(1)
+    acquired.lease.complete()
+    await pausing
+    expect(f.events.filter((event) => event === 'recovery.prepare')).toHaveLength(1)
+    expect(f.events.filter((event) => event === 'runtime.start')).toHaveLength(1)
+  } finally {
+    acquired.lease.complete()
+    await f.lifecycle.close()
+  }
+})
+
+test('same-grant observation during normal pause keeps settlement authority without restoring dispatch', async () => {
+  let context: HostExecutionGrantContext | undefined
+  const f = harness({
+    runtime: {
+      start(request) {
+        context = request.context
+      },
+    },
+  })
+  try {
+    await f.lifecycle.start()
+    await f.lifecycle.quiesceAdmissions()
+    f.observe({ kind: 'granted', reference: f.references[0]! })
+    await nextTurn()
+    expect(context!.current()).toBe(true)
+    expect(context!.canDispatch?.()).toBe(false)
+    expect(f.lifecycle.queries.snapshot().phase).toBe('draining')
+    await f.lifecycle.pause()
+    expect(context!.current()).toBe(false)
+    await f.lifecycle.start()
+    expect(f.lifecycle.queries.snapshot().phase).toBe('active')
+  } finally {
+    await f.lifecycle.close()
+  }
 })
 
 test('loss synchronously stops new admission and waits for admitted owner completion', async () => {

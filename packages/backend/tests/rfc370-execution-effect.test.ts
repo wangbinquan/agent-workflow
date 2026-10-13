@@ -449,7 +449,8 @@ describe('RFC-370 selected native execution binding', () => {
         },
       }),
     )
-    expect(receipt).toEqual({ executionRef: selected.executionRef, startedAt: 53 })
+    expect(receipt).toMatchObject({ executionRef: selected.executionRef, startedAt: 53 })
+    expect(receipt?.recoveryRef).toBeString()
     await selected.recordLegacyTaskReceipt(receipt!, 'run')
     expect(patches).toEqual([
       {
@@ -534,7 +535,8 @@ describe('RFC-370 selected native execution binding', () => {
         },
       }),
     )
-    expect(receipt).toEqual({ executionRef: selected.executionRef, startedAt: 53 })
+    expect(receipt).toMatchObject({ executionRef: selected.executionRef, startedAt: 53 })
+    expect(receipt?.recoveryRef).toBeString()
     expect(seen).toEqual([{ pid: 731, spawnedAt: 53, spawnBinaryPath: '/native' }])
   })
 

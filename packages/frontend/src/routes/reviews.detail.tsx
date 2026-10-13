@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate, useSearch, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import type {
   DocVersionWithBodyAndComments,
   ReviewComment,
@@ -86,6 +87,7 @@ function ReviewDetailPage() {
   const search = useSearch({ from: Route.id }) as ReviewDetailSearch
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   const qc = useQueryClient()
 
   const detail = useQuery<ReviewDetail>({
@@ -603,7 +605,8 @@ function ReviewDetailPage() {
                 <button
                   type="button"
                   className="btn btn--sm btn--primary"
-                  disabled={mode !== 'awaiting' || submitDecision.isPending}
+                  disabled={mode !== 'awaiting' || submitDecision.isPending || !execution.available}
+                  title={execution.unavailableReason}
                   onClick={() => void onApprove()}
                 >
                   {t('reviews.approveButton')}
@@ -611,7 +614,8 @@ function ReviewDetailPage() {
                 <button
                   type="button"
                   className="btn btn--sm"
-                  disabled={mode !== 'awaiting' || submitDecision.isPending}
+                  disabled={mode !== 'awaiting' || submitDecision.isPending || !execution.available}
+                  title={execution.unavailableReason}
                   onClick={() => onIterate()}
                 >
                   {t('reviews.iterateButton')}
@@ -619,7 +623,8 @@ function ReviewDetailPage() {
                 <button
                   type="button"
                   className="btn btn--sm btn--danger"
-                  disabled={mode !== 'awaiting' || submitDecision.isPending}
+                  disabled={mode !== 'awaiting' || submitDecision.isPending || !execution.available}
+                  title={execution.unavailableReason}
                   onClick={() => onReject()}
                 >
                   {t('reviews.rejectButton')}

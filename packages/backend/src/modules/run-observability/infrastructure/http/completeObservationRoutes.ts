@@ -168,13 +168,13 @@ export function mountCompleteObservationRoutes(
       },
       async (c) => c.json(await reports.projectionVersion!()),
     )
+  const reportGate = { ...gate, executionGroup: 'observation' as const }
   registerRoute(
     app,
     {
-      ...gate,
+      ...reportGate,
       method: 'POST',
       path: '/api/observability/reports',
-      executionGroup: 'observation',
       summary: 'Build complete visible original observation report without population caps',
     },
     async (c) => {

@@ -27,6 +27,7 @@ import {
 import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { rawCopyDb } from '@/services/rawDbSnapshot'
+import type { BackgroundExecutionLifetime } from './definitions'
 
 const log = createLogger('backupScheduler')
 
@@ -149,6 +150,8 @@ export interface ScheduledBackupRequest {
 export type ScheduledBackupRequester = (input: ScheduledBackupRequest) => Promise<unknown>
 
 interface BackupSchedulerCommonOptions {
+  /** Explicit host selection; native callers retain the original cadence. */
+  execution?: BackgroundExecutionLifetime
   intervalMs: number
   retentionCount: number
   retentionDays: number
@@ -222,9 +225,12 @@ async function requestScheduledBackup(
 export function startBackupScheduler(
   opts: BackupSchedulerOptions,
 ): BackupSchedulerHandle & { awaitIdle: () => Promise<void> } {
+  const current = opts.execution?.current.bind(opts.execution)
+  if (current?.() === false) throw new Error('scheduled-backup-execution-unavailable')
   const appHome = opts.appHome ?? Paths.root
   const externalPrune = opts.pruneMode === 'external'
   const safePrune = (label: string): void => {
+    if (current?.() === false) return
     try {
       runPrune(opts, appHome)
     } catch (err) {
@@ -255,15 +261,18 @@ export function startBackupScheduler(
   let stopped = false
   let active: Promise<void> | null = null
   const handle = setInterval(() => {
-    if (stopped || running) return
+    if (stopped || running || current?.() === false) return
     running = true
     const run = Promise.resolve()
-      .then(() => requestScheduledBackup(opts, appHome))
+      .then(() => {
+        if (current !== undefined && (stopped || !current())) return
+        return requestScheduledBackup(opts, appHome)
+      })
       .catch((err) => log.warn('backup tick threw', { error: (err as Error).message }))
       .finally(() => {
         // A fresh backup is exactly when the family caps want re-applying, and
         // it must survive a failed backup — hence `finally`, not the then-path.
-        if (externalPrune) {
+        if (externalPrune && current?.() !== false) {
           try {
             opts.onBackupSettled?.()
           } catch (err) {
@@ -271,7 +280,7 @@ export function startBackupScheduler(
               error: err instanceof Error ? err.message : String(err),
             })
           }
-        } else {
+        } else if (!externalPrune) {
           safePrune('post-backup prune')
         }
         running = false

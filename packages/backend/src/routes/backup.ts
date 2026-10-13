@@ -29,6 +29,7 @@ export function mountBackupRoutes(
     descriptor: systemOperations.operations.requestBackup,
     method: 'POST',
     path: '/api/backup',
+    executionGroup: 'maintenance',
     tokenAccess: 'allow',
     decode: () => ({ includeWorktrees: false }),
     context: (c) =>

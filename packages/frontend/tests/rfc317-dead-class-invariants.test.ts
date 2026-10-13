@@ -111,7 +111,6 @@ const UNDEFINED_CLASS_SNAPSHOT: readonly string[] = [
   'form-checkbox__label',
   'form-hint',
   'form-section__summary',
-  'form-section--collapsible',
   'home-cap',
   'injected-memory-row__summary',
   'inspector__port-refs--missing',

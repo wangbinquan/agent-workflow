@@ -17,6 +17,7 @@ import {
   releaseProcessTreeOwnership,
 } from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
+import { retainOriginalProcessRecovery } from './originalProcessRecovery'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
 import {
@@ -86,6 +87,8 @@ export interface ManagedProcessRequest {
     spawnBinaryPath: string
     /** Present for the RFC-328 pre-activation launcher. */
     launchNonce?: string
+    /** Original daemon owns a kill-on-close Windows job before activation. */
+    jobOwnerPid?: number
   }) => Promise<void> | void
   /**
    * Task execution uses a durable pre-activation receipt.  When enabled, a
@@ -93,6 +96,8 @@ export interface ManagedProcessRequest {
    * reaps the process tree, and reports spawn-failed.
    */
   requireSpawnReceipt?: boolean
+  /** Reserved by the native execution owner; used only with a receipt gate. */
+  launchNonce?: string
   onStdoutLine?: (line: string) => Promise<void> | void
   onStderrLine?: (line: string) => Promise<void> | void
   /**
@@ -153,6 +158,9 @@ export interface ManagedProcessResult {
   }
   /** Durable launcher identity when pre-activation is enabled. */
   launchNonce?: string
+  jobOwnerPid?: number
+  /** Native capability retained only for the original unconfirmed child. */
+  recoverOriginal?: () => Promise<boolean>
   spawnError?: string
   /** Hosted Windows relay evidence from the compiled launcher. */
   launcherOutputBytes?: { stdoutBytes: number; stderrBytes: number }
@@ -418,7 +426,8 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const graceMs = req.killEscalationGraceMs ?? 10_000
 
   const spawnBinaryPath = req.argv[0] ?? ''
-  const launchNonce = req.requireSpawnReceipt === true ? randomUUID() : undefined
+  const launchNonce =
+    req.requireSpawnReceipt === true ? (req.launchNonce ?? randomUUID()) : undefined
 
   if (req.requireSpawnReceipt === true && req.onSpawned === undefined) {
     return {
@@ -551,7 +560,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   // 没有被生产代码调用过**（唯一调用点是它自己的测试），于是 Windows 杀树一直退在
   // `taskkill /T /F` 的快照枚举上、后代可逃逸——逃逸的后代占着 iso 工作树的句柄，
   // 正是 issue #13 里 `git worktree remove` 删不掉的直接原因。
-  if (pid !== null) adoptSpawnedProcessTree(pid)
+  const jobOwned = pid !== null && adoptSpawnedProcessTree(pid)
   let activationFailure: string | null = null
   if (pid !== null && req.onSpawned !== undefined) {
     try {
@@ -560,6 +569,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         spawnedAt,
         spawnBinaryPath,
         ...(launchNonce !== undefined ? { launchNonce } : {}),
+        ...(jobOwned ? { jobOwnerPid: process.pid } : {}),
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -923,6 +933,15 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       spawnBinaryPath,
       pid,
       lifecycle: { spawnedAt, reapedAt: null, drainedAt: null },
+      ...(jobOwned ? { jobOwnerPid: process.pid } : {}),
+      ...(pid === null
+        ? {}
+        : {
+            recoverOriginal: retainOriginalProcessRecovery({
+              pid,
+              originalChildExited: () => reapedAt !== null,
+            }),
+          }),
       ...(launchNonce !== undefined ? { launchNonce } : {}),
       ...(activationFailure !== null ? { spawnError: activationFailure } : {}),
       ...(pumpError !== undefined ? { pumpError } : {}),

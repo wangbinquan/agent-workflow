@@ -616,206 +616,236 @@ async function fireTrigger(
       }
     }
 
-    // RFC-310 PR-10 T104：code-round writer 已删除。存量 trigger 行（历史数据）
-    // 的 fire 落 skipped-trigger-invalid 留痕，不再启动任何 round。
-    if (effectiveTrigger.launchKind === 'code-round') {
-      await recordFire(deps.persistence, { ...base, outcome: 'skipped-trigger-invalid' })
-      return
-    }
-
-    // supersede（D8/D21）：同流最近一次 launched 的任务未终态 → 取消。
-    let supersededTaskId: string | null = null
-    const prevTask = await deps.persistence.findLatestLaunchedTask(triggerId, streamKey)
-    if (prevTask !== null && !isTerminalTaskStatus(prevTask.status)) {
-      try {
-        await deps.cancel(prevTask.id)
-        supersededTaskId = prevTask.id
-      } catch (err) {
-        // 终态竞态（cancel 时已经收尾）不阻塞新启动。
-        log.warn('supersede cancel failed; continuing', {
-          taskId: prevTask.id,
-          error: errText(err),
-        })
-      }
-    }
-
-    // RFC-268：scratch 在任何 cache/decrypt/clone 前短路。payload 与
-    // autoRegisterRepos 同取匹配时快照，避免排队期间编辑造成混合代配置。
-    let space: RepoResolution | { kind: 'scratch' }
-    try {
-      space =
-        effectiveTrigger.launchKind === 'digital-employee' ||
-        ('scratch' in effectiveTrigger.payloadTemplate &&
-          effectiveTrigger.payloadTemplate.scratch === true)
-          ? { kind: 'scratch' }
-          : await deps.resolveRepo(event, input.endpoint, effectiveTrigger.row.autoRegisterRepos)
-    } catch (error) {
-      await launchGuard?.failed(
-        error instanceof DomainError ? error.code : 'repo-resolution-failed',
-      )
+    // The whole preparation path owns its guard, including failures before
+    // deps.launch. Selected hosts must be able to await this original owner.
+    let launchGuardReleased = false
+    const releaseLaunchGuard = () => {
+      if (launchGuardReleased) return
       launchGuard?.release()
-      deps.terminalControl?.wake()
-      await recordFire(deps.persistence, {
-        ...base,
-        outcome: 'launch-failed',
-        supersededTaskId,
-        error: errText(error),
-      })
-      return
-    }
-    if (space.kind === 'unregistered') {
-      await launchGuard?.failed('repo-unregistered')
-      launchGuard?.release()
-      deps.terminalControl?.wake()
-      await recordFire(deps.persistence, {
-        ...base,
-        outcome: 'skipped-repo-unregistered',
-        supersededTaskId,
-      })
-      return
-    }
-
-    // owner 重建 + 目标可用性重校验（每次触发评估，AC-13；照抄 fireSchedule 骨架）。
-    const delegated = await deps.identityAccess.delegatedRequests.forWebhook({
-      ownerUserId: fresh.ownerUserId,
-      triggerId,
-      deliveryId: input.deliveryId,
-      fireId,
-    })
-    if (delegated === null) {
-      await launchGuard?.failed('owner-invalid')
-      launchGuard?.release()
-      deps.terminalControl?.wake()
-      await recordFire(deps.persistence, {
-        ...base,
-        outcome: 'skipped-owner-invalid',
-        supersededTaskId,
-        error: `owner '${fresh.ownerUserId}' missing or inactive`,
-      })
-      return
-    }
-    const actor: Actor = delegated.actor
-    const resourceAuthority = Object.freeze({
-      authority: delegated.authority,
-      actor,
-      resources: deps.identityAccess.integrationTriggerResources,
-      taskExecutionResources: deps.identityAccess.taskExecutionResources,
-    })
-    const taskExecutionAuthority = Object.freeze({
-      authority: delegated.authority,
-      actor,
-      resources: deps.identityAccess.taskExecutionResources,
-    })
-    const rendered = renderWebhookLaunch(effectiveTrigger, effectiveTrigger.row.name, event, space)
-    /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
-    const recordLaunchFailed = async (msg: string): Promise<void> => {
-      await recordFire(deps.persistence, {
-        ...base,
-        outcome: 'launch-failed',
-        supersededTaskId,
-        error: msg,
-      })
-      await deps.persistence.markTriggerLaunchFailed(triggerId, msg, now)
+      launchGuardReleased = true
     }
     try {
-      await deps.admitLaunch({
-        rendered,
-        resourceAuthority,
-        defaultRuntime: await deps.getDefaultRuntime(),
-        triggerContext: webhookTriggerContextOf(event),
-      })
-    } catch (err) {
-      // 这个 gate 同时做两件事：目标可用性（缺失 / 不可见 / built-in 不可调度）与
-      // 渲染后的 payload·输入校验。早期实现把两类异常一律记成 skipped-owner-invalid
-      // ——与枚举自身的语义矛盾（launch-failed 才是「owner 有效但启动失败
-      // （payload-invalid）」），后果是配错的触发器**永远触不了熔断**、卡片一直挂着
-      // 上一次的旧状态。按错误类别分流（RFC-268 实现门 P2，2026-08-09；归属 RFC-257）：
-      //   ValidationError            → payload / 输入非法 → launch-failed（计入连续失败）
-      //   NotFound / Forbidden / 其它 → 目标不可用或 owner 失去启动权 → skipped-owner-invalid
-      if (err instanceof ValidationError) {
-        await launchGuard?.failed(err.code)
-        launchGuard?.release()
-        deps.terminalControl?.wake()
-        await recordLaunchFailed(errText(err))
+      // RFC-310 PR-10 T104：code-round writer 已删除。存量 trigger 行（历史数据）
+      // 的 fire 落 skipped-trigger-invalid 留痕，不再启动任何 round。
+      if (effectiveTrigger.launchKind === 'code-round') {
+        await launchGuard?.failed('legacy-code-round-trigger')
+        await recordFire(deps.persistence, { ...base, outcome: 'skipped-trigger-invalid' })
         return
       }
-      await launchGuard?.failed(err instanceof DomainError ? err.code : 'target-unusable')
-      launchGuard?.release()
-      deps.terminalControl?.wake()
-      await recordFire(deps.persistence, {
-        ...base,
-        outcome: 'skipped-owner-invalid',
-        supersededTaskId,
-        error: errText(err),
-      })
-      return
-    }
 
-    // 启动（唯一收口 startExecution；渲染后的全量校验 = launch 服务既有校验，
-    // 失败即 launch-failed —— design §4.2「payload-invalid」不在此重复实现）。
-    const invoker: ExecutionInvoker =
-      input.eventSubscriptionId !== undefined && input.eventDeliveryId !== undefined
-        ? {
-            type: 'event',
-            eventSubscriptionId: input.eventSubscriptionId,
-            eventDeliveryId: input.eventDeliveryId,
-            triggerContext: input.triggerContext ?? webhookTriggerContextOf(event),
-            ...(launchGuard === undefined
-              ? {}
-              : { sourceTerminationSnapshot: launchGuard.snapshot }),
-          }
-        : {
-            type: 'webhook',
-            webhookTriggerId: triggerId,
-            webhookFireId: fireId,
-            triggerContext: webhookTriggerContextOf(event),
-            ...(launchGuard === undefined
-              ? {}
-              : { sourceTerminationSnapshot: launchGuard.snapshot }),
-          }
-    try {
-      const rawReceipt = await deps.launch(
-        actor,
-        rendered,
-        invoker,
-        taskExecutionAuthority,
-        launchGuard,
-      )
-      const receipt: WorkStartReceipt =
-        typeof rawReceipt === 'string' ? { kind: 'orchestration', taskId: rawReceipt } : rawReceipt
-      if (receipt.kind === 'orchestration') {
-        await launchGuard?.taskCommitted(receipt.taskId)
-        await launchGuard?.launchSettled(receipt.taskId)
+      // supersede（D8/D21）：同流最近一次 launched 的任务未终态 → 取消。
+      let supersededTaskId: string | null = null
+      const prevTask = await deps.persistence.findLatestLaunchedTask(triggerId, streamKey)
+      if (prevTask !== null && !isTerminalTaskStatus(prevTask.status)) {
+        try {
+          await deps.cancel(prevTask.id)
+          supersededTaskId = prevTask.id
+        } catch (err) {
+          // 终态竞态（cancel 时已经收尾）不阻塞新启动。
+          log.warn('supersede cancel failed; continuing', {
+            taskId: prevTask.id,
+            error: errText(err),
+          })
+        }
       }
-      await recordFire(deps.persistence, {
-        ...base,
-        outcome: 'launched',
-        supersededTaskId,
-        ...(receipt.kind === 'orchestration'
-          ? { taskId: receipt.taskId }
-          : { employeeCaseId: receipt.caseId }),
-      })
-      await writeStream(circuit.effectiveCount + 1, true)
-      await deps.persistence.markTriggerLaunched({
-        triggerId,
-        taskId: receipt.kind === 'orchestration' ? receipt.taskId : null,
-        now,
-      })
-    } catch (err) {
-      await launchGuard?.failed(err instanceof DomainError ? err.code : 'launch-failed')
-      if (err instanceof DomainError && err.code === 'webhook-mr-launch-terminal') {
+
+      // RFC-268：scratch 在任何 cache/decrypt/clone 前短路。payload 与
+      // autoRegisterRepos 同取匹配时快照，避免排队期间编辑造成混合代配置。
+      let space: RepoResolution | { kind: 'scratch' }
+      try {
+        space =
+          effectiveTrigger.launchKind === 'digital-employee' ||
+          ('scratch' in effectiveTrigger.payloadTemplate &&
+            effectiveTrigger.payloadTemplate.scratch === true)
+            ? { kind: 'scratch' }
+            : await deps.resolveRepo(event, input.endpoint, effectiveTrigger.row.autoRegisterRepos)
+      } catch (error) {
+        await launchGuard?.failed(
+          error instanceof DomainError ? error.code : 'repo-resolution-failed',
+        )
+        releaseLaunchGuard()
+        deps.terminalControl?.wake()
         await recordFire(deps.persistence, {
           ...base,
-          outcome: 'skipped-mr-stream-terminal',
+          outcome: 'launch-failed',
+          supersededTaskId,
+          error: errText(error),
+        })
+        return
+      }
+      if (space.kind === 'unregistered') {
+        await launchGuard?.failed('repo-unregistered')
+        releaseLaunchGuard()
+        deps.terminalControl?.wake()
+        await recordFire(deps.persistence, {
+          ...base,
+          outcome: 'skipped-repo-unregistered',
+          supersededTaskId,
+        })
+        return
+      }
+
+      // owner 重建 + 目标可用性重校验（每次触发评估，AC-13；照抄 fireSchedule 骨架）。
+      const delegated = await deps.identityAccess.delegatedRequests.forWebhook({
+        ownerUserId: fresh.ownerUserId,
+        triggerId,
+        deliveryId: input.deliveryId,
+        fireId,
+      })
+      if (delegated === null) {
+        await launchGuard?.failed('owner-invalid')
+        releaseLaunchGuard()
+        deps.terminalControl?.wake()
+        await recordFire(deps.persistence, {
+          ...base,
+          outcome: 'skipped-owner-invalid',
+          supersededTaskId,
+          error: `owner '${fresh.ownerUserId}' missing or inactive`,
+        })
+        return
+      }
+      const actor: Actor = delegated.actor
+      const resourceAuthority = Object.freeze({
+        authority: delegated.authority,
+        actor,
+        resources: deps.identityAccess.integrationTriggerResources,
+        taskExecutionResources: deps.identityAccess.taskExecutionResources,
+      })
+      const taskExecutionAuthority = Object.freeze({
+        authority: delegated.authority,
+        actor,
+        resources: deps.identityAccess.taskExecutionResources,
+      })
+      const rendered = renderWebhookLaunch(
+        effectiveTrigger,
+        effectiveTrigger.row.name,
+        event,
+        space,
+      )
+      /** launch-failed 收尾：fires 行 + 触发器行的失败水位（熔断计数的唯一来源）。 */
+      const recordLaunchFailed = async (msg: string): Promise<void> => {
+        await recordFire(deps.persistence, {
+          ...base,
+          outcome: 'launch-failed',
+          supersededTaskId,
+          error: msg,
+        })
+        await deps.persistence.markTriggerLaunchFailed(triggerId, msg, now)
+      }
+      try {
+        await deps.admitLaunch({
+          rendered,
+          resourceAuthority,
+          defaultRuntime: await deps.getDefaultRuntime(),
+          triggerContext: webhookTriggerContextOf(event),
+        })
+      } catch (err) {
+        // 这个 gate 同时做两件事：目标可用性（缺失 / 不可见 / built-in 不可调度）与
+        // 渲染后的 payload·输入校验。早期实现把两类异常一律记成 skipped-owner-invalid
+        // ——与枚举自身的语义矛盾（launch-failed 才是「owner 有效但启动失败
+        // （payload-invalid）」），后果是配错的触发器**永远触不了熔断**、卡片一直挂着
+        // 上一次的旧状态。按错误类别分流（RFC-268 实现门 P2，2026-08-09；归属 RFC-257）：
+        //   ValidationError            → payload / 输入非法 → launch-failed（计入连续失败）
+        //   NotFound / Forbidden / 其它 → 目标不可用或 owner 失去启动权 → skipped-owner-invalid
+        if (err instanceof ValidationError) {
+          await launchGuard?.failed(err.code)
+          releaseLaunchGuard()
+          deps.terminalControl?.wake()
+          await recordLaunchFailed(errText(err))
+          return
+        }
+        await launchGuard?.failed(err instanceof DomainError ? err.code : 'target-unusable')
+        releaseLaunchGuard()
+        deps.terminalControl?.wake()
+        await recordFire(deps.persistence, {
+          ...base,
+          outcome: 'skipped-owner-invalid',
           supersededTaskId,
           error: errText(err),
         })
-      } else {
-        await recordLaunchFailed(errText(err))
+        return
       }
+
+      // 启动（唯一收口 startExecution；渲染后的全量校验 = launch 服务既有校验，
+      // 失败即 launch-failed —— design §4.2「payload-invalid」不在此重复实现）。
+      const invoker: ExecutionInvoker =
+        input.eventSubscriptionId !== undefined && input.eventDeliveryId !== undefined
+          ? {
+              type: 'event',
+              eventSubscriptionId: input.eventSubscriptionId,
+              eventDeliveryId: input.eventDeliveryId,
+              triggerContext: input.triggerContext ?? webhookTriggerContextOf(event),
+              ...(launchGuard === undefined
+                ? {}
+                : { sourceTerminationSnapshot: launchGuard.snapshot }),
+            }
+          : {
+              type: 'webhook',
+              webhookTriggerId: triggerId,
+              webhookFireId: fireId,
+              triggerContext: webhookTriggerContextOf(event),
+              ...(launchGuard === undefined
+                ? {}
+                : { sourceTerminationSnapshot: launchGuard.snapshot }),
+            }
+      try {
+        const rawReceipt = await deps.launch(
+          actor,
+          rendered,
+          invoker,
+          taskExecutionAuthority,
+          launchGuard,
+        )
+        const receipt: WorkStartReceipt =
+          typeof rawReceipt === 'string'
+            ? { kind: 'orchestration', taskId: rawReceipt }
+            : rawReceipt
+        if (receipt.kind === 'orchestration') {
+          await launchGuard?.taskCommitted(receipt.taskId)
+          await launchGuard?.launchSettled(receipt.taskId)
+        }
+        await recordFire(deps.persistence, {
+          ...base,
+          outcome: 'launched',
+          supersededTaskId,
+          ...(receipt.kind === 'orchestration'
+            ? { taskId: receipt.taskId }
+            : { employeeCaseId: receipt.caseId }),
+        })
+        await writeStream(circuit.effectiveCount + 1, true)
+        await deps.persistence.markTriggerLaunched({
+          triggerId,
+          taskId: receipt.kind === 'orchestration' ? receipt.taskId : null,
+          now,
+        })
+      } catch (err) {
+        await launchGuard?.failed(err instanceof DomainError ? err.code : 'launch-failed')
+        if (err instanceof DomainError && err.code === 'webhook-mr-launch-terminal') {
+          await recordFire(deps.persistence, {
+            ...base,
+            outcome: 'skipped-mr-stream-terminal',
+            supersededTaskId,
+            error: errText(err),
+          })
+        } else {
+          await recordLaunchFailed(errText(err))
+        }
+      } finally {
+        releaseLaunchGuard()
+        deps.terminalControl?.wake()
+      }
+    } catch (error) {
+      if (!launchGuardReleased) {
+        await launchGuard?.failed(
+          error instanceof DomainError ? error.code : 'launch-preparation-failed',
+        )
+      }
+      throw error
     } finally {
-      launchGuard?.release()
-      deps.terminalControl?.wake()
+      if (!launchGuardReleased) {
+        releaseLaunchGuard()
+        deps.terminalControl?.wake()
+      }
     }
   })
 }

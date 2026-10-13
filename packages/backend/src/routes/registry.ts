@@ -34,7 +34,13 @@
 
 import type { Handler, Hono, MiddlewareHandler } from 'hono'
 import type { BlankEnv } from 'hono/types'
-import { ROUTE_BACKED_POINTS, type Permission } from '@agent-workflow/shared'
+import {
+  ROUTE_BACKED_POINTS,
+  HostExecutionGroupSchema,
+  type HostExecutionGroup,
+  type Permission,
+} from '@agent-workflow/shared'
+import { runHttpHostExecutionRequest } from '@/platform/http/hostExecutionAvailability'
 import { tryActorOf } from '@/auth/actor'
 import {
   registerHttpOperationProjection,
@@ -75,6 +81,9 @@ export interface RouteMeta<P extends string = string> {
   readonly method: HttpMethod
   /** Hono path template, byte-identical to the string passed at registration. */
   readonly path: P
+  /** New execution requires this actual root group; resource editing and
+   * original receipt intake/cancellation deliberately have no group gate. */
+  readonly executionGroup?: HostExecutionGroup
   /**
    * Points required to pass. The array is an **AND** — every entry must be held.
    *
@@ -129,12 +138,18 @@ function sameMeta(a: RouteMeta, b: RouteMeta): boolean {
     a.tokenAccess === b.tokenAccess &&
     a.publicReason === b.publicReason &&
     a.summary === b.summary &&
+    a.executionGroup === b.executionGroup &&
     a.permissions.length === b.permissions.length &&
     a.permissions.every((p, i) => p === b.permissions[i])
   )
 }
 
 function validate(meta: RouteMeta): void {
+  if (
+    meta.executionGroup !== undefined &&
+    !HostExecutionGroupSchema.safeParse(meta.executionGroup).success
+  )
+    throw new RouteMetaError(`${key(meta.method, meta.path)}: unknown execution group`)
   if (meta.permissions.length === 0 && meta.publicReason === undefined) {
     throw new RouteMetaError(
       `${key(meta.method, meta.path)}: permissions is empty — declare publicReason explaining why this route needs no permission point`,
@@ -253,7 +268,9 @@ export function registerRoute<P extends string>(
   // this check exists to catch.
   REGISTRY.set(k, meta)
   const operation = registerHttpOperationProjection(meta)
-  const gate = routeMetaGate(meta)
+  const authorize = routeMetaGate(meta)
+  const gate: MiddlewareHandler = (c, next) =>
+    authorize(c, () => runHttpHostExecutionRequest(app, meta.executionGroup, next))
   registerBoundOperationHandler({
     app,
     operationId: operation.operationId,

@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
@@ -180,6 +181,7 @@ interface ManifestFile {
 
 function MissionDetailPage(): ReactElement {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('development')
   const { missionId } = Route.useParams()
   const qc = useQueryClient()
   const canInteract = usePermission('development-missions:interact')
@@ -223,7 +225,10 @@ function MissionDetailPage(): ReactElement {
     onSuccess: invalidate,
   })
   const retry = useMutation({
-    mutationFn: () => api.post(`/api/code/missions/${encodeURIComponent(missionId)}/retry`, {}),
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post(`/api/code/missions/${encodeURIComponent(missionId)}/retry`, {})
+    },
     onSuccess: invalidate,
   })
   const refreshPreview = useMutation({
@@ -234,8 +239,10 @@ function MissionDetailPage(): ReactElement {
       ),
   })
   const refreshApply = useMutation({
-    mutationFn: () =>
-      api.post(`/api/code/missions/${encodeURIComponent(missionId)}/source-refresh`, {}),
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post(`/api/code/missions/${encodeURIComponent(missionId)}/source-refresh`, {})
+    },
     onSuccess: invalidate,
   })
   const handoff = useMutation({
@@ -243,7 +250,10 @@ function MissionDetailPage(): ReactElement {
     onSuccess: invalidate,
   })
   const resume = useMutation({
-    mutationFn: () => api.post(`/api/code/missions/${encodeURIComponent(missionId)}/resume`, {}),
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post(`/api/code/missions/${encodeURIComponent(missionId)}/resume`, {})
+    },
     onSuccess: invalidate,
   })
   const trace = useQuery<{ items: TimelineDecision[] }>({
@@ -312,7 +322,8 @@ function MissionDetailPage(): ReactElement {
                 <button
                   type="button"
                   className="btn btn--sm"
-                  disabled={resume.isPending}
+                  disabled={resume.isPending || !execution.available}
+                  title={execution.unavailableReason}
                   onClick={() => resume.mutate()}
                   data-testid="mission-resume"
                 >
@@ -362,6 +373,11 @@ function MissionDetailPage(): ReactElement {
             <JourneyNextAction
               journey={mission.journey}
               commandPending={retry.isPending || resume.isPending}
+              commandUnavailableReason={
+                ['retry', 'resume'].includes(mission.journey.next.command ?? '')
+                  ? execution.unavailableReason
+                  : undefined
+              }
               onCommand={(command) => {
                 if (command === 'retry') retry.mutate()
                 if (command === 'resume') resume.mutate()
@@ -532,7 +548,8 @@ function MissionDetailPage(): ReactElement {
                       <button
                         type="button"
                         className="btn btn--xs btn--primary"
-                        disabled={refreshApply.isPending}
+                        disabled={refreshApply.isPending || !execution.available}
+                        title={execution.unavailableReason}
                         onClick={() => refreshApply.mutate()}
                       >
                         {t('code.missions.refreshApply')}
@@ -726,16 +743,19 @@ function AnswersSection(props: {
   onSubmitted: () => void
 }): ReactElement {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('development')
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const submit = useMutation({
-    mutationFn: () =>
-      api.post(`/api/code/missions/${encodeURIComponent(props.missionId)}/answers`, {
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post(`/api/code/missions/${encodeURIComponent(props.missionId)}/answers`, {
         questionSetRef: props.questions.questionSetRef,
         answers: props.questions.items.map((item) => ({
           questionId: item.questionId,
           answer: answers[item.questionId] ?? '',
         })),
-      }),
+      })
+    },
     onSuccess: props.onSubmitted,
   })
   const complete = props.questions.items.every(
@@ -758,7 +778,8 @@ function AnswersSection(props: {
       <button
         type="button"
         className="btn btn--sm btn--primary"
-        disabled={!complete || submit.isPending}
+        disabled={!complete || submit.isPending || !execution.available}
+        title={execution.unavailableReason}
         onClick={() => submit.mutate()}
         data-testid="mission-answers-submit"
       >

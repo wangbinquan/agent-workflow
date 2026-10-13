@@ -17,6 +17,7 @@
 // driving `tick()` synchronously instead of starting the interval.
 
 import { ulid } from 'ulid'
+import type { MemoryDistillExecutionRecord } from '../ports/distillExecutionJournal'
 import type {
   DistillPolicy,
   DistillSourceKind,
@@ -32,8 +33,13 @@ import {
   WorkgroupRuntimeConfigSchema,
 } from '@agent-workflow/shared'
 import { distillAdmission } from '@/modules/memory/domain/distillAdmission'
+import { MemoryDistillSettlementPendingError, settleOriginalMemoryDistillation } from './settlement'
+import { MemoryDistillReceiptCheckpoints } from './receiptCheckpoints'
+import { MemoryDistillExecutionSession } from './executionSession'
+import { canonicalJson } from '@agent-workflow/shared'
 import {
   runDistill,
+  IndeterminateRuntimeProcessError,
   type RunDistillOptions,
   rowToDistillJob,
 } from '@/modules/memory/application/distill/memoryDistiller'
@@ -92,9 +98,9 @@ export function resetMemoryDistillPolicyProviderForTest(): void {
 /** Cap how many distill jobs we kick off per tick to bound LLM concurrency. */
 export const DISTILL_BATCH_LIMIT = 5
 /** Failed jobs flip to permanent `failed` after this many attempts. */
-export const DISTILL_MAX_ATTEMPTS = 3
-/** First retry waits 2s, then 4s, then 8s before the row gives up. */
-export const DISTILL_BACKOFF_BASE_MS = 30_000
+import { DISTILL_MAX_ATTEMPTS, DISTILL_BACKOFF_BASE_MS } from '../../domain/distillSchedulingPolicy'
+export { DISTILL_MAX_ATTEMPTS, DISTILL_BACKOFF_BASE_MS }
+/** Original retry waits 30s, then 60s, before the third failure is terminal. */
 
 // ---------------------------------------------------------------------------
 // Enqueue
@@ -384,6 +390,10 @@ export async function computeEligibleScopes(
 // ---------------------------------------------------------------------------
 
 export interface DistillTickOptions {
+  readonly restore?: readonly MemoryDistillExecutionRecord[]
+  /** Only the originating composition retains a late original-work failure. */
+  readonly retainOriginalFailure?: (error: unknown) => void
+  readonly execution?: { readonly current: () => boolean }
   store: MemoryDistillWorkStore
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
   nodeRunPrompts: NodeRunPromptReader
@@ -425,8 +435,48 @@ export async function distillTick(options: DistillTickOptions): Promise<{
   failed: number
   candidatesCreated: number
 }> {
+  const execution = options.execution
+  if (execution === undefined) return await runDistillTick(options, undefined, execution)
+  const checkpoints = new MemoryDistillReceiptCheckpoints()
+  const retained = options.retainOriginalFailure?.bind(options)
+  const original = runDistillTick(options, checkpoints, execution).catch((error) => {
+    retained?.(error)
+    throw error
+  })
+  return await checkpoints.retainOriginalWork(original)
+}
+
+async function runDistillTick(
+  options: DistillTickOptions,
+  checkpoints: MemoryDistillReceiptCheckpoints | undefined,
+  execution: DistillTickOptions['execution'],
+): Promise<{
+  picked: number
+  succeeded: number
+  failed: number
+  candidatesCreated: number
+}> {
+  const current = execution?.current.bind(execution)
+  const empty = { picked: 0, succeeded: 0, failed: 0, candidatesCreated: 0 }
+  if (current?.() === false) return empty
+  const markDone = current === undefined ? undefined : options.store.markDone.bind(options.store)
+  const markFailed =
+    current === undefined ? undefined : options.store.markFailed.bind(options.store)
+  const loadJobs = current === undefined ? undefined : options.store.loadJobs.bind(options.store)
+  const markRunning =
+    current === undefined ? undefined : options.store.markRunning.bind(options.store)
+  const deferUnissued =
+    current === undefined ? undefined : options.store.deferUnissued.bind(options.store)
   const now = (options.now ?? Date.now)()
-  const due = await options.store.listDue(now, DISTILL_BATCH_LIMIT)
+  const restored = options.restore?.[0]
+  const restoredHead = restored?.original.find((row) => row.id === restored.jobId)
+  if (restored !== undefined && restoredHead === undefined)
+    throw new Error('memory-distill-restored-head-missing')
+  const due =
+    restoredHead === undefined
+      ? await options.store.listDue(now, DISTILL_BATCH_LIMIT)
+      : [restoredHead]
+  if (current?.() === false) return empty
   if (due.length === 0) {
     return { picked: 0, succeeded: 0, failed: 0, candidatesCreated: 0 }
   }
@@ -441,20 +491,155 @@ export async function distillTick(options: DistillTickOptions): Promise<{
   let succeeded = 0
   let failed = 0
   let candidatesCreated = 0
+  let admitted = 0
   // RFC-117: resolve the distiller runtime once per tick (per-feature profile
   // name → default → deprecated model fallback). Runtime config can't change
   // within a tick; resolving once keeps every merged bundle on the same runtime.
-  const rt = await options.runtimeResolver.resolve({
-    runtimeName: options.runtimeName,
-    deprecatedModel: options.model,
-    defaultRuntime: options.defaultRuntime,
-  })
+  const rt =
+    restored === undefined
+      ? await options.runtimeResolver.resolve({
+          runtimeName: options.runtimeName,
+          deprecatedModel: options.model,
+          defaultRuntime: options.defaultRuntime,
+        })
+      : {
+          protocol: restored.protocol as NonNullable<RunDistillOptions['protocol']>,
+          runtimeBinding: restored.runtimeBinding ?? null,
+          model: restored.model ?? null,
+          isSandbox: restored.isSandbox === true,
+          observationIdentity: undefined,
+        }
   for (const head of heads) {
+    if (current?.() === false) break
     // Pull every pending sibling sharing this debounce_key in one shot.
-    const siblings = await options.store.listPendingSiblings(head.debounceKey)
+    const siblings =
+      restored === undefined
+        ? await options.store.listPendingSiblings(head.debounceKey)
+        : restored.original
+    if (current?.() === false) break
     const ids = siblings.map((s) => s.id)
-    await options.store.markRunning(ids, now)
+    const originalJobs = siblings.map((row) => Object.freeze({ ...row }))
+    const returnUnissued = async () => {
+      if (!(await deferUnissued!({ original: originalJobs, startedAt: now })))
+        throw new Error('memory-distill-unissued-bundle-unproven')
+    }
+    if (restored === undefined) {
+      try {
+        await (markRunning ?? options.store.markRunning.bind(options.store))(ids, now)
+      } catch (error) {
+        if (current !== undefined) await settleOriginalMemoryDistillation(returnUnissued, ids)
+        throw error
+      }
+      if (current !== undefined) {
+        if (!current()) {
+          await settleOriginalMemoryDistillation(returnUnissued, ids)
+          break
+        }
+        let claimed: readonly MemoryDistillJobRecord[]
+        try {
+          claimed = await loadJobs!(ids)
+        } catch (error) {
+          await settleOriginalMemoryDistillation(returnUnissued, ids)
+          throw error
+        }
+        const claimedById = new Map(claimed.map((row) => [row.id, row]))
+        if (
+          !current() ||
+          claimed.length !== originalJobs.length ||
+          originalJobs.some((original) => {
+            const row = claimedById.get(original.id)
+            return (
+              !row ||
+              row.status !== 'running' ||
+              row.startedAt !== now ||
+              row.attempts !== original.attempts ||
+              row.sourceEventId !== original.sourceEventId ||
+              row.createdAt !== original.createdAt ||
+              row.debounceKey !== original.debounceKey
+            )
+          })
+        ) {
+          await settleOriginalMemoryDistillation(returnUnissued, ids)
+          if (!current()) break
+          continue
+        }
+      }
+    } else {
+      const rows = await options.store.loadJobs(ids)
+      if (
+        rows.length !== siblings.length ||
+        siblings.some(
+          (original) =>
+            !rows.some(
+              (row) =>
+                row.id === original.id &&
+                row.status === 'running' &&
+                row.startedAt === original.startedAt &&
+                row.attempts === original.attempts &&
+                row.sourceEventId === original.sourceEventId &&
+                row.createdAt === original.createdAt,
+            ),
+        )
+      )
+        throw new Error('memory-distill-original-restored-claim-mismatch')
+    }
+    // This durable bundle is one admitted logical distillation, including its
+    // original protocol follow-ups and receipts. Loss fences the next bundle.
+    admitted += siblings.length
     publish({ type: 'distill.started', jobId: head.id })
+    const originalBundle = siblings.map((row) =>
+      Object.freeze({
+        id: row.id,
+        sourceKind: row.sourceKind,
+        sourceEventId: row.sourceEventId,
+        taskId: row.taskId,
+        createdAt: row.createdAt,
+        debounceKey: row.debounceKey,
+        attempts: row.attempts,
+      }),
+    )
+    const confirmOriginal = async (
+      matches: (row: MemoryDistillJobRecord, original: (typeof originalBundle)[number]) => boolean,
+    ) => {
+      if (loadJobs === undefined) return
+      const rows = await loadJobs(ids)
+      const rowsById = new Map(rows.map((row) => [row.id, row]))
+      if (
+        rows.length !== originalBundle.length ||
+        originalBundle.some((original) => {
+          const row = rowsById.get(original.id)
+          return (
+            row === undefined ||
+            row.sourceKind !== original.sourceKind ||
+            row.sourceEventId !== original.sourceEventId ||
+            row.taskId !== original.taskId ||
+            row.createdAt !== original.createdAt ||
+            row.debounceKey !== original.debounceKey ||
+            !matches(row, original)
+          )
+        })
+      )
+        throw new Error('memory-distill-original-settlement-unproven')
+    }
+    const issuedOriginal = originalJobs.map((row) =>
+      Object.freeze({
+        ...row,
+        status: 'running' as const,
+        startedAt: restored === undefined ? now : row.startedAt,
+      }),
+    )
+    const executionSession =
+      checkpoints === undefined
+        ? undefined
+        : new MemoryDistillExecutionSession({
+            journal: options.store.executionJournal,
+            checkpoints,
+            jobId: head.id,
+            current: current!,
+            original: issuedOriginal,
+            now: options.now ?? Date.now,
+            ...(options.restore === undefined ? {} : { restore: options.restore }),
+          })
     try {
       const result = await runDistill({
         store: options.store,
@@ -469,44 +654,101 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         isSandbox: rt.isSandbox,
         ...(rt.observationIdentity ? { runtimeObservationIdentity: rt.observationIdentity } : {}),
         sourceContextBudget: options.sourceContextBudget,
-        timeoutMs: options.timeoutMs,
+        timeoutMs: restored?.timeoutMs ?? options.timeoutMs,
+        ...(executionSession === undefined ? {} : { executionSession }),
+        ...(options.restore === undefined ? {} : { restore: options.restore }),
       })
-      await options.store.markDone(ids, (options.now ?? Date.now)())
-      publish({
-        type: 'distill.done',
-        jobId: head.id,
+      const finishedAt = (options.now ?? Date.now)()
+      const successReceipt = canonicalJson({
+        kind: 'done',
+        ids,
+        finishedAt,
         candidatesCreated: result.candidatesCreated,
       })
+      const settleSuccess = async () => {
+        await confirmOriginal(() => true)
+        await executionSession?.recordSettlement(successReceipt)
+        await (markDone ?? options.store.markDone.bind(options.store))(
+          ids,
+          finishedAt,
+          current === undefined ? undefined : issuedOriginal,
+        )
+        await confirmOriginal(
+          (row, original) =>
+            row.status === 'done' &&
+            row.finishedAt === finishedAt &&
+            row.attempts === original.attempts,
+        )
+        await executionSession?.acknowledgeSettlement(successReceipt)
+        publish({
+          type: 'distill.done',
+          jobId: head.id,
+          candidatesCreated: result.candidatesCreated,
+        })
+      }
+      if (current === undefined) await settleSuccess()
+      else await settleOriginalMemoryDistillation(settleSuccess, ids)
       succeeded += 1
       candidatesCreated += result.candidatesCreated
     } catch (err) {
+      // The selected host cannot release execution ownership while the
+      // original runtime reports a live/unknown process. Keep its running
+      // records and the actual error for the owner's drain, without retrying.
+      if (current !== undefined && err instanceof MemoryDistillSettlementPendingError) throw err
       const message = err instanceof Error ? err.message : String(err)
-      log.warn('distill failed', { jobId: head.id, error: message })
       const attempts = head.attempts + 1
-      if (attempts >= DISTILL_MAX_ATTEMPTS) {
-        await options.store.markFailed({
-          ids,
-          attempts,
-          error: message.slice(0, 2000),
-          now: (options.now ?? Date.now)(),
-          retryAt: null,
-        })
-      } else {
-        const backoff = DISTILL_BACKOFF_BASE_MS * Math.pow(2, attempts - 1)
-        const failedAt = (options.now ?? Date.now)()
-        await options.store.markFailed({
-          ids,
-          attempts,
-          error: message.slice(0, 2000),
-          now: failedAt,
-          retryAt: failedAt + backoff,
-        })
+      const failedAt = (options.now ?? Date.now)()
+      const failure = {
+        ids,
+        attempts,
+        error: message.slice(0, 2000),
+        now: failedAt,
+        retryAt:
+          attempts >= DISTILL_MAX_ATTEMPTS
+            ? null
+            : failedAt + DISTILL_BACKOFF_BASE_MS * Math.pow(2, attempts - 1),
       }
-      publish({ type: 'distill.failed', jobId: head.id, error: message.slice(0, 200) })
+      const failureReceipt = canonicalJson({ kind: 'failed', ...failure })
+      const settleFailure = async () => {
+        await confirmOriginal(() => true)
+        await executionSession?.recordSettlement(failureReceipt)
+        await (markFailed ?? options.store.markFailed.bind(options.store))({
+          ...failure,
+          ...(current === undefined ? {} : { original: issuedOriginal }),
+        })
+        await confirmOriginal(
+          (row) =>
+            row.attempts === failure.attempts &&
+            row.lastError === failure.error &&
+            (failure.retryAt === null
+              ? row.status === 'failed' && row.finishedAt === failure.now
+              : (row.status === 'pending' || row.status === 'canceled') &&
+                row.nextRunAt === failure.retryAt &&
+                row.startedAt === null),
+        )
+        await executionSession?.acknowledgeSettlement(failureReceipt)
+        publish({ type: 'distill.failed', jobId: head.id, error: message.slice(0, 200) })
+      }
+      if (current !== undefined && err instanceof IndeterminateRuntimeProcessError) {
+        err.retainOriginalSettlement(ids, settleFailure)
+        if (executionSession !== undefined)
+          await checkpoints!.acknowledge(ids, () =>
+            executionSession.recordSettlement(failureReceipt),
+          )
+        throw err
+      }
+      log.warn('distill failed', { jobId: head.id, error: message })
+      if (current === undefined) await settleFailure()
+      else await settleOriginalMemoryDistillation(settleFailure, ids)
       failed += 1
     }
   }
-  return { picked: due.length, succeeded, failed, candidatesCreated }
+  return {
+    picked: current === undefined ? due.length : admitted,
+    succeeded,
+    failed,
+    candidatesCreated,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -604,8 +846,16 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
 
 export async function recoverRunning(
   store: MemoryDistillWorkStore,
+  preserveIds: readonly string[] = [],
 ): Promise<{ recovered: number }> {
-  const recovered = await store.recoverRunning()
+  const open = await store.executionJournal.listOpen()
+  const preserved = new Set(preserveIds)
+  const unconfirmed = open.find((row) => row.original.some((subject) => !preserved.has(subject.id)))
+  if (unconfirmed)
+    throw new IndeterminateRuntimeProcessError(
+      'original durable distillation cannot be blanket-requeued',
+    )
+  const recovered = await store.recoverRunning(preserveIds)
   if (recovered > 0) log.info('recovered running jobs', { count: recovered })
   return { recovered }
 }

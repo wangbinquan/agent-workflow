@@ -10,6 +10,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import type { Fusion, MemorySummary, Skill } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -40,6 +41,7 @@ export function FuseDialog({
   entry: FuseDialogEntry
 }) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('knowledge')
   const navigate = useNavigate()
 
   const [skillId, setSkillId] = useState(entry.kind === 'from-skill' ? entry.skillId : '')
@@ -97,12 +99,14 @@ export function FuseDialog({
   )
 
   const launch = useMutation<Fusion, ApiError>({
-    mutationFn: () =>
-      api.post('/api/fusions', {
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post('/api/fusions', {
         skillId,
         memoryIds: Array.from(picked),
         intent,
-      }),
+      })
+    },
     onSuccess: (f) => {
       onClose()
       void navigate({ to: '/fusions/$id', params: { id: f.id } })
@@ -147,7 +151,8 @@ export function FuseDialog({
             type="button"
             className="btn btn--primary"
             onClick={submit}
-            disabled={launch.isPending}
+            disabled={launch.isPending || !execution.available}
+            title={execution.unavailableReason}
           >
             {launch.isPending ? t('fusion.submitting') : t('fusion.submit')}
           </button>

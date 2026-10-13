@@ -48,6 +48,9 @@ export interface DaemonProviderRuntimeAdmission {
  * factory again and receives a new handle.
  */
 export interface DaemonProviderRuntimeHandle {
+  /** A cold owner can retain an unresolved original recovery without becoming
+   * ready. The session records its handle before asking for the start ACK. */
+  readonly acknowledgeStart?: () => MaybePromise<void>
   readonly stop: () => MaybePromise<void>
   readonly drain: () => MaybePromise<void>
 }
@@ -127,6 +130,8 @@ export interface CreateDaemonProviderRuntimeSessionInput<
   /** Executed in declaration order after every handle has drained. */
   readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
   readonly shutdownIdentity: () => MaybePromise<void>
+  /** Host authority retires its durable write receipt before this database closes. */
+  readonly beforeCloseProvider?: () => MaybePromise<void>
   readonly closeProvider: () => MaybePromise<void>
 }
 
@@ -155,6 +160,7 @@ interface ActiveHandle {
   stopMode?: 'normal' | 'authority-loss'
   stopAcknowledgedMode?: 'normal' | 'authority-loss'
   drainAcknowledgedMode?: 'normal' | 'authority-loss'
+  stopAttempt?: { readonly mode: ActiveHandle['stopMode']; readonly result: Promise<void> }
 }
 
 interface CloseParticipantProgress {
@@ -186,10 +192,21 @@ function drainedForCurrentMode(active: ActiveHandle): boolean {
 export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocketHandlers>(
   input: CreateDaemonProviderRuntimeSessionInput<UpgradeServer, WebSocketHandlers>,
 ): Promise<DaemonProviderRuntimeSession<UpgradeServer, WebSocketHandlers>> {
-  const handleFactories = [
+  const nativeFactories = [
     ...(input.runtimeFactories ?? []),
     ...(input.backgroundWriterFactories ?? []),
   ]
+  // Embedded HTTP has no native daemon scheduler factories. Its explicit
+  // selection is the real ordered owner inventory, with no dummy native start.
+  const handleFactories: readonly {
+    id: string
+    start?: DaemonProviderRuntimeHandleFactory['start']
+  }[] =
+    input.hostExecutionRuntime !== undefined &&
+    input.runtimeFactories === undefined &&
+    input.backgroundWriterFactories === undefined
+      ? input.hostExecutionRuntime.handles.map((binding) => ({ id: binding.id }))
+      : nativeFactories
   const authorityBindings = new Map<string, DaemonProviderHostExecutionHandleBinding>()
   if (input.hostExecutionRuntime !== undefined) {
     const ids = new Set(handleFactories.map((factory) => factory.id))
@@ -242,6 +259,7 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
   let webSocketAdmissionMayBeOpen = true
   let identityShutdown = false
   let providerClosed = false
+  let providerControlClosed = false
   let lifecycleTail: Promise<void> = Promise.resolve()
 
   const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
@@ -289,29 +307,65 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
   const stopHandles = async (context?: HostExecutionGrantContext): Promise<unknown[]> => {
     executionRunning = false
     const failures: unknown[] = []
+    const unavailableStops = new Set<ActiveHandle>()
+    const prepareMode = (active: ActiveHandle): boolean => {
+      if (active.authority !== undefined && active.stopMode === undefined) {
+        const explicitMode = authorityRetirementModes.get(active.authority.context)
+        if (explicitMode === undefined && !active.authority.context.current()) {
+          failures.push(new Error('host-execution-runtime-stop-reason-pending'))
+          return false
+        }
+        active.stopMode = explicitMode ?? 'normal'
+      }
+      return true
+    }
+    const beginStop = (active: ActiveHandle) => {
+      if (active.stopAttempt) return active.stopAttempt
+      const mode = active.stopMode
+      let result: Promise<void>
+      try {
+        result = Promise.resolve(
+          active.authority !== undefined && mode === 'authority-loss'
+            ? active.authority.binding.quiesceAuthorityLoss({
+                handle: active.handle,
+                context: active.authority.context,
+              })
+            : active.handle.stop(),
+        )
+      } catch (error) {
+        result = Promise.reject(error)
+      }
+      void result.catch(() => {})
+      return (active.stopAttempt = { mode, result })
+    }
+    // Start each selected owner's real scheduling fence in reverse declaration
+    // order before awaiting any one owner's potentially long business drain.
+    // Native sessions retain their original sequential stop behavior below.
+    if (input.hostExecutionRuntime !== undefined) {
+      for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
+        const active = activeHandles[index]!
+        if (context !== undefined && active.authority?.context !== context) continue
+        if (!stoppedForCurrentMode(active)) {
+          if (prepareMode(active)) beginStop(active)
+          else unavailableStops.add(active)
+        }
+      }
+    }
     for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
       const active = activeHandles[index]!
       if (context !== undefined && active.authority?.context !== context) continue
+      if (unavailableStops.has(active)) continue
       try {
-        if (active.authority !== undefined && active.stopMode === undefined) {
-          const explicitMode = authorityRetirementModes.get(active.authority.context)
-          if (explicitMode === undefined && !active.authority.context.current()) {
-            failures.push(new Error('host-execution-runtime-stop-reason-pending'))
-            continue
-          }
-          active.stopMode = explicitMode ?? 'normal'
-        }
+        if (!prepareMode(active)) continue
         while (!stoppedForCurrentMode(active)) {
           // The requested mode can change during an awaited normal stop. Its
           // ACK proves only that exact operation; loss still needs its owner ACK.
-          const acknowledgedMode = active.stopMode
-          if (active.authority !== undefined && acknowledgedMode === 'authority-loss') {
-            await active.authority.binding.quiesceAuthorityLoss({
-              handle: active.handle,
-              context: active.authority.context,
-            })
-          } else {
-            await active.handle.stop()
+          const attempt = beginStop(active),
+            acknowledgedMode = attempt.mode
+          try {
+            await attempt.result
+          } finally {
+            if (active.stopAttempt === attempt) active.stopAttempt = undefined
           }
           active.stopped = true
           if (active.authority !== undefined) active.stopAcknowledgedMode = acknowledgedMode
@@ -383,9 +437,11 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
         grant === undefined ||
         (!authorityClosing && grant.version === authorityVersion && grant.context.current())
       if (!current()) throw new Error('host-execution-runtime-grant-lost')
+      if (grant === undefined && factory.start === undefined)
+        throw new Error('host-execution-runtime-prepared-grant-required')
       const handle =
         grant === undefined
-          ? await factory.start(lifecycleInput)
+          ? await factory.start!(lifecycleInput)
           : await binding!.start({ scope: lifecycleInput, context: grant.context })
       activeHandles.push({
         id: factory.id,
@@ -399,6 +455,7 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
               stopMode: authorityRetirementModes.get(grant.context),
             }),
       })
+      await handle.acknowledgeStart?.()
       if (!current()) throw new Error('host-execution-runtime-grant-lost')
     }
     executionRunning = true
@@ -425,6 +482,10 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
       identityShutdown = true
     }
     if (!providerClosed) {
+      if (!providerControlClosed) {
+        await input.beforeCloseProvider?.()
+        providerControlClosed = true
+      }
       await input.closeProvider()
       providerClosed = true
     }
@@ -460,6 +521,10 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
     }
     if (!providerClosed) {
       try {
+        if (!providerControlClosed) {
+          await input.beforeCloseProvider?.()
+          providerControlClosed = true
+        }
         await input.closeProvider()
         providerClosed = true
       } catch (error) {

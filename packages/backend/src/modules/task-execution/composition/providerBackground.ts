@@ -369,6 +369,17 @@ export function composeTaskExecutionProviderBackground(
       throw new Error('task-provider-execution-authority-required')
     }
     const current = (): boolean => capturedCurrent.call(authority) === true
+    const dispatch = authority.canDispatch?.bind(authority)
+    let activated = authority.whenActive === undefined
+    const activation =
+      authority.whenActive?.then((value) => {
+        activated = value
+        return value
+      }) ?? Promise.resolve(true)
+    let stopActivation!: () => void
+    const activationStopped = new Promise<boolean>((resolve) => {
+      stopActivation = () => resolve(false)
+    })
     if (!current()) throw new Error('task-provider-execution-authority-not-current')
     if (mode === 'native') throw new Error('task-provider-execution-authority-mode-mismatch')
     if (stopped) throw new Error('task-execution-provider-background-stopped')
@@ -416,7 +427,8 @@ export function composeTaskExecutionProviderBackground(
     let normalTickets: Awaited<ReturnType<TaskExecutionModule['pause']>> | null = null
     let closeTickets: Awaited<ReturnType<TaskExecutionModule['dispose']>> | null = null
     let closeReason: string | undefined
-    const canDispatch = (): boolean => ownsLifetime(lifetime) && !retired && !stopped && current()
+    const canControl = (): boolean => ownsLifetime(lifetime) && !retired && !stopped && current()
+    const canDispatch = (): boolean => canControl() && activated && (dispatch?.() ?? true)
     const pauseLoops = (): Promise<void[]> => Promise.all(ownedLoops.map((loop) => loop.pause()))
     const waitOwnedWork = async (): Promise<void> => {
       await Promise.all(ownedLoops.map((loop) => loop.awaitIdle()))
@@ -434,6 +446,7 @@ export function composeTaskExecutionProviderBackground(
 
     const quiesceAuthorityLoss = (): Promise<void> => {
       retired = true
+      stopActivation()
       lossRequested = true
       if (lossQuiesce !== null) return lossQuiesce
       if (lossClaims === null) {
@@ -459,6 +472,7 @@ export function composeTaskExecutionProviderBackground(
     }
     const pause = (): Promise<void> => {
       retired = true
+      stopActivation()
       normalRequested = true
       if (normalPause !== null) return normalPause
       const cancelNormally = !lossRequested && ownsLifetime(lifetime)
@@ -482,6 +496,7 @@ export function composeTaskExecutionProviderBackground(
     }
     const close = (reason: string): Promise<readonly string[]> => {
       retired = true
+      stopActivation()
       closeRequested = true
       if (terminalClose !== null) return terminalClose
       closeReason ??= reason
@@ -549,7 +564,7 @@ export function composeTaskExecutionProviderBackground(
     try {
       const claims = gateDrain()
       await claims
-      if (!canDispatch()) return handle
+      if (!canControl()) return handle
 
       ownedLoops = createProviderLoops(
         runtime,
@@ -560,12 +575,13 @@ export function composeTaskExecutionProviderBackground(
       )
       const currentRead = (async () => await configuration.read())()
       const moduleOpen = currentRead.then((settings) => {
-        if (!canDispatch()) return undefined
+        if (!canControl()) return undefined
         runtime.module.resume()
         return settings
       })
       const run = moduleOpen
         .then(async (settings) => {
+          if (!(await Promise.race([activation, activationStopped]))) return
           if (settings === undefined || !canDispatch()) return
           if (!selectedBootResumePending || !settings.autoResumeOnBoot) return
           selectedBootResumePending = false

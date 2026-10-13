@@ -42,6 +42,9 @@ describe('RFC-370 complete System family binding', () => {
       },
     }
     const retainedContents: SystemAgentRetainedContents = {
+      inspect() {
+        throw new Error('not reached')
+      },
       forget() {},
       release() {
         throw new Error('not reached')
@@ -77,7 +80,16 @@ describe('RFC-370 complete System family binding', () => {
         throw original
       },
     }
-    const family = composeSystemAgentRunFamily({ invocations, workspaces, retainedContents })
+    const family = composeSystemAgentRunFamily({
+      invocations,
+      workspaces,
+      retainedContents,
+      recovery: {
+        recoverReference: async () => {
+          throw new Error('unselected recovery')
+        },
+      },
+    })
     expect(family.workspaces).toBe(workspaces)
     expect(family.retainedContents).toBe(retainedContents)
     await expect(family.run(request)).rejects.toBe(original)

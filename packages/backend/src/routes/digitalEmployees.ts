@@ -434,6 +434,7 @@ export function mountDigitalEmployeeRoutes(
       {
         method: 'POST',
         path: '/api/digital-employees/:id/cases',
+        executionGroup: 'digital-employee',
         permissions: ['development-missions:launch'],
         tokenAccess: 'allow',
         summary: 'Give body, files or an external work item to a digital employee',
@@ -518,6 +519,7 @@ export function mountDigitalEmployeeRoutes(
       {
         method: 'POST',
         path: '/api/employee-cases/:id/resume',
+        executionGroup: 'digital-employee',
         permissions: ['development-missions:retry'],
         tokenAccess: 'allow',
         summary: 'Resume a blocked employee case after its blocker was resolved',
@@ -553,6 +555,7 @@ export function mountDigitalEmployeeRoutes(
       descriptor: createDevelopmentActivityOperation(activityOperations),
       method: 'POST',
       path: '/api/employee-cases/worker/run-one',
+      executionGroup: 'digital-employee',
       tokenAccess: 'never',
       decode: () => ({}),
       context: (c) => directOperationAuthority(contexts, actorOf(c)),

@@ -1,3 +1,4 @@
+import { composeLocalFusionWorkspaces } from '../src/modules/system-operations/composition/localFusionWorkspace'
 // RFC-101 PR-B — fusion engine.
 //
 // Validates the parts that don't need a live opencode: the fusion state
@@ -9,7 +10,10 @@
 // real diff/manifest/incorporated⊆selected reconcile + the atomic apply
 // (skill version bump + memory fuse) + OCC).
 
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, spyOn, test } from 'bun:test'
+import { bindFusionReconcileHostOwner } from '../src/cli/daemonHostExecutionOwners'
+import { DAEMON_CADENCE } from '@/services/daemonCadence'
+import { deferred } from './helpers/taskHostExecution'
 import {
   existsSync,
   mkdirSync,
@@ -47,6 +51,7 @@ import {
   getFusion,
   isValidFusionTransition,
   reconcileFusion,
+  reconcileRunningFusions,
   recoverFusionDecisions,
   rejectFusion,
   type FusionDeps,
@@ -204,6 +209,7 @@ async function build(): Promise<H> {
   const deps: TestFusionDeps = {
     db,
     operations: composeSqliteFusionOperations({
+      fusionWorkspaces: composeLocalFusionWorkspaces(),
       ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
       appHome,
@@ -872,6 +878,133 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
       }>
     )[0]?.status
   }
+
+  test('RFC-370 authority lost during the candidate read leaves every fusion untouched', async () => {
+    seedFusion('host-first', {})
+    seedFusion('host-second', {})
+    let current = true
+    const original = h.deps.operations.persistence.listIdsByStatus.bind(
+      h.deps.operations.persistence,
+    )
+    const dependencies: FusionDeps = {
+      ...h.deps,
+      operations: {
+        ...h.deps.operations,
+        persistence: {
+          ...h.deps.operations.persistence,
+          async listIdsByStatus(status) {
+            const ids = await original(status)
+            current = false
+            return ids
+          },
+        },
+      },
+    }
+    await reconcileRunningFusions(dependencies, { current: () => current })
+    expect(rawStatus('host-first')).toBe('running')
+    expect(rawStatus('host-second')).toBe('running')
+  })
+
+  test('RFC-370 an admitted fusion intake completes while the next reconciliation is fenced', async () => {
+    seedFusion('host-first', {})
+    seedFusion('host-second', {})
+    let current = true
+    const original = h.deps.operations.tasks.load.bind(h.deps.operations.tasks)
+    let reads = 0
+    const dependencies: FusionDeps = {
+      ...h.deps,
+      operations: {
+        ...h.deps.operations,
+        tasks: {
+          ...h.deps.operations.tasks,
+          async load(id) {
+            reads++
+            const task = await original(id)
+            current = false
+            return task
+          },
+        },
+      },
+    }
+    await reconcileRunningFusions(dependencies, { current: () => current })
+    expect([rawStatus('host-first'), rawStatus('host-second')].sort()).toEqual([
+      'failed',
+      'running',
+    ])
+    expect(reads).toBe(1)
+  })
+
+  test('RFC-370 the actual Fusion root binding drains its admitted original intake and leaves the next fusion running', async () => {
+    seedFusion('host-first', {})
+    seedFusion('host-second', {})
+    const entered = deferred(),
+      release = deferred()
+    const load = h.deps.operations.tasks.load.bind(h.deps.operations.tasks)
+    let active = true,
+      reads = 0
+    const context = {
+      generation: 'actual-fusion-owner',
+      reference: Object.freeze({}),
+      current() {
+        expect(this).toBe(context)
+        return active
+      },
+    }
+    const owner = bindFusionReconcileHostOwner({
+      dependencies: {
+        ...h.deps,
+        operations: {
+          ...h.deps.operations,
+          tasks: {
+            ...h.deps.operations.tasks,
+            async load(id) {
+              reads += 1
+              entered.resolve()
+              await release.promise
+              return await load(id)
+            },
+          },
+        },
+      },
+      onError(error) {
+        throw error
+      },
+    })
+    const timer = spyOn(globalThis, 'setTimeout')
+    const handle = await owner.start({
+      context,
+      scope: { provider: 'sqlite', generationId: context.generation, operationId: 'fusion-root' },
+    })
+    try {
+      const index = timer.mock.calls.findIndex((args) => args[1] === DAEMON_CADENCE.fusionReconcile)
+      const args = timer.mock.calls[index],
+        result = timer.mock.results[index]
+      if (!args || result?.type !== 'return' || typeof args[0] !== 'function')
+        throw new Error('original fusion timer missing')
+      clearTimeout(result.value)
+      args[0](...args.slice(2))
+      await entered.promise
+      active = false
+      await owner.quiesceAuthorityLoss({ context, handle })
+      let drained = false
+      const draining = Promise.resolve(owner.drainAuthorityLoss({ context, handle })).then(() => {
+        drained = true
+      })
+      expect(drained).toBe(false)
+      release.resolve()
+      await draining
+      expect(reads).toBe(1)
+      expect([rawStatus('host-first'), rawStatus('host-second')].sort()).toEqual([
+        'failed',
+        'running',
+      ])
+    } finally {
+      release.resolve()
+      await handle.stop()
+      await handle.drain()
+      timer.mockRestore()
+    }
+  })
 
   test("'applying' whose version already committed rolls FORWARD to done", async () => {
     seedFusion('fz-fwd', { status: 'applying', currentTaskId: null })

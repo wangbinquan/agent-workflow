@@ -9,6 +9,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import type { RunNowEligibility } from '@/lib/schedule-view'
 import { classifyWriteOutcome } from '@/lib/write-outcome'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 export interface ScheduledRunNowSlots {
   action: ReactElement
@@ -33,15 +34,20 @@ export interface ScheduledRunNowActionProps {
  */
 export function ScheduledRunNowAction(props: ScheduledRunNowActionProps) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   const blockedReasonId = useId()
   const mutation = useMutation<{ taskId: string }, ApiError>({
-    mutationFn: () =>
-      api.post(`/api/scheduled-tasks/${encodeURIComponent(props.scheduleId)}/run-now`, {}),
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post(`/api/scheduled-tasks/${encodeURIComponent(props.scheduleId)}/run-now`, {})
+    },
     onSuccess: ({ taskId }) => props.onSuccess(taskId),
   })
-  const blockedReason = props.eligibility.allowed
-    ? undefined
-    : t(`scheduled.runNowBlocked.${props.eligibility.reason}`)
+  const blockedReason =
+    execution.unavailableReason ??
+    (props.eligibility.allowed
+      ? undefined
+      : t(`scheduled.runNowBlocked.${props.eligibility.reason}`))
   const writeOutcome =
     mutation.error === null ? null : classifyWriteOutcome(mutation.error, { idempotent: false })
   const outcomeUnknown = writeOutcome !== null && writeOutcome !== 'definitive'
@@ -55,7 +61,12 @@ export function ScheduledRunNowAction(props: ScheduledRunNowActionProps) {
         label={t('scheduled.runNow')}
         confirmationKey={confirmationKey}
         onConfirm={() => mutation.mutateAsync()}
-        disabled={!props.eligibility.allowed || mutation.isPending || mutation.error !== null}
+        disabled={
+          !execution.available ||
+          !props.eligibility.allowed ||
+          mutation.isPending ||
+          mutation.error !== null
+        }
         ariaDescribedBy={blockedReason === undefined ? undefined : blockedReasonId}
         size={props.size}
         variant={props.variant}

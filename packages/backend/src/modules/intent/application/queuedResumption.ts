@@ -1,4 +1,5 @@
 import type { Config } from '@agent-workflow/shared'
+import { waitForExecutionActivation } from '@/platform/background/activation'
 
 export interface QueuedIntentResumptionDependencies {
   readonly readConfiguration: () => Config | Promise<Config>
@@ -17,6 +18,8 @@ interface ResumptionLifetime {
   readonly authorityCurrent?: () => boolean
   readonly batches: Set<ResumptionBatch>
   readonly reportingFailures: unknown[]
+  readonly activation: AbortController
+  activating?: Promise<void>
 }
 
 /** Own only queued admission, not the subsequently dispatched Intent turns. */
@@ -64,19 +67,21 @@ export function createQueuedIntentResumption(input: QueuedIntentResumptionDepend
     lifetime.batches.add(batch)
   }
 
-  const startLifetime = (authorityCurrent?: () => boolean) => {
+  const startLifetime = (authorityCurrent?: () => boolean, whenActive?: Promise<boolean>) => {
     if (current !== null) throw new Error('intent-queued-resumption-already-started')
     const lifetime: ResumptionLifetime = {
       stopped: false,
       ...(authorityCurrent === undefined ? {} : { authorityCurrent }),
       batches: new Set(),
       reportingFailures: [],
+      activation: new AbortController(),
     }
     current = lifetime
     const handle = Object.freeze({
       stop(): void {
         if (lifetime.stopped) return
         lifetime.stopped = true
+        lifetime.activation.abort()
         // Retain unread/unadmitted IDs for this same composition's rollback.
         // Already admitted work settles against its original provider.
         for (const batch of lifetime.batches) {
@@ -88,6 +93,7 @@ export function createQueuedIntentResumption(input: QueuedIntentResumptionDepend
       async drain(): Promise<void> {
         if (!lifetime.stopped) throw new Error('intent-queued-resumption-drain-before-stop')
         await Promise.all([...lifetime.batches].map((batch) => batch.done))
+        await lifetime.activating
         if (lifetime.reportingFailures.length > 0) {
           throw new AggregateError(
             lifetime.reportingFailures,
@@ -97,11 +103,20 @@ export function createQueuedIntentResumption(input: QueuedIntentResumptionDepend
         if (current === lifetime) current = null
       },
     })
-    if (pending.size > 0) {
+    const resumePending = () => {
+      if (lifetime.stopped || pending.size === 0 || (authorityCurrent && !authorityCurrent()))
+        return
       const sessionIds = [...pending]
       pending.clear()
       admit(lifetime, sessionIds)
     }
+    if (whenActive)
+      lifetime.activating = waitForExecutionActivation(whenActive, lifetime.activation.signal).then(
+        (active) => {
+          if (active) resumePending()
+        },
+      )
+    else resumePending()
     return handle
   }
 
@@ -118,11 +133,19 @@ export function createQueuedIntentResumption(input: QueuedIntentResumptionDepend
     start() {
       return startLifetime()
     },
-    startAuthority(authority: { readonly current: () => boolean }) {
+    startAuthority(authority: {
+      readonly current: () => boolean
+      readonly whenActive?: Promise<boolean>
+      readonly canDispatch?: () => boolean
+    }) {
       const selectedCurrent = authority.current
       if (typeof selectedCurrent !== 'function')
         throw new Error('intent-queued-resumption-current-missing')
-      return startLifetime(() => selectedCurrent.call(authority))
+      const dispatch = authority.canDispatch?.bind(authority)
+      return startLifetime(
+        () => selectedCurrent.call(authority) && (dispatch?.() ?? true),
+        authority.whenActive,
+      )
     },
   })
 }

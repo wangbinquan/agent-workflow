@@ -1,8 +1,9 @@
 // RFC-341 — continuous owner of already-admitted RFC-333 gate continuations.
 
 import {
-  defineManagedWorker,
-  type ManagedWorkerDefinition,
+  defineAuthorityManagedWorker,
+  type AuthorityManagedWorkerDefinition,
+  type BackgroundExecutionLifetime,
 } from '@/platform/background/definitions'
 import { createWakeLatch } from '@/platform/events/committed/workerDefinitions'
 
@@ -24,7 +25,7 @@ export function createHumanGateContinuationWorkerDefinition(input: {
   readonly now?: () => number
   readonly onError?: (input: PendingHumanGateContinuation & { error: unknown }) => void
 }): Readonly<{
-  definition: Readonly<ManagedWorkerDefinition>
+  definition: Readonly<AuthorityManagedWorkerDefinition>
   nudge: () => void
   runCycle: () => Promise<HumanGateContinuationWorkerCycle>
 }> {
@@ -39,11 +40,18 @@ export function createHumanGateContinuationWorkerDefinition(input: {
   let failed = 0
   let lastError: string | null = null
 
-  const runCycle = async (): Promise<HumanGateContinuationWorkerCycle> => {
+  const runCycle = async (
+    execution?: BackgroundExecutionLifetime,
+  ): Promise<HumanGateContinuationWorkerCycle> => {
+    if (execution !== undefined && !execution.current())
+      return { attempted: 0, completed: 0, failed: 0 }
     const pending = await input.listPending()
+    let cycleAttempted = 0
     let cycleCompleted = 0
     let cycleFailed = 0
     for (const continuation of pending) {
+      if (execution !== undefined && !execution.current()) break
+      cycleAttempted += 1
       try {
         await input.drive(continuation)
         cycleCompleted += 1
@@ -54,13 +62,14 @@ export function createHumanGateContinuationWorkerDefinition(input: {
       }
     }
     cycles += 1
-    attempted += pending.length
+    attempted += cycleAttempted
     completed += cycleCompleted
     failed += cycleFailed
-    return { attempted: pending.length, completed: cycleCompleted, failed: cycleFailed }
+    return { attempted: cycleAttempted, completed: cycleCompleted, failed: cycleFailed }
   }
 
-  const definition = defineManagedWorker({
+  const definition = defineAuthorityManagedWorker({
+    supportsExecutionLifetime: true,
     id: 'human-gate-continuation',
     owner: 'collaboration',
     kind: 'long-running',
@@ -76,7 +85,9 @@ export function createHumanGateContinuationWorkerDefinition(input: {
       readiness = 'ready'
       try {
         while (!context.signal.aborted) {
-          await runCycle()
+          if (context.execution !== undefined && !context.execution.current()) break
+          await runCycle(context.execution)
+          if (context.execution !== undefined && !context.execution.current()) break
           await latch.wait(reconcileMs, context.signal)
         }
       } catch (error) {

@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { createRoute, Link } from '@tanstack/react-router'
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 import { api } from '@/api/client'
 import type { LocalizedText } from '@/components/digital-employees/types'
@@ -397,6 +398,7 @@ function sourceStateKind(state: CustomSourceSummary['state']): 'neutral' | 'warn
 }
 
 function EventsPage(): ReactElement {
+  const execution = useHostExecutionAvailability('event-dispatch')
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const zh = language.startsWith('zh')
@@ -534,14 +536,16 @@ function EventsPage(): ReactElement {
     },
   })
   const retryCommittedDelivery = useMutation({
-    mutationFn: (delivery: CommittedEventDeliveryStatus) =>
-      api.post(
+    mutationFn: (delivery: CommittedEventDeliveryStatus) => {
+      execution.assertAvailable()
+      return api.post(
         `/api/event-center/committed-deliveries/${encodeURIComponent(delivery.eventId)}/${encodeURIComponent(delivery.consumerId)}/retry`,
         {
           observedLeaseEpoch: delivery.leaseEpoch,
           observedUpdatedAt: Date.parse(delivery.updatedAt),
         },
-      ),
+      )
+    },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['event-center', 'committed-deliveries'] })
     },
@@ -1604,6 +1608,7 @@ function EventsPage(): ReactElement {
                                           type="button"
                                           className="btn btn--xs"
                                           disabled={
+                                            !execution.available ||
                                             !canUpdateSource ||
                                             (retryCommittedDelivery.isPending &&
                                               retryCommittedDelivery.variables?.eventId ===
@@ -1612,11 +1617,12 @@ function EventsPage(): ReactElement {
                                                 delivery.consumerId)
                                           }
                                           title={
-                                            canUpdateSource
+                                            execution.unavailableReason ??
+                                            (canUpdateSource
                                               ? undefined
                                               : zh
                                                 ? '需要事件来源更新权限'
-                                                : 'Event-source update permission required'
+                                                : 'Event-source update permission required')
                                           }
                                           onClick={() => retryCommittedDelivery.mutate(delivery)}
                                           data-testid={`committed-delivery-retry-${delivery.eventId}-${delivery.consumerId}`}
@@ -1858,6 +1864,7 @@ function EventSourceEditor(props: {
   onClose: () => void
   onSaved: () => Promise<void>
 }): ReactElement {
+  const execution = useHostExecutionAvailability('event-dispatch')
   const zh = props.language.startsWith('zh')
   const [form, setForm] = useState(initialDraft)
   const [workingId, setWorkingId] = useState(props.sourceId)
@@ -2011,7 +2018,9 @@ function EventSourceEditor(props: {
     setError(null)
     setValidation(null)
     try {
+      if (next !== 'save') execution.assertAvailable()
       const id = await saveDraft()
+      if (next !== 'save') execution.assertAvailable()
       if (next === 'validate') {
         const receipt = await api.post<{ observationCount: number }>(
           `/api/event-center/sources/${id}/validate`,
@@ -2102,9 +2111,10 @@ function EventSourceEditor(props: {
           <button
             type="button"
             className="btn"
-            disabled={!draftValid || action !== null || authoringLoading}
+            disabled={!draftValid || action !== null || authoringLoading || !execution.available}
             onClick={() => void run('validate')}
             data-testid="event-source-validate"
+            title={execution.unavailableReason}
           >
             {action === 'validate'
               ? zh
@@ -2117,9 +2127,10 @@ function EventSourceEditor(props: {
           <button
             type="button"
             className="btn btn--primary"
-            disabled={!draftValid || action !== null || authoringLoading}
+            disabled={!draftValid || action !== null || authoringLoading || !execution.available}
             onClick={() => void run('publish')}
             data-testid="event-source-publish"
+            title={execution.unavailableReason}
           >
             {action === 'publish'
               ? zh

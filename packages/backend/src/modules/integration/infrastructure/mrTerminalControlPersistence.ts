@@ -14,6 +14,7 @@ import {
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   MrLaunchGuardPersistencePort,
+  MrTerminalEffectAuthoritySettlementPort,
   MrTerminalEffectPersistencePort,
 } from '../application/ports/mrTerminalControlPersistence'
 import { ConflictError } from '@/util/errors'
@@ -227,7 +228,7 @@ export function createMrLaunchGuardPersistence(
 
 export function createMrTerminalEffectPersistence(
   db: ProviderNeutralDatabase,
-): MrTerminalEffectPersistencePort {
+): MrTerminalEffectPersistencePort & MrTerminalEffectAuthoritySettlementPort {
   const session = databaseSessionFor(db)
   return {
     async claimNextDue(input) {
@@ -301,6 +302,50 @@ export function createMrTerminalEffectPersistence(
           }
         }
         return null
+      })
+    },
+    async settleClaim(input) {
+      await session.transaction(async (tx) => {
+        const changed = await tx
+          .update(webhookMrControlEffects)
+          .set({
+            status: input.status,
+            nextAttemptAt: input.nextAttemptAt,
+            lastError: input.lastError,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            updatedAt: input.now,
+          })
+          .where(
+            and(
+              eq(webhookMrControlEffects.id, input.claim.id),
+              eq(webhookMrControlEffects.status, 'leased'),
+              eq(webhookMrControlEffects.leaseOwner, input.workerId),
+              eq(webhookMrControlEffects.attemptCount, input.claim.attemptCount),
+            ),
+          )
+          .returning({ id: webhookMrControlEffects.id })
+        if (changed.length > 0) return
+        const prior = (
+          await tx
+            .select()
+            .from(webhookMrControlEffects)
+            .where(eq(webhookMrControlEffects.id, input.claim.id))
+            .limit(1)
+        )[0]
+        // Retrying the same uncertain database ACK is safe; a newer claim is
+        // never released. attemptCount remains monotone even for unissued work.
+        if (
+          prior !== undefined &&
+          prior.attemptCount === input.claim.attemptCount &&
+          prior.status === input.status &&
+          prior.leaseOwner === null &&
+          prior.leaseExpiresAt === null &&
+          prior.nextAttemptAt === input.nextAttemptAt &&
+          prior.lastError === input.lastError
+        )
+          return
+        throw new Error('mr-terminal-claim-settlement-lost')
       })
     },
     async recordReceipts(effectId, receipts, now) {

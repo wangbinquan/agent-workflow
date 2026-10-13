@@ -343,12 +343,16 @@ export function startBatchImportGc(
   // RFC-322：错峰相位。原实现的 handle 没有 unref()，收编后统一 unref——本 GC 的
   // 定时器不该独自把进程吊活着，daemon 寿命由 HTTP server 与 shutdown 路径决定。
   phaseOffsetMs: number = MAINTENANCE_PHASE.batchImportGc,
+  execution?: { readonly current: () => boolean },
 ): { stop: () => void } {
+  const current = execution?.current.bind(execution)
+  if (current?.() === false) throw new Error('batch-import-gc-execution-unavailable')
   return startMaintenanceTicker({
     job: 'batchImportGc',
     intervalMs,
     phaseOffsetMs,
     onTick: () => {
+      if (current?.() === false) return
       try {
         gcBatches({ retentionMs })
       } catch (err) {

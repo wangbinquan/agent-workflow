@@ -15,6 +15,7 @@ import {
   type IntentSessionSummary,
 } from '@agent-workflow/shared'
 import { useMutation } from '@tanstack/react-query'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
 import { AppPortal } from '@/components/AppPortal'
@@ -65,6 +66,7 @@ export function IntentCreateComposer(props: {
   footerTarget?: HTMLElement | null
 }) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('intent')
   const onPendingChange = props.onPendingChange
   const formId = useId()
   const [message, setMessage] = useState('')
@@ -105,14 +107,16 @@ export function IntentCreateComposer(props: {
       })
   }
   const createSession = useMutation<IntentSessionSummary, ApiError, void>({
-    mutationFn: async () =>
-      IntentSessionSummarySchema.parse(
+    mutationFn: async () => {
+      execution.assertAvailable()
+      return IntentSessionSummarySchema.parse(
         await api.post<unknown>('/api/intent-sessions', {
           message: message.trim(),
           ...(hint === 'auto' || props.mount !== undefined ? {} : { hint }),
           ...(props.mount === undefined ? {} : { mounts: [props.mount] }),
         }),
-      ),
+      )
+    },
     onSuccess: (session) => {
       createdSessionRef.current = session
       navigateToCreatedSession(session)
@@ -197,7 +201,8 @@ export function IntentCreateComposer(props: {
           type="submit"
           form={formId}
           className="btn btn--primary"
-          disabled={message.trim() === '' || locked}
+          disabled={message.trim() === '' || locked || !execution.available}
+          title={execution.unavailableReason}
         >
           {pending ? t('common.creating') : t('intent.startBuilding')}
         </button>

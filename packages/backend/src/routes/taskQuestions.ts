@@ -227,6 +227,7 @@ export function mountTaskQuestionRoutes(app: Hono, operations: CollaborationRout
     {
       method: 'POST',
       path: '/api/tasks/:id/questions/dispatch',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Dispatch staged questions (advances the task)',

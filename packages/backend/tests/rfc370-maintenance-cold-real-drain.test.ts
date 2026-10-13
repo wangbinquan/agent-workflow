@@ -85,6 +85,78 @@ function phaseChannel() {
 }
 
 describeEachProvider('RFC-370 cold maintenance actual Worker drain', (harness) => {
+  test('a ready child keeps an existing durable queue untouched until global activation', async () => {
+    const appHome = mkdtempSync(join(tmpdir(), 'rfc370-worker-global-activation-'))
+    const database = openProviderMaintenanceWorkerDatabase(harness, appHome)
+    const store = createMaintenanceRunStore(database.db),
+      phases = phaseChannel()
+    const runId = randomUUID(),
+      events: MaintenanceWorkerEvent[] = []
+    let actualWorker: { postMessage(message: unknown): void } | undefined
+    const supervisor = createColdMaintenanceWorkerSupervisor({
+      appHome,
+      databaseInit: database.databaseInit,
+      dispatchPaused: true,
+      workerFactory() {
+        const worker =
+          database.workerFactory === undefined
+            ? new Worker(
+                new URL('../src/platform/background/maintenanceWorker.ts', import.meta.url).href,
+              )
+            : database.workerFactory()
+        actualWorker = worker
+        return worker
+      },
+      effectsBootstrap: {
+        moduleSpecifier: effectsModule,
+        exportName: 'createEffects',
+        configurationJson: JSON.stringify({ channelName: phases.name, holdCollect: true }),
+        capabilities: ['pluginGenerationGc'],
+      },
+      onEvent: (event) => {
+        events.push(event)
+      },
+    })
+    try {
+      await store.enqueue({
+        id: runId,
+        jobKey: 'pluginGenerationGc',
+        jobClass: 'cleanup',
+        slotKey: runId,
+        payload: {},
+        scheduledAt: 0,
+        now: 0,
+      })
+      await supervisor.start()
+      expect(events.filter((event) => event.type === 'ready')).toHaveLength(1)
+      // Exercise the real child gate as well as the supervisor's wake gate.
+      // The selected environment reports this same inbound frame after routing.
+      actualWorker!.postMessage({ type: 'wake', version: 1 })
+      await phases.wait('wake-received')
+      expect(await store.read(runId)).toMatchObject({ state: 'pending', attempt: 0 })
+      expect(events.some((event) => event.type === 'active')).toBe(false)
+      supervisor.activateDispatch()
+      await phases.wait('gc-collect-entered')
+      expect(await store.read(runId)).toMatchObject({ state: 'running', attempt: 1 })
+      supervisor.quiesce()
+      const draining = supervisor.awaitDrained(15_000)
+      await phases.wait('drain-received')
+      phases.release('collect')
+      await draining
+      expect(await store.read(runId)).toMatchObject({ state: 'succeeded', attempt: 1 })
+      expect(events.filter((event) => event.type === 'drained')).toHaveLength(1)
+    } finally {
+      phases.release('collect')
+      try {
+        await supervisor.stop(15_000)
+      } finally {
+        phases.close()
+        await database.close()
+        await removeClosedWorkerHome(appHome)
+      }
+    }
+  }, 60_000)
+
   test('cold construction claims nothing and loss waits for actual job, effect and database close', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc370-cold-worker-real-drain-'))
     const database = openProviderMaintenanceWorkerDatabase(harness, appHome)

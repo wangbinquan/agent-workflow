@@ -315,6 +315,7 @@ export function mountScheduledTaskRoutes(
     {
       method: 'POST',
       path: '/api/scheduled-tasks/:id/run-now',
+      executionGroup: 'task',
       permissions: ['scheduled-tasks:execute', 'tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Run a scheduled task immediately',

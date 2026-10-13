@@ -3,6 +3,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { readCommittedArchitectureSource } from './lib/committed-architecture-source'
 
 import {
   CANONICAL_MANIFEST_PATHS,
@@ -33,6 +34,12 @@ const snapshotIndex = process.argv.indexOf('--snapshot-sha')
 const requestedSnapshot = snapshotIndex >= 0 ? process.argv[snapshotIndex + 1] : undefined
 const seedIndex = process.argv.indexOf('--seed-ref')
 const seedRef = seedIndex >= 0 ? process.argv[seedIndex + 1] : undefined
+const sourceIndex = process.argv.indexOf('--source-ref')
+const sourceRef = sourceIndex >= 0 ? process.argv[sourceIndex + 1] : undefined
+if (sourceIndex >= 0 && sourceRef === undefined)
+  throw new Error('--source-ref requires a Git revision')
+const committedSource =
+  sourceRef === undefined ? undefined : readCommittedArchitectureSource(REPO_ROOT, sourceRef)
 
 function fullSha(value: string): string {
   const result = spawnSync('git', ['rev-parse', `${value}^{commit}`], {
@@ -93,7 +100,10 @@ function asciiJson(value: unknown): string {
 
 function upsertCanonicalGuard(value: Record<string, unknown>): Record<string, unknown> {
   const path = 'packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts'
-  const text = readFileSync(resolve(REPO_ROOT, path), 'utf8')
+  const text = committedSource
+    ? committedSource.readText(path)
+    : readFileSync(resolve(REPO_ROOT, path), 'utf8')
+  if (text === undefined) throw new Error('canonical guard source is missing')
   const unit = sourceUnit(path, text)
   const raw = Array.isArray(value.guards) ? value.guards : []
   const guards = raw.filter(
@@ -122,7 +132,7 @@ function upsertCanonicalGuard(value: Record<string, unknown>): Record<string, un
   }
 }
 
-const artifacts = buildCanonicalArtifacts(REPO_ROOT)
+const artifacts = buildCanonicalArtifacts(REPO_ROOT, committedSource)
 const errors = validateCanonicalArtifacts(artifacts)
 if (errors.length > 0)
   throw new Error(`canonical artifact validation failed:\n${errors.join('\n')}`)

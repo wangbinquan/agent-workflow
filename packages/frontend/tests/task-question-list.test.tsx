@@ -18,6 +18,8 @@ import { resolve } from 'node:path'
 import { useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
 import { TaskQuestionList, type TaskQuestionEntry } from '../src/components/tasks/TaskQuestionList'
+import type { HostExecutionStatus } from '@agent-workflow/shared'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
@@ -57,6 +59,7 @@ async function wrap(
     { id: 'designer', label: 'designer' },
     { id: 'fixer', label: 'fixer' },
   ],
+  view: HostExecutionStatus = { mode: 'native', status: null },
 ) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -68,7 +71,9 @@ async function wrap(
     path: '/',
     component: () => (
       <QueryClientProvider client={qc}>
-        <TaskQuestionList taskId="task-1" nodeOptions={nodeOptions} />
+        <HostExecutionReadinessContext.Provider value={view}>
+          <TaskQuestionList taskId="task-1" nodeOptions={nodeOptions} />
+        </HostExecutionReadinessContext.Provider>
       </QueryClientProvider>
     ),
   })
@@ -145,6 +150,36 @@ async function wrapFocus(entries: TaskQuestionEntry[]) {
 }
 
 describe('TaskQuestionList board', () => {
+  test('RFC-370 unavailable Task execution preserves staged questions and allows moving them back without dispatch', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true })
+    vi.spyOn(api, 'get').mockResolvedValue([
+      entry({ id: 'preserved-question', phase: 'pending', roleKind: 'designer' }),
+    ] as never)
+    await wrap(
+      [entry({ id: 'preserved-question', phase: 'staged', staged: true, roleKind: 'designer' })],
+      undefined,
+      {
+        mode: 'resource-only',
+        status: {
+          phase: 'standby',
+          generation: 'question-resource-mode',
+          readyGroups: [],
+          reason: 'resource-only',
+        },
+      },
+    )
+    const dispatch = screen.getByTestId('tq-batch-dispatch') as HTMLButtonElement
+    expect(dispatch.disabled).toBe(true)
+    fireEvent.click(dispatch)
+    expect(post).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('tq-stage-preserved-question'))
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/api/tasks/task-1/questions/preserved-question/stage', {
+        staged: false,
+      }),
+    )
+    expect(post.mock.calls.some(([url]) => String(url).endsWith('/dispatch'))).toBe(false)
+  })
   test('renders entries as cards on the board', async () => {
     await wrap([
       entry({ id: 'e1', phase: 'pending' }),

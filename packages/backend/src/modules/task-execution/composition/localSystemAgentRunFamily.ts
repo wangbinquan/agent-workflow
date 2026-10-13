@@ -15,6 +15,7 @@ import type { PreparedSystemAgentRunResult } from '../application/ports/systemAg
 import { createLocalAgentInvocationPreparation } from './localAgentInvocationPreparation'
 import { composeSystemAgentRunFamily } from './systemAgentRunFamily'
 import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
+import { createLocalAgentExecutionRecoveryReferences } from '../infrastructure/local/agentExecutionRecoveryReference'
 
 /** Native facts and fake-run projection are selected only by an explicit root. */
 export function composeLocalSystemAgentRunFamily(input: {
@@ -26,6 +27,7 @@ export function composeLocalSystemAgentRunFamily(input: {
 }) {
   const runtimes = createLocalSystemAgentRuntimeBindings()
   const contents = createLocalSystemAgentRetainedContents(input)
+  const recovery = createLocalAgentExecutionRecoveryReferences()
   const invocations: SystemAgentInvocationFamily = {
     open(request, log) {
       const definition = selectLocalAgentMaterialDefinition(request.protocol)
@@ -59,7 +61,8 @@ export function composeLocalSystemAgentRunFamily(input: {
           protocol: definition.protocol,
           workspace: selected.workspace,
           workingDirectory: () => selected.locations.workingDirectory,
-          requireSpawnReceipt: true,
+          requireSpawnReceipt:
+            request.executionReceipts !== undefined || request.admitExecution !== undefined,
           cleanupReceiver: 'material',
           evidenceHooks: definition.evidenceHooks,
         },
@@ -136,6 +139,7 @@ export function composeLocalSystemAgentRunFamily(input: {
     invocations,
     workspaces: contents.workspaces,
     retainedContents: contents.contents,
+    recovery,
   })
   const fixture = input.fixture
   function fixtureFamily(
@@ -144,6 +148,7 @@ export function composeLocalSystemAgentRunFamily(input: {
     return Object.freeze<SystemAgentRunFamily>({
       workspaces: contents.workspaces,
       retainedContents: contents.contents,
+      recovery,
       async run(request) {
         const native = nativeFixtureRequest(request)
         const result = await runFn(native)

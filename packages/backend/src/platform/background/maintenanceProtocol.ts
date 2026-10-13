@@ -11,6 +11,8 @@ const SqliteMaintenanceWorkerInitSchema = z
     dbPath: z.string().min(1),
     migrationsFolder: z.string().min(1),
     appHome: z.string().min(1),
+    /** Host-selected roots handshake without admitting the durable queue. */
+    dispatchPaused: z.boolean().optional(),
     sqlite: z
       .object({
         synchronous: z.enum(['NORMAL', 'FULL']),
@@ -30,6 +32,7 @@ const PostgresqlMaintenanceWorkerInitSchema = z
     provider: z.literal('postgresql'),
     generationId: z.string().min(1),
     appHome: z.string().min(1),
+    dispatchPaused: z.boolean().optional(),
     database: z
       .object({
         provider: z.literal('postgresql'),
@@ -53,6 +56,12 @@ export const MaintenanceWorkerInitSchema = z.union([
 
 export const MaintenanceWorkerRequestSchema = z.union([
   MaintenanceWorkerInitSchema,
+  z
+    .object({
+      type: z.literal('activate'),
+      version: z.literal(MAINTENANCE_PROTOCOL_VERSION),
+    })
+    .strict(),
   z
     .object({
       type: z.literal('wake'),

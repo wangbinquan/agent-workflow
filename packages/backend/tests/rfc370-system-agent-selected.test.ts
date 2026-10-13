@@ -44,6 +44,9 @@ function selectedRun() {
     preparedSeeds: undefined as Parameters<AgentMaterialWorkspace['prepare']>[0],
     submitted: undefined as ExecutionEffectRequest | undefined,
     warnings: [] as { message: string; fields: unknown }[],
+    recoveryState: 'unknown' as 'unknown' | 'reaped',
+    recoveryRef: undefined as string | undefined,
+    execution: undefined as AgentExecutionBinding | undefined,
   }
   const workspace: AgentMaterialWorkspace = {
     workspace: { owner: 'source-control', reference: 'selected:working', version: 7 },
@@ -139,6 +142,11 @@ function selectedRun() {
         materialRef: material.materialRef,
         workspaceRef: workspace.workspace.reference,
         effect: {
+          async recoverOriginal({ executionRef }) {
+            expect(this).toBe(execution.effect)
+            calls.push('recover-original')
+            return { executionRef: state.recoveryRef ?? executionRef, state: state.recoveryState }
+          },
           async submit(request: ExecutionEffectRequest) {
             calls.push('submit')
             state.submitted = request
@@ -149,7 +157,9 @@ function selectedRun() {
                 startedAt: 17,
               })
             } catch {
-              return { ...state.result, outcome: 'spawn-failed' as const }
+              return state.result.outcome === 'unreaped'
+                ? state.result
+                : { ...state.result, outcome: 'spawn-failed' as const }
             }
             try {
               await request.capture?.onStdoutLine?.('original streamed event')
@@ -168,6 +178,7 @@ function selectedRun() {
         reportUnreaped: unused,
         unreapedMessage: unused,
       }
+      state.execution = execution
       return execution
     },
   }
@@ -384,6 +395,118 @@ describe('RFC-370 selected System common core', () => {
     expect(attempts).toBe(2)
   })
 
+  test('durable preparation ACK precedes submit and original start ACK precedes owner/stream activation', async () => {
+    const run = selectedRun()
+    const prepared: unknown[] = [],
+      started: unknown[] = []
+    const receipts = {
+      async prepared(value: unknown) {
+        expect(this).toBe(receipts)
+        run.calls.push('durable-prepared')
+        prepared.push(value)
+      },
+      async started(value: unknown) {
+        expect(this).toBe(receipts)
+        run.calls.push('durable-started')
+        started.push(value)
+      },
+    }
+    const result = await runPreparedSystemAgent({ ...run.options, executionReceipts: receipts })
+    expect(prepared).toEqual([
+      {
+        executionRef: 'selected:execution',
+        retainedRef: 'selected:retained-content',
+        startedAt: null,
+        recoveryRef: null,
+      },
+    ])
+    expect(started).toEqual([
+      {
+        executionRef: 'selected:execution',
+        retainedRef: 'selected:retained-content',
+        startedAt: 17,
+        recoveryRef: null,
+      },
+    ])
+    expect(run.calls.indexOf('durable-prepared')).toBeLessThan(run.calls.indexOf('submit'))
+    expect(run.calls.indexOf('durable-started')).toBeLessThan(run.calls.indexOf('acknowledge'))
+    expect(run.calls.indexOf('durable-started')).toBeLessThan(run.calls.indexOf('parse'))
+    expect(result.executionReceipt).toEqual(started[0])
+  })
+
+  test('a rejected durable preparation preserves its original error and does not submit a replacement', async () => {
+    const run = selectedRun(),
+      failure = new Error('original durable preparation ACK failed')
+    await expect(
+      runPreparedSystemAgent({
+        ...run.options,
+        executionReceipts: {
+          prepared: async () => {
+            throw failure
+          },
+          started: unused,
+        },
+      }),
+    ).rejects.toBe(failure)
+    expect(run.calls).not.toContain('submit')
+    expect(run.calls).not.toContain('acknowledge')
+  })
+
+  test('original start persistence failure prevents owner/stream activation while preserving the native outcome', async () => {
+    const run = selectedRun()
+    const result = await runPreparedSystemAgent({
+      ...run.options,
+      executionReceipts: {
+        prepared: async () => {},
+        started: async () => {
+          throw new Error('original start ACK failed')
+        },
+      },
+    })
+    expect(result.status).toBe('spawn-failed')
+    expect(result.stderrTail).toContain('original start ACK failed')
+    expect(run.calls).not.toContain('acknowledge')
+    expect(run.calls).not.toContain('parse')
+    expect(result.executionReceipt).toMatchObject({
+      executionRef: 'selected:execution',
+      startedAt: 17,
+    })
+  })
+
+  for (const stage of ['prepared', 'started'] as const)
+    test(`authority loss during ${stage} ACK fences the held original execution`, async () => {
+      const run = selectedRun()
+      let current = true
+      const options = {
+        ...run.options,
+        admitExecution() {
+          expect(this).toBe(options)
+          return current
+        },
+        executionReceipts: {
+          async prepared() {
+            if (stage === 'prepared') {
+              current = false
+              options.admitExecution = () => true
+            }
+          },
+          async started() {
+            if (stage === 'started') {
+              current = false
+              options.admitExecution = () => true
+            }
+          },
+        },
+      }
+      const result = await runPreparedSystemAgent(options)
+      expect(result.status).toBe('spawn-failed')
+      expect(result.stderrTail).toContain('system-agent-execution-admission-expired')
+      expect(result.executionNotActivated).toBe(true)
+      expect(run.calls.includes('submit')).toBe(stage === 'started')
+      expect(run.calls).not.toContain('acknowledge')
+      expect(run.calls).not.toContain('parse')
+    })
+
   test('unreaped execution never disposes selected material or its workspace', async () => {
     const run = selectedRun()
     run.state.result = { ...run.state.result, outcome: 'unreaped', exitCode: null }
@@ -395,6 +518,90 @@ describe('RFC-370 selected System common core', () => {
     expect(run.calls).not.toContain('cleanup')
     expect(run.calls).not.toContain('unbound-cleanup')
     expect(run.calls).not.toContain('discard')
+  })
+
+  test('original recovery requires the same execution receipt and never synthesizes success', async () => {
+    const run = selectedRun()
+    run.state.result = { ...run.state.result, outcome: 'unreaped', exitCode: null }
+    const result = await runPreparedSystemAgent(run.options)
+    const recovery = result.executionRecovery!
+    expect(await recovery.recoverOriginal()).toBe(false)
+    expect(run.calls).not.toContain('cleanup')
+    run.state.recoveryState = 'reaped'
+    run.state.recoveryRef = 'replacement:execution'
+    expect(await recovery.recoverOriginal()).toBe(false)
+    expect(run.calls).not.toContain('cleanup')
+    run.state.recoveryRef = undefined
+    expect(await recovery.recoverOriginal()).toBe(true)
+    expect(result.status).toBe('unreaped')
+    expect(result.exitCode).toBeNull()
+    expect(run.calls.filter((call) => call === 'submit')).toHaveLength(1)
+    expect(run.calls.filter((call) => call === 'cleanup')).toHaveLength(1)
+    expect(run.calls).not.toContain('discard')
+  })
+
+  test('recovery captures original participants and shares physical and cleanup ACKs', async () => {
+    const run = selectedRun()
+    run.state.result = { ...run.state.result, outcome: 'unreaped', exitCode: null }
+    run.state.recoveryState = 'reaped'
+    const result = await runPreparedSystemAgent(run.options)
+    run.state.execution!.effect.recoverOriginal = unused
+    const one = result.executionRecovery!.recoverOriginal()
+    expect(result.executionRecovery!.recoverOriginal()).toBe(one)
+    expect(await one).toBe(true)
+    expect(await result.executionRecovery!.recoverOriginal()).toBe(true)
+    expect(run.calls.filter((call) => call === 'recover-original')).toHaveLength(1)
+    expect(run.calls.filter((call) => call === 'cleanup')).toHaveLength(1)
+    expect(run.calls.filter((call) => call === 'submit')).toHaveLength(1)
+  })
+
+  test('failed original cleanup remains recoverable without a substitute invocation', async () => {
+    const run = selectedRun()
+    run.state.result = { ...run.state.result, outcome: 'unreaped', exitCode: null }
+    run.state.recoveryState = 'reaped'
+    run.state.cleanupError = new Error('original cleanup ACK lost')
+    const result = await runPreparedSystemAgent(run.options)
+    await expect(result.executionRecovery!.recoverOriginal()).rejects.toThrow(
+      'original cleanup ACK lost',
+    )
+    run.state.cleanupError = undefined
+    expect(await result.executionRecovery!.recoverOriginal()).toBe(true)
+    expect(run.calls.filter((call) => call === 'submit')).toHaveLength(1)
+    expect(run.calls).not.toContain('discard')
+  })
+
+  test('an unreaped process takes precedence over its failed original start receipt', async () => {
+    const run = selectedRun()
+    run.state.result = { ...run.state.result, outcome: 'unreaped', exitCode: null }
+    run.state.acknowledgeError = new Error('original start ACK lost')
+    const result = await runPreparedSystemAgent(run.options)
+    expect(result.status).toBe('unreaped')
+    expect(result.scratchRetained).toBe(true)
+    expect(result.executionRecovery).toBeDefined()
+    expect(run.calls).not.toContain('cleanup')
+    expect(run.calls).not.toContain('discard')
+  })
+
+  test('original incomplete capture ACK must settle before recovered material cleanup', async () => {
+    const run = selectedRun()
+    run.state.result = { ...run.state.result, outcome: 'unreaped', exitCode: null }
+    run.state.recoveryState = 'reaped'
+    let permitTerminal = false
+    run.sink.markTerminal = async function (state, reason) {
+      expect(this).toBe(run.sink)
+      expect(state).toBe('incomplete')
+      expect(reason).toBe('post-exit-flush-timeout')
+      if (!permitTerminal) throw new Error('original terminal ACK lost')
+    }
+    const result = await runPreparedSystemAgent({ ...run.options, eventSink: run.sink })
+    expect(await result.executionRecovery!.recoverOriginal()).toBe(false)
+    expect(run.calls).not.toContain('cleanup')
+    permitTerminal = true
+    run.sink.markTerminal = unused
+    expect(await result.executionRecovery!.recoverOriginal()).toBe(true)
+    expect(run.calls.filter((call) => call === 'recover-original')).toHaveLength(1)
+    expect(run.calls.filter((call) => call === 'cleanup')).toHaveLength(1)
+    expect(run.calls.filter((call) => call === 'submit')).toHaveLength(1)
   })
 
   test('cleanup failure keeps the original failed result and skips workspace disposal', async () => {

@@ -7,6 +7,8 @@
 //      decisions[slots]} — the server-issued-slot contract end to end.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type { HostExecutionStatus } from '@agent-workflow/shared'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import {
@@ -131,7 +133,10 @@ interface Recorded {
   calls: Array<{ url: string; method: string; body: unknown }>
 }
 
-function installFetch(detail: IntentSessionDetail): Recorded {
+function installFetch(
+  detail: IntentSessionDetail,
+  recovery?: Promise<{ acknowledged: boolean }> | Error,
+): Recorded {
   const rec: Recorded = { calls: [] }
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (req: RequestInfo | URL, init?: RequestInit) => {
@@ -147,6 +152,10 @@ function installFetch(detail: IntentSessionDetail): Recorded {
       if (url.includes('/commit')) {
         return json({ journalId: 'J1', commitSeq: 1, applied: [] })
       }
+      if (method === 'POST' && url.endsWith('/recover')) {
+        if (recovery instanceof Error) throw recovery
+        return json(recovery ? await recovery : { acknowledged: true })
+      }
       if (method === 'POST') return json({ turnId: 'T9' })
       return json(detail)
     },
@@ -154,7 +163,7 @@ function installFetch(detail: IntentSessionDetail): Recorded {
   return rec
 }
 
-async function renderPage(opts: { staleTime?: number } = {}) {
+async function renderPage(opts: { staleTime?: number; hostExecution?: HostExecutionStatus } = {}) {
   const qc = new QueryClient({
     defaultOptions: {
       queries: {
@@ -176,14 +185,185 @@ async function renderPage(opts: { staleTime?: number } = {}) {
   })
   render(
     <QueryClientProvider client={qc}>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <RouterProvider router={router as any} />
+      <HostExecutionReadinessContext.Provider
+        value={opts.hostExecution ?? { mode: 'native', status: null }}
+      >
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <RouterProvider router={router as any} />
+      </HostExecutionReadinessContext.Provider>
     </QueryClientProvider>,
   )
   return qc
 }
 
+test('RFC-370 resource-only Intent preserves composer text and lifecycle actions without generating a new turn', async () => {
+  const rec = installFetch(detailFixture({ currentDraft: CLEAN_DRAFT }))
+  await renderPage({
+    hostExecution: {
+      mode: 'resource-only',
+      status: {
+        phase: 'standby',
+        generation: 'intent-resource-mode',
+        readyGroups: [],
+        reason: 'resource-only',
+      },
+    },
+  })
+  const composer = (await screen.findByTestId('intent-composer')) as HTMLTextAreaElement
+  fireEvent.change(composer, { target: { value: 'preserved refinement' } })
+  const submit = screen.getByTestId('intent-composer-submit') as HTMLButtonElement
+  expect(submit.disabled).toBe(true)
+  fireEvent.click(submit)
+  expect(composer.value).toBe('preserved refinement')
+  expect(
+    rec.calls.some(
+      (call) => call.method === 'POST' && /\/(messages|iterations|current-action)$/.test(call.url),
+    ),
+  ).toBe(false)
+  expect(
+    (screen.getByRole('button', { name: enUS.intent.archiveAction }) as HTMLButtonElement).disabled,
+  ).toBe(false)
+})
+
 describe('RFC-234 /intent/$sessionId', () => {
+  test('RFC-370 pending and refused original recovery preserves text and offers another explicit recovery', async () => {
+    const original = detailFixture({
+      turns: [
+        {
+          id: 'ORIGINAL',
+          seq: 2,
+          role: 'agent',
+          kind: 'running',
+          content: {},
+          contextRevision: 0,
+          runMeta: { originalExecution: { phase: 'started' } },
+          scratchRetained: true,
+          execution: null,
+          createdAt: 2,
+        },
+      ],
+    })
+    let resolve!: (value: { acknowledged: boolean }) => void
+    const recorded = installFetch(
+      original,
+      new Promise((accept) => {
+        resolve = accept
+      }),
+    )
+    const hostExecution: HostExecutionStatus = {
+      mode: 'execution',
+      status: {
+        phase: 'draining',
+        generation: 'original',
+        readyGroups: [],
+        reason: 'host-execution-owner-failed',
+      },
+    }
+    await renderPage({ hostExecution })
+    const composer = (await screen.findByTestId('intent-composer')) as HTMLTextAreaElement
+    fireEvent.change(composer, { target: { value: 'retained draft' } })
+    fireEvent.click(await screen.findByRole('button', { name: enUS.hostExecution.recoverIntent }))
+    expect(
+      (
+        (await screen.findByRole('button', {
+          name: enUS.hostExecution.recoveringIntent,
+        })) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true)
+    resolve({ acknowledged: false })
+    await screen.findByText(enUS.hostExecution.intentRecoveryPending)
+    expect(composer.value).toBe('retained draft')
+    expect(recorded.calls.filter((call) => call.method === 'POST')).toHaveLength(1)
+    cleanup()
+    installFetch(original, new Error('Original recovery ACK failed'))
+    await renderPage({ hostExecution })
+    fireEvent.click(await screen.findByRole('button', { name: enUS.hostExecution.recoverIntent }))
+    await screen.findByText('Original recovery ACK failed')
+    expect(
+      (screen.getByRole('button', { name: enUS.hostExecution.recoverIntent }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false)
+  })
+  test('RFC-370 recovers the original turn while preserving the composer and never submits a replacement turn', async () => {
+    const original = detailFixture({ currentDraft: CLEAN_DRAFT })
+    original.turns = [
+      {
+        id: 'ORIGINAL',
+        seq: 2,
+        role: 'agent',
+        kind: 'running',
+        content: {},
+        contextRevision: 0,
+        runMeta: { originalExecution: { phase: 'started', turnId: 'ORIGINAL' } },
+        scratchRetained: true,
+        execution: null,
+        createdAt: 2,
+      },
+    ]
+    const recorded = installFetch(original)
+    await renderPage({
+      hostExecution: {
+        mode: 'execution',
+        status: {
+          phase: 'draining',
+          generation: 'original',
+          readyGroups: [],
+          reason: 'host-execution-owner-failed',
+        },
+      },
+    })
+    const composer = (await screen.findByTestId('intent-composer')) as HTMLTextAreaElement
+    fireEvent.change(composer, { target: { value: 'preserved original feedback' } })
+    fireEvent.click(await screen.findByRole('button', { name: enUS.hostExecution.recoverIntent }))
+    await screen.findByText(enUS.hostExecution.intentRecoveryAcknowledged)
+    expect(composer.value).toBe('preserved original feedback')
+    expect(recorded.calls.filter((call) => call.method === 'POST').map((call) => call.url)).toEqual(
+      ['http://daemon.test/api/intent-sessions/S1/turns/ORIGINAL/recover'],
+    )
+  })
+
+  test('RFC-370 active execution and audit views expose no original-recovery action', async () => {
+    const original = detailFixture({
+      turns: [
+        {
+          id: 'ORIGINAL',
+          seq: 2,
+          role: 'agent',
+          kind: 'running',
+          content: {},
+          contextRevision: 0,
+          runMeta: { originalExecution: { phase: 'started' } },
+          scratchRetained: true,
+          execution: null,
+          createdAt: 2,
+        },
+      ],
+    })
+    installFetch(original)
+    await renderPage({
+      hostExecution: {
+        mode: 'execution',
+        status: { phase: 'active', generation: 'active', readyGroups: ['intent'], reason: null },
+      },
+    })
+    await screen.findByTestId('intent-composer')
+    expect(screen.queryByRole('button', { name: enUS.hostExecution.recoverIntent })).toBeNull()
+    cleanup()
+    installFetch({ ...original, session: { ...original.session, ownerUserId: 'OTHER-OWNER' } })
+    await renderPage({
+      hostExecution: {
+        mode: 'execution',
+        status: {
+          phase: 'draining',
+          generation: 'old',
+          readyGroups: [],
+          reason: 'host-execution-owner-failed',
+        },
+      },
+    })
+    await screen.findByText(enUS.intent.auditReadOnly)
+    expect(screen.queryByRole('button', { name: enUS.hostExecution.recoverIntent })).toBeNull()
+  })
   test('archives and reopens from the detail header without a hidden API-only state', async () => {
     const archiveRec = installFetch(detailFixture())
     await renderPage()

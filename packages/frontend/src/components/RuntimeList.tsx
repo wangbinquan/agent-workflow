@@ -16,6 +16,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import {
   RUNTIME_NUMERIC_BOUNDS,
   configDirEnvProblem,
@@ -117,6 +118,7 @@ export function RuntimeList({
   restoreFocusFallbackRef?: RefObject<HTMLElement | null>
 } = {}) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const [editing, setEditing] = useState<RuntimeView | 'new' | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
@@ -132,8 +134,10 @@ export function RuntimeList({
   })
 
   const probe = useMutation({
-    mutationFn: (name: string) =>
-      api.post<{ smoke: SmokeResult }>(`/api/runtimes/${encodeURIComponent(name)}/probe`),
+    mutationFn: (name: string) => {
+      execution.assertAvailable()
+      return api.post<{ smoke: SmokeResult }>(`/api/runtimes/${encodeURIComponent(name)}/probe`)
+    },
     onSuccess: () => void qc.invalidateQueries({ queryKey: RUNTIMES_QUERY_KEY }),
   })
 
@@ -265,7 +269,8 @@ export function RuntimeList({
                 <button
                   type="button"
                   className="btn btn--xs"
-                  disabled={probe.isPending}
+                  disabled={probe.isPending || !execution.available}
+                  title={execution.unavailableReason}
                   onClick={() => probe.mutate(rt.name)}
                 >
                   {t('runtimes.test')}
@@ -345,11 +350,13 @@ function RuntimeFormDialog(props: {
   onSaved: () => void
 }) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const isEdit = props.existing !== null
   const [name, setName] = useState(props.existing?.name ?? '')
   const [protocol, setProtocol] = useState<RuntimeProtocol>(props.existing?.protocol ?? 'opencode')
   const [binaryPath, setBinaryPath] = useState(props.existing?.binaryPath ?? '')
+  const [probeBeforeSave, setProbeBeforeSave] = useState(true)
   const [smoke, setSmoke] = useState<SmokeResult | null>(props.existing?.lastProbe ?? null)
   // RFC-113: the runtime IS the execution profile.
   const [model, setModel] = useState<string | undefined>(props.existing?.model ?? undefined)
@@ -415,14 +422,16 @@ function RuntimeFormDialog(props: {
   })
 
   const test = useMutation({
-    mutationFn: () =>
-      api.post<{ smoke: SmokeResult }>('/api/runtimes/probe', {
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post<{ smoke: SmokeResult }>('/api/runtimes/probe', {
         protocol,
         binaryPath: binaryPath.trim(),
         ...(model !== undefined && model.trim() !== '' ? { model: model.trim() } : {}),
         ...(!isOpencode && extraArgs.length > 0 ? { extraArgs } : {}),
         ...(!isOpencode && isSandbox ? { isSandbox: true } : {}),
-      }),
+      })
+    },
     onSuccess: (r) => setSmoke(r.smoke),
   })
 
@@ -435,11 +444,12 @@ function RuntimeFormDialog(props: {
           ...profileBody(),
         })
       }
+      if (probeBeforeSave && trimmed !== '') execution.assertAvailable()
       return api.post('/api/runtimes', {
         name: name.trim(),
         protocol,
         ...(trimmed === '' ? {} : { binaryPath: trimmed }),
-        probe: trimmed !== '',
+        probe: probeBeforeSave && trimmed !== '',
         ...profileBody(),
       })
     },
@@ -462,7 +472,8 @@ function RuntimeFormDialog(props: {
           <button
             type="button"
             className="btn"
-            disabled={test.isPending || binaryPath.trim() === ''}
+            disabled={test.isPending || binaryPath.trim() === '' || !execution.available}
+            title={execution.unavailableReason}
             onClick={() => test.mutate()}
           >
             {test.isPending ? t('runtimes.testing') : t('runtimes.testBinary')}
@@ -475,6 +486,7 @@ function RuntimeFormDialog(props: {
             className="btn btn--primary"
             disabled={
               save.isPending ||
+              (!isEdit && probeBeforeSave && binaryPath.trim() !== '' && !execution.available) ||
               (!isEdit && name.trim() === '') ||
               // RFC-154: invalid config-dir overrides block Save (inline errors
               // explain why); the backend validators are the second line.
@@ -483,6 +495,11 @@ function RuntimeFormDialog(props: {
               profileNumericInvalid
             }
             onClick={() => save.mutate()}
+            title={
+              !isEdit && probeBeforeSave && binaryPath.trim() !== ''
+                ? execution.unavailableReason
+                : undefined
+            }
           >
             {t('common.save')}
           </button>
@@ -490,6 +507,15 @@ function RuntimeFormDialog(props: {
       }
     >
       <SettingsCard title={t('runtimes.launchTitle')} hint={t('runtimes.launchHint')}>
+        {!isEdit && (
+          <Field label={t('runtimes.probeBeforeSave')}>
+            <Switch
+              checked={probeBeforeSave}
+              onChange={setProbeBeforeSave}
+              label={t('runtimes.probeBeforeSave')}
+            />
+          </Field>
+        )}
         <Field label={t('runtimes.fieldName')} hint={t('runtimes.fieldNameHint')} required>
           <TextInput value={name} onChange={setName} disabled={isEdit} data-testid="runtime-name" />
         </Field>

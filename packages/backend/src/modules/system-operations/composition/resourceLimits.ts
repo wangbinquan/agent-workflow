@@ -6,6 +6,17 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import type { ResourceLimitOperations } from '../application/ports/resourceLimitPersistence'
 import { DrizzleResourceLimitPersistence } from '../infrastructure/resourceLimitPersistence'
 
+/** The selected host supplies the same Task cancellation binding as its root. */
+export function composeResourceLimitOperations(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly cancelTask: ResourceLimitOperations['cancelTask']
+}): ResourceLimitOperations {
+  return Object.freeze({
+    persistence: new DrizzleResourceLimitPersistence(input.db),
+    cancelTask: input.cancelTask,
+  })
+}
+
 /** Compatibility composition for SQLite callers not yet assembled at bootstrap. */
 export function composeLegacySqliteResourceLimitOperations(
   db: ProviderNeutralDatabase,

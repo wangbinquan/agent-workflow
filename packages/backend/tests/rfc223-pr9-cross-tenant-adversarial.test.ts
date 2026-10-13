@@ -1,3 +1,4 @@
+import { composeLocalFusionWorkspaces } from '../src/modules/system-operations/composition/localFusionWorkspace'
 // RFC-223 PR-9 (T16) — cross-tenant same-name adversarial coverage.
 //
 // This suite deliberately exercises the real id-canonical consumers that were
@@ -356,6 +357,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       db,
       appHome,
       operations: composeSqliteFusionOperations({
+        fusionWorkspaces: composeLocalFusionWorkspaces(),
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
         appHome,

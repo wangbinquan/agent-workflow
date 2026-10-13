@@ -22,6 +22,7 @@ import type {
 } from './maintenanceWorkerSupervisor'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
+import { waitForExecutionActivation } from './activation'
 
 const log = createLogger('maintenance-service')
 const CHECKPOINT_SUPERVISOR_MS = 60_000
@@ -127,6 +128,8 @@ export interface MaintenanceService {
 /** A captured owner lifetime; the platform does not interpret its authority. */
 export interface MaintenanceExecutionLifetime {
   readonly current: () => boolean
+  readonly whenActive?: Promise<boolean>
+  readonly canDispatch?: () => boolean
 }
 
 export type ColdMaintenanceServiceOptions = Omit<MaintenanceServiceOptions, 'startSupervisor'> &
@@ -498,6 +501,9 @@ function createMaintenanceService(
   interface ColdServiceFrame {
     readonly lifetime: MaintenanceExecutionLifetime
     readonly current: () => boolean
+    readonly dispatch: () => boolean
+    activationControl: AbortController
+    activation: Promise<void> | null
     supervisor: ColdMaintenanceWorkerSupervisor | null
     readonly supervisors: ColdMaintenanceWorkerSupervisor[]
     start: Promise<void> | null
@@ -519,6 +525,7 @@ function createMaintenanceService(
       (activeColdFrame !== null &&
         activeColdFrame.activated &&
         activeColdFrame.current() &&
+        activeColdFrame.dispatch() &&
         activeColdFrame.supervisor?.live().state === 'ready'))
 
   const payloadFor = async (
@@ -979,6 +986,7 @@ function createMaintenanceService(
   }
   const fenceFrame = (frame: ColdServiceFrame): void => {
     frame.quiesced = true
+    frame.activationControl.abort()
     frame.activated = false
     if (activeColdFrame === frame) {
       paused = true
@@ -995,12 +1003,34 @@ function createMaintenanceService(
   }
   const activateFrame = (frame: ColdServiceFrame): void => {
     assertCanActivate(frame)
+    frame.supervisor?.activateDispatch()
     frame.activated = true
     paused = false
     admission.resume()
     assertCanActivate(frame)
     startEventLoopSampling()
     startExecutionSchedules()
+  }
+  const activateScheduling = (frame: ColdServiceFrame): void => {
+    if (frame.lifetime.whenActive === undefined) {
+      activateFrame(frame)
+      return
+    }
+    frame.activationControl = new AbortController()
+    const control = frame.activationControl
+    frame.activation = waitForExecutionActivation(frame.lifetime.whenActive, control.signal).then(
+      (active) => {
+        if (
+          active &&
+          frame.current() &&
+          frame.dispatch() &&
+          !frame.quiesced &&
+          !control.signal.aborted
+        )
+          activateFrame(frame)
+      },
+    )
+    void frame.activation.catch(() => {})
   }
   const pauseCold = (): Promise<void> => {
     if (stopped) return pausePromise ?? Promise.resolve()
@@ -1011,7 +1041,10 @@ function createMaintenanceService(
     paused = true
     stopExecutionTimers()
     const frame = lastSelectedColdFrame
-    if (frame !== null) frame.activated = false
+    if (frame !== null) {
+      frame.activated = false
+      frame.activationControl.abort()
+    }
     if (pausePromise !== null) return pausePromise
     const admissionTail = admission.pause()
     if (frame !== null) frame.admissionTail = admissionTail
@@ -1069,7 +1102,7 @@ function createMaintenanceService(
       if (!frame.current() || frame.quiesced || lastSelectedColdFrame !== frame) {
         throw new Error('maintenance execution lifetime is not current')
       }
-      activateFrame(frame)
+      activateScheduling(frame)
     })()
       .catch((error: unknown) => {
         if (!frame.current() || stopped || frame.quiesced || lastSelectedColdFrame !== frame) {
@@ -1107,6 +1140,7 @@ function createMaintenanceService(
       // the complete list; start checks the synchronous quiesce fence before creation.
       await frame.start?.catch(() => undefined)
       await frame.resume?.catch(() => undefined)
+      await frame.activation
       const admissionTail = frame.admissionTail
       await admissionTail
       const owners = [...frame.supervisors]
@@ -1142,6 +1176,9 @@ function createMaintenanceService(
       frame = {
         lifetime,
         current: () => current.call(lifetime),
+        dispatch: lifetime.canDispatch?.bind(lifetime) ?? (() => true),
+        activationControl: new AbortController(),
+        activation: null,
         supervisor: null,
         supervisors: [],
         start: null,
@@ -1205,7 +1242,7 @@ function createMaintenanceService(
       }
       selected.ownerStarted = true
       await owner.start()
-      activateFrame(selected)
+      activateScheduling(selected)
     })()
       .catch((error: unknown) => {
         if (!selected.current() || stopped || selected.quiesced || !coldPauseRequested) {

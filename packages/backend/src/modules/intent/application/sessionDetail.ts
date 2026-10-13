@@ -60,7 +60,18 @@ export async function projectIntentSessionDetail(
     kind: t.kind,
     content: parseJsonRecord(t.contentJson),
     contextRevision: t.contextRevision,
-    runMeta: t.runMetaJson === null ? null : parseJsonRecord(t.runMetaJson),
+    runMeta:
+      t.runMetaJson === null
+        ? null
+        : (() => {
+            const { execution, ...metrics } = parseJsonRecord(t.runMetaJson)
+            if (execution === undefined) return metrics
+            const original = execution as { phase?: string }
+            return {
+              ...metrics,
+              originalExecution: { phase: original.phase ?? 'unknown', turnId: t.id },
+            }
+          })(),
     scratchRetained: t.scratchRetained,
     execution: projectIntentTurnExecution(t),
     createdAt: t.createdAt,

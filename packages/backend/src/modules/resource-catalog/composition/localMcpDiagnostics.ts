@@ -14,6 +14,7 @@ export interface LocalMcpDiagnosticsApplicationInput
 export interface LocalMcpDiagnosticsCompositionInput extends LocalMcpDiagnosticsApplicationInput {
   readonly requestBinding: McpDiagnosticsCompositionInput['requestBinding']
   readonly coordinator: McpDiagnosticsCompositionInput['coordinator']
+  readonly queryMode?: McpDiagnosticsCompositionInput['queryMode']
 }
 
 /** Original native snapshot/getter order and actual application callback receiver. */

@@ -1,3 +1,95 @@
+## 2026-10-14 阶段 A 完整候选收口
+
+实际 Intent turn/主回执/冷恢复和原恢复 HTTP/UI 已补；未激活 helper 保存原事实并保留原预约/预算，原结果与图修复预约同事务。两 daemon 复用既有 intent owner，embedded 增加其真实 HTTP Intent owner。阶段 A 生产与用例写作齐备，接下来完成最终生成物和集中功能验收，完整提交到远端并取得确切 SHA GitHub 主 CI/Windows 总绿，之后 B。独立 Codex 实现门工具缺失仍未记 PASS，RFC 保持 In Progress；以下历史状态不作为当前验收证明。
+
+## 2026-10-14 实际 owner 覆盖与 Intent 间接派发收口
+
+idle timeout 原树取消/原因/审计和 Fusion 实际根 intake/drain 的遗漏覆盖已補写，双 provider/native 原判据保留；新增三根十九项 roster 源码约束，原启动 lease 用例同步。四份 TS 静态自查不是功能门。Intent queued admission 不覆盖真实 detached turn，且 unreaped 原引用被普通结算/forget；此实际 H7 消费者遗漏须先补 turn lifetime、Intent 自有主事实/显式恢复、continuation 准入与真实根接线，再关闭 A-T6。见 [收口要求](intent-issued-owner-closeout.md)。未执行新用例/实现门、未发布/部署，无跨 session 信息；下方原产出保留。
+
+## 2026-10-14 资源服务及原恢复入口候选
+
+真实启动入口补 selected 资源 serving，执行受阻仍可通过 HTTP 处理原恢复；新增 SO 独立启动重试/API/UI、Memory 行级恢复及正常在途 tick 不被冷接管。Intent 遗留 scratch helper 复用现存 port。本轮完整接线与对应双 provider/embedded/native-error/UI/原存储用例只编写未执行；见 [资源服务与原恢复](resource-serving-and-original-recovery.md)。[调用者账本](stage-a-caller-ledger.md) 已按八职责落位，间接入口/完整根/十九 owner/A-T7 仍需收口，随后集中门、完整提交、确切 SHA GitHub 总绿后 B。原计划和并发内容完整保留。
+
+## 2026-10-13 实际主回执、原协议恢复与新执行代候选
+
+Memory primary journal 已接实际 prepare/start/terminal/候选/固定业务结算；ACK 失败只继续原工作。冷恢复保持原候选人审、任务预算和协议 session/scope/nonce/runtime/deadline；原 gated 准备窗口可跨进程退休，首轮未执行归还 claim，原补问待 active owner 继续。冷启动失败保留未就绪 owner，原物理/业务 ACK 后才 drain 并进入新 SO epoch。实际 native 窗口与双 provider/SO/原业务回归只编写未执行，43 份 TS 静态自查不是功能验收。
+
+继续完成全调用者、三根/十九 owner 完整覆盖及 A-T7，再集中验收、完整提交与确切 SHA GitHub 总绿后 B。RFC 仍 In Progress；未发布本批候选、未部署 CS，无跨 session 信息。详见 [耐久恢复与实际接线](durable-system-recovery-reference.md)。下方并发和历史记录完整保留。
+
+## 2026-10-13 耐久原执行引用、材料及日志基础候选
+
+新增跨进程 native recovery reference、同安装材料 generation 释放、System 原 prepared/started ACK 合同和双 provider Memory 原回执 journal。SQLite 0254/PG 0030 及 roster/合同配套由当前完整共享 schema 生成，保留既有并发产出；用例仅编写，31 份 TS 只语法/格式/diff 自查，没有运行迁移或功能门。日志的实际 Memory 调度/协议链、原 ACK 继续、重建业务结算及 SO 新 epoch 接线尚待完成，不能据底层接口关闭 H7/A-G。详见 [本轮候选与下一步](durable-system-recovery-reference.md)。
+
+用户要求的完整 A 开发/用例、集中验证、完整提交与确切 SHA GitHub 总绿后再 B 顺序保持；无新发布/部署或跨 session 信息。以下原计划和并发内容完整保留。
+
+## 2026-10-13 阶段 A 完整提交与 GitHub 总绿退出门
+
+用户最新要求：阶段 A 完成后先完整提交上库，并把 GitHub 总流水线修绿，再继续阶段 B。当前五类收口工作是原执行恢复/恢复后继续、H1～H8 全调用者核对、三根/十九 owner 完整用例、A-T7 架构配套、A-G 集中验证与完整提交/确切 SHA 总绿。细目见 [阶段 A 退出清单](stage-a-exit-checklist.md)，候选代码、静态解析或部分 CI 通过不代签完成。
+
+原 System recovery port、native 原 child 能力、原 result recovery 及 Memory 显式原恢复/结算/HTTP 已写入候选；用例只编写未执行，25 份 TS 仅格式/语法/diff 自查。当前能力只保留在原实例，跨进程耐久恢复与 SO 继续未闭合；见 [原系统执行恢复](original-system-execution-recovery.md)。本会话未发布本批候选，无跨 session 信息；下方原计划和并发产出完整保留。
+
+## 2026-10-13 记忆未发领取归还候选
+
+原 host 领取 ACK 之后重新检查执行权/实际记录，未发 bundle 通过完整原事务 port 归还；取消保留，回执变化不清除。领取/归还丢 ACK 只结算原归还，不调用 runtime、不增加预算；实际已发后结算另有用例。双 provider 用例只写入未执行，四份 TS 静态自查，累计 136 份 TS/TSX 语法零错误不代签功能/CI。
+
+完整阶段 A 的未知物理恢复/继续、整体装配、调用者与架构配套、A-G 仍开放；之后按先 M0 首次实际部署再 M1～M4 推进独立 CS adapters。原计划、并发和历史内容保持。见 [当前候选和完整剩余](memory-unissued-claim-return.md)。
+
+## 2026-10-13 owner 致命失败与准入候选
+
+原 fatal owner 向同一 SO grant 反馈，立即关闭新准入并进入 draining，等待原 runtime/recovery/write 的真实 ACK；旧 grant 和普通暂停有独立保护。polling/managed/MCP 及 Task lifetime 接线已补，控制与 provider 用例只写入未执行。十一份 TS 静态自查，累计 136 份 TS/TSX 语法零错误不代签功能/CI。
+
+阶段 A 的未发领取、未知物理恢复/继续、整体装配、调用者与架构配套及 A-G 仍开放，之后按先 M0 实际部署再 M1～M4 推进独立 CS adapters。RFC 未完成、AW 未部署 CS；旧内容和并发产出完整保留。见 [当前候选与真实剩余项](owner-failure-admission.md)。
+
+## 2026-10-13 记忆蒸馏原结算候选
+
+host 蒸馏的 runtime 成功与未确认落库分开，原结算只重试原 ID/时间/attempt/backoff，实际记录缺失或替换不确认。普通暂停和失权 drain 接同一原回执，不能再次运行 runtime 或代签 unreaped。双 provider 与 owner 测试用例已写入、未执行，八份 TS 静态自查、累计 130 份 TS/TSX 语法零错误不是功能/CI 结果。
+
+完整阶段 A 的未发领取、未知物理恢复、owner 状态、三根/十九 owner、调用者与架构配套、A-G 仍开放。之后按 AC00/AC00B 进入独立 CS adapters 与先 M0 首次实际部署、再 M1～M4；RFC 未完成。详见 [当前候选及实际剩余路径](memory-original-settlement.md)。下方历史及并发记录完整保留。
+
+## 2026-10-13 MCP 恢复、入口与融合工作区候选
+
+原 MCP 结算 callback/lease ACK 重试和原会话显式恢复已完成应用命令、HTTP 与界面接线；实际恢复与不确定失败用例只写入，尚未执行。补齐执行入口及界面；runtime 模型列表命令须实际准入，纯配置保存和取消保留。融合编排的 FS/Git 改由完整独立工作区 port/local adapter，三根显式装配，冷查询只读原持久事实。
+
+123 份 TS/TSX 只语法零错误及指定格式/diff 自查，无功能门、新候选 CI 验收、提交/推送/部署或跨 session 信息。全阶段 A/A-T7/A-G 尚未完成，CS adapter 仍待 AC00；之后先 M0 实际部署与持久性验收，再增量 M1～M4。详见 [当前候选及完整剩余工作](mcp-recovery-and-execution-entrypoints.md)。原任务表和下方历史记录完整保留。
+
+## 2026-10-13 三根选型、激活与状态接线候选
+
+两 daemon 根已选择原十九个 owner，嵌入式 HTTP 已接同一 Task/MCP 及原有限所有权；统一激活等待实际 recovery/write/start ACK，维护子 Worker 原持久队列单独在 activate 后才派发。补齐普通暂停/失权顺序、构造失败清理与 PG webhook 原 registry。中立执行状态 API、应用根提示、Task 创建/MCP 启动限制和首批服务端分组边界已写入候选，全部新回归尚未执行。
+
+67 份 TS/TSX 只完成语法零错误与指定格式/diff 自查，无功能门、CI 代签、新发布/部署或跨 session 信息。请求受理已持有实际 SO lease；暂停中的新 grant 不重新开派发，deferred clarify 保存与自动继续分开，准备期配置在刷新 owner 激活后重读。剩余完整根/owner 用例、全部请求及界面入口、未确定结算恢复、A-T7/架构配套、A-G，随后独立 CS adapters 与先 M0 再 M1～M4 继续开放；RFC 保持 In Progress，AW 尚未部署 CS。详见 [本轮候选与完整待项](root-activation-and-availability.md)。下方历史及并发记录完整保留。
+
+## 2026-10-13 十九项 owner 绑定候选续推
+
+十九项独立根侧绑定代码已写齐，最新补齐五个业务循环和报告 owner。报告生命周期覆盖原完整报告及并发新增的增量统计/存储维护，保留所有原业务计算和持久输出；已发工作的结果/清理排空，未发工作关闭准入或归还同一领取。新增真实双 provider、原报告 snapshot/spool 和 worker 生命周期用例均只编写未执行。十五份业务与十一份报告 TS 静态解析零错误，必要格式/diff 自查不构成功能验收。
+
+三个真实启动根尚未完成选型和十九项接线，状态 API/UI、运行时不确定结算恢复、A-T7/A-G、各层 CS adapter 和 M0～M4 仍开放，RFC 保持 In Progress，AW 未部署 CS。继续完成完整实现及测试写作后集中验证；本批未发布或部署，无跨 session 通信。详见 [H7 当前进度](host-execution-root-assembly.md)。以下历史记录完整保留。
+
+## 2026-10-13 定时 owner 续推
+
+已写入 scheduled backup、submodule refresh、batch import GC、resource limits 与 idle timeout 五个独立根侧绑定，现合计十三项绑定代码，仍未表示三个根已完成真实选择。配置读取后和下一业务项之前使用同一捕获 lifetime；备份失权后不再发起新 prune wake，原请求仍排空；刷新只标记实际尝试的仓库，不把未发出的镜像错误标成已刷新。GC 是同步内存清理，停 ticker 后确无异步业务尾部；不能将此结论套到备份或刷新。
+
+额度清理等待原已发取消的原因及审计写回，失权后不取消下一任务。idle timeout 按原任务树准入，已受理树完成原 kill/cascade/audit，停止下一棵树；未受理候选不因失权落失败。新增同一 Task 取消绑定的中立 resource limit 装配入口，避免 selected SQLite 回退到旧进程默认取消器。双 provider 实际存储、受控定时器/配置通知/原调用 ACK、原真实 Git 刷新及 idle tree 用例已同步编写，全部未执行。十一份本批 TS 静态解析零错误，格式/diff 自查完成，不代表功能或 CI 通过。
+
+剩余 memory distill、development wake、digital employee、event center、fusion、report，三根整体接线及根关闭、状态 API/UI、A-T7/A-G 与 CS M0～M4 继续开发；不逐片执行功能门，不发送跨 session 信息。
+
+## 2026-10-13 webhook terminal control 续推
+
+已补 webhook terminal control 的显式冷宿主生命周期、第八个独立 owner 绑定与双 provider 用例。原 claim 在未发出任务终止前失权时归还为 pending；已经发出的操作等待原 receipt 写入，精确 CAS 结算领取，单调保留 claim attempt。数据库 ACK 未确认时保留原写入重试，不再次调用任务终止。原启动 guard 的 reservation、结果写回与 release 都计入同一 lifetime；失权不 abort，普通 pause 保留 abort，旧尾部未确认不得换代。额外补齐 webhook 准备阶段异常的 guard 收尾，避免新排空边界暴露永久等待。
+
+原 native 用例、完整端口和失败证据保留；新增九项双 provider 宿主/领取/启动/事务用例及原真实 dispatcher 的准备异常用例均只写入、未执行。十一份 TS 的语法解析零错误，必要格式与 diff 静态自查完成，不等同于功能验收。三个真实根与完整十九项仍待接线，报告、其余后台 owner、状态 API/UI、A-T7/A-G 和 CS adapter、M0～M4 仍开放；本候选尚未发布或部署，无跨 session 信息。
+
+## 2026-10-13 MCP 与事件 owner 续推
+
+新增 MCP host 生命周期、原请求在未发出时的延后与首轮 lease 重领、全部在途回执排空；资源查询和修改继续保留原持久事实。人工确认 continuation 和已提交事件增加独立的失权派发面，后者用原 provider 事务归还尚未发给 consumer 的 claim，保留重试预算。相应真实双 provider／owner 回归已写入候选，未执行。
+
+根侧独立绑定已写七项，但十九项尚未全部实际接入 SQLite daemon、PostgreSQL daemon 和 embedded HTTP；报告、其它 owner、状态读面与不确定结算恢复仍待完整接线。A-G、CS adapters 和 M0～M4 均未验收，AW 尚未部署 CS。仍先完成完整实现与测试写作，再集中验证；本轮未本机执行 AW 测试、typecheck、build、服务或逐片门，也未发布这批生产候选。详见 [H7 最新进度](host-execution-root-assembly.md)。
+
+## 2026-10-13 恢复 RFC 生产实现
+
+用户最新指示“先继续推进 RFC”，恢复完整 RFC 开发。现有共享 CI 失败保留原证据和责任划分，不再以等待他人修绿阻止本会话实现；不能据此宣称整体 CI 已通过。按最新 `AGENTS.md` 完成生产代码、全部真实接线和测试用例后集中验证，禁止逐片实现门或本机 AW 执行。
+
+当前新增一次安装的宿主 bootstrap、资源 resume 先于 authority start 的实际 session 装配方法、四个已有 owner 的独立绑定和 MCP 持久查询面，并补对应回归用例；共同 session 入口已能接收完整 host runtime 选择。三根尚未真正选择完整十九个 owner，MCP／report 生命周期和状态读面等仍待完成。A-T6、A-T7、A-G、各层 CS adapter 与先 M0 首次实际部署再 M1～M4 均未关闭，RFC 保持 In Progress。详情见 [H7 当前实现](host-execution-root-assembly.md)。以下历史记录与并发内容保留。
+
 ## 2026-10-08 retrospective-first：原 PostgreSQL rollback cause 探针
 
 449 历史生产路径的三组回顾已实际消费：H1268 PASS、H345 / H7 有效 FAIL，各一项已确认功能 P2，原回执保留并交独立修复。后续 runtime / Node / CS 适配暂停至回顾修复与实际 exact-SHA CI 修绿。
@@ -1291,7 +1383,6 @@ Windows swimlane原case拿导航前单独生成的retained报告与UI稍后独�
 
 c7375662 的 Mac backend6 job113619940054 中，原 RFC303 两例之一在残锁上重复启动 Git，日志明确 5131.62ms/原5000ms 超时。本有限批只改其测试 helper：第一次原 Git add 和非锁错误传播保持，原十九次25ms最大显式等待改为原夹具 ref lock 的文件检查，随后沿原路径移除残锁并真实重试一次。原 runGit 已先等待 proc.exited 再进同一钩子；生产取消/清理、原两个case全部断言和预算保持。详见 ci-git-fixture-ref-lock-wait.md。限定独立功能检视、精确发布与 hosted 总绿/真实两例逐项验收；无本机AW执行或新census。所有旧文档正文与并行内容保留。N2/H7/A-T7/A-G/CS M0～M4仍开放，AW未部署CS。
 
-
 ## 2026-10-09 当前 main 总绿与 N2 调用者设计
 
 40a0d70518f31d18321ae7680bf946a733b74d91 主 CI37872131154 全72/72 success，原 Windows workflow 手动dispatch37873022203 同SHA success/Typecheck通过，全部73 terminal jobs已完整消费；原RFC303两case在Mac/Ubuntu各成功，5000ms和全部断言保持。旧failure/INVALID保留，用户总绿门槛满足，CI修复闭合。N1原8768599的196真实provider案例及原完整main/Windows总绿已消费，40a包含且相关完整source blobs保持，不重复该候选全门或census。
@@ -1342,11 +1433,9 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 
 精确981ae0f默认完整Windows failure，主CI typecheck及相关backend分片已失败，旧失败据实保持。修新测试的原事务作用域、单reporter ACK差值、真正不可attach的Task前置和可空Task类型，补六原调用的有限逆变换及两insert行号；52个provider用例与一个全量调用者case／原预算保持。原五分母增长遗漏当次声明只在账本note记录，不补造未增长后继许可、不降分母或改规则，130行保持；生产和四原规则不变，无新census／本机AW运行。功能门、精确上库、新SHA主CI／默认完整Windows总绿与211真实用例逐项验收；HumanGate有限设计PASS，生产等总绿后接续。H7／19owner／3roots／A-T7／A-G与各层CS独立adapter、M0先部署及M1～M4仍开放，RFC未Done，AW未部署CS。详见[CI修复](ci-task-runtime-lifecycle.md)。旧plan与并行输出完整保留。
 
-
 ## CI：原 driver lifetime 的 not-attached 夹具修复
 
 精确102919a4的Windows run 38017304465终态failure：九个原not-attached case仍在原30秒内等待未清算的首个host lifetime，旧失败保留。原attach在读Task status前等pending，故先以原releaseAndFinalize完成原driver，再测目标提交的完整状态与累计ACK差额；保留原全部结果／零reporter／零drive／零新增ACK／完整快照／幂等finally，加pending存在与清除两断言。原25注册／52-provider＋1全量case／所有预算、14生产／四规则及产物保持，无新census或本机AW运行。有限实现门、精确四文件发布及后继总主CI／完整Windows／211例另验；本轮ECR限流初始化分片独立处理，不skip、不代签总绿。HumanGate生产仍等总绿，H7／A-T7／A-G／各层CS adapter与M0～M4继续开放，RFC未完成。详见[CI夹具说明](ci-not-attached-driver-finalization.md)。
-
 
 ### CI follow-up：RFC-371 三个字符串生成器返回类型（2026-10-10）
 
@@ -1354,7 +1443,6 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 - 修复范围为既有 bad JSON / null / array 三个生成器的显式 `string` 返回类型；三个函数的表达式、全部原用例/数据/断言/预算和并行内容完整保留。
 - 记录见 `design/RFC-370-crewstation-hosted-deployment/ci-default-range-return-types.md`。只发布该测试及本 RFC 的 STATE、plan、记录文档；后继主 CI + 完整 Windows 总绿、原 211 次生命周期实际执行单独验收，本地 AW 运行 0 次。
 - HumanGate 生产代码、全 H7/A-G、CS adapter / M0–M4 / RFC 完成仍未签。
-
 
 ## 2026-10-10 CI：原 writer 持锁与跨仓引用
 
@@ -1368,13 +1456,11 @@ b8ef988a 的原 macOS 托管发布失败及旧 504/失败/INVALID 保留；19bf1
 
 已开始经独立设计PASS的HumanGate候选：Task三原子的preparation／issuedResults完整视图、原serializable callback与同一capture的body后／COMMIT前消费、独立guard+purpose入口、公共composition原ownership binding／调用者dependency优先、八个engine调用与Review／Clarify两producer显式目的。九份原生产源码及十个原输入的文本／AST保持证明通过；旧生命周期52+全量case及原启动根inverse保留。新双provider测试已写，未在本机执行；独立实现门、唯一新内容census、配套清单／Windows登记检视、精确发布与后继完整CI继续。详见[人工门切面](host-authority-task-human-gate.md)。完整H7／A-G、CS M0～M4未闭合，AW尚未部署CS，RFC继续。
 
-
 ## 2026-10-10 HumanGate SOURCE1-R2 与发布配套
 
 独立源码门R2 PASS／零findings已消费，R1 FAIL及两项新增测试夹具修正保留。唯一原census在236c6dab基底完成13份产物；原四规则、6818份非本片Git blob和全部原库存保持，实际增长仅mutation1993→1994、owner27794→27804。两个一次性许可将随源码消费提交登记并由紧邻普通ledger提交退役。原28个纯声明逐字复现13份输出，本片11生产文件经典边界前后0／0。Windows候选补12个缺失输入／三套测试并保留原完整配置与并行内容。
 
 配套独立检视、35个精确路径发布、紧邻退役、新SHA完整主CI＋默认完整Windows和398次实际案例另验；无额外census或本机AW运行。详见[配套发布记录](host-authority-task-human-gate-publication.md)。本片不闭合完整H7／十九owner／三个根／A-T7／A-G，各层CS adapter与M0首次部署、M1～M4继续，AW尚未部署CS，RFC未完成。全部旧plan与并行输出保持。
-
 
 ## 2026-10-10 HumanGate CI 修复候选
 
@@ -1393,7 +1479,6 @@ HumanGate 修复 127ab32d／abca1d51 已发布；源码与配套 PASS 保留。a
 ca947c2431cd710bdaa63af3bae4903c1ace03b4 的主 CI 38044940528 正式 success、72／72 作业成功；同一提交默认完整 Windows 38045024500 正式 success、26 步成功。全部 73 作业、八条 typecheck code 0 与 398 次实际功能案例已由根会话实际核对（Ubuntu 198／macOS 100／Windows 100），目标案例无缺失／重复／失败／skip／todo。原失败记录、原预算／规则和所有并行输出完整保留；无本机 AW 执行或新增 census，源码与配套门按完整字节身份复用。详见[总绿验收](ci-human-gate-total-green-closeout.md)。
 
 用户要求的“总流水线全绿后再继续 RFC”前置门已满足。后续先完成 Task 启动恢复／周期资源恢复的原写入与事务清单和功能设计，再接完整宿主装配。完整 H7／十九 owner／三个根、A-T7／A-G、CS 各层独立 adapter、M0～M4 与实际部署保持未完成；本次 CI 验收不代签这些门。
-
 
 ## 2026-10-10 Task 启动与周期资源恢复候选
 
@@ -1422,7 +1507,6 @@ ca947c2431cd710bdaa63af3bae4903c1ace03b4 的主 CI 38044940528 正式 success、
 ## 2026-10-11 SO SOURCE R1：保留 FAIL，修复后复核 R2
 
 独立 R1 仅有 F01：异步 factory 前固定了对象而没有固定五个原函数。根已消费全部功能分析与52项EOF身份，原 FAIL保持。R2 提前捕获五函数／receiver，W21 使用可变完整视图，pending期间替换／删除方法及选择指针，真实续租／退役仍断言原方法、this与durable行；其余25个callback、注册／默认预算、原native和Task全文保持。限定格式／lint与纯静态检查，无本机AW执行。R2 SOURCE、唯一本候选原scoped census／MATCHING、精确发布和新 SHA主CI＋完整Windows及103次SO行为继续另验；原534次已通过记录不代签新候选。完整H7／三根／十九owner／A-T7／A-G、CS独立adapter及先M0再M1～M4和RFC仍开放，原正文与并行内容完整保留。
-
 
 ## 2026-10-11 SO 生命周期与前期代码：总绿验收，继续 Task provider
 

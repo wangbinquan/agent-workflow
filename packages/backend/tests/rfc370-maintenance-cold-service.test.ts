@@ -52,7 +52,13 @@ function coldHarness(
   const owners: ReturnType<typeof owner>[] = []
   const factoryConfigs: Config[] = []
   const storeConfigs: Config[] = []
-  const observations = { bootReads: 0, payloadReads: 0, closes: 0, closeReceiver: false }
+  const observations = {
+    bootReads: 0,
+    payloadReads: 0,
+    closes: 0,
+    closeReceiver: false,
+    activations: 0,
+  }
   const store: MaintenanceRunStore = {
     async enqueue(input) {
       inputs.push(input)
@@ -115,6 +121,10 @@ function coldHarness(
     const calls: string[] = []
     let state: 'stopped' | 'starting' | 'ready' = 'stopped'
     const supervisor: ColdMaintenanceWorkerSupervisor = {
+      activateDispatch() {
+        expect(this).toBe(supervisor)
+        observations.activations += 1
+      },
       wake() {
         expect(this).toBe(supervisor)
         calls.push('wake')
@@ -232,6 +242,44 @@ async function ownerReady(harness: ReturnType<typeof coldHarness>, scope = lifet
   await starting
   return scope
 }
+
+test('a host lifetime ACKs setup but admits no job or child dispatch before global activation', async () => {
+  const h = coldHarness()
+  let activate!: (active: boolean) => void,
+    dispatch = false
+  const scope = {
+    ...lifetime(),
+    whenActive: new Promise<boolean>((resolve) => {
+      activate = resolve
+    }),
+    canDispatch: () => dispatch,
+  }
+  try {
+    await ownerReady(h, scope)
+    expect(h.observations.activations).toBe(0)
+    expect(h.inputs).toEqual([])
+    expect(() => h.service.runSoon('backupPrune')).toThrow('not ready')
+    dispatch = true
+    activate(true)
+    await eventually(
+      async () => h.observations.activations,
+      (count) => count === 1,
+    )
+    h.service.runSoon('backupPrune')
+    await eventually(
+      async () => h.inputs.length,
+      (count) => count > 0,
+    )
+    scope.valid = false
+    h.service.quiesce(scope)
+    h.owners[0]!.drained.resolve()
+    await h.service.awaitDrained(scope)
+    expect(h.observations.activations).toBe(1)
+  } finally {
+    activate(false)
+    await h.finish()
+  }
+})
 
 test('cold service queries, hot configuration and unstarted close create no execution owner', async () => {
   const h = coldHarness()
@@ -850,6 +898,7 @@ test('the service drain deadline rejects in a fresh process while actual enqueue
         async readProjection() { return { active: null, last: null, backlog: [] }; },
       };
       const supervisor = {
+        activateDispatch() {},
         wake() {},
         live() { return { state: 'ready', active: null, error: null, lastHeartbeatAt: null }; },
         async pause() {},

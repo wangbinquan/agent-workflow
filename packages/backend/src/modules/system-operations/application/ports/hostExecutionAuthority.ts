@@ -64,6 +64,12 @@ export interface HostExecutionGrantContext {
   readonly reference: HostExecutionAuthorityReference
   /** Read dynamically before each new boot write or dispatch. */
   readonly current: () => boolean
+  /** Resolves after all actual owner starts ACK, or false when this grant retires. */
+  readonly whenActive?: Promise<boolean>
+  /** New dispatch is distinct from the control lifetime used to settle old work. */
+  readonly canDispatch?: () => boolean
+  /** Report a fatal owner failure for this original active grant only. */
+  readonly reportFailure?: (error: unknown) => void
 }
 
 export type HostExecutionPreparation =
@@ -138,6 +144,10 @@ export interface HostExecutionAuthorityLifecycle {
   readonly queries: HostExecutionAvailabilityQueries
   readonly admission: HostExecutionAdmission
   start(): Promise<void>
+  /** Close new admissions while original normal stops can still settle writes. */
+  quiesceAdmissions(): Promise<void>
+  /** Retire this grant for a reversible provider freeze; keep the driver open. */
+  pause(): Promise<void>
   /** An explicit renewal, when required by the chosen host control flow. */
   renew(): Promise<void>
   /** Wait for already received lifecycle observations; does not create work. */

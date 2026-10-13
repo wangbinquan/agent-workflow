@@ -33,6 +33,8 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { taskWizardDraftKey, taskWizardNewDraftSourceId } from '../src/lib/task-wizard-draft'
 import '../src/i18n'
+import type { HostExecutionStatus } from '@agent-workflow/shared'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 
 const permissionHarness = vi.hoisted(() => ({
   permissions: new Set<string>(),
@@ -417,6 +419,7 @@ async function renderWizard(
     waitForWizard?: boolean
     seedQueries?: (queryClient: QueryClient) => void
     onTaskPageRender?: () => void
+    execution?: HostExecutionStatus
   } = {},
 ) {
   const mod = await import('../src/routes/tasks.new')
@@ -470,7 +473,11 @@ async function renderWizard(
   options.seedQueries?.(qc)
   render(
     <QueryClientProvider client={qc}>
-      <RouterProvider router={router} />
+      <HostExecutionReadinessContext.Provider
+        value={options.execution ?? { mode: 'native', status: null }}
+      >
+        <RouterProvider router={router} />
+      </HostExecutionReadinessContext.Provider>
     </QueryClientProvider>,
   )
   // Router mount is async — wait for the wizard shell before interacting.
@@ -536,6 +543,33 @@ async function chooseManualRepoUrl() {
 }
 
 describe('RFC-165 T12 — /tasks/new wizard', () => {
+  test('resource-only retains the complete draft and scheduled save while disabling immediate launch', async () => {
+    const calls = installFetch()
+    await renderWizard(AGENT_NEW_URL, {
+      execution: {
+        mode: 'resource-only',
+        status: {
+          phase: 'standby',
+          generation: 'resource-only-wizard',
+          readyGroups: [],
+          reason: 'host-execution-resource-only',
+        },
+      },
+    })
+    fireEvent.click(await screen.findByTestId('wizard-space-scratch'))
+    await fillAgentDraft('保存资源后接入执行', 'Retain this task configuration', true)
+    const launch = screen.getByTestId('wizard-launch') as HTMLButtonElement
+    expect(launch.disabled).toBe(true)
+    expect(launch.title).toContain('Workflow tasks')
+    fireEvent.click(launch)
+    expect(calls.filter((call) => call.method === 'POST' && /\/tasks$/.test(call.url))).toEqual([])
+    expect(screen.getByTestId('wizard-save-scheduled')).toBeTruthy()
+    expect(readAgentNewDraft()?.values).toMatchObject({
+      taskName: '保存资源后接入执行',
+      description: 'Retain this task configuration',
+    })
+  })
+
   test('switching execution cards stays in one creation session and never reopens draft recovery', async () => {
     installFetch()
     await renderWizard('/tasks/new')

@@ -31,3 +31,7 @@
 本轮只在该原用例通过原默认 selector 获取同一真实 native factory，并把它显式交回原 `composeEventCenter` 入口。每次 `create` 原样转发同一 input，返回同一完整 effects 对象；只包围其原 `run`，以原 effects receiver 和原 workspace/program 引用调用一次，原结果对象原样返回。失败时记录该真实返回值已具有的固定结算字段及 stdout/stderr 字符数，不另开程序、不探测解释器、不读取程序引用、不改变其他六个成员、异常、清理、正文或进程预算。既有 selector 家族用例仍检查 undefined 默认选择；本次集成用例明确使用该 selector 返回的真实 native 家族，不能把它称为另一个执行实现。
 
 新增诊断不包含原脚本内容、输入文件正文、环境值或完整 stdout/stderr；原验证错误及现有两条 stderr 标记保持。所有原用例名称、全部断言、四次真实执行、10000ms 程序预算和 50000ms 整段预算不变。以完整源码 inverse、语法和格式静态检查记录候选，不运行本机 AW 功能验证，不新增逐片设计或实现门。只有新确切提交的 hosted 日志可以说明实际 PID、所用 binary、进程结算时间及捕获是否为空；这项诊断本身不是超时根因修复或 CI 全绿。
+
+诊断已以 `171aaad529a1a768f9f9c5ce9bcdcac0475e0381` 精确发布三个路径，推送前后 fetch、提交全文/路径/三份 blob、标准 Codex co-author 与 `main`／`origin/main` 0/0 均核对，共享 index 为空。该 SHA 的默认完整 Windows run `38291400427`、job `114952109506` 已终态 failure：1492 pass、3 skip、14 fail。原真实自定义源用例在原始行 592 实际 pass／7697.71ms，本会话 SQLite 的二十六项回归也全部通过；本轮没有失败结算诊断记录，不能从这次通过解释此前超时的根因。完整日志 569829 bytes，SHA256 `62823a155c7bfc669c2975fbec8426b0bd4c15f1b2361cf35790306a399a7c2c`；完整 Windows 仍失败，后续 skipped 不代签。
+
+主 CI `38291400452` 尚未终态；当前已完成格式作业 `114952110494` 原始行 171–176 仍只报三个观测源码文件，日志 14633 bytes，SHA256 `2d5cd1e0368ad3d92be7af32ee0b37c44fefb5916d9dcbfa5a08bb5e9bd1e521`。另外，上一 SHA 的新账本失败有明确独立来源：备份提交 `1d380944b` 只在原清单新增 `rfc213-raw-snapshot.test.ts: 4` 一条及两条说明，去除该新增便逐字恢复 `861833a65` 全部清单；其 job `114940426660` 行 1262／1279 实际报源码 346／基线 345。本会话原登记和退役没有被改动，按当前 AGENTS 第四条保留证据等待该条修改的责任会话修复，不代改或发跨 session 信息。以上原失败历史均保留；总绿门槛、RFC 剩余实现与 CS 部署状态不变。

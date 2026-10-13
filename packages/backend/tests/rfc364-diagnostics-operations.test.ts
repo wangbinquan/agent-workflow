@@ -1,4 +1,4 @@
-// RFC-364: a real shared coordinator must linearize catalog writes and all seven diagnostics calls.
+// RFC-364/RFC-370: the shared coordinator linearizes catalog writes and diagnostics, including recovery.
 import { describe, expect, test } from 'bun:test'
 import type { Mcp } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
@@ -84,6 +84,10 @@ function fixture() {
         called.push('end')
         throw stop
       },
+      async recover() {
+        called.push('recover')
+        throw stop
+      },
       async latest() {
         called.push('latest')
         return null
@@ -161,7 +165,7 @@ describe('RFC-364 context operations and catalog lock', () => {
     ).rejects.toMatchObject({ code: 'mcp-not-found' })
     expect(f.called).toEqual([])
   })
-  test('read, cancel and end wait behind the same catalog coordinator', async () => {
+  test('read, cancel, end and recovery wait behind the same catalog coordinator', async () => {
     const f = fixture()
     const release = gate()
     const held = f.coordinator.runExclusive('mcp', () => release.promise)
@@ -172,12 +176,13 @@ describe('RFC-364 context operations and catalog lock', () => {
       f.queries.transcript(f.contexts.query(f.actor), ref),
       f.commands.cancel(f.contexts.command(f.actor), { ...ref, request: { turnId: 'turn' } }),
       f.commands.end(f.contexts.command(f.actor), ref),
+      f.commands.recover(f.contexts.command(f.actor), ref),
     ].map((p) => p.catch((error: unknown) => error))
     expect(f.reads).toEqual([])
     release.resolve()
     await held
-    expect(await Promise.all(pending)).toEqual([null, f.stop, f.stop, f.stop, f.stop])
-    expect(f.called).toEqual(['latest', 'session', 'transcript', 'cancel', 'end'])
-    expect(f.reads).toHaveLength(5)
+    expect(await Promise.all(pending)).toEqual([null, f.stop, f.stop, f.stop, f.stop, f.stop])
+    expect(f.called).toEqual(['latest', 'session', 'transcript', 'cancel', 'end', 'recover'])
+    expect(f.reads).toHaveLength(6)
   })
 })

@@ -376,6 +376,12 @@ export interface McpRuntimeTestPersistence {
     readonly now: number
     readonly idleDeadlineAt: number
   }): Promise<McpRuntimeTestAdmittedTurn | null>
+  /** Acknowledge a local admission for which no runtime request was issued.
+   * Keeps the same durable request/turn and never resets a spawned execution. */
+  deferUnspawnedTurn(input: {
+    readonly sessionId: string
+    readonly turnId: string
+  }): Promise<boolean>
   isSpawnAllowed(input: {
     readonly sessionId: string
     readonly turnId: string

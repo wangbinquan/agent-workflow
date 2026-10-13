@@ -313,6 +313,7 @@ export function mountReviewRoutes(
     {
       method: 'POST',
       path: '/api/reviews/:nodeRunId/decision',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Submit a review decision (advances the task)',

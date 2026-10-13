@@ -7,6 +7,7 @@ import type { MrTerminalControlRuntime } from '../application/ports/mrTerminalCo
 import type {
   MrLaunchGuardPersistencePort,
   MrTerminalEffectPersistencePort,
+  MrTerminalEffectAuthoritySettlementPort,
 } from '../application/ports/mrTerminalControlPersistence'
 import {
   createMrLaunchGuardPersistence,
@@ -15,6 +16,8 @@ import {
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { InMemoryWebhookLaunchSupervisor } from '../infrastructure/inMemoryWebhookLaunchSupervisor'
+import { MrTerminalExecutionController } from '../application/mrTerminalControlExecution'
+export type { MrTerminalExecutionLifecycle } from '../application/mrTerminalControlExecution'
 
 export interface MrTerminalControlPersistence {
   readonly launchGuards: MrLaunchGuardPersistencePort
@@ -31,27 +34,72 @@ export function composeMrTerminalControlWithPorts(input: {
   readonly persistence: MrTerminalControlPersistence
   readonly taskTermination: MrTerminalControlTaskTermination
   readonly canDispatch?: () => boolean
+  readonly execution?: {
+    readonly mode: 'host'
+    readonly settlement: MrTerminalEffectAuthoritySettlementPort
+  }
 }): MrTerminalControlRuntime {
+  if (
+    input.execution !== undefined &&
+    (input.execution.mode !== 'host' ||
+      typeof input.execution.settlement?.settleClaim !== 'function')
+  )
+    throw new Error('mr-terminal-invalid-host-execution-selection')
+  let execution: MrTerminalExecutionController | undefined
+  const canDispatch =
+    input.execution === undefined
+      ? input.canDispatch
+      : () => (execution?.current() ?? false) && (input.canDispatch?.() ?? true)
   const launchGuards = new MrLaunchGuardCoordinator(
     input.persistence.launchGuards,
     new InMemoryWebhookLaunchSupervisor(),
-    input.canDispatch,
+    canDispatch,
+    input.execution === undefined
+      ? undefined
+      : {
+          admit() {
+            if (execution === undefined) throw new Error('mr-terminal-execution-not-installed')
+            return execution.admit()
+          },
+        },
   )
   const worker = new MrTerminalControlWorker(
     input.persistence.terminalEffects,
     launchGuards,
     input.taskTermination.participant,
     input.taskTermination.mintCapability,
-    input.canDispatch,
+    canDispatch,
+    input.execution?.settlement,
   )
+  if (input.execution !== undefined) execution = new MrTerminalExecutionController(worker)
   return {
+    ...(execution === undefined ? {} : { execution }),
     reserveLaunch: (input) => launchGuards.reserve(input),
     wake: (effectId) => worker.wake(effectId),
-    reconcileOnBoot: () => worker.reconcileOnBoot(),
-    stop: () => worker.stop(),
-    resume: () => worker.resume(),
-    quiesceAuthorityLoss: () => worker.quiesceAuthorityLoss(),
-    drainAuthorityLoss: () => worker.drainAuthorityLoss(),
+    reconcileOnBoot: () => {
+      execution?.requireReady()
+      return worker.reconcileOnBoot()
+    },
+    stop: () =>
+      execution === undefined
+        ? worker.stop()
+        : execution.selected === undefined
+          ? Promise.resolve()
+          : execution.pause(execution.selected),
+    resume: () => {
+      execution?.requireReady()
+      worker.resume()
+    },
+    quiesceAuthorityLoss: () => {
+      if (execution === undefined) worker.quiesceAuthorityLoss()
+      else if (execution.selected !== undefined) execution.quiesce(execution.selected)
+    },
+    drainAuthorityLoss: () =>
+      execution === undefined
+        ? worker.drainAuthorityLoss()
+        : execution.selected === undefined
+          ? Promise.resolve()
+          : execution.awaitDrained(execution.selected),
   }
 }
 
@@ -74,13 +122,24 @@ export function composeMrTerminalControl(input: {
   readonly db: ProviderNeutralDatabase
   readonly taskTermination: MrTerminalControlTaskTermination
   readonly canDispatch?: () => boolean
+  readonly executionMode?: 'native' | 'host'
 }): MrTerminalControlRuntime {
+  if (
+    input.executionMode !== undefined &&
+    input.executionMode !== 'native' &&
+    input.executionMode !== 'host'
+  )
+    throw new Error('mr-terminal-invalid-execution-mode')
+  const terminalEffects = createMrTerminalEffectPersistence(input.db)
   return composeMrTerminalControlWithPorts({
     persistence: {
       launchGuards: createMrLaunchGuardPersistence(input.db),
-      terminalEffects: createMrTerminalEffectPersistence(input.db),
+      terminalEffects,
     },
     taskTermination: input.taskTermination,
     ...(input.canDispatch === undefined ? {} : { canDispatch: input.canDispatch }),
+    ...(input.executionMode === 'host'
+      ? { execution: { mode: 'host' as const, settlement: terminalEffects } }
+      : {}),
   })
 }

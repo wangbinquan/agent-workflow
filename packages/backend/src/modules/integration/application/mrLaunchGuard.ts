@@ -11,15 +11,21 @@ import type {
   ProtectedMrLaunchGuardInput,
 } from '@/modules/integration/public/mrTerminalControl'
 import { ConflictError } from '@/util/errors'
+import {
+  MrTerminalExecutionUnavailable,
+  type MrLaunchExecutionPort,
+} from './mrTerminalControlExecution'
 
 export class MrLaunchGuardCoordinator {
   constructor(
     private readonly persistence: MrLaunchGuardPersistencePort,
     readonly supervisor: MrLaunchSupervisorPort,
     private readonly canDispatch: () => boolean = () => true,
+    private readonly execution?: MrLaunchExecutionPort,
   ) {}
 
   async reserve(input: ProtectedMrLaunchGuardInput): Promise<ProtectedMrLaunchGuard> {
+    if (this.execution !== undefined) return this.reserveExecution(input, this.execution)
     const guardId = ulid()
     const ownerKey = ulid()
     const controller = new AbortController()
@@ -71,6 +77,81 @@ export class MrLaunchGuardCoordinator {
         await this.persistence.markFailed(guardId, errorCode, Date.now()),
       release: () => {
         this.supervisor.release(guardId, controller)
+      },
+    }
+  }
+
+  private async reserveExecution(
+    input: ProtectedMrLaunchGuardInput,
+    execution: MrLaunchExecutionPort,
+  ): Promise<ProtectedMrLaunchGuard> {
+    const admission = execution.admit()
+    const guardId = ulid(),
+      ownerKey = ulid(),
+      controller = new AbortController()
+    const assertCurrent = () => {
+      if (!admission.current()) throw new MrTerminalExecutionUnavailable()
+      if (controller.signal.aborted)
+        throw new ConflictError(
+          'webhook-mr-launch-terminal',
+          'the MR/PR stream became terminal while launch was being prepared',
+        )
+    }
+    let registered = false
+    try {
+      await admission.run(async () => {
+        assertCurrent()
+        await this.persistence.reserve({ ...input, guardId, ownerKey, createdAt: Date.now() })
+        assertCurrent()
+        registered = this.supervisor.register(guardId, controller)
+        if (!registered) throw new Error(`duplicate webhook launch guard owner: ${guardId}`)
+        await this.persistence.markLaunching(guardId, Date.now())
+        assertCurrent()
+      })
+    } catch (error) {
+      try {
+        await admission.settle(() =>
+          this.persistence.markFailed(guardId, 'webhook-mr-launch-not-issued', Date.now()),
+        )
+      } finally {
+        if (registered) this.supervisor.release(guardId, controller)
+        admission.release()
+      }
+      throw error
+    }
+    return {
+      id: guardId,
+      signal: controller.signal,
+      snapshot: {
+        binding: input.binding,
+        launchRevision: input.launchRevision,
+        fence: null,
+        effectRevision: null,
+      },
+      assertCanCommit: assertCurrent,
+      verifyCanCommit: () =>
+        admission.run(async () => {
+          assertCurrent()
+          const allowed = await this.persistence.assertCanCommit({
+            guardId,
+            launchRevision: input.launchRevision,
+          })
+          assertCurrent()
+          if (!allowed)
+            throw new ConflictError(
+              'webhook-mr-launch-terminal',
+              'the MR/PR stream became terminal while launch was being prepared',
+            )
+        }),
+      taskCommitted: (taskId) =>
+        admission.settle(() => this.persistence.markTaskCommitted(guardId, taskId, Date.now())),
+      launchSettled: (taskId) =>
+        admission.settle(() => this.persistence.markLaunchSettled(guardId, taskId, Date.now())),
+      failed: (errorCode) =>
+        admission.settle(() => this.persistence.markFailed(guardId, errorCode, Date.now())),
+      release: () => {
+        this.supervisor.release(guardId, controller)
+        admission.release()
       },
     }
   }

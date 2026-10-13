@@ -7,8 +7,10 @@ import { observationPricingEn } from './observationPricing'
 import { runObservabilityEn } from './runObservability'
 import { mindmapEn } from './mindmap'
 import { markdownEditorEn } from './markdownEditor'
+import { hostExecutionEn } from './hostExecution'
 
 export const enUS: Resources = {
+  hostExecution: hostExecutionEn,
   markdownEditor: markdownEditorEn,
   mindmap: mindmapEn,
   observationPricing: observationPricingEn,
@@ -3522,6 +3524,7 @@ export const enUS: Resources = {
     profileTitle: 'Execution profile',
     profileHint: 'Choose model behavior and runtime-specific arguments applied to each run.',
     testBinary: 'Test binary',
+    probeBeforeSave: 'Run a test before creating this runtime',
     testing: 'Testing…',
     fieldName: 'Name',
     fieldNameHint: 'Lowercase, URL-safe (a-z, 0-9, -). How agents reference this runtime.',
@@ -4017,6 +4020,10 @@ export const enUS: Resources = {
         'The runtime is stopping and session state is being reclaimed. You can close the dialog while cleanup continues.',
       endedHint:
         'This test has ended. Its execution history remains readable, and you can start a new test below.',
+      recover: 'Recover original session',
+      recovering: 'Recovering original session…',
+      quarantinedHint:
+        'Resource cleanup for the original execution is not yet confirmed. Recovery checks and reclaims that execution while preserving its result; unconfirmed cleanup stays quarantined and prevents a new test.',
       dirtyBasis:
         'The form has unsaved changes. Save and start, or explicitly use the saved version.',
       activeUsesSaved:
@@ -8739,6 +8746,8 @@ export const enUS: Resources = {
       tagsLabel: 'Tags',
     },
     distillJobs: {
+      recoveredOriginal:
+        'Original execution recovery was acknowledged. Retry execution startup above; the refreshed job state remains authoritative.',
       empty: 'No distill jobs queued',
       emptyDescription:
         'Feedback and review events create jobs automatically; new runs will appear here for monitoring.',
@@ -8759,6 +8768,7 @@ export const enUS: Resources = {
       action: {
         retry: 'Retry',
         cancel: 'Cancel',
+        recover: 'Recover original execution',
       },
     },
     // RFC-043: top-level alias of source-kind labels for the distill

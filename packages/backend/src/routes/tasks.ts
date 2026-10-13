@@ -281,6 +281,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Launch a task',
@@ -780,6 +781,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks/:id/resume',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Resume a task',
@@ -912,6 +914,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks/:id/nodes/:nodeRunId/retry',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Retry a node (rolls back to pre_snapshot, cascades downstream)',

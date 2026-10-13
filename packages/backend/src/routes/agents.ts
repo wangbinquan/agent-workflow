@@ -311,6 +311,7 @@ export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): voi
     {
       method: 'POST',
       path: '/api/agents/:id/tasks',
+      executionGroup: 'task',
       // RFC-165 F15/N1: launching is a TASK operation on every subject face —
       // all three launch endpoints gate uniformly on the task execute point,
       // and the agent launch path is explicitly EXEMPT from the agent method

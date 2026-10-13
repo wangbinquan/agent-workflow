@@ -3,6 +3,7 @@
 // deliberately stay outside this module.
 
 import type { DaemonProviderSessionLifecycleInput } from './daemonProviderSession'
+import { waitForExecutionActivation } from '@/platform/background/activation'
 import type {
   DaemonProviderCloseParticipant,
   DaemonProviderHostExecutionHandleBinding,
@@ -30,6 +31,7 @@ export interface AuthorityPollingDaemonRuntimeHandleBindingInput {
   readonly intervalMs: number
   readonly runImmediately?: boolean
   readonly beforeStart?: (input: AuthorityPollingDaemonRuntimeRunInput) => MaybePromise<void>
+  readonly afterActive?: (input: AuthorityPollingDaemonRuntimeRunInput) => MaybePromise<void>
   readonly run: (input: AuthorityPollingDaemonRuntimeRunInput) => Promise<void>
   readonly onError: (
     error: unknown,
@@ -43,6 +45,7 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
 ): DaemonProviderHostExecutionHandleBinding {
   const { id, group, intervalMs, runImmediately } = input
   const beforeStart = input.beforeStart
+  const afterActive = input.afterActive
   const run = input.run
   const onError = input.onError
   if (
@@ -58,6 +61,7 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
   }
   if (
     (beforeStart !== undefined && typeof beforeStart !== 'function') ||
+    (afterActive !== undefined && typeof afterActive !== 'function') ||
     typeof run !== 'function' ||
     typeof onError !== 'function'
   ) {
@@ -93,12 +97,20 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
       if (context.generation !== scope.generationId) {
         throw new Error('daemon-authority-polling-generation-mismatch')
       }
-      const current = (): boolean => capturedCurrent.call(context) === true
+      let retired = false
+      const current = (): boolean => !retired && capturedCurrent.call(context) === true
+      const dispatch = context.canDispatch?.bind(context)
+      const reportFailure = context.reportFailure?.bind(context)
       if (!current()) throw new Error('daemon-authority-polling-not-current')
       const callbackInput = Object.freeze({ scope, context, current })
+      const dispatchInput = Object.freeze({
+        scope,
+        context,
+        current: () => current() && (dispatch?.() ?? true),
+      })
       await beforeStart?.call(input, callbackInput)
 
-      let retired = !current()
+      retired = !current()
       let lossRequested = false
       const controller = retired ? null : new AbortController()
       const stop = (reason: string): void => {
@@ -109,14 +121,21 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
         controller === null
           ? Promise.resolve()
           : (async (): Promise<void> => {
+              if (!(await waitForExecutionActivation(context.whenActive, controller.signal))) return
+              if (retired || !current()) return
+              try {
+                await afterActive?.call(input, dispatchInput)
+              } catch (error) {
+                await onError.call(input, error, dispatchInput)
+              }
               if (runImmediately !== true) {
                 await waitForPollingInterval(intervalMs, controller.signal)
               }
-              while (!retired && !controller.signal.aborted && current()) {
+              while (!retired && !controller.signal.aborted && dispatchInput.current()) {
                 try {
-                  await run.call(input, callbackInput)
+                  await run.call(input, dispatchInput)
                 } catch (error) {
-                  await onError.call(input, error, callbackInput)
+                  await onError.call(input, error, dispatchInput)
                 }
                 if (retired || controller.signal.aborted || !current()) break
                 await waitForPollingInterval(intervalMs, controller.signal)
@@ -124,7 +143,7 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
             })()
       // The owner may fail before RuntimeSession has received this handle.
       // Keep the original rejection for drain while preventing an unhandled gap.
-      void done.catch(() => undefined)
+      void done.catch((error) => reportFailure?.(error)).catch(() => undefined)
       const handle = Object.freeze<DaemonProviderRuntimeHandle>({
         stop: () => stop('daemon-provider-runtime-paused'),
         drain() {
@@ -144,7 +163,7 @@ export function createAuthorityPollingDaemonRuntimeHandleBinding(
         quiesce() {
           lossRequested = true
           stop('authority-loss')
-          return done
+          return Promise.resolve()
         },
         drain() {
           if (!lossRequested) {

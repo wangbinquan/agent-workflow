@@ -114,6 +114,9 @@ export function bindNativeAgentInvocation(input: {
       return {
         effect: native.effect,
         executionRef: native.executionRef,
+        ...(native.preparedRecoveryRef === undefined
+          ? {}
+          : { preparedRecoveryRef: native.preparedRecoveryRef }),
         materialRef: native.materialRef,
         workspaceRef: native.workspaceRef,
         projection: native.projection,

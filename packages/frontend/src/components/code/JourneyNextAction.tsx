@@ -42,6 +42,7 @@ interface Props {
   journey: JourneyProjection
   onCommand?: (command: string) => void
   commandPending?: boolean
+  commandUnavailableReason?: string
   className?: string
 }
 
@@ -69,7 +70,12 @@ export function JourneyNextAction(props: Props): ReactElement {
         <button
           type="button"
           className="btn btn--primary"
-          disabled={!props.journey.next.available || props.commandPending === true}
+          disabled={
+            !props.journey.next.available ||
+            props.commandPending === true ||
+            props.commandUnavailableReason !== undefined
+          }
+          title={props.commandUnavailableReason}
           onClick={() => props.onCommand?.(props.journey.next.command!)}
           data-testid="journey-next-command"
         >

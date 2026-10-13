@@ -41,11 +41,17 @@ class ManualWorker {
   }
 }
 
-function harness(options: { readonly onCreate?: (worker: ManualWorker) => void } = {}) {
+function harness(
+  options: {
+    readonly onCreate?: (worker: ManualWorker) => void
+    readonly dispatchPaused?: boolean
+  } = {},
+) {
   const workers: ManualWorker[] = []
   const timers: Array<{ fn: () => void; ms: number; cleared: boolean }> = []
   const supervisor = createColdMaintenanceWorkerSupervisor({
     appHome: '/cold-maintenance-supervisor',
+    ...(options.dispatchPaused ? { dispatchPaused: true } : {}),
     databaseInit: {
       dbPath: '/cold-maintenance-supervisor/db.sqlite',
       migrationsFolder: '/cold-maintenance-supervisor/migrations',
@@ -68,6 +74,36 @@ function harness(options: { readonly onCreate?: (worker: ManualWorker) => void }
   })
   return { supervisor, workers, timers }
 }
+
+test('a host-selected handshake cannot wake or restart queue dispatch before explicit activation', async () => {
+  const f = harness({ dispatchPaused: true })
+  try {
+    expect(() => f.supervisor.activateDispatch()).toThrow('before ready')
+    const starting = f.supervisor.start()
+    await microtasks()
+    const worker = f.workers[0]!
+    expect(worker.messages[0]).toMatchObject({ type: 'init', dispatchPaused: true })
+    worker.ready()
+    await starting
+    f.supervisor.wake()
+    expect(worker.messages.map((message) => (message as { type: string }).type)).toEqual(['init'])
+    f.supervisor.activateDispatch()
+    f.supervisor.activateDispatch()
+    f.supervisor.wake()
+    expect(worker.messages.map((message) => (message as { type: string }).type)).toEqual([
+      'init',
+      'activate',
+      'wake',
+    ])
+    f.supervisor.quiesce()
+    expect(() => f.supervisor.activateDispatch()).toThrow('before ready')
+    worker.drained()
+    await f.supervisor.awaitDrained()
+  } finally {
+    for (const worker of f.workers) worker.acknowledgeDrainSynchronously = true
+    await f.supervisor.stop()
+  }
+})
 
 function observe<T>(promise: Promise<T>) {
   const outcome: { settled: boolean; error?: unknown } = { settled: false }

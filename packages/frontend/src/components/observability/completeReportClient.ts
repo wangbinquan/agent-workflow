@@ -101,7 +101,7 @@ export function useCompleteObservationReport(
     'scope-metrics/14',
     liveDisplayScope ?? filters,
     taskId ?? null,
-    revision,
+    // A manual request revision changes the fetch identity, not the same-window display identity.
   ])
   const query = useQuery({
     queryKey: key,

@@ -7,6 +7,7 @@ import {
 } from '@agent-workflow/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { ulid } from 'ulid'
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -54,6 +55,7 @@ export interface IntentMountDialogProps {
 
 export function IntentMountDialog(props: IntentMountDialogProps) {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('intent')
   const [type, setType] = useState<IntentMountType>('agent')
   const [picks, setPicks] = useState<Picks>(EMPTY_PICKS)
   const [removals, setRemovals] = useState<string[]>([])
@@ -96,6 +98,7 @@ export function IntentMountDialog(props: IntentMountDialogProps) {
     setBusy(mode)
     setError(null)
     try {
+      execution.assertAvailable()
       await api.post(`/api/intent-sessions/${props.sessionId}/working-set`, {
         clientMutationId: ulid(),
         expectedTurnSeq: props.turnSeq,
@@ -161,7 +164,8 @@ export function IntentMountDialog(props: IntentMountDialogProps) {
               <button
                 type="button"
                 className="btn"
-                disabled={!changed || busy !== null}
+                disabled={!changed || busy !== null || !execution.available}
+                title={execution.unavailableReason}
                 onClick={() => void submit('after-current')}
               >
                 {t('intent.workingContextQueue')}
@@ -169,7 +173,8 @@ export function IntentMountDialog(props: IntentMountDialogProps) {
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={!changed || busy !== null}
+                disabled={!changed || busy !== null || !execution.available}
+                title={execution.unavailableReason}
                 onClick={() => void submit('interrupt')}
                 data-testid="intent-working-context-interrupt"
               >
@@ -180,7 +185,8 @@ export function IntentMountDialog(props: IntentMountDialogProps) {
             <button
               type="button"
               className="btn btn--primary"
-              disabled={!changed || busy !== null}
+              disabled={!changed || busy !== null || !execution.available}
+              title={execution.unavailableReason}
               onClick={() => void submit('after-current')}
               data-testid="intent-working-context-submit"
             >

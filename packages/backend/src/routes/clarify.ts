@@ -22,6 +22,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
+import { runHttpHostExecutionRequest } from '@/platform/http/hostExecutionAvailability'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
@@ -116,6 +117,7 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
     {
       method: 'POST',
       path: '/api/clarify/:nodeRunId/followup',
+      executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Append classified follow-up questions to this open round',
@@ -341,39 +343,43 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
       // are no longer reached from the route (§4). Kind-agnostic: autoDispatchClarifyRound reads
       // round.kind internally + dispatches the round's self/questioner AND designer entries (designer
       // aggregates its siblings; multi-source not-ready parks 等齐 until the last sibling answers).
-      {
-        const auto = await requireClarifyOperations(operations).submitDecision({
-          actor,
-          actorRole: role,
-          nodeRunId,
-          answers: parsed.data.answers,
-          ...(parsed.data.questionSetKey ? { questionSetKey: parsed.data.questionSetKey } : {}),
-          directive: parsed.data.directive,
-          // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
-          ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
-          ...(c.req.header('Idempotency-Key') === undefined
-            ? {}
-            : { idempotencyKey: c.req.header('Idempotency-Key')! }),
-        })
-        return c.json({
-          ok: true,
-          kind: 'autodispatch' as const,
-          taskId: auto.taskId,
-          receipt: auto.receipt,
-          roundKind: auto.roundKind,
-          sealedQuestionIds: auto.sealedQuestionIds,
-          roundFullySealed: auto.roundFullySealed,
-          reruns: auto.reruns,
-          dispatchedEntryIds: auto.dispatchedEntryIds,
-          deferred: auto.deferred,
-          // Codex round-5: set when the answer WAS sealed but auto-dispatch was deferred to the board
-          // (a post-seal dispatch conflict, e.g. a same-home in-flight rerun). The answer is saved +
-          // parked; the user dispatches it from the board. The request still succeeds (not a failure).
-          ...(auto.dispatchDeferredReason !== undefined
-            ? { dispatchDeferredReason: auto.dispatchDeferredReason }
-            : {}),
-        })
-      }
+      return runHttpHostExecutionRequest(
+        app,
+        parsed.data.directive === 'stop' ? undefined : 'task',
+        async () => {
+          const auto = await requireClarifyOperations(operations).submitDecision({
+            actor,
+            actorRole: role,
+            nodeRunId,
+            answers: parsed.data.answers,
+            ...(parsed.data.questionSetKey ? { questionSetKey: parsed.data.questionSetKey } : {}),
+            directive: parsed.data.directive,
+            // RFC-023 optimistic lock — same If-Match the immediate path honors (/clarify page sends it).
+            ...(ifMatch !== undefined ? { ifMatchIteration: ifMatch } : {}),
+            ...(c.req.header('Idempotency-Key') === undefined
+              ? {}
+              : { idempotencyKey: c.req.header('Idempotency-Key')! }),
+          })
+          return c.json({
+            ok: true,
+            kind: 'autodispatch' as const,
+            taskId: auto.taskId,
+            receipt: auto.receipt,
+            roundKind: auto.roundKind,
+            sealedQuestionIds: auto.sealedQuestionIds,
+            roundFullySealed: auto.roundFullySealed,
+            reruns: auto.reruns,
+            dispatchedEntryIds: auto.dispatchedEntryIds,
+            deferred: auto.deferred,
+            // Codex round-5: set when the answer WAS sealed but auto-dispatch was deferred to the board
+            // (a post-seal dispatch conflict, e.g. a same-home in-flight rerun). The answer is saved +
+            // parked; the user dispatches it from the board. The request still succeeds (not a failure).
+            ...(auto.dispatchDeferredReason !== undefined
+              ? { dispatchDeferredReason: auto.dispatchDeferredReason }
+              : {}),
+          })
+        },
+      )
     },
   )
 

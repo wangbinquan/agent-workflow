@@ -24,6 +24,7 @@ interface GrantProgress {
   readonly version: number
   readonly context: HostExecutionGrantContext
   readonly admissions: Set<AdmissionProgress>
+  readonly publishActive: (active: boolean) => void
   valid: boolean
   reason: HostExecutionStopReason
   preparationAttempted: boolean
@@ -105,6 +106,8 @@ export function createHostExecutionAuthorityLifecycle(
   let readyGroups: readonly HostExecutionGroup[] = Object.freeze([])
   let version = 0
   let closing = false
+  let paused = false
+  let admissionQuiescing = false
   let current: GrantProgress | undefined
   let desired: GrantProgress | undefined
   let subscription: { close(): void | Promise<void> } | undefined
@@ -145,6 +148,10 @@ export function createHostExecutionAuthorityLifecycle(
     }
     const known = grants.get(reference)
     if (known) return known
+    let publishActive!: (active: boolean) => void
+    const whenActive = new Promise<boolean>((resolve) => {
+      publishActive = resolve
+    })
     const progress: GrantProgress = {
       reference,
       version: operationVersion,
@@ -152,10 +159,21 @@ export function createHostExecutionAuthorityLifecycle(
         generation: input.generation,
         reference,
         current: () => !closing && progress.valid && progress.version === version,
+        whenActive,
+        canDispatch: () => progress.context.current() && phase === 'active',
+        reportFailure(error: unknown) {
+          // Old callbacks cannot invalidate another grant. A normal pause
+          // already closes admission and retains its original stop policy.
+          if (!progress.context.current() || phase !== 'active') return
+          invalidate('authority-loss', 'host-execution-owner-failed')
+          serialize(retireObsolete).catch(notifyFailure)
+          notifyFailure(error)
+        },
       }),
       admissions: new Set(),
+      publishActive,
       valid: !closing && operationVersion === version,
-      reason: closing ? 'shutdown' : 'authority-loss',
+      reason: closing ? 'shutdown' : paused ? 'handoff' : 'authority-loss',
       preparationAttempted: false,
       writePrepared: false,
       writeQuiesced: true,
@@ -170,6 +188,7 @@ export function createHostExecutionAuthorityLifecycle(
     }
     grants.set(reference, progress)
     ownedGrants.add(progress)
+    if (!progress.valid) progress.publishActive(false)
     return progress
   }
 
@@ -180,6 +199,7 @@ export function createHostExecutionAuthorityLifecycle(
     for (const grant of ownedGrants) {
       if (!grant.valid) continue
       grant.valid = false
+      grant.publishActive(false)
       grant.reason = stopReason
       for (const admitted of grant.admissions) admitted.stop(stopReason)
     }
@@ -374,6 +394,7 @@ export function createHostExecutionAuthorityLifecycle(
       phase = 'active'
       reason = null
       lastFailure = undefined
+      grant.publishActive(true)
     } catch (error) {
       failed = true
       if (grant.context.current()) invalidate('authority-loss', 'host-execution-activation-failed')
@@ -418,6 +439,41 @@ export function createHostExecutionAuthorityLifecycle(
   }
 
   const observe = (observation: HostExecutionAuthorityObservation): void => {
+    if (admissionQuiescing && !closing) {
+      if (
+        observation.kind === 'granted' &&
+        current?.reference === observation.reference &&
+        current.context.current()
+      ) {
+        // Renew the old settlement authority without reopening dispatch.
+        observeWriteRenewal(current)
+        return
+      }
+      invalidate(
+        'authority-loss',
+        observation.kind === 'granted'
+          ? 'host-execution-pause-observed-replacement'
+          : observation.reason,
+      )
+      if (observation.kind === 'granted') {
+        const grant = register(observation.reference, version)
+        grant.valid = false
+        grant.reason = 'handoff'
+        grant.publishActive(false)
+      }
+      serialize(retireObsolete).catch(notifyFailure)
+      return
+    }
+    if (paused && !closing) {
+      if (observation.kind === 'granted') {
+        const grant = register(observation.reference, version)
+        grant.valid = false
+        grant.reason = 'handoff'
+        grant.publishActive(false)
+      }
+      serialize(retireObsolete).catch(notifyFailure)
+      return
+    }
     if (observation.kind !== 'granted') {
       invalidate('authority-loss', observation.reason)
       serialize(retireObsolete).catch(notifyFailure)
@@ -483,7 +539,15 @@ export function createHostExecutionAuthorityLifecycle(
     start() {
       return serialize(async () => {
         if (closing) throw new Error('host-execution-closed')
-        if (input.mode === 'resource-only' || current?.context.current()) return
+        if (phase === 'draining' && current?.context.current())
+          throw new Error('host-execution-pause-unsettled')
+        paused = false
+        admissionQuiescing = false
+        if (input.mode === 'resource-only') {
+          reason = 'host-execution-resource-only'
+          return
+        }
+        if (current?.context.current()) return
         try {
           await retireObsolete()
           const operationVersion = version
@@ -523,6 +587,35 @@ export function createHostExecutionAuthorityLifecycle(
           }
           throw error
         }
+      })
+    },
+    quiesceAdmissions() {
+      if (closing) return Promise.resolve()
+      const grant = current
+      if (!grant?.context.current()) return Promise.resolve()
+      if (phase === 'active') {
+        admissionQuiescing = true
+        readyGroups = Object.freeze([])
+        phase = 'draining'
+        reason = 'host-execution-pause-unsettled'
+        for (const admitted of grant.admissions) admitted.stop('handoff')
+      }
+      return serialize(async () => {
+        if (writeLifecycle && !grant.writeQuiesced) {
+          await writeLifecycle.quiesce(grant.context)
+          grant.writeQuiesced = true
+        }
+      })
+    },
+    pause() {
+      if (closing) return lifecycle.close()
+      if (!paused) {
+        paused = true
+        invalidate('handoff', 'host-execution-paused')
+      }
+      return serialize(async () => {
+        await retireObsolete()
+        lastFailure = undefined
       })
     },
     renew() {

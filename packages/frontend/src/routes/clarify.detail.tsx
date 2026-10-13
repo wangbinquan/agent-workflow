@@ -57,6 +57,7 @@ import type { TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { answersEqual, isAnswerFilled } from '@/lib/clarify/answers'
 import { useClarifyFollowup } from '@/lib/clarify/useClarifyFollowup'
 import { useActor } from '@/hooks/useActor'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { Dialog } from '@/components/Dialog'
 import { useClarifyWs } from '@/hooks/useClarifyWs'
@@ -106,6 +107,7 @@ function emptyAnswer(questionId: string): ClarifyAnswer {
 
 export function ClarifyDetailPage() {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('task')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nodeRunId = (Route as any).useParams().nodeRunId as string
   const qc = useQueryClient()
@@ -563,6 +565,7 @@ export function ClarifyDetailPage() {
   const [crossWaiting, setCrossWaiting] = useState<{ pending: string[] } | null>(null)
   const submitMut = useMutation<SubmitClarifyAnswersResponse, Error, ClarifyDirective>({
     mutationFn: async (directive) => {
+      if (directive === 'continue') execution.assertAvailable()
       const s = session.data
       if (s === undefined) throw new Error('no session loaded')
       if (followupPending) throw new Error(t('mindmap.generating'))
@@ -1123,8 +1126,14 @@ export function ClarifyDetailPage() {
               type="button"
               className="btn btn--primary"
               disabled={
-                readonly || submitMut.isPending || allLocked || followupPending || mindmapIncomplete
+                readonly ||
+                submitMut.isPending ||
+                allLocked ||
+                followupPending ||
+                mindmapIncomplete ||
+                !execution.available
               }
+              title={execution.unavailableReason}
               onClick={() => submitMut.mutate('continue')}
               data-testid="clarify-submit-continue"
               data-directive="continue"

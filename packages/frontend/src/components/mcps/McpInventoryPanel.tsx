@@ -22,6 +22,7 @@ import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbe
 import { NoticeBanner } from '@/components/NoticeBanner'
 import type { SplitBusyRelease } from '@/components/split/splitDirty'
 import { useMcpProbe, useProbeMcpMutation } from '@/lib/mcp-probe-query'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { probeFreshness } from '@/lib/probe-freshness'
 import { usePermission } from '@/hooks/useActor'
 import { McpRuntimeTestDialog } from './McpRuntimeTestDialog'
@@ -41,6 +42,7 @@ export interface McpInventoryPanelProps {
 }
 
 export function McpInventoryPanel(props: McpInventoryPanelProps) {
+  const execution = useHostExecutionAvailability('diagnostics')
   const { t } = useTranslation()
   const canExecuteMcp = usePermission('mcps:execute')
   const probeQ = useMcpProbe(props.mcpId)
@@ -95,7 +97,8 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
         <button
           type="button"
           className="btn btn--sm btn--primary"
-          disabled={isProbing || props.saving === true}
+          disabled={isProbing || props.saving === true || !execution.available}
+          title={execution.unavailableReason}
           onClick={() => void saveAndProbe()}
           data-testid="mcp-save-and-probe"
         >
@@ -104,7 +107,8 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
         <button
           type="button"
           className="btn btn--sm"
-          disabled={isProbing || props.saving === true}
+          disabled={isProbing || props.saving === true || !execution.available}
+          title={execution.unavailableReason}
           onClick={() => void runSaved(hash).catch(() => undefined)}
           data-testid="mcp-probe-saved-version"
         >
@@ -115,7 +119,8 @@ export function McpInventoryPanel(props: McpInventoryPanelProps) {
       <button
         type="button"
         className="btn btn--sm btn--primary"
-        disabled={isProbing || props.saving === true}
+        disabled={isProbing || props.saving === true || !execution.available}
+        title={execution.unavailableReason}
         onClick={() => void runSaved(hash).catch(() => undefined)}
         data-testid={`mcp-inventory-reprobe-${props.mcpId}`}
       >

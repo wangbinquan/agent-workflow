@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
 import type * as UseActorModule from '../src/hooks/useActor'
 import type { DocVersion, ReviewDetail } from '@agent-workflow/shared'
+import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
 
 vi.mock('../src/api/client', async () => {
   const actual = await vi.importActual<typeof ApiClientModule>('../src/api/client')
@@ -164,6 +165,47 @@ function wrap(node: React.ReactElement): ReturnType<typeof render> {
     </QueryClientProvider>,
   )
 }
+
+test('RFC-370 unavailable Task execution preserves document selection while preventing every round decision', async () => {
+  const allSelected: ReviewDetail = {
+    ...detail,
+    documents: detail.documents!.map((item) => ({ ...item, selection: 'accepted' as const })),
+  }
+  ;(api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) =>
+    url === '/api/reviews/run' ? allSelected : undefined,
+  )
+  wrap(
+    <HostExecutionReadinessContext.Provider
+      value={{
+        mode: 'resource-only',
+        status: {
+          phase: 'standby',
+          generation: 'review-resource-mode',
+          readyGroups: [],
+          reason: 'resource-only',
+        },
+      }}
+    >
+      <MultiDocReviewView nodeRunId="run" />
+    </HostExecutionReadinessContext.Provider>,
+  )
+  await screen.findByText('Case A')
+  expect((screen.getByTestId('multidoc-approve') as HTMLButtonElement).disabled).toBe(true)
+  expect(
+    (screen.getByRole('button', { name: /Revise per comments/i }) as HTMLButtonElement).disabled,
+  ).toBe(true)
+  const accept = screen.getByTestId('multidoc-accept') as HTMLButtonElement
+  expect(accept.disabled).toBe(false)
+  fireEvent.click(accept)
+  await waitFor(() =>
+    expect(api.patch).toHaveBeenCalledWith('/api/reviews/run/documents/d0/selection', {
+      selection: 'accepted',
+    }),
+  )
+  expect(vi.mocked(api.post).mock.calls.some(([url]) => String(url).endsWith('/decision'))).toBe(
+    false,
+  )
+})
 
 beforeEach(() => {
   ;(api.get as ReturnType<typeof vi.fn>).mockReset()

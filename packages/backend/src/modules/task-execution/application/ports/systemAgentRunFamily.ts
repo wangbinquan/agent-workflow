@@ -7,6 +7,7 @@ import type {
 } from '@/modules/runtime-management/public/participants'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type { Logger } from '@/util/log'
+import type { ExecutionRecoveryReferencePort } from './executionEffect'
 import type {
   PreparedSystemAgentRunResult,
   SystemAgentCoreInvocation,
@@ -37,6 +38,7 @@ export interface SystemAgentRunFamily {
   readonly workspaces: SystemAgentWorkspaceScopes
   run(request: SystemAgentRunRequest): Promise<PreparedSystemAgentRunResult>
   readonly retainedContents: SystemAgentRetainedContents
+  readonly recovery: ExecutionRecoveryReferencePort
 }
 
 /** Preparation is opened after the original logger/default/clock read boundary. */

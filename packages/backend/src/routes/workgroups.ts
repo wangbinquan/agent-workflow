@@ -223,6 +223,7 @@ export function mountWorkgroupRoutes(app: Hono, module: WorkgroupRouteDependenci
     {
       method: 'POST',
       path: '/api/workgroups/:id/tasks',
+      executionGroup: 'task',
       // RFC-165 F15/N1 — see routes/agents.ts: all three launch endpoints gate
       // uniformly on the task execute point.
       permissions: ['tasks:execute'],

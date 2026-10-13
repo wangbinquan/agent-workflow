@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 import { type Fusion, type Memory } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -31,6 +32,7 @@ const ACTIVE = new Set(['running', 'applying'])
 
 function FusionDetailPage() {
   const { t } = useTranslation()
+  const execution = useHostExecutionAvailability('knowledge')
   const { id } = Route.useParams()
   const qc = useQueryClient()
   const [rejectOpen, setRejectOpen] = useState(false)
@@ -67,7 +69,10 @@ function FusionDetailPage() {
   })
 
   const approve = useMutation<Fusion, ApiError>({
-    mutationFn: () => api.post(`/api/fusions/${encodeURIComponent(id)}/approve`),
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post(`/api/fusions/${encodeURIComponent(id)}/approve`)
+    },
     onSuccess: () => {
       invalidate()
       void qc.invalidateQueries({ queryKey: ['skills'] })
@@ -75,7 +80,10 @@ function FusionDetailPage() {
     },
   })
   const reject = useMutation<Fusion, ApiError>({
-    mutationFn: () => api.post(`/api/fusions/${encodeURIComponent(id)}/reject`, { feedback }),
+    mutationFn: () => {
+      execution.assertAvailable()
+      return api.post(`/api/fusions/${encodeURIComponent(id)}/reject`, { feedback })
+    },
     onSuccess: () => {
       setRejectOpen(false)
       setFeedback('')
@@ -221,11 +229,18 @@ function FusionDetailPage() {
               type="button"
               className="btn btn--primary"
               onClick={() => approve.mutate()}
-              disabled={approve.isPending}
+              disabled={approve.isPending || !execution.available}
+              title={execution.unavailableReason}
             >
               {approve.isPending ? t('fusion.approving') : t('fusion.approve')}
             </button>
-            <button type="button" className="btn" onClick={() => setRejectOpen(true)}>
+            <button
+              type="button"
+              className="btn"
+              disabled={!execution.available}
+              title={execution.unavailableReason}
+              onClick={() => setRejectOpen(true)}
+            >
               {t('fusion.reject')}
             </button>
           </div>
@@ -245,7 +260,8 @@ function FusionDetailPage() {
               type="button"
               className="btn btn--primary"
               onClick={() => reject.mutate()}
-              disabled={reject.isPending || feedback.trim() === ''}
+              disabled={reject.isPending || feedback.trim() === '' || !execution.available}
+              title={execution.unavailableReason}
             >
               {t('fusion.rejectSubmit')}
             </button>

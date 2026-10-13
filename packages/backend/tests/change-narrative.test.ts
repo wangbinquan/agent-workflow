@@ -345,6 +345,9 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
         return { ...response, retainedRef: 'remote-narrative-result:17' }
       },
       retainedContents: {
+        inspect() {
+          throw new Error('Narrative does not inspect completed scratch')
+        },
         forget() {
           throw new Error('Narrative does not separately forget completed scratch')
         },

@@ -16,6 +16,7 @@
 // request/callback stack.
 
 import { ulid } from 'ulid'
+import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
 
 import { runMissionReconcile, type ReconcileDeps, type ReconcileOutcome } from './missionReconciler'
 
@@ -28,6 +29,7 @@ export type MissionDriveStop =
   | 'failed-or-blocked'
   | 'not-found'
   | 'step-budget'
+  | 'execution-paused'
 
 export interface MissionDriveOutcome {
   readonly steps: number
@@ -75,8 +77,9 @@ function stopOf(outcome: ReconcileOutcome): MissionDriveStop {
 export async function driveMission(
   deps: ReconcileDeps,
   missionId: string,
-  options: { readonly maxSteps?: number } = {},
+  options: { readonly maxSteps?: number; readonly execution?: BackgroundExecutionLifetime } = {},
 ): Promise<MissionDriveOutcome> {
+  const current = options.execution?.current.bind(options.execution)
   const maxSteps = options.maxSteps ?? MISSION_DRIVE_MAX_STEPS
   if (!Number.isInteger(maxSteps) || maxSteps < 1) {
     throw new Error('mission driver maxSteps must be a positive integer')
@@ -84,6 +87,20 @@ export async function driveMission(
 
   let last: ReconcileOutcome = { kind: 'not-found' }
   for (let steps = 1; steps <= maxSteps; steps += 1) {
+    if (current?.() === false) {
+      // A due wake may already have been claimed. Preserve its continuation
+      // as durable intake instead of starting a new action after host loss.
+      const mission = await deps.store.getMission(missionId)
+      if (mission !== null)
+        await deps.store.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'mission-driver-execution-paused',
+          deliveryKey: `mission-driver-execution-paused:${missionId}:${mission.revision}`,
+          now: deps.now(),
+        })
+      return { steps: steps - 1, stop: 'execution-paused', last }
+    }
     last = await runMissionReconcile(deps, missionId)
     if (!continuationOf(last)) return { steps, stop: stopOf(last), last }
   }

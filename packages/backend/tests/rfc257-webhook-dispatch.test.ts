@@ -23,6 +23,8 @@ import {
   users,
   webhookDeliveries,
   webhookEndpoints,
+  webhookMrLaunchGuards,
+  webhookMrStreamStates,
   webhookTriggerFires,
   webhookTriggers,
   webhookTriggerStreams,
@@ -30,6 +32,9 @@ import {
 } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { stableMrIdentityOf } from '../src/modules/integration/domain/mrTerminalControl'
+import { mintSourceTerminationEffectCapability } from '../src/modules/task-execution/application/sourceTerminationCapability'
 import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
@@ -338,6 +343,64 @@ describe('RFC-257 T6 · renderWebhookLaunch（纯装配）', () => {
 describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) => {
   beforeEach(() => {
     seedFixture(providerHarness)
+  })
+
+  test('RFC-370: unexpected preparation failure settles and releases the actual selected launch guard', async () => {
+    const h = await harness()
+    await insertTrigger(h, { cancelOnMrTerminal: true })
+    const event = ev({ projectId: '77', author: { username: 'human-owner' } })
+    const identity = stableMrIdentityOf(event)!
+    const deliveryId = await insertReceivedDelivery(h, event)
+    await h.db
+      .update(webhookDeliveries)
+      .set({
+        mrStreamKey: identity.streamKey,
+        mrStreamRevision: 1,
+        mrStateAfter: 'open',
+      })
+      .where(eq(webhookDeliveries.id, deliveryId))
+    await h.db.insert(webhookMrStreamStates).values({
+      endpointId: h.endpoint.id,
+      streamKey: identity.streamKey,
+      projectId: identity.projectId,
+      mrIid: identity.mrIid,
+      state: 'open',
+      revision: 1,
+      lastDeliveryId: deliveryId,
+      updatedAt: Date.now(),
+    })
+    const terminalControl = composeMrTerminalControl({
+      db: h.db,
+      executionMode: 'host',
+      taskTermination: {
+        participant: {
+          async apply() {
+            throw new Error('unexpected termination dispatch')
+          },
+        },
+        mintCapability: mintSourceTerminationEffectCapability,
+      },
+    })
+    const lifetime = { current: () => true }
+    await terminalControl.execution!.start(lifetime)
+    const dispatcher = createWebhookDispatcher({
+      ...h.deps,
+      terminalControl,
+      persistence: {
+        ...h.deps.persistence,
+        async findLatestLaunchedTask() {
+          throw new Error('fixture-preparation-read-failed')
+        },
+      },
+    })
+    await dispatcher.dispatch({ deliveryId, endpoint: h.endpoint, event })
+    expect(await h.db.select().from(webhookMrLaunchGuards)).toMatchObject([
+      { status: 'failed', launchOwnerKey: null, error: 'launch-preparation-failed' },
+    ])
+    expect(h.launched).toEqual([])
+    expect(await deliveryStatus(h, deliveryId)).toEqual(['failed', 'internal-error'])
+    await terminalControl.execution!.pause(lifetime)
+    await terminalControl.execution!.awaitDrained(lifetime)
   })
 
   describe('RFC-257 T6 · resolveRepoForEvent（AC-8）', () => {

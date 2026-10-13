@@ -115,6 +115,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     {
       method: 'POST',
       path: '/api/event-center/committed-deliveries/:eventId/:consumerId/retry',
+      executionGroup: 'event-dispatch',
       permissions: ['event-sources:update'],
       tokenAccess: 'never',
       summary: 'Retry one dead-letter committed-event delivery with an observed-state CAS',
@@ -369,6 +370,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     {
       method: 'POST',
       path: '/api/event-center/observers/run-due',
+      executionGroup: 'event-dispatch',
       permissions: ['event-sources:update'],
       tokenAccess: 'never',
       summary: 'Run one due short observer cycle',
@@ -460,6 +462,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     {
       method: 'POST',
       path: '/api/event-center/sources/:id/validate',
+      executionGroup: 'event-dispatch',
       permissions: ['event-sources:update'],
       tokenAccess: 'never',
       summary: 'Execute the real fixture for one custom event source draft',
@@ -480,6 +483,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     {
       method: 'POST',
       path: '/api/event-center/sources/:id/publish',
+      executionGroup: 'event-dispatch',
       permissions: ['event-sources:update'],
       tokenAccess: 'never',
       summary: 'Validate and publish one immutable custom event source revision',

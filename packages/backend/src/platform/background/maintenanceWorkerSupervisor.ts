@@ -34,6 +34,8 @@ export interface MaintenanceWorkerLiveState {
 
 interface MaintenanceWorkerSupervisorCommonOptions {
   readonly appHome: string
+  /** Host roots release queue dispatch separately from the catalog handshake. */
+  readonly dispatchPaused?: boolean
   readonly onDelta?: (runId: string, job: MaintenanceJobKey, delta: MaintenanceWorkerDelta) => void
   readonly onEvent?: (event: MaintenanceWorkerEvent) => void
   readonly workerFactory?: () => WorkerLike
@@ -100,6 +102,8 @@ export interface MaintenanceWorkerSupervisor {
 export interface ColdMaintenanceWorkerSupervisor extends MaintenanceWorkerSupervisor {
   /** Create the first Worker only here, and wait for its actual catalog handshake. */
   start(): Promise<void>
+  /** Release the same ready Worker's queue only after global execution READY. */
+  activateDispatch(): void
   /** Close wake/restart admission synchronously and request the same Worker's drain. */
   quiesce(): void
   /** A timeout rejects the caller; only the protocol's drained event settles this receipt. */
@@ -161,6 +165,7 @@ function createSupervisor(
   let worker: WorkerLike | null = null
   let stopped = false
   let paused = cold
+  let dispatchActivated = options.dispatchPaused !== true
   let restartAttempt = 0
   let restartTimer: unknown | null = null
   let handshakeTimer: unknown | null = null
@@ -214,6 +219,7 @@ function createSupervisor(
   }
   const quiesce = (): void => {
     paused = true
+    if (options.dispatchPaused) dispatchActivated = false
     if (coldStartAttempt !== null) coldStartAttempt.quiesced = true
     if (restartTimer !== null) clearTimer(restartTimer)
     restartTimer = null
@@ -352,7 +358,11 @@ function createSupervisor(
         // A generation that finished its handshake after pause/stop already
         // requested a drain. Waking it would admit a slice this supervisor is
         // waiting to see finish.
-        if (!stopped && !paused) post({ type: 'wake', version: MAINTENANCE_PROTOCOL_VERSION })
+        if (!stopped && !paused && dispatchActivated) {
+          if (options.dispatchPaused)
+            post({ type: 'activate', version: MAINTENANCE_PROTOCOL_VERSION })
+          else post({ type: 'wake', version: MAINTENANCE_PROTOCOL_VERSION })
+        }
         return
       case 'heartbeat':
         live = { ...live, lastHeartbeatAt: event.at }
@@ -496,6 +506,7 @@ function createSupervisor(
         version: MAINTENANCE_PROTOCOL_VERSION,
         catalogDigest: MAINTENANCE_CATALOG_DIGEST,
         appHome: options.appHome,
+        ...(options.dispatchPaused ? { dispatchPaused: true } : {}),
         ...options.databaseInit,
       }
       if (options.effectsBootstrap === undefined) post(init)
@@ -564,6 +575,7 @@ function createSupervisor(
     if (coldStart !== null) return coldStart
     if (!paused && worker !== null && live.state === 'ready') return Promise.resolve()
     coldStarted = true
+    if (options.dispatchPaused) dispatchActivated = false
     const attempt = { quiesced: false }
     coldStartAttempt = attempt
     const pending = (async () => {
@@ -602,7 +614,7 @@ function createSupervisor(
 
   const supervisor: MaintenanceWorkerSupervisor = {
     wake() {
-      if (stopped || paused) return
+      if (stopped || paused || !dispatchActivated) return
       if (!cold && worker === null && restartTimer === null) {
         restartAttempt = Math.min(restartAttempt, 5)
         spawn()
@@ -614,6 +626,7 @@ function createSupervisor(
       if (coldStartAttempt !== null) coldStartAttempt.quiesced = true
       if (stopped || paused) return lifecycleDrain ?? Promise.resolve()
       paused = true
+      if (options.dispatchPaused) dispatchActivated = false
       if (cold) rejectColdReady('maintenance worker paused before ready')
       return drainWorker(timeoutMs)
     },
@@ -648,5 +661,14 @@ function createSupervisor(
       return drainWorker(timeoutMs)
     },
   }
-  return cold ? { ...supervisor, start, quiesce, awaitDrained } : supervisor
+  const activateDispatch = (): void => {
+    if (stopped || paused || worker === null || live.state !== 'ready')
+      throw new Error('maintenance worker dispatch activation before ready')
+    if (dispatchActivated) return
+    // Preserve false if the actual post fails; a retry must send this exact
+    // control message before admitting main-thread schedules or requests.
+    post({ type: 'activate', version: MAINTENANCE_PROTOCOL_VERSION })
+    dispatchActivated = true
+  }
+  return cold ? { ...supervisor, start, activateDispatch, quiesce, awaitDrained } : supervisor
 }

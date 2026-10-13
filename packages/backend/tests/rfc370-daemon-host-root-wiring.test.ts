@@ -91,6 +91,26 @@ test('both HTTP roots consume the host query rather than reading the info file i
   expect(route.text).not.toContain("from '@/util/daemonInfo'")
 })
 
+test('the shared daemon serves resources only through the same selected startup and recovery owner', () => {
+  const root = declaration(start, 'startCommand')
+  const preparing = calls(root, start, 'resumeDaemonResourcesForServing')
+  expect(preparing).toHaveLength(1)
+  expect(compact(preparing[0]!.arguments[0]!, start)).toContain('session:initial.session,')
+  expect(compact(preparing[0]!.arguments[0]!, start)).toContain('host:initial.hostExecution,')
+  expect(preparing[0]!.pos).toBeLessThan(calls(root, start, 'serveDaemon')[0]!.pos)
+  expect(calls(root, start, 'initial.session.resume')).toHaveLength(0)
+  const bootstrap = source('cli/daemonHostExecutionBootstrap.ts')
+  const serving = declaration(bootstrap, 'resumeDaemonResourcesForServing')
+  expect(calls(serving, bootstrap, 'resume')).toHaveLength(1)
+  expect(calls(serving, bootstrap, 'onExecutionUnavailable')).toHaveLength(1)
+  const control = source('modules/system-operations/application/hostExecutionRecovery.ts')
+  expect(
+    calls(declaration(control, 'createHostExecutionRecoveryCommands'), control, 'start'),
+  ).toHaveLength(1)
+  expect(control.text).not.toContain('killProcess')
+  expect(control.text).not.toContain('readyGroups =')
+})
+
 test('the single listener composes one host application with the original selected receiver', () => {
   const root = declaration(start, 'serveDaemon')
   selected(root, start, 'composeDaemonHostApplication', 'host:input.daemonHost,')

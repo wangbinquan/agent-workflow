@@ -41,6 +41,9 @@ import { createUser } from '../src/services/users'
 import { loadUndispatchedSelfQuestionerTargets } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyAnswer, ClarifyQuestion } from '@agent-workflow/shared'
+import { composeDaemonHostExecutionBootstrap } from '../src/cli/daemonHostExecutionBootstrap'
+import { createLocalHostExecutionAuthorityFactory } from '@/modules/system-operations/infrastructure/local/hostExecutionAuthority'
+import { bindHttpHostExecutionAvailability } from '@/platform/http/hostExecutionAvailability'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
@@ -274,6 +277,49 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc128-p2-',
   },
   (scope) => {
+    test('RFC-370 resource-only keeps deferred answer sealing but rejects automatic continuation before writing the round', async () => {
+      const h = await buildHarness(scope)
+      const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [
+        makeQ('q1'),
+        makeQ('q2'),
+      ])
+      const bootstrap = await composeDaemonHostExecutionBootstrap({
+        db: h.db,
+        provider: scope.harness.applicationBinding.provider,
+        generation: 'clarify-resource-only',
+        selection: {
+          mode: 'resource-only',
+          recoveryKind: 'local-startup',
+          authority: createLocalHostExecutionAuthorityFactory(),
+          leaseFacts: {
+            forGrant: () => ({ holder: 'clarify-resource-only', expiresAt: Date.now() + 60_000 }),
+          },
+        },
+        onFailure: (error) => {
+          throw error
+        },
+      })
+      bindHttpHostExecutionAvailability(h.app, bootstrap.http)
+      try {
+        const before = await h.db.select().from(clarifyRounds)
+        const quick = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+          method: 'POST',
+          body: JSON.stringify({ answers: [makeAns('q1', 1)], directive: 'continue' }),
+        })
+        expect(quick.status).toBe(503)
+        expect(await h.db.select().from(clarifyRounds)).toEqual(before)
+        const deferred = await req(h.app, h.alice.token, `/api/clarify/${nodeRunId}/answers`, {
+          method: 'POST',
+          body: JSON.stringify({ defer: true, answers: [makeAns('q1', 1)] }),
+        })
+        expect(deferred.status).toBe(200)
+        expect(await deferred.json()).toMatchObject({ kind: 'seal', roundFullySealed: false })
+        expect(await clarifyAnswerReruns(h.db, taskId)).toBe(0)
+      } finally {
+        await bootstrap.beforeCloseProvider()
+      }
+    })
+
     test('partial defer-seal 单题：response kind=seal/roundFullySealed=false；轮 awaiting_human；q1 sealed+staged(autoStage)、q2 未 seal pending；0 续跑', async () => {
       const h = await buildHarness(scope)
       const { taskId, nodeRunId } = await seedSelfRound(h.db, h.alice.id, [

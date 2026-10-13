@@ -1,7 +1,11 @@
 // RFC-341 — bounded durable committed-event delivery driver.
 
 import { createLogger } from '@/util/log'
-import type { CommittedEventDeliveryPersistencePort } from './persistence'
+import type {
+  CommittedEventDeliveryPersistencePort,
+  CommittedEventUnissuedClaimSettlement,
+} from './persistence'
+import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
 import {
   createCommittedEventProjectionLedger,
   type CommittedEventConsumerDefinition,
@@ -107,7 +111,7 @@ function errorCode(error: unknown): string {
   return error instanceof Error ? error.name : 'committed-event-consumer-error'
 }
 
-export function createCommittedEventDispatcher(input: {
+export interface CommittedEventDispatcherInput {
   readonly persistence: CommittedEventDeliveryPersistencePort
   readonly workerId: string
   readonly codecs: CommittedEventCodecRegistry
@@ -121,7 +125,47 @@ export function createCommittedEventDispatcher(input: {
     consumerId: string
     error: unknown
   }) => void
-}): CommittedEventDispatcher {
+}
+
+export interface AuthorityCommittedEventDispatcher {
+  runOne(lifetime: BackgroundExecutionLifetime): Promise<CommittedEventDeliveryOutcome>
+  drain(
+    lifetime: BackgroundExecutionLifetime,
+    maxSteps?: number,
+  ): Promise<Readonly<{ steps: number; madeProgress: boolean }>>
+}
+
+export function createCommittedEventDispatcher(
+  input: CommittedEventDispatcherInput,
+): CommittedEventDispatcher {
+  return buildCommittedEventDispatcher(input)
+}
+
+export function createAuthorityCommittedEventDispatcher(
+  input: CommittedEventDispatcherInput & {
+    readonly persistence: CommittedEventDeliveryPersistencePort &
+      CommittedEventUnissuedClaimSettlement
+  },
+): AuthorityCommittedEventDispatcher {
+  if (typeof input.persistence.deferUnissued !== 'function')
+    throw new Error('committed-event-unissued-settlement-missing')
+  const dispatcher = buildCommittedEventDispatcher(
+    input,
+    input.persistence.deferUnissued.bind(input.persistence),
+  )
+  const capture = (lifetime: BackgroundExecutionLifetime): BackgroundExecutionLifetime =>
+    Object.freeze({ current: lifetime.current.bind(lifetime) })
+  return Object.freeze({
+    runOne: (lifetime: BackgroundExecutionLifetime) => dispatcher.runOne(capture(lifetime)),
+    drain: (lifetime: BackgroundExecutionLifetime, maxSteps?: number) =>
+      dispatcher.drain(maxSteps, capture(lifetime)),
+  })
+}
+
+function buildCommittedEventDispatcher(
+  input: CommittedEventDispatcherInput,
+  deferUnissued?: CommittedEventUnissuedClaimSettlement['deferUnissued'],
+) {
   assertCommittedEventRegistry({ codecs: input.codecs, consumers: input.consumers })
   const persistence = input.persistence
   const now = input.now ?? Date.now
@@ -137,8 +181,10 @@ export function createCommittedEventDispatcher(input: {
   const projectEphemeral = async (
     envelope: CommittedEventEnvelopeV1,
     payloadDigest: string,
+    execution?: BackgroundExecutionLifetime,
   ): Promise<void> => {
     for (const projector of ephemeralProjectors) {
+      if (execution !== undefined && !execution.current()) return
       if (!projector.eventTypes.includes(envelope.type)) continue
       try {
         if (
@@ -162,16 +208,22 @@ export function createCommittedEventDispatcher(input: {
     }
   }
   return {
-    async runOne() {
+    async runOne(execution?: BackgroundExecutionLifetime): Promise<CommittedEventDeliveryOutcome> {
+      if (execution !== undefined && deferUnissued === undefined)
+        throw new Error('committed-event-unissued-settlement-missing')
+      if (execution !== undefined && !execution.current()) return 'idle'
       const claim = await persistence.claimNext({
         workerId: input.workerId,
         now: now(),
         ...(input.leaseMs === undefined ? {} : { leaseMs: input.leaseMs }),
       })
       if (claim === null) return 'idle'
+      const unissued = new Error('committed-event-dispatch-quiesced')
       try {
+        if (execution !== undefined && !execution.current()) throw unissued
         const envelope = input.codecs.decode(claim.event.envelope)
-        await projectEphemeral(envelope, claim.event.payloadDigest)
+        await projectEphemeral(envelope, claim.event.payloadDigest, execution)
+        if (execution !== undefined && !execution.current()) throw unissued
         const consumer = durableConsumers.get(claim.consumerId)
         if (consumer === undefined) {
           throw Object.assign(
@@ -191,6 +243,10 @@ export function createCommittedEventDispatcher(input: {
         await persistence.accept({ claim, now: now() })
         return 'completed'
       } catch (error) {
+        if (error === unissued) {
+          await deferUnissued!({ claim, now: now() })
+          return 'idle'
+        }
         return await persistence.reject({
           claim,
           errorCode: errorCode(error),
@@ -200,13 +256,17 @@ export function createCommittedEventDispatcher(input: {
         })
       }
     },
-    async drain(maxSteps = 32) {
+    async drain(
+      maxSteps = 32,
+      execution?: BackgroundExecutionLifetime,
+    ): Promise<Readonly<{ steps: number; madeProgress: boolean }>> {
       if (!Number.isSafeInteger(maxSteps) || maxSteps <= 0) {
         throw new Error('committed event drain maxSteps must be a positive integer')
       }
       let steps = 0
       for (; steps < maxSteps; steps += 1) {
-        if ((await this.runOne()) === 'idle') break
+        if (execution !== undefined && !execution.current()) break
+        if ((await this.runOne(execution)) === 'idle') break
       }
       return { steps, madeProgress: steps > 0 }
     },
