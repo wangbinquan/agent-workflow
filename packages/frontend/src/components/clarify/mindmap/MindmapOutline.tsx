@@ -1,6 +1,7 @@
-import { useMemo, useRef, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TextInput } from '@/components/Form'
+import { TreeDisclosure } from '@/components/TreeDisclosure'
 import { VirtualList } from '@/components/VirtualList'
 import type { MindmapNodeSummary } from '@/lib/clarify/mindmap/projection'
 import {
@@ -23,6 +24,12 @@ interface Props {
 export function MindmapOutline(props: Props) {
   const { t } = useTranslation()
   const navigation = useMemo(() => indexMindmapNavigation(props.nodes), [props.nodes])
+  // Clicking disclosure keeps selection intact, but leaves a reachable tree Tab stop.
+  const [focusOverride, setFocusOverride] = useState<{
+    id: string
+    selectedId: string
+    search: string
+  } | null>(null)
   const query = props.search.trim().toLocaleLowerCase()
   const rows = useMemo(() => {
     const hidden = new Set<string>()
@@ -37,14 +44,19 @@ export function MindmapOutline(props: Props) {
     })
   }, [navigation, query, props.collapsed])
   const visibleIds = new Set(rows.map(({ node }) => node.id))
-  const tabStop = visibleIds.has(props.selectedId)
-    ? props.selectedId
+  const preferredId =
+    focusOverride?.selectedId === props.selectedId && focusOverride.search === props.search
+      ? focusOverride.id
+      : props.selectedId
+  const tabStop = visibleIds.has(preferredId)
+    ? preferredId
     : query
       ? rows[0]?.node.id
       : (mindmapAncestorPath(props.selectedId, navigation.byId)
           .reverse()
           .find((node) => visibleIds.has(node.id))?.id ?? rows[0]?.node.id)
   const keyboardSelect = (id: string) => {
+    setFocusOverride(null)
     props.onSelect(id, true, false)
     // The virtual row can mount after navigation. Its own ref restores focus.
     focusTarget.current = id
@@ -81,7 +93,7 @@ export function MindmapOutline(props: Props) {
       <VirtualList
         items={rows}
         itemKey={({ node }) => node.id}
-        estimateSize={84}
+        estimateSize={44}
         scrollResetKey={query}
         scrollToKey={tabStop}
         containerProps={{
@@ -93,6 +105,7 @@ export function MindmapOutline(props: Props) {
           const { node, parent } = row
           const expandable = row.children.length > 0
           const pending = pendingMindmapDescendants(node)
+          const total = node.counts.done + node.counts.needs_confirmation + node.counts.needs_detail
           const path = query ? mindmapAncestorPath(node.id, navigation.byId).slice(1) : []
           return (
             <div
@@ -113,6 +126,8 @@ export function MindmapOutline(props: Props) {
               data-node-id={node.id}
               data-parent-id={node.parentId ?? ''}
               data-depth={row.depth}
+              data-last-sibling={row.position === row.siblings}
+              data-compressed={row.depth > 6 && !query}
               style={
                 {
                   '--mindmap-indent': `${query ? 0 : Math.min(5, Math.max(0, row.depth - 1)) * 14}px`,
@@ -120,6 +135,7 @@ export function MindmapOutline(props: Props) {
               }
               onClick={(event) => {
                 event.currentTarget.focus({ preventScroll: true })
+                setFocusOverride(null)
                 props.onSelect(node.id, !!query)
               }}
               onKeyDown={(event) => {
@@ -146,21 +162,34 @@ export function MindmapOutline(props: Props) {
                 }
               }}
             >
+              {!query && row.depth > 1 && (
+                <span className="mindmap-outline__guides" aria-hidden="true">
+                  {row.guideDepths.map((depth) => (
+                    <span
+                      key={depth}
+                      className="mindmap-outline__rail"
+                      style={{ left: `${(depth - 1) * 14 + 16}px` }}
+                    />
+                  ))}
+                  <span className="mindmap-outline__elbow" />
+                </span>
+              )}
               <div className="mindmap-outline__line">
                 {expandable && !query ? (
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm mindmap-outline__toggle"
-                    tabIndex={-1}
-                    aria-label={`${t(props.collapsed.has(node.id) ? 'mindmap.expand' : 'mindmap.collapse')} ${node.title}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
+                  <TreeDisclosure
+                    className="mindmap-outline__toggle"
+                    expanded={!props.collapsed.has(node.id)}
+                    label={`${t(props.collapsed.has(node.id) ? 'mindmap.expand' : 'mindmap.collapse')} ${node.title}`}
+                    onToggle={() => {
+                      focusTarget.current = node.id
+                      setFocusOverride({
+                        id: node.id,
+                        selectedId: props.selectedId,
+                        search: props.search,
+                      })
                       props.onToggle(node.id)
                     }}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <span aria-hidden="true">{props.collapsed.has(node.id) ? '▸' : '▾'}</span>
-                  </button>
+                  />
                 ) : (
                   <span className="mindmap-outline__toggle-space" aria-hidden="true" />
                 )}
@@ -168,22 +197,51 @@ export function MindmapOutline(props: Props) {
                   {node.kind === 'question' && (
                     <span className="mindmap-outline__number">Q{node.order + 1}</span>
                   )}
-                  <span className="mindmap-outline__title">{node.title}</span>
-                </span>
-              </div>
-              <div className="mindmap-outline__meta">
-                {node.kind === 'group' ? (
-                  <span className={`mindmap-status mindmap-status--${node.status}`}>
-                    {node.counts.done} /{' '}
-                    {node.counts.done + node.counts.needs_confirmation + node.counts.needs_detail}{' '}
-                    {t('mindmap.confirmed')}
+                  <span className="mindmap-outline__title" title={node.title}>
+                    {node.title}
                   </span>
-                ) : (
-                  <MindmapStatus status={node.ownStatus!} />
-                )}
-                {node.kind === 'question' && pending > 0 && (
-                  <span className="muted">{t('mindmap.pendingChildren', { count: pending })}</span>
-                )}
+                </span>
+                <span className="mindmap-outline__meta">
+                  {node.kind === 'group' && (
+                    <span
+                      className="mindmap-outline__count"
+                      title={`${node.counts.done} / ${total} ${t('mindmap.confirmed')}`}
+                    >
+                      {node.counts.done}
+                      <span aria-hidden="true">/</span>
+                      <span className="sr-only"> / </span>
+                      {total}
+                    </span>
+                  )}
+                  {node.kind === 'question' && pending > 0 && (
+                    <span
+                      className="mindmap-outline__pending"
+                      title={t('mindmap.pendingChildren', { count: pending })}
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                      >
+                        <path
+                          d="M4 3v5a3 3 0 0 0 3 3h5m-3-3 3 3-3 3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      <span aria-hidden="true">{pending}</span>
+                      <span className="sr-only">
+                        {t('mindmap.pendingChildren', { count: pending })}
+                      </span>
+                    </span>
+                  )}
+                  <MindmapStatus
+                    status={node.kind === 'group' ? node.status : node.ownStatus!}
+                    compact
+                  />
+                </span>
               </div>
               {row.depth > 6 && !query && (
                 <span className="mindmap-outline__path">

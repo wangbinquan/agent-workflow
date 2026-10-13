@@ -7,6 +7,8 @@ export interface MindmapOutlineRow {
   siblings: number
   children: string[]
   parent: MindmapNodeSummary | undefined
+  /** Visible ancestor rails only; bounded even when the actual tree is very deep. */
+  guideDepths: number[]
 }
 
 /** A display index of the real tree. Appended follow-ups retain their parent and depth. */
@@ -19,21 +21,30 @@ export function indexMindmapNavigation(nodes: readonly MindmapNodeSummary[]) {
     children.set(node.parentId, siblings)
   }
   const rows: MindmapOutlineRow[] = []
-  const stack = (children.get(null) ?? []).map((id) => ({ id, depth: 0, position: 1 }))
+  const stack = (children.get(null) ?? []).map((id) => ({
+    id,
+    depth: 0,
+    position: 1,
+    guideDepths: [] as number[],
+  }))
   while (stack.length) {
-    const { id, depth, position } = stack.pop()!
+    const { id, depth, position, guideDepths } = stack.pop()!
     const node = byId.get(id)!
     const childIds = children.get(id) ?? []
+    const siblings = children.get(node.parentId)?.length ?? 1
     rows.push({
       node,
       depth,
       position,
-      siblings: children.get(node.parentId)?.length ?? 1,
+      siblings,
       children: childIds,
       parent: node.parentId ? byId.get(node.parentId) : undefined,
+      guideDepths,
     })
+    const childGuides =
+      depth > 1 && depth <= 5 && position < siblings ? [...guideDepths, depth - 1] : guideDepths
     for (let i = childIds.length - 1; i >= 0; i--)
-      stack.push({ id: childIds[i]!, depth: depth + 1, position: i + 1 })
+      stack.push({ id: childIds[i]!, depth: depth + 1, position: i + 1, guideDepths: childGuides })
   }
   return { rows, byId, children, byRowId: new Map(rows.map((row) => [row.node.id, row])) }
 }

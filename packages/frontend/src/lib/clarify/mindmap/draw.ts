@@ -252,8 +252,8 @@ export function drawMindmap(input: {
         id: node.id,
         left: x - width / 2,
         right: x + width / 2,
-        top: y - 15,
-        bottom: y + 15,
+        top: y - 12,
+        bottom: y + 12,
       }
       const keys: string[] = []
       for (let gx = Math.floor((rect.left - 4) / 64); gx <= Math.floor((rect.right + 4) / 64); gx++)
@@ -284,17 +284,17 @@ export function drawMindmap(input: {
       ctx.strokeStyle = item.id === selectedId ? palette.accent : palette.border
       ctx.lineWidth = item.id === selectedId ? 2 : 1
       ctx.beginPath()
-      ctx.roundRect(rect.left, rect.top, rect.right - rect.left, 30, 6)
+      ctx.roundRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, 6)
       ctx.fill()
       ctx.stroke()
       ctx.fillStyle = palette.status[node.status]
-      mark(ctx, node.status, rect.left + 10, rect.top + 15, 3)
+      mark(ctx, node.status, rect.left + 10, rect.top + 12, 3)
       ctx.fillStyle = palette.text
       ctx.font = '500 12px system-ui, sans-serif'
       ctx.fillText(
         shorten(ctx, node.title, rect.right - rect.left - 28),
         rect.left + 20,
-        rect.top + 15,
+        rect.top + 12,
       )
       hits.push(rect)
     }

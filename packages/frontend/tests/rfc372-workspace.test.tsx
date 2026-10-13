@@ -80,12 +80,17 @@ test('category validation preserves the existing categories and guidance when a 
     },
   })
   render(<ClarifyModeEdit node={node} onPatch={patch} onHistoryBoundary={() => {}} />)
-  const input = screen.getByRole('textbox', { name: /Question categories|提问分类/ })
-  fireEvent.change(input, { target: { value: 'Too many' } })
-  fireEvent.keyDown(input, { key: 'Enter' })
+  expect(
+    screen.getByRole('button', { name: /Add root category|添加一级分类/ }).hasAttribute('disabled'),
+  ).toBe(true)
+  expect(
+    screen.getByRole('button', { name: /Add subcategory|添加子分类/ }).hasAttribute('disabled'),
+  ).toBe(true)
   expect(patch).not.toHaveBeenCalled()
   expect(screen.getByDisplayValue('Keep my guidance')).toBeTruthy()
   expect(screen.getByText('Category 39')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: /Rename|重命名/ }))
+  const input = screen.getByRole('textbox', { name: /Category name|分类名称/ })
   fireEvent.change(input, { target: { value: 'x'.repeat(121) } })
   fireEvent.keyDown(input, { key: 'Enter' })
   expect(patch).not.toHaveBeenCalled()

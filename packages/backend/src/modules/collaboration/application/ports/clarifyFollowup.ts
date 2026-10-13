@@ -14,6 +14,7 @@ export interface ClarifyFollowupSnapshot {
   questions: ClarifyQuestion[]
   drafts: Record<string, ClarifyDraftValue>
   instruction: string
+  categoryPaths?: string[][]
 }
 export interface ClarifyFollowupGenerator {
   generate(input: {

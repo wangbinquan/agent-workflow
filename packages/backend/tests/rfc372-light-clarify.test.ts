@@ -8,6 +8,8 @@ import { mountClarifyRoutes } from '@/routes/clarify'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
 import {
   ClarifyQuestionSchema,
+  CLARIFY_MINDMAP_QUESTION_GUIDANCE,
+  type ClarifyMindmapConfig,
   clarifyAnswerBasis,
   clarifyContentKey,
   clarifyFollowupContext,
@@ -91,7 +93,12 @@ test('a route composition without a follow-up generator returns a structured una
   expect(await response.json()).toMatchObject({ code: 'clarify-followup-unavailable' })
 })
 
-async function seed(h: ProviderHarness, kind: 'self' | 'cross' = 'self', mindmap = true) {
+async function seed(
+  h: ProviderHarness,
+  kind: 'self' | 'cross' = 'self',
+  mindmap = true,
+  config: ClarifyMindmapConfig = { categories: ['Scope'], instructions: 'Ask consequences' },
+) {
   const taskId = randomUUID(),
     workflowId = randomUUID(),
     askingNodeRunId = randomUUID()
@@ -107,7 +114,7 @@ async function seed(h: ProviderHarness, kind: 'self' | 'cross' = 'self', mindmap
         ...(mindmap
           ? {
               interactionMode: 'mindmap',
-              mindmap: { categories: ['Scope'], instructions: 'Ask consequences' },
+              mindmap: config,
             }
           : {}),
       },
@@ -167,6 +174,52 @@ async function seed(h: ProviderHarness, kind: 'self' | 'cross' = 'self', mindmap
 
 describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
   for (const kind of ['self', 'cross'] as const)
+    test(`${kind}: nested category configuration reaches follow-up from the immutable task snapshot without focus notes`, async () => {
+      const fixture = await seed(h, kind, true, {
+        categories: ['Scope', ['Performance', 'Database', 'SQL']],
+        instructions: '',
+      })
+      // Editing the reusable workflow must not silently change an already running task.
+      await h.db.update(workflows).set({ definition: JSON.stringify({ nodes: [] }) })
+      const store = createClarifyFollowupStore(h.db, events)
+      const snapshot = await store.read(fixture.nodeRunId, [])
+      expect(snapshot.categoryPaths).toEqual([['Scope'], ['Performance', 'Database', 'SQL']])
+      expect(snapshot.instruction).toBe('')
+      const operations = createClarifyFollowupOperations(store, {
+        generate: async ({ prompt }) => {
+          expect(prompt).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
+          expect(prompt).toContain(
+            '"configuredCategoryPaths":[["Scope"],["Performance","Database","SQL"]]',
+          )
+          expect(prompt).toContain('"guidance":""')
+          expect(prompt).toContain('"userRequest":""')
+          return (
+            '<workflow-clarify>' +
+            JSON.stringify({
+              questions: [
+                { ...q('sql'), mindmap: { categoryPath: ['Performance', 'Database', 'SQL'] } },
+              ],
+            }) +
+            '</workflow-clarify>'
+          )
+        },
+      })
+      await operations.append(
+        fixture.nodeRunId,
+        {
+          requestId: randomUUID(),
+          categoryPath: [],
+          instruction: '',
+          basis: clarifyContentKey(clarifyFollowupContext(snapshot.questions, snapshot.drafts, [])),
+        },
+        editor,
+      )
+      const questions = JSON.parse((await fixture.read()).questionsJson) as ClarifyQuestion[]
+      expect(questions.at(-1)?.mindmap?.categoryPath).toEqual(['Performance', 'Database', 'SQL'])
+      expect(questions.at(-1)?.mindmap?.parentQuestionId).toBeUndefined()
+    })
+
+  for (const kind of ['self', 'cross'] as const)
     test(`${kind}: persistent shared draft, append idempotency, old-tab rejection and original seal`, async () => {
       const fixture = await seed(h, kind),
         store = createClarifyFollowupStore(h.db, events)
@@ -183,11 +236,14 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       for (const question of fixture.questions) await save(question)
       const snap = await store.read(fixture.nodeRunId, 'b')
       expect(snap.instruction).toBe('Ask consequences')
+      expect(snap.categoryPaths).toEqual([['Scope']])
       expect(snap.drafts.b?.confirmedBasis).toBe(answer(fixture.questions[1]!).confirmedBasis)
       let calls = 0
       const operations = createClarifyFollowupOperations(store, {
         generate: async (input) => {
           calls++
+          expect(input.prompt).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
+          expect(input.prompt).toContain('Ask consequences')
           expect(input.prompt).toContain('Question a')
           expect(input.prompt).toContain('Question b')
           return generated

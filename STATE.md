@@ -1,3 +1,15 @@
+## 2026-10-13 RFC-372：多级分类配置、内置提问与第三次真实模型验收
+
+提问分类由单层标签改为公共树编辑器，可新增子分类、父级重命名、删除分支及原撤销；旧单层字符串兼容，限制按真实分类节点计数。首次 self/cross 与追问共用系统内置分类/覆盖规则，补充关注点可留空，追问读取原任务快照。目录改为 32/44px 紧凑行、SVG 折叠控件与真实层级导线，已确认父题不掩盖未答子题；修正 40% 缩略标签间隔。
+
+日常 AW 真实 OpenCode/DeepSeek 任务 `01M4TB2FRHBMGTXJZVMSPF9NMK` 已 done：三级预置、空指引分类补 4 题、深入 1 题、根补连接池 1 题，九题确认后生成 1950 字符最终文档；开发热更新取消一次，原任务自动恢复后完成。第三份记录复用 System Mock 边界与参数化 E2E 固化。集中验证 shared 8、双 provider 各 13、前端 34 项有效通过，首批 E2E 6 项及最终新旧录制 2 项通过，构建 smoke 与有限独立功能门通过；手机/桌面、深浅主题实际检查。整包前端类型的两项并发错误、十三份共享架构清单及新 SHA 的整仓 CI 仍开放。范围、失败与验收见 [目录与多级分类记录](design/RFC-372-mindmap-clarify/outline-redesign-20261013.md)。以下并发和历史输出完整保留。
+
+## 2026-10-13 RFC-370：三根选型、激活边界及执行状态候选
+
+两 daemon 根已写入原十九 owner 选型，嵌入式 HTTP 新入口保持原 Task/MCP 及借用 DB 所有权。全局激活等待真实 recovery/write/owner start ACK；维护子 Worker 的预存队列增加独立 activate，普通 pause 保留原取消/结算再退役，失权不以取消或假 ACK 排空。构造失败清理与 PG webhook 本根 Task registry 接线已补。
+
+中立状态 API、原 UI 提示及中英文文案、Task/MCP 新启动限制和首批 API 分组边界已写入候选。HTTP/原 bound operation 获取同一 SO 请求租约，暂停中的新 grant 不再重开派发；clarify deferred 保存与自动继续分开，准备期配置在刷新 owner 激活后重读。实际 root/双 provider/Worker、shared、完整 UI 回归均只编写未执行；67 份 TS/TSX 语法零错误与格式/diff 静态自查不等同功能验收。完整根/十九 owner 回归、所有请求/界面入口、未确定结算恢复、A-T7/A-G、独立 CS adapters 与先 M0 再 M1～M4 仍开放，AW 尚未部署 CS。新候选未发布/部署，无本机测试/服务/门或跨 session 信息；最近 fetch 后 main/origin 同为 `2a39095f4c67a6393f0049829bddd1ce4500623e`、0/0、index 空。详见 [实施与待项](design/RFC-370-crewstation-hosted-deployment/root-activation-and-availability.md)。以下并发与历史输出完整保留。
+
 ## 2026-10-13 RFC-372：UX 已发布，补齐 CI 配套遗漏
 
 `f3ab372d9` 已发布脑图横排、分类方向、问题弹窗及两份真实任务录制。其 CI 暴露本次头部动态 class 断言与 Dialog 双向清单漏项，已修正并保留原约束；最终定向 21 项通过、格式/lint 通过、有限独立功能复核 PASS。真实录制文档的两个示例幂等 UUID 只登记确切历史指纹，实际文档原文保留；以上修正已以 `0bb5e5fc7` 推送。稍后链接作业报告 GitHub runner 无法连接文档中的两条 localhost 地址，后继改为完整任务 ID 与本地路径说明。visual 与 OpenCode integration 已 success，Windows 原 14 项失败与主 CI 新结果分别跟踪；其他观测/根装配失败有父提交或源码 blob 对照，不代改、不发跨 session 消息。13 份共享架构清单同步及后继 exact-SHA CI 仍开放，RFC 保持 In Progress；见 [CI 修正记录](design/RFC-372-mindmap-clarify/ci-ux-repair-20261013.md)。以下并发和历史正文完整保留。

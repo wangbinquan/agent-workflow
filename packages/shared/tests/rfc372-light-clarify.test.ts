@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
   ClarifyQuestionSchema,
+  ClarifyMindmapConfigSchema,
+  CLARIFY_MINDMAP_QUESTION_GUIDANCE,
+  clarifyCategoryPaths,
   ClarifyFollowupSchema,
   clarifyAnswerBasis,
   clarifyContentKey,
@@ -144,4 +147,60 @@ test('category follow-up requires exactly one target and uses the complete categ
       clarifyFollowupContext(qs, { a: { ...answer('a'), selectedOptionIndices: [1] } }, ['Scope']),
     ),
   )
+})
+
+// Regression: the configuration editor used to silently discard nested paths.
+test('category configuration round trips old names and full paths without splitting literal slashes', () => {
+  const raw = {
+    categories: ['Service/API', ['Performance', 'Database', 'SQL'], ['Performance', 'Application']],
+    instructions: '',
+  }
+  const config = ClarifyMindmapConfigSchema.parse(JSON.parse(JSON.stringify(raw)))
+  expect(config).toEqual(raw)
+  expect(clarifyCategoryPaths(config.categories)).toEqual([
+    ['Service/API'],
+    ['Performance', 'Database', 'SQL'],
+    ['Performance', 'Application'],
+  ])
+  expect(ClarifyMindmapConfigSchema.parse({ categories: [[' Root ', ' Child ']] })).toEqual({
+    categories: [['Root', 'Child']],
+    instructions: '',
+  })
+  for (const categories of [[[]], [['Root', ' ']], [['x'.repeat(121)]]])
+    expect(ClarifyMindmapConfigSchema.safeParse({ categories }).success).toBe(false)
+})
+
+test('category limit counts shared parent prefixes once and every actual node toward forty', () => {
+  const paths = Array.from({ length: 39 }, (_, i) => ['Root', `Child ${i}`])
+  expect(ClarifyMindmapConfigSchema.safeParse({ categories: paths }).success).toBe(true)
+  expect(
+    ClarifyMindmapConfigSchema.safeParse({ categories: [...paths, ['Root', 'One too many']] })
+      .success,
+  ).toBe(false)
+  const deep = Array.from({ length: 40 }, (_, i) => `Level ${i}`)
+  expect(ClarifyMindmapConfigSchema.safeParse({ categories: [deep] }).success).toBe(true)
+  expect(
+    ClarifyMindmapConfigSchema.safeParse({ categories: [[...deep, 'Too deep']] }).success,
+  ).toBe(false)
+})
+
+test('self and cross mindmap prompts always include shared classification rules with empty optional notes', () => {
+  for (const kind of ['self', 'cross'] as const) {
+    const rendered = renderUserPrompt({
+      promptTemplate: 'Design',
+      inputs: {},
+      meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
+      agentOutputs: ['design'],
+      clarifyChannel: { kind, directive: 'mandatory', injectStopNotice: false },
+      clarifyMindmap: {
+        categories: ['Service/API', ['Performance', 'Database', 'SQL']],
+        instructions: '',
+      },
+    })
+    expect(rendered).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
+    expect(rendered).toContain(
+      JSON.stringify([['Service/API'], ['Performance', 'Database', 'SQL']]),
+    )
+    expect(rendered).toContain('MANDATORY ASK-BACK')
+  }
 })

@@ -13,6 +13,7 @@ import { MindmapWorkspace } from '../src/components/clarify/mindmap/MindmapWorks
 import { MindmapOutline } from '../src/components/clarify/mindmap/MindmapOutline'
 import { projectClarifyMindmap } from '../src/lib/clarify/mindmap/projection'
 import { QuestionForm } from '../src/components/clarify/QuestionForm'
+import { indexMindmapNavigation } from '../src/lib/clarify/mindmap/navigation'
 
 vi.mock('../src/components/clarify/mindmap/MindmapCanvas', () => ({
   MindmapCanvas: () => <div role="img" aria-label="Test map" />,
@@ -99,6 +100,66 @@ function renderFocused(element: Parameters<typeof render>[0]) {
 }
 const select = (name: string) =>
   fireEvent.click(screen.getByRole('treeitem', { name: new RegExp(name) }))
+
+// Dense rows must keep the actual multi-level category/question tree and usable
+// disclosure focus, instead of trading correctness for a smaller screenshot.
+test('outline rails continue only through ancestors with later siblings and stay bounded at depth 100', () => {
+  const make = (id: string, parentQuestionId?: string) =>
+    ClarifyQuestionSchema.parse({
+      id,
+      title: id,
+      kind: 'single',
+      options: ['A', 'B'],
+      mindmap: { categoryPath: ['Performance', 'Database'], parentQuestionId },
+    })
+  const source = [make('a'), make('a1', 'a'), make('deep', 'a1'), make('a2', 'a'), make('b')]
+  const index = indexMindmapNavigation(projectClarifyMindmap(source, {}, new Set(), 'Root'))
+  expect(index.byRowId.get('g:["Performance","Database"]')?.depth).toBe(2)
+  expect(index.byRowId.get('q:a1')?.guideDepths).toEqual([2])
+  expect(index.byRowId.get('q:deep')?.guideDepths).toEqual([2, 3])
+  expect(index.byRowId.get('q:a2')?.guideDepths).toEqual([2])
+  expect(index.byRowId.get('q:b')?.guideDepths).toEqual([])
+  expect(index.byRowId.get('q:a2')?.position).toBe(index.byRowId.get('q:a2')?.siblings)
+  const deep = Array.from({ length: 100 }, (_, i) => make(`d${i}`, i ? `d${i - 1}` : undefined))
+  const deepIndex = indexMindmapNavigation(projectClarifyMindmap(deep, {}, new Set(), 'Root'))
+  expect(deepIndex.byRowId.get('q:d99')?.depth).toBe(102)
+  expect(deepIndex.rows.every((row) => row.guideDepths.length <= 4)).toBe(true)
+})
+
+test('SVG disclosure folds without opening or selecting a question and leaves a reachable focused row', () => {
+  render(<Harness />)
+  const parent = screen.getByRole('treeitem', { name: /Main decision/ })
+  const toggle = within(parent).getByRole('button', { name: 'Collapse children Main decision' })
+  const selection = document.querySelector('[role="treeitem"][aria-selected="true"]')
+  expect(toggle.querySelector('svg')).toBeTruthy()
+  fireEvent.click(toggle)
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.queryByRole('treeitem', { name: /Network timeout recovery/ })).toBeNull()
+  expect(document.querySelector('[role="treeitem"][aria-selected="true"]')).toBe(selection)
+  expect(document.activeElement).toBe(parent)
+  expect(parent.tabIndex).toBe(0)
+  expect(document.querySelectorAll('[role="treeitem"][tabindex="0"]')).toHaveLength(1)
+  fireEvent.keyDown(parent, { key: 'ArrowRight' })
+  expect(screen.getByRole('treeitem', { name: /Network timeout recovery/ })).toBeTruthy()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  fireEvent.keyDown(parent, { key: 'Enter' })
+  expect(
+    within(screen.getByRole('dialog')).getByRole('heading', { name: 'Main decision' }),
+  ).toBeTruthy()
+})
+
+test('compact row preserves full titles, category progress and separate own versus descendant status', () => {
+  render(<Harness />)
+  const parent = screen.getByRole('treeitem', { name: /Main decision/ })
+  expect(within(parent).getByText('Main decision').getAttribute('title')).toBe('Main decision')
+  expect(within(parent).getByText('Confirmed')).toBeTruthy()
+  expect(within(parent).getByText('2 child questions pending')).toBeTruthy()
+  expect(within(parent).queryByText('Unanswered')).toBeNull()
+  const group = screen.getByRole('treeitem', { name: /^Concurrency/ })
+  expect(within(group).getByTitle('1 / 3 Confirmed')).toBeTruthy()
+  expect(within(group).getByText('Unanswered')).toBeTruthy()
+  expect(group.getAttribute('aria-level')).toBe('2')
+})
 
 test('outline retains category and question ancestry, distinct own status and expandable descendants', () => {
   renderFocused(<Harness />)

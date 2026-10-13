@@ -1,0 +1,519 @@
+{
+  "source": {
+    "kind": "recorded-real-model",
+    "instance": "daily-local-aw",
+    "taskId": "01M4TB2FRHBMGTXJZVMSPF9NMK",
+    "workflowId": "01M4TAQK87FTHK6X1FX2DQZX1T",
+    "roundId": "01M4TB3ZF4NGBS36CKR8RRETYT",
+    "date": "2026-10-13",
+    "runtime": "opencode",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "modelMocked": false,
+    "finalStatus": "done",
+    "autoRecoveryAttempts": 1,
+    "modelRuns": [
+      {
+        "id": "01M4TB2KG9PM86MQ4ZSV0ZDJ17",
+        "status": "done",
+        "error": null,
+        "sessionId": "ses_ecb4e6c27ffe9DsXgKQw97k1A7",
+        "inputTokens": 2043,
+        "outputTokens": 2541
+      },
+      {
+        "id": "01M4TC0QTC9RAWHW6CBCDR1JYN",
+        "status": "canceled",
+        "error": "aborted by signal",
+        "sessionId": "ses_ecb3f5abaffefu588HheraUxFb",
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      {
+        "id": "01M4TC27JQD6WX9D1YQCV028JT",
+        "status": "done",
+        "error": null,
+        "sessionId": "ses_ecb3ec747ffeV3Ktu9JvFIOfX8",
+        "inputTokens": 2051,
+        "outputTokens": 4033
+      }
+    ],
+    "normalization": "Only question and agent IDs, request identities and confirmation hashes are normalized or omitted. Questions, options, business guidance, answers and final document come from the completed daily AW task. One final generation was canceled during development hot reload and recovered by AW."
+  },
+  "topic": "面向500名内部员工的报表查询服务。应用使用HTTP API，数据库为PostgreSQL，工作日高峰查询较多。需要明确性能和恢复目标，并给出可验收的实现方案。",
+  "workflow": {
+    "$schema_version": 7,
+    "inputs": [
+      {
+        "kind": "text",
+        "key": "topic",
+        "label": "设计主题",
+        "required": true
+      }
+    ],
+    "nodes": [
+      {
+        "id": "topic",
+        "kind": "input",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "inputKey": "topic"
+      },
+      {
+        "id": "designer",
+        "kind": "agent-single",
+        "position": {
+          "x": 280,
+          "y": 0
+        },
+        "agentId": "recorded-hierarchy-designer",
+        "promptTemplate": "RFC372_REAL_HIERARCHY_ACCEPTANCE\n为{{topic}}设计可落地的方案。先澄清关键决策，用户确认后输出最终设计。"
+      },
+      {
+        "id": "clarify",
+        "kind": "clarify",
+        "position": {
+          "x": 280,
+          "y": 250
+        },
+        "title": "多级方向与深入澄清",
+        "interactionMode": "mindmap",
+        "mindmap": {
+          "categories": [
+            ["性能"],
+            ["性能", "服务性能"],
+            ["性能", "数据库"],
+            ["性能", "数据库", "慢查询"],
+            ["可靠性"],
+            ["可靠性", "故障恢复"]
+          ],
+          "instructions": ""
+        }
+      },
+      {
+        "id": "output",
+        "kind": "output",
+        "position": {
+          "x": 920,
+          "y": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "topic-designer",
+        "source": {
+          "nodeId": "topic",
+          "portName": "topic"
+        },
+        "target": {
+          "nodeId": "designer",
+          "portName": "topic"
+        }
+      },
+      {
+        "id": "designer-clarify",
+        "source": {
+          "nodeId": "designer",
+          "portName": "__clarify__"
+        },
+        "target": {
+          "nodeId": "clarify",
+          "portName": "questions"
+        }
+      },
+      {
+        "id": "clarify-designer",
+        "source": {
+          "nodeId": "clarify",
+          "portName": "answers"
+        },
+        "target": {
+          "nodeId": "designer",
+          "portName": "__clarify_response__"
+        }
+      },
+      {
+        "id": "designer-output",
+        "source": {
+          "nodeId": "designer",
+          "portName": "design"
+        },
+        "target": {
+          "nodeId": "output",
+          "portName": "design"
+        }
+      }
+    ]
+  },
+  "initialQuestionCount": 3,
+  "configuredCategoryPaths": [
+    ["性能"],
+    ["性能", "服务性能"],
+    ["性能", "数据库"],
+    ["性能", "数据库", "慢查询"],
+    ["可靠性"],
+    ["可靠性", "故障恢复"]
+  ],
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "服务性能"]
+      },
+      "id": "q1",
+      "title": "报表查询服务的性能验收目标（SLO）如何定义？这决定后续架构选型与验收口径。",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "分级 SLO：常规报表 P95 ≤ 2s，复杂报表 P95 ≤ 5s，超时转异步导出",
+          "description": "按报表复杂度分层设定延迟目标，超过阈值的重查询降级为后台异步导出任务。验收时用真实工作负载分布分别统计两档 P95。",
+          "recommended": true,
+          "recommendationReason": "500 人内部报表场景中报表复杂度差异大，单一阈值要么逼停复杂查询、要么对常规查询过于宽松；分级能兼顾体验与实现成本。"
+        },
+        {
+          "label": "统一 SLO：所有报表 API P95 ≤ 3s，峰值并发 100 QPS",
+          "description": "单一延迟与吞吐目标，实现与验收最简单，但对超复杂报表可能需要提前预聚合或限制功能。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "宽松 SLO：P95 ≤ 10s，以吞吐和成本优先",
+          "description": "内部使用可接受较长等待，避免引入缓存/预聚合等复杂度，成本最低，但高峰期体验较差。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "数据库", "慢查询"]
+      },
+      "id": "q2",
+      "title": "为控制慢查询对数据库的影响，报表查询的主导策略选哪一种？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "只读副本读写分离 + 查询约束（推荐）",
+          "description": "报表请求路由到 PostgreSQL 只读副本，设置 statement_timeout（如 30s）与并发/资源组限流，主库只承担写入。慢查询被隔离且可观测。",
+          "recommended": true,
+          "recommendationReason": "直接切断报表重查询对主库的冲击，配合超时与限流即可满足分级 SLO，是最通用且可验收的基线方案。"
+        },
+        {
+          "label": "物化视图 / 预聚合定时刷新",
+          "description": "对高频报表定时刷新物化视图，查询命中预聚合结果。延迟最优，但数据有刷新时延且需维护刷新调度。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "应用层结果缓存（Redis，TTL 分钟级）",
+          "description": "缓存报表结果，降低重复查询压力。实现简单，但首次/穿透查询仍慢，且存在缓存一致性窗口。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["可靠性", "故障恢复"]
+      },
+      "id": "q3",
+      "title": "数据库故障恢复目标（RTO/RPO）与高可用拓扑如何选择？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "主备流复制 + PITR（推荐）：RTO ≤ 15 分钟，RPO ≈ 0",
+          "description": "同步/半同步流复制到备库并开启时间点恢复，故障时手动或半自动切换，可短时只读降级。",
+          "recommended": true,
+          "recommendationReason": "内部报表服务对分钟级中断可接受，该方案以合理成本实现近零数据丢失，恢复流程简单可验收。"
+        },
+        {
+          "label": "单实例 + 每日全量备份：RTO 数小时，RPO ≤ 24h",
+          "description": "成本最低，故障需从备份重建，期间服务不可用，可能丢失一天数据。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "多可用区高可用集群：自动故障切换，RTO ≤ 5 分钟，RPO ≈ 0",
+          "description": "自动 failover，可用性最高，但架构与运维复杂度、成本显著上升。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "数据库", "慢查询"]
+      },
+      "id": "q4",
+      "title": "报表改走只读副本后，可接受的数据复制延迟是多少？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "秒级（<5 秒）：滞后超阈值即告警并短暂回主库兜底",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "分钟级（1–5 分钟）：接受延迟，绝不回主库，优先保护主库",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "小时级或 T+1：只读副本彻底隔离，时效让位于稳定性",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "数据库", "慢查询"]
+      },
+      "id": "q5",
+      "title": "报表查询触发 statement_timeout（如 30s）时，产品应如何响应？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "中止并报错，引导用户收窄时间范围或维度",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "自动转为异步任务，完成后通知或推送结果",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "降级返回缓存/预聚合结果，并标注数据时效",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "数据库", "慢查询"]
+      },
+      "id": "q6",
+      "title": "针对已识别的高频慢查询，查询侧优化的主导手段是？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "补充针对性索引并强制上线前执行计划评审",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "改写或替换重查询为预聚合/分页增量取数",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "收紧即席查询能力，仅开放预定义报表模板",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "数据库", "慢查询"]
+      },
+      "id": "q7",
+      "title": "只读副本的容量规格与故障时的兜底策略如何确定？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "独立副本按峰值报表并发规格化，故障时直接拒绝报表请求",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "副本自动扩缩，故障时限额回退主库并触发降级",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "与其他服务共享副本池，按优先级排队等待",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "数据库", "慢查询"],
+        "parentQuestionId": "q6"
+      },
+      "id": "q8",
+      "title": "为避免索引变更拖慢业务写入，上线门槛与自动回滚触发条件如何设定？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "核心表强制灰度+自动回滚：写入P99、吞吐、复制延迟任一越线即自动下线新索引（最安全，但需具备灰度与指标监控基建）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "统一阈值自动回滚、不分表：所有索引变更共用一套写入指标阈值（实现简单，但核心表与非核心表策略相互妥协，可能误伤或漏判）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "仅上线前压测与执行计划评审，上线后设人工观察窗口决策（成本低，但故障发现与回滚依赖人工及时性，风险敞口较长）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "使用在线DDL工具（gh-ost/pt-osc）并设锁等待与复制延迟阈值触发暂停而非回滚（减少锁表，但暂停后仍需人工判定索引去留）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能", "数据库", "连接池"]
+      },
+      "id": "q9",
+      "title": "报表改走只读副本后，数据库连接池的容量与排队超时如何设定？（需与保护主库、超时转异步策略一致）",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "按副本并发上限设定池上限 + 短排队超时（≈500ms–1s），队列满即快速失败并引导转异步导出",
+          "description": "池大小贴合副本可承载并发，排队超时短，能快速暴露过载并避免请求堆积雪崩；缺点是高峰期更多请求被拒或转异步，用户需等待导出",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "较大连接池 + 较长排队超时（3–5s），优先吸收突发流量",
+          "description": "突发期成功率更高、体验更平滑；缺点是慢查询会长时间占用连接，队列积压可能放大副本压力甚至拖垮副本，与保护主库策略存在张力",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "拆分独立连接池：报表池严格限额+短超时（失败转异步），在线/交互查询池独立保底",
+          "description": "报表重查询与在线查询资源隔离，互不挤占，符合读写分离与异步兜底方向；缺点是配置与监控更复杂，需维护两套池参数和容量规划",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按副本规格设固定池 + 排队超时中等（2s），超时统一走异步任务",
+          "description": "实现简单、参数统一，介于快速失败与长排队之间；缺点是无法区分报表与在线查询，极端负载下两类请求仍会相互影响",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "questionId": "q1",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["分级 SLO：常规报表 P95 ≤ 2s，复杂报表 P95 ≤ 5s，超时转异步导出"],
+      "customText": ""
+    },
+    {
+      "questionId": "q2",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["只读副本读写分离 + 查询约束（推荐）"],
+      "customText": ""
+    },
+    {
+      "questionId": "q3",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["主备流复制 + PITR（推荐）：RTO ≤ 15 分钟，RPO ≈ 0"],
+      "customText": ""
+    },
+    {
+      "questionId": "q4",
+      "selectedOptionIndices": [1],
+      "selectedOptionLabels": ["分钟级（1–5 分钟）：接受延迟，绝不回主库，优先保护主库"],
+      "customText": ""
+    },
+    {
+      "questionId": "q5",
+      "selectedOptionIndices": [1],
+      "selectedOptionLabels": ["自动转为异步任务，完成后通知或推送结果"],
+      "customText": ""
+    },
+    {
+      "questionId": "q6",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["补充针对性索引并强制上线前执行计划评审"],
+      "customText": ""
+    },
+    {
+      "questionId": "q7",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["独立副本按峰值报表并发规格化，故障时直接拒绝报表请求"],
+      "customText": ""
+    },
+    {
+      "questionId": "q8",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": [
+        "核心表强制灰度+自动回滚：写入P99、吞吐、复制延迟任一越线即自动下线新索引（最安全，但需具备灰度与指标监控基建）"
+      ],
+      "customText": ""
+    },
+    {
+      "questionId": "q9",
+      "selectedOptionIndices": [2],
+      "selectedOptionLabels": [
+        "拆分独立连接池：报表池严格限额+短超时（失败转异步），在线/交互查询池独立保底"
+      ],
+      "customText": ""
+    }
+  ],
+  "stages": [
+    {
+      "kind": "category",
+      "categoryPath": ["性能", "数据库", "慢查询"],
+      "instruction": "",
+      "contextQuestionIds": ["q2"],
+      "questionIds": ["q4", "q5", "q6", "q7"]
+    },
+    {
+      "kind": "deep",
+      "categoryPath": null,
+      "instruction": "请只深入一道问题：为避免索引优化拖慢业务写入，如何设定索引变更的上线门槛和回滚条件？",
+      "contextQuestionIds": ["q6"],
+      "questionIds": ["q8"]
+    },
+    {
+      "kind": "root",
+      "categoryPath": [],
+      "instruction": "请再补充一道数据库连接池容量与排队超时的问题，分类放在“性能 → 数据库 → 连接池”。沿用已确认的读写分离、异步报表与保护主库策略。",
+      "contextQuestionIds": ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8"],
+      "questionIds": ["q9"]
+    }
+  ],
+  "finalDocument": "# 面向 500 名内部员工的报表查询服务设计方案\n\n## 一、目标与范围\n服务约 500 名内部员工，工作日高峰集中，采用 HTTP API + PostgreSQL，报表类型多样。核心矛盾在于：慢查询挤占主库资源，与报表时效性诉求冲突。设计围绕三条主线展开：保护主库、分级响应、可恢复。\n\n## 二、总体架构\n- **网关层**：鉴权、限流（账号维度 + 全局）、路由至报表查询服务。\n- **应用层**：报表查询 API，负责查询模板解析、SQL 构造、参数校验、分级路由与超时处理。\n- **数据层**：主库（写入与事务）+ 独立只读副本（承载报表查询，按峰值并发规格化）；主备流复制 + WAL 归档。\n- **异步层**：任务队列 + 结果存储（对象存储/临时表）+ 通知通道（站内信/邮件/Webhook）。\n- **连接池**：报表池与在线交互池物理隔离。\n\n## 三、性能 SLO 与验收口径\n采用**分级 SLO**：常规报表（单表/小范围聚合、命中索引）P95 ≤ 2s；复杂报表（多表 JOIN、大范围聚合、多维下钻）P95 ≤ 5s；超过阈值的查询由 statement_timeout 触发，自动转异步，不再占用同步通道。\n**验收方法**：按工作日峰值曲线（9:30–11:30、14:00–16:30）压测，模拟 500 用户中 80 并发、混合 70% 常规 / 30% 复杂查询，分别统计 P50/P95/P99；错误率 < 0.1%，异步转派率不高于 5%（作为容量回归指标）。\n\n## 四、数据库拓扑与恢复目标\n- **主库**：承担写入与少量强一致交互，不对报表开放直连。\n- **只读副本**：独立、按报表峰值并发规格化，专门承载报表，不与其他服务共享连接池。\n- **复制**：主备流复制（异步），接受 1–5 分钟复制延迟；**绝不回主库兜底**，优先保护主库。\n- **备份与恢复**：每日全量 + WAL 连续归档（PITR），**RTO ≤ 15 分钟，RPO ≈ 0**。\n- **延迟可观测**：副本 lag 超过 5 分钟告警，仅用于报表结果时效标注，不触发回主切换。\n\n## 五、查询优化与索引治理\n- **查询约束**：强制时间范围与分页参数，禁止无界全表扫描；WHERE 必须命中索引前缀；限制返回行数与最大时间跨度。\n- **索引补充**：针对高频慢查询补充针对性索引，**强制上线前执行计划评审**（EXPLAIN ANALYZE 证据留档）。\n- **变更安全（核心表强制灰度 + 自动回滚）**：索引先在副本上创建并灰度验证，再评估核心表。上线期间监控写入 P99、写入吞吐、复制延迟三项指标，任一越线即自动下线新索引并告警。非核心表可简化流程。\n\n## 六、超时转异步\n- 同步通道设 statement_timeout（默认 30s，依据分级 SLO 可低至 8s）。\n- 触发超时后，应用捕获并**自动转为异步任务**：落队列（带查询参数指纹），后台在副本或专用批处理窗口执行，结果写入结果存储，完成后经站内信/邮件/Webhook 通知，支持结果 TTL 与重跑。\n- **幂等**：以参数指纹去重，避免重复任务。\n- **用户体验**：前端展示“已转异步，完成后通知”，并提供任务状态查询接口。\n\n## 七、连接池与故障兜底\n- **拆分独立连接池**：报表池严格限额（等于副本并发上限），排队超时 500ms–1s，队列满即快速失败并引导转异步；在线/交互池独立保底，避免报表挤占。\n- **副本故障**：直接拒绝报表请求并返回明确提示（可转异步排队），不回主库，保护主库。\n- **副本过载**：触发限流 + 快速失败，防止级联。\n\n## 八、可观测性与验收清单\n**指标**：API P50/P95/P99、错误率、转异步率、副本 lag、副本 CPU/IO、连接池排队时长与饱和度、慢查询 TopN、异步任务时长与成功率。\n**告警**：SLO 越线、lag > 5 分钟、池饱和、自动回滚触发。\n**验收项**：1) 峰值压测达到分级 SLO；2) 副本故障时报表被拒绝且主库写入无影响；3) statement_timeout 触发后异步任务成功并可通知；4) 索引变更灰度 + 自动回滚演练通过；5) PITR 恢复演练 RTO ≤ 15 分钟、RPO ≈ 0；6) 报表池与在线池隔离验证通过。\n\n## 九、风险与取舍\n- 接受 1–5 分钟副本延迟，报表数据可能滞后，须在结果上标注时效。\n- 副本故障时拒绝报表牺牲可用性，换取主库稳定。\n- 异步化带来任务治理与结果时效成本，需统一任务平台支撑。"
+}

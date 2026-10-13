@@ -3,12 +3,33 @@ import { z } from 'zod'
 
 export const ClarifyInteractionModeSchema = z.enum(['questions', 'mindmap'])
 export type ClarifyInteractionMode = z.infer<typeof ClarifyInteractionModeSchema>
+const categoryName = z.string().trim().min(1).max(120)
+/** Legacy strings are one category name, including any literal slash. */
+export function clarifyCategoryPaths(
+  categories: readonly (string | readonly string[])[],
+): string[][] {
+  return categories.map((category) => (typeof category === 'string' ? [category] : [...category]))
+}
 export const ClarifyMindmapConfigSchema = z
   .object({
-    categories: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
+    categories: z
+      .array(z.union([categoryName, z.array(categoryName).min(1).max(40)]))
+      .max(40)
+      .default([]),
     instructions: z.string().max(8000).default(''),
   })
   .strict()
+  .superRefine((value, ctx) => {
+    const nodes = new Set<string>()
+    for (const path of clarifyCategoryPaths(value.categories))
+      for (let i = 1; i <= path.length; i++) nodes.add(JSON.stringify(path.slice(0, i)))
+    if (nodes.size > 40)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['categories'],
+        message: 'Use at most 40 category nodes, including parent categories.',
+      })
+  })
 export type ClarifyMindmapConfig = z.infer<typeof ClarifyMindmapConfigSchema>
 export function resolveClarifyInteractionMode(node: {
   interactionMode?: unknown

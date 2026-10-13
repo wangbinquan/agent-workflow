@@ -1,0 +1,22 @@
+.tree-disclosure.btn.btn--sm {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+}
+.tree-disclosure svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms ease;
+}
+.tree-disclosure[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tree-disclosure svg {
+    transition: none;
+  }
+}

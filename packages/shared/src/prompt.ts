@@ -1,4 +1,5 @@
-import type { ClarifyMindmapConfig } from './schemas/clarifyMindmap'
+import { clarifyCategoryPaths, type ClarifyMindmapConfig } from './schemas/clarifyMindmap'
+import { CLARIFY_MINDMAP_QUESTION_GUIDANCE } from './clarifyMindmap'
 // Prompt assembly logic shared between the backend runner and the frontend
 // preview pane (NodeInspector). Pure functions — no Bun / Node / DB
 // imports. Mirrors design.md §7.2.
@@ -801,10 +802,14 @@ export function renderUserPrompt(input: RenderPromptInput): string {
       '\n\n## Classified questions for the mindmap workspace\n' +
       'Keep the same workflow-clarify envelope, nonce, question fields and question/option limits. ' +
       'Every question must include mindmap: {"categoryPath":["Category","Subcategory"]}. ' +
-      'Choose concise, useful categories in the user language. Group related decisions, avoid duplicate questions, and ask the most consequential unresolved points first. ' +
+      CLARIFY_MINDMAP_QUESTION_GUIDANCE +
+      '\n' +
       'For a dependent question include "parentQuestionId" inside mindmap; it must name another question in THIS envelope. IDs must be unique and parents must not form cycles. ' +
       'Do not emit confirmations, request IDs, delivery documents or a second output envelope.\n' +
-      fence('clarify-categories', JSON.stringify(input.clarifyMindmap.categories)) +
+      fence(
+        'clarify-categories',
+        JSON.stringify(clarifyCategoryPaths(input.clarifyMindmap.categories)),
+      ) +
       '\n' +
       fence('clarify-guidance', input.clarifyMindmap.instructions)
   }

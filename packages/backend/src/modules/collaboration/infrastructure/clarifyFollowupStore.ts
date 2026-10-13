@@ -1,5 +1,7 @@
 import { and, eq, isNotNull } from 'drizzle-orm'
 import {
+  clarifyCategoryPaths,
+  ClarifyMindmapConfigSchema,
   clarifyContentKey,
   clarifyFollowupContext,
   effectiveClarifyAnswers,
@@ -71,6 +73,7 @@ export function createClarifyFollowupStore(
 
     const definition = JSON.parse(task.workflowSnapshot) as WorkflowDefinition
     const gate = definition.nodes.find((n) => n.id === round.intermediaryNodeId)
+    const config = ClarifyMindmapConfigSchema.safeParse(gate?.mindmap)
     return {
       canAppend:
         round.status === 'awaiting_human' &&
@@ -81,6 +84,7 @@ export function createClarifyFollowupStore(
       taskId: round.taskId,
       askingNodeRunId: round.askingNodeRunId!,
       questions,
+      categoryPaths: config.success ? clarifyCategoryPaths(config.data.categories) : [],
       drafts: effectiveClarifyAnswers(
         JSON.parse(round.draftAnswersJson ?? '{}') as Record<string, ClarifyDraftValue>,
         JSON.parse(round.answersJson ?? '[]'),

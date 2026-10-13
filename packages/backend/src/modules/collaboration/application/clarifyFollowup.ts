@@ -1,6 +1,7 @@
 import { beginClarifyFollowup } from './clarifyFollowupActivity'
 import type { SaveClarifyDraftInput } from './ports/collaborationRouteOperations'
 import {
+  CLARIFY_MINDMAP_QUESTION_GUIDANCE,
   clarifyContentKey,
   clarifyFollowupContext,
   parseClarifyEnvelopeBody,
@@ -84,8 +85,10 @@ export function createClarifyFollowupOperations(
             : target.length
               ? 'Add missing questions directly under the selected categoryPath. These are peer questions, not follow-ups to any one existing question. Address userRequest explicitly and consider the existing branch answers without repeating them.'
               : 'Add missing questions across the mindmap. Assign each question a meaningful categoryPath, reusing existing categories where appropriate. Address userRequest explicitly without repeating resolved questions.',
+          CLARIFY_MINDMAP_QUESTION_GUIDANCE,
           JSON.stringify({
             branch: context,
+            configuredCategoryPaths: snapshot.categoryPaths ?? [],
             ...(typeof target === 'string' ? {} : { categoryPath: target }),
             guidance: snapshot.instruction,
             userRequest: request.instruction,

@@ -171,11 +171,17 @@ export const INTENT_NODE_TEACHING = {
         required: false,
       },
       mindmap: {
-        form: 'mindmap:{categories:string[],instructions:string} (required for mindmap mode)',
+        form: 'mindmap:{categories:(string|string[])[],instructions?:string} (required for mindmap mode; classification and follow-up rules are built in)',
         required: false,
         nested: {
-          categories: { form: 'categories:[category]', required: false },
-          instructions: { form: 'instructions', required: false },
+          categories: {
+            form: 'categories:[categoryName | [root, child, ...]] (full paths, up to 40 total category nodes)',
+            required: false,
+          },
+          instructions: {
+            form: 'instructions (optional additional business focus)',
+            required: false,
+          },
         },
       },
       assignee: {
@@ -202,11 +208,17 @@ export const INTENT_NODE_TEACHING = {
         required: false,
       },
       mindmap: {
-        form: 'mindmap:{categories:string[],instructions:string} (required for mindmap mode)',
+        form: 'mindmap:{categories:(string|string[])[],instructions?:string} (required for mindmap mode; classification and follow-up rules are built in)',
         required: false,
         nested: {
-          categories: { form: 'categories:[category]', required: false },
-          instructions: { form: 'instructions', required: false },
+          categories: {
+            form: 'categories:[categoryName | [root, child, ...]] (full paths, up to 40 total category nodes)',
+            required: false,
+          },
+          instructions: {
+            form: 'instructions (optional additional business focus)',
+            required: false,
+          },
         },
       },
       sessionModeForQuestioner: {

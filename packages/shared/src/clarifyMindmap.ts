@@ -2,6 +2,15 @@ import type { ClarifyAnswer, ClarifyQuestion } from './schemas/clarify'
 import type { ClarifyDraftValue } from './schemas/resourceAcl'
 import type { ClarifyFollowupTarget } from './schemas/clarifyMindmap'
 
+/** Product defaults shared by initial self/cross questions and branch follow-ups. */
+export const CLARIFY_MINDMAP_QUESTION_GUIDANCE = [
+  'Organize questions into concise categories in the user language. Use multi-level categoryPath arrays for meaningful subtopics; never flatten a supplied hierarchy or treat slash characters inside a category name as separators.',
+  'Configured category paths are the requested coverage outline. Preserve their exact names and ancestry, and use the most specific relevant configured path. When a category is broad, introduce useful subcategories instead of putting unrelated decisions in one flat bucket. Do not add empty or decorative levels.',
+  'Ask the most consequential unresolved decisions first. Consider relevant sibling concerns rather than repeatedly exploring one aspect: for performance, consider application behavior, database queries/indexes/connection pools, capacity and external dependencies when applicable. Do not force irrelevant topics or repeat resolved questions.',
+  'A category expresses a topic; parentQuestionId expresses a dependent follow-up to a concrete question. Do not use question dependency to imitate a category hierarchy. Respect existing answers, ask about missing constraints or consequences, and provide concrete choices with their tradeoffs.',
+  'Additional focus notes are optional business preferences. Empty notes do not disable these built-in classification and follow-up rules. The selected follow-up target and the workflow envelope/limits below still apply.',
+].join('\n')
+
 // A deterministic content identity, not a security credential. Four independent
 // 32-bit lanes keep it synchronous in the canvas and identical across runtimes.
 export function clarifyContentKey(value: unknown): string {
