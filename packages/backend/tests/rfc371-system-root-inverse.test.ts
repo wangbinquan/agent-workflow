@@ -1,5 +1,7 @@
 // Full original bootstrap body oracles remain in their existing RFC-370 suites.
 // These regressions reject disconnected System capture rather than normalizing it away.
+// CI 38375430917: the exact statement receipt also covers the published incremental
+// projection and build shutdown fields; the original complete-body oracle is unchanged.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -47,6 +49,35 @@ for (const entry of reviewed.roots) {
       const disconnected = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
       expect(() => inverseTaskLaunchRootStatements(disconnected, entry.rootName)).toThrow(
         'task-launch inverse unreviewed statement: systemAgentObservations',
+      )
+    })
+  }
+  for (const lostField of entry.changes.some((change) => change.name === 'observationReports')
+    ? (['projection', 'closeBuild'] as const)
+    : []) {
+    test(`${entry.rootName}: removing the actual report ${lostField} binding is rejected`, () => {
+      const actual = source()
+      const root = actual.statements.find(
+        (node): node is ts.FunctionDeclaration =>
+          ts.isFunctionDeclaration(node) && node.name?.text === entry.rootName,
+      )
+      const statement = root!.body!.statements.find(
+        (node) =>
+          ts.isVariableStatement(node) &&
+          node.declarationList.declarations.some(
+            (declaration) =>
+              ts.isIdentifier(declaration.name) && declaration.name.text === 'observationReports',
+          ),
+      )!
+      const original = statement.getText(actual)
+      expect(original).toContain(lostField)
+      const text =
+        actual.text.slice(0, statement.getStart(actual)) +
+        original.replace(lostField, 'disconnectedReportSource') +
+        actual.text.slice(statement.end)
+      const disconnected = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
+      expect(() => inverseTaskLaunchRootStatements(disconnected, entry.rootName)).toThrow(
+        'task-launch inverse unreviewed statement: observationReports',
       )
     })
   }

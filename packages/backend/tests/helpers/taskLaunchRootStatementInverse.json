@@ -82,7 +82,7 @@
         },
         {
           "name": "observationReports",
-          "introducedSha256": "553ab56399ce12b6b16fc7e54c3e0f2dba281c8c3707ea8954dfb2e962bd3d54",
+          "introducedSha256": "a098da7132c663de067ed9131a7fc5ce24f5f1febec338603727eb4e2eca7666",
           "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db,\n    generation: databaseProvider.generation.payload.generationId,\n    appHome: Paths.root,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});"
         }
       ]
@@ -170,7 +170,7 @@
         },
         {
           "name": "observationReports",
-          "introducedSha256": "db17ce9f28972118a4e950dbfd2c4b62111a77b8af55a95dcb3bb1c5269f8f42",
+          "introducedSha256": "ac3b77b6eedcc8041532073a5c51d15939fac185be0bb83bdd59a475e482e220",
           "previousStatement": "const observationReports = composeCompleteObservationReports({\n    db: input.db,\n    generation: input.provider.runtime.generationId,\n    appHome: input.appHome,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n});"
         }
       ]

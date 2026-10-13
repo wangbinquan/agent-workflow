@@ -1,5 +1,7 @@
 // RFC-371 report staging: eight complete pages previously repeated the same owned-report
 // read/progress write. Keep every original page and group while batching database I/O.
+// PostgreSQL statements name agent_workflow explicitly; count the actual table
+// in both providers rather than treating schema-qualified reads as absent.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
@@ -149,14 +151,16 @@ describeEachProvider('RFC-371 original whole-batch transaction', (harness) => {
     }
     const reportReads = recording
       .selects()
-      .filter((entry) => /\bfrom\s+"?observation_reports"?\b/i.test(entry.sql))
+      .filter((entry) =>
+        /\bfrom\s+(?:"?agent_workflow"?\s*\.\s*)?"?observation_reports"?\b/i.test(entry.sql),
+      )
     expect(reportReads.filter((entry) => !/\bfor\s+update\b/i.test(entry.sql))).toHaveLength(1)
     expect(reportReads.filter((entry) => /\bfor\s+update\b/i.test(entry.sql))).toHaveLength(
       harness.capabilities.isolation === 'exclusive' ? 0 : 1,
     )
     expect(
       recording.statements.filter((entry) =>
-        /\bupdate\s+"?observation_reports"?\b/i.test(entry.sql),
+        /\bupdate\s+(?:"?agent_workflow"?\s*\.\s*)?"?observation_reports"?\b/i.test(entry.sql),
       ),
     ).toHaveLength(1)
     expect(
