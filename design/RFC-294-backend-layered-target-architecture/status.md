@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,17 +10,17 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2563 |
+| backend production TS 文件 | 2564 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1940 / 18 |
+| `modules/**` 文件 / 非空 context | 1941 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 1 |
 | production ambient wiring seam | 522 |
-| background work entries | 411 |
+| background work entries | 412 |
 | direct native `setInterval`（call / files） | 26 / 22 |
-| direct native timers（全部） | 87 |
+| direct native timers（全部） | 88 |
 | RFC-317 boundary census（inbound / outbound） | 334 / 46 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 522 |
-| `architectureExceptions` | 6437 |
-| `backgroundJobs` | 411 |
-| `crossContextImports` | 7347 |
+| `architectureExceptions` | 6438 |
+| `backgroundJobs` | 412 |
+| `crossContextImports` | 7348 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 28686 |
-| `mutationEntrypoints` | 2034 |
+| `moduleSymbolOwners` | 28688 |
+| `mutationEntrypoints` | 2035 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1293 |
 | `transactionExternalEffects` | 309 |
@@ -89,10 +89,10 @@
 | run-observability / composition | 12 |
 | code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
+| event-center / application | 11 |
 | intent / infrastructure | 11 |
 | resource-catalog / domain | 11 |
 | source-control / domain | 11 |
-| event-center / application | 10 |
 | intent / composition | 10 |
 | memory / domain | 10 |
 | memory / infrastructure | 9 |
@@ -208,7 +208,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 4102 |
+| legacy-outbound | 4103 |
 | legacy-inbound | 2105 |
 | offered-consumption | 390 |
 | infrastructure-external | 365 |
@@ -223,7 +223,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 4102 |
+| legacy-outbound | 4103 |
 | legacy-inbound | 2105 |
 | temporary-internal-debt | 113 |
 | off-dag-offered | 101 |
@@ -235,7 +235,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3514 |
+| W9 | 3515 |
 | W9-D | 1146 |
 | W4-E1 | 862 |
 | W5 | 203 |

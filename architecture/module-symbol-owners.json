@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2563,
+    "backendFiles": 2564,
     "frontendFiles": 689,
     "legacyFiles": 623,
-    "moduleFiles": 1940,
-    "productionFiles": 3429,
+    "moduleFiles": 1941,
+    "productionFiles": 3430,
     "sharedFiles": 177,
-    "symbolsIncludingFileRoots": 28686
+    "symbolsIncludingFileRoots": 28688
   },
   "entries": [
     {
@@ -53058,6 +53058,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TargetLaunchPermissions",
+      "targetContext": "event-center",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "event-center",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/event-center/application/notificationWake.ts",
+      "id": "owner:packages/backend/src/modules/event-center/application/notificationWake.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "event-center",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "event-center",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/event-center/application/notificationWake.ts",
+      "id": "owner:packages/backend/src/modules/event-center/application/notificationWake.ts#createEventCenterNotificationWake",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createEventCenterNotificationWake",
       "targetContext": "event-center",
       "targetLayer": "application"
     },
@@ -344975,5 +344999,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced"
+  "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d"
 }

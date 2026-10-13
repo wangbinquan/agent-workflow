@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1873,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 31211,
+    "recursiveFields": 31213,
     "symbols": 1293
   },
   "entries": [
@@ -218512,7 +218512,7 @@
       "budget": {
         "maxMethods": 19,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 195,
+        "maxTransitiveLeafFields": 196,
         "maxUnionVariants": 109
       },
       "consumerEdgeIds": [
@@ -219020,6 +219020,13 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:run.$parameter:request.protocol.$variant:1",
           "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:edb76d371bf6d37abd8f"
+          ],
+          "fieldPath": "$method:run.$parameter:request.resumeRetainedRef",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -219831,8 +219838,8 @@
       "authority": "context-bound",
       "budget": {
         "maxMethods": 11,
-        "maxTopLevelFields": 24,
-        "maxTransitiveLeafFields": 109,
+        "maxTopLevelFields": 25,
+        "maxTransitiveLeafFields": 110,
         "maxUnionVariants": 59
       },
       "consumerEdgeIds": [
@@ -220297,6 +220304,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "protocol.$variant:1",
           "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resumeRetainedRef",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -239649,7 +239661,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced",
+  "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d",
   "targetContexts": [
     "collaboration",
     "development-automation",

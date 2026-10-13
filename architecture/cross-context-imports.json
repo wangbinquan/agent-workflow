@@ -76214,6 +76214,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationBootstrap.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/composition/incrementalObservationBootstrap.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b54da3c0241dc82e2bd4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "engineOf",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionRecovery.ts#$file",
       "fromPath": "packages/backend/src/cli/daemonHostExecutionRecovery.ts",
       "fromSymbol": "$file",
@@ -109431,9 +109448,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6437,
+    "architectureExceptions": 6438,
     "implementationSccs": 0,
-    "observedEdges": 7347,
+    "observedEdges": 7348,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -191747,6 +191764,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/composition/incrementalObservationBootstrap.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationBootstrap.ts#$file",
+      "id": "import:b54da3c0241dc82e2bd4",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "engineOf",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/daemonHostExecutionRecovery.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionRecovery.ts#$file",
@@ -227885,7 +227918,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced",
+  "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

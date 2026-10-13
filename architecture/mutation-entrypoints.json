@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 2034,
+    "entries": 2035,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -9448,6 +9448,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/eventResponseRules.ts#createEventResponseRoutingDirectory",
       "symbol": "createEventResponseRoutingDirectory",
+      "targetContext": "event-center",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/event-center/application/notificationWake.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/event-center/application/notificationWake.ts#createEventCenterNotificationWake",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/notificationWake.ts#createEventCenterNotificationWake",
+      "symbol": "createEventCenterNotificationWake",
       "targetContext": "event-center",
       "targetLayer": "application"
     },
@@ -48652,7 +48676,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced",
+  "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

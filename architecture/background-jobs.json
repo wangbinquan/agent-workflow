@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
-      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:867",
+      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:870",
       "kind": "register-call",
-      "line": 867,
+      "line": 870,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#bindAfterCommitHostOwner",
       "removeAfterWave": "W6/W9",
       "symbol": "bindAfterCommitHostOwner",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
-      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:869",
+      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:872",
       "kind": "register-call",
-      "line": 869,
+      "line": 872,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#bindAfterCommitHostOwner",
       "removeAfterWave": "W6/W9",
       "symbol": "bindAfterCommitHostOwner",
@@ -69,9 +69,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3612",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3613",
       "kind": "register-call",
-      "line": 3612,
+      "line": 3613,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -80,9 +80,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3618",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3619",
       "kind": "register-call",
-      "line": 3618,
+      "line": 3619,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -102,9 +102,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:4059",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:4060",
       "kind": "register-call",
-      "line": 4059,
+      "line": 4060,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -135,9 +135,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:4111",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:4112",
       "kind": "global-setter",
-      "line": 4111,
+      "line": 4112,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -5762,11 +5762,11 @@
   "denominator": {
     "ambientWiring": 522,
     "disabled": 9,
-    "entries": 411,
+    "entries": 412,
     "executionLocal": 54,
     "longRunning": 118,
     "managed": 13,
-    "periodic": 230
+    "periodic": 231
   },
   "entries": [
     {
@@ -5905,7 +5905,7 @@
       ],
       "file": "packages/backend/src/cli/daemonProviderRuntimeHandles.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#$setTimeout:269",
+      "id": "background:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#$setTimeout:271",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -5919,7 +5919,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderRuntimeHandles.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:269",
+      "symbol": "$setTimeout:271",
       "targetContext": "runtime-management"
     },
     {
@@ -6780,7 +6780,7 @@
       ],
       "file": "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/event-center/application/eventCenterWorker.ts#$setInterval:81",
+      "id": "background:packages/backend/src/modules/event-center/application/eventCenterWorker.ts#$setInterval:82",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6794,7 +6794,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/eventCenterWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:81",
+      "symbol": "$setInterval:82",
       "targetContext": "event-center"
     },
     {
@@ -6818,6 +6818,29 @@
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/eventCenterWorker.ts#startEventCenterWorker",
       "phase": "unknown",
       "symbol": "startEventCenterWorker",
+      "targetContext": "event-center"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/event-center/application/notificationWake.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/event-center/application/notificationWake.ts#$setTimeout:25",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/notificationWake.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:25",
       "targetContext": "event-center"
     },
     {
@@ -14784,5 +14807,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced"
+  "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d"
 }
