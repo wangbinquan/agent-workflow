@@ -12895,7 +12895,7 @@
       ],
       "file": "packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts#$setTimeout:38",
+      "id": "background:packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts#$setTimeout:41",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12909,7 +12909,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:38",
+      "symbol": "$setTimeout:41",
       "targetContext": "platform"
     },
     {
@@ -14784,5 +14784,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9be30b9798da201c6ef3bda0e65da16c0cbf34d82adb9f2001f97f6c8553916c"
+  "sourceDigest": "sha256:ee07924a70dab48c8f3d24e5cd7040caa60f699bf327db0fdaebf658076b5e31"
 }

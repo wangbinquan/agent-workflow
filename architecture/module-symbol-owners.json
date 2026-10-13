@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2562,
+    "backendFiles": 2563,
     "frontendFiles": 689,
-    "legacyFiles": 622,
+    "legacyFiles": 623,
     "moduleFiles": 1940,
-    "productionFiles": 3428,
+    "productionFiles": 3429,
     "sharedFiles": 177,
-    "symbolsIncludingFileRoots": 28664
+    "symbolsIncludingFileRoots": 28674
   },
   "entries": [
     {
@@ -187307,6 +187307,30 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/persistence/jsonPathArray.ts",
+      "id": "owner:packages/backend/src/platform/persistence/jsonPathArray.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/jsonPathArray.ts",
+      "id": "owner:packages/backend/src/platform/persistence/jsonPathArray.ts#jsonPathArray",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "jsonPathArray",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/persistence/jsonPathText.ts",
       "id": "owner:packages/backend/src/platform/persistence/jsonPathText.ts#$file",
       "removeAfterWave": "W9",
@@ -188920,6 +188944,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "quoted",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/observationProjectionRouting.ts",
+      "id": "owner:packages/backend/src/platform/persistence/observationProjectionRouting.ts#relationPrefix",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "relationPrefix",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -196668,6 +196704,42 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/sqliteStorageProtocol.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqliteStorageProtocol.ts#DatabaseStorageCounters",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DatabaseStorageCounters",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqliteStorageProtocol.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqliteStorageProtocol.ts#decodeDatabaseStorageCounters",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "decodeDatabaseStorageCounters",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqliteStorageProtocol.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqliteStorageProtocol.ts#SQLITE_OBSERVATION_STORAGE_SQL",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "SQLITE_OBSERVATION_STORAGE_SQL",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqliteStorageProtocol.ts",
       "id": "owner:packages/backend/src/platform/persistence/sqliteStorageProtocol.ts#SQLITE_TABLE_STORAGE_SQL",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -196756,6 +196828,30 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "entry",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts#readSqliteStorage",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "readSqliteStorage",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts#readSqliteStorageCounters",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "readSqliteStorageCounters",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -196920,10 +197016,34 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/storageUsage.ts",
+      "id": "owner:packages/backend/src/platform/persistence/storageUsage.ts#postgresqlStorageCounters",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "postgresqlStorageCounters",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/storageUsage.ts",
       "id": "owner:packages/backend/src/platform/persistence/storageUsage.ts#postgresqlStorageUsage",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "postgresqlStorageUsage",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/storageUsage.ts",
+      "id": "owner:packages/backend/src/platform/persistence/storageUsage.ts#sqliteStorageCounters",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "sqliteStorageCounters",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -344711,5 +344831,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9be30b9798da201c6ef3bda0e65da16c0cbf34d82adb9f2001f97f6c8553916c"
+  "sourceDigest": "sha256:ee07924a70dab48c8f3d24e5cd7040caa60f699bf327db0fdaebf658076b5e31"
 }

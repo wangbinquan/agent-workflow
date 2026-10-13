@@ -3132,8 +3132,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#transaction:109",
-      "line": 109,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#transaction:110",
+      "line": 110,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#collectObservationStorage",
       "status": "clear",
       "symbol": "collectObservationStorage",
@@ -3778,7 +3778,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9be30b9798da201c6ef3bda0e65da16c0cbf34d82adb9f2001f97f6c8553916c",
+  "sourceDigest": "sha256:ee07924a70dab48c8f3d24e5cd7040caa60f699bf327db0fdaebf658076b5e31",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
