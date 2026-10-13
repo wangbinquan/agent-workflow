@@ -55,7 +55,7 @@ describe('RFC-372 single workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: /Confirm this answer|确认这个回答/ }))
     expect(screen.getByText(/This round is reviewed|本轮审阅完成/)).toBeTruthy()
     const view = screen.getByRole('radiogroup', { name: /View|视图/ })
-    fireEvent.click(within(view).getByRole('radio', { name: /Focus|聚焦/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open in focused answers' }))
     expect(
       screen.getByRole('button', { name: /^(Confirmed|已确认)$/ }).hasAttribute('disabled'),
     ).toBe(true)

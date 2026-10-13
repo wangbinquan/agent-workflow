@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   ClarifyQuestionSchema,
+  ClarifyFollowupSchema,
   clarifyAnswerBasis,
   clarifyContentKey,
   clarifyFollowupContext,
@@ -115,4 +116,32 @@ describe('RFC-372 classified questions on the original protocol', () => {
     )
     expect(clarifyQuestionSetKey(qs)).not.toBe(clarifyQuestionSetKey([...qs, question('d', 'c')]))
   })
+})
+
+test('category follow-up requires exactly one target and uses the complete category prefix', () => {
+  const base = { requestId: 'bd73cae0-20b3-45a6-9f74-6c72e567232f', basis: 'v1:context' }
+  expect(ClarifyFollowupSchema.safeParse(base).success).toBe(false)
+  expect(
+    ClarifyFollowupSchema.safeParse({ ...base, parentQuestionId: 'a', categoryPath: [] }).success,
+  ).toBe(false)
+  expect(ClarifyFollowupSchema.parse({ ...base, categoryPath: [] }).categoryPath).toEqual([])
+  expect(ClarifyFollowupSchema.parse({ ...base, categoryPath: [' Scope '] }).categoryPath).toEqual([
+    'Scope',
+  ])
+  expect(ClarifyFollowupSchema.safeParse({ ...base, categoryPath: [' '] }).success).toBe(false)
+  const other = { ...question('other'), mindmap: { categoryPath: ['Scope extra'] } }
+  const qs = [question('a'), question('b', 'a'), other]
+  const context = clarifyFollowupContext(qs, { a: answer('a') }, ['Scope'])
+  expect(context.map(({ question }) => question.id)).toEqual(['a', 'b'])
+  expect(clarifyFollowupContext(qs, {}, []).map(({ question }) => question.id)).toEqual([
+    'a',
+    'b',
+    'other',
+  ])
+  expect(clarifyFollowupContext(qs, {}, ['Scope', 'Missing'])).toEqual([])
+  expect(clarifyContentKey(context)).not.toBe(
+    clarifyContentKey(
+      clarifyFollowupContext(qs, { a: { ...answer('a'), selectedOptionIndices: [1] } }, ['Scope']),
+    ),
+  )
 })

@@ -50,7 +50,8 @@ export function createClarifyFollowupOperations(
     // Defer the body one microtask so identical concurrent requests see the same promise.
     const result = Promise.resolve().then(async () => {
       try {
-        const snapshot = await store.read(nodeRunId, request.parentQuestionId)
+        const target = request.parentQuestionId ?? request.categoryPath!
+        const snapshot = await store.read(nodeRunId, target)
         const accepted = snapshot.questions.filter(
           (q) => q.mindmap?.requestId === request.requestId,
         )
@@ -69,11 +70,7 @@ export function createClarifyFollowupOperations(
             'clarify-followup-closed',
             'This question no longer accepts follow-ups.',
           )
-        const context = clarifyFollowupContext(
-          snapshot.questions,
-          snapshot.drafts,
-          request.parentQuestionId,
-        )
+        const context = clarifyFollowupContext(snapshot.questions, snapshot.drafts, target)
         if (clarifyContentKey(context) !== request.basis)
           throw new ConflictError(
             'clarify-followup-stale',
@@ -81,9 +78,15 @@ export function createClarifyFollowupOperations(
           )
         const prompt = [
           'Ask 1–4 consequential follow-up questions about the selected branch, in the same language as the user. Do not repeat resolved questions. Do not execute the task or produce deliverables.',
-          'Return exactly one <workflow-clarify> envelope containing {"questions":[{"id":"q1","title":"...","kind":"single","options":["...","..."],"mindmap":{"categoryPath":["..."]}}]}. Every question needs 2–4 options; do not include a free-text option. Use the parent category. Parent links will be assigned by the framework. No text outside the envelope.',
+          'Return exactly one <workflow-clarify> envelope containing {"questions":[{"id":"q1","title":"...","kind":"single","options":["...","..."],"mindmap":{"categoryPath":["..."]}}]}. Every question needs 2–4 options; do not include a free-text option. The framework assigns attachment to the selected question or category. No text outside the envelope.',
+          typeof target === 'string'
+            ? 'Deepen the selected question, respecting its ancestor answers.'
+            : target.length
+              ? 'Add missing questions directly under the selected categoryPath. These are peer questions, not follow-ups to any one existing question. Address userRequest explicitly and consider the existing branch answers without repeating them.'
+              : 'Add missing questions across the mindmap. Assign each question a meaningful categoryPath, reusing existing categories where appropriate. Address userRequest explicitly without repeating resolved questions.',
           JSON.stringify({
             branch: context,
+            ...(typeof target === 'string' ? {} : { categoryPath: target }),
             guidance: snapshot.instruction,
             userRequest: request.instruction,
           }),
@@ -119,13 +122,17 @@ export function createClarifyFollowupOperations(
             'clarify-followup-invalid',
             parsed?.errors[0]?.detail ?? 'Expected 1–4 valid classified questions.',
           )
-        const parent = snapshot.questions.find((q) => q.id === request.parentQuestionId)!
+        const parent = snapshot.questions.find((q) => q.id === request.parentQuestionId)
         const questions = parsed.body.questions.map((q, i) => ({
           ...q,
           id: `fq-${request.requestId}-${i}`,
           mindmap: {
-            categoryPath: parent.mindmap!.categoryPath,
-            parentQuestionId: parent.id,
+            categoryPath: parent
+              ? parent.mindmap!.categoryPath
+              : request.categoryPath!.length
+                ? request.categoryPath!
+                : q.mindmap!.categoryPath,
+            ...(parent ? { parentQuestionId: parent.id } : {}),
             requestId: request.requestId,
             requestBasis: requestKey,
           },

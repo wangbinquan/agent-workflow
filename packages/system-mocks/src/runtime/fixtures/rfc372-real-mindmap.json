@@ -1,0 +1,538 @@
+{
+  "source": {
+    "kind": "recorded-real-model",
+    "taskId": "01M4SK0C3RQH0FPWSBQHER3FES",
+    "date": "2026-10-13",
+    "runtime": "opencode",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "instance": "daily-local-aw",
+    "finalStatus": "done",
+    "normalization": "Generated follow-up IDs are stable aliases; request IDs, confirmation hashes and user attributions are omitted. The invalid-output case reproduces the observed missing-category error; its raw model response was not retained."
+  },
+  "workflow": {
+    "$schema_version": 7,
+    "inputs": [
+      {
+        "key": "topic",
+        "kind": "text",
+        "label": "设计主题",
+        "required": true
+      }
+    ],
+    "nodes": [
+      {
+        "id": "topic",
+        "kind": "input",
+        "inputKey": "topic",
+        "position": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "designer",
+        "kind": "agent-single",
+        "agentId": "designer",
+        "promptTemplate": "为以下主题设计可落地的系统。先通过脑图澄清业务范围、数据一致性、体验与验收三个方向，每方向一道关键问题。用户确认后输出完整设计。\n主题：{{topic}}",
+        "position": {
+          "x": 280,
+          "y": 0
+        }
+      },
+      {
+        "id": "clarify",
+        "kind": "clarify",
+        "title": "设计方向与分支澄清",
+        "interactionMode": "mindmap",
+        "mindmap": {
+          "categories": ["业务范围", "数据一致性", "体验与验收"],
+          "instructions": "请用中文按预置的三个方向分类提问，首次每个方向提出一个关键决策问题，问题提供清楚的可选答案。用户在分支继续追问时，紧扣该分支的祖先回答，优先问尚未确定的边界。不要替用户作答。"
+        },
+        "position": {
+          "x": 280,
+          "y": 250
+        }
+      },
+      {
+        "id": "reviewer",
+        "kind": "agent-single",
+        "agentId": "reviewer",
+        "promptTemplate": "审阅下列已澄清的设计。首次先通过跨 Agent 脑图反问补齐仍待决定的业务边界、数据恢复、交互验收，每方向一道；用户确认后输出最终设计文档。\n<已澄清设计>\n{{design}}\n</已澄清设计>",
+        "position": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      {
+        "id": "cross",
+        "kind": "clarify-cross-agent",
+        "title": "验收与最终文档确认",
+        "interactionMode": "mindmap",
+        "mindmap": {
+          "categories": ["业务范围", "数据一致性", "体验与验收"],
+          "instructions": "请用中文按预置的三个方向分类提问，首次每个方向提出一个关键决策问题，问题提供清楚的可选答案。用户在分支继续追问时，紧扣该分支的祖先回答，优先问尚未确定的边界。不要替用户作答。"
+        },
+        "position": {
+          "x": 600,
+          "y": 250
+        }
+      },
+      {
+        "id": "output",
+        "kind": "output",
+        "position": {
+          "x": 920,
+          "y": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "topic-designer",
+        "source": {
+          "nodeId": "topic",
+          "portName": "topic"
+        },
+        "target": {
+          "nodeId": "designer",
+          "portName": "topic"
+        }
+      },
+      {
+        "id": "designer-clarify",
+        "source": {
+          "nodeId": "designer",
+          "portName": "__clarify__"
+        },
+        "target": {
+          "nodeId": "clarify",
+          "portName": "questions"
+        }
+      },
+      {
+        "id": "clarify-designer",
+        "source": {
+          "nodeId": "clarify",
+          "portName": "answers"
+        },
+        "target": {
+          "nodeId": "designer",
+          "portName": "__clarify_response__"
+        }
+      },
+      {
+        "id": "designer-reviewer",
+        "source": {
+          "nodeId": "designer",
+          "portName": "design"
+        },
+        "target": {
+          "nodeId": "reviewer",
+          "portName": "design"
+        }
+      },
+      {
+        "id": "reviewer-cross",
+        "source": {
+          "nodeId": "reviewer",
+          "portName": "__clarify__"
+        },
+        "target": {
+          "nodeId": "cross",
+          "portName": "questions"
+        }
+      },
+      {
+        "id": "cross-reviewer",
+        "source": {
+          "nodeId": "cross",
+          "portName": "to_questioner"
+        },
+        "target": {
+          "nodeId": "reviewer",
+          "portName": "__clarify_response__"
+        }
+      },
+      {
+        "id": "cross-designer",
+        "source": {
+          "nodeId": "cross",
+          "portName": "to_designer"
+        },
+        "target": {
+          "nodeId": "designer",
+          "portName": "__external_feedback__"
+        }
+      },
+      {
+        "id": "reviewer-output",
+        "source": {
+          "nodeId": "reviewer",
+          "portName": "document"
+        },
+        "target": {
+          "nodeId": "output",
+          "portName": "document"
+        }
+      }
+    ]
+  },
+  "topic": "设计面向公司内部约 200 名员工的会议室预约系统。请先通过脑图澄清，待用户逐题回答、继续深入并确认后，形成可实施的中文设计文档。预置方向为业务范围、数据一致性、体验与验收。",
+  "self": {
+    "questions": [
+      {
+        "mindmap": {
+          "categoryPath": ["业务范围", "资源与场景边界"]
+        },
+        "id": "scope-resources",
+        "title": "业务范围：首期系统的资源对象与预约场景边界如何界定？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "内部员工预约内部会议室，支持周期性会议 + 访客登记",
+            "description": "资源仅限公司自有会议室（约 200 人规模，估计 15~30 间）；员工可创建单次与周期性预约，可为外部参会人登记访客信息。覆盖日常绝大多数使用场景，实现成本可控。",
+            "recommended": true,
+            "recommendationReason": "200 人规模下业务复杂度有限，此边界既覆盖周期会议室占用与访客这两个真实高频需求，又避免引入多租户/通行联动等大改造。"
+          },
+          {
+            "label": "最小 MVP：仅单次预约，不含周期会议与访客",
+            "description": "只做「选会议室 + 选时段 + 取消」，不做周期性预约、访客管理、审批流。上线最快，但周期性会议占用的时段可能被反复人工重订。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "含跨园区/多地点资源统一预约 + 访客通行联动",
+            "description": "资源池覆盖多办公楼甚至多城市，预约需联动门禁/前台接待系统发放通行权限。需额外对接硬件与安全系统，实施周期明显拉长。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "含部门级配额与审批流的强管控模式",
+            "description": "会议室按时段分配部门配额，超额预约需上级审批；适合会议室严重紧张或成本中心的组织，但会显著增加流程负担与实现复杂度。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": ["数据一致性", "并发冲突控制"]
+        },
+        "id": "consistency-booking",
+        "title": "数据一致性：同一时段被多人同时抢订时，采用哪种一致性与冲突控制策略？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "强一致：数据库唯一约束/行级锁保证同一会议室时段唯一占用，先到先得",
+            "description": "以 (会议室, 时段) 唯一索引或事务内悲观锁为最终仲裁，冲突请求立即返回「已被占用」。语义最清晰，200 人并发压力下完全够用。",
+            "recommended": true,
+            "recommendationReason": "并发量低（峰值不过几十 QPS），强一致实现简单且天然避免超卖，后续排查冲突也有唯一数据源。"
+          },
+          {
+            "label": "乐观锁 + 版本号，冲突时提示用户重新选时段",
+            "description": "读取版本号后提交，版本不一致则拒绝并引导重选。读写吞吐略高，但用户体验上会出现更多「白填表单」的挫败感。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "最终一致：队列异步确认，允许短暂超售后补偿通知",
+            "description": "提交即返回「受理中」，后台串行落库，冲突时通知后到者改期。可支撑极高突发流量，但用户会看到预约状态延迟与不确定结果。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "Redis 分布式锁 + 数据库兜底双重保障",
+            "description": "先用分布式锁削峰，再由数据库约束兜底。可靠性最高，但引入额外中间件与锁失效/续期等运维复杂度，对本规模可能过度设计。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": ["体验与验收", "入口形态与验收基线"]
+        },
+        "id": "ux-acceptance",
+        "title": "体验与验收：首期的核心入口形态与验收基线怎么定？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "Web + 移动端（企业微信/钉钉内 H5）双端，验收含性能与预约成功率量化指标",
+            "description": "两端同一后端；验收标准明确为：会议室视图加载 P95 < 1s、预约提交 P95 < 500ms、预约成功率 ≥ 99.9%、无超卖。可量化、可回归。",
+            "recommended": true,
+            "recommendationReason": "员工多数在移动端即时决策订会议室，双端覆盖真实习惯；量化验收指标让「是否达标」可被自动验证而非主观判断。"
+          },
+          {
+            "label": "仅桌面 Web，验收以功能用例全部通过为准",
+            "description": "实现与测试成本最低，验收标准为清单式功能用例逐条通过，不设置性能门槛。上线快，但移动端需求很快会以新需求形式回流。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "含会议室门口屏/二维码签到终端，验收含签到与超时自动释放",
+            "description": "在双端之外增加门牌屏或扫码签到，未按时签到自动释放会议室。能显著提升资源利用率，但需部署硬件或打印二维码，验收要覆盖设备侧时序。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "以日历集成（Outlook/飞书日历）双向同步为核心体验",
+            "description": "预约结果自动写入个人日历，日历侧的改动反写回系统。体验最顺滑，但双向同步的冲突与幂等是本项目最大的技术难点。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": ["数据一致性", "并发冲突控制"],
+          "parentQuestionId": "consistency-booking"
+        },
+        "id": "idempotency-retry",
+        "title": "幂等处理：预约请求已在服务端提交成功、但客户端网络超时后重试时，如何保证不产生重复预约或误报冲突？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "客户端生成全局唯一幂等键（Idempotency-Key），服务端对该键建唯一索引，重复请求直接复用并返回首次成功结果",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "以业务自然键去重：同一用户对同一 (会议室, 时段) 的重复提交视为同一笔，唯一约束冲突时返回已有预约而非报错",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "服务端缓存最近处理结果（requestId→结果，TTL 数分钟），命中缓存即返回原结果、不再落库",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "不做幂等，仅靠 (会议室, 时段) 唯一约束拦截，重试命中冲突时返回「已被占用」并引导用户查看「我的预约」",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": ["数据一致性", "并发冲突控制"],
+          "parentQuestionId": "idempotency-retry"
+        },
+        "id": "idempotency-key-reuse",
+        "title": "幂等键复用：当同一 Idempotency-Key 携带的请求内容不一致（如更换了会议室或时段）时如何处理，且键→首次结果的保留时长设为多少？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "严格拒绝并短期保留：服务端比对请求参数指纹，指纹不一致即返回 409「幂等键冲突」，键→响应对照保留 24 小时后过期，过期后同键视为新请求重新落库",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "严格拒绝并长期保留：指纹不一致返回 409，键→响应对照保留 7 天，以覆盖用户跨日重试与人工对账，占用存储但可追溯性最强",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "首请求优先并短期保留：忽略后续请求内容差异，一律复用首次成功结果并返回提示，键→响应对照保留 24 小时，实现最简但可能掩盖误用",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "首请求优先并长期保留：一律复用首次结果，键→响应对照保留 7 天，最大限度保证同一键结果稳定，代价是错误键长期锁死",
+            "description": "",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      }
+    ],
+    "answers": [
+      {
+        "questionId": "scope-resources",
+        "selectedOptionIndices": [],
+        "selectedOptionLabels": [],
+        "customText": "首期只做内部 200 名员工、单一办公地点的 6 间会议室单次预约与取消。暂不做周期会议、访客、工位、审批流、门禁和双向日历同步。时段按 15 分钟粒度，最多提前 14 天预约，统一按 Asia/Shanghai 展示并用 UTC 存储。"
+      },
+      {
+        "questionId": "consistency-booking",
+        "selectedOptionIndices": [0],
+        "selectedOptionLabels": [
+          "强一致：数据库唯一约束/行级锁保证同一会议室时段唯一占用，先到先得"
+        ],
+        "customText": ""
+      },
+      {
+        "questionId": "ux-acceptance",
+        "selectedOptionIndices": [0],
+        "selectedOptionLabels": [
+          "Web + 移动端（企业微信/钉钉内 H5）双端，验收含性能与预约成功率量化指标"
+        ],
+        "customText": ""
+      },
+      {
+        "questionId": "idempotency-retry",
+        "selectedOptionIndices": [0],
+        "selectedOptionLabels": [
+          "客户端生成全局唯一幂等键（Idempotency-Key），服务端对该键建唯一索引，重复请求直接复用并返回首次成功结果"
+        ],
+        "customText": ""
+      },
+      {
+        "questionId": "idempotency-key-reuse",
+        "selectedOptionIndices": [0],
+        "selectedOptionLabels": [
+          "严格拒绝并短期保留：服务端比对请求参数指纹，指纹不一致即返回 409「幂等键冲突」，键→响应对照保留 24 小时后过期，过期后同键视为新请求重新落库"
+        ],
+        "customText": ""
+      }
+    ]
+  },
+  "cross": {
+    "questions": [
+      {
+        "mindmap": {
+          "categoryPath": ["业务范围", "预约冲突边界"]
+        },
+        "id": "scope-user-overlap",
+        "title": "同一员工在同一时段预约多间会议室的策略：是否禁止、警告还是限额？（当前设计仅保证会议室维度唯一，未定义个人日程冲突口径）",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "禁止：个人时段硬冲突，返回 409 USER_TIME_CONFLICT",
+            "description": "需在数据层补用户级占用约束（如新增 user_slot(user_id, slot_start) 唯一表，或在 booking_slot 增加 user_id 做复合唯一），提交前即时校验。好处是个人日程永不矛盾、并发下也可强一致拒绝；代价是数据模型与事务写入增加一张表/一个唯一键，压测用例需新增「同人同段并发抢房恰好 1 单」。",
+            "recommended": true,
+            "recommendationReason": "单人同一时段物理上无法分身，与首期强一致、先到先得的口径一致，且能在数据层彻底消除后续对账争议。"
+          },
+          {
+            "label": "允许：不做个人时段校验，仅会议室维度唯一",
+            "description": "实现成本最低，现有 booking_slot 模型无需改动；但同一员工可同时占多间房，需明确这是业务允许的行为，后续「我的预约」列表会出现重叠卡片，验收用例也不需要覆盖个人冲突。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "允许但提示：返回个人日程冲突警告，用户二次确认后可提交",
+            "description": "数据模型不变，只需在创建接口返回 warning 字段并在双端加确认弹窗，需定义警告是否可绕过、埋点与验收口径；用户仍可造成自冲突预约。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "允许但限额：同一员工同一时段最多预约 N 间（默认 3，可配置）",
+            "description": "需在事务内查询用户该时段已有预约数并与会议室唯一约束组合判定，边界规则（含取消后是否回补额度）与并发下的计数一致性都要额外定义，验收复杂度高于硬禁止。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": ["数据一致性", "幂等与故障恢复"]
+        },
+        "id": "consistency-idem-recovery",
+        "title": "写请求超时或 5xx（结果未知）后同键重试的恢复语义：如何保证不重复下单、不把已成功的预约误报为失败？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "以 booking.idempotency_key 唯一约束为最终兜底：同键重试命中既有 booking 即返回原结果",
+            "description": "保留幂等表作为快路径，但判定「是否已受理」以下单记录为准：同键重试先按 uk_booking_idem 查询，命中（含已取消）直接回放既有结果；即当 5xx/超时发生在提交之后，也能恢复为首次结果而不产生第二单。需定义返回状态码与 body 复用规则、以及已取消单的回放语义，并新增对应验收用例。",
+            "recommended": true,
+            "recommendationReason": "直接复用已有唯一约束，代价最小；把「记录存在=业务已决」的判定权交给数据库事实，可堵住「提交成功但响应丢失 → 重试重复下单」这一现存漏洞。"
+          },
+          {
+            "label": "两阶段：幂等记录独立事务先行提交 state=1，超时/崩溃后由兜底任务在 60 秒内判定结果",
+            "description": "语义最严谨，可区分「从未受理」与「结果未知」，但引入后台判定任务、更长的客户端等待（需轮询到终态）与更复杂的 425/409 分支，验收需覆盖任务失败与积压场景。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "维持现设计：5xx 不落幂等记录即视为新请求，接受极小概率重复预约",
+            "description": "改动最小，但需在文档中显式标注该风险为已知并给出运营兜底（用户/管理员手动取消多出的预约），验收 I 系列用例需注明「重复下单属可接受偏差」的边界。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "写接口改为异步 202 + 结果查询（按幂等键轮询）",
+            "description": "提交与结果解耦，天然可恢复，但双端交互需改造为「提交中 → 轮询确认」，移动端首屏与提交体验指标、按钮态与超时文案都要重定义，改动面最大。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": ["体验与验收", "登录降级与双端验收"]
+        },
+        "id": "ux-sso-fallback",
+        "title": "企业微信/钉钉免登失败、用户未绑定内部账号时的降级路径与验收口径如何定义？（当前设计只写了免登换取 JWT，未定义失败行为）",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "仅免登：失败即阻断，提示「请在企微/钉钉内打开或联系管理员绑定」",
+            "description": "实现最简、无第二套凭证体系；验收口径为免登成功率与失败提示文案，H5 首屏 2.0s 指标需明确是否包含免登跳转与失败重试。未绑定/异常账号一律无法自助进入，依赖管理员人工处理。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "免登 + 一次性授权码兜底（管理员或 HR 发放）",
+            "description": "覆盖未绑定与免登异常场景，无需短信/邮件通道；需新增授权码生成、有效期与使用次数的数据模型和审计，验收增加授权码置换会话的用例。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "免登 + 工号加短信/邮件验证码的过渡登录",
+            "description": "用户可完全自助，但需要短信/邮件网关与限流防刷，安全面扩大（验证码轰炸、账号枚举），验收需覆盖验证码限流与失败锁定。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "免登为主，辅以管理员后台手工绑定/白名单导入，不提供自助登录",
+            "description": "收敛登录面、风险最低；需定义绑定的数据模型与同步来源（HR 系统或名单文件），验收以「绑定后免登可用」为准，未绑定用户的处理时效由运维承诺决定。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      }
+    ],
+    "answers": [
+      {
+        "questionId": "scope-user-overlap",
+        "selectedOptionIndices": [1],
+        "selectedOptionLabels": ["允许：不做个人时段校验，仅会议室维度唯一"],
+        "customText": ""
+      },
+      {
+        "questionId": "consistency-idem-recovery",
+        "selectedOptionIndices": [],
+        "selectedOptionLabels": [],
+        "customText": "幂等记录、预约记录与时段占用在同一数据库事务内提交。24 小时有效期内，同一用户同一 Idempotency-Key 且参数指纹相同，重放首次已提交的状态码与响应；参数不同返回 409。提交后响应丢失也按已提交事实恢复，不能把结果未知当新下单；没有提交记录才允许重试创建。首次结果可保留原预约 ID，当前取消状态通过查询返回，不再新增预约。24 小时后旧键不能静默重放永久 booking 结果；客户端对新的预约意图生成新键，并明确要求超期重试先查原结果。"
+      },
+      {
+        "questionId": "ux-sso-fallback",
+        "selectedOptionIndices": [3],
+        "selectedOptionLabels": ["免登为主，辅以管理员后台手工绑定/白名单导入，不提供自助登录"],
+        "customText": ""
+      }
+    ]
+  },
+  "draftDocument": "# 会议室预约系统设计文档（首期·可实施版）\n\n## 0. 文档信息\n\n| 项 | 内容 |\n| --- | --- |\n| 系统名称 | MeetingRoom Booking（公司内部会议室预约系统） |\n| 目标用户 | 公司内部约 200 名员工 |\n| 首期形态 | 桌面 Web + 移动端 H5（企业微信/钉钉内置浏览器） |\n| 时区策略 | 统一以 Asia/Shanghai 展示与交互，数据库以 UTC 存储 |\n| 一致性等级 | 强一致（数据库唯一约束 + 事务，先到先得，零超卖） |\n| 状态 | 需求已确认，可进入开发（第 1.4 节假设如无异议即按此实施） |\n\n### 0.1 已确认决策清单（本文档的唯一事实来源）\n\n| 编号 | 决策点 | 结论 |\n| --- | --- | --- |\n| D1 | 业务范围 | 首期仅「内部 200 人 + 单一办公地点 + 6 间会议室」的**单次预约与取消** |\n| D2 | 不做 | 周期会议、访客、工位、审批流、门禁、双向日历同步 |\n| D3 | 时间粒度与窗口 | 15 分钟粒度；最多提前 14 天预约；Asia/Shanghai 展示、UTC 存储 |\n| D4 | 一致性策略 | 强一致：数据库唯一约束/行级锁保证同一会议室时段唯一占用，先到先得 |\n| D5 | 入口与验收 | Web + 移动端 H5 双端；验收含性能与预约成功率量化指标 |\n| D6 | 幂等机制 | 客户端生成全局唯一 `Idempotency-Key`，服务端对该键建唯一索引，重复请求复用首次结果 |\n| D7 | 幂等键复用 | 服务端比对请求指纹，不一致返回 `409 幂等键冲突`；键到响应对照保留 **24 小时**后过期，过期后同键视为新请求 |\n\n---\n\n## 1. 目标与范围\n\n### 1.1 首期目标\n\n1. 员工可在 30 秒内完成「选会议室 → 看空闲 → 提交 → 得到确认」的完整预约。\n2. 在 200 人并发抢订同一会议室同一时段时，**保证恰好 1 人成功，其余得到明确冲突提示**，系统内不出现任何重叠占用。\n3. 网络抖动导致的客户端重试**不会产生重复预约**，也不会把已成功的预约误报为失败。\n4. 桌面与移动端具备一致的可用性与可读性，不做功能裁剪。\n\n### 1.2 首期范围（In Scope）\n\n- 会议室资源列表与详情（6 间，含容量、位置、设备标签）。\n- 按日期查看单个/全部会议室的空闲时段矩阵（15 分钟粒度）。\n- 单次预约创建（含会议主题、参会人数、可选备注）。\n- 预约取消（仅本人或管理员）。\n- 「我的预约」列表（即将开始 / 历史）。\n- 登录鉴权（企业微信或钉钉免登换取内部会话）、基础权限（普通员工 / 管理员）。\n- 审计与可观测（操作日志、指标、告警）。\n\n### 1.3 明确不做（Out of Scope，首期）\n\n周期会议、访客登记与通行联动、工位预约、跨园区多地点、部门配额、审批流、门禁闸机联动、Outlook/飞书日历双向同步、会议室门口屏与二维码签到、超时自动释放（无签到能力，因此不做）。\n\n### 1.4 关键假设（默认值，均以配置项形式实现，可后续调整）\n\n| 假设 | 默认值 | 理由 |\n| --- | --- | --- |\n| 可预约时间段 | 工作日 08:00–20:00（Asia/Shanghai） | 覆盖绝大多数办公会议场景 |\n| 单次最长时长 | 4 小时 | 防止长时间占位，规则可配置 |\n| 单次预约是否可跨自然日 | 否，必须落在同一自然日内 | 大幅简化槽位生成与冲突判定 |\n| 预约提前窗口 | 提前 14 天（含今天，即 D+13 内） | 来自 D3 |\n| 取消规则 | 开始时间前可取消，取消后时段立即释放 | 无审批流，无需审批撤销 |\n| 取消截止 | 会议开始后可申请取消，但需管理员操作 | 保证历史可追溯 |\n| 会议室数量 | 6 间，单一办公地点 | 来自 D1 |\n| 幂等覆盖接口 | 创建预约、取消预约（写接口） | 读接口天然幂等 |\n\n---\n\n## 2. 业务规则\n\n### 2.1 时间模型\n\n- **存储**：所有时间字段使用 `TIMESTAMPTZ`，内部一律以 UTC 存储。\n- **展示与交互**：API 出入参统一使用带偏移量的 ISO-8601（例如 `2026-10-13T01:00:00.000Z`），前端按 `Asia/Shanghai` 渲染为 `2026-10-13 09:00`。\n- **槽位对齐**：所有预约的起止时间必须对齐到本地时间 15 分钟边界（即 UTC 分钟数为 00/15/30/45，Asia/Shanghai 全年无夏令时，偏移恒为 +8，UTC 与本地分钟边界一致，无需额外换算）。\n- **槽位数**：每日 48 个槽位（12 小时 × 4）。\n\n### 2.2 预约规则（服务端强校验，前端仅作提示）\n\n1. `startAt` 早于当前时间 → 拒绝。\n2. `startAt` 晚于「今天 + 14 天」的 20:00 → 拒绝。\n3. 起止时间未对齐 15 分钟 → 拒绝。\n4. `endAt` 减 `startAt` 大于 4 小时 → 拒绝。\n5. 跨自然日 → 拒绝。\n6. 超出 08:00–20:00 → 拒绝。\n7. 会议室不存在或 `status` 非启用 → 拒绝。\n8. 任一槽位已被占用 → 整体拒绝（不留部分占用）。\n\n### 2.3 可用性口径\n\n某槽位「可用」的定义：该 `(room_id, slot_start)` 在 `booking_slot` 表中不存在记录。取消预约即删除对应槽位记录，因此取消是**即时可用**的。\n\n### 2.4 权限\n\n| 角色 | 能力 |\n| --- | --- |\n| 员工（Employee） | 查看会议室与空闲、创建预约、取消自己的预约、查看自己的预约 |\n| 管理员（Admin） | 员工全部能力 + 取消任意预约 + 停用/启用会议室 + 查看全量预约与审计日志 |\n\n首期不引入部门与配额，权限仅区分两级。\n\n---\n\n## 3. 总体架构\n\n### 3.1 架构图（文字描述）\n\n```\n桌面 Web (React)         移动 H5 (React, 企业微信/钉钉内置)\n        |                              |\n        +------------- HTTPS ----------+\n                       |\n                 API Gateway / Nginx\n             （TLS、限流、静态资源、SSO 回调）\n                       |\n                 Booking Service（无状态，可水平扩展 N 个实例）\n                       |\n        +--------------+---------------+\n        |                              |\n   PostgreSQL（主库，强一致唯一约束）   Redis（可选：限流计数、热点只读缓存）\n```\n\n### 3.2 组件职责\n\n- **Booking Service**：全部业务校验、事务、幂等控制、鉴权。无状态，会话信息放 JWT。\n- **PostgreSQL**：唯一事实来源。核心一致性依赖 `booking_slot` 的 `(room_id, slot_start)` 主键。\n- **Redis（可选，非一致性路径）**：仅用于限流计数和只读热点缓存（会议室列表、单日可用矩阵短 TTL），**任何一致性判定都不依赖 Redis**，即使 Redis 全挂也只影响性能不影响正确性。\n- **前端双端**：同一套 API，同一套业务组件，桌面端用矩阵式时间网格，移动端用「按小时分组的卡片列表」。\n\n### 3.3 技术栈建议\n\n| 层 | 建议 |\n| --- | --- |\n| 后端 | Go 或 Java（Spring Boot），连接池 HikariCP/pgxpool |\n| 数据库 | PostgreSQL 14+ |\n| 前端 | React + TypeScript，Vite 构建，移动端适配用 CSS 媒体查询 + 触摸友好的点击区 |\n| 部署 | 容器化，服务 2 副本（高峰可扩至 4），数据库单主 + 每日备份 + 流复制备库 |\n| 鉴权 | 企业微信/钉钉 OAuth 免登，换取内部 JWT（含 userId、role） |\n\n---\n\n## 4. 数据模型\n\n### 4.1 DDL（PostgreSQL）\n\n```sql\n-- 会议室\nCREATE TABLE meeting_room (\n  id          BIGSERIAL PRIMARY KEY,\n  name        VARCHAR(64)  NOT NULL UNIQUE,\n  location    VARCHAR(128) NOT NULL,\n  capacity    INT          NOT NULL CHECK (capacity BETWEEN 1 AND 1000),\n  equipment   JSONB        NOT NULL DEFAULT '[]'::jsonb,\n  status      SMALLINT     NOT NULL DEFAULT 1,   -- 1 启用, 0 停用\n  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()\n);\n\n-- 预约单（业务主记录，保留取消历史）\nCREATE TABLE booking (\n  id               BIGSERIAL PRIMARY KEY,\n  room_id          BIGINT       NOT NULL REFERENCES meeting_room(id),\n  user_id          BIGINT       NOT NULL,\n  subject          VARCHAR(128) NOT NULL,\n  attendee_count   INT          NOT NULL DEFAULT 1 CHECK (attendee_count BETWEEN 1 AND 1000),\n  remark           VARCHAR(512),\n  start_at         TIMESTAMPTZ  NOT NULL,\n  end_at           TIMESTAMPTZ  NOT NULL,\n  status           SMALLINT     NOT NULL DEFAULT 1,  -- 1 生效, 2 已取消\n  idempotency_key  CHAR(36)     NOT NULL,\n  created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  cancelled_at     TIMESTAMPTZ,\n  cancelled_by     BIGINT,\n  -- 时长在 15 分钟至 4 小时之间（同时保证 end_at 与 start_at 不相等）\n  CONSTRAINT chk_booking_duration\n    CHECK (end_at - start_at BETWEEN interval '15 minute' AND interval '4 hour'),\n  CONSTRAINT uk_booking_idem UNIQUE (idempotency_key)\n);\n\nCREATE INDEX idx_booking_user_time ON booking (user_id, start_at DESC);\nCREATE INDEX idx_booking_room_time ON booking (room_id, start_at);\n\n-- 槽位占用：唯一性约束所在，全系统的并发正确性由这张表保证\nCREATE TABLE booking_slot (\n  room_id     BIGINT      NOT NULL REFERENCES meeting_room(id),\n  slot_start  TIMESTAMPTZ NOT NULL,\n  booking_id  BIGINT      NOT NULL REFERENCES booking(id) ON DELETE CASCADE,\n  PRIMARY KEY (room_id, slot_start)          -- 核心唯一约束\n);\n\nCREATE INDEX idx_slot_booking ON booking_slot (booking_id);\n\n-- 幂等记录（D6/D7）\nCREATE TABLE idempotency_record (\n  idempotency_key CHAR(36)     PRIMARY KEY,\n  user_id         BIGINT       NOT NULL,\n  endpoint        VARCHAR(64)  NOT NULL,     -- 例如 POST:/api/bookings\n  fingerprint     CHAR(64)     NOT NULL,     -- SHA-256(规范化请求)\n  state           SMALLINT     NOT NULL,     -- 1 处理中, 2 已完成\n  http_status     INT,\n  response_body   JSONB,\n  booking_id      BIGINT,\n  created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  expires_at      TIMESTAMPTZ  NOT NULL       -- created_at + 24h\n);\n\nCREATE INDEX idx_idem_expires ON idempotency_record (expires_at);\nCREATE INDEX idx_idem_user    ON idempotency_record (user_id, created_at DESC);\n\n-- 审计日志\nCREATE TABLE audit_log (\n  id          BIGSERIAL PRIMARY KEY,\n  actor_id    BIGINT       NOT NULL,\n  action      VARCHAR(32)  NOT NULL,   -- BOOKING_CREATE / BOOKING_CANCEL / ROOM_UPDATE\n  target_type VARCHAR(32)  NOT NULL,\n  target_id   BIGINT,\n  detail      JSONB,\n  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()\n);\nCREATE INDEX idx_audit_actor_time ON audit_log (actor_id, created_at DESC);\n```\n\n### 4.2 设计要点\n\n- **为什么用槽位表而不是范围重叠约束**：15 分钟是固定粒度，槽位表把「区间重叠判断」转化为「主键冲突」，一次 INSERT 即可完成原子判定，冲突时还能精确指出是哪些槽位被占，前端可高亮展示；而范围排除约束在报错信息与索引维护上更复杂，且不利于展示冲突细节。\n- **为什么槽位不设自增主键**：`(room_id, slot_start)` 天然唯一且即有聚簇语义，直接做主键，避免额外索引与唯一约束两份开销。\n- **取消保留 booking 行**：审计与「我的历史」需要，槽位行删除即释放资源。\n\n### 4.3 容量估算（性能基线）\n\n- 槽位上限：6 间 × 48 槽/天 × 14 天 ≈ **4032 行**，全表可常驻内存，查询毫秒级。\n- 预约单：200 人 × 日均 2 单 ≈ 400 单/天，年 ≈ 10 万行，索引完全覆盖。\n- 幂等记录：峰值约 2000 条/天，24 小时 TTL，稳态不超过 3000 行。\n\n---\n\n## 5. 数据一致性设计（强一致，先到先得）\n\n### 5.1 正确性基石\n\n```sql\nPRIMARY KEY (room_id, slot_start)\n```\n\n一次预约涉及 N 个槽位，在**同一事务**中按 `slot_start` 升序批量插入。只要有一个槽位已被占用，主键冲突即触发回滚，整个预约不生效——**不存在部分占用，不存在超卖**。\n\n### 5.2 创建预约事务流程\n\n```\nBEGIN;\n  -- 步骤 1：抢占幂等记录（见第 6 节，先于业务逻辑）\n  INSERT INTO idempotency_record (..., state=1)\n  ON CONFLICT (idempotency_key) DO NOTHING\n  RETURNING idempotency_key;\n  -- 未返回行 → 键已存在，走 6.4 的「重放/冲突」分支，不进入步骤 2\n\n  -- 步骤 2：业务校验（窗口、粒度、时长、营业时间、会议室状态）\n  SELECT id FROM meeting_room WHERE id = :roomId AND status = 1 FOR SHARE;\n\n  -- 步骤 3：写入预约单\n  INSERT INTO booking (room_id, user_id, subject, attendee_count, remark,\n                       start_at, end_at, status, idempotency_key)\n  VALUES (...) RETURNING id;\n\n  -- 步骤 4：按 slot_start 升序批量插入槽位（关键：固定顺序防死锁）\n  INSERT INTO booking_slot (room_id, slot_start, booking_id)\n  VALUES (:roomId, :slot1, :bid), (:roomId, :slot2, :bid), ... ;\n  -- 任一主键冲突 → 抛 unique_violation → 捕获后 ROLLBACK\n\n  -- 步骤 5：回填幂等结果并提交\n  UPDATE idempotency_record\n     SET state = 2, http_status = 201, response_body = :resp, booking_id = :bid\n   WHERE idempotency_key = :key;\nCOMMIT;\n```\n\n### 5.3 冲突处理与返回\n\n- 捕获 `SQLSTATE 23505`（unique_violation）且约束名为 `booking_slot_pkey` 时：\n  - 回滚业务写入，但**仍要写幂等结果**（独立事务）：`http_status = 409`，`response_body` 含冲突槽位列表。这样同一幂等键的后续重试会稳定复现同一结果（D6 语义）。\n  - 返回 `409 ROOM_SLOT_CONFLICT`，body 示例：\n\n```json\n{\n  \"code\": \"ROOM_SLOT_CONFLICT\",\n  \"message\": \"所选时段已被占用，请重新选择\",\n  \"conflictingSlots\": [\"2026-10-13T01:00:00.000Z\", \"2026-10-13T01:15:00.000Z\"],\n  \"alternatives\": [\n    { \"startAt\": \"2026-10-13T02:00:00.000Z\", \"endAt\": \"2026-10-13T03:00:00.000Z\" }\n  ]\n}\n```\n\n其中 `alternatives` 为服务端在该会议室前后 4 小时内推荐的等价时长空档，减少用户来回试错。\n\n### 5.4 死锁与并发控制\n\n- **固定插入顺序**：槽位按 `slot_start` 升序插入，所有事务加锁顺序一致，从根源消除死锁。\n- 不额外引入 `SELECT ... FOR UPDATE` 预锁槽位（避免热点行争抢与锁等待放大）；依赖唯一索引的原子插入，性能最优。\n- 不采用乐观锁版本号（方案 B 的语义已由唯一约束更强地覆盖），不采用最终一致队列（会产生超卖与补偿，违背 D4），不采用 Redis 分布式锁（引入额外故障点且无法替代数据库约束，仅作可选限流）。\n\n### 5.5 取消的并发安全\n\n```sql\nBEGIN;\n  SELECT * FROM booking WHERE id = :id AND status = 1 FOR UPDATE;  -- 行锁，防并发双取消\n  -- 校验权限（本人或管理员）与取消规则\n  UPDATE booking SET status = 2, cancelled_at = now(), cancelled_by = :uid WHERE id = :id;\n  DELETE FROM booking_slot WHERE booking_id = :id;   -- 即时释放\nCOMMIT;\n```\n\n重复取消时 `status` 已为 2，返回幂等的 `200`（同一预约状态），不报错。\n\n---\n\n## 6. 幂等设计（D6 + D7）\n\n### 6.1 客户端约定\n\n- 前端在**用户点击提交按钮的那一刻**生成一个 UUIDv4 作为 `Idempotency-Key`，并在该次「提交意图」的所有重试中复用同一个键。\n- 用户修改了会议室或时段后再次提交 → **必须生成新键**（因为这是一次新的提交意图）。\n- 键放在 HTTP 头：`Idempotency-Key: 8f1c...`。缺失该头时服务端返回 `400 MISSING_IDEMPOTENCY_KEY`（创建与取消接口强制要求）。\n\n### 6.2 请求指纹计算\n\n```\nfingerprint = SHA-256(\n  method + \"\\n\" +\n  canonicalPath + \"\\n\" +\n  canonicalJsonBody\n)\n```\n\n- `canonicalJsonBody`：JSON 键按字典序升序、无多余空白、时间统一规范化为 UTC 毫秒级 ISO 字符串、数值去掉前导零。\n- 指纹**不包含** `Idempotency-Key` 自身，也不包含 `Authorization`。\n- 键与用户绑定：`idempotency_record.user_id` 必须与请求者一致，否则返回 `403`（防止跨用户重放）。\n\n### 6.3 状态机\n\n```\n（不存在）──首次请求──▶ 处理中(1) ──成功──▶ 已完成(2, 201 + body)\n                             │\n                             └──业务失败(4xx)──▶ 已完成(2, 4xx + body)\n                             │\n                             └──系统异常(5xx)──▶ 删除记录（允许重试重算）\n```\n\n- **只持久化 2xx 与 4xx 结果**；5xx 不落库，让客户端重试能真正重试成功。\n- 记录在 `created_at + 24h` 过期（D7）；过期清理任务每 10 分钟批量删除 `expires_at` 早于当前时间的行。\n\n### 6.4 重复请求处理（同一 Idempotency-Key）\n\n| 情况 | 判定 | 响应 |\n| --- | --- | --- |\n| 记录不存在 | 新请求 | 走 5.2 正常流程 |\n| 存在，`user_id` 不一致 | 越权重放 | `403 FORBIDDEN_IDEMPOTENCY_KEY` |\n| 存在，`state = 2`，指纹一致 | 重放 | **原样返回** 首次的 `http_status` 与 `response_body`（含首次的 `bookingId`），不产生任何新数据 |\n| 存在，`state = 2`，指纹不一致 | 键被复用 | `409 IDEMPOTENCY_KEY_CONFLICT`，提示「该请求标识已用于另一次预约，请勿复用」 |\n| 存在，`state = 1`（并发同键） | 首次仍在处理 | `425 IDEMPOTENCY_IN_PROGRESS`，`Retry-After: 1`；客户端 1 秒后重试即命中已完成记录 |\n| 记录已过 24h 被清理 | 视为新请求 | 按新键处理（D7 明确语义） |\n\n### 6.5 为什么这样设计\n\n- **比对指纹 + 24h 保留**（D7 选项一）在「实现复杂度」「存储成本」「误用可发现性」之间取得平衡：既能挡住网络重试，又能在用户误复用键时明确报错而非静默掩盖，24 小时的窗口足够覆盖任何合理的客户端重试与跨日轻量对账。\n- 幂等记录在业务事务内抢占、在业务结果确定后回填，保证「记录存在」等于「业务已决」，不存在中间态泄漏。\n\n---\n\n## 7. 接口设计\n\n### 7.1 接口清单\n\n| 方法 | 路径 | 说明 | 幂等键 |\n| --- | --- | --- | --- |\n| GET | `/api/rooms` | 会议室列表（含设备、容量） | 否 |\n| GET | `/api/rooms/availability?date=2026-10-13&roomIds=1,2` | 指定日期全部/部分会议室的 15 分钟矩阵 | 否 |\n| POST | `/api/bookings` | 创建预约 | 是 |\n| GET | `/api/bookings?scope=mine&status=active` | 我的预约列表（分页） | 否 |\n| GET | `/api/bookings/{id}` | 预约详情 | 否 |\n| POST | `/api/bookings/{id}/cancel` | 取消预约 | 是 |\n| GET | `/api/health` | 健康检查（含数据库探活） | 否 |\n\n### 7.2 创建预约\n\n请求：\n\n```http\nPOST /api/bookings\nIdempotency-Key: 3f6a1e0c-9b2d-4d1f-8a7e-2c5b4d9a1f33\nContent-Type: application/json\nAuthorization: Bearer <jwt>\n\n{\n  \"roomId\": 3,\n  \"subject\": \"Q4 产品规划评审\",\n  \"attendeeCount\": 8,\n  \"remark\": \"需投屏\",\n  \"startAt\": \"2026-10-13T01:00:00.000Z\",\n  \"endAt\": \"2026-10-13T02:00:00.000Z\"\n}\n```\n\n成功响应 `201`：\n\n```json\n{\n  \"id\": 10241,\n  \"roomId\": 3,\n  \"roomName\": \"3F-301 松涛厅\",\n  \"userId\": 887,\n  \"subject\": \"Q4 产品规划评审\",\n  \"attendeeCount\": 8,\n  \"startAt\": \"2026-10-13T01:00:00.000Z\",\n  \"endAt\": \"2026-10-13T02:00:00.000Z\",\n  \"status\": \"ACTIVE\",\n  \"createdAt\": \"2026-10-12T09:12:33.114Z\"\n}\n```\n\n### 7.3 可用性矩阵\n\n```json\n{\n  \"date\": \"2026-10-13\",\n  \"timezone\": \"Asia/Shanghai\",\n  \"slotMinutes\": 15,\n  \"rooms\": [\n    {\n      \"roomId\": 3,\n      \"roomName\": \"3F-301 松涛厅\",\n      \"capacity\": 10,\n      \"slots\": [\n        { \"start\": \"2026-10-13T00:00:00.000Z\", \"available\": true },\n        { \"start\": \"2026-10-13T00:15:00.000Z\", \"available\": false, \"bookingId\": 10230, \"subject\": \"周会\" },\n        { \"start\": \"2026-10-13T00:30:00.000Z\", \"available\": true }\n      ]\n    }\n  ]\n}\n```\n\n### 7.4 错误码表\n\n| HTTP | code | 含义 | 前端处理 |\n| --- | --- | --- | --- |\n| 400 | `INVALID_ARGUMENT` | 参数缺失或格式错误 | 字段级提示 |\n| 400 | `MISSING_IDEMPOTENCY_KEY` | 写接口缺少幂等键 | 前端缺陷，上报埋点 |\n| 400 | `OUT_OF_BOOKING_WINDOW` | 早于当前或超出 14 天窗口 | 提示可预约范围 |\n| 400 | `INVALID_SLOT_ALIGNMENT` | 未对齐 15 分钟 | 自动吸附到最近边界 |\n| 400 | `EXCEED_MAX_DURATION` | 超过 4 小时 | 提示上限 |\n| 400 | `OUT_OF_BUSINESS_HOURS` | 超出 08:00–20:00 或跨自然日 | 禁用越界选择 |\n| 401 | `UNAUTHENTICATED` | 未登录或 Token 过期 | 触发免登重取 |\n| 403 | `FORBIDDEN` / `FORBIDDEN_IDEMPOTENCY_KEY` | 无权操作或幂等键归属不符 | 提示无权限 |\n| 404 | `ROOM_NOT_FOUND` / `BOOKING_NOT_FOUND` | 资源不存在 | 刷新列表 |\n| 409 | `ROOM_SLOT_CONFLICT` | 时段被占（含 `conflictingSlots` 与 `alternatives`） | 高亮冲突并给替代时段 |\n| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 同键不同内容 | 提示并自动换新键重提 |\n| 425 | `IDEMPOTENCY_IN_PROGRESS` | 首次仍在处理 | 按 `Retry-After` 重试 |\n| 429 | `RATE_LIMITED` | 触发限流 | 退避重试 |\n| 500 | `INTERNAL_ERROR` | 服务异常（不落幂等记录） | 可安全重试（同键） |\n\n---\n\n## 8. 体验与验收中「体验」部分的落地（双端）\n\n### 8.1 桌面 Web\n\n- 主页为**周视图 + 时间轴矩阵**：横轴 6 间会议室，纵轴 08:00–20:00，15 分钟一格；已占用格显示主题与预约人（同名可见），空闲格可拖拽选择连续区间。\n- 拖拽时实时计算时长（默认吸附 15 分钟），超过 4 小时自动截断并提示。\n- 提交按钮点击瞬间生成幂等键并锁定按钮，避免双击；请求期间显示骨架态，超时（8 秒）自动以**同键**重试一次，仍失败则提示「可安全重试」并保留页面状态。\n\n### 8.2 移动端 H5（企业微信/钉钉内置浏览器）\n\n- 以「日期条 + 会议室卡片 + 按小时分组的时间胶囊」呈现，点击起点与终点选择连续区间，避免小屏拖拽。\n- 拇指热区不小于 44×44 px；底部固定「确认预约」按钮。\n- 复用同一套 API 与同一套时间处理工具函数，避免双端语义漂移。\n\n### 8.3 冲突与幂等的用户可见行为\n\n- 冲突时不清空用户已填写的表单，直接就地高亮冲突槽位，并提供一键采用推荐替代时段。\n- 幂等重放成功时，用户体感等同于「一次成功」，不会看到两条预约。\n- `IDEMPOTENCY_KEY_CONFLICT` 属异常路径：前端静默生成新键重提一次，同时上报埋点用于排查误用。\n\n### 8.4 可访问性与文案\n\n- 所有状态除颜色外必须有文字或图标标识（色盲友好）。\n- 时间文案统一由前端按 `Asia/Shanghai` 渲染，禁止直接展示 UTC 原串。\n\n---\n\n## 9. 性能设计（重点）\n\n性能按「生产可用」标准设计，不以 200 人小规模为由放松要求。\n\n### 9.1 量化目标\n\n| 指标 | 目标 |\n| --- | --- |\n| 创建预约接口延迟 | p95 不超过 300 ms，p99 不超过 800 ms（服务端内部耗时，不含公网 RTT） |\n| 可用性矩阵接口延迟 | p95 不超过 200 ms（6 间房 × 48 槽） |\n| 列表接口延迟 | p95 不超过 250 ms（分页 20 条） |\n| 并发承载 | 200 并发写、500 并发读，错误率低于 0.1% |\n| 合法请求成功率 | 不低于 99.9%（不含业务冲突 409） |\n| 超卖次数 | 恒为 0 |\n| 移动端 H5 首屏 | 4G 网络下不超过 2.0 s |\n| 桌面首屏可交互 | 不超过 1.5 s |\n\n### 9.2 数据库层\n\n- **索引覆盖**：`booking_slot` 主键 `(room_id, slot_start)` 直接服务矩阵查询；矩阵接口用 `room_id = ANY(:ids) AND slot_start BETWEEN :d0 AND :d1` 一次取回全部占用，**单次查询、无 N+1**。\n- 批量插入槽位使用**单条多值 INSERT**（一次网络往返），而非逐槽循环。\n- 连接池：服务副本数 × 每副本 10–20 连接，总连接数不超过 PostgreSQL `max_connections` 的 70%，预留运维连接。\n- 事务保持**短小**：所有校验在事务外先做（只读校验用普通查询），事务内只做写入与唯一约束判定，事务持有时间控制在 5 ms 量级。\n- 定期 `VACUUM`/`ANALYZE`，`booking_slot` 因高频增删需关注表膨胀，配置更激进的 `autovacuum` 阈值。\n\n### 9.3 应用层\n\n- 读接口启用**短 TTL 缓存**（Redis 或进程内缓存）：会议室列表 TTL 5 分钟并带版本号失效；单日矩阵 TTL 5 秒（仅用于吸收突发重复刷新，**不用于预约一致性判定**）。\n- 写接口完全绕过缓存，直连数据库。\n- 限流：按用户维度写接口 5 次/秒、读接口 20 次/秒（Redis 令牌桶，或令牌桶不可用时降级为进程内限流），防止误操作与脚本刷。\n- 序列化与压缩：API 开启 gzip/brotli，矩阵响应体压至 10 KB 以内。\n\n### 9.4 前端层\n\n- 矩阵渲染使用虚拟滚动或纯 CSS Grid，避免 288 个 DOM 节点引起卡顿（桌面 6 房 × 48 槽 = 288 格，控制在 1 帧内渲染）。\n- 路由级代码分割，移动端仅加载当前路由与必要组件。\n- 可用矩阵请求做**日期级缓存 + 请求去重**（同一日期并发刷新只发一次请求）。\n- 静态资源强缓存 + 内容哈希文件名，二次访问走 304。\n\n### 9.5 抢订热点\n\n200 人抢同一时段的极端场景下，唯一索引冲突是**最快的拒绝路径**（无锁等待、无长事务），冲突方立即得到 409 并可一键采用替代时段，整体体验优于排队。压测须覆盖该场景（见第 12 节）。\n\n---\n\n## 10. 安全与审计\n\n- **鉴权**：企业微信/钉钉免登换取内部 JWT（有效期 2 小时 + 静默续期），签名使用服务端密钥，`userId` 与 `role` 由服务端注入，**不信任任何客户端传入的身份字段**。\n- **授权**：所有写操作校验资源归属；管理员能力单独判权。\n- **注入防护**：全部使用参数化查询/预编译语句；`subject`、`remark` 做长度与字符校验（禁止控制字符）。\n- **越权防护**：幂等键与 `user_id` 强绑定（第 6.4 节）。\n- **审计**：创建、取消、房间启停在 `audit_log` 留痕，含操作者、目标、变更详情与时间；管理员取消需填原因。\n- **数据保留**：预约历史保留 2 年（合规与统计需求），幂等记录 24 小时，审计日志 1 年。\n\n---\n\n## 11. 可观测性与运维\n\n- **指标（Prometheus）**：预约创建 QPS、成功率、409 冲突率、幂等命中率、幂等键冲突率、p50/p95/p99 延迟、数据库连接池使用率、唯一约束冲突计数、`425` 出现次数。\n- **日志**：结构化 JSON，包含 `traceId`、`userId`、`idempotencyKey`、`bookingId`、耗时；错误日志带 SQLSTATE。\n- **链路追踪**：前端 → 服务 → 数据库打点，便于定位慢请求。\n- **告警**：\n  - 5 分钟内 `ROOM_SLOT_CONFLICT` 比例异常升高（可能被脚本刷或前端选择逻辑异常）；\n  - p99 超过 1 s 持续 5 分钟；\n  - 幂等记录清理任务失败；\n  - 数据库主从延迟超过 30 s。\n- **备份**：每日全量 + WAL 归档，恢复演练每季度一次，RPO 不超过 5 分钟，RTO 不超过 1 小时。\n\n---\n\n## 12. 验收标准与测试计划\n\n### 12.1 功能验收（用例必须全通过）\n\n| 编号 | 用例 | 期望 |\n| --- | --- | --- |\n| F1 | 正常单次预约 | 201，矩阵中对应槽位变为占用 |\n| F2 | 取消自己的预约 | 200，槽位立即释放 |\n| F3 | 取消他人预约（非管理员） | 403 |\n| F4 | 越界时间（超出 14 天/过去时间/跨日/超 4 小时/未对齐 15 分钟） | 对应 400 错误码 |\n| F5 | 停用会议室预约 | 404 或 403（按实现） |\n| F6 | 我的预约列表分页与状态筛选 | 数据正确 |\n\n### 12.2 并发与一致性验收（核心）\n\n| 编号 | 场景 | 期望 |\n| --- | --- | --- |\n| C1 | 200 并发同时预约同一会议室同一时段 | **恰好 1 个 201，其余 409**；`booking_slot` 中该时段仅 1 条记录 |\n| C2 | 100 并发预约同一会议室的**部分重叠**时段 | 无任何两条生效预约发生重叠（用 SQL 校验：按 `room_id` 分组、按 `slot_start` 排序，相邻记录 `booking_id` 无交叉） |\n| C3 | 并发创建与取消同一预约 | 最终状态一致，无槽位残留（`booking_slot` 无孤儿行） |\n| C4 | 一致性校验 SQL 全表跑批 | 相同 `(room_id, slot_start)` 唯一，且无生效预约的槽位缺失 |\n\n一致性校验 SQL 示例：\n\n```sql\n-- 检查是否存在孤儿槽位\nSELECT COUNT(*) FROM booking_slot s\nLEFT JOIN booking b ON b.id = s.booking_id AND b.status = 1\nWHERE b.id IS NULL;   -- 期望 0\n\n-- 检查同一预约的槽位是否连续且时长与 booking 一致\nSELECT b.id, b.start_at, b.end_at,\n       COUNT(s.slot_start) AS slot_cnt,\n       MIN(s.slot_start) AS min_slot, MAX(s.slot_start) AS max_slot\nFROM booking b JOIN booking_slot s ON s.booking_id = b.id\nWHERE b.status = 1\nGROUP BY b.id\nHAVING COUNT(s.slot_start) <> EXTRACT(EPOCH FROM (b.end_at - b.start_at)) / 900\n    OR MIN(s.slot_start) <> b.start_at\n    OR MAX(s.slot_start) <> b.end_at - interval '15 minute';   -- 期望 0 行\n```\n\n### 12.3 幂等验收\n\n| 编号 | 场景 | 期望 |\n| --- | --- | --- |\n| I1 | 同一键 + 同一内容重复提交 10 次（含并发） | 全部返回同一 `id`，数据库中仅 1 条 booking |\n| I2 | 同一键 + 更换会议室/时段 | `409 IDEMPOTENCY_KEY_CONFLICT`，不产生任何新数据 |\n| I3 | 首次返回 201 后服务端重启，同键重试 | 仍返回原 201 结果 |\n| I4 | 同一键 + 首次为业务失败（如冲突） | 重试复现同一 409 结果 |\n| I5 | 键记录超过 24 小时后再用同键 | 视为新请求，正常创建新预约 |\n| I6 | 另一个用户使用该键 | `403 FORBIDDEN_IDEMPOTENCY_KEY` |\n| I7 | 首次请求并发同键（如双击） | 一方 201/409，另一方 425 后按 `Retry-After` 重试得到相同结果 |\n\n### 12.4 性能验收\n\n| 编号 | 场景 | 期望 |\n| --- | --- | --- |\n| P1 | 200 并发持续 5 分钟混合读写 | 写接口 p95 不超过 300 ms、p99 不超过 800 ms；错误率低于 0.1% |\n| P2 | 500 并发读矩阵接口 | p95 不超过 200 ms |\n| P3 | 200 并发抢订同一时段（C1 的压测版本） | 成功率符合定义（合法且唯一者成功），无超卖、无数据库死锁 |\n| P4 | 移动端 4G 首屏 | 不超过 2.0 s（Lighthouse/真机） |\n| P5 | 数据库连接池打满时的表现 | 快速失败并返回 503/429，不出现雪崩 |\n\n**指标口径定义**（避免歧义）：\n- 预约成功率 = （2xx 请求数）/（2xx + 5xx + 超时请求数）。业务冲突 409 不计入分母，因为它代表系统正确拒绝了非法请求。\n- 超卖 = 任意时刻存在 `(room_id, slot_start)` 对应多于 1 条生效槽位记录，恒为 0。\n\n### 12.5 测试方法\n\n- 工具：k6 或 Locust 编写并发脚本；幂等飞检用脚本对同一键并发 POST N 次；一致性用第 12.2 节 SQL 在每次压测后跑批。\n- 环境：与生产同规格的预发环境，数据规模与生产一致（6 间房、14 天窗口）。\n- 回归：上述用例纳入 CI，每次发版必跑 C1/C2/I1/I2 四条关键用例。\n\n---\n\n## 13. 里程碑与风险\n\n### 13.1 里程碑\n\n| 阶段 | 内容 | 产出 |\n| --- | --- | --- |\n| M1（第 1 周） | 数据模型与迁移脚本、鉴权接入、会议室只读接口 | 可查会议室与矩阵 |\n| M2（第 2 周） | 预约创建/取消事务 + 唯一约束 + 幂等模块 | 写接口可用，C1/C2/I1/I2 通过 |\n| M3（第 3 周） | 桌面 Web 与移动 H5 全流程 | 双端可用，F1–F6 通过 |\n| M4（第 4 周） | 性能压测、可观测、审计、验收 | 第 12 节全量通过，可上线 |\n\n### 13.2 风险与对策\n\n| 风险 | 影响 | 对策 |\n| --- | --- | --- |\n| 幂等键在客户端被误复用 | 用户看到 `IDEMPOTENCY_KEY_CONFLICT` | 前端在「提交意图」变化时强制换键；该错误静默换键重提一次并埋点 |\n| 24 小时后同键复用 | 极端情况下产生第二笔预约 | 属 D7 明确设计语义；前端每次提交都生成新键，实际触发概率极低；埋点监控该路径 |\n| 抢订时大量 409 影响体验 | 用户反复试错 | 返回 `alternatives` 推荐空档；前端一键采用 |\n| `booking_slot` 高频增删导致表膨胀 | 查询变慢 | 调整 autovacuum 阈值，定期监控表大小与死元组比例 |\n| 未来需求扩展（周期会议、日历同步） | 当前模型需演进 | 槽位表模型天然兼容周期会议（展开为多个槽位）；API 版本化预留 `/v2`；`booking` 表预留扩展字段空间 |\n\n### 13.3 后续演进方向（非首期）\n\n周期会议（按规则批量展开槽位并在同一事务内整体判定）、日历双向同步（以 `booking` 为源，外发事件 ID 映射）、门口屏签到与超时释放（新增 `check_in` 表与状态机）、部门配额与审批（在 `booking` 前加预占态 `PENDING`，审批通过才写槽位）、跨园区多地点（`meeting_room` 增加 `site_id`，规则不变）。\n\n---\n\n## 附：实现检查清单（开发自检）\n\n1. 所有时间字段在数据库为 `TIMESTAMPTZ`，API 出入参为带 `Z` 的 UTC ISO 字符串，前端统一按 `Asia/Shanghai` 渲染。\n2. `booking_slot` 主键为 `(room_id, slot_start)`；批量插入按 `slot_start` 升序；单条多值 INSERT。\n3. 业务校验在事务外完成，事务内仅写入；事务执行时间有指标监控。\n4. 幂等记录在业务事务内抢占、在结果确定后回填；5xx 不落库；4xx 与 2xx 落库。\n5. 指纹算法有单元测试，覆盖键序、空白、时间规范化差异不改变指纹。\n6. 写接口强制要求 `Idempotency-Key`，键与 `user_id` 绑定校验。\n7. 取消用行锁防双取消，槽位删除即时释放。\n8. CI 必跑 C1/C2/I1/I2 四条关键用例与一致性校验 SQL。\n9. 指标覆盖第 11 节全部项，告警阈值已配置并演练。\n10. 矩阵接口无 N+1，单次查询返回全部占用；响应压缩开启。",
+  "finalDocument": "# 会议室预约系统设计文档（首期·最终可实施版）\n\n| 项 | 内容 |\n| --- | --- |\n| 系统名称 | MeetingRoom Booking（公司内部会议室预约系统） |\n| 目标用户 | 公司内部约 200 名员工，单一办公地点，6 间会议室 |\n| 首期形态 | 桌面 Web + 移动端 H5（企业微信/钉钉内置浏览器） |\n| 时区策略 | 交互与展示统一 Asia/Shanghai，数据库以 UTC 存储（TIMESTAMPTZ） |\n| 一致性等级 | 强一致：数据库唯一约束 + 单事务，先到先得，超卖恒为 0 |\n| 性能标准 | 按生产可用设计，不以 200 人规模放松要求（见第 11 节） |\n| 本文档地位 | 唯一事实来源，开发、测试、验收均以本文档为准 |\n\n---\n\n## 0. 修订说明（相对首稿的变化）\n\n首稿的 D1–D6 全部保留；D7（幂等键 24 小时过期语义）在澄清后**被修订**；新增强制分支决策 B1/B2/B3。\n\n| 编号 | 变更类型 | 内容 |\n| --- | --- | --- |\n| D7' | **修订** | 幂等键在写路径上**永不静默复用**。24 小时 TTL 只决定\"是否返回缓存响应快照\"，不决定键的唯一性与语义；超期后由 `booking.idempotency_key` / `booking.last_cancel_key` 永久唯一约束兜底，返回原预约的**当前状态**，绝不新建第二笔。 |\n| B1 | 新增 | 个人日程冲突：**允许**。服务端不做个人时段校验，仅会议室维度唯一。 |\n| B2 | 新增 | 结果未知（超时/5xx/进程崩溃）的恢复语义：幂等记录、预约记录、时段占用**同一事务提交**；按\"已提交事实\"恢复，不得把结果未知当新下单。 |\n| B3 | 新增 | 登录：免登为主 + 管理员后台手工绑定/白名单导入，**不提供自助登录**。 |\n\n---\n\n## 1. 已确认决策与分支决策清单\n\n### 1.1 主干决策\n\n| 编号 | 决策点 | 结论 |\n| --- | --- | --- |\n| D1 | 业务范围 | 首期仅「内部 200 人 + 单一办公地点 + 6 间会议室」的**单次预约与取消** |\n| D2 | 不做 | 周期会议、访客、工位、审批流、门禁、双向日历同步、签到与超时自动释放 |\n| D3 | 时间粒度与窗口 | 15 分钟粒度；最多提前 14 天（含今天，D+13）；Asia/Shanghai 展示、UTC 存储 |\n| D4 | 一致性策略 | 强一致：`booking_slot (room_id, slot_start)` 唯一约束，先到先得，零超卖 |\n| D5 | 入口与验收 | Web + 移动 H5 双端，验收含性能与成功率量化指标 |\n| D6 | 幂等机制 | 客户端生成全局唯一 `Idempotency-Key`；同键同指纹复用首次结果 |\n| D7' | 幂等键生命周期 | 24h 内原样重放；24h 后返回原预约当前状态；永久禁止同键创建第二笔 |\n\n### 1.2 分支决策（澄清产出，必须显式落地）\n\n**B1｜个人日程冲突：允许，不做个人时段校验。**\n\n- 服务端零校验：同一员工在同一时段预约任意多间会议室，全部返回 201（受通用限流约束）。\n- 前端不做阻断、不发起额外的\"个人日程\"校验请求（避免多余 RTT 与性能损耗）；仅在「我的预约」列表内对自身重叠项做**本地视觉标记**（纯展示，不影响提交，可通过配置关闭）。\n- 明确记录为\"有意为之\"，避免后续被误判为缺陷。新增指标 `booking_overlap_self_total` 观测实际发生频率，为未来是否引入配额提供数据；后续若改为禁止，属于策略变更而非缺陷修复。\n- 不因此放宽会议室维度唯一性：`booking_slot` 主键不变。\n\n**B2｜结果未知的恢复语义：提交即事实，同键不可新建。**\n\n- **同一数据库事务**内完成三件事：抢占幂等记录 → 写入 `booking` → 写入全部 `booking_slot`；三者原子提交或原子回滚。\n- 关键推论：**不存在\"幂等记录已提交但业务未提交\"的中间态**，因此不存在\"结果未知\"导致的孤儿记录。\n- 24 小时内的同键同指纹重试 → 原样重放首次的状态码与响应体（含原 `bookingId`），不产生任何新数据。\n- 超过 24 小时（响应快照已清理）→ 由 `booking.idempotency_key` 的**永久唯一约束**兜底：返回**原预约的当前状态**（不新建），并在响应中显式标注这是重放、以及首次的原始状态码。\n- **只有完全没有提交记录（事务已回滚）时才允许按同键真正创建。**\n- 客户端义务：新预约意图必须生成新键；超过 24 小时的重试必须先调用 `GET /api/idempotency/{key}` 查询原结果，再决定动作。\n\n**B3｜登录：免登为主 + 管理员绑定/白名单，不提供自助登录。**\n\n- 主路径：企业微信/钉钉 OAuth 免登，用 `code` 换取内部 JWT。\n- 兜底路径（仅管理员）：白名单批量导入（工号、姓名、部门、联系方式、角色），或对单个员工手工绑定/启用。\n- 无自助注册、无自助绑定、无短信/邮件验证码登录。\n- 免登成功但工号未在 `employee` 表中或已停用 → 阻断并展示\"请联系管理员绑定\"页面，**不落回任何登录表单**。\n- 员工目录的唯一事实来源是内部 `employee` 表；SSO 只提供身份断言，不提供授权。\n\n---\n\n## 2. 目标与范围\n\n### 2.1 首期目标\n\n1. 员工 30 秒内完成「选会议室 → 看空闲 → 提交 → 得到确认」。\n2. 200 人并发抢订同一时段时，**恰好 1 人成功**，其余得到明确冲突提示与替代建议。\n3. 网络抖动、超时、进程崩溃导致的客户端重试**不产生重复预约**，也**不把已成功的预约误报为失败**。\n4. 桌面与移动端能力一致、可读性一致，不做功能裁剪。\n\n### 2.2 In Scope\n\n会议室列表与详情；按日 15 分钟粒度空闲矩阵；单次预约创建；预约取消（本人或管理员）；「我的预约」（即将开始 / 历史）；免登 + 管理员绑定/白名单；审计、指标、告警；备份与恢复演练。\n\n### 2.3 Out of Scope（首期）\n\n周期会议、访客登记、工位预约、跨园区、部门配额、审批流、门禁联动、日历双向同步、门口屏签到、超时自动释放、**自助注册与自助绑定**。\n\n### 2.4 关键参数（均以配置项实现）\n\n| 参数 | 默认值 |\n| --- | --- |\n| 可预约时段 | 工作日 08:00–20:00（Asia/Shanghai），每日 48 槽 |\n| 单次最长时长 | 4 小时 |\n| 跨自然日 | 不允许 |\n| 提前窗口 | 14 天（含今天） |\n| 取消规则 | 开始前本人可取消；开始后仅管理员可取消（需填原因） |\n| 键响应快照 TTL | 24 小时 |\n| 令牌有效期 | 访问令牌 30 分钟，刷新令牌 7 天 |\n\n---\n\n## 3. 角色与权限\n\n| 角色 | 能力 |\n| --- | --- |\n| 员工（Employee） | 查看会议室与空闲矩阵、创建预约、取消自己的预约、查看自己的预约、查看自己的身份信息 |\n| 管理员（Admin） | 员工全部能力 + 取消任意预约（需填原因）+ 停用/启用会议室 + 查看全量预约与审计日志 + 白名单导入 + 手工绑定/停用/改角色 |\n\n- 权限来源：`employee.role`（1 员工，9 管理员），由服务端注入 JWT，**不信任任何客户端传入的身份或角色字段**。\n- 资源级授权：取消接口必须校验 `booking.user_id == 当前用户` 或 `role == 9`。\n- 角色/停用变更在访问令牌续期时生效（≤30 分钟），见 9.4。\n\n---\n\n## 4. 业务规则\n\n### 4.1 时间模型\n\n- 存储：`TIMESTAMPTZ`，内部一律 UTC。\n- 传输：带偏移量的 ISO-8601，统一规范化到 UTC 毫秒（`2026-10-13T01:00:00.000Z`）。\n- 槽位对齐：UTC 分钟数为 00/15/30/45。Asia/Shanghai 全年无夏令时、偏移恒为 +8，UTC 与本地分钟边界一致，无需额外换算。\n- 展示：仅由前端按 Asia/Shanghai 渲染，禁止直出 UTC 原串。\n\n### 4.2 预约校验（服务端强校验，前端仅提示）\n\n1. `startAt` 早于当前时间 → 拒绝。\n2. `startAt` 晚于「今天 + 14 天」的 20:00 → 拒绝。\n3. 未对齐 15 分钟 → 拒绝。\n4. 时长超出 15 分钟至 4 小时 → 拒绝。\n5. 跨自然日 → 拒绝。\n6. 超出 08:00–20:00 → 拒绝。\n7. 会议室不存在或 `status != 1` → 拒绝。\n8. 任一槽位已被占用 → 整体拒绝，不留部分占用。\n9. **（B1）不做个人时段校验**：不检查同一 `user_id` 在其他会议室的重叠预约。\n\n### 4.3 可用性口径\n\n`(room_id, slot_start)` 在 `booking_slot` 中无记录即为可用。取消即删除槽位，取消后**立即释放**。\n\n---\n\n## 5. 数据模型\n\n### 5.1 DDL\n\n```sql\n-- 员工目录（B3 的核心表，身份与授权的唯一事实来源）\nCREATE TABLE employee (\n  id            BIGSERIAL PRIMARY KEY,\n  employee_no   VARCHAR(32)  NOT NULL UNIQUE,   -- 工号，与企微/钉钉 userid 一致\n  name          VARCHAR(64)  NOT NULL,\n  dept          VARCHAR(64),\n  email         VARCHAR(128),\n  mobile        VARCHAR(32),\n  role          SMALLINT     NOT NULL DEFAULT 1,  -- 1 员工, 9 管理员\n  status        SMALLINT     NOT NULL DEFAULT 1,  -- 1 启用, 0 停用\n  bind_source   SMALLINT     NOT NULL DEFAULT 1,  -- 1 白名单导入, 2 手工绑定\n  bound_at      TIMESTAMPTZ,\n  last_login_at TIMESTAMPTZ,\n  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()\n);\nCREATE INDEX idx_employee_role_status ON employee (role, status);\n\n-- 会议室\nCREATE TABLE meeting_room (\n  id         BIGSERIAL PRIMARY KEY,\n  name       VARCHAR(64)  NOT NULL UNIQUE,\n  location   VARCHAR(128) NOT NULL,\n  capacity   INT          NOT NULL CHECK (capacity BETWEEN 1 AND 1000),\n  equipment  JSONB        NOT NULL DEFAULT '[]'::jsonb,\n  status     SMALLINT     NOT NULL DEFAULT 1,\n  created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  updated_at TIMESTAMPTZ  NOT NULL DEFAULT now()\n);\n\n-- 预约单（保留取消历史）\nCREATE TABLE booking (\n  id                  BIGSERIAL PRIMARY KEY,\n  room_id             BIGINT       NOT NULL REFERENCES meeting_room(id),\n  user_id             BIGINT       NOT NULL REFERENCES employee(id),\n  subject             VARCHAR(128) NOT NULL,\n  attendee_count      INT          NOT NULL DEFAULT 1 CHECK (attendee_count BETWEEN 1 AND 1000),\n  remark              VARCHAR(512),\n  start_at            TIMESTAMPTZ  NOT NULL,\n  end_at              TIMESTAMPTZ  NOT NULL,\n  status              SMALLINT     NOT NULL DEFAULT 1,   -- 1 生效, 2 已取消\n  idempotency_key     CHAR(36)     NOT NULL,             -- 生产者键，永久唯一（B2 兜底）\n  request_fingerprint CHAR(64)     NOT NULL,             -- 该键的请求指纹（B2 判定同/异意图）\n  last_cancel_key     CHAR(36),                          -- 实际执行取消的键，永久唯一\n  created_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  cancelled_at        TIMESTAMPTZ,\n  cancelled_by        BIGINT,\n  cancel_reason       VARCHAR(256),\n  CONSTRAINT chk_booking_duration\n    CHECK (end_at - start_at BETWEEN interval '15 minute' AND interval '4 hour'),\n  CONSTRAINT chk_booking_aligned CHECK (\n    EXTRACT(EPOCH FROM start_at)::bigint % 900 = 0\n    AND EXTRACT(EPOCH FROM end_at)::bigint % 900 = 0\n  ),\n  CONSTRAINT uk_booking_idem UNIQUE (idempotency_key)     -- 永久兜底，不随 24h 过期\n);\nCREATE UNIQUE INDEX uk_booking_last_cancel_key\n  ON booking (last_cancel_key) WHERE last_cancel_key IS NOT NULL;\nCREATE INDEX idx_booking_user_time ON booking (user_id, start_at DESC);\nCREATE INDEX idx_booking_room_time ON booking (room_id, start_at);\n\n-- 槽位占用：全系统并发正确性的唯一基石\nCREATE TABLE booking_slot (\n  room_id    BIGINT      NOT NULL REFERENCES meeting_room(id),\n  slot_start TIMESTAMPTZ NOT NULL,\n  booking_id BIGINT      NOT NULL REFERENCES booking(id) ON DELETE CASCADE,\n  PRIMARY KEY (room_id, slot_start)\n);\nCREATE INDEX idx_slot_booking ON booking_slot (booking_id);\n\n-- 幂等响应快照（仅影响\"是否返回缓存快照\"，不影响键唯一性）\nCREATE TABLE idempotency_record (\n  idempotency_key CHAR(36)     PRIMARY KEY,\n  user_id         BIGINT       NOT NULL,\n  endpoint        VARCHAR(64)  NOT NULL,   -- POST:/api/bookings | POST:/api/bookings/{id}/cancel\n  fingerprint     CHAR(64)     NOT NULL,   -- SHA-256(规范化请求)\n  state           SMALLINT     NOT NULL,   -- 1 处理中(仅事务内可见), 2 已完成\n  http_status     INT,\n  response_body   JSONB,\n  booking_id      BIGINT,\n  created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),\n  expires_at      TIMESTAMPTZ  NOT NULL    -- created_at + 24h\n);\nCREATE INDEX idx_idem_expires ON idempotency_record (expires_at);\nCREATE INDEX idx_idem_user    ON idempotency_record (user_id, created_at DESC);\n\n-- 审计日志\nCREATE TABLE audit_log (\n  id          BIGSERIAL PRIMARY KEY,\n  actor_id    BIGINT      NOT NULL,\n  action      VARCHAR(32) NOT NULL,  -- BOOKING_CREATE/BOOKING_CANCEL/ROOM_UPDATE/EMPLOYEE_IMPORT/EMPLOYEE_BIND/EMPLOYEE_ROLE_CHANGE\n  target_type VARCHAR(32) NOT NULL,\n  target_id   BIGINT,\n  detail      JSONB,\n  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()\n);\nCREATE INDEX idx_audit_actor_time ON audit_log (actor_id, created_at DESC);\n```\n\n### 5.2 设计要点\n\n- **槽位表而非范围排除约束**：把\"区间重叠判断\"转化为\"主键冲突\"，一次 INSERT 原子判定，且能精确指出冲突槽位供前端高亮。\n- **幂等两处永久唯一 + 一处 TTL**：`booking.idempotency_key`、`booking.last_cancel_key` 是永久唯一守卫（键永不被静默复用）；`idempotency_record` 的 24h TTL 只决定\"是否原样返回历史快照\"。这是 D7' 的结构性落地。\n- **取消保留 booking 行**：审计与历史需要；删除槽位行即释放资源。\n- **`chk_booking_aligned` 用 UTC 秒数取余**：因 Asia/Shanghai 无夏令时，等价于本地 15 分钟对齐，可由数据库兜底防止应用层漏校验。\n\n### 5.3 容量与性能基线\n\n- 槽位上限：6 间 × 48 槽 × 14 天 ≈ 4032 行，全表可常驻内存。\n- 预约单：约 400 单/天，年约 10 万行，索引完全覆盖。\n- 幂等记录：稳态不超过 3000 行，清理任务每 10 分钟批量删除 `expires_at` 早于当前时间的行（批量 1000 条/批，避免长事务）。\n\n---\n\n## 6. 并发冲突与一致性\n\n### 6.1 正确性基石\n\n```sql\nPRIMARY KEY (room_id, slot_start)\n```\n\n### 6.2 创建预约事务（B2 落地）\n\n```sql\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nSET LOCAL statement_timeout = '5s';\n\n-- 步骤 1：抢占幂等记录（**业务事务内**，与业务同生共死）\nINSERT INTO idempotency_record\n  (idempotency_key, user_id, endpoint, fingerprint, state, expires_at)\nVALUES (:key, :uid, 'POST:/api/bookings', :fp, 1, now() + interval '24 hour')\nON CONFLICT (idempotency_key) DO NOTHING\nRETURNING idempotency_key;\n-- 无返回行 → 键已存在（等待先到事务提交后判定）→ 回滚本事务，转 7.4 重放分支\n\n-- 步骤 2：会议室状态（只读校验已在事务外完成）\nSELECT id FROM meeting_room WHERE id = :roomId AND status = 1 FOR SHARE;\n\n-- 步骤 3：写预约单\nINSERT INTO booking (room_id, user_id, subject, attendee_count, remark,\n                     start_at, end_at, status, idempotency_key, request_fingerprint)\nVALUES (...) RETURNING id;\n\n-- 步骤 4：批量占槽（升序、单语句、ON CONFLICT DO NOTHING 便于精确获知冲突槽位）\nINSERT INTO booking_slot (room_id, slot_start, booking_id)\nSELECT :roomId, gs, :bid\nFROM (SELECT gs FROM unnest(:slots::timestamptz[]) AS gs ORDER BY gs) t\nON CONFLICT (room_id, slot_start) DO NOTHING\nRETURNING slot_start;\n-- 返回行数 != 期望槽位数 → 存在冲突 → 回滚整事务（passed 的 booking 与幂等记录一并消失）\n\n-- 步骤 5：回填幂等结果（仍在同一事务）\nUPDATE idempotency_record\n   SET state = 2, http_status = 201, response_body = :resp, booking_id = :bid\n WHERE idempotency_key = :key\n   AND user_id = :uid;\nCOMMIT;\n```\n\n实现约束：\n\n- 槽位数组在应用层**升序排序**后再传入，`ORDER BY gs` 在 SQL 内再保证一次；所有事务加锁顺序一致，从根源消除死锁。\n- 不引入 `SELECT ... FOR UPDATE` 预锁槽位，不做乐观锁版本号，不用 Redis 分布式锁，不用队列最终一致——冲突拒绝路径必须是最短路径。\n- `deadlock_detected (40P01)` 极低概率仍可能发生（排序未被优化器保留时），捕获后**同键重试一次**（同键重试安全，因为首个事务已回滚）。\n- `lock_timeout` 触发（等待先到事务超过 3 秒）→ 返回 `425 IDEMPOTENCY_IN_PROGRESS` + `Retry-After: 1`。\n\n### 6.3 冲突返回\n\n回滚后另起一个只读查询取回冲突明细（含占用人主题，用于矩阵一致性）：\n\n```sql\nSELECT s.slot_start, s.booking_id, b.subject\nFROM booking_slot s JOIN booking b ON b.id = s.booking_id\nWHERE s.room_id = :roomId AND s.slot_start = ANY(:slots);\n```\n\n随后**补偿写入**幂等快照（独立短事务，见 7.5），返回：\n\n```json\n{\n  \"code\": \"ROOM_SLOT_CONFLICT\",\n  \"message\": \"所选时段已被占用，请重新选择\",\n  \"conflictingSlots\": [\"2026-10-13T01:00:00.000Z\", \"2026-10-13T01:15:00.000Z\"],\n  \"alternatives\": [\n    { \"startAt\": \"2026-10-13T02:00:00.000Z\", \"endAt\": \"2026-10-13T03:00:00.000Z\" }\n  ]\n}\n```\n\n`alternatives` 为同会议室前后 4 小时内的等价时长空档，由一次范围查询计算（不按个人日程过滤——B1）。\n\n### 6.4 取消的并发安全\n\n```sql\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nSELECT * FROM booking WHERE id = :id FOR UPDATE;   -- 行锁，防并发双取消\n-- 权限校验：user_id = :uid 或 role = 9（管理员需 cancel_reason）\n-- 状态校验：status = 2 → 直接返回 200（幂等），不改写 last_cancel_key\nUPDATE booking\n   SET status = 2, cancelled_at = now(), cancelled_by = :uid,\n       cancel_reason = :reason, last_cancel_key = :key\n WHERE id = :id AND status = 1;\nDELETE FROM booking_slot WHERE booking_id = :id;   -- 即时释放\nUPDATE idempotency_record SET state = 2, http_status = 200, response_body = :resp\n WHERE idempotency_key = :key;\nCOMMIT;\n```\n\n- 同一预约行锁串行化并发取消：先到者改状态，后到者看到 `status = 2` 直接返回 200。\n- `uk_booking_last_cancel_key` 保证一个取消键在任何时间点全局只作用于一笔预约，跨预约复用键必触发唯一冲突 → `409 IDEMPOTENCY_KEY_CONFLICT`。\n- 已取消状态下用**另一个**键再次取消：返回 200 当前状态，不写 `last_cancel_key`（无变化即可幂等，键复用无副作用）。\n\n---\n\n## 7. 幂等与错误恢复（D6 / D7' / B2）\n\n### 7.1 客户端约定\n\n- 点击提交按钮的**那一刻**生成 UUIDv4 作为 `Idempotency-Key`；该次\"提交意图\"的所有重试复用同一个键。\n- 用户修改会议室、时段、主题等任一参与指纹的字段后再次提交 → **必须生成新键**。\n- 键放在 HTTP 头 `Idempotency-Key`；写接口缺失该头 → `400 MISSING_IDEMPOTENCY_KEY`。\n- 客户端反序列化必须保持键序与数值格式稳定（同一 payload 对象直接序列化，不重建字段顺序）。\n- 超过 24 小时的重试：先 `GET /api/idempotency/{key}` 查原结果，再决定动作；**绝不**用旧键表达新意图。\n\n### 7.2 请求指纹\n\n```\nfingerprint = SHA-256(method + \"\\n\" + canonicalPath + \"\\n\" + canonicalJsonBody)\n```\n\n- `canonicalJsonBody`：键按字典序升序、无多余空白、时间规范化为 UTC 毫秒 ISO、数值去前导零。\n- 不含 `Idempotency-Key` 与 `Authorization`。\n- 指纹持久化在两侧：`idempotency_record.fingerprint`（24h）与 `booking.request_fingerprint`（永久）。\n\n### 7.3 状态机\n\n```\n（无记录）──首次请求──▶ 同一事务内 [记录(1) + booking + slots] ──COMMIT──▶ 记录(2, 2xx/4xx)\n                                                    │\n                                                    └──ROLLBACK──▶ 三者全部不存在（可安全同键重试创建）\n```\n\n- `state = 1` 只在未提交事务内存在，**外部读者永不可见**（READ COMMITTED 不读未提交行）；提交后必然为 2。\n- 因此**不需要**\"5xx 删除记录\"的特判，也不存在中间态泄漏：回滚即彻底干净。\n- 无 2xx/4xx/5xx 落库区分：要么三者都提交，要么三者都不存在。\n\n### 7.4 同键重复请求判定表\n\n| 情况 | 判定 | 响应 |\n| --- | --- | --- |\n| 无记录且无 booking 兜底 | 全新请求 | 走 6.2 |\n| 记录存在，`user_id` 不一致 | 越权重放 | `403 FORBIDDEN_IDEMPOTENCY_KEY` |\n| 记录存在，`endpoint` 不一致 | 跨接口复用键 | `409 IDEMPOTENCY_KEY_CONFLICT` |\n| 记录存在，`state = 2`，指纹一致 | 24h 内重放 | **原样返回** `http_status` + `response_body`（含原 `bookingId`），附响应头 `Idempotent-Replay: true` |\n| 记录存在，`state = 2`，指纹不一致 | 键被复用 | `409 IDEMPOTENCY_KEY_CONFLICT` |\n| 记录存在，等待先到事务超过 `lock_timeout` | 首次仍在处理 | `425 IDEMPOTENCY_IN_PROGRESS`，`Retry-After: 1` |\n| 记录已过 24h 被清理，`booking.idempotency_key = key` 且指纹一致 | **超期重放** | `200` + 当前状态信封（见 7.6），**不新建** |\n| 记录已过 24h 被清理，`booking.idempotency_key = key` 但指纹不一致 | 键被复用 | `409 IDEMPOTENCY_KEY_CONFLICT` |\n| 记录已过 24h 被清理，取消路径且 `booking.last_cancel_key = key` | 超期重放取消 | `200` + 当前预约状态，**不改变数据** |\n| 记录已过 24h 被清理，取消路径但该键是他人/他接口的创建键 | 键被复用 | `409 IDEMPOTENCY_KEY_CONFLICT`（查 `booking.idempotency_key` 命中即判冲突） |\n\n### 7.5 冲突（409）结果的幂等补偿\n\n业务冲突时整个事务回滚，`booking` 与幂等记录都不存在，而 I4 要求\"重试复现同一 409\"。因此在回滚后执行**独立短事务补偿**：\n\n```sql\nBEGIN;\nINSERT INTO idempotency_record\n  (idempotency_key, user_id, endpoint, fingerprint, state, http_status, response_body, expires_at)\nVALUES (:key, :uid, 'POST:/api/bookings', :fp, 2, 409, :resp, now() + interval '24 hour')\nON CONFLICT (idempotency_key) DO NOTHING;   -- 并发同键时让先到者胜出\nCOMMIT;\n```\n\n- 补偿写入成功后，该键的后续重试稳定复现同一 409（`conflictingSlots` 可能因占用变化而过时，但状态码与语义稳定）。\n- 补偿写入失败（数据库抖动、并发键冲突）：记录指标 `idempotency_compensation_failed_total`，**仍向客户端返回 409**；下一次同键重试会重新计算冲突（若时段恰好被释放，则可能成功创建——这是可接受的残余不确定性，且方向上偏\"用户能约上\"）。\n- 补偿事务不含业务写入，事务时长在毫秒级，不影响写路径 p95。\n\n### 7.6 超期重放响应信封（B2）\n\n```json\n{\n  \"replayed\": true,\n  \"originalHttpStatus\": 201,\n  \"outcomeAgeSeconds\": 100000,\n  \"key\": \"3f6a1e0c-9b2d-4d1f-8a7e-2c5b4d9a1f33\",\n  \"booking\": {\n    \"id\": 10241,\n    \"status\": \"CANCELLED\",\n    \"roomId\": 3,\n    \"startAt\": \"2026-10-13T01:00:00.000Z\",\n    \"endAt\": \"2026-10-13T02:00:00.000Z\",\n    \"cancelledAt\": \"2026-10-13T03:20:00.000Z\"\n  }\n}\n```\n\n- HTTP 状态统一为 200；`originalHttpStatus` 承载首次的状态码。\n- 判别约定：**响应体顶层存在 `originalHttpStatus`** ⇒ 超期重放（返回当前状态，非历史快照）；否则为 24h 内原样重放（HTTP 状态与响应体与首次完全一致）。\n- 这就是\"保留原预约 ID、当前取消状态通过查询返回、不新建预约\"的具体形态。\n\n### 7.7 错误恢复矩阵（结果未知时怎么做）\n\n| 故障 | 数据状态 | 客户端动作 | 服务端行为 |\n| --- | --- | --- | --- |\n| 请求超时（事务已提交，响应丢失） | 三表一致已提交 | 同键重试 | 24h 内命中记录 → 原样重放 201 与**同一个** `bookingId` |\n| 请求超时（事务未提交） | 无任何痕迹 | 同键重试 | 按新请求创建；无残留 |\n| 服务进程崩溃（提交后） | 三表一致已提交 | 同键重试 | 同键重放，结果不变（I3） |\n| 服务进程崩溃（提交前） | 无任何痕迹 | 同键重试 | 正常创建 |\n| 首次为业务冲突 409，响应丢失 | 补偿记录或空 | 同键重试 | 有记录 → 复现 409；无记录 → 重算冲突 |\n| `lock_timeout` | 无痕迹 | 按 `Retry-After: 1` 重试 | `425` → 重试命中已完成记录 |\n| 客户端 24h 后才重试 | 提交记录已在，快照已清理 | 先查 `GET /api/idempotency/{key}` | 返回原预约**当前状态**，禁止新建 |\n| 数据库故障 / 主从切换 | 可能短暂不可写 | 退避重试（同键安全） | `503 SERVICE_DEGRADED`，不改数据 |\n\n**恢复原则（不可妥协）**：只要数据库里存在提交记录，同键重试就**永远**返回那笔预约，绝不新建第二笔。\n\n### 7.8 幂等结果查询接口\n\n`GET /api/idempotency/{key}` —— 供客户端在超期重试前\"先查原结果\"。\n\n- 命中 `idempotency_record`：返回 `{ state, httpStatus, bookingId, endpoint, ageSeconds, responseBody }`。\n- 未命中但命中 `booking.idempotency_key`：返回 7.6 信封。\n- 均未命中：`404 IDEMPOTENCY_KEY_NOT_FOUND`（客户端可安全以同键重新创建）。\n- 鉴权：必须有有效 JWT；`key` 归属不符 → `403`。\n\n---\n\n## 8. 接口设计\n\n### 8.1 接口清单\n\n| 方法 | 路径 | 说明 | 幂等键 |\n| --- | --- | --- | --- |\n| POST | `/api/auth/sso/exchange` | 免登 code 换 JWT | 否 |\n| POST | `/api/auth/refresh` | 刷新访问令牌（校验员工状态与角色） | 否 |\n| GET | `/api/me` | 当前用户与角色 | 否 |\n| GET | `/api/rooms` | 会议室列表 | 否 |\n| GET | `/api/rooms/availability` | 指定日期空闲矩阵 | 否 |\n| POST | `/api/bookings` | 创建预约 | **是** |\n| GET | `/api/bookings` | 我的/全量预约列表（分页） | 否 |\n| GET | `/api/bookings/{id}` | 预约详情 | 否 |\n| POST | `/api/bookings/{id}/cancel` | 取消预约 | **是** |\n| GET | `/api/idempotency/{key}` | 幂等结果查询 | 否 |\n| POST | `/api/admin/employees/import` | 白名单批量导入 | **是** |\n| POST | `/api/admin/employees/{id}/bind` | 手工绑定/启用 | 否 |\n| PATCH | `/api/admin/employees/{id}` | 改角色/停用 | 否 |\n| GET | `/api/health` | 健康检查（含 DB 探活） | 否 |\n\n### 8.2 创建预约\n\n```http\nPOST /api/bookings\nIdempotency-Key: 3f6a1e0c-9b2d-4d1f-8a7e-2c5b4d9a1f33\nContent-Type: application/json\nAuthorization: Bearer <jwt>\n\n{ \"roomId\": 3, \"subject\": \"Q4 产品规划评审\", \"attendeeCount\": 8,\n  \"remark\": \"需投屏\",\n  \"startAt\": \"2026-10-13T01:00:00.000Z\", \"endAt\": \"2026-10-13T02:00:00.000Z\" }\n```\n\n201 响应：\n\n```json\n{ \"id\": 10241, \"roomId\": 3, \"roomName\": \"3F-301 松涛厅\", \"userId\": 887,\n  \"subject\": \"Q4 产品规划评审\", \"attendeeCount\": 8,\n  \"startAt\": \"2026-10-13T01:00:00.000Z\", \"endAt\": \"2026-10-13T02:00:00.000Z\",\n  \"status\": \"ACTIVE\", \"createdAt\": \"2026-10-12T09:12:33.114Z\" }\n```\n\n### 8.3 可用性矩阵\n\n```json\n{ \"date\": \"2026-10-13\", \"timezone\": \"Asia/Shanghai\", \"slotMinutes\": 15,\n  \"rooms\": [\n    { \"roomId\": 3, \"roomName\": \"3F-301 松涛厅\", \"capacity\": 10,\n      \"slots\": [\n        { \"start\": \"2026-10-13T00:00:00.000Z\", \"available\": true },\n        { \"start\": \"2026-10-13T00:15:00.000Z\", \"available\": false,\n          \"bookingId\": 10230, \"subject\": \"周会\" }\n      ] } ] }\n```\n\n### 8.4 错误码表\n\n| HTTP | code | 含义 | 前端处理 |\n| --- | --- | --- | --- |\n| 400 | `INVALID_ARGUMENT` | 参数缺失/格式错误 | 字段级提示 |\n| 400 | `MISSING_IDEMPOTENCY_KEY` | 写接口缺键 | 前端缺陷，埋点上报 |\n| 400 | `OUT_OF_BOOKING_WINDOW` | 早于当前或超出 14 天 | 提示可预约范围 |\n| 400 | `INVALID_SLOT_ALIGNMENT` | 未对齐 15 分钟 | 自动吸附边界 |\n| 400 | `EXCEED_MAX_DURATION` | 超过 4 小时 | 提示上限 |\n| 400 | `OUT_OF_BUSINESS_HOURS` | 超出 08:00–20:00 或跨日 | 禁用越界选择 |\n| 401 | `UNAUTHENTICATED` | 未登录/令牌过期 | 触发免登重取 |\n| 403 | `ACCOUNT_NOT_BOUND` | 免登通过但工号未绑定/已停用 | 展示\"请联系管理员绑定\"页，无登录表单 |\n| 403 | `FORBIDDEN` / `FORBIDDEN_IDEMPOTENCY_KEY` | 无权操作 / 键归属不符 | 提示无权限 |\n| 404 | `ROOM_NOT_FOUND` / `BOOKING_NOT_FOUND` | 资源不存在 | 刷新列表 |\n| 404 | `IDEMPOTENCY_KEY_NOT_FOUND` | 键无任何记录 | 允许以同键重新创建 |\n| 409 | `ROOM_SLOT_CONFLICT` | 时段被占（含 `conflictingSlots`、`alternatives`） | 高亮冲突 + 一键采用替代 |\n| 409 | `IDEMPOTENCY_KEY_CONFLICT` | 同键不同内容/跨接口/跨预约 | 提示并自动换新键重提 |\n| 425 | `IDEMPOTENCY_IN_PROGRESS` | 首次仍在处理 | 按 `Retry-After` 重试 |\n| 429 | `RATE_LIMITED` | 触发限流 | 退避重试 |\n| 500 | `INTERNAL_ERROR` | 服务异常（无提交记录） | 同键安全重试 |\n| 503 | `SERVICE_DEGRADED` | 数据库不可用/恢复中 | 退避重试，提示稍后再试 |\n\n---\n\n## 9. 鉴权与账号管理（B3）\n\n### 9.1 免登主路径\n\n1. 前端在企微/钉钉容器内取 `code` → `POST /api/auth/sso/exchange`。\n2. 服务端用 `code` 调 SSO 换 `userid`（工号），查 `employee`：\n   - 存在且 `status = 1` → 签发访问令牌（30 分钟）与刷新令牌（7 天），更新 `last_login_at`。\n   - 不存在或 `status = 0` → `403 ACCOUNT_NOT_BOUND`，前端展示静态指引页（含工号与管理员联系方式），**不提供任何登录表单**。\n3. `role` 一律从 `employee` 表读取后写入令牌，忽略客户端传入值。\n\n### 9.2 管理员兜底路径\n\n- **白名单导入**：`POST /api/admin/employees/import`，CSV/JSON 含 `employeeNo,name,dept,email,mobile,role`。双重幂等：`employee_no` 唯一约束 upsert（天然幂等，同文件重复导入不产生重复行）+ `Idempotency-Key` 防重复执行。单批上限 1000 行；逐行校验，返回 `{inserted, updated, failed:[{line, reason}]}`；全程写入审计日志。\n- **手工绑定/启用**：`POST /api/admin/employees/{id}/bind`，设置 `status = 1`、`bind_source = 2`、`bound_at = now()`。\n- **改角色/停用**：`PATCH /api/admin/employees/{id}`，写审计日志；停用不影响历史预约数据。\n\n### 9.3 无自助通道（明确约束）\n\n不提供注册、自助绑定、短信/邮件验证码、口令登录。所有账号变更必须由管理员完成并留痕。\n\n### 9.4 令牌与权限生效时效\n\n- 访问令牌 30 分钟（含 `userId, role, jti, exp`），刷新时**重新读取** `employee` 的 `status` 与 `role`。\n- 因此停用与角色变更最迟 30 分钟内生效；已签发令牌在有效期内仍可用（残余风险，见 15.2）。此选择避免每请求查库，保护性能。\n- 服务端密钥签名，令牌不落客户端可读存储以外的位置；HTTPS 全程。\n\n---\n\n## 10. 交互设计（桌面 + 移动）\n\n### 10.1 桌面 Web\n\n- 主页：**周视图时间轴矩阵**，横轴 6 间会议室，纵轴 08:00–20:00，15 分钟一格；占用格显示主题与预约人；空闲格支持拖拽选择连续区间。\n- 拖拽实时吸附 15 分钟并计算时长；超过 4 小时自动截断并提示。\n- 提交按钮点击瞬间生成幂等键并锁定按钮（防双击）；请求中显示骨架态；8 秒超时后**同键**自动重试一次，仍失败提示\"可安全重试\"并完整保留页面状态。\n- 键盘可达：矩阵支持方向键移动选区、Enter 提交。\n\n### 10.2 移动端 H5（企微/钉钉容器内）\n\n- 「日期条 + 会议室卡片 + 按小时分组的时间胶囊」，点选起点与终点确定连续区间，避免小屏拖拽。\n- 拇指热区不小于 44×44 px；底部固定\"确认预约\"按钮。\n- 与桌面端共用同一套 API 与同一套时间工具函数，避免语义漂移。\n- 4G 首屏不超过 2.0 s（路由级代码分割 + 静态资源强缓存）。\n\n### 10.3 异常态交互\n\n| 场景 | 交互 |\n| --- | --- |\n| 409 冲突 | **不清空表单**，就地高亮冲突槽位，展示推荐替代时段并支持一键采用（采用后**生成新键**） |\n| 24h 内幂等重放 | 用户体感等同于\"一次成功\"，绝不出现两条预约 |\n| 超期重放（`originalHttpStatus`） | 顶部提示条：\"这是你在 X 小时前提交的预约结果（当前状态：已取消/生效中）\" |\n| `425` | 按钮保持禁用，显示\"正在确认中…\"1 秒后自动重试（同键） |\n| `IDEMPOTENCY_KEY_CONFLICT` | 静默生成新键重提一次，同时埋点上报（属异常路径） |\n| `403 ACCOUNT_NOT_BOUND` | 整页替换为绑定指引，含工号与管理员联系方式 |\n| `500` / `503` | 保留表单，提示\"可安全重试\"，用户点击后同键重试 |\n| 个人日程重叠（B1） | 「我的预约」中该条目加\"时间重叠\"角标（本地计算，不发请求，不阻断提交） |\n\n### 10.4 可访问性与文案\n\n- 状态不得仅靠颜色区分，必须有文字或图标（色盲友好）。\n- 时间文案一律前端按 Asia/Shanghai 渲染，禁止直出 UTC 原串。\n\n---\n\n## 11. 性能设计\n\n### 11.1 量化目标\n\n| 指标 | 目标 |\n| --- | --- |\n| 创建预约接口 | p95 ≤ 300 ms，p99 ≤ 800 ms（服务端内部耗时） |\n| 冲突路径（含补偿写） | p95 ≤ 350 ms |\n| 可用性矩阵接口 | p95 ≤ 200 ms |\n| 列表接口 | p95 ≤ 250 ms |\n| 并发承载 | 200 并发写 / 500 并发读，错误率低于 0.1% |\n| 合法请求成功率 | ≥ 99.9%（不含业务 409） |\n| 超卖次数 | 恒为 0 |\n| 移动 H5 首屏 | 4G 下 ≤ 2.0 s |\n| 桌面首屏可交互 | ≤ 1.5 s |\n\n### 11.2 数据库层\n\n- 矩阵查询一次取回：`WHERE room_id = ANY(:ids) AND slot_start BETWEEN :d0 AND :d1`，无 N+1。\n- 槽位使用**单条多值 INSERT**（一次网络往返），非逐槽循环。\n- 业务校验放在事务**之前**（只读普通查询）；事务内只有写入与唯一约束判定，事务持有时间控制在 5 ms 量级；`SET LOCAL statement_timeout = 5s` 硬约束。\n- 连接池：副本数 × 10–20，总数不超过 `max_connections` 的 70%。\n- `booking_slot` 高频增删，配置更激进的 autovacuum 阈值，监控表大小与死元组比例。\n- 新增的永久唯一索引（`uk_booking_idem`、`uk_booking_last_cancel_key` partial）均为小基数索引，写入开销可忽略；`request_fingerprint` 为定长 CHAR(64)，行宽影响可忽略。\n- 清理任务按批 1000 条删除，避免长事务与锁放大。\n\n### 11.3 应用层\n\n- 读接口短 TTL 缓存：会议室列表 5 分钟（版本号失效）；单日矩阵 5 秒（仅吸收突发刷新，**不参与一致性判定**）。写接口完全绕过缓存。\n- 限流：按用户写 5 次/秒、读 20 次/秒；Redis 不可用时降级为进程内令牌桶。\n- gzip/brotli，矩阵响应压至 10 KB 以内。\n\n### 11.4 前端层\n\n- 矩阵用 CSS Grid 或虚拟滚动，桌面 288 格控制在一帧内渲染。\n- 路由级代码分割；矩阵请求做日期级缓存 + 并发去重。\n- 静态资源内容哈希 + 强缓存，二次访问走 304。\n- 不为 B1 的个人日程提示发起任何额外网络请求（纯本地计算）。\n\n### 11.5 抢订热点\n\n200 人抢同一时段时，唯一索引冲突是**最短拒绝路径**（无锁等待、无长事务）。`ON CONFLICT DO NOTHING ... RETURNING` 使冲突检测与冲突明细在一条语句内完成，无需异常路径重新查询即可给出精确 `conflictingSlots`。\n\n---\n\n## 12. 安全、审计与可观测\n\n### 12.1 安全\n\n- 全部参数化查询；`subject`、`remark` 长度与字符校验（禁控制字符）。\n- 幂等键与 `user_id` 强绑定，跨用户重放 `403`。\n- 所有写操作校验资源归属；管理员能力单独判权。\n- 不在日志中记录 JWT；`Idempotency-Key` 可记录（非机密）。\n\n### 12.2 审计\n\n创建、取消（含原因）、房间启停、白名单导入、绑定、角色变更全部写 `audit_log`，含操作者、目标、变更详情、时间。\n\n### 12.3 数据保留\n\n预约历史 2 年；幂等快照 24 小时；审计日志 1 年。\n\n### 12.4 指标（Prometheus）\n\n预约创建 QPS、成功率、409 冲突率、幂等命中率、**`idempotency_replay_over_ttl_total`（超期重放）**、**`idempotency_compensation_failed_total`**、幂等键冲突率、`425` 次数、p50/p95/p99 延迟、连接池使用率、唯一约束冲突计数、`booking_overlap_self_total`（B1 观测）、`auth_bind_required_total`。\n\n### 12.5 日志与追踪\n\n结构化 JSON，含 `traceId`、`userId`、`idempotencyKey`、`bookingId`、耗时；错误日志带 SQLSTATE；前端 → 服务 → 数据库全链路打点。\n\n### 12.6 告警\n\n- 5 分钟内 `ROOM_SLOT_CONFLICT` 比例异常升高；\n- p99 超过 1 s 持续 5 分钟；\n- 幂等清理任务失败；\n- **`idempotency_compensation_failed_total` 5 分钟内大于 10**；\n- **`idempotency_replay_over_ttl_total` 突增**（提示客户端未按要求换键）；\n- 数据库主从延迟超过 30 s。\n\n---\n\n## 13. 备份与灾难恢复\n\n- 每日全量 + WAL 归档；RPO ≤ 5 分钟，RTO ≤ 1 小时；恢复演练每季度一次。\n- 因幂等记录、`booking`、`booking_slot` 在**同一事务**提交，任意时间点恢复后三者必然一致，不会出现\"记录在、业务不在\"的孤儿幂等行。\n- 唯一可能的不一致是 409 补偿记录的丢失——它是自包含的（不引用 booking），丢失只导致一次冲突结果重算，无正确性影响。\n- 恢复期间写接口主动返回 `503 SERVICE_DEGRADED` 并熔断（只读可用），避免在不确定的数据集上生成新的键状态；恢复完成后先跑第 14.2 节一致性 SQL，全绿再放开写。\n- PITR 之后，最近 5 分钟内已提交但未归档的写可能丢失，其幂等记录同步丢失 → 同键重试会重新创建（不产生重复，因为原提交也已丢失）。该窗口在恢复公告中说明。\n\n---\n\n## 14. 可执行验收标准\n\n### 14.1 功能验收\n\n| 编号 | 用例 | 期望 |\n| --- | --- | --- |\n| F1 | 正常单次预约 | 201；矩阵对应槽位变为占用 |\n| F2 | 取消自己的预约 | 200；槽位立即释放；`booking.status = 2` |\n| F3 | 非管理员取消他人预约 | 403，数据不变 |\n| F4 | 越界时间（过去 / 超 14 天 / 跨日 / 超 4 小时 / 未对齐） | 对应 400 错误码，无数据写入 |\n| F5 | 停用会议室预约 | 404 或 403，无数据写入 |\n| F6 | 我的预约分页与状态筛选 | 数据正确，按 `start_at` 倒序 |\n| **F7（B1）** | 同一员工同一时段在 2 间会议室各创建 1 条 | **两条均 201**，无任何个人冲突校验或警告阻断 |\n| F8 | 管理员取消任意预约未填原因 | 400，要求补填原因 |\n\n### 14.2 并发与一致性验收\n\n| 编号 | 场景 | 期望 |\n| --- | --- | --- |\n| C1 | 200 并发抢订同一会议室同一时段 | **恰好 1 个 201，其余 409**；该 `(room_id, slot_start)` 仅 1 条槽位 |\n| C2 | 100 并发预约部分重叠时段 | 无任何两条生效预约重叠 |\n| C3 | 并发创建与取消同一预约 | 最终状态一致，无孤儿槽位 |\n| C4 | 全表跑批一致性校验 SQL | 两个脚本均返回 0 行 |\n\n```sql\n-- C4-1 孤儿槽位（期望 0）\nSELECT COUNT(*) FROM booking_slot s\nLEFT JOIN booking b ON b.id = s.booking_id AND b.status = 1\nWHERE b.id IS NULL;\n\n-- C4-2 槽位与预约不一致（期望 0 行）\nSELECT b.id\nFROM booking b JOIN booking_slot s ON s.booking_id = b.id\nWHERE b.status = 1\nGROUP BY b.id, b.start_at, b.end_at\nHAVING COUNT(s.slot_start) != EXTRACT(EPOCH FROM (b.end_at - b.start_at)) / 900\n    OR MIN(s.slot_start) != b.start_at\n    OR MAX(s.slot_start) != b.end_at - interval '15 minute';\n\n-- C4-3 永久键唯一性（期望 0 行）\nSELECT idempotency_key FROM booking GROUP BY idempotency_key HAVING COUNT(*) > 1;\n\n-- C4-4 幂等记录与预约的悬挂引用（期望 0 行）\nSELECT r.idempotency_key FROM idempotency_record r\nLEFT JOIN booking b ON b.id = r.booking_id\nWHERE r.booking_id IS NOT NULL AND b.id IS NULL;\n```\n\n### 14.3 幂等与恢复验收（含 B2）\n\n| 编号 | 场景 | 期望 |\n| --- | --- | --- |\n| I1 | 同键同内容并发/串行重复提交 10 次 | 全部返回同一 `id`；DB 仅 1 条 booking |\n| I2 | 同键换会议室/时段（24h 内） | `409 IDEMPOTENCY_KEY_CONFLICT`，无新数据 |\n| I3 | 首次 201 后重启服务，同键重试 | 返回原 201 与**同一** `bookingId` |\n| I4 | 同键首次为业务冲突 409 | 重试复现同一 409（同 code、同 `conflictingSlots`） |\n| I5 | 同键、24h 前提交、已取消，超期后重试 | `200` + 信封，`originalHttpStatus = 201`，`booking.status = CANCELLED`，**booking 行数不变** |\n| I6 | 他人使用我的键 | `403 FORBIDDEN_IDEMPOTENCY_KEY` |\n| I7 | 双击并发同键 | 一方 201/409，另一方 425 后重试得到相同结果 |\n| **I8（B2）** | 提交成功后立即 `kill -9` 服务，同键重试 | 返回原 `bookingId`，DB 仅 1 条 booking |\n| **I9（B2）** | 事务回滚后（注入故障）同键重试 | 允许真正创建成功，且仅 1 条 |\n| **I10（B2）** | 记录已清理 + 同键 + 指纹不同 | `409 IDEMPOTENCY_KEY_CONFLICT`，不新建 |\n| **I11（B2）** | 超过 24h 后同键重试（未查结果直接提交） | 由 `uk_booking_idem` 兜底返回原预约当前状态，**绝不新建第二笔** |\n| **I12（B2）** | `GET /api/idempotency/{key}` 在 24h 内 / 超期后 | 分别返回记录快照 / 当前状态信封；未知键返回 404 |\n| I13 | 同一取消键先后取消两笔不同预约 | 第二笔 `409 IDEMPOTENCY_KEY_CONFLICT`（partial unique index） |\n| I14 | 同一取消键重复取消同一预约 | 两次均 200，`last_cancel_key` 与 `cancelled_at` 不变 |\n| I15 | 同键第一次用于创建、第二次用于取消（24h 内） | `409 IDEMPOTENCY_KEY_CONFLICT`（endpoint 不一致） |\n\n### 14.4 鉴权与账号验收（B3）\n\n| 编号 | 场景 | 期望 |\n| --- | --- | --- |\n| A1 | 未绑定工号免登 | `403 ACCOUNT_NOT_BOUND`，前端展示绑定指引页，无登录表单 |\n| A2 | 已停用员工免登 | 同上被阻断，不签发令牌 |\n| A3 | 同一白名单文件重复导入两次 | 第二次 `inserted = 0`，`employee` 行数不变；两次均有审计日志 |\n| A4 | 管理员手工绑定后员工免登 | 成功签发令牌并可创建预约 |\n| A5 | 员工令牌未过期时被停用 | 访问令牌到期（≤30 分钟）后续期失败，被阻断 |\n| A6 | 客户端伪造 `role` 字段 | 被忽略，仍按数据库角色判权 |\n\n### 14.5 性能验收\n\n| 编号 | 场景 | 期望 |\n| --- | --- | --- |\n| P1 | 200 并发持续 5 分钟混合读写 | 写 p95 ≤ 300 ms、p99 ≤ 800 ms；错误率低于 0.1% |\n| P2 | 500 并发读矩阵 | p95 ≤ 200 ms |\n| P3 | 200 并发抢订同一时段 | 恰好 1 成功，无超卖，无死锁 |\n| P4 | 移动端 4G 首屏 | ≤ 2.0 s |\n| P5 | 连接池打满 | 快速失败 `503/429`，不雪崩 |\n| **P6** | 冲突路径（含补偿写）× 100 并发 | p95 ≤ 350 ms，补偿成功率 ≥ 99.9% |\n\n**指标口径**：\n- 预约成功率 = 2xx /（2xx + 5xx + 超时）。业务 409 不计入分母。\n- 超卖 = 任意时刻存在 `(room_id, slot_start)` 对应多于 1 条生效槽位记录，恒为 0。\n\n### 14.6 测试方法\n\n- k6 或 Locust 编写并发脚本；幂等飞检脚本对同一键并发 POST N 次；每次压测后跑 14.2 全部 SQL。\n- 崩溃恢复用 kill 注入 + 键重试脚本（I8/I9）。\n- 环境与生产同规格，数据规模一致（6 间房、14 天窗口）。\n- CI 必跑 C1/C2/I1/I2/I5/I8 六条关键用例 + 一致性 SQL。\n\n---\n\n## 15. 里程碑与风险\n\n### 15.1 里程碑\n\n| 阶段 | 内容 | 产出 |\n| --- | --- | --- |\n| M1（第 1 周） | 数据模型与迁移、免登 + 白名单导入、会议室只读接口 | 可登录、可查会议室与矩阵 |\n| M2（第 2 周） | 创建/取消事务 + 唯一约束 + 幂等模块（含补偿与超期兜底） | 写接口可用，C1/C2/I1/I2/I5/I8 通过 |\n| M3（第 3 周） | 桌面 Web 与移动 H5 全流程 + 全部异常态 | 双端可用，F1–F8、A1–A6 通过 |\n| M4（第 4 周） | 性能压测、可观测、审计、恢复演练、验收 | 第 14 节全量通过，可上线 |\n\n### 15.2 风险与对策\n\n| 风险 | 影响 | 对策 |\n| --- | --- | --- |\n| 客户端误复用旧键（超 24h） | 遇 `409` 或看到超期重放 | 前端在提交意图变化时强制换键；`idempotency_replay_over_ttl_total` 突增告警；超期重试强制先查 `/api/idempotency/{key}` |\n| 补偿写失败导致 409 不能稳定复现 | 极少数重试结果可能变化 | 埋点 + 告警；方向上偏\"用户能约上\"，不产生重复数据 |\n| `booking_slot` 高频增删膨胀 | 查询变慢 | 激进 autovacuum、批量清理、表大小与死元组监控 |\n| 令牌有效期内停用未即时生效 | 最坏 30 分钟内旧令牌仍可用 | 访问令牌 30 分钟短周期 + 续期查库；高风险场景由管理员手工改角色并通知 |\n| 个人重复占房（B1 允许） | 可能出现一人占多房 | 明确为策略；`booking_overlap_self_total` 观测；未来可平滑升级为配额或禁止 |\n| 未来需求扩展（周期会议、日历同步） | 模型需演进 | 槽位表天然兼容周期展开；API 预留 `/v2`；`booking` 预留扩展字段 |\n\n---\n\n## 16. 后续演进（非首期）\n\n周期会议（规则展开为多槽位、同事务整体判定）、日历双向同步（以 `booking` 为源做事件 ID 映射）、门口屏签到与超时释放（新增 `check_in` 表与状态机）、部门配额与审批（`booking` 前加 `PENDING` 预占态，通过后写槽位）、跨园区（`meeting_room` 增 `site_id`；**若引入有夏令时的时区，槽位对齐必须改为按本地时区计算**）、个人日程硬冲突（B1 升级为 409 `USER_TIME_CONFLICT`，仅需在事务前加一条只读查询，不影响既有结构）。\n\n---\n\n## 附录 A：实现自检清单\n\n1. 时间字段全部 `TIMESTAMPTZ`；API 出入参为带 `Z` 的 UTC ISO；前端按 Asia/Shanghai 渲染。\n2. `booking_slot` 主键 `(room_id, slot_start)`；槽位按 `slot_start` 升序、单条多值 INSERT、`ON CONFLICT DO NOTHING RETURNING`。\n3. 幂等记录、`booking`、`booking_slot` **同一事务**提交；不存在\"记录在、业务不在\"。\n4. 幂等补偿（409 快照）为独立短事务，失败可容忍且不阻塞响应。\n5. 永久唯一守卫：`uk_booking_idem`、`uk_booking_last_cancel_key`；TTL 只清理 `idempotency_record`。\n6. 超期重试由 `GET /api/idempotency/{key}` + 永久唯一约束双保险兜底，禁止新建第二笔。\n7. 指纹算法有单元测试，覆盖键序、空白、时间规范化差异不改指纹。\n8. 写接口强制 `Idempotency-Key`；键与 `user_id`、`endpoint` 双重绑定校验。\n9. 取消用行锁防双取消，删除槽位即时释放；已取消再取消返回 200。\n10. `lock_timeout = 3s` → 425 + `Retry-After`；`statement_timeout = 5s`；`deadlock_detected` 同键重试一次。\n11. 鉴权只信任服务端注入的 `userId/role`；未绑定/停用一律 `ACCOUNT_NOT_BOUND`，无自助入口。\n12. 矩阵接口无 N+1、单次查询；响应压缩开启；读缓存不参与一致性判定。\n13. CI 必跑 C1/C2/I1/I2/I5/I8 + 一致性 SQL 四条。\n14. 指标覆盖第 12.4 节全部项，告警阈值已配置并演练；恢复演练每季度一次。",
+  "hints": {
+    "first": "请只追加 1 道问题，深入明确预约请求已在服务器提交、但客户端网络超时后重试时的幂等处理。沿用本分支强一致和先提交者成功的结论，不重复提问。",
+    "invalid": "请只追加 1 道更深的问题，明确同一幂等键被用于不同请求内容时怎样处理，以及幂等结果应保留多久。沿用祖先已确认的客户端 Idempotency-Key 和数据库事务强一致方案。",
+    "retry": "请只追加 1 道更深的问题，明确同一 Idempotency-Key 对应不同请求内容时如何处理，以及结果保留多久。沿用已经确认的客户端 Idempotency-Key 与强一致方案。请严格使用平台要求的 workflow-clarify JSON 协议，每道问题必须包含 mindmap: {\"categoryPath\":[\"数据一致性\",\"并发冲突控制\"]}，kind 为 single，options 为 2 到 4 个选项。"
+  }
+}

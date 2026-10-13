@@ -5,6 +5,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { LoadingState } from '@/components/LoadingState'
 import {
   fitMindmap,
+  readableMindmapCamera,
   moveMindmapGesture,
   preserveMindmapAnchor,
   resizeMindmapCamera,
@@ -105,7 +106,7 @@ export function MindmapCanvas(props: Props) {
       worker.postMessage({
         revision: props.topologyRevision,
         rootId: props.rootId,
-        nodes: props.nodes.map(({ id, parentId, order }) => ({ id, parentId, order })),
+        nodes: props.nodes.map(({ id, parentId, order, kind }) => ({ id, parentId, order, kind })),
       })
     } catch {
       setLayoutError(true)
@@ -147,7 +148,7 @@ export function MindmapCanvas(props: Props) {
   }, [])
   useEffect(() => {
     if (layout && viewport.width && !cameraRef.current)
-      latest.current.onCameraChange(fitMindmap(layout.bounds, viewport))
+      latest.current.onCameraChange(readableMindmapCamera(layout.bounds, viewport))
   }, [layout, viewport])
   useEffect(() => {
     const request = props.revealRequest
@@ -253,6 +254,15 @@ export function MindmapCanvas(props: Props) {
         selectedId: props.selectedId,
         highlightPending: props.highlightPending,
         palette,
+        labels: {
+          status: {
+            done: t('mindmap.status.done'),
+            needs_detail: t('mindmap.status.needs_detail'),
+            needs_confirmation: t('mindmap.status.needs_confirmation'),
+          },
+          pending: (count) => t('mindmap.pendingChildren', { count }),
+          confirmed: t('mindmap.confirmed'),
+        },
       }).hits
       const mini = minimap.current
       if (!mini) return
@@ -291,6 +301,7 @@ export function MindmapCanvas(props: Props) {
     props.selectedId,
     props.highlightPending,
     themeVersion,
+    t,
   ])
 
   const pointOf = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -483,6 +494,15 @@ export function MindmapCanvas(props: Props) {
         </button>
         <button type="button" className="btn btn--sm" onClick={fit}>
           {t('mindmap.fit')}
+        </button>
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={() => {
+            if (layout) setCamera(readableMindmapCamera(layout.bounds, viewport))
+          }}
+        >
+          {t('mindmap.readable')}
         </button>
       </div>
       <button

@@ -23,6 +23,8 @@ import {
   sanitizeStateKey,
 } from './skeleton'
 import { runMindmapDesignScenario } from './mindmapDesignScenario'
+import { runRecordedDirectionsScenario } from './recordedDirectionsScenario'
+import { runRecordedMindmapScenario } from './recordedMindmapScenario'
 
 const NAME = 'stub-opencode-clarify'
 
@@ -37,6 +39,12 @@ export function run(argv: readonly string[]): void | Promise<void> {
   }
   const stateDir = ensureStateDir(process.env.CLARIFY_STUB_STATE, '/tmp/aw-e2e-clarify-state')
   emitPromptForContractTest(call.prompt)
+  if (process.env.CLARIFY_STUB_MINDMAP_SCENARIO === 'recorded-live-directions') {
+    return runRecordedDirectionsScenario(call.prompt, stateDir)
+  }
+  if (process.env.CLARIFY_STUB_MINDMAP_SCENARIO === 'recorded-live-design') {
+    return runRecordedMindmapScenario(call.prompt, stateDir)
+  }
   if (process.env.CLARIFY_STUB_MINDMAP_SCENARIO === 'complete-design') {
     return runMindmapDesignScenario(call.prompt, stateDir)
   }

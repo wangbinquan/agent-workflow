@@ -22,10 +22,20 @@ export const ClarifyQuestionMindmapSchema = z.object({
   requestId: z.string().max(64).optional(),
   requestBasis: z.string().max(128).optional(),
 })
-export const ClarifyFollowupSchema = z.object({
-  requestId: z.string().uuid(),
-  parentQuestionId: z.string().min(1).max(64),
-  basis: z.string().min(1).max(128),
-  instruction: z.string().trim().max(2000).default(''),
-})
+export const ClarifyFollowupSchema = z
+  .object({
+    requestId: z.string().uuid(),
+    parentQuestionId: z.string().min(1).max(64).optional(),
+    /** Empty means the root; a nonempty path selects an existing category. */
+    categoryPath: z.array(z.string().trim().min(1).max(120)).optional(),
+    basis: z.string().min(1).max(128),
+    instruction: z.string().trim().max(2000).default(''),
+  })
+  .refine(
+    (value) => (value.parentQuestionId !== undefined) !== (value.categoryPath !== undefined),
+    {
+      message: 'Choose one follow-up target: parentQuestionId or categoryPath.',
+    },
+  )
 export type ClarifyFollowup = z.infer<typeof ClarifyFollowupSchema>
+export type ClarifyFollowupTarget = string | readonly string[]

@@ -41,6 +41,7 @@ export function useClarifyFollowup(
         const request: ClarifyFollowup =
           previous?.basis === input.basis &&
           previous.parentQuestionId === input.parentQuestionId &&
+          JSON.stringify(previous.categoryPath) === JSON.stringify(input.categoryPath) &&
           previous.instruction === input.instruction
             ? previous
             : { ...input, requestId: crypto.randomUUID() }

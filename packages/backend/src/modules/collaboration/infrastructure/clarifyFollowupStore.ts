@@ -6,6 +6,7 @@ import {
   isMindmapRound,
   validateClarifyMindmap,
   type ClarifyDraftValue,
+  type ClarifyFollowupTarget,
   type ClarifyQuestion,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
@@ -32,7 +33,7 @@ export function createClarifyFollowupStore(
   const read = async (
     reader: Reader,
     nodeRunId: string,
-    parentId: string,
+    target: ClarifyFollowupTarget,
   ): Promise<ClarifyFollowupSnapshot> => {
     const round = (
       await reader
@@ -56,19 +57,17 @@ export function createClarifyFollowupStore(
         'Follow-up is only available in mindmap mode.',
       )
     if (!task) throw new NotFoundError('task-not-found', 'Task not found.')
-    if (!questions.some((q) => q.id === parentId))
-      throw new NotFoundError('clarify-question-not-found', 'Parent question not found.')
+    const targetIds =
+      typeof target === 'string'
+        ? [target]
+        : clarifyFollowupContext(questions, {}, target).map(({ question }) => question.id)
+    if (!targetIds.length || !questions.some((q) => q.id === targetIds[0]))
+      throw new NotFoundError('clarify-question-not-found', 'Question or category not found.')
     const sealed = await reader
-      .select({ id: taskQuestions.id })
+      .select({ questionId: taskQuestions.questionId })
       .from(taskQuestions)
-      .where(
-        and(
-          eq(taskQuestions.originNodeRunId, nodeRunId),
-          eq(taskQuestions.questionId, parentId),
-          isNotNull(taskQuestions.sealedAt),
-        ),
-      )
-      .limit(1)
+      .where(and(eq(taskQuestions.originNodeRunId, nodeRunId), isNotNull(taskQuestions.sealedAt)))
+    const sealedIds = new Set(sealed.map((row) => row.questionId))
 
     const definition = JSON.parse(task.workflowSnapshot) as WorkflowDefinition
     const gate = definition.nodes.find((n) => n.id === round.intermediaryNodeId)
@@ -77,7 +76,7 @@ export function createClarifyFollowupStore(
         round.status === 'awaiting_human' &&
         task.status !== 'done' &&
         task.status !== 'canceled' &&
-        sealed.length === 0,
+        targetIds.some((id) => !sealedIds.has(id)),
       roundId: round.id,
       taskId: round.taskId,
       askingNodeRunId: round.askingNodeRunId!,
@@ -98,11 +97,12 @@ export function createClarifyFollowupStore(
       return getTaskQuestionWriteSem(first.taskId).run(() => read(db, nodeRunId, parentId))
     },
     async append(nodeRunId, request, additions, signal, editor) {
-      const first = await read(db, nodeRunId, request.parentQuestionId)
+      const target = request.parentQuestionId ?? request.categoryPath!
+      const first = await read(db, nodeRunId, target)
       await getTaskQuestionWriteSem(first.taskId).run(async () => {
         await databaseSessionFor(db).transaction(async (tx) => {
           await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, first.taskId)
-          const current = await read(tx, nodeRunId, request.parentQuestionId)
+          const current = await read(tx, nodeRunId, target)
           if (!current.canAppend)
             throw new ConflictError(
               'clarify-followup-closed',
@@ -119,9 +119,8 @@ export function createClarifyFollowupStore(
             return
           }
           if (
-            clarifyContentKey(
-              clarifyFollowupContext(current.questions, current.drafts, request.parentQuestionId),
-            ) !== request.basis
+            clarifyContentKey(clarifyFollowupContext(current.questions, current.drafts, target)) !==
+            request.basis
           )
             throw new ConflictError(
               'clarify-followup-stale',
@@ -140,7 +139,7 @@ export function createClarifyFollowupStore(
         taskId: first.taskId,
         nodeRunId,
         roundId: first.roundId,
-        questionId: request.parentQuestionId,
+        questionId: request.parentQuestionId ?? additions[0]!.id,
         editor,
         occurredAt: Date.now(),
       })

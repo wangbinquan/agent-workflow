@@ -1,0 +1,421 @@
+{
+  "source": {
+    "home": "/Users/wangbinquan/.agent-workflow",
+    "baseUrl": "http://127.0.0.1:7456",
+    "frontendUrl": "http://localhost:5174",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "modelMocked": false,
+    "workflowId": "01M4SYYS43PHB4SYNQHS5HQT4D",
+    "taskId": "01M4SZ1T6KTD54544KPDVVT7NX",
+    "finalStatus": "done",
+    "outputRunId": "01M4T064E3D871CMY4491N10FW",
+    "roundId": "01M4SZ2XPXFE5ZTD3002XQFEQT",
+    "modelRuns": [
+      {
+        "id": "01M4SZ1XAEJB2YQEEBB6TN5RRA",
+        "runtime": "opencode",
+        "runtime_binary": null,
+        "runtime_params_json": "{\"model\":\"opencode-go/deepseek-v4.1-flash\",\"variant\":null,\"temperature\":null,\"steps\":null,\"maxSteps\":null,\"isSandbox\":false,\"extraArgs\":null,\"__configDir\":{\"env\":\"OPENCODE_CONFIG_DIR\",\"name\":\".opencode\"},\"__observation\":{\"registrationId\":\"01KW39XY46YJ08QMA6H3FK34WQ\",\"configurationRevision\":1,\"acceptedName\":\"opencode\"}}",
+        "opencode_session_id": "ses_ecc0ed36effef1hCXQs9UosQpN",
+        "tok_input": 1996,
+        "tok_output": 1514,
+        "tok_total": 3510,
+        "status": "done"
+      },
+      {
+        "id": "01M4T053CJA8NMFV9K44Z6F14R",
+        "runtime": "opencode",
+        "runtime_binary": null,
+        "runtime_params_json": "{\"model\":\"opencode-go/deepseek-v4.1-flash\",\"variant\":null,\"temperature\":null,\"steps\":null,\"maxSteps\":null,\"isSandbox\":false,\"extraArgs\":null,\"__configDir\":{\"env\":\"OPENCODE_CONFIG_DIR\",\"name\":\".opencode\"},\"__observation\":{\"registrationId\":\"01KW39XY46YJ08QMA6H3FK34WQ\",\"configurationRevision\":1,\"acceptedName\":\"opencode\"}}",
+        "opencode_session_id": "ses_ecbfd4050ffeSnimE3UY2E294D",
+        "tok_input": 2448,
+        "tok_output": 1649,
+        "tok_total": 4097,
+        "status": "done"
+      }
+    ],
+    "normalization": "Only question/agent IDs and request/confirmation tokens are normalized. Accepted questions, choices, instructions and final document are the actual daily AW run.",
+    "recoveredFailures": [
+      {
+        "stage": "category",
+        "error": "missing mindmap category: perf-slow-query-index-budget",
+        "outcome": "422 with no append; retried with an explicit nested mindmap example"
+      },
+      {
+        "stage": "root",
+        "error": "clarify-followup-timeout",
+        "outcome": "180-second native request timeout with no append; retried successfully"
+      }
+    ]
+  },
+  "workflow": {
+    "$schema_version": 7,
+    "inputs": [
+      {
+        "kind": "text",
+        "key": "topic",
+        "label": "设计主题",
+        "required": true
+      }
+    ],
+    "nodes": [
+      {
+        "id": "topic",
+        "kind": "input",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "inputKey": "topic"
+      },
+      {
+        "id": "designer",
+        "kind": "agent-single",
+        "position": {
+          "x": 280,
+          "y": 0
+        },
+        "agentId": "recorded-designer",
+        "promptTemplate": "RFC372_REAL_DIRECTIONS_ACCEPTANCE\n请设计{{topic}}。先按预置分类问两道关键问题：性能方向先问服务吞吐与响应目标，可靠性方向问故障恢复目标。每分类一道问题，categoryPath 直接用一个分类名称。提供 2–4 个清楚选项，说明推荐理由。后续收到用户确认后，输出 1500–2500 中文字的完整最终设计，包含全部已确认决策、数据库与服务性能、恢复、实现和验收。不要执行代码。"
+      },
+      {
+        "id": "clarify",
+        "kind": "clarify",
+        "position": {
+          "x": 280,
+          "y": 250
+        },
+        "title": "性能方向与数据库补充",
+        "interactionMode": "mindmap",
+        "mindmap": {
+          "categories": ["性能", "可靠性"],
+          "instructions": "按性能、可靠性分类，用中文给出具体决策问题。用户补充分类方向时，认真考虑用户指出的遗漏；只补充该方向未解决的 1–2 道问题。问题继续深入时结合祖先回答。每题必须提供 mindmap.categoryPath。"
+        }
+      },
+      {
+        "id": "output",
+        "kind": "output",
+        "position": {
+          "x": 920,
+          "y": 0
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "topic-designer",
+        "source": {
+          "nodeId": "topic",
+          "portName": "topic"
+        },
+        "target": {
+          "nodeId": "designer",
+          "portName": "topic"
+        }
+      },
+      {
+        "id": "designer-clarify",
+        "source": {
+          "nodeId": "designer",
+          "portName": "__clarify__"
+        },
+        "target": {
+          "nodeId": "clarify",
+          "portName": "questions"
+        }
+      },
+      {
+        "id": "clarify-designer",
+        "source": {
+          "nodeId": "clarify",
+          "portName": "answers"
+        },
+        "target": {
+          "nodeId": "designer",
+          "portName": "__clarify_response__"
+        }
+      },
+      {
+        "id": "designer-output",
+        "source": {
+          "nodeId": "designer",
+          "portName": "design"
+        },
+        "target": {
+          "nodeId": "output",
+          "portName": "design"
+        }
+      }
+    ]
+  },
+  "topic": "内部会议室预约服务的性能与可靠性设计。约500名员工，工作日峰值明显。先明确服务性能与故障恢复，再通过分类引导补齐数据库性能和用户体验。最后形成可以实施和验收的中文设计文档。",
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["性能"]
+      },
+      "id": "perf-throughput-latency",
+      "title": "性能：会议室预约服务在工作日峰值下的吞吐与响应目标定在哪一档？（约500名员工，工作日存在明显峰值）",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "峰值约 50 QPS（并发约 150–200）；查询类 P95 ≤ 200ms，预约/取消提交 P95 ≤ 500ms，峰值错误率 < 0.1%",
+          "description": "按 500 员工、高峰时段约 10% 同时在线、人均 1 次会话内 3–5 次查询 + 1 次提交估算。读多写少，缓存会议室列表与日历视图；单主库 + 只读副本即可承载。成本与实现复杂度适中，留 2–3 倍余量。",
+          "recommended": true,
+          "recommendationReason": "与 500 人规模、工作日集中预约的真实负载最匹配，性能有明确可验收指标但不为过度冗余付费。"
+        },
+        {
+          "label": "峰值约 150 QPS（并发约 400–500）；查询类 P95 ≤ 100ms，提交 P95 ≤ 300ms，峰值错误率 < 0.01%",
+          "description": "按更激进的峰值假设（如全员在 9:00 前 5 分钟集中抢约、外部系统批量同步）。需要多副本读写分离 + 分布式缓存 + 可能的预约分片，压测与容量规划成本明显上升。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "峰值约 20 QPS（并发约 50）；查询类 P95 ≤ 500ms，提交 P95 ≤ 1s，峰值错误率 < 1%",
+          "description": "按宽松峰值假设，单实例 + 单库即可，几乎不做缓存与限流。实现最省，但工作日早高峰可能出现排队与超时投诉。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["可靠性"]
+      },
+      "id": "reliability-rto-rpo",
+      "title": "可靠性：发生故障（数据库宕机、应用实例不可用、机房级故障）时，本服务承诺的恢复目标（RTO/RPO）与可用性等级是哪一档？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "可用性 99.9%（月停约 43 分钟）；RTO ≤ 5 分钟、RPO ≈ 0（服务内数据不丢）；数据库半同步主从 + 自动故障切换，应用多活部署",
+          "description": "预约数据不可丢失，宕机后自动切换到备库、应用实例无状态可滚动重建；配合健康检查、熔断、幂等重试与预约冲突兜底。运维复杂度中等，需要演练切换。",
+          "recommended": true,
+          "recommendationReason": "会议冲突与重复预约占用的后果严重（冲突数据难以人工修复），RPO≈0 + 分钟级 RTO 是内部办公场景性价比最高的可靠档位。"
+        },
+        {
+          "label": "可用性 99.5%（月停约 3.6 小时）；RTO ≤ 30 分钟、RPO ≤ 5 分钟；异步主从 + 人工确认切换，故障期间服务只读或短暂不可用",
+          "description": "最低成本方案，允许丢失最近几分钟的预约写入，需要人工介入切换。可接受的代价是高峰期故障会直接导致预约失败与员工投诉。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "可用性 99.99%（月停约 4 分钟）；RTO ≤ 1 分钟、RPO = 0；同城双活/多副本强一致写入 + 自动流量摘除",
+          "description": "面向核心生产的强可靠性目标，需要双活数据中心、强一致复制与自动化容灾编排，建设与演练成本高、延迟开销大。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能"]
+      },
+      "id": "db-query",
+      "title": "数据库慢查询与索引/SQL 预算如何约束？（会议室预约服务读多写少，日历视图与冲突校验是热点）",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "严格档：慢查询阈值 100ms，核心查询（会议室列表、日历视图、冲突校验）必须走索引，禁止全表扫描；上线前 SQL Review + EXPLAIN 门禁，P95 查询 ≤ 50ms",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "标准档：慢查询阈值 200ms，核心查询必须有可用索引，允许少量范围扫描；关键接口做 EXPLAIN 抽查，P95 查询 ≤ 100ms",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "宽松档：慢查询阈值 500ms，仅对高频查询建索引，其余按需优化；P95 查询 ≤ 200ms，问题出现后再治理",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能"]
+      },
+      "id": "db-pool",
+      "title": "数据库连接池与容量规划按哪一档配置？（需与已选峰值约 50 QPS、并发 150–200、查询 P95 ≤ 200ms／提交 P95 ≤ 500ms 匹配）",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "按峰值并预留 2–3 倍余量：单主库连接池 50–100，只读副本连接池 50–100；按 50 QPS 压测验证，CPU 与连接数利用率 ≤ 60%，并预留只读副本扩容路径",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按峰值等量配置：主库与副本各 30–50 连接，压测达标即可，不额外预留，超载时靠限流与排队降级",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按宽松档配置：连接池 20 左右，单实例单库，不设副本与连接级限流，容量上线后按监控逐步调整",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["性能"],
+        "parentQuestionId": "db-query"
+      },
+      "id": "index-regression",
+      "title": "高峰出现慢查询后，如何验收索引调整并防止回归？（标准档：慢查询阈值 200ms、关键接口 EXPLAIN 抽查、P95 ≤ 100ms 已定）",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "影子验证 + 灰度放量：变更前用生产脱敏的高峰慢查询做样本，在只读副本上重放并对比 EXPLAIN 与 P95，达标后才灰度放量；索引脚本与数据迁移分离，保留一键回滚，验收证据归档。",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "基准用例 + CI 门禁：把高峰慢查询固化为基准用例，对索引变更在 CI 跑 EXPLAIN 与微基准，P95 劣化超 10% 即阻断合并；上线后在 APM 设 P95 与慢查询计数告警，形成回归清单。",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "先上线再观测回滚：直接上线索引调整，用慢查询日志与 APM 在下一个高峰观察，配置 200ms/P95 100ms 告警，未达标按预案回退，事后补建回归用例。",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "双路径对比切换：用开关按流量比例并行新旧查询路径，实时对比索引命中率与 P95，确认无回归后逐步全量，出问题即关闭开关切回旧路径。",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["用户体验"]
+      },
+      "id": "ux-recovery",
+      "title": "用户体验：工作日高峰被限流或请求超时后，用户应看到什么提示与可执行的恢复操作？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "明确说明当前为高峰繁忙/超时，保留已填写的预约信息，给出预计可重试时间，并提供“一键重试”按钮",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "自动静默重试并展示排队进度，成功即完成，仅在超过阈值后提示失败并允许手动重试",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "直接提示“预约失败，请稍后再试”，不保留填写内容，用户自行重新发起预约",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "转为“预约请求已提交、处理中”的异步语义，后台确认后通知结果，前端展示处理中状态",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "questionId": "perf-throughput-latency",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": [
+        "峰值约 50 QPS（并发约 150–200）；查询类 P95 ≤ 200ms，预约/取消提交 P95 ≤ 500ms，峰值错误率 < 0.1%"
+      ],
+      "customText": ""
+    },
+    {
+      "questionId": "reliability-rto-rpo",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": [
+        "可用性 99.9%（月停约 43 分钟）；RTO ≤ 5 分钟、RPO ≈ 0（服务内数据不丢）；数据库半同步主从 + 自动故障切换，应用多活部署"
+      ],
+      "customText": ""
+    },
+    {
+      "questionId": "db-query",
+      "selectedOptionIndices": [1],
+      "selectedOptionLabels": [
+        "标准档：慢查询阈值 200ms，核心查询必须有可用索引，允许少量范围扫描；关键接口做 EXPLAIN 抽查，P95 查询 ≤ 100ms"
+      ],
+      "customText": ""
+    },
+    {
+      "questionId": "db-pool",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": [
+        "按峰值并预留 2–3 倍余量：单主库连接池 50–100，只读副本连接池 50–100；按 50 QPS 压测验证，CPU 与连接数利用率 ≤ 60%，并预留只读副本扩容路径"
+      ],
+      "customText": ""
+    },
+    {
+      "questionId": "index-regression",
+      "selectedOptionIndices": [1],
+      "selectedOptionLabels": [
+        "基准用例 + CI 门禁：把高峰慢查询固化为基准用例，对索引变更在 CI 跑 EXPLAIN 与微基准，P95 劣化超 10% 即阻断合并；上线后在 APM 设 P95 与慢查询计数告警，形成回归清单。"
+      ],
+      "customText": ""
+    },
+    {
+      "questionId": "ux-recovery",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": [
+        "明确说明当前为高峰繁忙/超时，保留已填写的预约信息，给出预计可重试时间，并提供“一键重试”按钮"
+      ],
+      "customText": ""
+    }
+  ],
+  "stages": [
+    {
+      "kind": "category",
+      "categoryPath": ["性能"],
+      "contextQuestionIds": ["perf-throughput-latency"],
+      "questionIds": ["db-query", "db-pool"],
+      "instruction": "请补齐数据库性能，分别询问慢查询/索引/SQL预算和连接池/容量，两道问题。上次输出缺少 mindmap 字段，被严格校验拒绝。必须逐题照此结构输出：<workflow-clarify>{\"questions\":[{\"id\":\"db-query\",\"title\":\"数据库查询预算如何确定？\",\"kind\":\"single\",\"options\":[\"方案A\",\"方案B\"],\"mindmap\":{\"categoryPath\":[\"性能\"]}}]}</workflow-clarify>。请替换成有意义的题目和选项，每题都保留嵌套的 mindmap.categoryPath，不要将 categoryPath 放在题目顶层。"
+    },
+    {
+      "kind": "deep",
+      "categoryPath": null,
+      "contextQuestionIds": ["db-query"],
+      "questionIds": ["index-regression"],
+      "instruction": "继续深入已选的标准档，只问一道：高峰出现慢查询时，如何验收索引调整并避免回归？请给出实际可执行的选择。每题输出嵌套字段 \"mindmap\":{\"categoryPath\":[\"性能\"]}，使用完整 workflow-clarify envelope，禁止顶层 categoryPath。"
+    },
+    {
+      "kind": "root",
+      "categoryPath": [],
+      "contextQuestionIds": [
+        "perf-throughput-latency",
+        "reliability-rto-rpo",
+        "db-query",
+        "db-pool",
+        "index-regression"
+      ],
+      "questionIds": ["ux-recovery"],
+      "instruction": "请从全图补充遗漏的用户体验方向，只问一道：高峰限流或超时后，用户应看到什么提示与可执行的恢复操作？不要重复服务和数据库指标。请简短输出完整结构：<workflow-clarify>{\"questions\":[{\"id\":\"ux-recovery\",\"title\":\"高峰限流或超时后如何提示用户并恢复？\",\"kind\":\"single\",\"options\":[\"自动重试并显示排队进度\",\"明确失败原因，保留填写内容，提供手动重试\"],\"mindmap\":{\"categoryPath\":[\"用户体验\"]}}]}</workflow-clarify>。可改进题目和选项，但每题保留嵌套 mindmap.categoryPath。"
+    }
+  ],
+  "finalDocument": "# 内部会议室预约服务 — 性能与可靠性设计文档（中文）\n\n## 一、目标与范围\n本服务面向约 500 名员工，工作日呈现明显峰值，主要为会议室查询、日历视图、预约提交与取消。设计以“性能优先、可实施、可验收”为原则：先锁定服务吞吐与响应、故障恢复两个硬指标，再补齐数据库性能、容量与用户体验，最终形成可落地、可量化验收的方案。范围覆盖应用层、数据库层、容灾与前端交互，不含代码实现。\n\n## 二、服务性能目标（已确认）\n- 峰值吞吐：约 50 QPS，对应并发 150–200。\n- 响应时延：查询类接口（会议室列表、日历视图、可用性查询）P95 ≤ 200ms；预约/取消提交类 P95 ≤ 500ms。\n- 峰值错误率：< 0.1%。\n- 性能预算：应用内部处理、数据库访问、序列化等各环节共享上述时延预算，任一环节劣化即触发告警；所有实现需在设计与编码阶段评估性能影响，避免上线后不可用。\n\n## 三、可靠性目标（已确认）\n- 可用性等级：99.9%，月停机约 43 分钟。\n- 恢复目标：RTO ≤ 5 分钟，RPO ≈ 0（服务内已确认数据不丢）。\n- 架构手段：数据库半同步主从 + 自动故障切换；应用多活部署，实例级故障不影响整体对外服务。\n- 故障域覆盖：单应用实例不可用、数据库主库宕机、机房级故障均需在 RTO 内恢复，切换过程对用户尽量透明。\n\n## 四、数据库性能与索引（已确认：标准档）\n- 慢查询阈值：200ms，超过即记录并进入治理队列。\n- 核心查询必须走可用索引，包括会议室列表、日历视图、冲突校验；允许少量范围扫描，但不得出现全表扫描。\n- 关键接口执行 EXPLAIN 抽查，作为上线与变更门禁的一部分。\n- 查询 P95 目标 ≤ 100ms（数据库层），为整体查询 P95 ≤ 200ms 留出应用与网络开销余量。\n- 冲突校验采用唯一约束 + 事务保障，避免并发重复预约；读多写少场景下日历视图优先走只读副本。\n\n## 五、连接池与容量规划（已确认）\n- 单主库连接池 50–100，只读副本连接池 50–100。\n- 按峰值并预留 2–3 倍余量，确保突发流量与故障切换时仍有承载能力。\n- 以 50 QPS 压测验证，要求 CPU 与连接数利用率 ≤ 60%；超出即视为容量不足。\n- 预留只读副本扩容路径：日历视图与查询流量可水平扩展至新增副本，写路径保持单主半同步。\n\n## 六、索引与慢查询变更的验收与防回归（已确认）\n- 将高峰慢查询固化为基准用例，形成可重复执行的性能基线。\n- 对索引变更在 CI 中执行 EXPLAIN 与微基准；P95 劣化超过 10% 即阻断合并。\n- 上线后在 APM 设置 P95 与慢查询计数告警，与 200ms 阈值联动。\n- 维护回归清单，每次索引或 SQL 变更后逐项核对，确保持续达标。\n\n## 七、故障恢复流程\n1. 应用层多活：实例健康检查失败即摘除流量，正常实例承接请求，用户无感知。\n2. 数据库层：主库异常时半同步从库提升为主，配合自动故障切换，RPO ≈ 0，整体在 RTO ≤ 5 分钟内恢复写入。\n3. 机房级故障：切换至备用可用区/机房的服务与数据副本，优先恢复查询，再恢复写入。\n4. 恢复后校验：核对数据一致性、连接池重建、慢查询与错误率回落到基线，确认后方可解除告警。\n\n## 八、用户体验（已确认）\n高峰限流或请求超时后：\n- 明确提示当前为“高峰繁忙/请求超时”，不暴露内部错误。\n- 保留用户已填写的预约信息（时间、会议室、参会人等），避免重复输入。\n- 给出预计可重试时间，并提供“一键重试”按钮。\n- 一键重试命中限流时继续沿用上述提示，不丢失表单内容；重试成功后正常返回预约结果。\n\n## 九、实现要点\n- 查询与写操作路径分离：读走副本、写走主库，避免相互争用。\n- 提交类接口设置幂等键，配合一键重试防止重复预约。\n- 前端统一限流/超时的降级文案与状态管理，保留表单状态。\n- 监控体系覆盖 QPS、P95、错误率、慢查询计数、连接池利用率、复制延迟与切换状态。\n- 全链路优先保证性能：热点查询缓存、必要的批量/异步处理，但不得牺牲数据一致性与 RPO ≈ 0 的承诺。\n\n## 十、验收标准\n1. 50 QPS 峰值压测：查询 P95 ≤ 200ms、提交 P95 ≤ 500ms、错误率 < 0.1%。\n2. 数据库层查询 P95 ≤ 100ms，慢查询 < 200ms，核心查询均走索引，无全表扫描。\n3. 容量验收：CPU 与连接数利用率 ≤ 60%，连接池按 50–100 配置且有 2–3 倍余量。\n4. 索引变更 CI 门禁生效：P95 劣化 > 10% 阻断合并；APM 告警与回归清单齐备。\n5. 故障演练：单实例故障无对外影响；主库切换 RTO ≤ 5 分钟、RPO ≈ 0；可用性达到 99.9%。\n6. 用户体验验收：高峰超时提示清晰、保留表单、给出重试时间且一键重试可用。"
+}

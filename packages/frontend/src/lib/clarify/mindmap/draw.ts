@@ -1,7 +1,13 @@
 import type { MindmapNodeStatus, MindmapNodeSummary } from './projection'
+import { pendingMindmapDescendants } from './navigation'
 import { screenToWorld, worldToScreen, type MindmapCamera, type MindmapViewport } from './geometry'
-import type { indexMindmapLayout } from './layout'
-import { type MindmapLayout, type MindmapLayoutNode } from './layout'
+import {
+  MINDMAP_CARD_WIDTH,
+  MINDMAP_QUESTION_HEIGHT,
+  type indexMindmapLayout,
+  type MindmapLayout,
+  type MindmapLayoutNode,
+} from './layout'
 
 export interface MindmapPalette {
   background: string
@@ -36,6 +42,32 @@ function shorten(ctx: CanvasRenderingContext2D, text: string, width: number): st
   }
   return chars.slice(0, low).join('') + '…'
 }
+/** Wrapping operates on code points; only the final preview line is abbreviated. */
+function previewLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  width: number,
+  count: number,
+): string[] {
+  const chars = Array.from(text.replace(/\s+/g, ' '))
+  const lines: string[] = []
+  let offset = 0
+  while (offset < chars.length && lines.length < count) {
+    if (lines.length === count - 1) {
+      lines.push(shorten(ctx, chars.slice(offset).join(''), width))
+      break
+    }
+    let end = offset + 1
+    while (
+      end < chars.length &&
+      ctx.measureText(chars.slice(offset, end + 1).join('')).width <= width
+    )
+      end++
+    lines.push(chars.slice(offset, end).join(''))
+    offset = end
+  }
+  return lines
+}
 function mark(
   ctx: CanvasRenderingContext2D,
   status: MindmapNodeStatus,
@@ -54,6 +86,8 @@ function mark(
   else ctx.arc(x, y, size, 0, Math.PI * 2)
   ctx.fill()
 }
+const overlaps = (a: MindmapHit, b: MindmapHit) =>
+  a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 
 export function drawMindmap(input: {
   ctx: CanvasRenderingContext2D
@@ -66,6 +100,11 @@ export function drawMindmap(input: {
   selectedId: string | null
   highlightPending: boolean
   palette: MindmapPalette
+  labels?: {
+    status: Record<MindmapNodeStatus, string>
+    pending(count: number): string
+    confirmed: string
+  }
 }): MindmapDrawing {
   const {
     ctx,
@@ -79,21 +118,33 @@ export function drawMindmap(input: {
     highlightPending,
     palette,
   } = input
+  const labels = input.labels ?? {
+    status: { done: 'Confirmed', needs_detail: 'Needs detail', needs_confirmation: 'To confirm' },
+    pending: (count: number) => `${count} follow-ups pending`,
+    confirmed: 'confirmed',
+  }
   ctx.clearRect(0, 0, viewport.width, viewport.height)
   ctx.fillStyle = palette.background
   ctx.fillRect(0, 0, viewport.width, viewport.height)
-  const corner = screenToWorld({ x: -220, y: -60 }, camera)
-  const end = screenToWorld({ x: viewport.width + 220, y: viewport.height + 60 }, camera)
-  const visible = index.query({ left: corner.x, top: corner.y, right: end.x, bottom: end.y })
+  // Query centers with the same world-space dimensions used by layout and hit testing.
+  const corner = screenToWorld({ x: 0, y: 0 }, camera)
+  const end = screenToWorld({ x: viewport.width, y: viewport.height }, camera)
+  const marginX = Math.max(MINDMAP_CARD_WIDTH / 2, 110 / camera.zoom)
+  const marginY = Math.max(MINDMAP_QUESTION_HEIGHT / 2, 18 / camera.zoom)
+  const visible = index.query({
+    left: corner.x - marginX,
+    top: corner.y - marginY,
+    right: end.x + marginX,
+    bottom: end.y + marginY,
+  })
   const dim = (node: MindmapNodeSummary | undefined) =>
     highlightPending && node?.status === 'done' && node.id !== selectedId
-  // Edges crossing the viewport must still appear when both endpoints are off screen.
   for (const item of layout.nodes) {
     if (!item.parentId) continue
     const parent = positions.get(item.parentId)
     if (!parent) continue
-    const a = worldToScreen(parent, camera),
-      b = worldToScreen(item, camera)
+    const a = worldToScreen({ x: parent.x, y: parent.y + parent.height / 2 }, camera)
+    const b = worldToScreen({ x: item.x, y: item.y - item.height / 2 }, camera)
     if (
       Math.max(a.x, b.x) < 0 ||
       Math.min(a.x, b.x) > viewport.width ||
@@ -102,106 +153,151 @@ export function drawMindmap(input: {
     )
       continue
     const node = nodes.get(item.id)
-    ctx.globalAlpha = dim(node) ? 0.12 : 0.4
+    ctx.globalAlpha = dim(node) ? 0.16 : 0.5
     ctx.strokeStyle = palette.status[node?.status ?? 'needs_detail']
-    ctx.lineWidth = item.id === selectedId ? 2 : 1
+    ctx.lineWidth = item.id === selectedId ? 2 : 1.3
     ctx.beginPath()
     ctx.moveTo(a.x, a.y)
-    ctx.bezierCurveTo((a.x + b.x) / 2, a.y, (a.x + b.x) / 2, b.y, b.x, b.y)
+    ctx.bezierCurveTo(a.x, (a.y + b.y) / 2, b.x, (a.y + b.y) / 2, b.x, b.y)
     ctx.stroke()
   }
   const hits: MindmapHit[] = []
-  const occupied = new Map<string, MindmapHit[]>()
-  const candidates = [...visible].sort((a, b) => {
-    if (a.id === selectedId) return -1
-    if (b.id === selectedId) return 1
-    if (a.depth !== b.depth) return a.depth - b.depth
-    const ap = nodes.get(a.id)?.status === 'done' ? 1 : 0
-    const bp = nodes.get(b.id)?.status === 'done' ? 1 : 0
-    return ap - bp
-  })
-  const labels: Array<{
-    item: MindmapLayoutNode
-    node: MindmapNodeSummary
-    x: number
-    y: number
-    width: number
-  }> = []
-  for (const item of candidates) {
-    const node = nodes.get(item.id)
-    if (!node) continue
-    const { x, y } = worldToScreen(item, camera)
-    const color = palette.status[node.status]
-    ctx.globalAlpha = dim(node) ? 0.22 : 1
-    ctx.fillStyle = color
-    ctx.strokeStyle = color
-    ctx.lineWidth = 1.8
-    const radius = camera.zoom < 0.2 ? 2 : 3.5
-    mark(ctx, node.status, x, y, radius)
-    hits.push({ id: item.id, left: x - 8, right: x + 8, top: y - 8, bottom: y + 8 })
-    const primary = item.depth <= 1 || item.id === selectedId
-    ctx.font = `${primary ? '600 ' : ''}12px system-ui, sans-serif`
-    const width = Math.min(
-      item.id === selectedId ? 196 : Math.max(72, Math.min(196, 240 * camera.zoom - 20)),
-      Math.max(60, ctx.measureText(node.title).width + 28),
+  ctx.textBaseline = 'middle'
+  if (camera.zoom >= 0.6) {
+    for (const item of visible) {
+      const node = nodes.get(item.id)
+      if (!node) continue
+      const { x, y } = worldToScreen(item, camera)
+      const scale = camera.zoom,
+        width = item.width * scale,
+        height = item.height * scale
+      const left = x - width / 2,
+        top = y - height / 2,
+        inset = 16 * scale
+      const selected = item.id === selectedId
+      ctx.globalAlpha = dim(node) ? 0.38 : 1
+      ctx.fillStyle = palette.surface
+      ctx.strokeStyle = selected ? palette.accent : palette.border
+      ctx.lineWidth = selected ? 2 : 1
+      ctx.beginPath()
+      ctx.roundRect(left, top, width, height, 10 * scale)
+      ctx.fill()
+      ctx.stroke()
+      const own = node.ownStatus ?? node.status
+      ctx.fillStyle = palette.status[own]
+      mark(ctx, own, left + inset, top + 19 * scale, 3.5 * scale)
+      ctx.font = `500 ${14 * scale}px system-ui, sans-serif`
+      if (node.kind === 'question')
+        ctx.fillText(
+          `Q${node.order + 1} · ${labels.status[own]}`,
+          left + 26 * scale,
+          top + 19 * scale,
+        )
+      ctx.font = `${node.kind === 'group' ? '600' : '500'} ${15 * scale}px system-ui, sans-serif`
+      ctx.fillStyle = palette.text
+      const lines = previewLines(
+        ctx,
+        node.title,
+        width - inset * 2 - (node.kind === 'group' ? 10 * scale : 0),
+        node.kind === 'question' ? 3 : 1,
+      )
+      lines.forEach((line, i) =>
+        ctx.fillText(
+          line,
+          left + inset + (node.kind === 'group' ? 10 * scale : 0),
+          top + (node.kind === 'group' ? 19 : 45 + i * 21) * scale,
+        ),
+      )
+      ctx.font = `${12.5 * scale}px system-ui, sans-serif`
+      ctx.fillStyle = palette.muted
+      const pending = pendingMindmapDescendants(node)
+      const total = node.counts.done + node.counts.needs_confirmation + node.counts.needs_detail
+      const footer =
+        node.kind === 'group'
+          ? `${node.counts.done} / ${total} ${labels.confirmed}`
+          : pending
+            ? labels.pending(pending)
+            : ''
+      if (footer)
+        ctx.fillText(
+          shorten(ctx, footer, width - inset * 2),
+          left + inset,
+          top + height - 16 * scale,
+        )
+      hits.push({ id: node.id, left, top, right: left + width, bottom: top + height })
+    }
+  } else {
+    // Overview preserves every status mark, with collision-free readable labels.
+    const occupied = new Map<string, MindmapHit[]>()
+    const candidates = [...visible].sort((a, b) =>
+      a.id === selectedId ? -1 : b.id === selectedId ? 1 : a.depth - b.depth,
     )
-    const left = x - width / 2,
-      top = y - 14
-    const rect = {
-      id: item.id,
-      left: left - 4,
-      top: top - 3,
-      right: left + width + 4,
-      bottom: top + 31,
+    const previews: Array<{ item: MindmapLayoutNode; node: MindmapNodeSummary; rect: MindmapHit }> =
+      []
+    for (const item of candidates) {
+      const node = nodes.get(item.id)
+      if (!node) continue
+      const { x, y } = worldToScreen(item, camera)
+      ctx.globalAlpha = dim(node) ? 0.25 : 1
+      ctx.fillStyle = palette.status[node.status]
+      mark(ctx, node.status, x, y, camera.zoom < 0.2 ? 2 : 4)
+      hits.push({ id: node.id, left: x - 6, top: y - 6, right: x + 6, bottom: y + 6 })
+      if (camera.zoom < 0.12 && item.depth > 2 && item.id !== selectedId) continue
+      ctx.font = '500 12px system-ui, sans-serif'
+      const width = Math.max(
+        40,
+        Math.min(200, item.width * camera.zoom - 8, ctx.measureText(node.title).width + 28),
+      )
+      const rect = {
+        id: node.id,
+        left: x - width / 2,
+        right: x + width / 2,
+        top: y - 15,
+        bottom: y + 15,
+      }
+      const keys: string[] = []
+      for (let gx = Math.floor((rect.left - 4) / 64); gx <= Math.floor((rect.right + 4) / 64); gx++)
+        for (
+          let gy = Math.floor((rect.top - 4) / 32);
+          gy <= Math.floor((rect.bottom + 4) / 32);
+          gy++
+        )
+          keys.push(`${gx}:${gy}`)
+      const padded = {
+        ...rect,
+        left: rect.left - 4,
+        top: rect.top - 4,
+        right: rect.right + 4,
+        bottom: rect.bottom + 4,
+      }
+      if (keys.some((key) => occupied.get(key)?.some((other) => overlaps(padded, other)))) continue
+      for (const key of keys) {
+        const bucket = occupied.get(key) ?? []
+        bucket.push(padded)
+        occupied.set(key, bucket)
+      }
+      previews.push({ item, node, rect })
     }
-    const keys: string[] = []
-    for (let gx = Math.floor((left - 4) / 24); gx <= Math.floor((left + width + 4) / 24); gx++) {
-      for (let gy = Math.floor((top - 3) / 16); gy <= Math.floor((top + 29) / 16); gy++)
-        keys.push(`${gx}:${gy}`)
+    for (const { item, node, rect } of previews.reverse()) {
+      ctx.globalAlpha = dim(node) ? 0.38 : 1
+      ctx.fillStyle = palette.surface
+      ctx.strokeStyle = item.id === selectedId ? palette.accent : palette.border
+      ctx.lineWidth = item.id === selectedId ? 2 : 1
+      ctx.beginPath()
+      ctx.roundRect(rect.left, rect.top, rect.right - rect.left, 30, 6)
+      ctx.fill()
+      ctx.stroke()
+      ctx.fillStyle = palette.status[node.status]
+      mark(ctx, node.status, rect.left + 10, rect.top + 15, 3)
+      ctx.fillStyle = palette.text
+      ctx.font = '500 12px system-ui, sans-serif'
+      ctx.fillText(
+        shorten(ctx, node.title, rect.right - rect.left - 28),
+        rect.left + 20,
+        rect.top + 15,
+      )
+      hits.push(rect)
     }
-    if (
-      item.id !== selectedId &&
-      (keys.some((key) =>
-        occupied
-          .get(key)
-          ?.some(
-            (other) =>
-              rect.left < other.right &&
-              rect.right > other.left &&
-              rect.top < other.bottom &&
-              rect.bottom > other.top,
-          ),
-      ) ||
-        (camera.zoom < 0.12 && item.depth > 2 && node.status === 'done'))
-    )
-      continue
-    for (const key of keys) {
-      const entries = occupied.get(key) ?? []
-      entries.push(rect)
-      occupied.set(key, entries)
-    }
-    labels.push({ item, node, x, y, width })
-  }
-  // Labels are above all marks/edges; selected labels draw last and stay readable.
-  for (const { item, node, x, y, width } of labels.reverse()) {
-    const selected = item.id === selectedId
-    const left = x - width / 2
-    ctx.globalAlpha = dim(node) ? 0.3 : 1
-    ctx.fillStyle = palette.surface
-    ctx.strokeStyle = selected ? palette.accent : palette.border
-    ctx.lineWidth = selected ? 2 : 1
-    ctx.beginPath()
-    ctx.roundRect(left, y - 14, width, 28, 6)
-    ctx.fill()
-    if (selected || item.depth <= 1) ctx.stroke()
-    ctx.fillStyle = palette.status[node.status]
-    ctx.strokeStyle = palette.status[node.status]
-    mark(ctx, node.status, left + 10, y, 3)
-    ctx.font = `${item.depth <= 1 || selected ? '600 ' : ''}12px system-ui, sans-serif`
-    ctx.fillStyle = palette.text
-    ctx.textBaseline = 'middle'
-    ctx.fillText(shorten(ctx, node.title, width - 26), left + 20, y)
-    hits.push({ id: item.id, left, top: y - 14, right: left + width, bottom: y + 14 })
   }
   ctx.globalAlpha = 1
   return { hits, visible: visible.length }

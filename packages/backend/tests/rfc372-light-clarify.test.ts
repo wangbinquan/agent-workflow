@@ -440,3 +440,157 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
     expect(JSON.parse((await map.read()).answersJson!)[0].selectedOptionIndices).toEqual([0])
   })
 })
+
+describeEachProvider(
+  'RFC-372 category and root directions share the original append lifecycle',
+  (h) => {
+    for (const kind of ['self', 'cross'] as const)
+      for (const categoryPath of [['Scope'], []])
+        test(`${kind}: ${categoryPath.length ? 'category' : 'root'} directions append peers and preserve prior answers`, async () => {
+          const fixture = await seed(h, kind)
+          const store = createClarifyFollowupStore(h.db, events)
+          await saveClarifyDraft({
+            db: h.db,
+            intermediaryNodeRunId: fixture.nodeRunId,
+            roundId: (await fixture.read()).id,
+            questionId: 'b',
+            value: answer(fixture.questions[1]!),
+            editor,
+            draftEvents: events,
+          })
+          const snapshot = await store.read(fixture.nodeRunId, categoryPath)
+          const context = clarifyFollowupContext(snapshot.questions, snapshot.drafts, categoryPath)
+          let calls = 0
+          const operations = createClarifyFollowupOperations(store, {
+            generate: async ({ prompt }) => {
+              calls++
+              expect(prompt).toContain(JSON.stringify(context))
+              expect(prompt).toContain('数据库性能')
+              expect(prompt).toContain(JSON.stringify({ categoryPath }).slice(1, -1))
+              return (
+                '<workflow-clarify>' +
+                JSON.stringify({
+                  questions: [
+                    { ...q('db'), mindmap: { categoryPath: ['Database'] } },
+                    { ...q('capacity'), mindmap: { categoryPath: ['Capacity'] } },
+                  ],
+                }) +
+                '</workflow-clarify>'
+              )
+            },
+          })
+          const request = {
+            requestId: randomUUID(),
+            categoryPath,
+            instruction: '也考虑数据库性能',
+            basis: clarifyContentKey(context),
+          }
+          const result = await operations.append(fixture.nodeRunId, request, editor)
+          expect(await operations.append(fixture.nodeRunId, request, editor)).toEqual(result)
+          expect(
+            await createClarifyFollowupOperations(store, {
+              generate: async () => {
+                throw new Error('must replay')
+              },
+            }).append(fixture.nodeRunId, request, editor),
+          ).toEqual(result)
+          expect(calls).toBe(1)
+          const row = await fixture.read()
+          const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
+          expect(questions.slice(0, 2)).toEqual(fixture.questions)
+          expect(questions.slice(2).map((question) => question.mindmap?.categoryPath)).toEqual(
+            categoryPath.length ? [['Scope'], ['Scope']] : [['Database'], ['Capacity']],
+          )
+          expect(
+            questions
+              .slice(2)
+              .every((question) => question.mindmap?.parentQuestionId === undefined),
+          ).toBe(true)
+          expect(JSON.parse(row.draftAnswersJson!).b.confirmedBasis).toBe(
+            answer(fixture.questions[1]!).confirmedBasis,
+          )
+          await expect(
+            operations.append(
+              fixture.nodeRunId,
+              { ...request, categoryPath: ['Scope', 'unknown'] },
+              editor,
+            ),
+          ).rejects.toThrow('not found')
+          await expect(
+            operations.append(fixture.nodeRunId, { ...request, instruction: 'other' }, editor),
+          ).rejects.toThrow('request ID')
+        })
+
+    test('category generation rejects stale answers and cancellation, and honors partially/finally sealed branches', async () => {
+      const fixture = await seed(h)
+      const store = createClarifyFollowupStore(h.db, events)
+      await sealRoundQuestions({
+        db: h.db,
+        originNodeRunId: fixture.nodeRunId,
+        answers: [answer(fixture.questions[0]!)],
+      })
+      expect((await store.read(fixture.nodeRunId, ['Scope'])).canAppend).toBe(true)
+      for (const effect of ['edit', 'cancel'] as const) {
+        const snapshot = await store.read(fixture.nodeRunId, ['Scope'])
+        let start!: () => void, finish!: () => void
+        const started = new Promise<void>((resolve) => {
+          start = resolve
+        })
+        const gate = new Promise<void>((resolve) => {
+          finish = resolve
+        })
+        const ops = createClarifyFollowupOperations(store, {
+          generate: async ({ prompt }) => {
+            expect(prompt).toContain('selectedOptionIndices')
+            start()
+            await gate
+            return generated
+          },
+        })
+        const request = {
+          requestId: randomUUID(),
+          categoryPath: ['Scope'],
+          instruction: '',
+          basis: clarifyContentKey(
+            clarifyFollowupContext(snapshot.questions, snapshot.drafts, ['Scope']),
+          ),
+        }
+        const outcome = ops
+          .append(fixture.nodeRunId, request, editor)
+          .catch((error: unknown) => error)
+        await started
+        if (effect === 'edit')
+          await saveClarifyDraft({
+            db: h.db,
+            intermediaryNodeRunId: fixture.nodeRunId,
+            roundId: snapshot.roundId,
+            questionId: 'b',
+            value: { selectedOptionIndices: [1], customText: '' },
+            editor,
+            draftEvents: events,
+          })
+        else await ops.cancel(fixture.nodeRunId, request.requestId)
+        finish()
+        expect(await outcome).toMatchObject({
+          code: effect === 'edit' ? 'clarify-followup-stale' : 'clarify-followup-canceled',
+        })
+        expect(JSON.parse((await fixture.read()).questionsJson)).toHaveLength(2)
+      }
+      await sealRoundQuestions({
+        db: h.db,
+        originNodeRunId: fixture.nodeRunId,
+        answers: [answer(fixture.questions[1]!)],
+      })
+      for (const target of [[], ['Scope']])
+        expect((await store.read(fixture.nodeRunId, target)).canAppend).toBe(false)
+      await expect(store.read(fixture.nodeRunId, ['Scope extra'])).rejects.toThrow('not found')
+      await expect(
+        createClarifyFollowupOperations(store, { generate: async () => generated }).append(
+          fixture.nodeRunId,
+          { requestId: randomUUID(), categoryPath: ['Scope'], instruction: '', basis: 'stale' },
+          editor,
+        ),
+      ).rejects.toThrow('no longer accepts')
+    })
+  },
+)

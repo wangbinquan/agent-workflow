@@ -50,6 +50,8 @@ export interface QuestionFormProps {
   onChange: (next: ClarifyAnswer) => void
   /** When true, all inputs are disabled (post-submit / WS race lock). */
   disabled?: boolean
+  /** Mindmap's reading pane already owns the full question heading. */
+  hideHeading?: boolean
   /**
    * Called when the reviewer signals "advance to next question": pressing
    * Enter (outside the custom textarea), or — for single-choice — picking
@@ -66,7 +68,7 @@ export interface QuestionFormHandle {
 }
 
 export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(function QuestionForm(
-  { question, value, index, onChange, disabled, onAdvance },
+  { question, value, index, onChange, disabled, hideHeading, onAdvance },
   forwardedRef,
 ) {
   const { t } = useTranslation()
@@ -295,11 +297,14 @@ export const QuestionForm = forwardRef<QuestionFormHandle, QuestionFormProps>(fu
       className={'clarify-question' + ` clarify-question--${question.kind}`}
       data-question-id={question.id}
       data-testid={`clarify-question-${question.id}`}
+      aria-label={hideHeading ? question.title : undefined}
     >
-      <div className="clarify-question__header">
-        <span className="clarify-question__index">{`Q${index}.`}</span>
-        <span className="clarify-question__title">{question.title}</span>
-      </div>
+      {!hideHeading && (
+        <div className="clarify-question__header">
+          <span className="clarify-question__index">{`Q${index}.`}</span>
+          <span className="clarify-question__title">{question.title}</span>
+        </div>
+      )}
       <div className="clarify-question__options" role={isSingle ? 'radiogroup' : 'group'}>
         {question.options.map((opt, idx) => {
           const checked = isSingle

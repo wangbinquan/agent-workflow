@@ -6,12 +6,19 @@ export interface MindmapLayoutNode extends MindmapPoint {
   parentId: string | null
   depth: number
   side: -1 | 0 | 1
+  width: number
+  height: number
 }
 export interface MindmapLayout {
   nodes: MindmapLayoutNode[]
   bounds: MindmapBounds
 }
-export type MindmapTopologyNode = Pick<MindmapNodeSummary, 'id' | 'parentId' | 'order'>
+export type MindmapTopologyNode = Pick<MindmapNodeSummary, 'id' | 'parentId' | 'order'> &
+  Partial<Pick<MindmapNodeSummary, 'kind'>>
+
+export const MINDMAP_CARD_WIDTH = 236
+export const MINDMAP_QUESTION_HEIGHT = 132
+export const MINDMAP_GROUP_HEIGHT = 64
 
 /** Iterative linear traversal: depth never consumes the JavaScript call stack. */
 export function layoutMindmap(
@@ -37,7 +44,18 @@ export function layoutMindmap(
     siblings.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   const ordered: MindmapLayoutNode[] = []
   const visited = new Set<string>()
-  const stack: MindmapLayoutNode[] = [{ id: rootId, parentId: null, depth: 0, side: 0, x: 0, y: 0 }]
+  const stack: MindmapLayoutNode[] = [
+    {
+      id: rootId,
+      parentId: null,
+      depth: 0,
+      side: 0,
+      x: 0,
+      y: 0,
+      width: MINDMAP_CARD_WIDTH,
+      height: MINDMAP_GROUP_HEIGHT,
+    },
+  ]
   while (stack.length) {
     const node = stack.pop()!
     if (visited.has(node.id)) throw new Error('mindmap-topology-cycle')
@@ -46,42 +64,51 @@ export function layoutMindmap(
     const siblings = children.get(node.id) ?? []
     for (let index = siblings.length - 1; index >= 0; index--) {
       const child = siblings[index]!
-      const side = node.side || (index % 2 === 0 ? 1 : -1)
       stack.push({
         id: child.id,
         parentId: node.id,
         depth: node.depth + 1,
-        side,
-        x: side * (node.depth + 1) * 240,
+        side: 0,
+        width: MINDMAP_CARD_WIDTH,
+        height: child.kind === 'question' ? MINDMAP_QUESTION_HEIGHT : MINDMAP_GROUP_HEIGHT,
+        x: 0,
         y: 0,
       })
     }
   }
   if (visited.size !== topology.length) throw new Error('mindmap-topology-disconnected')
   const positions = new Map(ordered.map((node) => [node.id, node]))
-  const cursors = { '-1': 0, '0': 0, '1': 0 }
-  // Postorder places parents midway between their children; sibling order remains stable.
-  for (let index = ordered.length - 1; index >= 1; index--) {
+  const widths = new Map<string, number>()
+  // Reserve the entire subtree before positioning any sibling. Cards and hit areas
+  // use the same dimensions, including long question previews and progress lines.
+  for (let index = ordered.length - 1; index >= 0; index--) {
     const node = ordered[index]!
     const siblings = children.get(node.id) ?? []
-    if (siblings.length) {
-      node.y =
-        (positions.get(siblings[0]!.id)!.y + positions.get(siblings[siblings.length - 1]!.id)!.y) /
-        2
-    } else {
-      node.y = cursors[node.side]
-      cursors[node.side] += 48
+    widths.set(
+      node.id,
+      Math.max(
+        node.width,
+        siblings.reduce((sum, child) => sum + widths.get(child.id)!, 0) +
+          Math.max(0, siblings.length - 1) * 32,
+      ),
+    )
+  }
+  for (const node of ordered) {
+    let cursor = node.x - widths.get(node.id)! / 2
+    for (const child of children.get(node.id) ?? []) {
+      const point = positions.get(child.id)!
+      const width = widths.get(child.id)!
+      point.x = cursor + width / 2
+      point.y = node.y + node.height / 2 + 28 + point.height / 2
+      cursor += width + 32
     }
   }
+  const bounds = { left: 0, top: 0, right: 0, bottom: 0 }
   for (const node of ordered) {
-    if (node.side) node.y = Math.max(0, cursors[node.side] - 48) / 2 - node.y
-  }
-  const bounds = { left: -100, top: -28, right: 100, bottom: 28 }
-  for (const node of ordered) {
-    bounds.left = Math.min(bounds.left, node.x - 100)
-    bounds.right = Math.max(bounds.right, node.x + 100)
-    bounds.top = Math.min(bounds.top, node.y - 24)
-    bounds.bottom = Math.max(bounds.bottom, node.y + 24)
+    bounds.left = Math.min(bounds.left, node.x - node.width / 2)
+    bounds.right = Math.max(bounds.right, node.x + node.width / 2)
+    bounds.top = Math.min(bounds.top, node.y - node.height / 2)
+    bounds.bottom = Math.max(bounds.bottom, node.y + node.height / 2)
   }
   return { nodes: ordered, bounds }
 }

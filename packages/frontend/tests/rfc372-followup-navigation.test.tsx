@@ -85,3 +85,22 @@ test('navigation during draft flush retains the original request context and can
   })
   expect(result.current.pending).toBe(false)
 })
+
+test('category retries retain identity only for the same path and instruction', async () => {
+  vi.mocked(api.post).mockClear().mockRejectedValue(new Error('lost response'))
+  const { result } = renderHook(() => useClarifyFollowup('A', async () => {}))
+  const call = async (categoryPath: string[]) =>
+    act(async () => {
+      await result.current
+        .start({ categoryPath, basis: 'same', instruction: 'database' }, async () => {})
+        .catch(() => {})
+    })
+  await call(['Performance'])
+  await call(['Performance'])
+  await call(['Data'])
+  await call([])
+  const requests = vi.mocked(api.post).mock.calls.map((call) => call[1] as { requestId: string })
+  expect(requests[0]!.requestId).toBe(requests[1]!.requestId)
+  expect(requests[1]!.requestId).not.toBe(requests[2]!.requestId)
+  expect(requests[2]!.requestId).not.toBe(requests[3]!.requestId)
+})

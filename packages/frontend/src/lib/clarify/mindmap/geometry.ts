@@ -37,6 +37,15 @@ export function fitMindmap(bounds: MindmapBounds, viewport: MindmapViewport): Mi
     y: viewport.height / 2 - ((bounds.top + bounds.bottom) * zoom) / 2,
   }
 }
+/** A whole graph can be arbitrarily wide/deep. Initial reading never shrinks text
+ * below the readable card scale; the explicit overview control still fits all. */
+export function readableMindmapCamera(
+  bounds: MindmapBounds,
+  viewport: MindmapViewport,
+): MindmapCamera {
+  const fit = fitMindmap(bounds, viewport)
+  return fit.zoom >= 0.8 ? fit : { zoom: 0.85, x: viewport.width / 2, y: 64 }
+}
 export function zoomMindmapAt(
   camera: MindmapCamera,
   anchor: MindmapPoint,

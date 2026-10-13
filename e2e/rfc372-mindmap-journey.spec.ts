@@ -55,11 +55,15 @@ async function waitRound(taskId: string, kind: Round['kind']): Promise<Round> {
 }
 const detail = (page: Page) => page.locator('.mindmap-workspace__detail')
 async function select(page: Page, title: string) {
+  if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape')
   await page
-    .getByRole('button', { name: new RegExp(title) })
+    .getByRole('treeitem', { name: new RegExp(title) })
+    .or(page.getByRole('option', { name: new RegExp(title) }))
     .first()
     .click()
   await expect(detail(page).getByRole('heading', { name: title, exact: true })).toBeVisible()
+  if (await page.getByRole('dialog').isVisible())
+    await page.getByRole('button', { name: 'Open in focused answers' }).click()
 }
 async function answer(page: Page, title: string, options: string[], custom?: string) {
   await select(page, title)
@@ -73,9 +77,16 @@ async function answer(page: Page, title: string, options: string[], custom?: str
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
 }
 async function followup(page: Page, hint: string, title: string) {
+  const deepen = page.getByRole('button', { name: 'Deepen this question', exact: true })
+  if ((await deepen.getAttribute('aria-expanded')) !== 'true') await deepen.click()
   await detail(page).getByRole('textbox').last().fill(hint)
   await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
-  await expect(page.getByRole('button', { name: new RegExp(title) }).first()).toBeVisible({
+  await expect(
+    page
+      .getByRole('treeitem', { name: new RegExp(title) })
+      .or(page.getByRole('option', { name: new RegExp(title) }))
+      .first(),
+  ).toBeVisible({
     timeout: 90_000,
   })
 }
@@ -256,7 +267,7 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await expect(page.getByRole('button', { name: 'Confirm this answer', exact: true })).toBeEnabled()
   await page
     .getByRole('radiogroup', { name: 'View', exact: true })
-    .getByRole('radio', { name: 'Focused branch' })
+    .getByRole('radio', { name: 'Focused answers' })
     .click()
   await expect(detail(page).getByLabel('仅会议室预约', { exact: false })).toBeChecked()
   await page.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
@@ -273,6 +284,7 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await answer(page, '预约数据采用哪种一致性？', ['事务强一致'])
 
   // Cancel a real running model subprocess, then recover from invalid model output.
+  await page.getByRole('button', { name: 'Deepen this question', exact: true }).click()
   await detail(page).getByRole('textbox').last().fill('验证取消恢复')
   await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
   await expect
@@ -309,7 +321,10 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   ).toBe(true)
   // Parent confirmation cannot hide its still-unanswered descendants.
   await page.getByRole('button', { name: 'Collapse children', exact: true }).click()
-  await expect(detail(page).locator(':scope > .mindmap-status--needs_detail')).toBeVisible()
+  await expect(
+    detail(page).locator('.mindmap-question__eyebrow .mindmap-status--done'),
+  ).toBeVisible()
+  await expect(detail(page).getByText('2 child questions pending', { exact: true })).toBeVisible()
   await expect(page.getByText('This round is reviewed and ready to submit.')).toHaveCount(0)
   await page
     .getByRole('textbox', { name: 'Search categories or questions' })
@@ -341,6 +356,7 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await expect(
     page.getByRole('button', { name: 'Highlight pending', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: /Back to mindmap/ }).click()
   const canvas = page.getByRole('img', { name: 'Clarification mindmap' })
   await canvas.focus()
   await page.keyboard.press('ArrowRight')

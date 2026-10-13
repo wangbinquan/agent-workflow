@@ -532,7 +532,7 @@ export function ClarifyDetailPage() {
     qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(originNodeRunId) }),
   )
   const followupPending = followup.pending
-  const startFollowup = async (questionId: string, instruction: string) => {
+  const startFollowup = async (target: string | readonly string[], instruction: string) => {
     const current = session.data
     const controller = durabilityRef.current
     if (!current || !controller || followupPending) return
@@ -542,13 +542,22 @@ export function ClarifyDetailPage() {
       clarifyFollowupContext(
         current.questions,
         effectiveClarifyAnswers(answersRef.current, current.answers),
-        questionId,
+        target,
       ),
     )
-    await followup.start({ parentQuestionId: questionId, basis, instruction }, async () => {
-      await controller.flushLocal()
-      await controller.flushServer()
-    })
+    await followup.start(
+      {
+        ...(typeof target === 'string'
+          ? { parentQuestionId: target }
+          : { categoryPath: [...target] }),
+        basis,
+        instruction,
+      },
+      async () => {
+        await controller.flushLocal()
+        await controller.flushServer()
+      },
+    )
   }
   const cancelFollowup = followup.cancel
   const [crossWaiting, setCrossWaiting] = useState<{ pending: string[] } | null>(null)
@@ -784,9 +793,10 @@ export function ClarifyDetailPage() {
           question={q}
           value={a}
           index={idx + 1}
+          hideHeading={mindmapMode}
           disabled={readonly || submitMut.isPending || locked}
           onChange={(next) => updateAnswer(q.id, next)}
-          onAdvance={() => advanceFromQuestion(q.id)}
+          onAdvance={mindmapMode ? undefined : () => advanceFromQuestion(q.id)}
         />
         {/* RFC-099 (D7/D8): per-question last editor, live while
                   drafting and frozen after submit. Audit display only. */}
@@ -846,7 +856,7 @@ export function ClarifyDetailPage() {
 
   return (
     <div
-      className="page page--clarify-detail"
+      className={`page page--clarify-detail${mindmapMode ? ' page--mindmap' : ''}`}
       data-testid="clarify-detail-page"
       data-status={s.status}
       data-kind={s.kind}
@@ -1054,7 +1064,7 @@ export function ClarifyDetailPage() {
         </StatusChip>
       )}
 
-      {!readonly && (
+      {!readonly && !mindmapMode && (
         <p className="muted clarify-detail__keyboard-hint" data-testid="clarify-keyboard-hint">
           {t('clarify.detail.keyboardHint')}
         </p>
@@ -1084,6 +1094,7 @@ export function ClarifyDetailPage() {
             answers={answers}
             locked={lockedQuestionIds}
             disabled={readonly || submitMut.isPending}
+            roundStatus={s.status}
             followupPending={followupPending}
             onChange={updateAnswer}
             onFollowup={startFollowup}
@@ -1105,39 +1116,41 @@ export function ClarifyDetailPage() {
           {draftStatusLabel}
         </span>
         {/* RFC-162: scope-distribution submit hint removed (scope deleted). */}
-        <div className="clarify-detail__submit-group" data-testid="clarify-submit-group">
-          <button
-            ref={submitContinueRef}
-            type="button"
-            className="btn btn--primary"
-            disabled={
-              readonly || submitMut.isPending || allLocked || followupPending || mindmapIncomplete
-            }
-            onClick={() => submitMut.mutate('continue')}
-            data-testid="clarify-submit-continue"
-            data-directive="continue"
-          >
-            {t('clarify.detail.submitContinue')}
-          </button>
-          {/* Both self- and cross-clarify share one secondary button:
+        {(!mindmapMode || !readonly) && (
+          <div className="clarify-detail__submit-group" data-testid="clarify-submit-group">
+            <button
+              ref={submitContinueRef}
+              type="button"
+              className="btn btn--primary"
+              disabled={
+                readonly || submitMut.isPending || allLocked || followupPending || mindmapIncomplete
+              }
+              onClick={() => submitMut.mutate('continue')}
+              data-testid="clarify-submit-continue"
+              data-directive="continue"
+            >
+              {t('clarify.detail.submitContinue')}
+            </button>
+            {/* Both self- and cross-clarify share one secondary button:
               ghost-styled "Submit & stop clarifying" that opens a confirm
               modal before actually firing the 'stop' directive. The modal
               copy differs per kind (cross is irreversible across loop
               iterations; self is iteration-scoped) but the button surface
               is identical so the two pages read the same. */}
-          <button
-            type="button"
-            className="btn btn--ghost"
-            disabled={
-              readonly || submitMut.isPending || allLocked || followupPending || mindmapIncomplete
-            }
-            onClick={() => setStopModalOpen(true)}
-            data-testid="clarify-submit-stop"
-            data-directive="stop"
-          >
-            {t('clarify.detail.submitStop')}
-          </button>
-        </div>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={
+                readonly || submitMut.isPending || allLocked || followupPending || mindmapIncomplete
+              }
+              onClick={() => setStopModalOpen(true)}
+              data-testid="clarify-submit-stop"
+              data-directive="stop"
+            >
+              {t('clarify.detail.submitStop')}
+            </button>
+          </div>
+        )}
         {submitMut.error !== null && submitMut.error !== undefined && (
           <ErrorBanner error={submitMut.error} />
         )}

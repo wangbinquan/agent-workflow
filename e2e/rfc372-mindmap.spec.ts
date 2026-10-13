@@ -172,11 +172,14 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
   await openClarify(page, nodeRunId)
   const workspace = page.getByRole('region', { name: 'Clarify workspace' })
   await expect(workspace).toBeVisible()
-  await page.getByRole('button', { name: /Which database should we use/ }).click()
+  await page.getByRole('treeitem', { name: /Which database should we use/ }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Open in focused answers' }).click()
   await page.getByLabel('Postgres', { exact: false }).first().check()
   await page.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
+  await page.getByRole('button', { name: 'Deepen this question', exact: true }).click()
   await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
-  await expect(page.getByRole('button', { name: /Which consistency guarantee/ })).toBeVisible({
+  await expect(page.getByRole('treeitem', { name: /Which consistency guarantee/ })).toBeVisible({
     timeout: 180_000,
   })
   const fresh = await api<{
@@ -187,11 +190,13 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
   expect(fresh.questions).toHaveLength(3)
   expect(fresh.questions[2]!.mindmap.parentQuestionId).toBe('q-db')
   await page.reload()
-  await page.getByRole('button', { name: /Which database should we use/ }).click()
+  await page.getByRole('treeitem', { name: /Which database should we use/ }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('button', { name: 'Open in focused answers' }).click()
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
   await page
     .getByRole('radiogroup', { name: 'View', exact: true })
-    .getByRole('radio', { name: 'Focused branch' })
+    .getByRole('radio', { name: 'Focused answers' })
     .click()
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
   await page
@@ -229,12 +234,16 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
     await page.screenshot({ path: testInfo.outputPath(`mindmap-${width}.png`), fullPage: true })
   }
   await page.setViewportSize({ width: 1280, height: 900 })
+  await page
+    .getByRole('radiogroup', { name: 'View', exact: true })
+    .getByRole('radio', { name: 'Focused answers' })
+    .click()
   for (const [title, option] of [
     ['Pick languages', 'TypeScript'],
     ['Which consistency guarantee?', 'Strong'],
   ]) {
     await page
-      .getByRole('button', { name: new RegExp(title!.replace('?', '\\?')) })
+      .getByRole('treeitem', { name: new RegExp(title!.replace('?', '\\?')) })
       .first()
       .click()
     await page.getByLabel(option!, { exact: false }).first().check()
@@ -262,7 +271,7 @@ test('large projection keeps the canvas and virtual outline bounded at depth 100
   const source = await api<Record<string, unknown>>(`/api/clarify/${nodeRunId}`)
   const questions = Array.from({ length: 5000 }, (_, i) => ({
     id: `load-${i}`,
-    title: `Load question ${i}`,
+    title: `${i >= 400 && i < 700 ? 'Parent' : 'Load'} question ${i}`,
     kind: 'single',
     recommended: false,
     options: [
@@ -275,7 +284,9 @@ test('large projection keeps the canvas and virtual outline bounded at depth 100
         ? { parentQuestionId: `load-${i - 1}` }
         : i >= 100 && i < 400
           ? { parentQuestionId: 'load-0' }
-          : {}),
+          : i >= 700 && i < 1000
+            ? { parentQuestionId: `load-${i - 300}` }
+            : {}),
     },
   }))
   // Scale fixture affects only the response payload; UI layout/Worker/events are production code.
@@ -285,14 +296,33 @@ test('large projection keeps the canvas and virtual outline bounded at depth 100
   await openClarify(page, nodeRunId)
   const workspace = page.getByRole('region', { name: 'Clarify workspace' })
   await expect(page.getByRole('img', { name: 'Clarification mindmap' })).toBeVisible()
-  expect(await workspace.getByRole('listitem').count()).toBeLessThan(60)
+  expect(await workspace.getByRole('treeitem').count()).toBeLessThan(60)
+  await page
+    .getByRole('radiogroup', { name: 'View', exact: true })
+    .getByRole('radio', { name: 'Focused answers' })
+    .click()
   await page
     .getByRole('textbox', { name: 'Search categories or questions' })
     .fill('Load question 4999')
-  await page.getByRole('button', { name: /Load question 4999/ }).click()
+  await page.getByRole('option', { name: /Load question 4999/ }).click()
   await expect(
     workspace.getByRole('heading', { name: 'Load question 4999', exact: true }),
   ).toBeVisible()
+  const search = page.getByRole('textbox', { name: 'Search categories or questions' })
+  // A query change may leave the selected result at the same distant index.
+  // The actual Tab stop must still be mounted after the virtual list resets.
+  await search.fill('Load')
+  await search.press('Tab')
+  await expect(page.getByRole('option', { name: /Load question 4999/ })).toBeFocused()
+  await search.fill('Load question 999')
+  await page.getByRole('option', { name: /Load question 999/ }).click()
+  await search.fill('Parent question')
+  await search.press('Tab')
+  await expect(page.getByRole('option', { name: /Parent question 400/ })).toBeFocused()
+  await expect(
+    workspace.getByRole('heading', { name: 'Load question 999', exact: true }),
+  ).toBeVisible()
+  expect(await workspace.getByRole('option').count()).toBeLessThan(60)
   await page.screenshot({ path: testInfo.outputPath('mindmap-5000.png'), fullPage: true })
   await page.unrouteAll({ behavior: 'wait' })
 })

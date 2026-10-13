@@ -1,5 +1,10 @@
 import type { SaveClarifyDraftInput } from './collaborationRouteOperations'
-import type { ClarifyDraftValue, ClarifyFollowup, ClarifyQuestion } from '@agent-workflow/shared'
+import type {
+  ClarifyDraftValue,
+  ClarifyFollowup,
+  ClarifyFollowupTarget,
+  ClarifyQuestion,
+} from '@agent-workflow/shared'
 
 export interface ClarifyFollowupSnapshot {
   canAppend: boolean
@@ -20,7 +25,7 @@ export interface ClarifyFollowupGenerator {
   }): Promise<string>
 }
 export interface ClarifyFollowupStore {
-  read(nodeRunId: string, parentId: string): Promise<ClarifyFollowupSnapshot>
+  read(nodeRunId: string, target: ClarifyFollowupTarget): Promise<ClarifyFollowupSnapshot>
   append(
     nodeRunId: string,
     request: ClarifyFollowup,

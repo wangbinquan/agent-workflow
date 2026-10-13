@@ -55,6 +55,8 @@ export interface VirtualListProps<T> {
   rowRole?: string
   /** 数据集切换(过滤变化)时传新值可把滚动位置重置到顶部。 */
   scrollResetKey?: string
+  /** Reveal a selected row only as far as necessary; retain the user's list position. */
+  scrollToKey?: string | number | null
 }
 
 export function VirtualList<T>(props: VirtualListProps<T>): ReactElement {
@@ -92,6 +94,17 @@ export function VirtualList<T>(props: VirtualListProps<T>): ReactElement {
     virtualizer.scrollToOffset(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在数据集身份变化时重置
   }, [resetKey])
+
+  const scrollToKey = props.scrollToKey
+  const targetIndex =
+    scrollToKey == null
+      ? -1
+      : props.items.findIndex((item, i) => props.itemKey(item, i) === scrollToKey)
+  useEffect(() => {
+    if (targetIndex >= 0) virtualizer.scrollToIndex(targetIndex, { align: 'auto' })
+    // Selection, not answer/content changes, owns this navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollToKey, targetIndex, resetKey])
 
   const onReachEndRef = useRef(props.onReachEnd)
   useEffect(() => {

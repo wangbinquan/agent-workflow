@@ -1,5 +1,6 @@
 import type { ClarifyAnswer, ClarifyQuestion } from './schemas/clarify'
 import type { ClarifyDraftValue } from './schemas/resourceAcl'
+import type { ClarifyFollowupTarget } from './schemas/clarifyMindmap'
 
 // A deterministic content identity, not a security credential. Four independent
 // 32-bit lanes keep it synchronous in the canvas and identical across runtimes.
@@ -89,7 +90,7 @@ export function validateClarifyMindmap(
 export function clarifyFollowupContext(
   questions: readonly ClarifyQuestion[],
   drafts: Readonly<Record<string, ClarifyDraftValue>>,
-  parentId: string,
+  target: ClarifyFollowupTarget,
 ) {
   const byId = new Map(questions.map((q) => [q.id, q]))
   const branch: {
@@ -97,7 +98,22 @@ export function clarifyFollowupContext(
     answer: { selectedOptionIndices: number[]; customText: string }
   }[] = []
   const seen = new Set<string>()
-  let question = byId.get(parentId)
+  if (typeof target !== 'string') {
+    return questions
+      .filter((question) =>
+        target.every((category, index) => question.mindmap?.categoryPath[index] === category),
+      )
+      .map((question) => ({
+        question,
+        answer: {
+          selectedOptionIndices: [...(drafts[question.id]?.selectedOptionIndices ?? [])].sort(
+            (a, b) => a - b,
+          ),
+          customText: drafts[question.id]?.customText ?? '',
+        },
+      }))
+  }
+  let question = byId.get(target)
   while (question && !seen.has(question.id)) {
     seen.add(question.id)
     const answer = drafts[question.id]
