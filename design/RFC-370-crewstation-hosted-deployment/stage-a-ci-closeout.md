@@ -36,3 +36,11 @@ Intent 在原异步调用前一次捕获 retained owner 与 forget 方法；恢�
 原 whole-source oracle 的有限 stage A inverse 只还原本次新增 owner/recovery/resource/Fusion wiring，保留并发 native fact / reporting hooks，再交给先前明确 inverse。不得改原完整摘要、删除负向变异或把已有并发变动吸进 RFC-370 的白名单；剩余摘要差保留，按原提交归因。
 
 Codex 功能评审能力在当前环境未提供；CI 检查工具不等于独立代码评审，未登记实现门 PASS。阶段 A 保持待验收，B/M0 尚未开始。下一次完整提交后必须核对确切 SHA 主 CI／Windows，终态全绿及 A-G 取得才进入 CS adapters。
+
+## 确切 CI 及 inverse 组合收口
+
+`448eebf333fed279e132f4978827882417666a52` 与配套 `7bb2d73b631f9f1062a54420323201b439626942` 已 push 并确认 main/origin 同步。该 SHA 主 CI `38455536876` 在运行；Windows `38455536849` 已 failure。Typecheck job `115497168566` 仅余原先五处 signalCode 类型错误；frontend shard 3 job `115497168981` 的两项失败在报告返回展示，backend shard 7 job `115497168905` 的六项失败在 RFC-371 累计数值。归属依据原改动／依赖核对，不按文件名认领。
+
+本任务新 inverse 的 anchor 不能抢先把相邻原 report projection 的变异归为自己的片段。修正先组合已有 dev/clarify/native-fact inverse，再逆阶段 A；新增片段逐字匹配仍不可缺，必要时从另一侧唯一定位，未知邻接内容保留给原 oracle。SO／W29／System root 的相关 57 项通过，原完整指纹、原负向断言与并发接线均未改。
+
+既有 CI 阻塞的修复预览仅保存临时目录；等待用户明确例外于 AGENTS 第 4 条后才可应用。独立审阅子代理也等待授权，没有因等待超时自行启动。当前工具未提供独立实现门，未签 A-G、CI 总绿或部署完成。

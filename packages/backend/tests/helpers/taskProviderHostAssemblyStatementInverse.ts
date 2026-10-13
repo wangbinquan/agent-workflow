@@ -7,10 +7,10 @@ import { inverseRfc372ClarifyRootBinding } from './rfc372ClarifyRootInverse'
 
 /** Compose exact shared root hooks before the finite Task provider host assembly inverse. */
 export function inverseTaskProviderHostAssembly(source: ts.SourceFile): ts.SourceFile {
-  source = inverseStageAOwnerBindings(source)
   source = inverseRfc213DevStartupRoot(source)
   source = inverseRfc372ClarifyRootBinding(source)
   source = inverseRfc371NativeFactRootHooks(source)
+  source = inverseStageAOwnerBindings(source)
   const entry = reviewed.sources.find((row) =>
     source.fileName.endsWith(row.path.slice('packages/backend/src/'.length)),
   )

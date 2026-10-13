@@ -11,11 +11,20 @@ export function inverseStageAOwnerBindings(source: ts.SourceFile): ts.SourceFile
   if (!entry) return source
   if (createHash('sha256').update(source.text).digest('hex') === entry.previousSha256) return source
   const edits = entry.changes.map((change) => {
-    const start = source.text.indexOf(change.needle)
-    if (start < 0 || source.text.indexOf(change.needle, start + 1) >= 0)
-      throw new Error(`stage A owner inverse unreviewed fragment: ${entry.path}`)
-    const at = start + change.offset
-    return { start: at, end: at + change.introduced.length, text: change.previous }
+    for (const anchor of change.anchors) {
+      const matches: number[] = []
+      for (
+        let at = source.text.indexOf(anchor.needle);
+        at >= 0;
+        at = source.text.indexOf(anchor.needle, at + 1)
+      )
+        matches.push(at)
+      if (matches.length !== anchor.count) continue
+      const at = matches[anchor.index]! + anchor.offset
+      if (source.text.slice(at, at + change.introduced.length) !== change.introduced) continue
+      return { start: at, end: at + change.introduced.length, text: change.previous }
+    }
+    throw new Error(`stage A owner inverse unreviewed fragment: ${entry.path}`)
   })
   let text = source.text
   for (const edit of [...edits].sort((left, right) => right.start - left.start))
