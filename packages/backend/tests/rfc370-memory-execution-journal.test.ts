@@ -86,6 +86,10 @@ describeEachProvider('RFC-370 primary Memory execution journal', (scope) => {
     })
     expect(open[0]?.original).toEqual(context().original)
     expect((await rebuilt.findByJob('original-job'))[0]?.prompt).toBe('原 prompt\0')
+    expect(
+      JSON.parse((await scope.db.select().from(memoryDistillExecutionReceipts))[0]!.contextJson)
+        .encoding,
+    ).toBe('canonical-json-base64-v1')
     await expect(
       rebuilt.close({ receipts: [started()], settlement: 'original failed receipt' }),
     ).rejects.toThrow('memory-distill-original-close-unproven')
@@ -163,7 +167,13 @@ describeEachProvider('RFC-370 primary Memory execution journal', (scope) => {
     await journal.prepare({ context: context(), receipt: prepared(), preparedAt: 17 })
     await db
       .update(memoryDistillExecutionReceipts)
-      .set({ contextJson: JSON.stringify({ ...context(), jobId: 'replacement-job' }) })
+      .set({
+        contextJson: JSON.stringify({
+          ...context(),
+          prompt: 'original prompt',
+          jobId: 'replacement-job',
+        }),
+      })
       .where(eq(memoryDistillExecutionReceipts.executionRef, prepared().executionRef))
     await expect(journal.started(started())).rejects.toThrow(
       'memory-distill-execution-context-mismatch',

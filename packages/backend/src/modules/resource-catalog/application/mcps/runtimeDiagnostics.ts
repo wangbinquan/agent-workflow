@@ -787,6 +787,7 @@ export class McpDiagnosticsApplication {
           )
         const recovered = await this.deps.effects.recoverReapedTurn({
           ...candidate,
+          turn: candidate.turn,
           readNow: () => this.now(),
         })
         if (!recovered)

@@ -244,7 +244,7 @@ describeEachProvider('RFC-370 host execution bootstrap', (harness) => {
               id: 'task-execution',
               group: 'task',
               async start({ context }) {
-                expect(context).toBe(f.contexts[0])
+                expect(context).toBe(f.contexts[0]!)
                 f.calls.push('runtime.start')
                 expect((await harness.db.select().from(hostExecutionWriteContexts))[0]?.phase).toBe(
                   'active',
@@ -259,7 +259,7 @@ describeEachProvider('RFC-370 host execution bootstrap', (harness) => {
                 }
               },
               quiesceAuthorityLoss({ context }) {
-                expect(context).toBe(f.contexts[0])
+                expect(context).toBe(f.contexts[0]!)
                 f.calls.push('loss.quiesce')
               },
               drainAuthorityLoss() {

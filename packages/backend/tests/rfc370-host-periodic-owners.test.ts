@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from 'bun:test'
-import { ConfigSchema } from '@agent-workflow/shared'
+import { ConfigSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { cachedRepos, recoveryEvents, tasks, workflows } from '@/db/schema'
@@ -41,7 +41,7 @@ function grant(harness: ProviderHarness) {
 }
 const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 11))
 const appHome = '/fixture/not-used-for-backup-or-refresh'
-const config = () => ({ ...ConfigSchema.parse({}), backupIntervalMs: 123_456 })
+const config = () => ({ ...ConfigSchema.parse(DEFAULT_CONFIG), backupIntervalMs: 123_456 })
 
 async function seedLimitedTasks(harness: ProviderHarness) {
   const now = Date.now(),
@@ -349,6 +349,7 @@ describeEachProvider(
         timeout = spyOn(globalThis, 'setTimeout')
       const handle = await owner.start(g)
       try {
+        for (let i = 0; i < 12; i++) await Promise.resolve()
         const args = timeout.mock.calls[0],
           result = timeout.mock.results[0]
         if (args === undefined || result?.type !== 'return' || typeof args[0] !== 'function')

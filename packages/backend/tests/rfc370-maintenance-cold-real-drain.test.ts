@@ -151,7 +151,7 @@ describeEachProvider('RFC-370 cold maintenance actual Worker drain', (harness) =
         await supervisor.stop(15_000)
       } finally {
         phases.close()
-        await database.close()
+        await database.dispose()
         await removeClosedWorkerHome(appHome)
       }
     }

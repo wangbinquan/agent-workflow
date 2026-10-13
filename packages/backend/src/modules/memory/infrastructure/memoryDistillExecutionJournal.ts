@@ -111,9 +111,33 @@ const result = z
   })
   .passthrough()
 
+// PostgreSQL jsonb validation cannot represent escaped NUL or unpaired
+// surrogates. Persist the original canonical JSON bytes in a versioned JSON
+// envelope on both providers; legacy plain JSON remains readable.
+function encodeJournalJson(value: unknown): string {
+  return canonicalJson({
+    encoding: 'canonical-json-base64-v1',
+    value: Buffer.from(canonicalJson(value), 'utf8').toString('base64'),
+  })
+}
+function decodeJournalJson(text: string): unknown {
+  const value: unknown = JSON.parse(text)
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    'encoding' in value &&
+    value.encoding === 'canonical-json-base64-v1'
+  ) {
+    if (!('value' in value) || typeof value.value !== 'string')
+      throw new Error('memory-distill-execution-json-invalid')
+    return JSON.parse(Buffer.from(value.value, 'base64').toString('utf8'))
+  }
+  return value
+}
+
 type Stored = typeof memoryDistillExecutionReceipts.$inferSelect
 function parse(row: Stored): MemoryDistillExecutionRecord {
-  const parsed = context.parse(JSON.parse(row.contextJson))
+  const parsed = context.parse(decodeJournalJson(row.contextJson))
   if (
     parsed.jobId !== row.jobId ||
     parsed.attemptIndex !== row.attemptIndex ||
@@ -122,7 +146,8 @@ function parse(row: Stored): MemoryDistillExecutionRecord {
     new Set(parsed.original.map((original) => original.id)).size !== parsed.original.length
   )
     throw new Error('memory-distill-execution-context-mismatch')
-  const terminal = row.terminalJson === null ? null : result.parse(JSON.parse(row.terminalJson))
+  const terminal =
+    row.terminalJson === null ? null : result.parse(decodeJournalJson(row.terminalJson))
   if (terminal !== null && terminal.retainedRef !== row.retainedRef)
     throw new Error('memory-distill-execution-terminal-mismatch')
   if (terminal !== null) checkTerminalReceipt(receipt(row), terminal)
@@ -208,7 +233,7 @@ export class DrizzleMemoryDistillExecutionJournal implements MemoryDistillExecut
       !parsed.original.some((row) => row.id === parsed.jobId)
     )
       throw new Error('memory-distill-execution-preparation-invalid')
-    const contextJson = canonicalJson(parsed)
+    const contextJson = encodeJournalJson(parsed)
     await databaseSessionFor(this.db).transaction(async (tx) => {
       await tx
         .insert(memoryDistillExecutionReceipts)
@@ -227,7 +252,7 @@ export class DrizzleMemoryDistillExecutionJournal implements MemoryDistillExecut
       const row = await this.original(tx, input.receipt.executionRef)
       if (
         !matches(row, input.receipt, false) ||
-        row.contextJson !== contextJson ||
+        canonicalJson(decodeJournalJson(row.contextJson)) !== canonicalJson(parsed) ||
         (row.state === 'prepared' && row.recoveryRef !== input.receipt.recoveryRef) ||
         row.preparedAt !== input.preparedAt
       )
@@ -259,12 +284,13 @@ export class DrizzleMemoryDistillExecutionJournal implements MemoryDistillExecut
     checkTerminalReceipt(input.receipt, terminal)
     if (terminal.retainedRef !== input.receipt.retainedRef)
       throw new Error('memory-distill-original-terminal-mismatch')
-    const terminalJson = canonicalJson(terminal)
+    const terminalJson = encodeJournalJson(terminal)
     await databaseSessionFor(this.db).transaction(async (tx) => {
       const row = await this.original(tx, input.receipt.executionRef)
       if (
         !matches(row, input.receipt) ||
-        (row.terminalJson !== null && row.terminalJson !== terminalJson)
+        (row.terminalJson !== null &&
+          canonicalJson(decodeJournalJson(row.terminalJson)) !== canonicalJson(terminal))
       )
         throw new Error('memory-distill-original-terminal-mismatch')
       if (row.terminalJson !== null) return

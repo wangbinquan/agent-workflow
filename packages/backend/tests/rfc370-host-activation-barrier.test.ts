@@ -27,7 +27,7 @@ import {
   MemoryDistillSettlementPendingError,
 } from '@/modules/memory/composition'
 import type { MemoryDistillWorker } from '@/modules/memory/public/commands'
-import { ConfigSchema } from '@agent-workflow/shared'
+import { ConfigSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 
 const unexpected = (error: unknown): never => {
   throw error
@@ -88,7 +88,7 @@ async function fixture(
       bindMemoryDistillHostOwner({
         worker: hooks.memory,
         configuration: {
-          read: () => ({ ...ConfigSchema.parse({}), memoryDistillerEnabled: false }),
+          read: () => ({ ...ConfigSchema.parse(DEFAULT_CONFIG), memoryDistillerEnabled: false }),
         },
         onError: unexpected,
       }),
@@ -190,7 +190,7 @@ describeEachProvider('RFC-370 exact activation barrier', (harness) => {
       expect(f.bootstrap.admission.acquire('task').kind).toBe('unavailable')
       await expect(f.bootstrap.http.recovery.retryActivation()).rejects.toBeInstanceOf(Error)
       expect(physical).toBe(0)
-      expect((await f.row())?.closed).toBe(false)
+      expect((await f.row())?.phase).not.toBe('closed')
       acknowledged = true
       expect(await original.recoverOriginal()).toBe(true)
       await f.bootstrap.http.recovery.retryActivation()
@@ -261,7 +261,7 @@ describeEachProvider('RFC-370 exact activation barrier', (harness) => {
         expect(f.bootstrap.queries.snapshot()).toMatchObject({ phase: 'draining', readyGroups: [] })
         expect(f.installed.session.state().activeHandleIds).toContain('memory-distill')
         expect(f.runs).toHaveLength(0)
-        expect(before?.closed).toBe(false)
+        expect(before?.phase).not.toBe('closed')
         expect(acknowledged()).toBe(false)
         expect(recoveries).toBe(0)
         if (original instanceof IndeterminateRuntimeProcessError) {
@@ -271,7 +271,7 @@ describeEachProvider('RFC-370 exact activation barrier', (harness) => {
         }
         await expect(f.installed.resume(f.scope)).rejects.toBeInstanceOf(Error)
         expect(first.current()).toBe(false)
-        expect((await f.row())?.closed).toBe(false)
+        expect((await f.row())?.phase).not.toBe('closed')
         settlementAllowed = true
         if (original instanceof IndeterminateRuntimeProcessError)
           expect(await original.recoverOriginal()).toBe(true)
@@ -280,7 +280,7 @@ describeEachProvider('RFC-370 exact activation barrier', (harness) => {
         expect(f.contexts).toHaveLength(2)
         expect(f.contexts[1]!.reference).not.toBe(first.reference)
         expect(f.bootstrap.queries.snapshot().phase).toBe('active')
-        expect((await f.row())?.closed).toBe(false)
+        expect((await f.row())?.phase).not.toBe('closed')
         expect(starts).toBe(2)
         expect(acknowledged()).toBe(true)
         await eventually(
@@ -332,10 +332,10 @@ describeEachProvider('RFC-370 exact activation barrier', (harness) => {
           throw new Error('new dispatch must not run')
         }),
       ).rejects.toMatchObject({ status: 503 })
-      expect((await f.row())?.closed).toBe(false)
+      expect((await f.row())?.phase).not.toBe('closed')
       expect(failures).toContain(failure)
       await expect(f.close()).rejects.toBeInstanceOf(Error)
-      expect((await f.row())?.closed).toBe(false)
+      expect((await f.row())?.phase).not.toBe('closed')
     } finally {
       release.resolve()
       await f.close().catch(() => {})
@@ -401,7 +401,7 @@ describeEachProvider('RFC-370 exact activation barrier', (harness) => {
       release.resolve()
       await pausing
       expect(failures).toEqual([])
-      expect((await f.row())?.closed).toBe(true)
+      expect((await f.row())?.phase).toBe('closed')
     } finally {
       release.resolve()
       await f.close()

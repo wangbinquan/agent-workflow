@@ -489,6 +489,13 @@ test('both actual provider roots wire frozen notifications and one complete sele
         ts.isCallExpression(node) && compact(node.expression) === 'startMaintenanceService',
     )
     expect(maintenance).toHaveLength(1)
+    const options = nodes.find(
+      (node): node is ts.VariableDeclaration =>
+        ts.isVariableDeclaration(node) && node.name.getText(file) === 'maintenanceOptions',
+    )
+    expect(options).toBeDefined()
+    expect(compact(maintenance[0]!.arguments[0]!)).toBe('maintenanceOptions')
+
     if (name === 'composeSqliteProviderSession') {
       const notifications = nodes.filter(
         (node): node is ts.CallExpression =>
@@ -497,7 +504,7 @@ test('both actual provider roots wire frozen notifications and one complete sele
       )
       expect(notifications).toHaveLength(1)
       expect(notifications[0]!.pos).toBeLessThan(maintenance[0]!.pos)
-      expect(compact(maintenance[0]!)).toContain('intentQueuedNotifications.enqueue')
+      expect(compact(options!.initializer!)).toContain('intentQueuedNotifications.enqueue')
       expect(compact(selected[0]!)).toContain('notifications:intentQueuedNotifications')
       const dependencies = nodes.filter(
         (node): node is ts.VariableDeclaration =>
@@ -510,7 +517,7 @@ test('both actual provider roots wire frozen notifications and one complete sele
       expect(compact(root.body)).not.toContain('intent-queued-resumption-not-composed')
     } else {
       expect(selected[0]!.pos).toBeLessThan(maintenance[0]!.pos)
-      expect(compact(maintenance[0]!)).toContain('intentQueuedResumption.enqueue')
+      expect(compact(options!.initializer!)).toContain('intentQueuedResumption.enqueue')
     }
     const factories = nodes.filter(
       (node) =>

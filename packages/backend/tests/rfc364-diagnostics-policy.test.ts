@@ -80,9 +80,14 @@ describe('RFC-364 MCP diagnostics policy', () => {
       ),
       'utf8',
     )
-    const code = ts
-      .createPrinter({ removeComments: true })
-      .printFile(ts.createSourceFile('application.ts', source, ts.ScriptTarget.Latest, true))
+    const parsed = ts.createSourceFile('application.ts', source, ts.ScriptTarget.Latest, true)
+    const runtime = ts.factory.updateSourceFile(
+      parsed,
+      parsed.statements.filter(
+        (node) => !ts.isImportDeclaration(node) || node.importClause?.isTypeOnly !== true,
+      ),
+    )
+    const code = ts.createPrinter({ removeComments: true }).printFile(runtime)
     expect(code).not.toMatch(/from ['"](?:node:(?:fs|path|child_process)|@\/config|@\/db\/)/)
     expect(code).not.toMatch(/\b(?:Bun|appHome|configPath|runSystemAgent|SERVICE_INSTANCES)\b/)
     const native = readFileSync(
@@ -93,7 +98,8 @@ describe('RFC-364 MCP diagnostics policy', () => {
       'utf8',
     )
     expect(native).toContain('ownership.persistence.recordSpawn(')
-    expect(source).toContain('turnStart: this.deps.effects.captureTurnStart(')
+    expect(source).toContain('const turnStart = this.deps.effects.captureTurnStart(')
+    expect(source).toContain('turnStart,')
     expect(source).toContain('this.deps.persistence.settleTurn(')
     expect(source.indexOf("await sink.markTerminal('complete')")).toBeLessThan(
       source.indexOf('await result.verifyAfterCapture('),

@@ -61,8 +61,9 @@ export function composeLocalSystemAgentRunFamily(input: {
           protocol: definition.protocol,
           workspace: selected.workspace,
           workingDirectory: () => selected.locations.workingDirectory,
-          requireSpawnReceipt:
-            request.executionReceipts !== undefined || request.admitExecution !== undefined,
+          ...(request.executionReceipts !== undefined || request.admitExecution !== undefined
+            ? { requireSpawnReceipt: true as const }
+            : {}),
           cleanupReceiver: 'material',
           evidenceHooks: definition.evidenceHooks,
         },

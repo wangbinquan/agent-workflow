@@ -41,12 +41,13 @@ describe('RFC-338 maintenance architecture', () => {
 
   test('each selected provider owns one maintenance service and keeps only memory GC on main', () => {
     const start = readBackend('src/cli/start.ts')
-    expect(start.match(/startMaintenanceService\(\{/g)).toHaveLength(2)
+    expect(start.match(/startMaintenanceService\(maintenanceOptions\)/g)).toHaveLength(2)
+    expect(start.match(/createColdMaintenanceService\(\{/g)).toHaveLength(2)
     expect(start).toMatch(
-      /startMaintenanceService\(\{[\s\S]*?provider: 'postgresql',[\s\S]*?createMaintenanceRunStore\(db\)/u,
+      /const maintenanceOptions:[\s\S]*?provider: 'postgresql',[\s\S]*?createMaintenanceRunStore\(db\)/u,
     )
     expect(start).toMatch(
-      /startMaintenanceService\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
+      /const maintenanceOptions:[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
     )
     expect(start).toContain('maintenanceStatus: maintenanceService.status')
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")

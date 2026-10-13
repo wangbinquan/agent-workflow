@@ -84,6 +84,7 @@ async function fixture(
 ) {
   const mcp = McpSchema.parse({
     id: 'host-mcp',
+    schemaVersion: 1,
     name: 'host-mcp',
     description: '',
     type: 'local',
@@ -100,7 +101,7 @@ async function fixture(
     .values({ id: 'host-runtime', name: 'host-runtime', protocol: 'opencode', enabled: true })
   const composedProvider = composeMcpRuntimeTestProvider(db)
   const provider = {
-    persistence: composedProvider.persistence,
+    persistence: { ...composedProvider.persistence },
     leaseOperations: { ...composedProvider.leaseOperations },
   }
   const runtime: ResolvedTestRuntime = {
@@ -376,9 +377,12 @@ describeEachProvider('RFC-370 MCP host execution lifecycle', (harness) => {
       return rows
     }
     const starting = f.owner.start(g)
-    const rejected = expect(starting).rejects.toMatchObject({
-      code: 'mcp-test-execution-unavailable',
-    })
+    const rejected = Promise.resolve(starting).then(
+      () => {
+        throw new Error('lost startup unexpectedly became ready')
+      },
+      (error: unknown) => error,
+    )
     await entered.promise
     g.lose()
     f.execution.quiesce(g.context)
@@ -389,7 +393,7 @@ describeEachProvider('RFC-370 MCP host execution lifecycle', (harness) => {
     await Promise.resolve()
     expect(drained).toBe(false)
     release.resolve()
-    await rejected
+    expect(await rejected).toMatchObject({ code: 'mcp-test-execution-unavailable' })
     await draining
     expect(await facts(harness.db)).toEqual(before)
     expect(f.timers).toEqual([])

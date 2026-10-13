@@ -27,9 +27,10 @@
 // Tests inject `runFn` to skip the real subprocess.
 
 import { randomBytes, createHash } from 'node:crypto'
-import { ulid } from 'ulid'
+import { ulid, factory } from 'ulid'
 import { originalProtocolRounds } from './originalProtocolRounds'
 import type { MemoryDistillExecutionSession } from './executionSession'
+import { MemoryDistillSettlementPendingError } from './settlement'
 import type { MemoryDistillExecutionRecord } from '../ports/distillExecutionJournal'
 import type {
   DistillSourceKind,
@@ -1088,7 +1089,7 @@ export async function validateAndPersistCandidate(
   const id =
     origin === undefined
       ? ulid()
-      : ulid(origin.preparedAt, () => entropy![cursor++ % entropy!.length]! / 256)
+      : factory(() => entropy![cursor++ % entropy!.length]! / 256)(origin.preparedAt)
   let memory: Memory
   try {
     memory = MemorySchema.parse({
@@ -1277,7 +1278,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
               envelopeNonce,
             })
 
-      const result =
+      const result: SystemAgentRunResult =
         replay !== undefined && replay.terminal !== null
           ? replay.terminal
           : await systemAgents.run({
@@ -1326,7 +1327,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
               ...(round > 0 && sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
             })
       lastResult = result
-      originalUnknown = result.status === 'unreaped'
+      originalUnknown = options.executionSession !== undefined && result.status === 'unreaped'
       const retainedRef = result.retainedRef
       forgetRetainedContents.push(() => forget.call(retainedContents, { retainedRef }))
       sessionId ??= result.capturedSessionId
@@ -1355,7 +1356,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
 
       // 进程级失败不补问：模型没得到说话机会，再问一遍也是同样的失败。
       if (result.status === 'unreaped') {
-        originalUnknown = true
+        originalUnknown = options.executionSession !== undefined
         const retainedContents = systemAgents.retainedContents
         const release = retainedContents.release.bind(retainedContents)
         const recover = result.executionRecovery?.recoverOriginal.bind(result.executionRecovery)
@@ -1446,11 +1447,14 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       DEFAULT_PROTOCOL_RETRY_BUDGET + 1,
       describeProtocolFailure(lastFailure, lastResult?.outputEvidence),
     )
+  } catch (error) {
+    if (error instanceof MemoryDistillSettlementPendingError) originalUnknown = true
+    throw error
   } finally {
     // RFC-367: nothing to capture after the fact any more — the sink recorded
     // every round live, from the same normalized stream the parser read.
     try {
-      await releaseChainScratch(lastResult)
+      if (!originalUnknown) await releaseChainScratch(lastResult)
     } finally {
       for (const forget of originalUnknown ? [] : forgetRetainedContents) {
         try {

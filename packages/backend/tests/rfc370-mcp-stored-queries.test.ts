@@ -109,7 +109,7 @@ async function seed(db: ProviderNeutralDatabase) {
     runtimeSessionId: 'native-stored-session',
     parentSessionId: null,
     source: 'stream',
-    externalEventKey: 'stored-event',
+    externalEventKey: 'c'.repeat(64),
     payloadBytes: new TextEncoder().encode(payload).length,
     maxSingleEventBytes: 65536,
     maxSessionRows: 100,

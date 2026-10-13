@@ -123,7 +123,7 @@ async function recoverPreparedIdentity(value: z.infer<typeof preparedIdentity>):
 }
 
 export function createLocalAgentExecutionRecoveryReferences(): ExecutionRecoveryReferencePort {
-  return Object.freeze({
+  return Object.freeze<ExecutionRecoveryReferencePort>({
     async recoverReference(input) {
       const unknown = { executionRef: input.executionRef, state: 'unknown' as const }
       if (input.recoveryRef.startsWith(preparedPrefix) && input.recoveryRef.length <= 16384) {

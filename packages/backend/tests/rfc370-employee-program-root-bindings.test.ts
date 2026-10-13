@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
 import { sha256Hex } from '@/util/hash'
+import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 describeEachProviderHttpApplication(
@@ -20,7 +21,12 @@ describeEachProviderHttpApplication(
       Authorization: `Bearer ${'d'.repeat(64)}`,
       'content-type': 'application/json',
     }
-    const path = '/api/digital-employee-types/development@10/work-items/prepare-materials/tools'
+    const ref = (
+      JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
+        typeRef: { typeId: string; revision: number }
+      }
+    ).typeRef
+    const path = `/api/digital-employee-types/${ref.typeId}@${ref.revision}/work-items/prepare-materials/tools`
     for (const outcome of ['content', 'missing', 'failure'] as const) {
       test(`HTTP waits for selected put/read ACK and preserves the ${outcome} result`, async () => {
         const source = 'print("selected remote program")\n'

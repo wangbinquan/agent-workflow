@@ -941,6 +941,7 @@ function createMaintenanceService(
       'start',
       'quiesce',
       'awaitDrained',
+      'activateDispatch',
     ] as const) {
       if (typeof candidate[method] !== 'function') {
         throw new Error(`cold maintenance supervisor is missing ${method}`)
@@ -957,6 +958,7 @@ function createMaintenanceService(
       start: candidate.start.bind(candidate),
       quiesce: candidate.quiesce.bind(candidate),
       awaitDrained: candidate.awaitDrained.bind(candidate),
+      activateDispatch: candidate.activateDispatch.bind(candidate),
     }
   }
   const releaseDrainedOwners = (

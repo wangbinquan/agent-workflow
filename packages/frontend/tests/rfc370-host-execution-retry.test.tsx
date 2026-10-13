@@ -7,6 +7,7 @@ import { HostExecutionGroupSchema, type HostExecutionStatus } from '@agent-workf
 import { HostExecutionBanner } from '../src/components/shell/HostExecutionBanner'
 import { api } from '../src/api/client'
 import i18n from '../src/i18n'
+import { HostExecutionProvider } from '../src/hooks/useHostExecutionAvailability'
 
 const permission = vi.hoisted(() => ({ allowed: true }))
 vi.mock('../src/api/client', () => ({ api: { get: vi.fn(), post: vi.fn() } }))
@@ -43,7 +44,9 @@ function open() {
   clients.push(client)
   return render(
     <QueryClientProvider client={client}>
-      <HostExecutionBanner />
+      <HostExecutionProvider>
+        <HostExecutionBanner />
+      </HostExecutionProvider>
       <input aria-label="Resource draft" defaultValue="Preserved resource" />
     </QueryClientProvider>,
   )

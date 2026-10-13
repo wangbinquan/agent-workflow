@@ -1,4 +1,5 @@
 import { inversePurposeRootBindings } from './helpers/purposeRootInverse'
+import { inverseStageAOwnerBindings } from './helpers/stageAOwnerStatementInverse'
 import { inverseTaskLaunchRootStatements } from './helpers/taskLaunchRootStatementInverse'
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
@@ -1127,21 +1128,27 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
 
   test('RFC-370 preserves original parent metadata between real recovery and verification inverses', () => {
     const name = 'composePostgresqlApplication'
-    const boot = oldBootExecutionRecoveryBody(pg, name, functionBody(pg, name))
-    const calls = namedCalls(boot, pg, 'runTaskExecutionBootRecovery')
+    const restoredSource = inverseTaskLaunchRootStatements(pg, name)
+    const boot = oldBootExecutionRecoveryBody(
+      restoredSource,
+      name,
+      functionBody(restoredSource, name),
+    )
+    const calls = namedCalls(boot, restoredSource, 'runTaskExecutionBootRecovery')
     expect(calls).toHaveLength(1)
     const synthetic = calls[0]!.arguments[0]!
     expect(synthetic.parent).toBeUndefined()
     expect(ts.getOriginalNode(synthetic).parent).toBeDefined()
-    const restored = oldVerificationCommandsBody(pg, name, boot)
-    const development = namedCalls(restored, pg, 'composeDevelopmentAutomation')
+    const restored = oldVerificationCommandsBody(restoredSource, name, boot)
+    const development = namedCalls(restored, restoredSource, 'composeDevelopmentAutomation')
     expect(development).toHaveLength(1)
     const options = development[0]!.arguments[0]!
     if (!ts.isObjectLiteralExpression(options)) throw new Error('missing original DA options')
     expect(
       options.properties.filter(
         (property) =>
-          ts.isPropertyAssignment(property) && property.name.getText(pg) === 'verificationCommands',
+          ts.isPropertyAssignment(property) &&
+          property.name.getText(restoredSource) === 'verificationCommands',
       ),
     ).toHaveLength(0)
   })
@@ -1876,8 +1883,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       createComposedApp: 'c0a8d5ef48393cfb625a9bd8da82d9fc645a935ef0c2f5d6038c4e21c0b08c6d',
       createApp: '628edbc2da66884bfba5d159423fa972ea9a8d4aca3ecb37ed8e3ed98e18aefa',
     }
+    const nativeServer = inverseStageAOwnerBindings(server)
     for (const [name, hash] of Object.entries(expected)) {
-      expect(digest(functionBody(server, name), server)).toBe(hash)
+      expect(digest(functionBody(nativeServer, name), nativeServer)).toBe(hash)
     }
     const pgBody = functionBody(pg, 'composePostgresqlApplication')
     expect(namedCalls(pgBody, pg, 'createComposedApp').map((node) => compact(node, pg))).toEqual([

@@ -124,7 +124,7 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
     if (!queued) throw new Error('original job missing')
     const write = DrizzleMemoryDistillWorkStore.prototype.markDone
     const lost = spyOn(DrizzleMemoryDistillWorkStore.prototype, 'markDone').mockImplementation(
-      async function (ids, at, original) {
+      async function (this: DrizzleMemoryDistillWorkStore, ids, at, original) {
         await write.call(this, ids, at, original)
         throw new Error('original done ACK lost')
       },
@@ -234,6 +234,7 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
     const db = scope.db,
       root = home(),
       first = memoryJournalOperations(db, root, {
+        preparedRecovery: true,
         respond: async () => ({ text: 'Original non-envelope answer' }),
       })
     const queued = await first.operations.distillCommands.enqueue({
@@ -248,9 +249,9 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
     const interrupted = spyOn(
       DrizzleMemoryDistillExecutionJournal.prototype,
       'prepare',
-    ).mockImplementation(async function (input) {
-      if (++prepared === 2) throw new Error('daemon stopped before next round')
+    ).mockImplementation(async function (this: DrizzleMemoryDistillExecutionJournal, input) {
       await prepare.call(this, input)
+      if (++prepared === 2) throw new Error('daemon stopped before next round')
     })
     try {
       await expect(
@@ -262,6 +263,11 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
     expect(first.state.calls).toBe(1)
     const originalRequest = first.state.requests[0]!
     const restored = memoryJournalOperations(db, root)
+    await expect(restored.operations.distillWorker.recoverRunning()).rejects.toBeInstanceOf(
+      IndeterminateRuntimeProcessError,
+    )
+    expect(restored.state.calls).toBe(0)
+    expect(await restored.operations.distillCommands.recoverIssued(queued.jobId)).toBe(true)
     expect(await restored.operations.distillWorker.recoverRunning()).toEqual({ recovered: 0 })
     expect((await db.select().from(memoryDistillJobs))[0]).toMatchObject({
       status: 'running',
@@ -305,7 +311,7 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
     const held = spyOn(
       DrizzleMemoryDistillExecutionJournal.prototype,
       'started',
-    ).mockImplementation(async function (receipt) {
+    ).mockImplementation(async function (this: DrizzleMemoryDistillExecutionJournal, receipt) {
       if (++starts === 2) throw new Error('daemon stopped before follow-up activation')
       await started.call(this, receipt)
     })

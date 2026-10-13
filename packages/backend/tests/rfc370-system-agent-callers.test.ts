@@ -292,10 +292,11 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
       graphValidation: intentGraphValidationForTest(harness.db),
     }
     const http = new Hono()
-    http.use('*', async (context, next) => {
+    const injectOriginalActor: MiddlewareHandler = async (context, next) => {
       context.set('actor', actor)
       await next()
-    })
+    }
+    http.use('*', injectOriginalActor)
     http.onError(errorHandler)
     mountIntentSessionRoutes(http, {
       appHome: root,
@@ -324,6 +325,28 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
     expect(await settled.json()).toMatchObject({ acknowledged: true, turnId: reservation.turnId })
     expect(reads).toBe(1)
     await Promise.all([work, handle.drain()])
+    const nativeHttp = new Hono()
+    nativeHttp.use('*', injectOriginalActor)
+    nativeHttp.onError(errorHandler)
+    mountIntentSessionRoutes(nativeHttp, {
+      appHome: root,
+      configuration: { read: () => DEFAULT_CONFIG },
+      identityAccess,
+      directAuthority: identityAccess.directAuthority,
+      intentPersistence: persistence,
+      intentApply: {
+        apply: async () => {
+          throw new Error('Recovery must not apply resources')
+        },
+      },
+      intentTurnRuntime: { ...runtime, execution: undefined },
+      resourceCatalogFor: (currentActor) =>
+        intentResourceCatalogBinding(harness.db, currentActor, root),
+      events: { publish() {} },
+    })
+    const unavailable = await nativeHttp.request(endpoint, { method: 'POST' })
+    expect(unavailable.status).toBe(422)
+    expect(await unavailable.json()).toMatchObject({ code: 'intent-original-recovery-unavailable' })
   })
 
   test('HTTP Intent forwards a prototype family getter once and settles through the selected adapter', async () => {

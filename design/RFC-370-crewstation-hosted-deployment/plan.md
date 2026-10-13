@@ -1,3 +1,15 @@
+## 2026-10-14 集中验收修复与完整发布候选
+
+阶段 A 的完整生产／用例源码已发布为 `b9b27bfd84e0b39dac6b6f7dd76eee78343cc511`，配套架构投影为 `1e085af8e14bb6b7657fd6be9402f88ff78276d3`；两条确切 CI 已终态失败，不能据完整提交签 A-G。阶段 B 仍未启动，AW 尚未部署到 CS。
+
+集中诊断修正了 native 前端状态夹具及 ErrorBanner 接线、真实 maintenance activateDispatch 转交、Fusion 语义常量、调用者类型、Memory 原候选稳定 ID，以及原回执的 PostgreSQL JSON 字节存储。Memory journal 用 versioned canonical-json base64 封套保留 NUL／原输出，旧 JSON 可读取；原 ID／preparedAt／ACK 判据保持。Intent 的 retained owner／方法在原 await 前一次捕获，native 与 selected 不混用后换的 getter。宿主关闭先完成原 owner 正常 stop/drain 和 authority 退休，再进入 provider close，避免 beforeCloseProvider 回调同一 session 队列形成死锁。
+
+针对实际 CI 失败的本机集中诊断：前端七文件 108 项通过；Intent 原 prepared/started/terminal/settlement/material ACK 八项通过；实际宿主激活／embedded 根及 Memory 业务恢复 35 项通过；MCP 生命周期 23 项通过（含本次真实 child 原恢复，需要可读取 ps 的正常宿主权限）；最后五文件存储／webhook／boot/owner 夹具 48 项通过。另有多份已通过的相关回归，记录见 [阶段 A CI 修复](stage-a-ci-closeout.md)。这些是候选诊断，不代签 GitHub 双 provider、Windows、完整总流水线或独立实现门。
+
+本任务之前 `651f956df` 的 CI run `38429501809`／job `115407653250` 已有 `tests/cli.test.ts` 四处 signalCode 类型错误；本轮 backend Typecheck 修正本人错误后，仅余它们及 `scripts/rfc359-p0-mutations.ts` 同类错误。原 whole-source root oracle 在加入本轮有限逆变换后仍有先前并发根变化的原摘要差，须按实际原提交与依赖归因，不能删除断言或覆盖并发内容。独立 Codex 评审工具仍缺失，未记实现门 PASS。
+
+当前退出顺序不变：完成本人缺陷修复及配套生成物，按明确路径完整提交并 push，核对远端同步与确切 SHA 主 CI／Windows；总绿及 A-G 取得后才推进独立 CS adapter 的 M0 首次实际部署，之后 M1～M4。没有跨 session 消息。以下历史及并发正文完整保留。
+
 ## 2026-10-14 阶段 A 完整候选收口
 
 实际 Intent turn/主回执/冷恢复和原恢复 HTTP/UI 已补；未激活 helper 保存原事实并保留原预约/预算，原结果与图修复预约同事务。两 daemon 复用既有 intent owner，embedded 增加其真实 HTTP Intent owner。阶段 A 生产与用例写作齐备，接下来完成最终生成物和集中功能验收，完整提交到远端并取得确切 SHA GitHub 主 CI/Windows 总绿，之后 B。独立 Codex 实现门工具缺失仍未记 PASS，RFC 保持 In Progress；以下历史状态不作为当前验收证明。

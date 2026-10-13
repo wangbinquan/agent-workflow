@@ -459,7 +459,7 @@ describeEachProvider('RFC-370 webhook cold host and actual receipt lifetime', (h
       },
     })
     const g = grant(harness)
-    const starting = f.owner.start(g).then(
+    const starting = Promise.resolve(f.owner.start(g)).then(
       () => null,
       (error: unknown) => error,
     )

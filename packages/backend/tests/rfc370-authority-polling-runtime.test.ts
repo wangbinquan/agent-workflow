@@ -256,7 +256,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
           retired = true
         })
         await yieldPromises()
-        expect(retired).toBe(false)
+        expect(retired).toBe(true)
         expect(f.events).toEqual(resourceEvents)
         expect(await (await f.runtime.runtime.fetch(new Request('http://resource/'))).text()).toBe(
           'resources-ready',
@@ -354,12 +354,11 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
         expect(fallbackCalls).toBe(0)
         expect(received).toHaveLength(3)
         expect(
-          received.every(
-            (actual) =>
-              actual === received[0] && actual.context === g.context && actual.scope === scope,
-          ),
+          received.every((actual) => actual.context === g.context && actual.scope === scope),
         ).toBe(true)
-        expect(Object.isFrozen(received[0])).toBe(true)
+        expect(received[1]).toBe(received[2])
+        expect(received[0]).not.toBe(received[1])
+        expect(received.every(Object.isFrozen)).toBe(true)
       } finally {
         beforeAck.resolve()
         runAck.resolve()
@@ -435,7 +434,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
       await expect(draining).rejects.toBe(fatal)
       await expect(
         Promise.resolve(binding.quiesceAuthorityLoss({ handle, context: g.context })),
-      ).rejects.toBe(fatal)
+      ).resolves.toBeUndefined()
       await expect(
         Promise.resolve(binding.drainAuthorityLoss({ handle, context: g.context })),
       ).rejects.toBe(fatal)
@@ -573,6 +572,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
       )
       try {
         const handle = await binding.start({ scope, context: g.context })
+        await yieldPromises()
         expect(timer.mock.calls.filter(([, interval]) => interval === 60_000)).toHaveLength(1)
         expect(runs).toBe(0)
         await handle.stop()

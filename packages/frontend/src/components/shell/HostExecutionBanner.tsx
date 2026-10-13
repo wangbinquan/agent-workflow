@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import type { ReactNode } from 'react'
+import { useContext, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   HostExecutionGroupSchema,
@@ -15,6 +15,7 @@ import {
 } from '@/hooks/useHostExecutionStatus'
 import { usePermission } from '@/hooks/useActor'
 import { api } from '@/api/client'
+import { HostExecutionReadinessContext } from '@/hooks/useHostExecutionAvailability'
 
 /** Presentation is shared with action guards; it never starts an owner. */
 export function HostExecutionNotice({
@@ -61,6 +62,12 @@ export function HostExecutionNotice({
 }
 
 export function HostExecutionBanner() {
+  const selected = useContext(HostExecutionReadinessContext)
+  if (selected?.mode === 'native') return null
+  return <SelectedHostExecutionBanner />
+}
+
+function SelectedHostExecutionBanner() {
   const query = useHostExecutionStatus()
   const canWriteSettings = usePermission('settings:write'),
     canExecute = usePermission('tasks:execute')
@@ -75,7 +82,11 @@ export function HostExecutionBanner() {
   })
   if (query.isError)
     return (
-      <ErrorBanner message={t('hostExecution.queryFailed')} onRetry={() => void query.refetch()} />
+      <ErrorBanner
+        error={query.error}
+        message={t('hostExecution.queryFailed')}
+        onRetry={() => void query.refetch()}
+      />
     )
   const view = query.data
   if (!view) return null
@@ -107,6 +118,7 @@ export function HostExecutionBanner() {
       />
       {canRetry && retry.isError && (
         <ErrorBanner
+          error={retry.error}
           message={
             retry.error instanceof Error ? retry.error.message : t('hostExecution.retryFailed')
           }

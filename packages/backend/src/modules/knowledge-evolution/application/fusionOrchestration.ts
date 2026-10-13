@@ -16,7 +16,11 @@
 
 import { ulid } from 'ulid'
 import type { Fusion, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
-import { FusionResultManifestSchema, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+import {
+  FusionResultManifestSchema,
+  TERMINAL_TASK_STATUSES,
+  PLATFORM_FUSION_MANIFEST,
+} from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { SYSTEM_USER_ID } from '@/auth/actor'
@@ -35,6 +39,7 @@ import type {
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { FusionSeedGit, FusionWorkspace } from './ports/fusionWorkspace'
+const MANIFEST_REL = PLATFORM_FUSION_MANIFEST
 
 // Built-in resource names live in the leaf systemResources module (single
 // source of truth shared with the list-hiding filter); re-exported here so

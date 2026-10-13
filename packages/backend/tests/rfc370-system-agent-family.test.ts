@@ -198,12 +198,13 @@ describe('RFC-370 complete System family binding', () => {
     expect('scratchDir' in completed).toBe(false)
   })
 
-  test('an explicit fixture cannot interpret another root runtime reference', async () => {
+  test('an explicit native fixture decodes the durable original runtime reference after reconstruction', async () => {
     const first = composeLocalSystemAgentRunFamily({ appHome: () => '/first' })
     const second = composeLocalSystemAgentRunFamily({ appHome: () => '/second' })
     let calls = 0
-    const selected = second.withFixture(async () => {
+    const selected = second.withFixture(async (opts) => {
       calls++
+      expect(opts.runtimeBinary).toBe('/first/runtime')
       return result('/second/scratch/named')
     })
     await expect(
@@ -216,8 +217,8 @@ describe('RFC-370 complete System family binding', () => {
         runtimeBinding: first.bindRuntime({ binaryPath: '/first/runtime' }).runtimeBinding,
         workspaceScope: selected.family.workspaces.capture({ namespace: 'shared', name: 'named' }),
       }),
-    ).rejects.toThrow('system-runtime-binding-unavailable')
-    expect(calls).toBe(0)
+    ).resolves.toMatchObject({ status: 'ok' })
+    expect(calls).toBe(1)
   })
 
   for (const protocol of ['opencode', 'claude-code'] as const) {

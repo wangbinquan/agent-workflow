@@ -316,22 +316,10 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
     removeAfterWave: 'W9-D',
   },
   {
-    id: 'public:system-operations:participants:HostExecutionAuthorityFactory',
-    removeAfterWave: 'W9-D',
-  },
-  {
     id: 'public:system-operations:participants:HostExecutionAuthorityLifecycle',
     removeAfterWave: 'W9-D',
   },
   { id: 'public:system-operations:participants:HostExecutionPreparation', removeAfterWave: 'W9-D' },
-  {
-    id: 'public:system-operations:participants:HostExecutionRecoveryFamily',
-    removeAfterWave: 'W9-D',
-  },
-  {
-    id: 'public:system-operations:participants:HostExecutionWriteLeaseFacts',
-    removeAfterWave: 'W9-D',
-  },
   {
     id: 'public:system-operations:participants:HostExecutionWriteLifecycle',
     removeAfterWave: 'W9-D',

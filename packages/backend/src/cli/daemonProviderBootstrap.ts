@@ -10,6 +10,7 @@ import {
   type DaemonProviderMigrationAdmission,
   type DaemonProviderMigrationInitialGeneration,
 } from './daemonProviderMigrationAdmission'
+import type { DaemonHostExecutionBootstrap } from './daemonHostExecutionBootstrap'
 import {
   createDaemonProviderListenerTraffic,
   createDaemonProviderRuntimeRouter,
@@ -65,6 +66,7 @@ export interface ComposedDaemonProviderInitialSession<
 > {
   readonly application: Application
   readonly session: DaemonProviderListenerRuntimeSession<WebSocket>
+  readonly hostExecution?: Pick<DaemonHostExecutionBootstrap, 'queries'>
 }
 
 export interface ComposeDaemonProviderBootstrapInput<

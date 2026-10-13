@@ -325,6 +325,7 @@ describe('RFC-370 selected native execution binding', () => {
       abortSignal: signal,
       stdin,
       beforeSpawn: beforeStart,
+      onSpawned: expect.any(Function),
       requireSpawnReceipt: true,
       capture,
       cleanup,

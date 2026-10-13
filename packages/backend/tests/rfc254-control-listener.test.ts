@@ -283,7 +283,10 @@ describe('RFC-254 T7 — the daemon publishes and retracts the endpoint', () => 
     expect(start).toContain('composeDaemonHostApplication({')
     expect(start).toContain('return await application.run()')
     expect(host).toContain('const control = startControlListener({')
-    expect(host).toContain('return { close: () => control.close() }')
+    expect(host).toContain('control.close()')
+    expect(host).toContain("process.off('SIGTERM', onTerm)")
+    expect(host).toContain("process.off('SIGINT', onInt)")
+    expect(host).toContain("process.off('exit', onExit)")
     expect(application).toContain('await (await controlListener).close()')
   })
 

@@ -53,16 +53,25 @@ describeEachProvider('RFC-370 primary ACK retains original Memory continuation',
         terminal = prototype.terminal
       const failed =
         stage === 'prepare'
-          ? spyOn(prototype, 'prepare').mockImplementation(async function (input) {
+          ? spyOn(prototype, 'prepare').mockImplementation(async function (
+              this: DrizzleMemoryDistillExecutionJournal,
+              input,
+            ) {
               await prepare.call(this, input)
               failOnce()
             })
           : stage === 'started'
-            ? spyOn(prototype, 'started').mockImplementation(async function (input) {
+            ? spyOn(prototype, 'started').mockImplementation(async function (
+                this: DrizzleMemoryDistillExecutionJournal,
+                input,
+              ) {
                 await started.call(this, input)
                 failOnce()
               })
-            : spyOn(prototype, 'terminal').mockImplementation(async function (input) {
+            : spyOn(prototype, 'terminal').mockImplementation(async function (
+                this: DrizzleMemoryDistillExecutionJournal,
+                input,
+              ) {
                 await terminal.call(this, input)
                 failOnce()
               })
@@ -110,7 +119,7 @@ describeEachProvider('RFC-370 primary ACK retains original Memory continuation',
     const failed = spyOn(
       DrizzleMemoryDistillWorkStore.prototype,
       'insertCandidate',
-    ).mockImplementation(async function (input) {
+    ).mockImplementation(async function (this: DrizzleMemoryDistillWorkStore, input) {
       const inserted = await original.call(this, input)
       if (++writes === 1) throw new Error('candidate insert ACK lost')
       return inserted

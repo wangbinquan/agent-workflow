@@ -58,7 +58,8 @@ test('the actual managed worker reports its original fatal result through the ca
   try {
     await entered.promise
     release.resolve()
-    await expect(worker.done).rejects.toBe(failure)
+    await worker.quiesceAuthorityLoss()
+    await expect(worker.drain()).rejects.toBe(failure)
     expect(reports).toEqual([failure])
     await worker.quiesceAuthorityLoss()
     await expect(worker.drain()).rejects.toBe(failure)

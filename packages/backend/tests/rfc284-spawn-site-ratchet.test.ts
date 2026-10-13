@@ -68,6 +68,11 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       '故照实登记而非改名绕开棘轮。三处 = 接口方法声明 + 模式 A 的首次调用 + ' +
       'T5b 模式 B 重试循环里的再次调用（跨 attempt 窗口内由 retryPolicy 驱动）。',
   },
+  'modules/task-execution/infrastructure/local/agentExecutionRecoveryReference.ts': {
+    governance: 'short-lived',
+    count: 2,
+    why: 'RFC-370: readonly synchronous ps/PowerShell start-identity probes for the exact original native process; no business runtime or detached child is launched here.',
+  },
   'platform/execution/local/managedProcess.ts': {
     governance: 'kernel',
     count: 1,

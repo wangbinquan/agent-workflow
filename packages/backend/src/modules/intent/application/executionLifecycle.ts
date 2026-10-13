@@ -87,7 +87,7 @@ export function createIntentTurnExecutionLifecycle(): IntentTurnExecutionLifecyc
       report(error)
       await resumed
     }
-    const control: IntentExecutionControl = Object.freeze({
+    const control = Object.freeze<IntentExecutionControl>({
       current: authorized,
       async checkpoint<T>(write: () => Promise<T>): Promise<T> {
         try {
@@ -299,7 +299,8 @@ export function createIntentTurnExecutionLifecycle(): IntentTurnExecutionLifecyc
             if (turn.failure) throw turn.failure
             if (turn.done) {
               await Promise.race([turn.done, waitState(turn)])
-              if (turn.blocked) throw turn.blocked.error
+              const blockedAfterAwait = ((): TurnWork['blocked'] => turn.blocked)()
+              if (blockedAfterAwait) throw blockedAfterAwait.error
               if (turn.failure) throw turn.failure
             }
           }

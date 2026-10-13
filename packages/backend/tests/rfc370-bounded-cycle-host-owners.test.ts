@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from 'bun:test'
-import { ConfigSchema } from '@agent-workflow/shared'
+import { ConfigSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { runEventCenterCycle } from '@/modules/event-center/composition'
 import { runDigitalEmployeeOsCycle } from '@/modules/digital-employee/composition'
 import {
@@ -208,7 +208,7 @@ test('Memory owner waits for the exact initial recovery before acknowledging a l
     }),
     g = grant()
   let started = false
-  const starting = owner.start(g).then((handle) => {
+  const starting = Promise.resolve(owner.start(g)).then((handle) => {
     started = true
     return handle
   })
@@ -242,7 +242,9 @@ test('Memory owner propagates an unreaped original turn through its actual drain
   }
   const owner = bindMemoryDistillHostOwner({
     worker,
-    configuration: { read: () => ({ ...ConfigSchema.parse({}), memoryDistillerEnabled: true }) },
+    configuration: {
+      read: () => ({ ...ConfigSchema.parse(DEFAULT_CONFIG), memoryDistillerEnabled: true }),
+    },
     onError: (error) => {
       errors.push(error)
     },
@@ -299,7 +301,9 @@ for (const close of ['pause', 'loss'] as const) {
           throw error
         },
       },
-      configuration: { read: () => ({ ...ConfigSchema.parse({}), memoryDistillerEnabled: true }) },
+      configuration: {
+        read: () => ({ ...ConfigSchema.parse(DEFAULT_CONFIG), memoryDistillerEnabled: true }),
+      },
       onError: () => {},
     })
     const g = grant(),
@@ -368,7 +372,9 @@ for (const close of ['pause', 'loss'] as const) {
     const errors: unknown[] = []
     const owner = bindMemoryDistillHostOwner({
       worker,
-      configuration: { read: () => ({ ...ConfigSchema.parse({}), memoryDistillerEnabled: true }) },
+      configuration: {
+        read: () => ({ ...ConfigSchema.parse(DEFAULT_CONFIG), memoryDistillerEnabled: true }),
+      },
       onError: (error) => {
         errors.push(error)
       },

@@ -466,6 +466,7 @@ for (const provider of ['sqlite', 'postgresql'] as const) {
       await f.session.hostExecutionRuntime!.drain(g.context)
       expect(f.events.filter((event) => event.startsWith('normal-stop:'))).toEqual([
         'normal-stop:handle-15',
+        'normal-stop:handle-1',
       ])
       expect(f.events.filter((event) => event === 'loss-quiesce:handle-15')).toHaveLength(1)
       expect(f.events.filter((event) => event === 'loss-drain:handle-15')).toHaveLength(1)

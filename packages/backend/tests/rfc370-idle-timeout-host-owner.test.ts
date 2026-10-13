@@ -2,7 +2,7 @@
 // original owner after loss; the next tree is not admitted. No native signals
 // are mocked into proof here: the fixture has no live node runs.
 import { expect, spyOn, test } from 'bun:test'
-import { ConfigSchema } from '@agent-workflow/shared'
+import { ConfigSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { tasks, workflows, recoveryEvents } from '@/db/schema'
 import { createTaskIdleTimeoutPersistence } from '@/modules/task-execution/composition/taskIdleTimeout'
@@ -68,11 +68,13 @@ function grant(harness: ProviderHarness) {
   }
 }
 const config = () => ({
-  ...ConfigSchema.parse({}),
+  ...ConfigSchema.parse(DEFAULT_CONFIG),
   taskIdleTimeout: { enabled: true, idleHours: 1 },
 })
 const _spyTimeout = () => spyOn(globalThis, 'setTimeout')
-function fireOriginalTick(timer: ReturnType<typeof _spyTimeout>) {
+async function fireOriginalTick(timer: ReturnType<typeof _spyTimeout>) {
+  // The cold owner ACKs before its activation continuation arms the timer.
+  for (let i = 0; i < 12; i++) await Promise.resolve()
   const index = timer.mock.calls.findIndex((call) => call[1] === DAEMON_CADENCE.taskIdleTimeout)
   const args = timer.mock.calls[index],
     result = timer.mock.results[index]
@@ -127,7 +129,7 @@ describeEachProvider('RFC-370 actual idle owner and original task cancellation',
         timer = spyOn(globalThis, 'setTimeout'),
         handle = await owner.start(g)
       try {
-        fireOriginalTick(timer)
+        await fireOriginalTick(timer)
         await entered.promise
         g.lose()
         await owner.quiesceAuthorityLoss({ context: g.context, handle })
@@ -182,7 +184,7 @@ describeEachProvider('RFC-370 actual idle owner and original task cancellation',
       timer = spyOn(globalThis, 'setTimeout'),
       handle = await owner.start(g)
     try {
-      fireOriginalTick(timer)
+      await fireOriginalTick(timer)
       await entered.promise
       g.lose()
       await owner.quiesceAuthorityLoss({ context: g.context, handle })

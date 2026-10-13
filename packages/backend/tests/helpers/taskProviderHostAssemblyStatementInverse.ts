@@ -1,4 +1,5 @@
 import ts from 'typescript'
+import { inverseStageAOwnerBindings } from './stageAOwnerStatementInverse'
 import reviewed from '../fixtures/rfc370-task-provider-host-assembly-original-sources.json'
 import { inverseRfc213DevStartupRoot } from './rfc213DevStartupRootInverse'
 import { inverseRfc371NativeFactRootHooks } from './rfc371NativeFactRootInverse'
@@ -6,6 +7,7 @@ import { inverseRfc372ClarifyRootBinding } from './rfc372ClarifyRootInverse'
 
 /** Compose exact shared root hooks before the finite Task provider host assembly inverse. */
 export function inverseTaskProviderHostAssembly(source: ts.SourceFile): ts.SourceFile {
+  source = inverseStageAOwnerBindings(source)
   source = inverseRfc213DevStartupRoot(source)
   source = inverseRfc372ClarifyRootBinding(source)
   source = inverseRfc371NativeFactRootHooks(source)

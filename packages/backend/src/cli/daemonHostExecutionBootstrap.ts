@@ -281,9 +281,18 @@ export function installDaemonHostExecutionSession<UpgradeServer, WebSocketHandle
     },
     async close(reason) {
       const state = authority.queries.snapshot()
-      if (state.phase === 'active' || state.reason === 'host-execution-pause-unsettled')
+      if (state.phase === 'active' || state.reason === 'host-execution-pause-unsettled') {
         await closeAdmission()
-      else if (state.phase !== 'closed') await pauseAuthority()
+        // Normal owner stop/drain retains its current write epoch. Retire the
+        // authority before core close takes the provider-session queue; its
+        // beforeCloseProvider callback must never wait on that same queue.
+        await pause({
+          provider: session.provider,
+          generationId: session.generationId,
+          operationId: 'host-execution-close',
+        })
+        await pauseAuthority()
+      } else if (state.phase !== 'closed') await pauseAuthority()
       await close(reason)
     },
   })

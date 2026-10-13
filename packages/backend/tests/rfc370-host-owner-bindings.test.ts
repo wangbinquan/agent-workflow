@@ -19,7 +19,7 @@ import {
   publishCommittedEventsAfterCommit,
   registerAfterCommitEventPump,
 } from '@/platform/events/committed/runtime'
-import { ConfigSchema } from '@agent-workflow/shared'
+import { ConfigSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { deferred } from './helpers/taskHostExecution'
 
 function unexpected(): never {
@@ -220,7 +220,7 @@ test('Intent owner retains IDs when authority is lost during the actual configur
   await entered.promise
   first.lose()
   await binding.quiesceAuthorityLoss({ handle, context: first.context })
-  config.resolve(ConfigSchema.parse({}))
+  config.resolve(ConfigSchema.parse(DEFAULT_CONFIG))
   await binding.drainAuthorityLoss({ handle, context: first.context })
   expect(admitted).toEqual([])
   const second = grant()

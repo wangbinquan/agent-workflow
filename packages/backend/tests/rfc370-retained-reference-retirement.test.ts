@@ -62,6 +62,7 @@ test('forget retires exactly one reference and preserves physical diagnostics an
     feature: () => 'intent-builder',
     seedFiles: () => [],
   })
+  await second.workspace.prepare()
   mkdirSync(first.locations.root, { recursive: true })
   const diagnostic = join(first.locations.root, 'diagnostic.txt')
   writeFileSync(diagnostic, 'original failed turn')
@@ -98,6 +99,7 @@ test('forget retires exactly one reference and preserves physical diagnostics an
     feature: () => 'intent-builder',
     seedFiles: () => [],
   })
+  await fresh.workspace.prepare()
   mkdirSync(fresh.locations.root, { recursive: true })
   owner.contents.forget({ retainedRef: first.workspace.retainedRef })
   expect(
@@ -298,7 +300,7 @@ describeEachProvider('RFC-370 terminal Intent retained-reference retirement', (h
       expect(forgotten).toEqual([reference])
       expect(reference).toStartWith('aw-system-fixture:')
       expect(methodReads).toBe(1)
-      expect(ownerReads).toBe(mode === 'release-failure' ? 2 : 1)
+      expect(ownerReads).toBe(1)
       expect(releases).toBe(mode === 'release-failure' ? 1 : 0)
       expect(warnings).toBe(mode === 'diagnostic-failure' ? 1 : 0)
       expect(readFileSync(join(directory, 'diagnostic.txt'), 'utf8')).toBe(

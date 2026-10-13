@@ -29,7 +29,8 @@ export function composeSystemAgentRunFamily(input: {
     workspaces: input.workspaces,
     retainedContents: input.retainedContents,
     recovery: Object.freeze({
-      recoverReference: (request) => recoverReference.call(recovery, request),
+      recoverReference: (request: Parameters<NonNullable<typeof recoverReference>>[0]) =>
+        recoverReference.call(recovery, request),
     }),
     async run(request) {
       const log = request.log ?? createLogger('systemAgentRun')

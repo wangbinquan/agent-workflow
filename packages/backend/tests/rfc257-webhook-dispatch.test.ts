@@ -347,8 +347,16 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
 
   test('RFC-370: unexpected preparation failure settles and releases the actual selected launch guard', async () => {
     const h = await harness()
-    await insertTrigger(h, { cancelOnMrTerminal: true })
-    const event = ev({ projectId: '77', author: { username: 'human-owner' } })
+    await insertTrigger(h, {
+      cancelOnMrTerminal: true,
+      eventTypes: JSON.stringify(['mr_opened']),
+      ignoreUsernames: '[]',
+    })
+    const event = ev({
+      eventType: 'mr_opened',
+      projectId: '77',
+      author: { username: 'human-owner' },
+    })
     const identity = stableMrIdentityOf(event)!
     const deliveryId = await insertReceivedDelivery(h, event)
     await h.db

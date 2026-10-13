@@ -27,6 +27,8 @@ import { createTaskHostWriteContextAdapter } from '@/modules/task-execution/infr
 import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { describeEachProvider } from './helpers/eachProvider'
 import { deferred, nextTurn } from './helpers/taskHostExecution'
+import ts from 'typescript'
+import { inverseStageAOwnerBindings } from './helpers/stageAOwnerStatementInverse'
 import originals from './fixtures/rfc370-so-host-write-lifecycle-original-sources.json'
 
 function inverseWriteLifecycle(
@@ -49,7 +51,10 @@ function inverseWriteLifecycle(
 test('W26 finite SO inverse restores every whole original authority source and native oracle', () => {
   expect(originals.files).toHaveLength(5)
   for (const original of originals.files) {
-    const text = readFileSync(new URL(`../../../${original.path}`, import.meta.url), 'utf8')
+    const current = readFileSync(new URL(`../../../${original.path}`, import.meta.url), 'utf8')
+    const text = inverseStageAOwnerBindings(
+      ts.createSourceFile(original.path, current, ts.ScriptTarget.Latest, true),
+    ).text
     const restored = inverseWriteLifecycle(text, original.inverseEdits)
     expect(Buffer.byteLength(restored)).toBe(original.bytes)
     expect(createHash('sha256').update(restored).digest('hex')).toBe(original.sha256)

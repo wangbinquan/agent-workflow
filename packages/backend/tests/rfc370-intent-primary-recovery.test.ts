@@ -104,6 +104,7 @@ describeEachProvider('RFC-370 Intent primary receipts and original recovery', (s
       const owner = createIntentTurnExecutionLifecycle(),
         reported = deferred<unknown>()
       let models = 0,
+        helpers = 0,
         failed = false
       const handle = owner.start({ current: () => true, reportFailure: reported.resolve })
       const originalWrite = persistence.writeExecutionCheckpoint.bind(persistence),
@@ -139,18 +140,45 @@ describeEachProvider('RFC-370 Intent primary receipts and original recovery', (s
         },
         async run(request) {
           const receipt = {
-            executionRef: 'original-execution',
-            retainedRef: 'original-material',
+            executionRef: 'original-execution-' + ++helpers,
+            retainedRef: 'original-material-' + helpers,
             startedAt: null,
             recoveryRef: 'original-prepared-helper',
           }
+          const unactivated = (
+            originalReceipt:
+              | typeof receipt
+              | {
+                  executionRef: string
+                  retainedRef: string
+                  startedAt: number
+                  recoveryRef: string
+                },
+          ) => ({
+            status: 'spawn-failed' as const,
+            executionNotActivated: true,
+            executionReceipt: originalReceipt,
+            exitCode: null,
+            durationMs: 0,
+            stderrTail: 'system-agent-execution-admission-expired',
+            retainedRef: originalReceipt.retainedRef,
+            scratchRetained: false,
+            eventText: '',
+            outputEvidence: emptySystemAgentOutputEvidence(),
+          })
           await request.executionReceipts!.prepared(receipt)
+          if (!request.admitExecution!()) return unactivated(receipt)
           await request.executionReceipts!.started({
             ...receipt,
             startedAt: 10,
             recoveryRef: 'original-started-helper',
           })
-          expect(request.admitExecution!()).toBe(true)
+          if (!request.admitExecution!())
+            return unactivated({
+              ...receipt,
+              startedAt: 10,
+              recoveryRef: 'original-started-helper',
+            })
           models++
           return {
             status: 'ok',
@@ -161,11 +189,14 @@ describeEachProvider('RFC-370 Intent primary receipts and original recovery', (s
             scratchRetained: true,
             executionReceipt: { ...receipt, startedAt: 10, recoveryRef: 'original-started-helper' },
             outputEvidence: emptySystemAgentOutputEvidence(),
-            eventText: `<workflow-output nonce="${reservation.envelopeNonce}"><port name="summary">Original</port><port name="changeset">${JSON.stringify({ $schema_version: 1, ops: [{ opId: 'op1', action: 'create', resourceType: 'agent', tempRef: '$new:original', payload: { name: 'original', description: 'Original', outputs: ['result'], bodyMd: 'Original prompt' } }] })}</port></workflow-output>`,
+            eventText: `<workflow-output nonce="${reservation.envelopeNonce}"><port name="summary">Original</port><port name="changeset">${JSON.stringify({ $schema_version: 1, ops: [{ opId: 'op-1', action: 'create', resourceType: 'agent', tempRef: '$new:original', payload: { name: 'original', description: 'Original', outputs: ['result'], bodyMd: 'Original prompt' } }] })}</port></workflow-output>`,
           }
         },
       }
+      const finished = deferred<void>()
       const work = owner.dispatch(reservation.turnId, async (control) => {
+        const originalCheckpoint =
+          (await persistence.readExecutionCheckpoint(reservation.turnId)) ?? checkpoint
         await runIntentTurn(
           {
             persistence,
@@ -175,17 +206,29 @@ describeEachProvider('RFC-370 Intent primary receipts and original recovery', (s
             resourceCatalog: intentResourceCatalogBinding(db, actor, root),
             dumpAuxiliary: intentDumpAuxiliaryForTest(db),
             graphValidation: intentGraphValidationForTest(db),
-            execution: { control, checkpoint },
+            execution: { control, checkpoint: originalCheckpoint },
           },
           { sessionId: session.id, actor, reservation },
         )
+        finished.resolve()
       })
       try {
         await reported.promise
         handle.stop()
         await expect(handle.drain()).rejects.toThrow('intent-original-execution-pending')
-        expect(await owner.recoverOriginal(reservation.turnId)).toBe(true)
+        const unissued = failure === 'prepared' || failure === 'started'
+        expect(await owner.recoverOriginal(reservation.turnId)).toBe(!unissued)
         await Promise.all([work, handle.drain()])
+        if (unissued) {
+          expect(models).toBe(0)
+          expect((await persistence.readExecutionCheckpoint(reservation.turnId))?.phase).toBe(
+            'reserved',
+          )
+          const next = owner.start({ current: () => true })
+          await finished.promise
+          next.stop()
+          await next.drain()
+        }
         expect(failed).toBe(true)
         expect(models).toBe(1)
         expect(await db.select().from(intentDrafts)).toHaveLength(1)

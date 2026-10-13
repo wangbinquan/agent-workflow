@@ -1,0 +1,1056 @@
+{
+  "base": "651f956dfcb1be90f6a1d9d6086f9139f2215e53",
+  "scope": "RFC-370 complete stage A owner, recovery, resource serving and Fusion material bindings only; pre-existing peer hooks remain for their own inverses.",
+  "sources": [
+    {
+      "path": "packages/backend/src/cli/start.ts",
+      "previousSha256": "8a11e26bdb46e6cb9f0bf9da166559ac2e38bd798b9a9f2a8cdaace5c9afe00a",
+      "changes": [
+        {
+          "introduced": "import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'\nimport { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'\n",
+          "previous": "",
+          "needle": "import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'\nimport { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'\nimport { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'\n",
+          "offset": 0
+        },
+        {
+          "introduced": "import {\n  composeLegacySqliteResourceLimitOperations,\n  composeResourceLimitOperations,\n} from '@/modules/system-operations/composition/resourceLimits'\n",
+          "previous": "import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'\n",
+          "needle": "import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'\nimport {\n  composeLegacySqliteResourceLimitOperations,\n  composeResourceLimitOperations,\n} from '@/modules/system-operations/composition/resourceLimits'\nimport {\n",
+          "offset": 90
+        },
+        {
+          "introduced": "import { composeIntentTurnExecution } from '@/modules/intent/composition/execution'\n",
+          "previous": "",
+          "needle": "import { createIntentSessionWsPublisher } from '@/modules/intent/composition/apply'\nimport { composeIntentTurnExecution } from '@/modules/intent/composition/execution'\nimport { DAEMON_GENERATION } from '@/services/daemonGeneration'\n",
+          "offset": 84
+        },
+        {
+          "introduced": "  type TaskExecutionBootRecoveryInput,\n",
+          "previous": "",
+          "needle": "  type BootExecutionRecoveryFactory,\n  type TaskExecutionBootRecoveryInput,\n} from '@/modules/task-execution/composition/bootRecovery'\n",
+          "offset": 37
+        },
+        {
+          "introduced": "import type { HostExecutionGrantContext } from '@/modules/system-operations/public/participants'\n",
+          "previous": "",
+          "needle": "} from '@/modules/task-execution/composition/bootRecovery'\nimport type { HostExecutionGrantContext } from '@/modules/system-operations/public/participants'\nimport { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'\n",
+          "offset": 59
+        },
+        {
+          "introduced": "import {\n  startMaintenanceService,\n  createColdMaintenanceService,\n} from '@/platform/background/maintenanceService'\n",
+          "previous": "import { startMaintenanceService } from '@/platform/background/maintenanceService'\n",
+          "needle": "import { DAEMON_CADENCE } from '@/services/daemonCadence'\nimport {\n  startMaintenanceService,\n  createColdMaintenanceService,\n} from '@/platform/background/maintenanceService'\nimport { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'\n",
+          "offset": 58
+        },
+        {
+          "introduced": "  createAuthorityCommittedEventDispatcher,\n",
+          "previous": "",
+          "needle": "  createCommittedEventDispatcher,\n  createAuthorityCommittedEventDispatcher,\n} from '@/platform/events/committed/dispatcherWorker'\n",
+          "offset": 34
+        },
+        {
+          "introduced": "import {\n  createAfterCommitEventPump,\n  createColdAfterCommitEventPump,\n} from '@/platform/events/committed/afterCommitEventPump'\n",
+          "previous": "import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'\n",
+          "needle": "} from '@/modules/collaboration/composition/committedEvents'\nimport {\n  createAfterCommitEventPump,\n  createColdAfterCommitEventPump,\n} from '@/platform/events/committed/afterCommitEventPump'\nimport { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'\n",
+          "offset": 61
+        },
+        {
+          "introduced": "  createAuthorityCommittedEventDispatcherWorkerDefinition,\n",
+          "previous": "",
+          "needle": "  createCommittedEventDispatcherWorkerDefinition,\n  createAuthorityCommittedEventDispatcherWorkerDefinition,\n  startManagedWorkerDefinition,\n",
+          "offset": 50
+        },
+        {
+          "introduced": "import {\n  composeDaemonHostExecutionBootstrap,\n  assertDaemonHostExecutionRootSelection,\n  installDaemonHostExecutionSession,\n  resumeDaemonResourcesForServing,\n  type DaemonHostExecutionBootstrap,\n  type DaemonHostExecutionSelection,\n} from './daemonHostExecutionBootstrap'\nimport { composeDaemonLocalHostRecovery } from './daemonHostExecutionRecovery'\nimport { bindDaemonHostOwners } from './daemonHostExecutionOwners'\n",
+          "previous": "",
+          "needle": "} from './postgresqlDaemonApplication'\nimport {\n  composeDaemonHostExecutionBootstrap,\n  assertDaemonHostExecutionRootSelection,\n  installDaemonHostExecutionSession,\n  resumeDaemonResourcesForServing,\n  type DaemonHostExecutionBootstrap,\n  type DaemonHostExecutionSelection,\n} from './daemonHostExecutionBootstrap'\nimport { composeDaemonLocalHostRecovery } from './daemonHostExecutionRecovery'\nimport { bindDaemonHostOwners } from './daemonHostExecutionOwners'\nimport { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'\n",
+          "offset": 39
+        },
+        {
+          "introduced": "import {\n  startMaintenanceWorkerSupervisor,\n  createColdMaintenanceWorkerSupervisor,\n} from '@/platform/background/maintenanceWorkerSupervisor'\n",
+          "previous": "import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'\n",
+          "needle": "import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'\nimport {\n  startMaintenanceWorkerSupervisor,\n  createColdMaintenanceWorkerSupervisor,\n} from '@/platform/background/maintenanceWorkerSupervisor'\nimport type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'\n",
+          "offset": 87
+        },
+        {
+          "introduced": "import {\n  isDbSnapshotInProgress,\n  createBackup,\n} from '@/platform/persistence/sqlite/systemProviderBackup'\n",
+          "previous": "import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'\n",
+          "needle": "import { selectDatabaseSchemaProvider } from '@/db/providerSchema'\nimport {\n  isDbSnapshotInProgress,\n  createBackup,\n} from '@/platform/persistence/sqlite/systemProviderBackup'\nimport { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqlite/maintenanceAdmissionStore'\n",
+          "offset": 67
+        },
+        {
+          "introduced": "  fusionWorkspaces?: FusionWorkspaceFactory\n",
+          "previous": "",
+          "needle": "  portArtifactContentEffects?: PortArtifactContentEffects\n  fusionWorkspaces?: FusionWorkspaceFactory\n  taskRunSelection?: TaskRunRootSelection\n",
+          "offset": 58
+        },
+        {
+          "introduced": "  readonly hostExecution?: DaemonHostExecutionSelection\n",
+          "previous": "",
+          "needle": "  startupLease?: DaemonStartupLeasePort\n  readonly hostExecution?: DaemonHostExecutionSelection\n}\n",
+          "offset": 40
+        },
+        {
+          "introduced": "  readonly beforeCloseProvider?: () => void | Promise<void>\n",
+          "previous": "",
+          "needle": "  readonly shutdownIdentity: () => void | Promise<void>\n  readonly beforeCloseProvider?: () => void | Promise<void>\n  readonly closeProvider: () => void | Promise<void>\n",
+          "offset": 56
+        },
+        {
+          "introduced": "}\n\nfunction _bindPausableProviderService(\n  input: Parameters<typeof createPausableDaemonRuntimeServiceBindings>[0],\n  cold: boolean,\n) {\n  return cold\n    ? Promise.resolve(\n        createLazyPausableDaemonRuntimeServiceBindings({\n          ...input,\n          start: input.service.resume.bind(input.service),\n        }),\n      )\n    : createPausableDaemonRuntimeServiceBindings(input)\n",
+          "previous": "",
+          "needle": "  })\n}\n\nfunction _bindPausableProviderService(\n  input: Parameters<typeof createPausableDaemonRuntimeServiceBindings>[0],\n  cold: boolean,\n) {\n  return cold\n    ? Promise.resolve(\n        createLazyPausableDaemonRuntimeServiceBindings({\n          ...input,\n          start: input.service.resume.bind(input.service),\n        }),\n      )\n    : createPausableDaemonRuntimeServiceBindings(input)\n}\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    ...(input.beforeCloseProvider ? { beforeCloseProvider: input.beforeCloseProvider } : {}),\n",
+          "previous": "",
+          "needle": "    shutdownIdentity: input.shutdownIdentity,\n    ...(input.beforeCloseProvider ? { beforeCloseProvider: input.beforeCloseProvider } : {}),\n    closeProvider: input.closeProvider,\n",
+          "offset": 46
+        },
+        {
+          "introduced": "  readonly hostExecution?: DaemonHostExecutionBootstrap\n",
+          "previous": "",
+          "needle": "interface ComposedPostgresqlProviderSession {\n  readonly hostExecution?: DaemonHostExecutionBootstrap\n  readonly application: PostgresqlDaemonApplication\n",
+          "offset": 46
+        },
+        {
+          "introduced": "  if (composeInput.hostExecution) assertDaemonHostExecutionRootSelection(composeInput.hostExecution)\n",
+          "previous": "",
+          "needle": "): Promise<ComposedPostgresqlProviderSession> {\n  if (composeInput.hostExecution) assertDaemonHostExecutionRootSelection(composeInput.hostExecution)\n  const input = Object.freeze({\n",
+          "offset": 48
+        },
+        {
+          "introduced": "  const hostExecution =\n    input.hostExecution === undefined\n      ? undefined\n      : await composeDaemonHostExecutionBootstrap({\n          db,\n          provider: 'postgresql',\n          generation: input.lifecycle.generationId,\n          selection: input.hostExecution,\n          onFailure(error) {\n            input.log.error('host execution lifecycle failed', {\n              error: error instanceof Error ? error.message : String(error),\n            })\n          },\n        })\n",
+          "previous": "",
+          "needle": "  const db = input.provider.openClient()\n  const hostExecution =\n    input.hostExecution === undefined\n      ? undefined\n      : await composeDaemonHostExecutionBootstrap({\n          db,\n          provider: 'postgresql',\n          generation: input.lifecycle.generationId,\n          selection: input.hostExecution,\n          onFailure(error) {\n            input.log.error('host execution lifecycle failed', {\n              error: error instanceof Error ? error.message : String(error),\n            })\n          },\n        })\n  const databaseMigration = composeDatabaseMigrationModule({\n",
+          "offset": 41
+        },
+        {
+          "introduced": "    ...(hostExecution ? { hostExecution } : {}),\n",
+          "previous": "",
+          "needle": "  const application = await composePostgresqlDaemonApplication({\n    ...(hostExecution ? { hostExecution } : {}),\n    taskDeletionEffects: input.taskDeletionEffects,\n",
+          "offset": 65
+        },
+        {
+          "introduced": "    fusionWorkspaces: input.fusionWorkspaces,\n",
+          "previous": "",
+          "needle": "    workspaceExcludeProfiles: input.workspaceExcludeProfiles,\n    fusionWorkspaces: input.fusionWorkspaces,\n    automationWorkspaceEffects: input.automationWorkspaceEffects,\n",
+          "offset": 62
+        },
+        {
+          "introduced": "    ...(runtime.intentTurnExecution ? { execution: runtime.intentTurnExecution } : {}),\n",
+          "previous": "",
+          "needle": "    configuration: input.configuration,\n    ...(runtime.intentTurnExecution ? { execution: runtime.intentTurnExecution } : {}),\n    resume: (sessionIds, config) => runtime.resumeIntentSessions(sessionIds, config),\n",
+          "offset": 40
+        },
+        {
+          "introduced": "  const maintenanceOptions: Parameters<typeof startMaintenanceService>[0] = {\n",
+          "previous": "  const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({\n",
+          "needle": "  const maintenanceConfiguration = await input.configuration.read()\n  const maintenanceOptions: Parameters<typeof startMaintenanceService>[0] = {\n    provider: 'postgresql',\n",
+          "offset": 68
+        },
+        {
+          "introduced": "      activeTaskIds: hostExecution\n        ? () =>\n            runtime.taskExecution.executionModule.runtimeRegistry\n              .activeTokens()\n              .map((token) => token.taskId)\n        : activeTaskIdsSnapshot,\n",
+          "previous": "      activeTaskIds: activeTaskIdsSnapshot,\n",
+          "needle": "    payloadSources: Object.freeze({\n      activeTaskIds: hostExecution\n        ? () =>\n            runtime.taskExecution.executionModule.runtimeRegistry\n              .activeTokens()\n              .map((token) => token.taskId)\n        : activeTaskIdsSnapshot,\n      activeIntentApplyJournalIds: runtime.intentMaintenance.activeApplyJournalIds,\n",
+          "offset": 36
+        },
+        {
+          "introduced": "  }\n  const coldMaintenance = hostExecution\n    ? createColdMaintenanceService({\n        ...maintenanceOptions,\n        createSupervisor: (_config, handlers) =>\n          createColdMaintenanceWorkerSupervisor({\n            appHome: Paths.root,\n            dispatchPaused: true,\n            databaseInit: {\n              provider: 'postgresql',\n              generationId: input.provider.generation.payload.generationId,\n              database: input.config.database,\n            },\n            effectsBootstrap: input.maintenanceEffectsBootstrap,\n            ...handlers,\n          }),\n      })\n    : undefined\n  const maintenanceService = coldMaintenance ?? startMaintenanceService(maintenanceOptions)\n",
+          "previous": "  })\n",
+          "needle": "    },\n  }\n  const coldMaintenance = hostExecution\n    ? createColdMaintenanceService({\n        ...maintenanceOptions,\n        createSupervisor: (_config, handlers) =>\n          createColdMaintenanceWorkerSupervisor({\n            appHome: Paths.root,\n            dispatchPaused: true,\n            databaseInit: {\n              provider: 'postgresql',\n              generationId: input.provider.generation.payload.generationId,\n              database: input.config.database,\n            },\n            effectsBootstrap: input.maintenanceEffectsBootstrap,\n            ...handlers,\n          }),\n      })\n    : undefined\n  const maintenanceService = coldMaintenance ?? startMaintenanceService(maintenanceOptions)\n\n",
+          "offset": 7
+        },
+        {
+          "introduced": "  const maintenanceBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'maintenance',\n      closeParticipantId: 'maintenance-final-close',\n      service: maintenanceService,\n",
+          "previous": "  const maintenanceBindings = await createPausableDaemonRuntimeServiceBindings({\n    runtimeId: 'maintenance',\n    closeParticipantId: 'maintenance-final-close',\n    service: maintenanceService,\n  })\n  const mcpRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({\n    runtimeId: 'mcp-runtime-tests',\n    closeParticipantId: 'mcp-runtime-tests-final-close',\n    service: runtime.mcpRuntimeTests,\n  })\n  const observationReportBindings = await createPausableDaemonRuntimeServiceBindings({\n    runtimeId: 'observation-reports',\n    closeParticipantId: 'observation-reports-final-close',\n    service: {\n      pause: () => runtime.observationReports.stop(),\n      resume: async () => runtime.observationReports.start(),\n      stop: () => runtime.observationReports.stop(),\n",
+          "needle": "\n  const maintenanceBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'maintenance',\n      closeParticipantId: 'maintenance-final-close',\n      service: maintenanceService,\n    },\n",
+          "offset": 1
+        },
+        {
+          "introduced": "    hostExecution !== undefined,\n  )\n  const mcpRuntimeBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'mcp-runtime-tests',\n      closeParticipantId: 'mcp-runtime-tests-final-close',\n      service: runtime.mcpRuntimeTests,\n    },\n    hostExecution !== undefined,\n  )\n  const observationReportBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'observation-reports',\n      closeParticipantId: 'observation-reports-final-close',\n      service: {\n        pause: () => runtime.observationReports.stop(),\n        resume: async () => runtime.observationReports.start(),\n        stop: () => runtime.observationReports.stop(),\n      },\n    },\n    hostExecution !== undefined,\n  )\n",
+          "previous": "  })\n",
+          "needle": "    },\n    hostExecution !== undefined,\n  )\n  const mcpRuntimeBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'mcp-runtime-tests',\n      closeParticipantId: 'mcp-runtime-tests-final-close',\n      service: runtime.mcpRuntimeTests,\n    },\n    hostExecution !== undefined,\n  )\n  const observationReportBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'observation-reports',\n      closeParticipantId: 'observation-reports-final-close',\n      service: {\n        pause: () => runtime.observationReports.stop(),\n        resume: async () => runtime.observationReports.start(),\n        stop: () => runtime.observationReports.stop(),\n      },\n    },\n    hostExecution !== undefined,\n  )\n  const taskExecutionBindings = await _bindTaskExecutionProviderBackground(\n",
+          "offset": 7
+        },
+        {
+          "introduced": "  const committedEventDispatcherInput: Parameters<typeof createCommittedEventDispatcher>[0] = {\n",
+          "previous": "  const committedEventDispatcher = createCommittedEventDispatcher({\n",
+          "needle": "  const terminalSweep = createPostgresqlHumanGateTerminalSweepCommand(db)\n  const committedEventDispatcherInput: Parameters<typeof createCommittedEventDispatcher>[0] = {\n    persistence: committedEventPersistence,\n",
+          "offset": 74
+        },
+        {
+          "introduced": "          if (\n            hostExecution\n              ? runtime.taskExecution.runtime.schedulerDriver.isTaskActive(taskId)\n              : isTaskActive(taskId)\n          )\n            return\n",
+          "previous": "          if (isTaskActive(taskId)) return\n",
+          "needle": "        async nudgeWorkspacePrune(taskId) {\n          if (\n            hostExecution\n              ? runtime.taskExecution.runtime.schedulerDriver.isTaskActive(taskId)\n              : isTaskActive(taskId)\n          )\n            return\n          await runtime.workspaceMaintenance.finalizeClaimedWorkspace(taskId)\n",
+          "offset": 44
+        },
+        {
+          "introduced": "  }\n  const hostCommittedEventWorker = hostExecution\n    ? createAuthorityCommittedEventDispatcherWorkerDefinition({\n        persistence: committedEventPersistence,\n        dispatcher: createAuthorityCommittedEventDispatcher({\n          ...committedEventDispatcherInput,\n          persistence: committedEventPersistence,\n        }),\n      })\n    : undefined\n  const committedEventWorker =\n    hostCommittedEventWorker ??\n    createCommittedEventDispatcherWorkerDefinition({\n      persistence: committedEventPersistence,\n      dispatcher: createCommittedEventDispatcher(committedEventDispatcherInput),\n    })\n",
+          "previous": "  })\n  const committedEventWorker = createCommittedEventDispatcherWorkerDefinition({\n    persistence: committedEventPersistence,\n    dispatcher: committedEventDispatcher,\n  })\n",
+          "needle": "    },\n  }\n  const hostCommittedEventWorker = hostExecution\n    ? createAuthorityCommittedEventDispatcherWorkerDefinition({\n        persistence: committedEventPersistence,\n        dispatcher: createAuthorityCommittedEventDispatcher({\n          ...committedEventDispatcherInput,\n          persistence: committedEventPersistence,\n        }),\n      })\n    : undefined\n  const committedEventWorker =\n    hostCommittedEventWorker ??\n    createCommittedEventDispatcherWorkerDefinition({\n      persistence: committedEventPersistence,\n      dispatcher: createCommittedEventDispatcher(committedEventDispatcherInput),\n    })\n  const committedEventRuntimeFactory = createManagedWorkerRuntimeHandleFactory({\n",
+          "offset": 7
+        },
+        {
+          "introduced": "  const committedEventPumpInput: Parameters<typeof createAfterCommitEventPump>[0] = {\n",
+          "previous": "  const committedEventPump = createAfterCommitEventPump({\n",
+          "needle": "    },\n  })\n  const committedEventPumpInput: Parameters<typeof createAfterCommitEventPump>[0] = {\n    persistence: committedEventPersistence,\n    codecs: committedEventCodecs,\n",
+          "offset": 12
+        },
+        {
+          "introduced": "  }\n  const coldCommittedEventPump = hostExecution\n    ? createColdAfterCommitEventPump(committedEventPumpInput)\n    : undefined\n  const nativeCommittedEventPump = coldCommittedEventPump\n    ? undefined\n    : createAfterCommitEventPump(committedEventPumpInput)\n  const committedEventPump = coldCommittedEventPump ?? nativeCommittedEventPump!\n",
+          "previous": "  })\n",
+          "needle": "    nudgeDispatcher: committedEventWorker.nudge,\n  }\n  const coldCommittedEventPump = hostExecution\n    ? createColdAfterCommitEventPump(committedEventPumpInput)\n    : undefined\n  const nativeCommittedEventPump = coldCommittedEventPump\n    ? undefined\n    : createAfterCommitEventPump(committedEventPumpInput)\n  const committedEventPump = coldCommittedEventPump ?? nativeCommittedEventPump!\n  const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({\n",
+          "offset": 49
+        },
+        {
+          "introduced": "      if (!nativeCommittedEventPump) throw new Error('after-commit-native-factory-unselected')\n",
+          "previous": "",
+          "needle": "  const committedEventPump = coldCommittedEventPump ?? nativeCommittedEventPump!\n  const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({\n    id: 'after-commit-event-pump',\n    start() {\n      if (!nativeCommittedEventPump) throw new Error('after-commit-native-factory-unselected')\n      registerAfterCommitEventPump(committedEventPump)\n      let stopped = false\n      return Object.freeze({\n        stop() {\n",
+          "offset": 215
+        },
+        {
+          "introduced": "        async drain() {\n",
+          "previous": "        drain() {\n",
+          "needle": "      registerAfterCommitEventPump(committedEventPump)\n      let stopped = false\n      return Object.freeze({\n        stop() {\n          if (stopped) return\n          stopped = true\n          registerAfterCommitEventPump(null)\n        },\n        async drain() {\n          if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')\n          await nativeCommittedEventPump.awaitDrained()\n        },\n      })\n    },\n  })\n\n  // RFC-366: the ONE ambient provider the distill path needs. The admission gate\n",
+          "offset": 238
+        },
+        {
+          "introduced": "          await nativeCommittedEventPump.awaitDrained()\n",
+          "previous": "",
+          "needle": "      return Object.freeze({\n        stop() {\n          if (stopped) return\n          stopped = true\n          registerAfterCommitEventPump(null)\n        },\n        async drain() {\n          if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')\n          await nativeCommittedEventPump.awaitDrained()\n        },\n      })\n    },\n  })\n\n  // RFC-366: the ONE ambient provider the distill path needs. The admission gate\n  // runs inside `enqueueDistillJob`, which is reached from clarify / review /\n  // feedback / the two execution-end triggers, none of which have a config path\n",
+          "offset": 266
+        },
+        {
+          "introduced": "    close: async () => {\n      if (!hostExecution || hostExecution.queries.snapshot().phase === 'active')\n        await runtime.memory.distillWorker.recoverRunning()\n    },\n",
+          "previous": "    close: () => runtime.memory.distillWorker.recoverRunning().then(() => undefined),\n",
+          "needle": "    id: 'memory-distill-recover-running',\n    close: async () => {\n      if (!hostExecution || hostExecution.queries.snapshot().phase === 'active')\n        await runtime.memory.distillWorker.recoverRunning()\n    },\n  })\n",
+          "offset": 42
+        },
+        {
+          "introduced": "      if (hostExecution) {\n        await runtime.taskExecution.background.close('daemon-shutdown')\n        return\n      }\n",
+          "previous": "",
+          "needle": "    async close() {\n      if (hostExecution) {\n        await runtime.taskExecution.background.close('daemon-shutdown')\n        return\n      }\n      const { gracefulShutdown } = await import('@/services/shutdown')\n",
+          "offset": 20
+        },
+        {
+          "introduced": "  const ownerFailure = (message: string) => (error: unknown) =>\n    input.log.warn(message, {\n      error: error instanceof Error ? error.message : String(error),\n    })\n  const hostOwners = hostExecution\n    ? bindDaemonHostOwners({\n        intent: intentQueuedResumption.runtimeFactory,\n        task: {\n          background: runtime.taskExecution.background,\n          dependencies: {\n            configuration: input.configuration,\n            scheduled: {\n              operations: runtime.scheduledTasks.operations,\n              identityAccess: runtime.scheduledTaskIdentityAccess,\n            },\n          },\n        },\n        maintenance: coldMaintenance!,\n        mcp: runtime.mcpRuntimeTests.execution!,\n        reports: runtime.observationReportExecution!,\n        webhook: runtime.webhookTerminalControl.execution!,\n        afterCommit: coldCommittedEventPump!,\n        limits: {\n          operations: runtime.resourceLimits,\n          onError: ownerFailure('PostgreSQL resource limit enforcement failed'),\n        },\n        idle: {\n          operations: runtime.taskIdleTimeout,\n          configuration: input.configuration,\n          onError: ownerFailure('PostgreSQL task idle-timeout sweep failed'),\n        },\n        backup: {\n          configuration: input.configuration,\n          appHome: Paths.root,\n          createScheduledBackup: () =>\n            application.core.systemOperations.application.commands.requestBackup.execute(\n              application.core.systemOperations.localContext,\n              { includeWorktrees: true },\n            ),\n          onBackupSettled: () => maintenanceService.runSoon('backupPrune'),\n        },\n        submodules: {\n          store: application.core.repositoryWorkspaceStore,\n          configuration: input.configuration,\n          notificationKey: input.applicationConfiguration.notificationKey,\n          appHome: Paths.root,\n          secretBox: input.secretBox,\n        },\n        importGc: input.configuration,\n        humanGate: humanGateWorker.definition,\n        committed: hostCommittedEventWorker!.definition,\n        memory: {\n          worker: runtime.memory.distillWorker,\n          configuration: input.configuration,\n          onError: ownerFailure('PostgreSQL memory distill tick failed'),\n        },\n        development: {\n          automation: runtime.developmentAutomation,\n          writer: runtime.employeeWriterCutover,\n          onError: ownerFailure('PostgreSQL development wake sweep failed'),\n        },\n        employee: {\n          dependencies: { runtime: employeeRuntime.worker },\n          prepare: runtime.digitalEmployee.maintenance.settleAutomaticUpgrades.bind(\n            runtime.digitalEmployee.maintenance,\n          ),\n          onCycle(result) {\n            if (result.steps >= 32)\n              input.log.warn('PostgreSQL digital employee OS reached its bounded step budget', {\n                ...result,\n              })\n          },\n          onError: ownerFailure('PostgreSQL digital employee OS cycle failed'),\n        },\n        events: {\n          worker: runtime.eventCenter.worker,\n          onCycle(result) {\n            if (result.steps >= 32)\n              input.log.warn('PostgreSQL event center reached its bounded step budget', {\n                ...result,\n              })\n          },\n          onError: ownerFailure('PostgreSQL event center cycle failed'),\n        },\n        fusion: { dependencies: { operations: runtime.fusion, appHome: Paths.root }, onError() {} },\n      })\n    : undefined\n\n",
+          "previous": "",
+          "needle": "\n  const ownerFailure = (message: string) => (error: unknown) =>\n    input.log.warn(message, {\n      error: error instanceof Error ? error.message : String(error),\n    })\n  const hostOwners = hostExecution\n    ? bindDaemonHostOwners({\n        intent: intentQueuedResumption.runtimeFactory,\n        task: {\n          background: runtime.taskExecution.background,\n          dependencies: {\n            configuration: input.configuration,\n            scheduled: {\n              operations: runtime.scheduledTasks.operations,\n              identityAccess: runtime.scheduledTaskIdentityAccess,\n            },\n          },\n        },\n        maintenance: coldMaintenance!,\n        mcp: runtime.mcpRuntimeTests.execution!,\n        reports: runtime.observationReportExecution!,\n        webhook: runtime.webhookTerminalControl.execution!,\n        afterCommit: coldCommittedEventPump!,\n        limits: {\n          operations: runtime.resourceLimits,\n          onError: ownerFailure('PostgreSQL resource limit enforcement failed'),\n        },\n        idle: {\n          operations: runtime.taskIdleTimeout,\n          configuration: input.configuration,\n          onError: ownerFailure('PostgreSQL task idle-timeout sweep failed'),\n        },\n        backup: {\n          configuration: input.configuration,\n          appHome: Paths.root,\n          createScheduledBackup: () =>\n            application.core.systemOperations.application.commands.requestBackup.execute(\n              application.core.systemOperations.localContext,\n              { includeWorktrees: true },\n            ),\n          onBackupSettled: () => maintenanceService.runSoon('backupPrune'),\n        },\n        submodules: {\n          store: application.core.repositoryWorkspaceStore,\n          configuration: input.configuration,\n          notificationKey: input.applicationConfiguration.notificationKey,\n          appHome: Paths.root,\n          secretBox: input.secretBox,\n        },\n        importGc: input.configuration,\n        humanGate: humanGateWorker.definition,\n        committed: hostCommittedEventWorker!.definition,\n        memory: {\n          worker: runtime.memory.distillWorker,\n          configuration: input.configuration,\n          onError: ownerFailure('PostgreSQL memory distill tick failed'),\n        },\n        development: {\n          automation: runtime.developmentAutomation,\n          writer: runtime.employeeWriterCutover,\n          onError: ownerFailure('PostgreSQL development wake sweep failed'),\n        },\n        employee: {\n          dependencies: { runtime: employeeRuntime.worker },\n          prepare: runtime.digitalEmployee.maintenance.settleAutomaticUpgrades.bind(\n            runtime.digitalEmployee.maintenance,\n          ),\n          onCycle(result) {\n            if (result.steps >= 32)\n              input.log.warn('PostgreSQL digital employee OS reached its bounded step budget', {\n                ...result,\n              })\n          },\n          onError: ownerFailure('PostgreSQL digital employee OS cycle failed'),\n        },\n        events: {\n          worker: runtime.eventCenter.worker,\n          onCycle(result) {\n            if (result.steps >= 32)\n              input.log.warn('PostgreSQL event center reached its bounded step budget', {\n                ...result,\n              })\n          },\n          onError: ownerFailure('PostgreSQL event center cycle failed'),\n        },\n        fusion: { dependencies: { operations: runtime.fusion, appHome: Paths.root }, onError() {} },\n      })\n    : undefined\n\n  const session = await _createComposedDaemonProviderRuntimeSession({\n",
+          "offset": 1
+        },
+        {
+          "introduced": "    ...(hostOwners ? { hostExecutionRuntime: { handles: hostOwners } } : {}),\n",
+          "previous": "",
+          "needle": "    webSocket: application.webSocket,\n    ...(hostOwners ? { hostExecutionRuntime: { handles: hostOwners } } : {}),\n    runtimeFactories: [\n",
+          "offset": 38
+        },
+        {
+          "introduced": "    ...(hostExecution ? { beforeCloseProvider: hostExecution.beforeCloseProvider } : {}),\n",
+          "previous": "",
+          "needle": "    shutdownIdentity: () => application.core.identityAccess.shutdown(),\n    ...(hostExecution ? { beforeCloseProvider: hostExecution.beforeCloseProvider } : {}),\n    closeProvider: () => input.provider.close(),\n",
+          "offset": 72
+        },
+        {
+          "introduced": "  if (!hostExecution) return Object.freeze({ application, session })\n  if (!runtime.hostBootRecovery) throw new Error('postgresql-host-boot-recovery-missing')\n  const recoveryInput = {\n    generation: hostExecution.scope.generation,\n    boot: runtime.hostBootRecovery,\n    handles: hostOwners!,\n    prepareOwners: runtime.hostPreparations,\n  }\n  const recovery =\n    input.hostExecution!.recovery?.(recoveryInput) ?? composeDaemonLocalHostRecovery(recoveryInput)\n  const installed = installDaemonHostExecutionSession({\n    bootstrap: hostExecution,\n    recovery,\n    session,\n  })\n  return Object.freeze({ application, session: installed.session, hostExecution })\n",
+          "previous": "  return Object.freeze({ application, session })\n",
+          "needle": "  })\n  if (!hostExecution) return Object.freeze({ application, session })\n  if (!runtime.hostBootRecovery) throw new Error('postgresql-host-boot-recovery-missing')\n  const recoveryInput = {\n    generation: hostExecution.scope.generation,\n    boot: runtime.hostBootRecovery,\n    handles: hostOwners!,\n    prepareOwners: runtime.hostPreparations,\n  }\n  const recovery =\n    input.hostExecution!.recovery?.(recoveryInput) ?? composeDaemonLocalHostRecovery(recoveryInput)\n  const installed = installDaemonHostExecutionSession({\n    bootstrap: hostExecution,\n    recovery,\n    session,\n  })\n  return Object.freeze({ application, session: installed.session, hostExecution })\n}\n",
+          "offset": 5
+        },
+        {
+          "introduced": "  readonly hostExecution?: DaemonHostExecutionSelection\n",
+          "previous": "",
+          "needle": "  readonly provider: ResolvedDatabaseProviderRuntime\n  readonly hostExecution?: DaemonHostExecutionSelection\n  readonly lifecycle: DaemonProviderSessionLifecycleInput\n",
+          "offset": 53
+        },
+        {
+          "introduced": "  fusionWorkspaces?: FusionWorkspaceFactory\n",
+          "previous": "",
+          "needle": "  portArtifactContentEffects?: PortArtifactContentEffects\n  fusionWorkspaces?: FusionWorkspaceFactory\n  readonly taskRunSelection?: TaskRunRootSelection\n",
+          "offset": 58
+        },
+        {
+          "introduced": "  readonly hostExecution?: DaemonHostExecutionBootstrap\n",
+          "previous": "",
+          "needle": "interface ComposedDaemonProviderSession {\n  readonly hostExecution?: DaemonHostExecutionBootstrap\n  readonly application: {\n",
+          "offset": 42
+        },
+        {
+          "introduced": "      hostExecution: opts.hostExecution,\n",
+          "previous": "",
+          "needle": "    const sessionInput = Object.freeze({\n      hostExecution: opts.hostExecution,\n      taskDeletionEffects: opts.taskDeletionEffects,\n",
+          "offset": 41
+        },
+        {
+          "introduced": "      fusionWorkspaces: opts.fusionWorkspaces,\n",
+          "previous": "",
+          "needle": "      workspaceExcludeProfiles: opts.workspaceExcludeProfiles,\n      fusionWorkspaces: opts.fusionWorkspaces,\n      automationWorkspaceEffects: opts.automationWorkspaceEffects,\n",
+          "offset": 63
+        },
+        {
+          "introduced": "    await resumeDaemonResourcesForServing({\n      session: initial.session,\n      scope: lifecycle,\n      host: initial.hostExecution,\n      onExecutionUnavailable(error) {\n        log.warn('host execution unavailable; resource API remains ready', {\n          error: describeDaemonProviderSessionFailure(error),\n        })\n      },\n    })\n",
+          "previous": "    await initial.session.resume(lifecycle)\n",
+          "needle": "    })\n    await resumeDaemonResourcesForServing({\n      session: initial.session,\n      scope: lifecycle,\n      host: initial.hostExecution,\n      onExecutionUnavailable(error) {\n        log.warn('host execution unavailable; resource API remains ready', {\n          error: describeDaemonProviderSessionFailure(error),\n        })\n      },\n    })\n    await serveDaemon({\n",
+          "offset": 7
+        },
+        {
+          "introduced": "  if (input.hostExecution) assertDaemonHostExecutionRootSelection(input.hostExecution)\n",
+          "previous": "",
+          "needle": "): Promise<ComposedDaemonProviderSession> {\n  if (input.hostExecution) assertDaemonHostExecutionRootSelection(input.hostExecution)\n  const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({\n",
+          "offset": 44
+        },
+        {
+          "introduced": "  const hostExecution =\n    input.hostExecution === undefined\n      ? undefined\n      : await composeDaemonHostExecutionBootstrap({\n          db,\n          provider: 'sqlite',\n          generation: lifecycle.generationId,\n          selection: input.hostExecution,\n          onFailure(error) {\n            log.error('host execution lifecycle failed', {\n              error: error instanceof Error ? error.message : String(error),\n            })\n          },\n        })\n  const hostPreparations: ((context: HostExecutionGrantContext) => Promise<void>)[] = []\n  const prepareOwner = async (\n    operation: (context?: HostExecutionGrantContext) => Promise<void>,\n  ) => {\n    if (hostExecution) hostPreparations.push((context) => operation(context))\n    else await operation()\n  }\n",
+          "previous": "",
+          "needle": "  const db = databaseProvider.openClient({ migrationsFolder })\n  const hostExecution =\n    input.hostExecution === undefined\n      ? undefined\n      : await composeDaemonHostExecutionBootstrap({\n          db,\n          provider: 'sqlite',\n          generation: lifecycle.generationId,\n          selection: input.hostExecution,\n          onFailure(error) {\n            log.error('host execution lifecycle failed', {\n              error: error instanceof Error ? error.message : String(error),\n            })\n          },\n        })\n  const hostPreparations: ((context: HostExecutionGrantContext) => Promise<void>)[] = []\n  const prepareOwner = async (\n    operation: (context?: HostExecutionGrantContext) => Promise<void>,\n  ) => {\n    if (hostExecution) hostPreparations.push((context) => operation(context))\n    else await operation()\n  }\n\n",
+          "offset": 63
+        },
+        {
+          "introduced": "      ...(hostExecution ? { host: hostExecution.taskHost } : {}),\n",
+          "previous": "",
+          "needle": "    composeSqliteTaskExecutionProviderRuntime(db, {\n      ...(hostExecution ? { host: hostExecution.taskHost } : {}),\n      nativeUsage,\n",
+          "offset": 52
+        },
+        {
+          "introduced": "    fusionWorkspaces: input.fusionWorkspaces ?? composeLocalFusionWorkspaces(),\n",
+          "previous": "",
+          "needle": "  const fusionOperations = composeSqliteFusionOperations({\n    fusionWorkspaces: input.fusionWorkspaces ?? composeLocalFusionWorkspaces(),\n    // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经\n",
+          "offset": 59
+        },
+        {
+          "introduced": "  await prepareOwner(async () => {\n    const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)\n    if (removedCredentialLeases > 0) {\n      log.info('orphaned git credential leases removed', { count: removedCredentialLeases })\n    }\n  })\n",
+          "previous": "  const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)\n  if (removedCredentialLeases > 0) {\n    log.info('orphaned git credential leases removed', { count: removedCredentialLeases })\n  }\n",
+          "needle": "  })\n  await prepareOwner(async () => {\n    const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)\n    if (removedCredentialLeases > 0) {\n      log.info('orphaned git credential leases removed', { count: removedCredentialLeases })\n    }\n  })\n\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    await readDaemonStartupRecoveryAuthority(\n      lock,\n      hostExecution?.scope.generation ?? DAEMON_GENERATION,\n    ),\n",
+          "previous": "    await readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION),\n",
+          "needle": "  const taskExecutionLockProof = createDaemonRecoveryAuthorityProof(\n    await readDaemonStartupRecoveryAuthority(\n      lock,\n      hostExecution?.scope.generation ?? DAEMON_GENERATION,\n    ),\n  )\n",
+          "offset": 69
+        },
+        {
+          "introduced": "  const bootRecovery: TaskExecutionBootRecoveryInput = {\n",
+          "previous": "  await runTaskExecutionBootRecovery({\n",
+          "needle": "  )\n  const bootRecovery: TaskExecutionBootRecoveryInput = {\n    recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),\n",
+          "offset": 4
+        },
+        {
+          "introduced": "",
+          "previous": "  })\n\n  // RFC-328 terminal maintenance is durable and outlives task-row deletion.\n  // Resume exact delete claims before any automatic continuation is opened.\n  try {\n    const deleteRecovery = await recoverInterruptedTaskDeletes(\n      db,\n      undefined,\n      input.taskDeletionEffects,\n    )\n    if (\n      deleteRecovery.completed.length > 0 ||\n      deleteRecovery.cleanupPending.length > 0 ||\n      deleteRecovery.recoveryRequired.length > 0\n    ) {\n      log.info('terminal task delete recovery', { ...deleteRecovery })\n    }\n  } catch (err) {\n    log.warn('terminal task delete recovery failed', {\n      error: err instanceof Error ? err.message : String(err),\n    })\n",
+          "needle": "    log,\n  }\n",
+          "offset": 9
+        },
+        {
+          "introduced": "  if (!hostExecution) await runTaskExecutionBootRecovery(bootRecovery)\n  await prepareOwner(async (context) => {\n    // RFC-328 terminal maintenance is durable and outlives task-row deletion.\n    // Resume exact delete claims before any automatic continuation is opened.\n    try {\n      const deleteRecovery = await recoverInterruptedTaskDeletes(\n        db,\n        undefined,\n        input.taskDeletionEffects,\n      )\n      if (\n        deleteRecovery.completed.length > 0 ||\n        deleteRecovery.cleanupPending.length > 0 ||\n        deleteRecovery.recoveryRequired.length > 0\n      ) {\n        log.info('terminal task delete recovery', { ...deleteRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal task delete recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n",
+          "previous": "  // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步\n  // 走 provider 中立的命令面（归档命令 recover + 工作区维护 recover），PostgreSQL daemon 跑的是同一段。\n  try {\n    const archiveRecovery = await taskExecutionProvider.archive.recover({\n      archiveDir: Paths.taskArchiveDir,\n      runsDir: Paths.runsDir,\n      logsDir: Paths.logsDir,\n    })\n    if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {\n      log.info('terminal task archive recovery', { ...archiveRecovery })\n    }\n  } catch (err) {\n    log.warn('terminal task archive recovery failed', {\n      error: err instanceof Error ? err.message : String(err),\n    })\n  }\n\n  // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal\n  // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。\n  const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({\n    db,\n    appHome: Paths.root,\n    terminalMaintenance: taskExecutionPersistence.terminalMaintenance,\n    isMaterializingTask: () => false,\n    invalidateWorkspacePath: invalidateCallGraphIndex,\n  })\n  try {\n    const workspaceRecovery = await bootWorkspaceMaintenance.recover({\n      activeTaskIds: [],\n      webhookClaims: 'all',\n    })\n    if (\n      workspaceRecovery.completed > 0 ||\n      workspaceRecovery.failed > 0 ||\n      workspaceRecovery.healed > 0\n    ) {\n      log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })\n    }\n  } catch (err) {\n    log.warn('terminal workspace maintenance recovery failed', {\n      error: err instanceof Error ? err.message : String(err),\n    })\n  }\n\n  // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /\n  // legacy cross stop）由 RFC-217 T8 收编为一次性 migration 0107（垫片模块\n  // 随之删除）；migration 恰好一次的语义取代 boot-once 幂等重放。\n\n  // 5b4b. RFC-354 T4: one-shot frame backfill for node_runs rows minted before\n  // frames existed (migration 0223 adds the columns, only the daemon can fill\n  // them — it needs each task's frozen snapshot). Marker-gated: every later boot\n  // is a single maintenance_state read. Must run BEFORE auto-resume (step 8+)\n  // so a resumed nested wrapper sees its body rows in the right generation.\n  try {\n    const { runFrameBackfillOnBoot } =\n      await import('@/modules/task-execution/composition/frameBackfill')\n    const backfill = await runFrameBackfillOnBoot({ db })\n    if (!backfill.skipped) {\n      log.info('rfc354 frame backfill completed on boot', {\n        tasks: backfill.tasks,\n        rowsUpdated: backfill.rowsUpdated,\n        roundsUpdated: backfill.roundsUpdated,\n        unreadableTasks: backfill.unreadableTasks.length,\n        unresolvedRows: backfill.unresolvedRows,\n",
+          "needle": "  }\n  if (!hostExecution) await runTaskExecutionBootRecovery(bootRecovery)\n  await prepareOwner(async (context) => {\n    // RFC-328 terminal maintenance is durable and outlives task-row deletion.\n    // Resume exact delete claims before any automatic continuation is opened.\n    try {\n      const deleteRecovery = await recoverInterruptedTaskDeletes(\n        db,\n        undefined,\n        input.taskDeletionEffects,\n      )\n      if (\n        deleteRecovery.completed.length > 0 ||\n        deleteRecovery.cleanupPending.length > 0 ||\n        deleteRecovery.recoveryRequired.length > 0\n      ) {\n        log.info('terminal task delete recovery', { ...deleteRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal task delete recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n",
+          "offset": 4
+        },
+        {
+          "introduced": "    // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步\n    // 走 provider 中立的命令面（归档命令 recover + 工作区维护 recover），PostgreSQL daemon 跑的是同一段。\n    if (context && !context.current()) return\n    try {\n      const archiveRecovery = await taskExecutionProvider.archive.recover({\n        archiveDir: Paths.taskArchiveDir,\n        runsDir: Paths.runsDir,\n        logsDir: Paths.logsDir,\n      })\n      if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {\n        log.info('terminal task archive recovery', { ...archiveRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal task archive recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n\n    // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal\n    // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。\n    if (context && !context.current()) return\n    const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({\n      db,\n      appHome: Paths.root,\n      terminalMaintenance: taskExecutionPersistence.terminalMaintenance,\n      isMaterializingTask: () => false,\n      invalidateWorkspacePath: invalidateCallGraphIndex,\n",
+          "previous": "  } catch (err) {\n    log.warn('rfc354 frame backfill on boot failed', {\n      error: err instanceof Error ? err.message : String(err),\n",
+          "needle": "    }\n    // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步\n    // 走 provider 中立的命令面（归档命令 recover + 工作区维护 recover），PostgreSQL daemon 跑的是同一段。\n    if (context && !context.current()) return\n    try {\n      const archiveRecovery = await taskExecutionProvider.archive.recover({\n        archiveDir: Paths.taskArchiveDir,\n        runsDir: Paths.runsDir,\n        logsDir: Paths.logsDir,\n      })\n      if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {\n        log.info('terminal task archive recovery', { ...archiveRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal task archive recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n\n    // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal\n    // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。\n    if (context && !context.current()) return\n    const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({\n      db,\n      appHome: Paths.root,\n      terminalMaintenance: taskExecutionPersistence.terminalMaintenance,\n      isMaterializingTask: () => false,\n      invalidateWorkspacePath: invalidateCallGraphIndex,\n    })\n",
+          "offset": 6
+        },
+        {
+          "introduced": "    try {\n      const workspaceRecovery = await bootWorkspaceMaintenance.recover({\n        activeTaskIds: [],\n        webhookClaims: 'all',\n      })\n      if (\n        workspaceRecovery.completed > 0 ||\n        workspaceRecovery.failed > 0 ||\n        workspaceRecovery.healed > 0\n      ) {\n        log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal workspace maintenance recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n",
+          "previous": "  }\n",
+          "needle": "    })\n    try {\n      const workspaceRecovery = await bootWorkspaceMaintenance.recover({\n        activeTaskIds: [],\n        webhookClaims: 'all',\n      })\n      if (\n        workspaceRecovery.completed > 0 ||\n        workspaceRecovery.failed > 0 ||\n        workspaceRecovery.healed > 0\n      ) {\n        log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal workspace maintenance recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n\n",
+          "offset": 7
+        },
+        {
+          "introduced": "    // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /\n    // legacy cross stop）由 RFC-217 T8 收编为一次性 migration 0107（垫片模块\n    // 随之删除）；migration 恰好一次的语义取代 boot-once 幂等重放。\n\n    // 5b4b. RFC-354 T4: one-shot frame backfill for node_runs rows minted before\n    // frames existed (migration 0223 adds the columns, only the daemon can fill\n    // them — it needs each task's frozen snapshot). Marker-gated: every later boot\n    // is a single maintenance_state read. Must run BEFORE auto-resume (step 8+)\n    // so a resumed nested wrapper sees its body rows in the right generation.\n    if (context && !context.current()) return\n    try {\n      const { runFrameBackfillOnBoot } =\n        await import('@/modules/task-execution/composition/frameBackfill')\n      const backfill = await runFrameBackfillOnBoot({ db })\n      if (!backfill.skipped) {\n        log.info('rfc354 frame backfill completed on boot', {\n          tasks: backfill.tasks,\n          rowsUpdated: backfill.rowsUpdated,\n          roundsUpdated: backfill.roundsUpdated,\n          unreadableTasks: backfill.unreadableTasks.length,\n          unresolvedRows: backfill.unresolvedRows,\n        })\n      }\n    } catch (err) {\n      log.warn('rfc354 frame backfill on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n",
+          "previous": "  // 5b5. RFC-165 (§9): heal stored path-mode scheduled launch payloads to their\n  // faithful file:// form (fetchBeforeLaunch:true / missing dirs → disabled with\n  // an explanatory lastError). MUST run before the HTTP server serves the\n  // scheduled read/edit routes AND before the scheduler ticker fires — 幂等 +\n  // best-effort.\n  try {\n    const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')\n    const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)\n    if (healed.converted > 0 || healed.disabled > 0) {\n      log.info('scheduled launch payloads healed', healed)\n",
+          "needle": "\n    // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /\n    // legacy cross stop）由 RFC-217 T8 收编为一次性 migration 0107（垫片模块\n    // 随之删除）；migration 恰好一次的语义取代 boot-once 幂等重放。\n\n    // 5b4b. RFC-354 T4: one-shot frame backfill for node_runs rows minted before\n    // frames existed (migration 0223 adds the columns, only the daemon can fill\n    // them — it needs each task's frozen snapshot). Marker-gated: every later boot\n    // is a single maintenance_state read. Must run BEFORE auto-resume (step 8+)\n    // so a resumed nested wrapper sees its body rows in the right generation.\n    if (context && !context.current()) return\n    try {\n      const { runFrameBackfillOnBoot } =\n        await import('@/modules/task-execution/composition/frameBackfill')\n      const backfill = await runFrameBackfillOnBoot({ db })\n      if (!backfill.skipped) {\n        log.info('rfc354 frame backfill completed on boot', {\n          tasks: backfill.tasks,\n          rowsUpdated: backfill.rowsUpdated,\n          roundsUpdated: backfill.roundsUpdated,\n          unreadableTasks: backfill.unreadableTasks.length,\n          unresolvedRows: backfill.unresolvedRows,\n        })\n      }\n    } catch (err) {\n      log.warn('rfc354 frame backfill on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n",
+          "offset": 1
+        },
+        {
+          "introduced": "",
+          "previous": "  } catch (err) {\n    log.warn('scheduled payload heal on boot failed', {\n      error: err instanceof Error ? err.message : String(err),\n    })\n  }\n",
+          "needle": "      })\n    }\n\n    // 5b5. RFC-165 (§9): heal stored path-mode scheduled launch payloads to their\n",
+          "offset": 15
+        },
+        {
+          "introduced": "    // 5b5. RFC-165 (§9): heal stored path-mode scheduled launch payloads to their\n    // faithful file:// form (fetchBeforeLaunch:true / missing dirs → disabled with\n    // an explanatory lastError). MUST run before the HTTP server serves the\n    // scheduled read/edit routes AND before the scheduler ticker fires — 幂等 +\n    // best-effort.\n    if (context && !context.current()) return\n    try {\n      const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')\n      const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)\n      if (healed.converted > 0 || healed.disabled > 0) {\n        log.info('scheduled launch payloads healed', healed)\n      }\n    } catch (err) {\n      log.warn('scheduled payload heal on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n",
+          "previous": "  // 5b5. RFC-170 T6 (Codex re-review F9): recover fusion DECISION half-states left\n  // by a crash mid-approve/mid-reject (multi-tx decisions). Roll forward an\n  // 'applying' whose version already committed, roll back the rest, and fail a\n  // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.\n  try {\n    const { recoverFusionDecisions } =\n      await import('@/modules/knowledge-evolution/public/operations')\n    const r = await recoverFusionDecisions(fusionOperations.persistence)\n    if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {\n      log.info('fusion decision recovery on boot', { ...r })\n",
+          "needle": "\n    // 5b5. RFC-165 (§9): heal stored path-mode scheduled launch payloads to their\n    // faithful file:// form (fetchBeforeLaunch:true / missing dirs → disabled with\n    // an explanatory lastError). MUST run before the HTTP server serves the\n    // scheduled read/edit routes AND before the scheduler ticker fires — 幂等 +\n    // best-effort.\n    if (context && !context.current()) return\n    try {\n      const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')\n      const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)\n      if (healed.converted > 0 || healed.disabled > 0) {\n        log.info('scheduled launch payloads healed', healed)\n      }\n    } catch (err) {\n      log.warn('scheduled payload heal on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n",
+          "offset": 1
+        },
+        {
+          "introduced": "\n    // 5b5. RFC-170 T6 (Codex re-review F9): recover fusion DECISION half-states left\n    // by a crash mid-approve/mid-reject (multi-tx decisions). Roll forward an\n    // 'applying' whose version already committed, roll back the rest, and fail a\n    // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.\n    if (context && !context.current()) return\n    try {\n      const { recoverFusionDecisions } =\n        await import('@/modules/knowledge-evolution/public/operations')\n      const r = await recoverFusionDecisions(fusionOperations.persistence)\n      if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {\n        log.info('fusion decision recovery on boot', { ...r })\n      }\n    } catch (err) {\n      log.warn('fusion decision recovery on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n  })\n",
+          "previous": "  } catch (err) {\n    log.warn('fusion decision recovery on boot failed', {\n      error: err instanceof Error ? err.message : String(err),\n    })\n  }\n",
+          "needle": "    }\n\n    // 5b5. RFC-170 T6 (Codex re-review F9): recover fusion DECISION half-states left\n    // by a crash mid-approve/mid-reject (multi-tx decisions). Roll forward an\n    // 'applying' whose version already committed, roll back the rest, and fail a\n    // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.\n    if (context && !context.current()) return\n    try {\n      const { recoverFusionDecisions } =\n        await import('@/modules/knowledge-evolution/public/operations')\n      const r = await recoverFusionDecisions(fusionOperations.persistence)\n      if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {\n        log.info('fusion decision recovery on boot', { ...r })\n      }\n    } catch (err) {\n      log.warn('fusion decision recovery on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n  })\n\n",
+          "offset": 6
+        },
+        {
+          "introduced": "    ...(hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "  const mcpRuntimeTests = composeLocalMcpDiagnostics({\n    ...(hostExecution ? { executionMode: 'host' as const } : {}),\n    observe:\n",
+          "offset": 55
+        },
+        {
+          "introduced": "  const mcpRuntimeTestBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'mcp-runtime-tests',\n      closeParticipantId: 'mcp-runtime-tests-final-close',\n      service: mcpRuntimeTests,\n    },\n    hostExecution !== undefined,\n  )\n",
+          "previous": "  const mcpRuntimeTestBindings = await createPausableDaemonRuntimeServiceBindings({\n    runtimeId: 'mcp-runtime-tests',\n    closeParticipantId: 'mcp-runtime-tests-final-close',\n    service: mcpRuntimeTests,\n  })\n",
+          "needle": "  )\n  const mcpRuntimeTestBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'mcp-runtime-tests',\n      closeParticipantId: 'mcp-runtime-tests-final-close',\n      service: mcpRuntimeTests,\n    },\n    hostExecution !== undefined,\n  )\n\n",
+          "offset": 4
+        },
+        {
+          "introduced": "    ...(hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "    db,\n    ...(hostExecution ? { executionMode: 'host' as const } : {}),\n    // RFC-359 AC-1（第 14 刀）：无 driver 时的工作区收尾由**装配方**交——这一支交的是它\n",
+          "offset": 8
+        },
+        {
+          "introduced": "      ...(hostExecution\n        ? { runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry }\n        : {}),\n",
+          "previous": "",
+          "needle": "      db,\n      ...(hostExecution\n        ? { runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry }\n        : {}),\n      finalizeWithoutDriver: async (taskId) => {\n",
+          "offset": 10
+        },
+        {
+          "introduced": "  if (!hostExecution) await webhookTerminalControl.reconcileOnBoot()\n",
+          "previous": "  await webhookTerminalControl.reconcileOnBoot()\n",
+          "needle": "  })\n  if (!hostExecution) await webhookTerminalControl.reconcileOnBoot()\n  const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)\n",
+          "offset": 5
+        },
+        {
+          "introduced": "  await prepareOwner(async () => {\n    const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)\n    if (recoveredDeliveries > 0) {\n      log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })\n    }\n  })\n",
+          "previous": "  const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)\n  if (recoveredDeliveries > 0) {\n    log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })\n  }\n",
+          "needle": "  const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)\n  await prepareOwner(async () => {\n    const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)\n    if (recoveredDeliveries > 0) {\n      log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })\n    }\n  })\n  // RFC-310 PR-10 T104：legacy code-capability 的四个启动恢复钩子（lease 回收/\n",
+          "offset": 78
+        },
+        {
+          "introduced": "  const employeeWriterState = hostExecution ? undefined : await employeeWriterCutover.activate()\n  if (employeeWriterState) log.info('digital employee writer activated', { ...employeeWriterState })\n  if (hostExecution)\n    hostPreparations.push(async () => {\n      const state = await employeeWriterCutover.activate()\n      log.info('digital employee writer activated', { ...state })\n    })\n",
+          "previous": "  const employeeWriterState = await employeeWriterCutover.activate()\n  log.info('digital employee writer activated', { ...employeeWriterState })\n",
+          "needle": "  const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)\n  const employeeWriterState = hostExecution ? undefined : await employeeWriterCutover.activate()\n  if (employeeWriterState) log.info('digital employee writer activated', { ...employeeWriterState })\n  if (hostExecution)\n    hostPreparations.push(async () => {\n      const state = await employeeWriterCutover.activate()\n      log.info('digital employee writer activated', { ...state })\n    })\n\n",
+          "offset": 75
+        },
+        {
+          "introduced": "  const committedEventDispatcherInput: Parameters<typeof createCommittedEventDispatcher>[0] = {\n",
+          "previous": "  const committedEventDispatcher = createCommittedEventDispatcher({\n",
+          "needle": "  const humanGateTerminalSweep = createSqliteHumanGateTerminalSweepCommand(db)\n\n  const committedEventDispatcherInput: Parameters<typeof createCommittedEventDispatcher>[0] = {\n    persistence: committedEventPersistence,\n    workerId: `committed-events-${DAEMON_GENERATION}`,\n",
+          "offset": 80
+        },
+        {
+          "introduced": "          if (\n            hostExecution\n              ? taskExecutionRuntime.schedulerDriver.isTaskActive(taskId)\n              : isTaskActive(taskId)\n          )\n            return\n",
+          "previous": "          if (isTaskActive(taskId)) return\n",
+          "needle": "        async nudgeWorkspacePrune(taskId) {\n          if (\n            hostExecution\n              ? taskExecutionRuntime.schedulerDriver.isTaskActive(taskId)\n              : isTaskActive(taskId)\n          )\n            return\n          await finishClaimedWebhookWorkspacePrune(db, taskId)\n",
+          "offset": 44
+        },
+        {
+          "introduced": "  }\n  const hostCommittedEventWorker = hostExecution\n    ? createAuthorityCommittedEventDispatcherWorkerDefinition({\n        persistence: committedEventPersistence,\n        dispatcher: createAuthorityCommittedEventDispatcher({\n          ...committedEventDispatcherInput,\n          persistence: committedEventPersistence,\n        }),\n      })\n    : undefined\n  const committedEventWorkerDefinition =\n    hostCommittedEventWorker ??\n    createCommittedEventDispatcherWorkerDefinition({\n      persistence: committedEventPersistence,\n      dispatcher: createCommittedEventDispatcher(committedEventDispatcherInput),\n    })\n  const committedEventPumpInput: Parameters<typeof createAfterCommitEventPump>[0] = {\n",
+          "previous": "  })\n  const committedEventWorkerDefinition = createCommittedEventDispatcherWorkerDefinition({\n    persistence: committedEventPersistence,\n    dispatcher: committedEventDispatcher,\n  })\n  const committedEventPump = createAfterCommitEventPump({\n",
+          "needle": "    },\n  }\n  const hostCommittedEventWorker = hostExecution\n    ? createAuthorityCommittedEventDispatcherWorkerDefinition({\n        persistence: committedEventPersistence,\n        dispatcher: createAuthorityCommittedEventDispatcher({\n          ...committedEventDispatcherInput,\n          persistence: committedEventPersistence,\n        }),\n      })\n    : undefined\n  const committedEventWorkerDefinition =\n    hostCommittedEventWorker ??\n    createCommittedEventDispatcherWorkerDefinition({\n      persistence: committedEventPersistence,\n      dispatcher: createCommittedEventDispatcher(committedEventDispatcherInput),\n    })\n  const committedEventPumpInput: Parameters<typeof createAfterCommitEventPump>[0] = {\n    persistence: committedEventPersistence,\n",
+          "offset": 7
+        },
+        {
+          "introduced": "  }\n  const coldCommittedEventPump = hostExecution\n    ? createColdAfterCommitEventPump(committedEventPumpInput)\n    : undefined\n  const nativeCommittedEventPump = coldCommittedEventPump\n    ? undefined\n    : createAfterCommitEventPump(committedEventPumpInput)\n  const committedEventPump = coldCommittedEventPump ?? nativeCommittedEventPump!\n",
+          "previous": "  })\n",
+          "needle": "    nudgeDispatcher: committedEventWorkerDefinition.nudge,\n  }\n  const coldCommittedEventPump = hostExecution\n    ? createColdAfterCommitEventPump(committedEventPumpInput)\n    : undefined\n  const nativeCommittedEventPump = coldCommittedEventPump\n    ? undefined\n    : createAfterCommitEventPump(committedEventPumpInput)\n  const committedEventPump = coldCommittedEventPump ?? nativeCommittedEventPump!\n  // RFC-349 —— 与 PostgreSQL daemon 同构：post-commit 投影泵必须归 provider session 管。\n",
+          "offset": 59
+        },
+        {
+          "introduced": "      if (!nativeCommittedEventPump) throw new Error('after-commit-native-factory-unselected')\n",
+          "previous": "",
+          "needle": "  // 明确允许 pump 缺席，durable delivery 是恢复路径（`platform/events/committed/runtime.ts`）。\n  const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({\n    id: 'after-commit-event-pump',\n    start() {\n      if (!nativeCommittedEventPump) throw new Error('after-commit-native-factory-unselected')\n      registerAfterCommitEventPump(committedEventPump)\n      let stopped = false\n      return Object.freeze({\n        stop() {\n",
+          "offset": 216
+        },
+        {
+          "introduced": "        async drain() {\n",
+          "previous": "        drain() {\n",
+          "needle": "      registerAfterCommitEventPump(committedEventPump)\n      let stopped = false\n      return Object.freeze({\n        stop() {\n          if (stopped) return\n          stopped = true\n          registerAfterCommitEventPump(null)\n        },\n        async drain() {\n          if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')\n          await nativeCommittedEventPump.awaitDrained()\n        },\n      })\n    },\n  })\n  const humanGateContinuationRuntimeFactory = createManagedWorkerRuntimeHandleFactory({\n    id: 'human-gate-continuation',\n",
+          "offset": 238
+        },
+        {
+          "introduced": "          await nativeCommittedEventPump.awaitDrained()\n",
+          "previous": "",
+          "needle": "      return Object.freeze({\n        stop() {\n          if (stopped) return\n          stopped = true\n          registerAfterCommitEventPump(null)\n        },\n        async drain() {\n          if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')\n          await nativeCommittedEventPump.awaitDrained()\n        },\n      })\n    },\n  })\n  const humanGateContinuationRuntimeFactory = createManagedWorkerRuntimeHandleFactory({\n    id: 'human-gate-continuation',\n    stopReason: 'provider-session-paused',\n    start() {\n",
+          "offset": 266
+        },
+        {
+          "introduced": "  const maintenanceOptions: Parameters<typeof startMaintenanceService>[0] = {\n",
+          "previous": "  const maintenanceService = startMaintenanceService({\n",
+          "needle": "  const maintenanceConfiguration = await configuration.read()\n  const maintenanceOptions: Parameters<typeof startMaintenanceService>[0] = {\n    // RFC-359 AC-10：装配方本来就知道自己在装哪个 provider，写出来。\n",
+          "offset": 62
+        },
+        {
+          "introduced": "      activeTaskIds: hostExecution\n        ? () =>\n            taskExecutionProvider.executionModule.runtimeRegistry\n              .activeTokens()\n              .map((token) => token.taskId)\n        : activeTaskIdsSnapshot,\n",
+          "previous": "      activeTaskIds: activeTaskIdsSnapshot,\n",
+          "needle": "    payloadSources: Object.freeze({\n      activeTaskIds: hostExecution\n        ? () =>\n            taskExecutionProvider.executionModule.runtimeRegistry\n              .activeTokens()\n              .map((token) => token.taskId)\n        : activeTaskIdsSnapshot,\n      activeIntentApplyJournalIds: intentMaintenanceSnapshots.activeApplyJournalIds,\n",
+          "offset": 36
+        },
+        {
+          "introduced": "  }\n  const coldMaintenance = hostExecution\n    ? createColdMaintenanceService({\n        ...maintenanceOptions,\n        createSupervisor: (config, handlers) =>\n          createColdMaintenanceWorkerSupervisor({\n            appHome: Paths.root,\n            dispatchPaused: true,\n            databaseInit: {\n              dbPath: Paths.db,\n              migrationsFolder,\n              sqlite: {\n                synchronous: config.sqliteSynchronous,\n                pageCacheMib: config.sqlitePageCacheMib,\n                mmapMib: config.sqliteMmapMib,\n                busyTimeoutMs: 50,\n              },\n            },\n            effectsBootstrap: input.maintenanceEffectsBootstrap,\n            ...handlers,\n          }),\n      })\n    : undefined\n  const maintenanceService = coldMaintenance ?? startMaintenanceService(maintenanceOptions)\n  const maintenanceRuntimeBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'maintenance',\n      closeParticipantId: 'maintenance-final-close',\n      service: maintenanceService,\n    },\n    hostExecution !== undefined,\n  )\n",
+          "previous": "  })\n  const maintenanceRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({\n    runtimeId: 'maintenance',\n    closeParticipantId: 'maintenance-final-close',\n    service: maintenanceService,\n  })\n",
+          "needle": "    onIntentQueued: intentQueuedNotifications.enqueue,\n  }\n  const coldMaintenance = hostExecution\n    ? createColdMaintenanceService({\n        ...maintenanceOptions,\n        createSupervisor: (config, handlers) =>\n          createColdMaintenanceWorkerSupervisor({\n            appHome: Paths.root,\n            dispatchPaused: true,\n            databaseInit: {\n              dbPath: Paths.db,\n              migrationsFolder,\n              sqlite: {\n                synchronous: config.sqliteSynchronous,\n                pageCacheMib: config.sqlitePageCacheMib,\n                mmapMib: config.sqliteMmapMib,\n                busyTimeoutMs: 50,\n              },\n            },\n            effectsBootstrap: input.maintenanceEffectsBootstrap,\n            ...handlers,\n          }),\n      })\n    : undefined\n  const maintenanceService = coldMaintenance ?? startMaintenanceService(maintenanceOptions)\n  const maintenanceRuntimeBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'maintenance',\n      closeParticipantId: 'maintenance-final-close',\n      service: maintenanceService,\n    },\n    hostExecution !== undefined,\n  )\n  // RFC-349 T5 — compose this provider-neutral participant once at daemon\n",
+          "offset": 55
+        },
+        {
+          "introduced": "    ...(hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "  const observationReports = composeCompleteObservationReports({\n    ...(hostExecution ? { executionMode: 'host' as const } : {}),\n    projection: composeOriginalObservationProjection({\n",
+          "offset": 65
+        },
+        {
+          "introduced": "      ...(hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "    projection: composeOriginalObservationProjection({\n      ...(hostExecution ? { executionMode: 'host' as const } : {}),\n      db,\n",
+          "offset": 55
+        },
+        {
+          "introduced": "  const observationReportBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'observation-reports',\n      closeParticipantId: 'observation-reports-final-close',\n      service: {\n        pause: () => observationReports.worker.stop(),\n        resume: async () => observationReports.worker.start(),\n        stop: () => observationReports.worker.stop(),\n      },\n",
+          "previous": "  const observationReportBindings = await createPausableDaemonRuntimeServiceBindings({\n    runtimeId: 'observation-reports',\n    closeParticipantId: 'observation-reports-final-close',\n    service: {\n      pause: () => observationReports.worker.stop(),\n      resume: async () => observationReports.worker.start(),\n      stop: () => observationReports.worker.stop(),\n",
+          "needle": "  })\n  const observationReportBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'observation-reports',\n      closeParticipantId: 'observation-reports-final-close',\n      service: {\n        pause: () => observationReports.worker.stop(),\n        resume: async () => observationReports.worker.start(),\n        stop: () => observationReports.worker.stop(),\n      },\n    },\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    hostExecution !== undefined,\n  )\n  const intentTurnExecution = hostExecution ? composeIntentTurnExecution() : undefined\n",
+          "previous": "  })\n",
+          "needle": "    },\n    hostExecution !== undefined,\n  )\n  const intentTurnExecution = hostExecution ? composeIntentTurnExecution() : undefined\n  const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({\n",
+          "offset": 7
+        },
+        {
+          "introduced": "    ...(intentTurnExecution ? { intentTurnExecution } : {}),\n",
+          "previous": "",
+          "needle": "  const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({\n    ...(intentTurnExecution ? { intentTurnExecution } : {}),\n    nativeUsage,\n",
+          "offset": 91
+        },
+        {
+          "introduced": "    fusionWorkspaces: input.fusionWorkspaces,\n",
+          "previous": "",
+          "needle": "    workspaceExcludeProfiles: input.workspaceExcludeProfiles,\n    fusionWorkspaces: input.fusionWorkspaces,\n    taskDeletionEffects: input.taskDeletionEffects,\n",
+          "offset": 62
+        },
+        {
+          "introduced": "    hostExecutionHttp: hostExecution?.http,\n",
+          "previous": "",
+          "needle": "    daemonRuntime: input.daemonRuntime,\n    hostExecutionHttp: hostExecution?.http,\n    // RFC-226: runtime readiness is not daemon health. Startup never executes\n",
+          "offset": 40
+        },
+        {
+          "introduced": "  const reverifyResourceContent = async () => {\n",
+          "previous": "  void (async () => {\n",
+          "needle": "  //     is just \"available later\"); best-effort, never crashes the daemon.\n  const reverifyResourceContent = async () => {\n    try {\n",
+          "offset": 76
+        },
+        {
+          "introduced": "  }\n  if (hostExecution) await reverifyResourceContent()\n  else void reverifyResourceContent()\n",
+          "previous": "  })()\n",
+          "needle": "    }\n  }\n  if (hostExecution) await reverifyResourceContent()\n  else void reverifyResourceContent()\n\n",
+          "offset": 6
+        },
+        {
+          "introduced": "    employeeWriterState &&\n    (employeeWriterState.mode === 'legacy-draining' || employeeWriterState.legacyAdmissionsEnabled)\n",
+          "previous": "    employeeWriterState.mode === 'legacy-draining' ||\n    employeeWriterState.legacyAdmissionsEnabled\n",
+          "needle": "  if (\n    employeeWriterState &&\n    (employeeWriterState.mode === 'legacy-draining' || employeeWriterState.legacyAdmissionsEnabled)\n  ) {\n",
+          "offset": 7
+        },
+        {
+          "introduced": "  if (hostExecution) {\n    await employeeOs.maintenance.ready()\n    hostPreparations.push(() => employeeOs.maintenance.settleAutomaticUpgrades())\n  } else await employeeOs.maintenance.settleAutomaticUpgrades()\n",
+          "previous": "  await employeeOs.maintenance.settleAutomaticUpgrades()\n",
+          "needle": "  })\n  if (hostExecution) {\n    await employeeOs.maintenance.ready()\n    hostPreparations.push(() => employeeOs.maintenance.settleAutomaticUpgrades())\n  } else await employeeOs.maintenance.settleAutomaticUpgrades()\n  const intentAuthorityFor = (actor: Actor) =>\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n",
+          "previous": "",
+          "needle": "    persistence: intentPersistence,\n    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n    events: createIntentSessionWsPublisher(),\n",
+          "offset": 36
+        },
+        {
+          "introduced": "    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n",
+          "previous": "",
+          "needle": "    configuration,\n    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n    notifications: intentQueuedNotifications,\n",
+          "offset": 19
+        },
+        {
+          "introduced": "  if (intentTurnExecution) hostPreparations.push(() => intentTurnExecution.prepare())\n",
+          "previous": "",
+          "needle": "  })\n  if (intentTurnExecution) hostPreparations.push(() => intentTurnExecution.prepare())\n  const employeeOsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    close: async () => {\n      if (!hostExecution || hostExecution.queries.snapshot().phase === 'active')\n        await memoryOperations.distillWorker.recoverRunning()\n    },\n",
+          "previous": "    close: () => memoryOperations.distillWorker.recoverRunning().then(() => undefined),\n",
+          "needle": "    id: 'memory-distill-recover-running',\n    close: async () => {\n      if (!hostExecution || hostExecution.queries.snapshot().phase === 'active')\n        await memoryOperations.distillWorker.recoverRunning()\n    },\n  })\n",
+          "offset": 42
+        },
+        {
+          "introduced": "      if (hostExecution) {\n        await taskExecutionProvider.background.close('daemon-shutdown')\n        return\n      }\n",
+          "previous": "",
+          "needle": "    async close() {\n      if (hostExecution) {\n        await taskExecutionProvider.background.close('daemon-shutdown')\n        return\n      }\n      const { gracefulShutdown } = await import('@/services/shutdown')\n",
+          "offset": 20
+        },
+        {
+          "introduced": "  const ownerFailure = (message: string) => (error: unknown) =>\n    log.warn(message, {\n      error: error instanceof Error ? error.message : String(error),\n    })\n  const hostOwners = hostExecution\n    ? bindDaemonHostOwners({\n        intent: intentQueuedResumption.runtimeFactory,\n        task: {\n          background: taskExecutionProvider.background,\n          dependencies: {\n            configuration,\n            scheduled: {\n              operations: scheduledTaskRuntime.operations,\n              identityAccess: integrationIdentityAccess,\n            },\n          },\n        },\n        maintenance: coldMaintenance!,\n        mcp: mcpRuntimeTests.execution!,\n        reports: observationReports.execution!,\n        webhook: webhookTerminalControl.execution!,\n        afterCommit: coldCommittedEventPump!,\n        limits: {\n          operations: composeResourceLimitOperations({\n            db,\n            cancelTask: (taskId, reason) =>\n              composeTaskCancellation(db, taskExecutionProvider.driveBinding).cancel(taskId, {\n                kind: 'resource-reaped',\n                ...reason,\n              }),\n          }),\n          onError: ownerFailure('enforceLimits failed'),\n        },\n        idle: {\n          operations: idleTimeoutOperations,\n          configuration,\n          onError: ownerFailure('task idle-timeout sweep failed'),\n        },\n        backup: {\n          configuration,\n          appHome: Paths.root,\n          createScheduledBackup: () => createBackup({ db, kind: 'scheduled', appHome: Paths.root }),\n          onBackupSettled: () => maintenanceService.runSoon('backupPrune'),\n        },\n        submodules: {\n          store: repositoryWorkspaceStore,\n          configuration,\n          notificationKey: applicationConfiguration.notificationKey,\n          appHome: Paths.root,\n          secretBox,\n        },\n        importGc: configuration,\n        humanGate: humanGateContinuationWorkerDefinition.definition,\n        committed: hostCommittedEventWorker!.definition,\n        memory: {\n          worker: memoryOperations.distillWorker,\n          configuration,\n          onError: ownerFailure('memory distill tick failed'),\n        },\n        development: {\n          automation: developmentAutomation,\n          writer: employeeWriterCutover,\n          onError: ownerFailure('legacy development mission boot recovery failed'),\n        },\n        employee: {\n          dependencies: { runtime: employeeOs.runtime.worker },\n          prepare: employeeOs.maintenance.settleAutomaticUpgrades.bind(employeeOs.maintenance),\n          onCycle(result) {\n            if (result.steps >= 32)\n              log.warn('digital employee OS cycle reached its bounded step budget', { ...result })\n          },\n          onError: ownerFailure('digital employee OS cycle failed'),\n        },\n        events: {\n          worker: employeeEventCenter.worker,\n          onCycle(result) {\n            if (result.steps >= 32)\n              log.warn('event center cycle reached its bounded step budget', { ...result })\n          },\n          onError: ownerFailure('event center cycle failed'),\n        },\n        fusion: {\n          dependencies: { operations: fusionOperations, appHome: Paths.root },\n          onError() {},\n        },\n      })\n    : undefined\n",
+          "previous": "",
+          "needle": "  ] satisfies readonly DaemonProviderCloseParticipant[])\n  const ownerFailure = (message: string) => (error: unknown) =>\n    log.warn(message, {\n      error: error instanceof Error ? error.message : String(error),\n    })\n  const hostOwners = hostExecution\n    ? bindDaemonHostOwners({\n        intent: intentQueuedResumption.runtimeFactory,\n        task: {\n          background: taskExecutionProvider.background,\n          dependencies: {\n            configuration,\n            scheduled: {\n              operations: scheduledTaskRuntime.operations,\n              identityAccess: integrationIdentityAccess,\n            },\n          },\n        },\n        maintenance: coldMaintenance!,\n        mcp: mcpRuntimeTests.execution!,\n        reports: observationReports.execution!,\n        webhook: webhookTerminalControl.execution!,\n        afterCommit: coldCommittedEventPump!,\n        limits: {\n          operations: composeResourceLimitOperations({\n            db,\n            cancelTask: (taskId, reason) =>\n              composeTaskCancellation(db, taskExecutionProvider.driveBinding).cancel(taskId, {\n                kind: 'resource-reaped',\n                ...reason,\n              }),\n          }),\n          onError: ownerFailure('enforceLimits failed'),\n        },\n        idle: {\n          operations: idleTimeoutOperations,\n          configuration,\n          onError: ownerFailure('task idle-timeout sweep failed'),\n        },\n        backup: {\n          configuration,\n          appHome: Paths.root,\n          createScheduledBackup: () => createBackup({ db, kind: 'scheduled', appHome: Paths.root }),\n          onBackupSettled: () => maintenanceService.runSoon('backupPrune'),\n        },\n        submodules: {\n          store: repositoryWorkspaceStore,\n          configuration,\n          notificationKey: applicationConfiguration.notificationKey,\n          appHome: Paths.root,\n          secretBox,\n        },\n        importGc: configuration,\n        humanGate: humanGateContinuationWorkerDefinition.definition,\n        committed: hostCommittedEventWorker!.definition,\n        memory: {\n          worker: memoryOperations.distillWorker,\n          configuration,\n          onError: ownerFailure('memory distill tick failed'),\n        },\n        development: {\n          automation: developmentAutomation,\n          writer: employeeWriterCutover,\n          onError: ownerFailure('legacy development mission boot recovery failed'),\n        },\n        employee: {\n          dependencies: { runtime: employeeOs.runtime.worker },\n          prepare: employeeOs.maintenance.settleAutomaticUpgrades.bind(employeeOs.maintenance),\n          onCycle(result) {\n            if (result.steps >= 32)\n              log.warn('digital employee OS cycle reached its bounded step budget', { ...result })\n          },\n          onError: ownerFailure('digital employee OS cycle failed'),\n        },\n        events: {\n          worker: employeeEventCenter.worker,\n          onCycle(result) {\n            if (result.steps >= 32)\n              log.warn('event center cycle reached its bounded step budget', { ...result })\n          },\n          onError: ownerFailure('event center cycle failed'),\n        },\n        fusion: {\n          dependencies: { operations: fusionOperations, appHome: Paths.root },\n          onError() {},\n        },\n      })\n    : undefined\n  const initialProviderSession = await _createComposedDaemonProviderRuntimeSession({\n",
+          "offset": 57
+        },
+        {
+          "introduced": "    ...(hostOwners ? { hostExecutionRuntime: { handles: hostOwners } } : {}),\n",
+          "previous": "",
+          "needle": "    backgroundWriterFactories: providerBackgroundWriterFactories,\n    ...(hostOwners ? { hostExecutionRuntime: { handles: hostOwners } } : {}),\n    providerCloseParticipants,\n",
+          "offset": 66
+        },
+        {
+          "introduced": "    ...(hostExecution ? { beforeCloseProvider: hostExecution.beforeCloseProvider } : {}),\n",
+          "previous": "",
+          "needle": "    shutdownIdentity: () => identityAccess.shutdown(),\n    ...(hostExecution ? { beforeCloseProvider: hostExecution.beforeCloseProvider } : {}),\n    closeProvider: () => databaseProvider.close(),\n",
+          "offset": 55
+        },
+        {
+          "introduced": "  const recoveryInput = hostExecution\n    ? {\n        generation: hostExecution.scope.generation,\n        boot: bootRecovery,\n        handles: hostOwners!,\n        prepareOwners: hostPreparations,\n      }\n    : undefined\n  const selectedSession = hostExecution\n    ? installDaemonHostExecutionSession({\n        bootstrap: hostExecution,\n        session: initialProviderSession,\n        recovery:\n          input.hostExecution!.recovery?.(recoveryInput!) ??\n          composeDaemonLocalHostRecovery(recoveryInput!),\n      }).session\n    : initialProviderSession\n",
+          "previous": "",
+          "needle": "  })\n  const recoveryInput = hostExecution\n    ? {\n        generation: hostExecution.scope.generation,\n        boot: bootRecovery,\n        handles: hostOwners!,\n        prepareOwners: hostPreparations,\n      }\n    : undefined\n  const selectedSession = hostExecution\n    ? installDaemonHostExecutionSession({\n        bootstrap: hostExecution,\n        session: initialProviderSession,\n        recovery:\n          input.hostExecution!.recovery?.(recoveryInput!) ??\n          composeDaemonLocalHostRecovery(recoveryInput!),\n      }).session\n    : initialProviderSession\n  return Object.freeze({\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    session: selectedSession,\n    ...(hostExecution ? { hostExecution } : {}),\n",
+          "previous": "    session: initialProviderSession,\n",
+          "needle": "    application: Object.freeze({ core: providerCore }),\n    session: selectedSession,\n    ...(hostExecution ? { hostExecution } : {}),\n  })\n",
+          "offset": 56
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "previousSha256": "7351bacce1f82339c7a57ad566dfb634da4e16dfdd034192e5869bd021ea461c",
+      "changes": [
+        {
+          "introduced": "import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'\nimport { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'\n",
+          "previous": "",
+          "needle": "import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'\nimport { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'\nimport { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'\n",
+          "offset": 0
+        },
+        {
+          "introduced": "  type TaskExecutionBootRecoveryInput,\n",
+          "previous": "",
+          "needle": "  type BootExecutionRecoveryFactory,\n  type TaskExecutionBootRecoveryInput,\n} from '@/modules/task-execution/composition/bootRecovery'\n",
+          "offset": 37
+        },
+        {
+          "introduced": "import type { DaemonHostExecutionBootstrap } from './daemonHostExecutionBootstrap'\nimport type { HostExecutionGrantContext } from '@/modules/system-operations/public/participants'\nimport {\n  composeIntentTurnExecution,\n  configureIntentTurnExecutionRecovery,\n  type IntentTurnExecutionLifecycle,\n} from '@/modules/intent/composition/execution'\n",
+          "previous": "",
+          "needle": "} from '@/modules/task-execution/composition/bootRecovery'\nimport type { DaemonHostExecutionBootstrap } from './daemonHostExecutionBootstrap'\nimport type { HostExecutionGrantContext } from '@/modules/system-operations/public/participants'\nimport {\n  composeIntentTurnExecution,\n  configureIntentTurnExecutionRecovery,\n  type IntentTurnExecutionLifecycle,\n} from '@/modules/intent/composition/execution'\nimport { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'\n",
+          "offset": 59
+        },
+        {
+          "introduced": "  readonly hostExecution?: DaemonHostExecutionBootstrap\n",
+          "previous": "",
+          "needle": "export interface PostgresqlDaemonApplicationInput {\n  readonly hostExecution?: DaemonHostExecutionBootstrap\n  readonly provider: PostgresqlProviderRuntime\n",
+          "offset": 52
+        },
+        {
+          "introduced": "  fusionWorkspaces?: FusionWorkspaceFactory\n",
+          "previous": "",
+          "needle": "  readonly portArtifactContentEffects?: PortArtifactContentEffects\n  fusionWorkspaces?: FusionWorkspaceFactory\n  readonly taskRunSelection?: TaskRunRootSelection\n",
+          "offset": 67
+        },
+        {
+          "introduced": "  readonly observationReportExecution?: ReturnType<\n    typeof composeCompleteObservationReports\n  >['execution']\n  readonly hostBootRecovery?: TaskExecutionBootRecoveryInput\n  readonly hostPreparations?: readonly ((context: HostExecutionGrantContext) => Promise<void>)[]\n",
+          "previous": "",
+          "needle": "export interface PostgresqlDaemonApplicationRuntime {\n  readonly observationReportExecution?: ReturnType<\n    typeof composeCompleteObservationReports\n  >['execution']\n  readonly hostBootRecovery?: TaskExecutionBootRecoveryInput\n  readonly hostPreparations?: readonly ((context: HostExecutionGrantContext) => Promise<void>)[]\n  readonly observationReports: ReturnType<typeof composeCompleteObservationReports>['worker']\n",
+          "offset": 54
+        },
+        {
+          "introduced": "  readonly employeeWriterCutover: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>\n",
+          "previous": "",
+          "needle": "  readonly digitalEmployee: DigitalEmployeeModuleWithRuntime\n  readonly employeeWriterCutover: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>\n  readonly eventCenter: Awaited<ReturnType<typeof composeEventCenter>>\n",
+          "offset": 61
+        },
+        {
+          "introduced": "  readonly intentTurnExecution?: IntentTurnExecutionLifecycle\n",
+          "previous": "",
+          "needle": "  readonly resumeIntentSessions: (sessionIds: readonly string[], config: Config) => Promise<void>\n  readonly intentTurnExecution?: IntentTurnExecutionLifecycle\n  readonly driveHumanGateContinuation: (input: {\n",
+          "offset": 98
+        },
+        {
+          "introduced": "  if (\n    input.hostExecution &&\n    (phase.kind !== 'daemon' ||\n      input.hostExecution.scope.provider !== 'postgresql' ||\n      input.hostExecution.scope.generation !== input.provider.runtime.generationId)\n  )\n    throw new Error('postgresql-host-execution-scope-mismatch')\n  const hostPreparations: ((context: HostExecutionGrantContext) => Promise<void>)[] = []\n  const prepareOwner = async (\n    operation: (context?: HostExecutionGrantContext) => Promise<void>,\n  ) => {\n    if (input.hostExecution) hostPreparations.push((context) => operation(context))\n    else await operation()\n  }\n",
+          "previous": "",
+          "needle": "): Promise<PostgresqlDaemonApplication> {\n  if (\n    input.hostExecution &&\n    (phase.kind !== 'daemon' ||\n      input.hostExecution.scope.provider !== 'postgresql' ||\n      input.hostExecution.scope.generation !== input.provider.runtime.generationId)\n  )\n    throw new Error('postgresql-host-execution-scope-mismatch')\n  const hostPreparations: ((context: HostExecutionGrantContext) => Promise<void>)[] = []\n  const prepareOwner = async (\n    operation: (context?: HostExecutionGrantContext) => Promise<void>,\n  ) => {\n    if (input.hostExecution) hostPreparations.push((context) => operation(context))\n    else await operation()\n  }\n  const developmentPurposeRoot = composeDevelopmentPurposeRoot({\n",
+          "offset": 42
+        },
+        {
+          "introduced": "    await prepareOwner(async () => {\n      const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)\n      if (removedCredentialLeases > 0) {\n        log.info('orphaned git credential leases removed', { count: removedCredentialLeases })\n      }\n    })\n",
+          "previous": "    const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)\n    if (removedCredentialLeases > 0) {\n      log.info('orphaned git credential leases removed', { count: removedCredentialLeases })\n    }\n",
+          "needle": "    )\n    await prepareOwner(async () => {\n      const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)\n      if (removedCredentialLeases > 0) {\n        log.info('orphaned git credential leases removed', { count: removedCredentialLeases })\n      }\n    })\n  }\n",
+          "offset": 6
+        },
+        {
+          "introduced": "    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "    ...composeMcpRuntimeTestProvider(input.db),\n    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n    isRuntimeEligible: isRuntimeMcpTestEligible,\n",
+          "offset": 48
+        },
+        {
+          "introduced": "    ...(input.hostExecution ? { host: input.hostExecution.taskHost } : {}),\n",
+          "previous": "",
+          "needle": "  const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {\n    ...(input.hostExecution ? { host: input.hostExecution.taskHost } : {}),\n    nativeUsage,\n",
+          "offset": 90
+        },
+        {
+          "introduced": "    fusionWorkspaces: input.fusionWorkspaces ?? composeLocalFusionWorkspaces(),\n",
+          "previous": "",
+          "needle": "  const fusionOperations = composePostgresqlFusionOperations({\n    fusionWorkspaces: input.fusionWorkspaces ?? composeLocalFusionWorkspaces(),\n    // RFC-353 T6/T7：同 SQLite 侧——provider 装配只在 bootstrap 根上完成。\n",
+          "offset": 63
+        },
+        {
+          "introduced": "    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "    db: input.db,\n    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n    // RFC-359 AC-1（第 14 刀）：参与者与装配都合一了；这一支交的收尾是 source-control 的\n",
+          "offset": 18
+        },
+        {
+          "introduced": "      ...(input.hostExecution\n        ? { runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry }\n        : {}),\n",
+          "previous": "",
+          "needle": "      db: input.db,\n      ...(input.hostExecution\n        ? { runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry }\n        : {}),\n      finalizeWithoutDriver: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),\n",
+          "offset": 20
+        },
+        {
+          "introduced": "    await prepareOwner(async (context) => {\n      if (!input.hostExecution) await webhookTerminalControl.reconcileOnBoot()\n      const recoveredDeliveries = await recoverInterruptedDeliveries(\n        composeWebhookDeliveryPersistenceFor(input.db),\n      )\n      if (recoveredDeliveries > 0) {\n        log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })\n      }\n      if (context && !context.current()) return\n      // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed\n      // (marker-gated; a single maintenance_state read on every later boot).\n      try {\n        const backfill = await runFrameBackfillOnBoot({ db: input.db })\n        if (!backfill.skipped) {\n          log.info('rfc354 frame backfill completed on boot', {\n            tasks: backfill.tasks,\n            rowsUpdated: backfill.rowsUpdated,\n            roundsUpdated: backfill.roundsUpdated,\n            unreadableTasks: backfill.unreadableTasks.length,\n            unresolvedRows: backfill.unresolvedRows,\n          })\n        }\n      } catch (err) {\n        log.warn('rfc354 frame backfill on boot failed', {\n          error: err instanceof Error ? err.message : String(err),\n",
+          "previous": "    await webhookTerminalControl.reconcileOnBoot()\n    const recoveredDeliveries = await recoverInterruptedDeliveries(\n      composeWebhookDeliveryPersistenceFor(input.db),\n    )\n    if (recoveredDeliveries > 0) {\n      log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })\n    }\n    // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed\n    // (marker-gated; a single maintenance_state read on every later boot).\n    try {\n      const backfill = await runFrameBackfillOnBoot({ db: input.db })\n      if (!backfill.skipped) {\n        log.info('rfc354 frame backfill completed on boot', {\n          tasks: backfill.tasks,\n          rowsUpdated: backfill.rowsUpdated,\n          roundsUpdated: backfill.roundsUpdated,\n          unreadableTasks: backfill.unreadableTasks.length,\n          unresolvedRows: backfill.unresolvedRows,\n",
+          "needle": "  if (phase.kind === 'daemon') {\n    await prepareOwner(async (context) => {\n      if (!input.hostExecution) await webhookTerminalControl.reconcileOnBoot()\n      const recoveredDeliveries = await recoverInterruptedDeliveries(\n        composeWebhookDeliveryPersistenceFor(input.db),\n      )\n      if (recoveredDeliveries > 0) {\n        log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })\n      }\n      if (context && !context.current()) return\n      // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed\n      // (marker-gated; a single maintenance_state read on every later boot).\n      try {\n        const backfill = await runFrameBackfillOnBoot({ db: input.db })\n        if (!backfill.skipped) {\n          log.info('rfc354 frame backfill completed on boot', {\n            tasks: backfill.tasks,\n            rowsUpdated: backfill.rowsUpdated,\n            roundsUpdated: backfill.roundsUpdated,\n            unreadableTasks: backfill.unreadableTasks.length,\n            unresolvedRows: backfill.unresolvedRows,\n          })\n        }\n      } catch (err) {\n        log.warn('rfc354 frame backfill on boot failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n",
+          "offset": 33
+        },
+        {
+          "introduced": "    })\n",
+          "previous": "    } catch (err) {\n      log.warn('rfc354 frame backfill on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n",
+          "needle": "        })\n      }\n    })\n  }\n  const composedWebhookDispatcher = createWebhookDispatcher({\n",
+          "offset": 19
+        },
+        {
+          "introduced": "  const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(input.db)\n",
+          "previous": "",
+          "needle": "  })\n  const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(input.db)\n  if (phase.kind === 'daemon') {\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    if (input.hostExecution) await digitalEmployee.maintenance.ready()\n    await prepareOwner(async (context) => {\n      await employeeWriterCutover.activate()\n      if (context && !context.current()) return\n      await digitalEmployee.maintenance.settleAutomaticUpgrades()\n    })\n",
+          "previous": "    await composeDigitalEmployeeWriterCutoverFor(input.db).activate()\n    await digitalEmployee.maintenance.settleAutomaticUpgrades()\n",
+          "needle": "  if (phase.kind === 'daemon') {\n    if (input.hostExecution) await digitalEmployee.maintenance.ready()\n    await prepareOwner(async (context) => {\n      await employeeWriterCutover.activate()\n      if (context && !context.current()) return\n      await digitalEmployee.maintenance.settleAutomaticUpgrades()\n    })\n  } else {\n",
+          "offset": 33
+        },
+        {
+          "introduced": "  const intentTurnExecution = input.hostExecution ? composeIntentTurnExecution() : undefined\n",
+          "previous": "",
+          "needle": "  const intentSessionEvents = createIntentSessionWsPublisher()\n  const intentTurnExecution = input.hostExecution ? composeIntentTurnExecution() : undefined\n  const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({\n",
+          "offset": 63
+        },
+        {
+          "introduced": "    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n",
+          "previous": "",
+          "needle": "    persistence: intentPersistence,\n    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n    events: intentSessionEvents,\n",
+          "offset": 36
+        },
+        {
+          "introduced": "      ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n",
+          "previous": "",
+          "needle": "    intentTurnRuntime: Object.freeze({\n      ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),\n      runtimeResolver: composeIntentTurnRuntimeResolver(\n",
+          "offset": 39
+        },
+        {
+          "introduced": "  if (intentTurnExecution) {\n    configureIntentTurnExecutionRecovery(intentTurnExecution, {\n      ...intentDispatchDeps,\n      ...intentRoutes.intentTurnRuntime,\n    })\n    hostPreparations.push(() => intentTurnExecution.prepare())\n  }\n",
+          "previous": "",
+          "needle": "  })\n  if (intentTurnExecution) {\n    configureIntentTurnExecutionRecovery(intentTurnExecution, {\n      ...intentDispatchDeps,\n      ...intentRoutes.intentTurnRuntime,\n    })\n    hostPreparations.push(() => intentTurnExecution.prepare())\n  }\n  const taskCatalog = composeTaskCatalog({\n",
+          "offset": 5
+        },
+        {
+          "introduced": "    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "  const observationReports = composeCompleteObservationReports({\n    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n    ...(phase.kind === 'daemon'\n",
+          "offset": 65
+        },
+        {
+          "introduced": "            ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n",
+          "previous": "",
+          "needle": "          projection: composeOriginalObservationProjection({\n            ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n            db: input.db,\n",
+          "offset": 61
+        },
+        {
+          "introduced": "      execution: input.hostExecution?.http,\n",
+          "previous": "",
+          "needle": "      runtime: selectDaemonRuntimeQueries(input.daemonRuntime, { infoPath: input.daemonInfoPath }),\n      execution: input.hostExecution?.http,\n    }),\n",
+          "offset": 100
+        },
+        {
+          "introduced": "      appHome: input.appHome,\n",
+          "previous": "",
+          "needle": "      operations: fusionOperations,\n      appHome: input.appHome,\n      ...(taskLaunchConfiguration.selectedQueries === undefined\n",
+          "offset": 36
+        },
+        {
+          "introduced": "  let hostBootRecovery: TaskExecutionBootRecoveryInput | undefined\n",
+          "previous": "",
+          "needle": "  // 必须在 HTTP 与任何自动续跑之前；此前 PG daemon 从未跑过，重启一次就把上一代任务永久卡在 running。\n  let hostBootRecovery: TaskExecutionBootRecoveryInput | undefined\n  if (phase.kind === 'daemon') {\n",
+          "offset": 67
+        },
+        {
+          "introduced": "    const bootRecovery: TaskExecutionBootRecoveryInput = {\n",
+          "previous": "    await runTaskExecutionBootRecovery({\n",
+          "needle": "  if (phase.kind === 'daemon') {\n    const bootRecovery: TaskExecutionBootRecoveryInput = {\n      recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),\n",
+          "offset": 33
+        },
+        {
+          "introduced": "    }\n    if (input.hostExecution) hostBootRecovery = bootRecovery\n    else await runTaskExecutionBootRecovery(bootRecovery)\n    await prepareOwner(async (context) => {\n      // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在\n      // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与\n      // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。\n      try {\n        const deleteRecovery = await recoverInterruptedTaskDeletes(\n          input.db,\n          undefined,\n          input.taskDeletionEffects,\n        )\n        if (\n          deleteRecovery.completed.length > 0 ||\n          deleteRecovery.cleanupPending.length > 0 ||\n          deleteRecovery.recoveryRequired.length > 0\n        ) {\n          log.info('terminal task delete recovery', { ...deleteRecovery })\n        }\n      } catch (err) {\n        log.warn('terminal task delete recovery failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n\n      // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步，\n      // 与 cli/start.ts 同一段命令面。\n      if (context && !context.current()) return\n      try {\n        const archiveRecovery = await taskExecutionProvider.archive.recover({\n          archiveDir: Paths.taskArchiveDir,\n          runsDir: Paths.runsDir,\n          logsDir: Paths.logsDir,\n        })\n        if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {\n          log.info('terminal task archive recovery', { ...archiveRecovery })\n        }\n      } catch (err) {\n        log.warn('terminal task archive recovery failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n      if (context && !context.current()) return\n      try {\n        const workspaceRecovery = await workspaceMaintenance.recover({\n          activeTaskIds: [],\n          webhookClaims: 'all',\n        })\n        if (\n          workspaceRecovery.completed > 0 ||\n          workspaceRecovery.failed > 0 ||\n          workspaceRecovery.healed > 0\n        ) {\n          log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })\n        }\n      } catch (err) {\n        log.warn('terminal workspace maintenance recovery failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n\n      // RFC-359 W3-T15：以下 boot 步骤与 cli/start.ts 同序、同一份实现；此前 PG daemon 一步都没跑\n      //（终态维护恢复里的 archive / workspace-gc / webhook prune / legacy pruned 四步仍是 SQLite 专属实现，归 T15-B）。\n      // 5b5. RFC-165 §9：把存量 path-mode 定时启动载荷治愈成当前形状——幂等 + best-effort。\n      if (context && !context.current()) return\n      try {\n        const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')\n        const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)\n        if (healed.converted > 0 || healed.disabled > 0) {\n          log.info('scheduled launch payloads healed', healed)\n        }\n      } catch (err) {\n        log.warn('scheduled payload heal on boot failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n\n      // 5b5. RFC-170 T6：恢复崩溃留下的融合 DECISION 半状态（多事务决定）——best-effort。\n      if (context && !context.current()) return\n      try {\n        const { recoverFusionDecisions } =\n          await import('@/modules/knowledge-evolution/public/operations')\n        const r = await recoverFusionDecisions(fusionOperations.persistence)\n        if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {\n          log.info('fusion decision recovery on boot', { ...r })\n        }\n      } catch (err) {\n        log.warn('fusion decision recovery on boot failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n",
+          "previous": "",
+          "needle": "      log,\n    }\n    if (input.hostExecution) hostBootRecovery = bootRecovery\n    else await runTaskExecutionBootRecovery(bootRecovery)\n    await prepareOwner(async (context) => {\n      // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在\n      // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与\n      // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。\n      try {\n        const deleteRecovery = await recoverInterruptedTaskDeletes(\n          input.db,\n          undefined,\n          input.taskDeletionEffects,\n        )\n        if (\n          deleteRecovery.completed.length > 0 ||\n          deleteRecovery.cleanupPending.length > 0 ||\n          deleteRecovery.recoveryRequired.length > 0\n        ) {\n          log.info('terminal task delete recovery', { ...deleteRecovery })\n        }\n      } catch (err) {\n        log.warn('terminal task delete recovery failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n\n      // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步，\n      // 与 cli/start.ts 同一段命令面。\n      if (context && !context.current()) return\n      try {\n        const archiveRecovery = await taskExecutionProvider.archive.recover({\n          archiveDir: Paths.taskArchiveDir,\n          runsDir: Paths.runsDir,\n          logsDir: Paths.logsDir,\n        })\n        if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {\n          log.info('terminal task archive recovery', { ...archiveRecovery })\n        }\n      } catch (err) {\n        log.warn('terminal task archive recovery failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n      if (context && !context.current()) return\n      try {\n        const workspaceRecovery = await workspaceMaintenance.recover({\n          activeTaskIds: [],\n          webhookClaims: 'all',\n        })\n        if (\n          workspaceRecovery.completed > 0 ||\n          workspaceRecovery.failed > 0 ||\n          workspaceRecovery.healed > 0\n        ) {\n          log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })\n        }\n      } catch (err) {\n        log.warn('terminal workspace maintenance recovery failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n\n      // RFC-359 W3-T15：以下 boot 步骤与 cli/start.ts 同序、同一份实现；此前 PG daemon 一步都没跑\n      //（终态维护恢复里的 archive / workspace-gc / webhook prune / legacy pruned 四步仍是 SQLite 专属实现，归 T15-B）。\n      // 5b5. RFC-165 §9：把存量 path-mode 定时启动载荷治愈成当前形状——幂等 + best-effort。\n      if (context && !context.current()) return\n      try {\n        const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')\n        const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)\n        if (healed.converted > 0 || healed.disabled > 0) {\n          log.info('scheduled launch payloads healed', healed)\n        }\n      } catch (err) {\n        log.warn('scheduled payload heal on boot failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n\n      // 5b5. RFC-170 T6：恢复崩溃留下的融合 DECISION 半状态（多事务决定）——best-effort。\n      if (context && !context.current()) return\n      try {\n        const { recoverFusionDecisions } =\n          await import('@/modules/knowledge-evolution/public/operations')\n        const r = await recoverFusionDecisions(fusionOperations.persistence)\n        if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {\n          log.info('fusion decision recovery on boot', { ...r })\n        }\n      } catch (err) {\n        log.warn('fusion decision recovery on boot failed', {\n          error: err instanceof Error ? err.message : String(err),\n        })\n      }\n    })\n",
+          "offset": 11
+        },
+        {
+          "introduced": "",
+          "previous": "    // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在\n    // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与\n    // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。\n    try {\n      const deleteRecovery = await recoverInterruptedTaskDeletes(\n        input.db,\n        undefined,\n        input.taskDeletionEffects,\n      )\n      if (\n        deleteRecovery.completed.length > 0 ||\n        deleteRecovery.cleanupPending.length > 0 ||\n        deleteRecovery.recoveryRequired.length > 0\n      ) {\n        log.info('terminal task delete recovery', { ...deleteRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal task delete recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n\n    // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步，\n    // 与 cli/start.ts 同一段命令面。\n    try {\n      const archiveRecovery = await taskExecutionProvider.archive.recover({\n        archiveDir: Paths.taskArchiveDir,\n        runsDir: Paths.runsDir,\n        logsDir: Paths.logsDir,\n      })\n      if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {\n        log.info('terminal task archive recovery', { ...archiveRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal task archive recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n    try {\n      const workspaceRecovery = await workspaceMaintenance.recover({\n        activeTaskIds: [],\n        webhookClaims: 'all',\n      })\n      if (\n        workspaceRecovery.completed > 0 ||\n        workspaceRecovery.failed > 0 ||\n        workspaceRecovery.healed > 0\n      ) {\n        log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })\n      }\n    } catch (err) {\n      log.warn('terminal workspace maintenance recovery failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n\n    // RFC-359 W3-T15：以下 boot 步骤与 cli/start.ts 同序、同一份实现；此前 PG daemon 一步都没跑\n    //（终态维护恢复里的 archive / workspace-gc / webhook prune / legacy pruned 四步仍是 SQLite 专属实现，归 T15-B）。\n    // 5b5. RFC-165 §9：把存量 path-mode 定时启动载荷治愈成当前形状——幂等 + best-effort。\n    try {\n      const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')\n      const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)\n      if (healed.converted > 0 || healed.disabled > 0) {\n        log.info('scheduled launch payloads healed', healed)\n      }\n    } catch (err) {\n      log.warn('scheduled payload heal on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n\n    // 5b5. RFC-170 T6：恢复崩溃留下的融合 DECISION 半状态（多事务决定）——best-effort。\n    try {\n      const { recoverFusionDecisions } =\n        await import('@/modules/knowledge-evolution/public/operations')\n      const r = await recoverFusionDecisions(fusionOperations.persistence)\n      if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {\n        log.info('fusion decision recovery on boot', { ...r })\n      }\n    } catch (err) {\n      log.warn('fusion decision recovery on boot failed', {\n        error: err instanceof Error ? err.message : String(err),\n      })\n    }\n",
+          "needle": "      }\n    })\n\n    // 5e. RFC-101：内置 skill-fusion agent + workflow 幂等播种。\n",
+          "offset": 15
+        },
+        {
+          "introduced": "    const reverifyResourceContent = async () => {\n",
+          "previous": "    void (async () => {\n",
+          "needle": "  if (phase.kind === 'daemon') {\n    const reverifyResourceContent = async () => {\n      try {\n",
+          "offset": 33
+        },
+        {
+          "introduced": "    }\n    if (input.hostExecution) await reverifyResourceContent()\n    else void reverifyResourceContent()\n",
+          "previous": "    })()\n",
+          "needle": "      }\n    }\n    if (input.hostExecution) await reverifyResourceContent()\n    else void reverifyResourceContent()\n  }\n",
+          "offset": 8
+        },
+        {
+          "introduced": "    ...(intentTurnExecution ? { intentTurnExecution } : {}),\n    ...(input.hostExecution\n      ? {\n          hostBootRecovery,\n          hostPreparations: Object.freeze(hostPreparations),\n          observationReportExecution: observationReports.execution,\n        }\n      : {}),\n",
+          "previous": "",
+          "needle": "  const runtime: PostgresqlDaemonApplicationRuntime = Object.freeze({\n    ...(intentTurnExecution ? { intentTurnExecution } : {}),\n    ...(input.hostExecution\n      ? {\n          hostBootRecovery,\n          hostPreparations: Object.freeze(hostPreparations),\n          observationReportExecution: observationReports.execution,\n        }\n      : {}),\n    observationReports: observationReports.worker,\n",
+          "offset": 70
+        },
+        {
+          "introduced": "    employeeWriterCutover,\n",
+          "previous": "",
+          "needle": "    digitalEmployee,\n    employeeWriterCutover,\n    eventCenter,\n",
+          "offset": 21
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/server.ts",
+      "previousSha256": "9c7c2a1641e2bf391802a9ce1364fbcaf14514df913710b57060c4ab0c3e683a",
+      "changes": [
+        {
+          "introduced": "import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'\nimport { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'\n",
+          "previous": "",
+          "needle": "import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'\nimport { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'\nimport { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'\n",
+          "offset": 0
+        },
+        {
+          "introduced": "import {\n  bindHttpHostExecutionAvailability,\n  type HttpHostExecutionSelection,\n} from '@/platform/http/hostExecutionAvailability'\n",
+          "previous": "",
+          "needle": "import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'\nimport {\n  bindHttpHostExecutionAvailability,\n  type HttpHostExecutionSelection,\n} from '@/platform/http/hostExecutionAvailability'\nimport {\n",
+          "offset": 105
+        },
+        {
+          "introduced": "import {\n  configureIntentTurnExecutionRecovery,\n  type IntentTurnExecutionLifecycle,\n} from '@/modules/intent/composition/execution'\n",
+          "previous": "",
+          "needle": "import { composeIntentPersistence } from '@/modules/intent/composition/persistence'\nimport {\n  configureIntentTurnExecutionRecovery,\n  type IntentTurnExecutionLifecycle,\n} from '@/modules/intent/composition/execution'\nimport { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'\n",
+          "offset": 84
+        },
+        {
+          "introduced": "  fusionWorkspaces?: FusionWorkspaceFactory\n",
+          "previous": "",
+          "needle": "  portArtifactContentEffects?: PortArtifactContentEffects\n  fusionWorkspaces?: FusionWorkspaceFactory\n  portArtifacts?: PortArtifactOperations\n",
+          "offset": 58
+        },
+        {
+          "introduced": "  /** Same selected host controller as Task and all automatic owners. */\n  hostExecutionHttp?: HttpHostExecutionSelection\n  intentTurnExecution?: IntentTurnExecutionLifecycle\n",
+          "previous": "",
+          "needle": "  daemonRuntime?: DaemonRuntimeQueries\n  /** Same selected host controller as Task and all automatic owners. */\n  hostExecutionHttp?: HttpHostExecutionSelection\n  intentTurnExecution?: IntentTurnExecutionLifecycle\n  /**\n",
+          "offset": 39
+        },
+        {
+          "introduced": "  /** Explicit host roots construct the same diagnostic service cold. */\n  mcpExecutionMode?: 'native' | 'host'\n",
+          "previous": "",
+          "needle": "  mcpRuntimeTests?: McpDiagnosticsRuntime\n  /** Explicit host roots construct the same diagnostic service cold. */\n  mcpExecutionMode?: 'native' | 'host'\n}\n",
+          "offset": 42
+        },
+        {
+          "introduced": "  readonly hostExecutionHttp?: HttpHostExecutionSelection\n",
+          "previous": "",
+          "needle": "  readonly apiRoutes: AppApiRouteMounts\n  readonly hostExecutionHttp?: HttpHostExecutionSelection\n}\n",
+          "offset": 40
+        },
+        {
+          "introduced": "    hostExecutionHttp: input.hostExecutionHttp,\n",
+          "previous": "",
+          "needle": "    apiRoutes: Object.freeze({ ...input.apiRoutes }),\n    hostExecutionHttp: input.hostExecutionHttp,\n  })\n",
+          "offset": 54
+        },
+        {
+          "introduced": "    hostExecutionHttp: input.platform.daemon.execution,\n",
+          "previous": "",
+          "needle": "    core: input.core,\n    hostExecutionHttp: input.platform.daemon.execution,\n    publicRoutes,\n",
+          "offset": 22
+        },
+        {
+          "introduced": "/** Owned finite resource initialization and runtime-test composition for one application. */\n",
+          "previous": "/** Owned finite initialization and runtime-test lifetime for one unstarted application. */\n",
+          "needle": "\n/** Owned finite resource initialization and runtime-test composition for one application. */\nexport interface UnstartedApplicationScope {\n",
+          "offset": 1
+        },
+        {
+          "introduced": "      ...(effectiveDeps.mcpExecutionMode ? { executionMode: effectiveDeps.mcpExecutionMode } : {}),\n",
+          "previous": "",
+          "needle": "      ...composeMcpRuntimeTestProvider(effectiveDeps.db),\n      ...(effectiveDeps.mcpExecutionMode ? { executionMode: effectiveDeps.mcpExecutionMode } : {}),\n      isRuntimeEligible: isRuntimeMcpTestEligible,\n",
+          "offset": 58
+        },
+        {
+          "introduced": "    hostExecutionHttp: effectiveDeps.hostExecutionHttp,\n",
+          "previous": "",
+          "needle": "    token: effectiveDeps.token,\n    hostExecutionHttp: effectiveDeps.hostExecutionHttp,\n    configuration,\n",
+          "offset": 32
+        },
+        {
+          "introduced": "      ...(deps.intentTurnExecution ? { execution: deps.intentTurnExecution } : {}),\n",
+          "previous": "",
+          "needle": "    intentTurnRuntime: Object.freeze({\n      ...(deps.intentTurnExecution ? { execution: deps.intentTurnExecution } : {}),\n      runtimeResolver: composeIntentTurnRuntimeResolver(\n",
+          "offset": 39
+        },
+        {
+          "introduced": "  if (deps.intentTurnExecution)\n    configureIntentTurnExecutionRecovery(deps.intentTurnExecution, {\n      persistence: intentPersistence,\n      appHome,\n      identityAccess: intentSessionRoutes.identityAccess,\n      ...intentSessionRoutes.intentTurnRuntime,\n      events: intentSessionRoutes.events,\n      resourceCatalogFor: intentResourceCatalogFor,\n    })\n",
+          "previous": "",
+          "needle": "  } satisfies IntentSessionRouteDependencies)\n  if (deps.intentTurnExecution)\n    configureIntentTurnExecutionRecovery(deps.intentTurnExecution, {\n      persistence: intentPersistence,\n      appHome,\n      identityAccess: intentSessionRoutes.identityAccess,\n      ...intentSessionRoutes.intentTurnRuntime,\n      events: intentSessionRoutes.events,\n      resourceCatalogFor: intentResourceCatalogFor,\n    })\n  // RFC-359 W4-D6c：employee_* 的 ACL 走目录的中立 foreign-owner 路径（与 development_adapter 同一条），\n",
+          "offset": 46
+        },
+        {
+          "introduced": "    fusionWorkspaces: deps.fusionWorkspaces ?? composeLocalFusionWorkspaces(),\n",
+          "previous": "",
+          "needle": "  const fusionOperations = composeSqliteFusionOperations({\n    fusionWorkspaces: deps.fusionWorkspaces ?? composeLocalFusionWorkspaces(),\n    // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经\n",
+          "offset": 59
+        },
+        {
+          "introduced": "        execution: deps.hostExecutionHttp,\n",
+          "previous": "",
+          "needle": "        runtime: selectDaemonRuntimeQueries(deps.daemonRuntime, { infoPath: deps.daemonInfoPath }),\n        execution: deps.hostExecutionHttp,\n      }),\n",
+          "offset": 100
+        },
+        {
+          "introduced": "        appHome,\n",
+          "previous": "",
+          "needle": "        operations: fusionOperations,\n        appHome,\n        ...(taskLaunchConfiguration.selectedQueries === undefined\n",
+          "offset": 38
+        },
+        {
+          "introduced": "  bindHttpHostExecutionAvailability(app, deps.hostExecutionHttp)\n",
+          "previous": "",
+          "needle": "export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {\n  bindHttpHostExecutionAvailability(app, deps.hostExecutionHttp)\n  const routes = deps.apiRoutes\n",
+          "offset": 73
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "previousSha256": "0e7829ec489878d5cc47ceb192bfcd3522286726c15543d04ad7076969b57a22",
+      "changes": [
+        {
+          "introduced": "export type {\n  PreparedSystemAgentRunResult,\n  SystemAgentExecutionRecovery,\n  SystemAgentExecutionReceipt,\n  SystemAgentExecutionReceiptSink,\n} from '../application/ports/systemAgentRun'\nexport type {\n  ExecutionEffectPort,\n  ExecutionRecoveryPort,\n  ExecutionRecoveryReferencePort,\n  ExecutionRecoveryResult,\n} from '../application/ports/executionEffect'\n",
+          "previous": "export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'\n",
+          "needle": "} from '../application/ports/systemAgentRunFamily'\nexport type {\n  PreparedSystemAgentRunResult,\n  SystemAgentExecutionRecovery,\n  SystemAgentExecutionReceipt,\n  SystemAgentExecutionReceiptSink,\n} from '../application/ports/systemAgentRun'\nexport type {\n  ExecutionEffectPort,\n  ExecutionRecoveryPort,\n  ExecutionRecoveryReferencePort,\n  ExecutionRecoveryResult,\n} from '../application/ports/executionEffect'\nexport type { SystemAgentObservationRun } from '../application/ports/systemAgentObservation'\n",
+          "offset": 51
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts",
+      "previousSha256": "0256b607e1108199ae3567e283aa483e5b8eefaf3c1905b2538dbdad88c3b7a5",
+      "changes": [
+        {
+          "introduced": "  readonly publishActive: (active: boolean) => void\n",
+          "previous": "",
+          "needle": "  readonly admissions: Set<AdmissionProgress>\n  readonly publishActive: (active: boolean) => void\n  valid: boolean\n",
+          "offset": 46
+        },
+        {
+          "introduced": "  let paused = false\n  let admissionQuiescing = false\n",
+          "previous": "",
+          "needle": "  let closing = false\n  let paused = false\n  let admissionQuiescing = false\n  let current: GrantProgress | undefined\n",
+          "offset": 22
+        },
+        {
+          "introduced": "    let publishActive!: (active: boolean) => void\n    const whenActive = new Promise<boolean>((resolve) => {\n      publishActive = resolve\n    })\n",
+          "previous": "",
+          "needle": "    if (known) return known\n    let publishActive!: (active: boolean) => void\n    const whenActive = new Promise<boolean>((resolve) => {\n      publishActive = resolve\n    })\n    const progress: GrantProgress = {\n",
+          "offset": 28
+        },
+        {
+          "introduced": "        whenActive,\n        canDispatch: () => progress.context.current() && phase === 'active',\n        reportFailure(error: unknown) {\n          // Old callbacks cannot invalidate another grant. A normal pause\n          // already closes admission and retains its original stop policy.\n          if (!progress.context.current() || phase !== 'active') return\n          invalidate('authority-loss', 'host-execution-owner-failed')\n          serialize(retireObsolete).catch(notifyFailure)\n          notifyFailure(error)\n        },\n",
+          "previous": "",
+          "needle": "        current: () => !closing && progress.valid && progress.version === version,\n        whenActive,\n        canDispatch: () => progress.context.current() && phase === 'active',\n        reportFailure(error: unknown) {\n          // Old callbacks cannot invalidate another grant. A normal pause\n          // already closes admission and retains its original stop policy.\n          if (!progress.context.current() || phase !== 'active') return\n          invalidate('authority-loss', 'host-execution-owner-failed')\n          serialize(retireObsolete).catch(notifyFailure)\n          notifyFailure(error)\n        },\n      }),\n",
+          "offset": 83
+        },
+        {
+          "introduced": "      publishActive,\n",
+          "previous": "",
+          "needle": "      admissions: new Set(),\n      publishActive,\n      valid: !closing && operationVersion === version,\n",
+          "offset": 29
+        },
+        {
+          "introduced": "      reason: closing ? 'shutdown' : paused ? 'handoff' : 'authority-loss',\n",
+          "previous": "      reason: closing ? 'shutdown' : 'authority-loss',\n",
+          "needle": "      valid: !closing && operationVersion === version,\n      reason: closing ? 'shutdown' : paused ? 'handoff' : 'authority-loss',\n      preparationAttempted: false,\n",
+          "offset": 55
+        },
+        {
+          "introduced": "    if (!progress.valid) progress.publishActive(false)\n",
+          "previous": "",
+          "needle": "    ownedGrants.add(progress)\n    if (!progress.valid) progress.publishActive(false)\n    return progress\n",
+          "offset": 30
+        },
+        {
+          "introduced": "      grant.publishActive(false)\n",
+          "previous": "",
+          "needle": "      grant.valid = false\n      grant.publishActive(false)\n      grant.reason = stopReason\n",
+          "offset": 26
+        },
+        {
+          "introduced": "      grant.publishActive(true)\n",
+          "previous": "",
+          "needle": "      lastFailure = undefined\n      grant.publishActive(true)\n    } catch (error) {\n",
+          "offset": 30
+        },
+        {
+          "introduced": "    if (admissionQuiescing && !closing) {\n      if (\n        observation.kind === 'granted' &&\n        current?.reference === observation.reference &&\n        current.context.current()\n      ) {\n        // Renew the old settlement authority without reopening dispatch.\n        observeWriteRenewal(current)\n        return\n      }\n      invalidate(\n        'authority-loss',\n        observation.kind === 'granted'\n          ? 'host-execution-pause-observed-replacement'\n          : observation.reason,\n      )\n      if (observation.kind === 'granted') {\n        const grant = register(observation.reference, version)\n        grant.valid = false\n        grant.reason = 'handoff'\n        grant.publishActive(false)\n      }\n      serialize(retireObsolete).catch(notifyFailure)\n      return\n    }\n    if (paused && !closing) {\n      if (observation.kind === 'granted') {\n        const grant = register(observation.reference, version)\n        grant.valid = false\n        grant.reason = 'handoff'\n        grant.publishActive(false)\n      }\n      serialize(retireObsolete).catch(notifyFailure)\n      return\n    }\n",
+          "previous": "",
+          "needle": "  const observe = (observation: HostExecutionAuthorityObservation): void => {\n    if (admissionQuiescing && !closing) {\n      if (\n        observation.kind === 'granted' &&\n        current?.reference === observation.reference &&\n        current.context.current()\n      ) {\n        // Renew the old settlement authority without reopening dispatch.\n        observeWriteRenewal(current)\n        return\n      }\n      invalidate(\n        'authority-loss',\n        observation.kind === 'granted'\n          ? 'host-execution-pause-observed-replacement'\n          : observation.reason,\n      )\n      if (observation.kind === 'granted') {\n        const grant = register(observation.reference, version)\n        grant.valid = false\n        grant.reason = 'handoff'\n        grant.publishActive(false)\n      }\n      serialize(retireObsolete).catch(notifyFailure)\n      return\n    }\n    if (paused && !closing) {\n      if (observation.kind === 'granted') {\n        const grant = register(observation.reference, version)\n        grant.valid = false\n        grant.reason = 'handoff'\n        grant.publishActive(false)\n      }\n      serialize(retireObsolete).catch(notifyFailure)\n      return\n    }\n    if (observation.kind !== 'granted') {\n",
+          "offset": 78
+        },
+        {
+          "introduced": "        if (phase === 'draining' && current?.context.current())\n          throw new Error('host-execution-pause-unsettled')\n        paused = false\n        admissionQuiescing = false\n        if (input.mode === 'resource-only') {\n          reason = 'host-execution-resource-only'\n          return\n        }\n        if (current?.context.current()) return\n",
+          "previous": "        if (input.mode === 'resource-only' || current?.context.current()) return\n",
+          "needle": "        if (closing) throw new Error('host-execution-closed')\n        if (phase === 'draining' && current?.context.current())\n          throw new Error('host-execution-pause-unsettled')\n        paused = false\n        admissionQuiescing = false\n        if (input.mode === 'resource-only') {\n          reason = 'host-execution-resource-only'\n          return\n        }\n        if (current?.context.current()) return\n        try {\n",
+          "offset": 62
+        },
+        {
+          "introduced": "      })\n    },\n    quiesceAdmissions() {\n      if (closing) return Promise.resolve()\n      const grant = current\n      if (!grant?.context.current()) return Promise.resolve()\n      if (phase === 'active') {\n        admissionQuiescing = true\n        readyGroups = Object.freeze([])\n        phase = 'draining'\n        reason = 'host-execution-pause-unsettled'\n        for (const admitted of grant.admissions) admitted.stop('handoff')\n      }\n      return serialize(async () => {\n        if (writeLifecycle && !grant.writeQuiesced) {\n          await writeLifecycle.quiesce(grant.context)\n          grant.writeQuiesced = true\n        }\n      })\n    },\n    pause() {\n      if (closing) return lifecycle.close()\n      if (!paused) {\n        paused = true\n        invalidate('handoff', 'host-execution-paused')\n      }\n      return serialize(async () => {\n        await retireObsolete()\n        lastFailure = undefined\n",
+          "previous": "",
+          "needle": "        }\n      })\n    },\n    quiesceAdmissions() {\n      if (closing) return Promise.resolve()\n      const grant = current\n      if (!grant?.context.current()) return Promise.resolve()\n      if (phase === 'active') {\n        admissionQuiescing = true\n        readyGroups = Object.freeze([])\n        phase = 'draining'\n        reason = 'host-execution-pause-unsettled'\n        for (const admitted of grant.admissions) admitted.stop('handoff')\n      }\n      return serialize(async () => {\n        if (writeLifecycle && !grant.writeQuiesced) {\n          await writeLifecycle.quiesce(grant.context)\n          grant.writeQuiesced = true\n        }\n      })\n    },\n    pause() {\n      if (closing) return lifecycle.close()\n      if (!paused) {\n        paused = true\n        invalidate('handoff', 'host-execution-paused')\n      }\n      return serialize(async () => {\n        await retireObsolete()\n        lastFailure = undefined\n      })\n",
+          "offset": 10
+        }
+      ]
+    },
+    {
+      "path": "packages/backend/src/modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "previousSha256": "7c81ddfc0d48bde4dd5f1ac76339f96672f64d08ce04dfa2547623f61adad3ed",
+      "changes": [
+        {
+          "introduced": "  /** Resolves after all actual owner starts ACK, or false when this grant retires. */\n  readonly whenActive?: Promise<boolean>\n  /** New dispatch is distinct from the control lifetime used to settle old work. */\n  readonly canDispatch?: () => boolean\n  /** Report a fatal owner failure for this original active grant only. */\n  readonly reportFailure?: (error: unknown) => void\n",
+          "previous": "",
+          "needle": "  readonly current: () => boolean\n  /** Resolves after all actual owner starts ACK, or false when this grant retires. */\n  readonly whenActive?: Promise<boolean>\n  /** New dispatch is distinct from the control lifetime used to settle old work. */\n  readonly canDispatch?: () => boolean\n  /** Report a fatal owner failure for this original active grant only. */\n  readonly reportFailure?: (error: unknown) => void\n}\n",
+          "offset": 34
+        },
+        {
+          "introduced": "  /** Close new admissions while original normal stops can still settle writes. */\n  quiesceAdmissions(): Promise<void>\n  /** Retire this grant for a reversible provider freeze; keep the driver open. */\n  pause(): Promise<void>\n",
+          "previous": "",
+          "needle": "  start(): Promise<void>\n  /** Close new admissions while original normal stops can still settle writes. */\n  quiesceAdmissions(): Promise<void>\n  /** Retire this grant for a reversible provider freeze; keep the driver open. */\n  pause(): Promise<void>\n  /** An explicit renewal, when required by the chosen host control flow. */\n",
+          "offset": 25
+        }
+      ]
+    }
+  ]
+}

@@ -476,8 +476,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       const releaseSlot = await intentSem.acquire()
       let result: SystemAgentRunResult
       try {
-        const retainedContents = systemAgents.retainedContents
-        const forget = retainedContents.forget
         result = await systemAgents.run({
           ...(control
             ? {
@@ -542,6 +540,8 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       }
       return { dump, result }
     }
+    const retainedContents = systemAgents.retainedContents
+    const forget = retainedContents.forget.bind(retainedContents)
     const completed =
       recoveredSnapshot && executionCheckpoint && control
         ? {
@@ -564,8 +564,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         : await prepareAndRun()
     const dump = completed.dump
     let result = completed.result
-    const retainedContents = systemAgents.retainedContents
-    const forget = retainedContents.forget.bind(retainedContents)
     const retainedRef = result.retainedRef
     forgetRetainedContents = () => forget({ retainedRef })
     if (control && result.status === 'unreaped' && !executionCheckpoint?.receipt)

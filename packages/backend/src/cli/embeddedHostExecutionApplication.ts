@@ -35,6 +35,7 @@ import {
 import { createDaemonProviderRuntimeSession } from './daemonProviderRuntimeSession'
 import { composeIntentTurnExecution } from '@/modules/intent/composition/execution'
 import { awaitOriginalHostPreparation } from './daemonHostExecutionRecovery'
+import type { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 
 type EmbeddedResourceDependencies = Omit<
   AppDeps,
@@ -44,7 +45,8 @@ type EmbeddedResourceDependencies = Omit<
   | 'taskRouteLaunch'
   | 'mcpRuntimeTests'
   | 'completeObservationReports'
->
+  | 'webhookTerminalControl'
+> & { readonly webhookTerminalControl?: ReturnType<typeof composeMrTerminalControl> }
 
 /** A real embedded HTTP root, with the original request-driven owner inventory.
  * Its caller owns the database and, optionally, the original socket transport.
@@ -83,7 +85,9 @@ export async function composeEmbeddedHostExecutionApplication(input: {
     module,
     persistence,
     log: createLogger('embedded-host-task'),
-    finalizeWorkspace: (taskId) => finishClaimedWebhookWorkspacePrune(input.deps.db, taskId),
+    finalizeWorkspace: async (taskId) => {
+      await finishClaimedWebhookWorkspacePrune(input.deps.db, taskId)
+    },
   })
   const driveBinding = Object.freeze({ executionModule: module, persistence, driverLifecycle })
   const readiness: Promise<unknown>[] = []
@@ -183,7 +187,7 @@ export async function composeEmbeddedHostExecutionApplication(input: {
           id: 'embedded-task-final-close',
           close: () => disposeTasks('embedded-application-closed'),
         },
-        { id: 'embedded-mcp-final-close', close: runtimeTests.dispose.bind(runtimeTests) },
+        { id: 'embedded-mcp-final-close', close: () => runtimeTests!.dispose() },
         ...(input.reports
           ? [
               {

@@ -127,7 +127,7 @@ describeEachProvider(
       })
       const originalList = store.listDueCachedRepos.bind(store)
       const list = spyOn(store, 'listDueCachedRepos').mockImplementation(async (input) =>
-        (await originalList(input)).sort((a, b) =>
+        [...(await originalList(input))].sort((a, b) =>
           a.id === repoId ? -1 : b.id === repoId ? 1 : 0,
         ),
       )

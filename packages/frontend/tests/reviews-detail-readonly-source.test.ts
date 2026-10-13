@@ -95,7 +95,7 @@ describe('RFC-013/RFC-149 reviews.detail.tsx — readonly historical view', () =
     )
     // Owners/admins keep the decided-state controls visible but disabled.
     const disabledDecisions = s.match(
-      /disabled=\{mode !== 'awaiting' \|\| submitDecision\.isPending\}/g,
+      /disabled=\{mode !== 'awaiting' \|\| submitDecision\.isPending \|\| !execution\.available\}/g,
     )
     expect(disabledDecisions?.length).toBe(3)
     // The styled in-app decision dialog carries the same two gates.

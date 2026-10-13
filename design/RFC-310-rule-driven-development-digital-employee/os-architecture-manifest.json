@@ -13,6 +13,7 @@
       ],
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
+        "cli/daemonHostExecutionOwners.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> public/events",
         "cli/start.ts -> composition",

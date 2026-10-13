@@ -19,6 +19,7 @@ import type {
 } from '../src/modules/runtime-management/public/participants'
 import { emptyDeclaredManifest } from '../src/services/execution/agentInjection'
 import { createLogger } from '../src/util/log'
+import type { SystemAgentExecutionReceipt } from '../src/modules/task-execution/public/participants'
 
 function unused(): never {
   throw new Error('unselected System capability was read')
@@ -397,15 +398,15 @@ describe('RFC-370 selected System common core', () => {
 
   test('durable preparation ACK precedes submit and original start ACK precedes owner/stream activation', async () => {
     const run = selectedRun()
-    const prepared: unknown[] = [],
-      started: unknown[] = []
+    const prepared: SystemAgentExecutionReceipt[] = [],
+      started: SystemAgentExecutionReceipt[] = []
     const receipts = {
-      async prepared(value: unknown) {
+      async prepared(value: SystemAgentExecutionReceipt) {
         expect(this).toBe(receipts)
         run.calls.push('durable-prepared')
         prepared.push(value)
       },
-      async started(value: unknown) {
+      async started(value: SystemAgentExecutionReceipt) {
         expect(this).toBe(receipts)
         run.calls.push('durable-started')
         started.push(value)

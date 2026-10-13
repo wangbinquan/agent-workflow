@@ -231,7 +231,7 @@ describe('RFC-370 complete native invocation binding', () => {
       cleanupReceiver: 'executor',
       async runNative(input) {
         expect(input).not.toHaveProperty('requireSpawnReceipt')
-        expect(input).not.toHaveProperty('onSpawned')
+        expect(typeof input.onSpawned).toBe('function')
         return {
           outcome: 'ok',
           exitCode: 0,

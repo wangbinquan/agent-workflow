@@ -99,33 +99,44 @@ function asciiJson(value: unknown): string {
 }
 
 function upsertCanonicalGuard(value: Record<string, unknown>): Record<string, unknown> {
-  const path = 'packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts'
-  const text = committedSource
-    ? committedSource.readText(path)
-    : readFileSync(resolve(REPO_ROOT, path), 'utf8')
-  if (text === undefined) throw new Error('canonical guard source is missing')
-  const unit = sourceUnit(path, text)
   const raw = Array.isArray(value.guards) ? value.guards : []
-  const guards = raw.filter(
+  let guards = raw.filter(
     (entry): entry is Record<string, unknown> =>
-      entry !== null &&
-      typeof entry === 'object' &&
-      !Array.isArray(entry) &&
-      entry.id !== 'rfc294-canonical-manifests' &&
-      entry.file !== path,
+      entry !== null && typeof entry === 'object' && !Array.isArray(entry),
   )
-  guards.push({
-    id: 'rfc294-canonical-manifests',
-    file: path,
-    runner: 'bun',
-    mechanism: 'ast',
-    corpusScanner: isCorpusScanner(unit),
-    minCorpusFiles: corpusFloor(unit),
-    assertsAbsence: assertsAbsence(unit),
-    negativeFixture: negativeFixtureAssertions(unit).length > 0,
-    classified: true,
-    lines: text.split('\n').length - 1,
-  })
+  // Keep the registered corpus, and classify both generator regression tests
+  // from the same selected Git source used for the projection.
+  for (const [id, path, mechanism] of [
+    [
+      'rfc294-canonical-manifests',
+      'packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts',
+      'ast',
+    ],
+    [
+      'rfc370-committed-architecture-source',
+      'packages/backend/tests/rfc370-committed-architecture-source.test.ts',
+      'behaviour',
+    ],
+  ] as const) {
+    const text = committedSource
+      ? committedSource.readText(path)
+      : readFileSync(resolve(REPO_ROOT, path), 'utf8')
+    if (text === undefined) throw new Error(`registered guard source is missing: ${path}`)
+    const unit = sourceUnit(path, text)
+    guards = guards.filter((entry) => entry.id !== id && entry.file !== path)
+    guards.push({
+      id,
+      file: path,
+      runner: 'bun',
+      mechanism,
+      corpusScanner: isCorpusScanner(unit),
+      minCorpusFiles: corpusFloor(unit),
+      assertsAbsence: assertsAbsence(unit),
+      negativeFixture: negativeFixtureAssertions(unit).length > 0,
+      classified: true,
+      lines: text.split('\n').length - 1,
+    })
+  }
   return {
     ...value,
     guards: guards.sort((left, right) => String(left.id).localeCompare(String(right.id))),

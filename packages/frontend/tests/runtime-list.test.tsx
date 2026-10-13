@@ -158,7 +158,7 @@ describe('RuntimeList (RFC-112 PR-D)', () => {
     expect((dialog.getByRole('button', { name: /^Save$/i }) as HTMLButtonElement).disabled).toBe(
       true,
     )
-    fireEvent.click(dialog.getByRole('switch', { name: /Run a test before creating/ }))
+    fireEvent.click(dialog.getByRole('checkbox', { name: /Run a test before creating/ }))
     expect((screen.getByTestId('runtime-binary') as HTMLInputElement).value).toBe(
       '/retained/runtime',
     )

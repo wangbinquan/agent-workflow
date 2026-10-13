@@ -34,6 +34,24 @@ export interface ExemptLeaf {
 
 /** 每条叶子一个元素——见文件头。只许缩。 */
 export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
+  // RFC-370: UI operator status and original-execution recovery controls.
+  { leaf: 'GET /api/execution/status', group: '/api/daemon', category: 'system-point' },
+  { leaf: 'POST /api/execution/recover', group: '/api/daemon', category: 'system-point' },
+  {
+    leaf: 'POST /api/intent-sessions/:id/turns/:id/recover',
+    group: '/api/intent-sessions',
+    category: 'system-point',
+  },
+  {
+    leaf: 'POST /api/mcps/:id/runtime-test-sessions/:id/recover',
+    group: '/api/mcps',
+    category: 'system-point',
+  },
+  {
+    leaf: 'POST /api/memory-distill-jobs/:id/recover',
+    group: '/api/memory-distill-jobs',
+    category: 'system-point',
+  },
   { leaf: 'GET /.well-known/mcp', group: '(infrastructure)', category: 'deliberate' },
   { leaf: 'GET /health', group: '(infrastructure)', category: 'deliberate' },
   { leaf: 'GET /api/clarify/pending-count', group: '/api/clarify', category: 'deliberate' },

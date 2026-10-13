@@ -80,7 +80,11 @@ describeEachProvider('RFC-370 selected employee program content', (harness) => {
         connectionCatalog: { resolve: async () => null },
         id: () => `selected-program-${++ordinal}`,
       })
-      const typeRef = { typeId: 'development', revision: 10 }
+      const typeRef = (
+        JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
+          typeRef: { typeId: string; revision: number }
+        }
+      ).typeRef
       const created = await module.commands.createTool({
         typeRef,
         workItemRef: 'prepare-materials',

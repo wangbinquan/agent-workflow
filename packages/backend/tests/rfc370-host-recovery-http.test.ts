@@ -1,7 +1,7 @@
 // RFC-370: status GET is side-effect free; recovery POST invokes the original
 // selected control even while execution admission is closed.
 import { expect, test } from 'bun:test'
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { buildActor } from '@/auth/actor'
 import { mountDaemonRoutes } from '@/routes/daemon'
 import { errorHandler } from '@/util/errors'
@@ -10,7 +10,7 @@ import type { HostExecutionStatus } from '@agent-workflow/shared'
 function appFor(execution?: Parameters<typeof mountDaemonRoutes>[1]['execution']) {
   const app = new Hono()
   app.onError(errorHandler)
-  app.use('*', async (c, next) => {
+  const actorMiddleware: MiddlewareHandler = async (c, next) => {
     c.set(
       'actor',
       buildActor({
@@ -25,7 +25,8 @@ function appFor(execution?: Parameters<typeof mountDaemonRoutes>[1]['execution']
       }),
     )
     await next()
-  })
+  }
+  app.use('*', actorMiddleware)
   mountDaemonRoutes(app, { runtime: { readCurrent: async () => null }, execution })
   return app
 }

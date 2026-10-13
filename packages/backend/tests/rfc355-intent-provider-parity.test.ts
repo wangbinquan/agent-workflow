@@ -71,6 +71,10 @@ describe('RFC-355 T10 —— apply 面用户可见错误码的精确清单', () 
     'intent-iteration-stale',
     'intent-mutation-conflict',
     'intent-name-conflict',
+    // RFC-370: shared persistence rejects conflicting original checkpoint/settlement ACKs.
+    'intent-original-execution-checkpoint-conflict',
+    'intent-original-execution-settlement-conflict',
+    'intent-original-execution-turn-mismatch',
     'intent-op-canonical-invalid',
     'intent-ref-unknown',
     'intent-reservation-invalid',

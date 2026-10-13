@@ -207,10 +207,10 @@ export function registerRfc370SqliteAffectedRowsCases(): void {
           expect(statement.all(2)).toEqual([{ id: 2, value: 0 }])
           expect(statement.values(1)).toEqual([[1, 0]])
           statement.finalize()
-          expect(statement.isFinalized).toBe(true)
+          expect(Reflect.get(statement, 'isFinalized')).toBe(true)
           expect(() => statement.get(1)).toThrow()
           const reopened = sqlite.query(query)
-          expect(reopened.isFinalized).toBe(false)
+          expect(Reflect.get(reopened, 'isFinalized')).toBe(false)
           expect(reopened.get(2)).toEqual({ id: 2, value: 0 })
         })
       })
@@ -219,7 +219,7 @@ export function registerRfc370SqliteAffectedRowsCases(): void {
         withDatabase(factory, (_db, sqlite) => {
           const probe = sqlite.query('SELECT changes() AS changes')
           probe.finalize()
-          expect(probe.isFinalized).toBe(true)
+          expect(Reflect.get(probe, 'isFinalized')).toBe(true)
           expect(
             sqlite.prepare('UPDATE _rfc370_rows SET value = 11 WHERE id = 1').run().changes,
           ).toBe(1)
@@ -235,8 +235,8 @@ export function registerRfc370SqliteAffectedRowsCases(): void {
         withDatabase(factory, (_db, sqlite) => {
           const probe = sqlite.query('SELECT changes() AS changes')
           const update = sqlite.prepare('UPDATE _rfc370_rows SET value = 12')
-          sqlite.clearQueryCache()
-          expect(probe.isFinalized).toBe(true)
+          Reflect.get(sqlite, 'clearQueryCache').call(sqlite)
+          expect(Reflect.get(probe, 'isFinalized')).toBe(true)
           expect(update.run().changes).toBe(2)
           expect(sqlite.query('SELECT id, value FROM _rfc370_rows ORDER BY id').values()).toEqual([
             [1, 12],

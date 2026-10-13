@@ -66,7 +66,7 @@ export class MemoryDistillExecutionSession {
       original,
     })
     const { checkpoints } = this.input
-    return Object.freeze({
+    return Object.freeze<SystemAgentExecutionReceiptSink>({
       prepared: async (receipt) => {
         const captured = Object.freeze({ ...receipt })
         const preparedAt = this.now()
