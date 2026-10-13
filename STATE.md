@@ -1,6 +1,6 @@
 ## 2026-10-13 RFC-372：UX 已发布，补齐 CI 配套遗漏
 
-`f3ab372d9` 已发布脑图横排、分类方向、问题弹窗及两份真实任务录制。其 CI 暴露本次头部动态 class 断言与 Dialog 双向清单漏项，已修正并保留原约束；最终定向 21 项通过、格式/lint 通过、有限独立功能复核 PASS。真实录制文档的两个示例幂等 UUID 只登记确切历史指纹，实际文档原文保留。visual 与 OpenCode integration 已 success，Windows 原 14 项失败与主 CI 新结果分别跟踪；其他观测/根装配失败有父提交或源码 blob 对照，不代改、不发跨 session 消息。13 份共享架构清单同步及后继 exact-SHA CI 仍开放，RFC 保持 In Progress；见 [CI 修正记录](design/RFC-372-mindmap-clarify/ci-ux-repair-20261013.md)。以下并发和历史正文完整保留。
+`f3ab372d9` 已发布脑图横排、分类方向、问题弹窗及两份真实任务录制。其 CI 暴露本次头部动态 class 断言与 Dialog 双向清单漏项，已修正并保留原约束；最终定向 21 项通过、格式/lint 通过、有限独立功能复核 PASS。真实录制文档的两个示例幂等 UUID 只登记确切历史指纹，实际文档原文保留；以上修正已以 `0bb5e5fc7` 推送。稍后链接作业报告 GitHub runner 无法连接文档中的两条 localhost 地址，后继改为完整任务 ID 与本地路径说明。visual 与 OpenCode integration 已 success，Windows 原 14 项失败与主 CI 新结果分别跟踪；其他观测/根装配失败有父提交或源码 blob 对照，不代改、不发跨 session 消息。13 份共享架构清单同步及后继 exact-SHA CI 仍开放，RFC 保持 In Progress；见 [CI 修正记录](design/RFC-372-mindmap-clarify/ci-ux-repair-20261013.md)。以下并发和历史正文完整保留。
 
 ## 2026-10-13 RFC-372：弹窗、分类方向与日常 AW 真实模型完成
 

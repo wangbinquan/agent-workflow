@@ -11,6 +11,8 @@
 
 主 CI 静态检查 job `115172935767` 还将实际录制文档的两个示例幂等 UUID 命中 `generic-api-key`。这两个值是模型设计文档中的预约请求示例，不是认证凭据。为保留真实文档逐字回放，只在既有 `.gitleaksignore` 追加 `f3ab372d9` 下确切文件、规则与第 531/532 行的历史指纹；不改变扫描配置或加入路径级忽略。
 
+以上三项已以 `0bb5e5fc7f29df50f4fa75e0aa77e806e0644669` 正常后继提交并推送。稍后完成的 Markdown link job `115172935699` 指出真实验收记录中两条 localhost 任务链接无法从 GitHub runner 访问；这是本次文档遗漏。后继将它们改为任务名称、完整任务 ID 与本地路径说明，保留可定位性，不关闭链接检查或为 localhost 扩大忽略。
+
 ## 集中复验
 
 - 最终 `header-compaction` 与 `rfc372-workspace-ux`：2 files / 21 tests passed，3.01s；日志 `ux-ci-ratchet-repair-final.log`。
