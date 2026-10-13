@@ -311,10 +311,7 @@
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "id": "rfc329-mcp-surface-exemptions",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。 RFC-370 approved stage A: five explicit operator HTTP endpoints expose status and original Task/Intent/MCP/Memory recovery. They remain UI/system points; no model or replacement task is implicitly launched.",
-      "allowGrowth": {
-        "why": "RFC-370 approved stage A: five explicit operator HTTP endpoints expose status and original Task/Intent/MCP/Memory recovery. They remain UI/system points; no model or replacement task is implicitly launched."
-      }
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。 RFC-370 approved stage A: five explicit operator HTTP endpoints expose status and original Task/Intent/MCP/Memory recovery. They remain UI/system points; no model or replacement task is implicitly launched."
     },
     {
       "baseline": 33,
@@ -615,10 +612,7 @@
       "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
       "id": "spawn-site-allowlist",
       "symbol": "ALLOWLIST",
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表 RFC-370 approved stage A: register the original native process identity adapter, containing two readonly ps/PowerShell probe sites. The exact original process recovery remains covered by its existing behavior tests.",
-      "allowGrowth": {
-        "why": "RFC-370 approved stage A: register the original native process identity adapter, containing two readonly ps/PowerShell probe sites. The exact original process recovery remains covered by its existing behavior tests."
-      }
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表 RFC-370 approved stage A: register the original native process identity adapter, containing two readonly ps/PowerShell probe sites. The exact original process recovery remains covered by its existing behavior tests."
     },
     {
       "baseline": 14,
@@ -716,10 +710,7 @@
       "file": "packages/backend/tests/rfc310-architecture-lock.test.ts",
       "id": "rfc310-composition-consumers",
       "symbol": "COMPOSITION_CONSUMERS",
-      "why": "RFC-310：允许直接消费 composition 装配面的文件（组合根 + maintenanceWorker + server）。多一条等于多一处绕过 public 合同的装配耦合。RFC-359 W7 第二波按判据 C 补入网。 RFC-370 approved stage A: the actual daemonHostExecutionOwners root composes the existing digital-employee owner for selected lifetime start/quiesce/drain; original native consumers remain intact.",
-      "allowGrowth": {
-        "why": "RFC-370 approved stage A: the actual daemonHostExecutionOwners root composes the existing digital-employee owner for selected lifetime start/quiesce/drain; original native consumers remain intact."
-      }
+      "why": "RFC-310：允许直接消费 composition 装配面的文件（组合根 + maintenanceWorker + server）。多一条等于多一处绕过 public 合同的装配耦合。RFC-359 W7 第二波按判据 C 补入网。 RFC-370 approved stage A: the actual daemonHostExecutionOwners root composes the existing digital-employee owner for selected lifetime start/quiesce/drain; original native consumers remain intact."
     },
     {
       "baseline": 0,
@@ -873,10 +864,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 7348,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 approved stage A validation fix, exact source 448eebf333fed279e132f4978827882417666a52: one original Memory settlement class import preserves material/reference facts while the original primary ACK is pending; project that exact edge and retain every previous source entry."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -897,10 +885,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 6439,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 approved stage A validation fix, exact source 448eebf333fed279e132f4978827882417666a52: one original Memory settlement class import preserves material/reference facts while the original primary ACK is pending; project that exact edge and retain every previous source entry."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -935,10 +920,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 28678,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 approved stage A validation fix, exact source 448eebf333fed279e132f4978827882417666a52: project four actual new symbols: the restored Fusion MANIFEST_REL constant, encodeJournalJson, decodeJournalJson, and SelectedHostExecutionBanner. Original owners and native behavior remain intact."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。 RFC-370 历史记录：981ae0f4dd28f6711adac2bec65c96fb231fd77d 相对父提交5a0e315c51ffa51ec56fc5c626049296d944dc67增加生命周期双 purpose 切面：mutation-entrypoints 1988→1989、cross-context observed imports 6902→6905、architecture exceptions 6044→6047、public surfaces 1259→1260、module symbol owners 27775→27782；遗漏当次allowGrowth声明，主CI的RFC-317 T17正式失败。已有批准覆盖一个新公开selector、三个bootstrap消费边、七个owner及一个观测写入口；原规则和其他125个baseline保持。此处记录遗漏，不补造后继未增长提交的许可，不改旧历史，不把后继CI追记为981ae0f准入通过；详见design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md。 RFC-371 CI 配套（source 1603b9c7）：按原 T17 一次性规则消费上一份匹配 RFC-370 投影的七条未增长 permit，原历史与 why 全部保留；本次实际只增长 physical SQLite fixture 347→348 和 platform owner 28664→28674，按原计数逐条登记，下一次无增长时正常退役。没有修改清点规则、人口、required SPI、债务条款或完工信用。",
@@ -946,8 +928,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "448eebf333fed279e132f4978827882417666a52",
-    "contentDigest": "sha256:d5f4887771698c0318f3168099e0d4ce98bcc65eaaa40b936107838e8ca20572",
+    "currentSnapshotSha": "1f1e9bd3805e0004a6c85ca926863f3ce42fef04",
+    "contentDigest": "sha256:d7d5a308bf8db37b9ec69910a023973760173bb06e92b037cea2f889329f59c4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
