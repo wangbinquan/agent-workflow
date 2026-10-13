@@ -403,7 +403,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-370](./RFC-370-crewstation-hosted-deployment/proposal.md) | CrewStation完整托管部署：A先补中立端口／local adapter并独立验收；B按必须能力先部署，再逐项收编CS独立adapter，最终完整能力等价。 | In Progress · 2026-09-28 · 已批准实现／部署／远端发布；A-T1普查及A-T2配置切面首批进行中，独立设计门未执行。 |
 | [RFC-371](./RFC-371-run-observability/proposal.md) | 运行观测与统计：独立入口、任务 / Agent / 尝试分层用量、执行泳道、人民币成本与性能异常；同时覆盖独立部署与 CS 托管。 | In Progress · 2026-09-30 · 正式入口、账本、人民币价格与托管 v2 已实施；CI 收口、真实来源/联动及其他未闭环项见 [剩余工作](./RFC-371-run-observability/remaining-work.md)。 |
 | [RFC-372](./RFC-372-mindmap-clarify/proposal.md) | 现有反问的脑图模式：分类提问、同轮分支追问、全景/聚焦共享草稿与确认，复用原提交续跑；退役扩大实现。 | In Progress · 2026-10-13 · 同级横排、分类方向、居中弹窗已实现并验收；日常 AW 两个真实模型任务 done，两份实际录制 E2E 通过；功能代码独立发布，共享架构清单同步仍开放，新 SHA CI 另验，见 [真实验收](./RFC-372-mindmap-clarify/real-aw-ux-acceptance-20261013.md)。 |
-| [RFC-373](./RFC-373-markdown-editor-layout/proposal.md) | Markdown 编辑器可调整分栏：Agent / Skill 共用三态、容器自适应、拖动与布局偏好。 | In Progress · 2026-10-13 · 用户已审核原型并批准实现、提交及推送；见实施计划。 |
+| [RFC-373](./RFC-373-markdown-editor-layout/proposal.md) | Markdown 编辑器可调整分栏：Agent / Skill 共用三态、容器自适应、拖动与布局偏好。 | **Done（2026-10-13）**：AC1～AC7 完成；三平台 31 项布局/交互与九次真实页面首轮通过，功能设计/实现门 PASS；整仓 CI 与共享投影待项保持原记录，见 [关闭验收](./RFC-373-markdown-editor-layout/gates.md#正式验收与关闭)。 |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
