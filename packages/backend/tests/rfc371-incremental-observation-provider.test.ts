@@ -1,5 +1,7 @@
 // RFC-371: durable increments, inverse updates, immutable views and bootstrap
 // recovery on both real engines. Packet sizes must never terminate statistics.
+// CI 38375430917: unrelated components must use their own task membership and
+// detail owner; otherwise the fixture itself contaminates task/A's aggregate.
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { observationUsageSources } from '@/db/schema'
@@ -39,7 +41,7 @@ function contribution(
   key: string,
   component = 'A',
   amount = '9007199254740997',
-  memberships = ['task/A', 'day/old'],
+  memberships = ['task/' + component, 'day/old'],
 ): IncrementalObservationContribution {
   const fold = emptyCompleteObservationFold('1')
   fold.observedInvocations = '1'
@@ -57,7 +59,7 @@ function contribution(
       section: 'invocations',
       parent: null,
       key,
-      taskId: 'A',
+      taskId: component,
       cohortAt: 1,
       document: { invocationId: key },
     },
@@ -106,6 +108,28 @@ function fixture(harness: ProviderHarness) {
   return { stage, prepared, adapter, query, projection, notifications }
 }
 describeEachProvider('RFC-371 real durable incremental projection', (harness) => {
+  test('default memberships and detail ownership follow the original component', async () => {
+    const f = fixture(harness)
+    await f.projection.apply(await f.stage('owner-B', [contribution('only-B', 'B')], ['B']))
+    const version = (await f.query.snapshot())!
+    expect(await f.query.aggregate('task/A', version)).toBeNull()
+    const expected = {
+      input: '9007199254740997',
+      cacheRead: '13',
+      cacheWrite: '17',
+      output: '19',
+    }
+    for (const key of ['task/B', 'day/old']) {
+      const fold = completeIncrementalObservationFold((await f.query.aggregate(key, version))!)
+      expect(fold.tokens).toEqual(expected)
+      expect(fold.picos).toBe('1')
+    }
+    const details = []
+    for await (const row of f.query.details({ version, section: 'invocations' })) {
+      details.push({ key: row.detail.key, taskId: row.detail.taskId })
+    }
+    expect(details).toEqual([{ key: 'only-B', taskId: 'B' }])
+  })
   test('original I/U/D outbox rolls back with its producer and derived writes do not enqueue themselves', async () => {
     await harness.db.delete(observationProjectionChanges).run()
     await expect(
