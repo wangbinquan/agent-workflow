@@ -68,6 +68,8 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // substitute dependencies. Owner/embedded tests exercise restart rejection,
   // original-ticket draining and recovery without replacing the active work.
   'cli/daemonHostExecutionOwners.ts: marker=0, prose=0, holder=5',
+  // RFC-213: the existing development hot-reload startup retains its original preparation across retries.
+  'cli/dev.ts: marker=0, prose=0, holder=1',
   // W12：realtime policy 改为构造参数，两个根都交齐词法闭包，不再有 bind 步骤。
   // SQLite 根的 scheduler / collaboration / MCP / development 与 PG maintenance status
   // 空槽同步拆除；明确传 catalogBinding/runtime 的返回类型保证相应成员存在。
@@ -157,6 +159,8 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // 仍保留 `dynamic-workflow-operations-not-composed`，它是
   // **条件依赖**的 fail-closed（只有选了 dynamic-workflow 生成引擎的任务才需要它），
   // 不是「装配未完成」，只是错误码里恰好带 `not-composed` 才被本守卫计入。
+  // RFC-371: the existing report build retains its live execution lifetime until the original drain ACK.
+  'modules/run-observability/composition/completeObservationReports.ts: marker=0, prose=0, holder=1',
   'modules/task-execution/composition/taskEngineApplication.ts: marker=1, prose=0, holder=0',
   // RFC-359 W11 销账：`server.ts` marker 6 → 1、holder 2 → 0。五处里三处是与 PG 根同一形状的
   // 词法环（`composeFallbackDevelopmentAutomation` 的 `automationRef`、`agentCatalogRef`、

@@ -1,5 +1,13 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 两处旧装配计数接手授权
+
+用户已明确批准原预览中的两条 `COMPOSITION_ROOT_PLACEHOLDER_DEBT`：`cli/dev.ts: holder=1` 和 `modules/run-observability/composition/completeObservationReports.ts: holder=1`。原完整测试扫描器和严格相等断言保持，原实际源码保持；两文件从失败提交 `3472c9fc2` 到已发布 `c4adc1975` 的 blob 一致。生成配套将该账本 7→9，按新提交记录准确 provenance，并退役已消费的一次性增长声明。
+
+前一轮源码 `7f3244667e2f6e4ca77428773bf164cf7a2b3ef3`／配套 `c4adc1975a6d94f0f21a91d7e7ac535582e2848b` 已远端同步；独立完整功能门最终 PASS／0 findings。主 CI `38483477606` 的类型、lint、格式、shared/system mock 作业 `115591398071` 成功；Windows `38483477689` 终态 failure，平台套件 1657 pass／1 fail，新增 Memory before/after COMMIT、原 runtime identity、webhook 实际 owner、三个 native 正文及 P12 原完整 caller 均通过。Windows 唯一套件失败是既有增量累计使用量成员归属，不以局部通过签整体总绿。
+
+当前另已按真实提交归因：前端基础设施断言仍要求 Bun 1.4.0，而并发 `91f2bd982` 把正式 workflow 升为 1.4.3；旧员工 Case 夹具仍请求 development@10，前置 `651f956df` 正式 package 已为 @11，相关生产和夹具在本阶段原 blob 保持。其余原 CI 尚按 job/step、确切 diff 和依赖核对，未自动接手范围外代码。两条旧装配账本的新发布及确切 CI 另行验收；阶段 A／A-G 仍未签，B/M0 未启动。无跨 session 消息。
+
 ## 2026-10-14 授权修复与完整实现门结果
 
 用户已明确授权接手限定历史 CI 修复，并授权本任务内只读审阅完整阶段 A。原实现门返回 1 个 P1、2 个 P2；三个 finding 和材料失败清理尾项均已修复，原审阅者必要续审结论为 PASS／0 findings。该结论只代表当前源码候选的独立功能门，不能代签 A-G、GitHub 总绿或 CS 部署。没有跨独立 session 消息。

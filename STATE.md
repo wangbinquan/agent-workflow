@@ -1,3 +1,9 @@
+## 2026-10-14 RFC-370：两处历史装配账本接手已批准
+
+用户明确批准接手 `cli/dev.ts` 和 `completeObservationReports.ts` 两个已有 holder 的原账本漏项及其生成配套。只在原有序账本新增两条原实际计数和用途说明，原扫描器、严格逐文件断言、业务和并发在制内容保持；canonical 装配计数 7→9，消费旧一次性增长回执。此前源码 `7f3244667`／配套 `c4adc1975` 已完整发布并同步，完整实现门 PASS／0 findings 保持。
+
+`c4adc1975` 的主 CI 类型/lint/格式/shared/system mock 作业成功；Windows 平台套件 1657 pass、1 fail，新增 webhook/Memory 崩溃与原 runtime 身份、三个 native 正文和十一 caller 对账均实际通过。失败在原累计使用量成员归属；另有并发 Bun 1.4.3 对旧 1.4.0 断言、前置 `651f956df` 已升 development@11 对旧 @10 夹具的失败，按实际日志和 diff 保留责任证据，本次批准不扩大到这些范围。新两条账本与配套的集中诊断、提交及确切 CI 另验；A-G／总绿仍未取得，B/M0 未启动，AW 未部署 CS。无跨 session 消息，以下全部历史及共享正文保留。
+
 ## 2026-10-14 RFC-370：完整实现门 PASS，限定旧 CI 修复与最终发布继续
 
 用户批准限定历史 CI 接手及本任务内只读功能审阅。完整阶段 A 实现门发现的 webhook 通知越过 owner、Memory 下一轮 marker 和冷恢复 runtime 观测身份三项已全部修复；材料失败清理尾项也经真实 System family 回归及同一审阅者复核关闭，最终 PASS／0 findings。CI 中本阶段新增的 provider 字面量判断改为与实际 runtime 身份比较，三条真实根拒绝回归与原守卫通过。原三个 native 正文和十一调用者完整指纹保持，五处 signalCode 类型／有限旧 root inverse 已修复，样式计数 155→154 待本次 canonical 统一配套。
