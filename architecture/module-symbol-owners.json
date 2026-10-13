@@ -120476,6 +120476,18 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#decimalLt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "decimalLt",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts",
       "id": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#decimalLte",
       "removeAfterWave": null,
       "status": "current-module",
@@ -137118,18 +137130,6 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "composeLegacySqliteResourceLimitOperations",
-      "targetContext": "system-operations",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "system-operations",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/system-operations/composition/resourceLimits.ts",
-      "id": "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#composePostgresqlResourceLimitOperations",
-      "removeAfterWave": "W9-D",
-      "status": "current-module",
-      "symbol": "composePostgresqlResourceLimitOperations",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -344999,5 +344999,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d"
+  "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e"
 }

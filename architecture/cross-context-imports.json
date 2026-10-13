@@ -24551,23 +24551,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionBootstrap.ts#$file",
-      "fromPath": "packages/backend/src/cli/daemonHostExecutionBootstrap.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:36dce343ce665b834836",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts#createTaskHostWriteContextAdapter",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts",
-      "toSymbol": "createTaskHostWriteContextAdapter",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
       "fromPath": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
       "fromSymbol": "$file",
@@ -41381,23 +41364,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/embeddedHostExecutionApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/embeddedHostExecutionApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:5f5b8a1a5632c3bf6f91",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort",
-      "toPath": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
-      "toSymbol": "createDatabaseTaskDriverLifecyclePort",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "fromSymbol": "$file",
@@ -52525,7 +52491,7 @@
       "owner": "bootstrap",
       "removeAfterWave": "W9-D",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#composePostgresqlResourceLimitOperations",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#$file",
       "toPath": "packages/backend/src/modules/system-operations/composition/resourceLimits.ts",
       "toSymbol": "composePostgresqlResourceLimitOperations",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -61912,6 +61878,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/userOperations.ts#composeIdentityUserOperations",
       "toPath": "packages/backend/src/modules/identity-access/composition/userOperations.ts",
       "toSymbol": "composeIdentityUserOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionBootstrap.ts#$file",
+      "fromPath": "packages/backend/src/cli/daemonHostExecutionBootstrap.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:92bd6eff6471301229fc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/hostExecutionAdmission.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/composition/hostExecutionAdmission.ts",
+      "toSymbol": "createTaskHostWriteContextAdapter",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -77485,23 +77468,6 @@
       "toPath": "packages/backend/src/modules/collaboration/application/ports/humanGateTerminalSweep.ts",
       "toSymbol": "HumanGateTerminalSweepCommand",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/composition/resourceLimits.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:b7a69543b82bb22ebe61",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -96971,6 +96937,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/embeddedHostExecutionApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/embeddedHostExecutionApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e3c1a9b58fc82f167c83",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "toSymbol": "createDatabaseTaskDriverLifecyclePort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "fromSymbol": "$file",
@@ -109448,9 +109431,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6438,
+    "architectureExceptions": 6437,
     "implementationSccs": 0,
-    "observedEdges": 7348,
+    "observedEdges": 7347,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -135508,22 +135491,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/daemonHostExecutionBootstrap.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionBootstrap.ts#$file",
-      "id": "import:36dce343ce665b834836",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/infrastructure/hostExecutionWriteContext",
-      "syntax": "static-import",
-      "targetSymbol": "createTaskHostWriteContextAdapter",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/hostExecutionWriteContext.ts#createTaskHostWriteContextAdapter"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "memory",
       "fromFile": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
@@ -153764,22 +153731,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/embeddedHostExecutionApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/embeddedHostExecutionApplication.ts#$file",
-      "id": "import:5f5b8a1a5632c3bf6f91",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/infrastructure/taskDriverLifecycle",
-      "syntax": "static-import",
-      "targetSymbol": "createDatabaseTaskDriverLifecyclePort",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file",
@@ -165920,7 +165871,7 @@
       "targetSymbol": "composePostgresqlResourceLimitOperations",
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition/resourceLimits.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#composePostgresqlResourceLimitOperations"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -176049,6 +176000,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/composition/userOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/userOperations.ts#composeIdentityUserOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/daemonHostExecutionBootstrap.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionBootstrap.ts#$file",
+      "id": "import:92bd6eff6471301229fc",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/hostExecutionAdmission",
+      "syntax": "static-import",
+      "targetSymbol": "createTaskHostWriteContextAdapter",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/hostExecutionAdmission.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/hostExecutionAdmission.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -193153,22 +193120,6 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/application/ports/humanGateTerminalSweep.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/ports/humanGateTerminalSweep.ts#HumanGateTerminalSweepCommand"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/composition/resourceLimits.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/resourceLimits.ts#$file",
-      "id": "import:b7a69543b82bb22ebe61",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
       "edgeKind": "type",
@@ -213892,6 +213843,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/embeddedHostExecutionApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/embeddedHostExecutionApplication.ts#$file",
+      "id": "import:e3c1a9b58fc82f167c83",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/providerRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "createDatabaseTaskDriverLifecyclePort",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
@@ -227918,7 +227885,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d",
+  "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

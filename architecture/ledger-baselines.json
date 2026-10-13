@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d",
+    "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -381,10 +381,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts",
       "id": "rfc359-w5-composition-root-placeholder",
       "symbol": "COMPOSITION_ROOT_PLACEHOLDER_DEBT",
-      "why": "RFC-359 W5「防复辟」波次。组合根里的 `*-not-bound` / `*-not-composed` 占位与晚绑定 holder（fail-closed 那种）。语料含 `cli/**`、`**/composition*` 与 `server.ts`——把 server.ts 收进来照出了 `mcpCatalogRef` 在 HTTP 根与 daemon 根各存一份、而只有一份在守卫下。 RFC-370 H7: explicitly retain the documented bootstrap installation cycle and original owner lifetime slots; complete family/normal-ticket/recovery tests remain required. RFC-370 CI responsibility exception approved 2026-10-14: register the two already existing RFC-213 dev preparation and RFC-371 report lifetime holders while preserving all original production behavior and strict per-file scanner assertions; 7 to 9.",
-      "allowGrowth": {
-        "why": "RFC-370 user-approved CI responsibility exception: record exactly the existing RFC-213 dev preparation holder and RFC-371 report lifetime holder; production and original scanner assertions remain unchanged, count 7 to 9."
-      }
+      "why": "RFC-359 W5「防复辟」波次。组合根里的 `*-not-bound` / `*-not-composed` 占位与晚绑定 holder（fail-closed 那种）。语料含 `cli/**`、`**/composition*` 与 `server.ts`——把 server.ts 收进来照出了 `mcpCatalogRef` 在 HTTP 根与 daemon 根各存一份、而只有一份在守卫下。 RFC-370 H7: explicitly retain the documented bootstrap installation cycle and original owner lifetime slots; complete family/normal-ticket/recovery tests remain required. RFC-370 CI responsibility exception approved 2026-10-14: register the two already existing RFC-213 dev preparation and RFC-371 report lifetime holders while preserving all original production behavior and strict per-file scanner assertions; 7 to 9."
     },
     {
       "baseline": 4,
@@ -866,7 +863,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 7348,
+      "baseline": 7347,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -887,7 +884,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6438,
+      "baseline": 6437,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -931,8 +928,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d78792ca58f5d44dc0511c4c2954e99afd20b9a7",
-    "contentDigest": "sha256:fa2163c31fe6680218ee7119fd3510f3fa967e5ce31cf839722bdfa6d53d5d9c",
+    "currentSnapshotSha": "dba70f0fceaf12b7a4e07a724aae47ef1ff49495",
+    "contentDigest": "sha256:3016ee34636b52c98756f2f0b6ea876beb4a193bce0577599cb0c50016ba3913",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
