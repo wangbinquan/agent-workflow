@@ -1,3 +1,7 @@
+## 2026-10-13 RFC-372：UX 已发布，补齐 CI 配套遗漏
+
+`f3ab372d9` 已发布脑图横排、分类方向、问题弹窗及两份真实任务录制。其 CI 暴露本次头部动态 class 断言与 Dialog 双向清单漏项，已修正并保留原约束；最终定向 21 项通过、格式/lint 通过、有限独立功能复核 PASS。真实录制文档的两个示例幂等 UUID 只登记确切历史指纹，实际文档原文保留。visual 与 OpenCode integration 已 success，Windows 原 14 项失败与主 CI 新结果分别跟踪；其他观测/根装配失败有父提交或源码 blob 对照，不代改、不发跨 session 消息。13 份共享架构清单同步及后继 exact-SHA CI 仍开放，RFC 保持 In Progress；见 [CI 修正记录](design/RFC-372-mindmap-clarify/ci-ux-repair-20261013.md)。以下并发和历史正文完整保留。
+
 ## 2026-10-13 RFC-372：弹窗、分类方向与日常 AW 真实模型完成
 
 按用户追加要求完成同级横排、深入纵向、真实层级目录及居中大弹窗；关闭保留答案/相机/指引/在途请求，切换节点仍可取消。分类/根目标复用原 followup、草稿及提交事务，不加业务表或续跑链。日常 `localhost:5174` / `127.0.0.1:7456`、`~/.agent-workflow` 的真实 OpenCode DeepSeek 任务 `01M4SK0C3RQH0FPWSBQHER3FES` 与 `01M4SZ1T6KTD54544KPDVVT7NX` 均 done，输出 29,038 / 2,070 字符文档；后者完整覆盖分类补数据库性能、深入、根补用户体验、六题确认及最终文档。两份实际记录已固化 System Mock 模型边界回放，正式 HTTP/数据库/TaskEngine 未 mock。

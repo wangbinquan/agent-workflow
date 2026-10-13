@@ -251,6 +251,13 @@ const OVERLAY_CALLSITES = {
     family: 'review-and-clarify',
     count: 1,
   },
+  // RFC-372: the panorama question dialog shares the focused workspace state.
+  // rfc372-workspace-ux owns close/reopen and pending-request behavior;
+  // e2e/rfc372-recorded-mindmap owns responsive sizing, focus and long content.
+  'components/clarify/mindmap/MindmapWorkspace.tsx': {
+    family: 'review-and-clarify',
+    count: 1,
+  },
   'components/review/MultiDocReviewView.tsx': { family: 'review-and-clarify', count: 1 },
   'routes/clarify.detail.tsx': { family: 'review-and-clarify', count: 1 },
   // RFC-304 — the two dialogs that make the code capability configurable at

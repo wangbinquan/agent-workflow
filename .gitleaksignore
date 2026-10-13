@@ -92,3 +92,9 @@ a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-p
 # a generic API key. It carries no credential and is now marked inline.
 # Preserve scanning; exempt only this exact historical commit/path/rule/line.
 6f7bd418ceb831009291ca41e6c062d86701e973:packages/backend/tests/rfc370-config-applied-ack.test.ts:generic-api-key:20
+
+# RFC-372: the real model's recorded draft/final design includes a sample
+# booking request UUID for idempotency, not an authentication credential.
+# Preserve the actual document; exempt only its two published fingerprints.
+f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtures/rfc372-real-mindmap.json:generic-api-key:531
+f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtures/rfc372-real-mindmap.json:generic-api-key:532

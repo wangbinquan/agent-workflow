@@ -43,7 +43,14 @@ describe('multi-doc review header compaction', () => {
 
 describe('clarify header compaction', () => {
   test('clarify page root opts into the compaction scope class', () => {
-    expect(CLARIFY).toMatch(/className="page page--clarify-detail"/)
+    // RFC-372 adds a conditional mindmap class. Both modes must retain the
+    // unconditional page/compaction classes before any template expression.
+    const root = CLARIFY.match(/<div\b[^>]*\bdata-testid="clarify-detail-page"[^>]*>/)?.[0] ?? ''
+    const rootClass = root.match(/className=(?:"([^"]+)"|\{\s*`([^`$]*))/)
+    expect(rootClass).not.toBeNull()
+    expect((rootClass?.[1] ?? rootClass?.[2] ?? '').split(/\s+/)).toEqual(
+      expect.arrayContaining(['page', 'page--clarify-detail']),
+    )
   })
   test('clarify header drops the default 24px bottom margin', () => {
     expect(CSS).toMatch(
