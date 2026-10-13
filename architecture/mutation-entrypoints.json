@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 2011,
+    "entries": 2034,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -448,6 +448,30 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/cli/daemonHostExecutionBootstrap.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/daemonHostExecutionBootstrap.ts#resumeDaemonResourcesForServing",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionBootstrap.ts#resumeDaemonResourcesForServing",
+      "symbol": "resumeDaemonResourcesForServing",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/cli/daemonProviderBootstrap.ts#createDaemonProviderBootstrap",
@@ -767,6 +791,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderSession.ts#createDaemonProviderSessionController",
       "symbol": "createDaemonProviderSessionController",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/cli/dev.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/dev.ts#createDevelopmentDaemonState",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/dev.ts#createDevelopmentDaemonState",
+      "symbol": "createDevelopmentDaemonState",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -2672,7 +2720,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -2683,7 +2731,6 @@
       "id": "mutation:packages/backend/src/modules/collaboration/application/humanGateContinuationWorker.ts#createHumanGateContinuationWorkerDefinition",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
         "event",
         "fenceOrOcc",
@@ -8623,7 +8670,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": true,
         "fenceOrOcc": false,
@@ -8634,7 +8681,6 @@
       "id": "mutation:packages/backend/src/modules/digital-employee/application/osWorker.ts#runDigitalEmployeeOsCycle",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
         "fenceOrOcc",
         "transaction"
@@ -9315,7 +9361,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": true,
         "fenceOrOcc": false,
@@ -9326,7 +9372,6 @@
       "id": "mutation:packages/backend/src/modules/event-center/application/eventCenterWorker.ts#runEventCenterCycle",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
         "fenceOrOcc",
         "transaction"
@@ -12316,7 +12361,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "internal-family",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -12327,7 +12372,6 @@
       "id": "mutation:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrTerminalEffectPersistence",
       "missingControls": [
         "audit",
-        "authority",
         "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrTerminalEffectPersistence",
@@ -12713,6 +12757,29 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/application/executionLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/application/executionLifecycle.ts#createIntentTurnExecutionLifecycle",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/application/executionLifecycle.ts#createIntentTurnExecutionLifecycle",
+      "symbol": "createIntentTurnExecutionLifecycle",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": false,
@@ -12837,7 +12904,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -12848,7 +12915,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -13054,7 +13120,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -13064,8 +13130,7 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/intent/application/turnEngine.ts#runIntentTurn",
       "missingControls": [
-        "audit",
-        "authority"
+        "audit"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#runIntentTurn",
       "symbol": "runIntentTurn",
@@ -14030,8 +14095,33 @@
     },
     {
       "controls": {
-        "audit": true,
+        "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/local/fusionWorkspace.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/infrastructure/local/fusionWorkspace.ts#createLocalFusionWorkspaceFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/local/fusionWorkspace.ts#createLocalFusionWorkspaceFactory",
+      "symbol": "createLocalFusionWorkspaceFactory",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "system",
         "authorization": true,
         "event": true,
         "fenceOrOcc": false,
@@ -14041,7 +14131,6 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#runDistill",
       "missingControls": [
-        "authority",
         "fenceOrOcc",
         "transaction"
       ],
@@ -14149,6 +14238,28 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#runDistillTick",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#runDistillTick",
+      "symbol": "runDistillTick",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -14212,6 +14323,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#startMemoryDistillLoop",
       "symbol": "startMemoryDistillLoop",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/settlement.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/settlement.ts#settleOriginalMemoryDistillation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/settlement.ts#settleOriginalMemoryDistillation",
+      "symbol": "settleOriginalMemoryDistillation",
       "targetContext": "memory",
       "targetLayer": "application"
     },
@@ -19676,6 +19812,29 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts#claimPending",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts#claimPending",
+      "symbol": "claimPending",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts",
@@ -21953,6 +22112,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/run-observability/application/completeObservationExecution.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/completeObservationExecution.ts#Settlement",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/completeObservationExecution.ts#Settlement",
+      "symbol": "Settlement",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/run-observability/application/completeObservationReportTransfer.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/run-observability/application/completeObservationReportTransfer.ts#sealCompleteObservationReport",
@@ -22530,7 +22714,7 @@
       "controls": {
         "audit": false,
         "authority": "system",
-        "authorization": false,
+        "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": true
@@ -22539,8 +22723,7 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationProjectionStore.ts#createIncrementalObservationProjectionStore",
       "missingControls": [
-        "audit",
-        "authorization"
+        "audit"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationProjectionStore.ts#createIncrementalObservationProjectionStore",
       "symbol": "createIncrementalObservationProjectionStore",
@@ -22554,15 +22737,14 @@
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
-        "transaction": false
+        "transaction": true
       },
       "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#createIncrementalObservationQueryStore",
       "missingControls": [
         "audit",
-        "event",
-        "transaction"
+        "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#createIncrementalObservationQueryStore",
       "symbol": "createIncrementalObservationQueryStore",
@@ -22597,6 +22779,53 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#remove",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#remove",
+      "symbol": "remove",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageLifetime.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/observationStorageLifetime.ts#admitObservationStorage",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageLifetime.ts#admitObservationStorage",
+      "symbol": "admitObservationStorage",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": true,
         "transaction": true
       },
@@ -22611,6 +22840,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#createPlatformObservationStore",
       "symbol": "createPlatformObservationStore",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/priceCorrections.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/priceCorrections.ts#createObservationPriceCorrectionStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/priceCorrections.ts#createObservationPriceCorrectionStore",
+      "symbol": "createObservationPriceCorrectionStore",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -24218,6 +24472,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRetainedReference.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRetainedReference.ts#createDurableSystemRetainedReference",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRetainedReference.ts#createDurableSystemRetainedReference",
+      "symbol": "createDurableSystemRetainedReference",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -24259,6 +24538,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings.ts#createLocalTaskAgentRuntimeBindings",
       "symbol": "createLocalTaskAgentRuntimeBindings",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeConnectedSessions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/opencodeConnectedSessions.ts#opencodeConnectedSessions",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeConnectedSessions.ts#opencodeConnectedSessions",
+      "symbol": "opencodeConnectedSessions",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -26592,7 +26896,7 @@
       "controls": {
         "audit": false,
         "authority": "system",
-        "authorization": false,
+        "authorization": true,
         "event": true,
         "fenceOrOcc": true,
         "transaction": false
@@ -26602,7 +26906,6 @@
       "id": "mutation:packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts#createHostExecutionAuthorityLifecycle",
       "missingControls": [
         "audit",
-        "authorization",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts#createHostExecutionAuthorityLifecycle",
@@ -26631,6 +26934,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/hostExecutionAuthority.ts#CreateHostExecutionAuthorityLifecycleInput",
       "symbol": "CreateHostExecutionAuthorityLifecycleInput",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/application/hostExecutionRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/application/hostExecutionRecovery.ts#createHostExecutionRecoveryCommands",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/hostExecutionRecovery.ts#createHostExecutionRecoveryCommands",
+      "symbol": "createHostExecutionRecoveryCommands",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -29737,7 +30064,7 @@
     },
     {
       "controls": {
-        "audit": false,
+        "audit": true,
         "authority": "none-observed",
         "authorization": true,
         "event": false,
@@ -29748,7 +30075,6 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts#runTaskIdleTimeoutSweep",
       "missingControls": [
-        "audit",
         "authority",
         "event",
         "fenceOrOcc",
@@ -32911,6 +33237,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations",
       "symbol": "createLegacySqliteNodeRunOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionRecoveryReference.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionRecoveryReference.ts#createLocalAgentExecutionRecoveryReferences",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionRecoveryReference.ts#createLocalAgentExecutionRecoveryReferences",
+      "symbol": "createLocalAgentExecutionRecoveryReferences",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -36683,6 +37033,29 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/authorityManagedWorker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/authorityManagedWorker.ts#startAuthorityManagedWorker",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/authorityManagedWorker.ts#startAuthorityManagedWorker",
+      "symbol": "startAuthorityManagedWorker",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": true,
@@ -37844,6 +38217,27 @@
     },
     {
       "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/events/committed/afterCommitEventPump.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/events/committed/afterCommitEventPump.ts#createColdAfterCommitEventPump",
+      "missingControls": [
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/afterCommitEventPump.ts#createColdAfterCommitEventPump",
+      "symbol": "createColdAfterCommitEventPump",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "controls": {
         "audit": false,
         "authority": "internal-family",
         "authorization": true,
@@ -37962,6 +38356,29 @@
     {
       "controls": {
         "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/events/committed/dispatcherWorker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/events/committed/dispatcherWorker.ts#CommittedEventDispatcherInput",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/dispatcherWorker.ts#CommittedEventDispatcherInput",
+      "symbol": "CommittedEventDispatcherInput",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": false,
         "event": true,
@@ -37970,9 +38387,34 @@
       },
       "file": "packages/backend/src/platform/events/committed/dispatcherWorker.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/events/committed/dispatcherWorker.ts#createAuthorityCommittedEventDispatcher",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/dispatcherWorker.ts#createAuthorityCommittedEventDispatcher",
+      "symbol": "createAuthorityCommittedEventDispatcher",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/events/committed/dispatcherWorker.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/events/committed/dispatcherWorker.ts#createCommittedEventDispatcher",
       "missingControls": [
+        "audit",
+        "authority",
         "authorization",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/events/committed/dispatcherWorker.ts#createCommittedEventDispatcher",
@@ -38045,6 +38487,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/events/committed/persistence.ts#CommittedEventDeliveryPersistencePort",
       "symbol": "CommittedEventDeliveryPersistencePort",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/events/committed/persistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/events/committed/persistence.ts#CommittedEventUnissuedClaimSettlement",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/persistence.ts#CommittedEventUnissuedClaimSettlement",
+      "symbol": "CommittedEventUnissuedClaimSettlement",
       "targetContext": "platform",
       "targetLayer": "events"
     },
@@ -38575,6 +39039,54 @@
       },
       "file": "packages/backend/src/platform/events/committed/workerDefinitions.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/events/committed/workerDefinitions.ts#CommittedEventWorkerInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/workerDefinitions.ts#CommittedEventWorkerInput",
+      "symbol": "CommittedEventWorkerInput",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/events/committed/workerDefinitions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/events/committed/workerDefinitions.ts#createAuthorityCommittedEventDispatcherWorkerDefinition",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/events/committed/workerDefinitions.ts#createAuthorityCommittedEventDispatcherWorkerDefinition",
+      "symbol": "createAuthorityCommittedEventDispatcherWorkerDefinition",
+      "targetContext": "platform",
+      "targetLayer": "events"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/events/committed/workerDefinitions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/events/committed/workerDefinitions.ts#createCommittedEventDispatcherWorkerDefinition",
       "missingControls": [
         "audit",
@@ -38662,7 +39174,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -38673,7 +39185,6 @@
       "id": "mutation:packages/backend/src/platform/execution/local/managedProcess.ts#runManagedProcess",
       "missingControls": [
         "audit",
-        "authority",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/execution/local/managedProcess.ts#runManagedProcess",
@@ -38730,6 +39241,30 @@
       "symbol": "runManagedProcessLauncher",
       "targetContext": "platform",
       "targetLayer": "execution"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/http/hostExecutionAvailability.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/http/hostExecutionAvailability.ts#runHttpHostExecutionRequest",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/http/hostExecutionAvailability.ts#runHttpHostExecutionRequest",
+      "symbol": "runHttpHostExecutionRequest",
+      "targetContext": "platform",
+      "targetLayer": "http"
     },
     {
       "controls": {
@@ -41565,7 +42100,7 @@
       },
       "file": "packages/backend/src/routes/tasks.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/tasks.ts#$http:delete:427",
+      "id": "mutation:packages/backend/src/routes/tasks.ts#$http:delete:428",
       "missingControls": [
         "audit",
         "authority",
@@ -41575,7 +42110,7 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file",
-      "symbol": "$http:delete:427",
+      "symbol": "$http:delete:428",
       "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
@@ -45308,8 +45843,8 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
+        "authority": "system",
+        "authorization": true,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -45319,8 +45854,6 @@
       "id": "mutation:packages/backend/src/services/submoduleRefresh.ts#createSubmoduleRefreshLoop",
       "missingControls": [
         "audit",
-        "authority",
-        "authorization",
         "event",
         "transaction"
       ],
@@ -45332,8 +45865,8 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
+        "authority": "system",
+        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -45343,8 +45876,6 @@
       "id": "mutation:packages/backend/src/services/submoduleRefresh.ts#startConfiguredSubmoduleRefreshLoop",
       "missingControls": [
         "audit",
-        "authority",
-        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -48121,7 +48652,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c161c9848d02c523172ffa47dded783bfe7a07d27bedc96f3dbcc1ffb000415b",
+  "sourceDigest": "sha256:9be30b9798da201c6ef3bda0e65da16c0cbf34d82adb9f2001f97f6c8553916c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
