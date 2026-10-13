@@ -554,6 +554,27 @@ describeEachProvider(
                   .map((row) => row.document),
               ),
             )
+            // An unknown clock is diagnosed completely, rather than leaking
+            // into the admitted records or disappearing from the original EOF.
+            for (const section of ['time-partitions', 'time-unassigned'] as const) {
+              const original = expected.rows
+                .filter((row) => row.section === section && row.parent === null)
+                .map((row) => row.document)
+              const items: unknown[] = []
+              let after: string | undefined
+              do {
+                const page = await f.queries.page(actor, actual.header.reportId, {
+                  section,
+                  limit: 2,
+                  ...(after ? { after } : {}),
+                })
+                expect(page.total).toBe(String(original.length))
+                items.push(...page.items)
+                if (page.nextCursor !== null) expect(page.nextCursor).not.toBe(after)
+                after = page.nextCursor ?? undefined
+              } while (after)
+              expect(normalized(items)).toEqual(normalized(original))
+            }
           }
     }, 60_000)
     test('actual native WAL, shared root candidates and original EOF match the canonical historical allocator without duplicate numbers', async () => {

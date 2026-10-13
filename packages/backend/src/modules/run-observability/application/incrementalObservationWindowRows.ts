@@ -104,7 +104,9 @@ export function incrementalObservationWindowRows(
   if (section === 'historical-records' && parent !== 'original-source')
     return rows.filter((raw) => {
       const row = raw as CompleteHistoricalObservationRecord
-      return row.occurredAt === null || inWindow(row.occurredAt)
+      // Unknown-time originals remain in time-unassigned and original-source;
+      // the admitted usage detail follows the same half-open window as its header.
+      return inWindow(row.occurredAt)
     })
   if (section === 'historical-record-references')
     return rows.filter((row) => refs.has((row as { referenceId: string }).referenceId))

@@ -94,6 +94,7 @@ export function CompleteDimensionRows({
                   type="button"
                   className="link link--button data-table__link"
                   data-observation-dimension={row.key}
+                  data-observation-dimension-kind={row.kind}
                   data-observation-runtime={row.kind === 'runtime' ? row.key : undefined}
                   data-observation-model={row.kind === 'model' ? row.key : undefined}
                   aria-label={

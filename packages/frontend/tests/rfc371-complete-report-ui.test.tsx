@@ -147,6 +147,8 @@ function fixture(
   const state = {
     missing: false,
     pageFailureReportId: null as string | null,
+    holdAgentRevision: null as string | null,
+    releaseAgentPage: null as (() => void) | null,
     releaseHostStatus: null as (() => void) | null,
     holdHostStatus: options.holdHostStatus ?? false,
     building: options.building ?? false,
@@ -246,8 +248,16 @@ function fixture(
         taskRow('task-' + (offset + i), '任务 ' + (offset + i)),
       )
       if (offset + items.length < Number(total)) nextCursor = 'opaque-' + (offset + items.length)
-    } else if (section === 'agents') items = [agent]
-    else if (section === 'dimension-tasks') {
+    } else if (section === 'agents') {
+      items = [agent]
+      if (
+        state.holdAgentRevision !== null &&
+        state.holdAgentRevision === report.header.sourceRevision
+      )
+        await new Promise<void>((resolve) => {
+          state.releaseAgentPage = resolve
+        })
+    } else if (section === 'dimension-tasks') {
       const id = report.header.taskId === 'parent' ? 'child' : 'grandchild'
       items = [taskRow(id, taskName(id))]
     } else if (section === 'trends')
@@ -843,6 +853,78 @@ test('a background projection keeps the open contribution on its labelled immuta
     expect(document.activeElement?.getAttribute('data-observation-dimension')).toBe(agent.key),
   )
 })
+
+// Pause the actual new dimension page after its immutable report is ready.
+// The existing fast-path regression above remains unchanged.
+test.each([
+  ['agent-page', 'restore'],
+  ['agent-page', 'user-input'],
+  ['report', 'restore'],
+  ['report', 'user-input'],
+] as const)(
+  'closing a retained contribution during delayed %s respects %s',
+  async (phase, mode) => {
+    const f = fixture({ ...initial, task: 'parent' })
+    await screen.findByRole('heading', { name: '父任务' })
+    fireEvent.click(await screen.findByRole('button', { name: '实现 Agent' }))
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByRole('button', { name: '子任务' })
+    const snapshot = within(dialog).getByText(
+      i18n.t('runObservability.asOf', { time: new Date(NOW).toLocaleString(i18n.language) }),
+    ).textContent
+    const count = f.reports.size
+    if (phase === 'agent-page') f.state.holdAgentRevision = '3'
+    else f.state.holdReport = true
+    f.state.projection = { revision: '3', asOf: NOW + 1000 }
+    await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+    await waitFor(() => expect(f.reports.size).toBeGreaterThan(count))
+    await waitFor(() =>
+      expect(
+        phase === 'agent-page' ? f.state.releaseAgentPage : f.state.releaseReport,
+      ).not.toBeNull(),
+    )
+    const oldTrigger = document.querySelector('[data-observation-dimension="original-agent"]')
+    if (phase === 'agent-page') expect(oldTrigger).toBeNull()
+    else expect(oldTrigger).not.toBeNull()
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(dialog.textContent).toContain(snapshot)
+    expect(within(dialog).getByRole('button', { name: '子任务' })).toBeTruthy()
+    fireEvent.click(within(dialog).getAllByRole('button', { name: '关闭' }).at(-1)!)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    const page = document.querySelector('[data-complete-observation]') as HTMLElement
+    await waitFor(() =>
+      expect(document.activeElement).toBe(phase === 'agent-page' ? page : oldTrigger),
+    )
+    const back = screen.getByRole('button', { name: '← 返回统计分析' })
+    if (mode === 'user-input') {
+      fireEvent.keyDown(window, { key: 'Tab' })
+      back.focus()
+      expect(document.activeElement).toBe(back)
+    }
+    if (phase === 'agent-page') {
+      f.state.holdAgentRevision = null
+      f.state.releaseAgentPage!()
+    } else {
+      f.state.holdReport = false
+      f.state.releaseReport!()
+    }
+    await screen.findByText(
+      i18n.t('runObservability.completeAsOf', {
+        time: new Date(NOW + 1000).toLocaleString(i18n.language),
+      }),
+    )
+    const replacement = await screen.findByRole('button', { name: '实现 Agent' })
+    if (mode === 'restore') await waitFor(() => expect(document.activeElement).toBe(replacement))
+    else expect(document.activeElement).toBe(back)
+    expect(f.reports.size).toBe(count + 1)
+    const summary = screen.getByRole('heading', { name: '任务整体' }).closest('.card')!
+    for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const)
+      expect(summary.querySelector('[data-token-bucket="' + bucket + '"] dd')?.textContent).toBe(
+        BigInt(metrics.tokens[bucket]).toLocaleString('zh'),
+      )
+    expect(summary.textContent).toContain('¥2500.75005')
+  },
+)
 
 // A retained contribution must also observe its own report validity after the
 // main page moves to a newer projection; the newer report remains independent.

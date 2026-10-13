@@ -94,15 +94,16 @@ describeEachProvider('RFC-371 long running derived storage without population tr
     } finally {
       recording.stop()
     }
-    const probes = recording
-      .selects()
-      .filter(
-        (row) =>
-          row.sql.includes('observation_projection_indexed_versions') &&
-          row.sql.includes('NOT EXISTS') &&
-          row.sql.includes('observation_projection_versions'),
-      )
+    // The correlated primary-key probe belongs to the actual DELETE, not
+    // to the separately recorded key-page SELECT.
+    const probes = recording.statements.filter(
+      (row) =>
+        row.sql.includes('observation_projection_indexed_versions') &&
+        row.sql.includes('NOT EXISTS') &&
+        row.sql.includes('observation_projection_versions'),
+    )
     expect(probes.length).toBeGreaterThan(0)
+    expect(probes.every((probe) => /^\s*DELETE\s+FROM/i.test(probe.sql))).toBe(true)
     if (h.capabilities.isolation === 'exclusive')
       for (const probe of probes) {
         const plan = await h.explain(probe)

@@ -211,6 +211,11 @@ export function CompleteRunObservability({
   const setDimension = (value: typeof dimension) =>
     setDimensions((previous) => new Map(previous).set(routeScope, value))
   const dimensionTrigger = useRef<HTMLElement | null>(null)
+  const pendingDimensionFocus = useRef<{
+    key: string
+    kind: CompleteObservationDimension['kind']
+    scope: string
+  } | null>(null)
   const [parents, setParents] = useState<readonly string[]>([])
   const tab = search.tab ?? 'tasks'
   const filters: ObservationOverviewQuery = {
@@ -311,8 +316,20 @@ export function CompleteRunObservability({
     dimensionTrigger.current = trigger
     if (report) setDimension({ report, row, kind: 'quality', displayScope: dimensionDisplayScope })
   }
+  const dimensionFocusScope = JSON.stringify([
+    dimensionDisplayScope,
+    tab,
+    revision,
+    taskRevision,
+    routeScope,
+  ])
   const closeDimension = () => {
     if (dimension?.kind === 'dimension') {
+      pendingDimensionFocus.current = {
+        key: dimension.row.key,
+        kind: dimension.row.kind,
+        scope: dimensionFocusScope,
+      }
       const trigger = Array.from(
         pageRef.current?.querySelectorAll<HTMLElement>('[data-observation-dimension]') ?? [],
       ).find((node) => node.getAttribute('data-observation-dimension') === dimension.row.key)
@@ -320,6 +337,62 @@ export function CompleteRunObservability({
     }
     setDimension(null)
   }
+  // A background report can finish before its dimension page has arrived.
+  // Restore to the replacement row once it exists; never override a later
+  // user action or carry the request into another Task/filter/tab context.
+  useEffect(() => {
+    const pending = pendingDimensionFocus.current
+    if (dimension || !pending) return
+    if (pending.scope !== dimensionFocusScope) {
+      pendingDimensionFocus.current = null
+      return
+    }
+    const page = pageRef.current
+    if (!page) return
+    const stop = () => {
+      observer.disconnect()
+      window.removeEventListener('pointerdown', finish, true)
+      window.removeEventListener('keydown', finish, true)
+    }
+    const finish = () => {
+      if (pendingDimensionFocus.current === pending) pendingDimensionFocus.current = null
+      stop()
+    }
+    const restore = () => {
+      // A retained old row is not the final target while the new report is
+      // still being read: that row may disappear with the next child page.
+      if (current.busy) return
+      const nodes = Array.from(page.querySelectorAll<HTMLElement>('[data-observation-dimension]'))
+      const trigger = nodes.find(
+        (node) => node.getAttribute('data-observation-dimension') === pending.key,
+      )
+      if (trigger) {
+        dimensionTrigger.current = trigger
+        trigger.focus()
+        finish()
+      } else {
+        const section = (pending.kind + 's') as keyof NonNullable<typeof report>['counts']
+        const completed =
+          report &&
+          (report.counts[section] === '0' ||
+            nodes.some(
+              (node) => node.getAttribute('data-observation-dimension-kind') === pending.kind,
+            ))
+        if (completed) {
+          page.focus()
+          finish()
+        }
+      }
+    }
+    const observer = new MutationObserver(restore)
+    observer.observe(page, { childList: true, subtree: true })
+    window.addEventListener('pointerdown', finish, true)
+    window.addEventListener('keydown', finish, true)
+    restore()
+    // An arriving report may precede its child page. Keep only the same
+    // scoped pending request while replacing this DOM observer.
+    return stop
+  }, [dimension, dimensionFocusScope, report, current.busy])
   const refreshReport = () => {
     setDimension(null)
     if (search.task) {
@@ -339,7 +412,12 @@ export function CompleteRunObservability({
   const selectedQualityKey = dimension?.kind === 'quality' ? dimension.row.key : undefined
   const parent = search.task ? JSON.stringify(['task-tree', search.task]) : null
   return (
-    <div className="page observation-typography" ref={pageRef} data-complete-observation>
+    <div
+      className="page observation-typography"
+      ref={pageRef}
+      tabIndex={-1}
+      data-complete-observation
+    >
       <PageHeader
         title={
           search.task && report?.summary.rootTask

@@ -262,7 +262,9 @@ test('execution comparison uses the frozen report and an original wait opens in 
   await client.invalidateQueries({ queryKey: ['observation-comparison'] })
   await screen.findByText('comparison read failed')
   expect(document.querySelectorAll('[data-token-buckets]')).toHaveLength(0)
-  const wait = screen.getByRole('button', { name: /等待审核/ })
+  const waitRow = screen.getByRole('rowheader', { name: '等待审核' }).closest('tr')!
+  const wait = within(waitRow).getByRole('button', { name: i18n.t('runObservability.detail') })
+  expect(wait.getAttribute('data-execution-id')).toBe('actual-review')
   fireEvent.click(wait)
   const dialog = screen.getByRole('dialog')
   expect(within(dialog).getByText('review-round · review-original-evidence')).toBeTruthy()

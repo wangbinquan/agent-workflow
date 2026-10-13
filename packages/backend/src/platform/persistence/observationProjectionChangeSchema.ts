@@ -24,7 +24,7 @@ function routeColumns(table: LogicalTableContract) {
 function jsonObject(
   table: LogicalTableContract,
   row: 'OLD' | 'NEW',
-  engine: DatabaseProvider,
+  provider: DatabaseProvider,
   primary = false,
 ) {
   const columns = primary ? table.primaryKey : routeColumns(table).map((column) => column.name)
@@ -32,14 +32,14 @@ function jsonObject(
     ...columns.flatMap((column) => [literal(column), `CAST(${row}.${quote(column)} AS TEXT)`]),
     ...(primary
       ? []
-      : observationDocumentRouteSQL(table.id, row, engine).flatMap(({ name, expression }) => [
+      : observationDocumentRouteSQL(table.id, row, provider).flatMap(({ name, expression }) => [
           literal(name),
           expression,
         ])),
   ].join(',')
-  if (engine === 'sqlite') return `json_object(${fields})`
-  if (engine === 'postgresql') return `json_build_object(${fields})::text`
-  return unhandledDatabaseProvider(engine)
+  if (provider === 'sqlite') return `json_object(${fields})`
+  if (provider === 'postgresql') return `json_build_object(${fields})::text`
+  return unhandledDatabaseProvider(provider)
 }
 
 /** Capture routing identities, not another copy of numeric authority. Existing
