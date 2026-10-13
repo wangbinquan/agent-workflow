@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:ee07924a70dab48c8f3d24e5cd7040caa60f699bf327db0fdaebf658076b5e31",
+    "sourceDigest": "sha256:cbe629d32cd83232ab03ebe54c3a96572bfebdeb2048c63e666198583258ad22",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -139,11 +139,11 @@
       "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。 RFC-370 C2-W1：已复核的 Task composition/hostExecutionAdmission.ts 实际消费 system-operations exact public HostExecutionAdmission，原 OFF_DAG_OFFERED_EDGE_DEBT 的47个完整条目和字段保持，新增这一条已具名登记的真实 offered 边，47 → 48。原 DAG、分类器、集合断言及清偿策略不改，随 W9-D Task/SO owner contract convergence 收敛。"
     },
     {
-      "baseline": 143,
+      "baseline": 140,
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "id": "rfc294-review-unconsumed-public-symbols",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。** RFC-362：四个 SC offered seam 显式作为 W4-E1/W5 合同前置入账，136 → 140，生产接入后逐项删除。 RFC-363 consumes WorkspaceContentParticipant: 140 -> 139. RFC-363 deferred production binding consumes snapshot and preparation participants: 139 -> 137. RFC-363 public URL launch consumes the source seal port: 137 -> 136. RFC-370 Task Run：WorkspaceExcludeParticipant 已由三个完整 publicTypeConsumerIds 消费，按原 unconsumedPublicSymbols 规则销账，136 → 135；其余 public 和 required-port 条目保持。 RFC-370 C2-W1 配套：完整原 UNCONSUMED_PUBLIC_SYMBOL_DEBT 数组、原 public 清单以及合入已发布原生公共入口修复后的清单实际均141项且集合相等；旧 baseline135滞后，按既有库存修为141。原数组、判据、清偿波次不改，没有新增六个未消费合同。 RFC-370 SO write lifecycle CI 配套：02e39fee3 已把 HostExecutionWriteLeaseFacts 与 HostExecutionWriteLifecycle 两个实际零生产 consumer 的公共类型登记到原 W9-D，完整原库存141项及其字段保持；本次条目数基线按这143个实际条目从141补为143。已批准的完整宿主写入生命周期合同保留，真实根消费仍待H7接入后逐项销账。02e39fee3 的 RFC-317 T16 已实际失败，此处不改旧历史、不追记旧准入成功。"
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。 RFC-355 T9：intent 的 public 面按「无 consumer 不公开」收到只剩 5 个真跨出去的符号，10 条零 consumer 条目一次销账，152 → 142。 RFC-359：collaboration 的四个同步 committed-event 参与者（appendHumanGateDecision / appendQuestionDispatch / appendReviewCommentsChanged / appendReviewSelectionChanged…CommittedEventTx）随 collaborationCommittedEventParticipant.ts 整文件退役——dbTxSync 在 src 侧归零后它们的宿主全改走统一事务原语，生产侧零消费者，按「删除优于入账」清掉，141 → 137。 RFC-359 AC-1（plan §5hn 批次一）137 → 136：`TaskDriveCoordinator` 销账——它不再是零 consumer 的 public 符号。SQLite 的单代理启动路由改走共享编排后，`cli/start.ts` 按这个公开类型给根内核搭了协调器转发面，于是它有了第一个生产消费者。**是被消费了，不是被删了。** RFC-362：四个 SC offered seam 显式作为 W4-E1/W5 合同前置入账，136 → 140，生产接入后逐项删除。 RFC-363 consumes WorkspaceContentParticipant: 140 -> 139. RFC-363 deferred production binding consumes snapshot and preparation participants: 139 -> 137. RFC-363 public URL launch consumes the source seal port: 137 -> 136. RFC-370 Task Run：WorkspaceExcludeParticipant 已由三个完整 publicTypeConsumerIds 消费，按原 unconsumedPublicSymbols 规则销账，136 → 135；其余 public 和 required-port 条目保持。 RFC-370 C2-W1 配套：完整原 UNCONSUMED_PUBLIC_SYMBOL_DEBT 数组、原 public 清单以及合入已发布原生公共入口修复后的清单实际均141项且集合相等；旧 baseline135滞后，按既有库存修为141。原数组、判据、清偿波次不改，没有新增六个未消费合同。 RFC-370 SO write lifecycle CI 配套：02e39fee3 已把 HostExecutionWriteLeaseFacts 与 HostExecutionWriteLifecycle 两个实际零生产 consumer 的公共类型登记到原 W9-D，完整原库存141项及其字段保持；本次条目数基线按这143个实际条目从141补为143。已批准的完整宿主写入生命周期合同保留，真实根消费仍待H7接入后逐项销账。02e39fee3 的 RFC-317 T16 已实际失败，此处不改旧历史、不追记旧准入成功。 RFC-370 stage A: HostExecutionAuthorityFactory, HostExecutionRecoveryFamily and HostExecutionWriteLeaseFacts now have actual production consumers; retire their three stale zero-consumer entries."
     },
     {
       "baseline": 7,
@@ -307,11 +307,14 @@
       "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
     },
     {
-      "baseline": 401,
+      "baseline": 406,
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "id": "rfc329-mcp-surface-exemptions",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。 RFC-370 approved stage A: five explicit operator HTTP endpoints expose status and original Task/Intent/MCP/Memory recovery. They remain UI/system points; no model or replacement task is implicitly launched.",
+      "allowGrowth": {
+        "why": "RFC-370 approved stage A: five explicit operator HTTP endpoints expose status and original Task/Intent/MCP/Memory recovery. They remain UI/system points; no model or replacement task is implicitly launched."
+      }
     },
     {
       "baseline": 33,
@@ -535,10 +538,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19f-test-engine-hardcoding.test.ts",
       "id": "rfc359-w5-test-engine-hardcoding",
       "symbol": "TEST_ENGINE_HARDCODING_DEBT",
-      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎。RFC-359 AC-6（plan §5ep）335 → 334：`limits` 随同一刀销账（它只需要 `enforceLimits`）。RFC-359 AC-6（plan §5es）334 → 333：`rfc357` 的三态授权谓词转双引擎——它锁的正是 NULL 比较那个坑，两个引擎渲染不同，尤其该双跑 RFC-359 AC-6（2026-09-15）333 → 332：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，唯一那处 `createInMemoryDb` 消失。 同日 332 → 331：`rfc291-closure-call-edges.test.ts` 的最后一处随死脚手架删除。 同日 331 → 330：`rfc349-websocket-provider.test.ts` 的假池孪生合一。 RFC-359 AC-6（plan §5gj）330 → 329：`rfc310-pr7b-handover.test.ts` 的 HTTP 面真迁——它原来用 `createApp({ db: createInMemoryDb(...) })`，而 `createApp` 不是能放宽形参的入口，它就是 SQLite 组合根的大门；改用仓里既有的 `describeEachProviderHttpApplication`（全仓 113 个文件在用），两个引擎各装一个真应用。本文件上半部早有四处 `describeEachProvider`，所以这一格是**残留**而不是被根挡住。4 例 → 8 例。 RFC-359 AC-6（plan §5gn）329 → 328：`rfc349-execution-peripheral-provider.test.ts` 真迁——它原来是**一真一假**：SQLite 那格用真库读回行、断言内容与幂等；PostgreSQL 那格用本地手搓的假池（记 SQL 文本、回罐头行），唯一断言是「某条 SQL 里出现过 workflows 那张表的 schema 限定名」——证明不了行真写进去了、更证明不了写两次幂等。两个 composer 的 `db` 形参本来就是 `ProviderNeutralDatabase`，合一**零生产改动**。变异验证：把期望的 name 改错 ⇒ **两个引擎各红一格**（迁移前同一处变异只会红 SQLite 一格，PG 那格压根没看 name）。 RFC-359 AC-1（plan §5gt）328 → 327：`rfc221-login-policy-routes` 的最后一格随**被测状态一起消失**——把 `AppDeps.secretBox` 收成必填之后，那格「不传 secretBox ⇒ OIDC 装配退化成 null ⇒ 两条 503」所测的状态在生产与测试里都不再构造得出来（改完实测：那两条断言从 503 变 404）。不是删测试，是连同它锁的那个分支一起退役；该文件注释当年就写明这是正解。 RFC-359 AC-1（第 8 刀）327 → 326：`lifecycle-repair-harness.ts` 那一格清零（它托着的 12 个行为套件改由 `describeEachProvider` 的 lane 交库，同一批断言落到两个真引擎上）；同刀 `rfc097-repair-liveness` 1 → 2，是那次改动的代价面——它的反面对照用例本来就只跑 SQLite（真 resumeTask + 桩 opencode 二进制），harness 不再自己建库后它得自己建一个。 RFC-359 AC-1（第 9 刀）326 → 322：`retry` 两份实现合一，验它的四份行为套件（`lifecycle-property` / `lifecycle-transitions-current` / `retry-node-guard-order` / `retry-node-no-review-cascade`）迁到 `describeEachProvider`。触发点是合并本身——它们此前靠「import `services/task`」这条机械理由挂账，合一之后那条理由消失，守卫当场把它们推到「既无理由也不在 open 名单」，于是一起迁掉。RFC-359 AC-1（第 11 刀下半）322 → 319：`retry-cascade-kind-matrix` / `rfc202-lifecycle-exits` / `rfc350-idle-timeout-integration` 三份迁到 `describeEachProvider`——取消合一之后它们的两样依赖（共用取消实现、`createTaskIdleTimeoutPersistence`）都已 provider 中立，不再有留在单引擎上的理由。RFC-359 AC-6：319 → 318，`start-task-deps` 迁到 `describeEachProvider`。318 → 317：`execution-contract-platform` 的两处建库合成一处（本就同文件，账本按文件计数）随迁移消失。 RFC-359 AC-1（第 13 刀下）317 → 316：`syncWorkflow` 两个引擎合一，RFC-109 那套回归判据整套迁到 `describeEachProvider` + 生产装配，`rfc109-sync-task-workflow.test.ts` 的单引擎那一格随之销账。 （RFC-359 AC-6 收尾：`helpers/rfc310Pr3Fixture.ts` 的 SQLite 回退整条删除——`db` 改必填，五个消费者 t109 / pr5-java / pr4 / pr7b / pr3-adapter 全部迁到 `describeEachProvider`。本仓最后一条「真·待迁」就此销账，`OPEN_MIGRATION_DEBT` 只剩 `rfc257-webhook-error-codes` 那条按构造只存在于一个装配形态的用例。）基线 316 → 315。 RFC-371：按文件登记两个 OpenCode 原生 SQLite 夹具，315 → 317；rfc371-native-model.test.ts 有两处建库，runner.test.ts 有一处。仅外部原生格式固定 SQLite，runner 行为继续双 provider 验证。 RFC-371 原生分页：同一外部 OpenCode SQLite 格式的 worker-helper、all-roots final-owner、terminal-capture 三文件共四个调用实际入账，330 → 333；原 AW Task/账本继续双 provider，原分类判据和实际调用数比较不变。 RFC-370／RFC-371 联合发布 ca6f8417e 的真实 CI 修复：340 → 342，同步已提交的 helpers/rfc371PersistentNativeFactFixture.ts 与 rfc371-native-source-version.test.ts 两份外部 OpenCode 固定 SQLite 夹具；AW 报告及 Task 判据仍双 provider，原条目、规则和分类全部保持。 RFC-371 physical capacity Worker fixture adds one file (two original readonly SQLite calls) already reviewed and registered in TEST_ENGINE_HARDCODING_DEBT; application storage/retention remain covered by both providers. The physical readonly backlog-counter fixture adds the second exact SQLite-file fixture; no application-provider behavior is narrowed.",
-      "allowGrowth": {
-        "why": "RFC-371 complete storage-read CI repair, original immutable source 1603b9c7bfd0d921ad9768e98e6daa85b741871a: actual 347 to 348. One physical SQLite-only readonly backlog-counter fixture is added to the original exact debt population. The original capacity fixture is already present in the committed 347 baseline. Application storage/retention remain verified on both PostgreSQL and SQLite; original guard, count and budgets stay intact."
-      }
+      "why": "RFC-359 W5「防复辟」波次。harness 之外直接 `createInMemoryDb(` 的测试（821 文件 / 1877 调用点）——它们写的是**只验证 SQLite** 的判据，正是 PG 侧长期零行为覆盖、合一时才发现更弱的根源。正解是 `describeEachProvider` + `harness.db`。。RFC-359（plan §5dy）400 → 398：`rfc271-bundle-engine` 与 `rfc271-bundle-recovery-hardening` 随被测的通用 bundle 引擎一起退役，判据已在统一引擎上逐条对账（见 plan §5dx 的表）。RFC-359 AC-6（plan §5ej）378 → 369：第二波四路并行迁移清掉 9 个文件的 15 个调用点。RFC-359 AC-6（plan §5ek）369 → 359：第三波四路并行再清 10 个文件的 25 个调用点。RFC-359 AC-6（plan §5ek）359 → 358：`validateWorkflowById` 的参数放宽到中立句柄，`workflows` 最后一格转双引擎。RFC-359 AC-6（plan §5el）358 → 350：第四波四路并行清掉 7 个文件、`execution-contract-platform` 从 5 格降到 2 格（两条判据的被测物就是 SQLite 组合根）。RFC-359 AC-6（plan §5em）351 → 346：第五波再清 5 个文件。RFC-359 AC-6（plan §5en）346 → 339：第六 / 七波清掉两个巨型 rfc310 文件与 commitpush 一族共 7 个文件。RFC-359 AC-6（plan §5en）339 → 337：`rfc323` 与 `rfc338` 补齐（前者的红是容器磁盘写满，不是测试缺陷；后者的注入口经作用域补上）。RFC-359 AC-6（plan §5en）337 → 336：`rfc321` 销账（`rfc349-digital-employee-platform-tools-wiring` 判不适用——被测物是 SQLite 组合根的可选注入点本身，PG 根没有这个形状）。RFC-359 AC-6（plan §5ep）336 → 335：`cancelTask` 的排队取号与前置读解耦后放宽到中立句柄，`rfc207` 的端到端段转双引擎。RFC-359 AC-6（plan §5ep）335 → 334：`limits` 随同一刀销账（它只需要 `enforceLimits`）。RFC-359 AC-6（plan §5es）334 → 333：`rfc357` 的三态授权谓词转双引擎——它锁的正是 NULL 比较那个坑，两个引擎渲染不同，尤其该双跑 RFC-359 AC-6（2026-09-15）333 → 332：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，唯一那处 `createInMemoryDb` 消失。 同日 332 → 331：`rfc291-closure-call-edges.test.ts` 的最后一处随死脚手架删除。 同日 331 → 330：`rfc349-websocket-provider.test.ts` 的假池孪生合一。 RFC-359 AC-6（plan §5gj）330 → 329：`rfc310-pr7b-handover.test.ts` 的 HTTP 面真迁——它原来用 `createApp({ db: createInMemoryDb(...) })`，而 `createApp` 不是能放宽形参的入口，它就是 SQLite 组合根的大门；改用仓里既有的 `describeEachProviderHttpApplication`（全仓 113 个文件在用），两个引擎各装一个真应用。本文件上半部早有四处 `describeEachProvider`，所以这一格是**残留**而不是被根挡住。4 例 → 8 例。 RFC-359 AC-6（plan §5gn）329 → 328：`rfc349-execution-peripheral-provider.test.ts` 真迁——它原来是**一真一假**：SQLite 那格用真库读回行、断言内容与幂等；PostgreSQL 那格用本地手搓的假池（记 SQL 文本、回罐头行），唯一断言是「某条 SQL 里出现过 workflows 那张表的 schema 限定名」——证明不了行真写进去了、更证明不了写两次幂等。两个 composer 的 `db` 形参本来就是 `ProviderNeutralDatabase`，合一**零生产改动**。变异验证：把期望的 name 改错 ⇒ **两个引擎各红一格**（迁移前同一处变异只会红 SQLite 一格，PG 那格压根没看 name）。 RFC-359 AC-1（plan §5gt）328 → 327：`rfc221-login-policy-routes` 的最后一格随**被测状态一起消失**——把 `AppDeps.secretBox` 收成必填之后，那格「不传 secretBox ⇒ OIDC 装配退化成 null ⇒ 两条 503」所测的状态在生产与测试里都不再构造得出来（改完实测：那两条断言从 503 变 404）。不是删测试，是连同它锁的那个分支一起退役；该文件注释当年就写明这是正解。 RFC-359 AC-1（第 8 刀）327 → 326：`lifecycle-repair-harness.ts` 那一格清零（它托着的 12 个行为套件改由 `describeEachProvider` 的 lane 交库，同一批断言落到两个真引擎上）；同刀 `rfc097-repair-liveness` 1 → 2，是那次改动的代价面——它的反面对照用例本来就只跑 SQLite（真 resumeTask + 桩 opencode 二进制），harness 不再自己建库后它得自己建一个。 RFC-359 AC-1（第 9 刀）326 → 322：`retry` 两份实现合一，验它的四份行为套件（`lifecycle-property` / `lifecycle-transitions-current` / `retry-node-guard-order` / `retry-node-no-review-cascade`）迁到 `describeEachProvider`。触发点是合并本身——它们此前靠「import `services/task`」这条机械理由挂账，合一之后那条理由消失，守卫当场把它们推到「既无理由也不在 open 名单」，于是一起迁掉。RFC-359 AC-1（第 11 刀下半）322 → 319：`retry-cascade-kind-matrix` / `rfc202-lifecycle-exits` / `rfc350-idle-timeout-integration` 三份迁到 `describeEachProvider`——取消合一之后它们的两样依赖（共用取消实现、`createTaskIdleTimeoutPersistence`）都已 provider 中立，不再有留在单引擎上的理由。RFC-359 AC-6：319 → 318，`start-task-deps` 迁到 `describeEachProvider`。318 → 317：`execution-contract-platform` 的两处建库合成一处（本就同文件，账本按文件计数）随迁移消失。 RFC-359 AC-1（第 13 刀下）317 → 316：`syncWorkflow` 两个引擎合一，RFC-109 那套回归判据整套迁到 `describeEachProvider` + 生产装配，`rfc109-sync-task-workflow.test.ts` 的单引擎那一格随之销账。 （RFC-359 AC-6 收尾：`helpers/rfc310Pr3Fixture.ts` 的 SQLite 回退整条删除——`db` 改必填，五个消费者 t109 / pr5-java / pr4 / pr7b / pr3-adapter 全部迁到 `describeEachProvider`。本仓最后一条「真·待迁」就此销账，`OPEN_MIGRATION_DEBT` 只剩 `rfc257-webhook-error-codes` 那条按构造只存在于一个装配形态的用例。）基线 316 → 315。 RFC-371：按文件登记两个 OpenCode 原生 SQLite 夹具，315 → 317；rfc371-native-model.test.ts 有两处建库，runner.test.ts 有一处。仅外部原生格式固定 SQLite，runner 行为继续双 provider 验证。 RFC-371 原生分页：同一外部 OpenCode SQLite 格式的 worker-helper、all-roots final-owner、terminal-capture 三文件共四个调用实际入账，330 → 333；原 AW Task/账本继续双 provider，原分类判据和实际调用数比较不变。 RFC-370／RFC-371 联合发布 ca6f8417e 的真实 CI 修复：340 → 342，同步已提交的 helpers/rfc371PersistentNativeFactFixture.ts 与 rfc371-native-source-version.test.ts 两份外部 OpenCode 固定 SQLite 夹具；AW 报告及 Task 判据仍双 provider，原条目、规则和分类全部保持。 RFC-371 physical capacity Worker fixture adds one file (two original readonly SQLite calls) already reviewed and registered in TEST_ENGINE_HARDCODING_DEBT; application storage/retention remain covered by both providers. The physical readonly backlog-counter fixture adds the second exact SQLite-file fixture; no application-provider behavior is narrowed."
     },
     {
       "baseline": 2,
@@ -611,11 +611,14 @@
       "why": "shared API schema 里允许 z.any() 的文件。**当前为空**——钉成 0 让第一个逃生口必须显式声明（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
-      "baseline": 16,
+      "baseline": 17,
       "file": "packages/backend/tests/rfc284-spawn-site-ratchet.test.ts",
       "id": "spawn-site-allowlist",
       "symbol": "ALLOWLIST",
-      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表"
+      "why": "允许直接起进程的站点。新增站点必须走能力面，不许扩表 RFC-370 approved stage A: register the original native process identity adapter, containing two readonly ps/PowerShell probe sites. The exact original process recovery remains covered by its existing behavior tests.",
+      "allowGrowth": {
+        "why": "RFC-370 approved stage A: register the original native process identity adapter, containing two readonly ps/PowerShell probe sites. The exact original process recovery remains covered by its existing behavior tests."
+      }
     },
     {
       "baseline": 14,
@@ -709,11 +712,14 @@
       "why": "S-14：不经 setTaskStatus、直接 update(tasks) 写非状态列的站点清单（按文件计数）。每一条都是一处绕开生命周期 CAS 的直写面，新增一条就要人复核它确实不碰 status。RFC-359 W7 第二波按判据 C 补入网。 RFC-359 W8：PG 侧 `postgresqlTaskRouteOperations.ts` 新增一处非 status 写点，15→16。它是 delete 路径沿父链重算 `branch_started_at` 的那笔 UPDATE——SQLite 侧 `services/taskDelete.ts` 一直有、PG 侧一直没有，导致父任务的物化排序列永久停在已删子树的时间戳上。补齐它就必然多一个非 status 写点；这是抬齐两个引擎的代价，不是新债。。RFC-359 AC-1（plan §5hn 之后的盘点，第 4 / 5 刀）15 → 14：`postgresqlTaskRouteOperations.ts` 整行销账——第 4 刀删掉 PG 内联的 `replaceTaskMembers`，第 5 刀删掉 PG 内联的 `deleteTask`，两处非状态 `update(tasks)` 分别并入共用的 `updateTaskMembersLocked` 与 `services/taskDelete.ts`。RFC-359 AC-1（第 11 刀）14 → 15：cancel 合一，`services/task.ts` 的 `cancelTask` 只剩薄壳（该文件仍有 2 处，不消失），它那处「父级联撞上一个已经 canceled 的子任务时补盖级联来源」的写点随实现搬到共用那份 `postgresqlChildTaskLifecycleParticipant.ts`——按文件计数于是多一个键。写的只有 `error_message`，写入门是 `status='canceled'`，不翻状态。"
     },
     {
-      "baseline": 4,
+      "baseline": 5,
       "file": "packages/backend/tests/rfc310-architecture-lock.test.ts",
       "id": "rfc310-composition-consumers",
       "symbol": "COMPOSITION_CONSUMERS",
-      "why": "RFC-310：允许直接消费 composition 装配面的文件（组合根 + maintenanceWorker + server）。多一条等于多一处绕过 public 合同的装配耦合。RFC-359 W7 第二波按判据 C 补入网。"
+      "why": "RFC-310：允许直接消费 composition 装配面的文件（组合根 + maintenanceWorker + server）。多一条等于多一处绕过 public 合同的装配耦合。RFC-359 W7 第二波按判据 C 补入网。 RFC-370 approved stage A: the actual daemonHostExecutionOwners root composes the existing digital-employee owner for selected lifetime start/quiesce/drain; original native consumers remain intact.",
+      "allowGrowth": {
+        "why": "RFC-370 approved stage A: the actual daemonHostExecutionOwners root composes the existing digital-employee owner for selected lifetime start/quiesce/drain; original native consumers remain intact."
+      }
     },
     {
       "baseline": 0,
@@ -866,8 +872,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 7347,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 7348,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 approved stage A validation fix, exact source 448eebf333fed279e132f4978827882417666a52: one original Memory settlement class import preserves material/reference facts while the original primary ACK is pending; project that exact edge and retain every previous source entry."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -887,8 +896,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6438,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 6439,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 approved stage A validation fix, exact source 448eebf333fed279e132f4978827882417666a52: one original Memory settlement class import preserves material/reference facts while the original primary ACK is pending; project that exact edge and retain every previous source entry."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -922,10 +934,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 28674,
+      "baseline": 28678,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-371 complete storage-read CI repair, original immutable source 1603b9c7bfd0d921ad9768e98e6daa85b741871a: actual 28664 to 28674. Ten exact platform persistence owners for JSON array capability, exhaustive projection prefixes, decimal counter protocol/decoder and readonly SQLite/PG Worker reads are projected from committed production source; no old owner or rule is removed."
+        "why": "RFC-370 approved stage A validation fix, exact source 448eebf333fed279e132f4978827882417666a52: project four actual new symbols: the restored Fusion MANIFEST_REL constant, encodeJournalJson, decodeJournalJson, and SelectedHostExecutionBanner. Original owners and native behavior remain intact."
       }
     }
   ],
@@ -934,8 +946,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1603b9c7bfd0d921ad9768e98e6daa85b741871a",
-    "contentDigest": "sha256:e0d1b9cd43862bb48e241726f55bd33601f8cd8db0bb503cabd07f0c94162b2d",
+    "currentSnapshotSha": "448eebf333fed279e132f4978827882417666a52",
+    "contentDigest": "sha256:d5f4887771698c0318f3168099e0d4ce98bcc65eaaa40b936107838e8ca20572",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
