@@ -2592,7 +2592,7 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "7f3244667e2f6e4ca77428773bf164cf7a2b3ef3",
+    "currentSnapshotSha": "d78792ca58f5d44dc0511c4c2954e99afd20b9a7",
     "contentDigest": "sha256:30215f4e7c642a82991605a7e83fe50b1fbfb1575c0878af5ef8c48ba275abd2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
