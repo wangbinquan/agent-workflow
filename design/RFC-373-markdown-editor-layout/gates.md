@@ -33,3 +33,15 @@
 以上修复只更新测试适配与记录，生产实现未改动。基线与本次格式门均在相同三份 RFC-371 后台文件失败，其他观测报告回归也须按原日志归属保留，不为使全仓转绿代改并发功能。
 
 独立功能复检已检查这三处测试修复，结论 **PASS**：滚轮落点与被验证的外层滚动所有者对齐，原有可见性、编辑、保存和重载验证保留，无未关闭 P1/P2；该源码复检结论不代替修复后的 CI 运行。
+
+## 公共控件与主题规则修复
+
+测试修复已发布为 `4888202bbf3a3e90eb07ab655cd71509c2684f34`，对应 [CI 38362806574](https://github.com/wangbinquan/agent-workflow/actions/runs/38362806574)；该 SHA 的 [视觉回归 38362806173](https://github.com/wangbinquan/agent-workflow/actions/runs/38362806173) 为 success。三平台的 29 项新增布局/交互、旧移动布局用例与生产构建均已通过，真实页面作业另待完整执行。
+
+进一步读取分片完整失败日志，定位两项此前未闭合的自有失败：`ux-source-ratchets` 要求 `.segmented` 只能由公共 `Segmented` 渲染，`theme-css-ratchet` 禁止将前景别名 `--accent` 用作纯背景色。修复生产组件复用 `Segmented` 的 radio、方向键与 activeOptionRef，分隔条背景改为 `--accent-fill`；保留这两项原有全局规则，不加豁免或放宽断言。
+
+复用时启用 `allowActiveReselect`，并新增回归覆盖自动回退后用户明确点击当前编辑选项、恢复宽屏仍保持编辑、方向键跳过禁用双栏及焦点移动；原草稿、拖动、单栏恢复与 Enter 收起检查保留。公共原语仅增加可选的禁用说明关联，并补对应合同用例。新增布局/交互用例变为 30 项；这些新改动的实际通过结果仍须由后继 exact-SHA CI 证明。
+
+并发 `f3ab372d9` 改动的澄清根 class 与 MindmapWorkspace Dialog 对应 header-compaction / overlay 清单失败，已按源码差异归因；RFC-371 观测报告失败保留原基线证据。不得将这些失败与上述本 RFC 的两项自有问题混为一谈。
+
+上述生产修复与补充用例完成后，定向 ESLint / Prettier 通过，独立功能复检 **PASS**；未关闭 P1/P2 为零。重新检查整个本地前端类型时，报告共享工作树未提交的 `components/shell/HostExecutionBanner.tsx:53` 缺少 `ErrorBannerProps.error`，该组件不在本 RFC 差异内，原语 `ErrorBanner` 也未被本次修改。保留并发文件与错误证据，不将这次全前端类型检查宣称为通过。

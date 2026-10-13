@@ -20,6 +20,8 @@ export interface SegmentedOption<V extends string> {
   label: ReactNode
   disabled?: boolean
   title?: string
+  /** Description for an option, including why an unavailable choice is disabled. */
+  ariaDescribedBy?: string
   /**
    * kbd shortcut hint (clarify.detail Q/W scope picker). Rendered as
    * `<kbd class="kbd-shortcut segmented__shortcut" aria-hidden>`.
@@ -159,6 +161,7 @@ export function Segmented<V extends string>({
             type="button"
             role="radio"
             aria-checked={active}
+            aria-describedby={opt.ariaDescribedBy}
             tabIndex={opt.value === tabStopValue ? 0 : -1}
             className={'segmented__option' + (active ? ' segmented__option--active' : '')}
             disabled={disabled === true || opt.disabled === true}

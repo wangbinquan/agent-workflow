@@ -8473,7 +8473,7 @@ details.form-section[open] > summary {
 .md-editor__separator:hover::after,
 .md-editor__separator:focus-visible::after,
 .md-editor[data-dragging] .md-editor__separator::after {
-  background: var(--accent);
+  background: var(--accent-fill);
 }
 
 .md-editor__separator:focus-visible {

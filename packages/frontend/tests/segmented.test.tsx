@@ -104,6 +104,35 @@ describe('<Segmented> — radiogroup shape', () => {
     )
     expect(activeOptionRef.current).toBe(screen.getByRole('radio', { name: 'Questioner' }))
   })
+
+  test('an unavailable option can describe why it is disabled', () => {
+    render(
+      <>
+        <span id="unavailable-reason">This mode requires more space.</span>
+        <Segmented
+          value="designer"
+          onChange={() => {}}
+          options={[
+            OPTIONS[0]!,
+            {
+              ...OPTIONS[1]!,
+              disabled: true,
+              ariaDescribedBy: 'unavailable-reason',
+            },
+          ]}
+          ariaLabel="Scope"
+        />
+      </>,
+    )
+    const unavailable = screen.getByRole('radio', { name: 'Questioner' })
+    expect((unavailable as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      document.getElementById(unavailable.getAttribute('aria-describedby')!)?.textContent,
+    ).toBe('This mode requires more space.')
+    expect(screen.getByRole('radio', { name: 'Designer' }).hasAttribute('aria-describedby')).toBe(
+      false,
+    )
+  })
 })
 
 describe('<Segmented> — change semantics', () => {

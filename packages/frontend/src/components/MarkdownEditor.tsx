@@ -27,6 +27,7 @@ import {
 } from '@/lib/markdown-editor-layout'
 import { Prose } from './prose/Prose'
 import { TextArea } from './Form'
+import { Segmented } from './Segmented'
 
 interface MarkdownEditorProps {
   value: string
@@ -54,7 +55,7 @@ export function MarkdownEditor({
   const editRef = useRef<HTMLDivElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const separatorRef = useRef<HTMLDivElement>(null)
-  const modeRefs = useRef<Partial<Record<MarkdownEditorMode, HTMLButtonElement | null>>>({})
+  const activeModeRef = useRef<HTMLButtonElement>(null)
   const dragRef = useRef<{ pointerId: number; target: HTMLDivElement } | null>(null)
   const [dragging, setDragging] = useState(false)
   const [width, setWidth] = useState(0)
@@ -112,7 +113,7 @@ export function MarkdownEditor({
     const hiddenPane = layout.mode === 'edit' ? previewRef.current : editRef.current
     const active = document.activeElement
     if (hiddenPane?.contains(active) || separatorRef.current === active) {
-      modeRefs.current[layout.mode]?.focus()
+      activeModeRef.current?.focus()
     }
   }, [layout.mode, stopDrag])
 
@@ -162,7 +163,6 @@ export function MarkdownEditor({
       case 'Enter':
         event.preventDefault()
         selectMode('preview')
-        modeRefs.current.preview?.focus()
         return
       default:
         return
@@ -183,28 +183,22 @@ export function MarkdownEditor({
           {readOnly ? t('markdownEditor.readOnly') : 'Markdown'}
         </span>
         <div className="md-editor__tools">
-          <div className="segmented" role="group" aria-label={t('markdownEditor.layout')}>
-            {(['edit', 'split', 'preview'] as const).map((mode) => (
-              <button
-                key={mode}
-                ref={(element) => {
-                  modeRefs.current[mode] = element
-                }}
-                type="button"
-                className={`segmented__option${layout.mode === mode ? ' segmented__option--active' : ''}`}
-                aria-pressed={layout.mode === mode}
-                aria-describedby={mode === 'split' && layout.compact ? `${id}-compact` : undefined}
-                disabled={mode === 'split' && layout.compact}
-                title={
-                  mode === 'split' && layout.compact ? t('markdownEditor.compactHint') : undefined
-                }
-                data-testid={`markdown-mode-${mode}`}
-                onClick={() => selectMode(mode)}
-              >
-                {t(`markdownEditor.${mode}`)}
-              </button>
-            ))}
-          </div>
+          <Segmented<MarkdownEditorMode>
+            value={layout.mode}
+            onChange={selectMode}
+            allowActiveReselect
+            ariaLabel={t('markdownEditor.layout')}
+            testidPrefix="markdown-mode"
+            activeOptionRef={activeModeRef}
+            options={(['edit', 'split', 'preview'] as const).map((mode) => ({
+              value: mode,
+              label: t(`markdownEditor.${mode}`),
+              disabled: mode === 'split' && layout.compact,
+              ariaDescribedBy: mode === 'split' && layout.compact ? `${id}-compact` : undefined,
+              title:
+                mode === 'split' && layout.compact ? t('markdownEditor.compactHint') : undefined,
+            }))}
+          />
           {layout.mode === 'split' && (
             <button type="button" className="btn btn--sm" onClick={() => setRatio(0.5)}>
               {t('markdownEditor.equalSplit')}

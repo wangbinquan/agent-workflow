@@ -4,7 +4,7 @@
 
 本次属于前端资源创作的共享表现层；Agent 与 Skill 消费相同 `MarkdownEditor`。依据 RFC-294 的统一机制原则，把布局放在该共享组件与前端纯函数中，业务数据仍由原页面持有，不增加后台、数据库、路由、跨域依赖或临时 facade。
 
-保留 `TextArea`、`Prose` 与 `useDeferredValue`；工具栏复用 `.segmented`、`.segmented__option` 和 `.btn .btn--sm`。现有 `useResizable` 面向 review 右侧栏固定像素宽度和 window 监听，不足以表达容器比例与单栏回退，本次不修改其消费者。新布局能力在共享 MarkdownEditor 内完成，数学/偏好解析落入 `lib/markdown-editor-layout.ts`。
+保留 `TextArea`、`Prose` 与 `useDeferredValue`；模式工具栏复用公共 `Segmented` 的 radio 语义、方向键导航和 activeOptionRef，均分按钮复用 `.btn .btn--sm`。启用 `allowActiveReselect`，确保在自动回退到编辑时再次明确选择编辑，仍会将其保存为用户的显式单栏偏好；可选的 `ariaDescribedBy` 关联禁用原因。现有 `useResizable` 面向 review 右侧栏固定像素宽度和 window 监听，不足以表达容器比例与单栏回退，本次不修改其消费者。新布局能力在共享 MarkdownEditor 内完成，数学/偏好解析落入 `lib/markdown-editor-layout.ts`。
 
 ## 布局状态
 

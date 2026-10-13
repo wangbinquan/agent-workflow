@@ -146,6 +146,34 @@ describe('Markdown editor layout interactions', () => {
     expect(editorMode()).toBe('edit')
   })
 
+  test('compact radios preserve an explicit active choice and keyboard navigation skips split', () => {
+    containerWidth = 390
+    const { changed } = mount()
+    const edit = screen.getByRole('radio', { name: 'Edit' })
+    const split = screen.getByRole('radio', { name: 'Split' })
+    const preview = screen.getByRole('radio', { name: 'Preview' })
+    expect(stored().mode).toBe('split')
+    expect(edit.getAttribute('aria-checked')).toBe('true')
+    expect((split as HTMLButtonElement).disabled).toBe(true)
+    const description = document.getElementById(split.getAttribute('aria-describedby')!)
+    expect(description?.textContent).toBe(
+      'Use Edit or Preview here. Widen this panel for a split view.',
+    )
+    fireEvent.click(edit)
+    resize(1000)
+    expect(editorMode()).toBe('edit')
+    resize(390)
+    act(() => edit.focus())
+    fireEvent.keyDown(edit, { key: 'ArrowRight' })
+    expect(editorMode()).toBe('preview')
+    expect(document.activeElement).toBe(preview)
+    expect(preview.getAttribute('aria-checked')).toBe('true')
+    fireEvent.keyDown(preview, { key: 'Home' })
+    expect(editorMode()).toBe('edit')
+    expect(document.activeElement).toBe(edit)
+    expect(changed).not.toHaveBeenCalled()
+  })
+
   test('keyboard resizing exposes limits, equal split and a focus-safe collapse', () => {
     const { changed } = mount()
     const separator = screen.getByRole('separator')
@@ -257,7 +285,7 @@ describe('Markdown editor layout interactions', () => {
   test('Chinese controls use the same translated layout and separator semantics', async () => {
     await i18n.changeLanguage('zh-CN')
     mount()
-    expect(screen.getByRole('button', { name: '双栏' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('radio', { name: '双栏' }).getAttribute('aria-checked')).toBe('true')
     expect(
       screen
         .getByRole('separator', { name: '调整 Markdown 编辑区宽度' })
