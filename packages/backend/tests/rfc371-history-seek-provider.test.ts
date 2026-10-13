@@ -8,7 +8,10 @@ import {
   observationProjectionIndexedVersions as indexed,
 } from '@/db/observationProjection'
 import { createIncrementalObservationQueryStore } from '@/modules/run-observability/infrastructure/incrementalObservationQueryStore'
-import { qualifiedObservationIndexes } from '@/modules/run-observability/domain/qualifiedObservationIndexes'
+import {
+  qualifiedObservationIndexes,
+  qualifiedObservationIndexVersion,
+} from '@/modules/run-observability/domain/qualifiedObservationIndexes'
 import { emptyCompleteObservationFold } from '@/modules/run-observability/domain/completeObservationMetrics'
 import { emptyIncrementalObservationFold } from '@/modules/run-observability/domain/incrementalObservationFold'
 
@@ -23,7 +26,9 @@ describeEachProvider('RFC-371 exact historical section seeks', (h) => {
       .run()
     await h.db
       .insert(indexed)
-      .values([{ revision: '1' }, { revision: '10' }])
+      .values(
+        ['1', '10'].map((revision) => ({ revision: qualifiedObservationIndexVersion(revision) })),
+      )
       .run()
     const expected: string[] = []
     for (let offset = 0; offset < 1212; offset += 100) {

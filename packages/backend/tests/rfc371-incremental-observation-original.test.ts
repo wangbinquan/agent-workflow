@@ -12,7 +12,7 @@ import { ObservationPriceVersionSchema } from '@agent-workflow/shared'
 // RFC-371: the persistent increment must equal the canonical original allocator,
 // including ancestry, four-bucket partials, local pricing and platform authority.
 import { afterEach, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type {
   CompleteObservationReport,
   CompleteObservationReportPage,
@@ -71,7 +71,28 @@ import type { ProjectionOriginalScope } from '@/modules/run-observability/compos
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import {
+  qualifiedObservationIndexChannel,
+  qualifiedObservationIndexVersion,
+} from '@/modules/run-observability/domain/qualifiedObservationIndexes'
 import { incrementalObservationBootstrap } from '@/modules/run-observability/infrastructure/incrementalObservationBootstrap'
+
+import { composeOriginalProjectionBootstrap } from '@/modules/run-observability/composition/incrementalObservationBootstrap'
+import { retainIncrementalObservationVersion } from '@/modules/run-observability/infrastructure/incrementalObservationVersions'
+import { observationWindowCellKey } from '@/modules/run-observability/domain/observationWindowCell'
+import {
+  emptyIncrementalObservationFold,
+  replaceIncrementalObservationContribution,
+  type IncrementalObservationFold,
+} from '@/modules/run-observability/domain/incrementalObservationFold'
+import type { QualifiedObservationContribution } from '@/modules/run-observability/ports/incrementalObservationQualified'
+import type { ProjectionOccurrence } from '@/modules/run-observability/application/incrementalObservationWindow'
+import {
+  observationProjectionCurrent,
+  observationProjectionDescriptors,
+  observationProjectionIndexedVersions,
+  observationProjectionWork,
+} from '@/db/observationProjection'
 
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -126,12 +147,16 @@ function setup(
     open: async () => null,
     generation: async () => 'empty-native',
   }
+  let nativeOpens = 0
   const qualify = incrementalObservationQualification({
     db: h.db,
     snapshot,
     tasks: createProjectionTaskObservationFacts,
     owners,
-    native: () => ({ ...nativeQuery, close() {} }),
+    native: () => {
+      nativeOpens++
+      return { ...nativeQuery, close() {} }
+    },
   })
   const projection = createIncrementalObservationProjection({
     store: adapter.store,
@@ -169,7 +194,7 @@ function setup(
       .insert(observationProjectionBootstrap)
       .values({
         generation,
-        channel: indexed ? 'indexed-details-v1' : 'fixture-complete-population',
+        channel: indexed ? qualifiedObservationIndexChannel : 'fixture-complete-population',
         done: true,
       })
       .onConflictDoNothing()
@@ -229,6 +254,10 @@ function setup(
     apply,
     queries,
     oracle,
+    store,
+    get nativeOpens() {
+      return nativeOpens
+    },
     async drain() {
       for (;;) {
         const pending = await adapter.store.pending(100)
@@ -304,7 +333,10 @@ describeEachProvider(
         ).toEqual([])
         await db.delete(observationProjectionChanges).run()
         const boot = incrementalObservationBootstrap(db, generation, [
-            { id: 'indexed-details-v1', page: async () => ({ items: [], nextCursor: null }) },
+            {
+              id: qualifiedObservationIndexChannel,
+              page: async () => ({ items: [], nextCursor: null }),
+            },
           ]),
           signal = new AbortController().signal
         expect(await boot(signal)).toBe(1)
@@ -327,6 +359,43 @@ describeEachProvider(
         await single?.close()
       }
     }, 60_000)
+    test('only the known obsolete v1 index channel is retired; unknown required checkpoints still fail explicitly', async () => {
+      await h.db
+        .insert(observationProjectionBootstrap)
+        .values([
+          { generation, channel: 'indexed-details-v1', cursor: 'original-v1-cursor', done: false },
+          {
+            generation,
+            channel: 'a-required-original-channel',
+            cursor: 'original-required-cursor',
+            done: false,
+          },
+        ])
+        .run()
+      const boot = incrementalObservationBootstrap(h.db, generation, [
+        {
+          id: qualifiedObservationIndexChannel,
+          page: async () => ({ items: [], nextCursor: null }),
+        },
+      ])
+      await expect(boot(new AbortController().signal)).rejects.toThrow(
+        'Original bootstrap channel disappeared',
+      )
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, 'a-required-original-channel'))
+          .get(),
+      ).toMatchObject({ cursor: 'original-required-cursor', done: false })
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, 'indexed-details-v1'))
+          .get(),
+      ).toMatchObject({ cursor: 'original-v1-cursor', done: false })
+    })
     test('physical native parent/child roots across two Tasks retain the canonical candidate set in either change order', async () => {
       await seedCompleteTask(h, 2, 0)
       const original = (await h.db
@@ -617,6 +686,250 @@ describeEachProvider(
         }
       }
     }, 60_000)
+    for (const legacyDone of [true, false])
+      test(`persisted ${legacyDone ? 'complete' : 'interrupted'} v1 duplicate-cell indexes upgrade once from retained atoms, survive restart and preserve every original record and old report`, async () => {
+        await seedCompleteTask(h, 2, 7, discreteRequest)
+        const f = setup(h, undefined, true)
+        await f.apply('legacy-population', [
+          completeFixtureId('invocation', 0),
+          completeFixtureId('invocation', 1),
+        ])
+        const previous = (await f.store.snapshot())!,
+          query = { ...all, cohort: 'usage' as const },
+          expected = await f.oracle(query),
+          sourceBefore = normalized(await h.db.select().from(observationUsageCurrent).all()),
+          rows = await h.db
+            .select()
+            .from(observationProjectionCurrent)
+            .where(
+              and(
+                eq(observationProjectionCurrent.kind, 'contribution'),
+                eq(observationProjectionCurrent.section, 'time-partitions'),
+              ),
+            )
+            .all()
+        expect(rows).toHaveLength(7)
+        // Reproduce the previous persisted algorithm using original atoms and
+        // its second equivalent descriptor. The original fact is never changed.
+        await h.session.transaction(async (tx) => {
+          for (const value of rows) {
+            const original = JSON.parse(value.document) as QualifiedObservationContribution,
+              document = original.detail.document as ProjectionOccurrence,
+              reordered = Object.fromEntries(
+                Object.entries(document).reverse(),
+              ) as ProjectionOccurrence,
+              descriptor = observationWindowCellKey(original.component, reordered)!,
+              alias = 'occurrence-cell/' + sha256Hex(descriptor)
+            expect(original.aggregates).not.toContain(alias)
+            await tx
+              .insert(observationProjectionDescriptors)
+              .values({ key: alias, document: descriptor })
+              .onConflictDoNothing()
+              .run()
+            const accumulated = await tx
+              .select()
+              .from(observationProjectionCurrent)
+              .where(
+                and(
+                  eq(observationProjectionCurrent.kind, 'aggregate'),
+                  eq(observationProjectionCurrent.key, alias),
+                ),
+              )
+              .get()
+            await retainIncrementalObservationVersion(tx, {
+              kind: 'aggregate',
+              key: alias,
+              component: null,
+              version: previous,
+              document: replaceIncrementalObservationContribution(
+                accumulated
+                  ? (JSON.parse(accumulated.document) as IncrementalObservationFold)
+                  : emptyIncrementalObservationFold(),
+                null,
+                original.fold,
+              ),
+            })
+            await retainIncrementalObservationVersion(tx, {
+              kind: 'contribution',
+              key: original.key,
+              component: original.component,
+              version: previous,
+              document: { ...original, aggregates: [...original.aggregates, alias] },
+            })
+          }
+          await tx
+            .delete(observationProjectionIndexedVersions)
+            .where(
+              eq(
+                observationProjectionIndexedVersions.revision,
+                qualifiedObservationIndexVersion(previous.revision),
+              ),
+            )
+            .run()
+          await tx
+            .insert(observationProjectionIndexedVersions)
+            .values({ revision: previous.revision })
+            .run()
+          await tx
+            .delete(observationProjectionBootstrap)
+            .where(
+              and(
+                eq(observationProjectionBootstrap.generation, generation),
+                eq(observationProjectionBootstrap.channel, qualifiedObservationIndexChannel),
+              ),
+            )
+            .run()
+          await tx
+            .insert(observationProjectionBootstrap)
+            .values({
+              generation,
+              channel: 'indexed-details-v1',
+              done: legacyDone,
+              cursor: legacyDone ? null : 'original-v1-checkpoint',
+            })
+            .run()
+        })
+        await h.session.transaction((tx) =>
+          enqueueIncrementalObservationWork(tx, {
+            id: 'original-v1-pending',
+            source: 'original-bootstrap-upgrade',
+            revision: generation,
+            components: [rows[0]!.component!],
+          }),
+        )
+        // A legacy receipt does not certify v2. Exact raw atoms keep statistics
+        // available while derived indexes are being repaired in the background.
+        expect(await f.store.indexedDetails(previous)).toBe(false)
+        const oldReport = content(await f.queries.request(actor, query, 'before-upgrade'))
+        expect(oldReport.summary.metrics).toEqual(expected.summary.metrics)
+        const opensBefore = f.nativeOpens,
+          createBoot = () =>
+            composeOriginalProjectionBootstrap({
+              db: h.db,
+              generation,
+              tasks: createProjectionTaskObservationFacts(h.db),
+              owners: [],
+            }),
+          signal = new AbortController().signal
+        const boot = createBoot()
+        expect(await boot(signal)).toBe(1)
+        expect(await boot(signal)).toBe(1)
+        const checkpoint = await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(
+            and(
+              eq(observationProjectionBootstrap.generation, generation),
+              eq(observationProjectionBootstrap.channel, qualifiedObservationIndexChannel),
+            ),
+          )
+          .get()
+        expect(checkpoint?.done).toBe(true)
+        expect(await f.store.indexedDetails(previous)).toBe(false)
+        // Restart between the durable enumeration checkpoint and its work ACK.
+        const restarted = createBoot()
+        await f.drain()
+        for (;;) {
+          const advanced = await restarted(signal)
+          await f.drain()
+          if (!advanced) break
+        }
+        const current = (await f.store.snapshot())!
+        expect(await f.store.indexedDetails(current)).toBe(true)
+        expect(f.nativeOpens).toBe(opensBefore)
+        expect(
+          (
+            await h.db
+              .select()
+              .from(observationProjectionWork)
+              .where(eq(observationProjectionWork.id, 'original-v1-pending'))
+              .get()
+          )?.completedRevision,
+        ).toMatch(/^[1-9][0-9]*$/)
+        expect(
+          await h.db
+            .select()
+            .from(observationProjectionBootstrap)
+            .where(
+              and(
+                eq(observationProjectionBootstrap.generation, generation),
+                eq(observationProjectionBootstrap.channel, 'indexed-details-v1'),
+              ),
+            )
+            .get(),
+        ).toMatchObject({ done: legacyDone, cursor: legacyDone ? null : 'original-v1-checkpoint' })
+        expect(normalized(await h.db.select().from(observationUsageCurrent).all())).toEqual(
+          sourceBefore,
+        )
+        const repaired = content(await f.queries.request(actor, query, 'after-upgrade'))
+        expect(repaired.summary.metrics).toEqual(expected.summary.metrics)
+        expect(repaired.summary.inventory).toEqual(expected.summary.inventory)
+        expect(content(await f.queries.status(actor, oldReport.header.reportId))).toEqual(oldReport)
+        const beforeIdle = await f.store.snapshot()
+        expect(await restarted(signal)).toBe(0)
+        await f.drain()
+        expect(await f.store.snapshot()).toEqual(beforeIdle)
+        for await (const value of f.store.details({ version: current, section: 'time-partitions' }))
+          expect(value.aggregates.filter((key) => key.startsWith('occurrence-cell/'))).toHaveLength(
+            1,
+          )
+      }, 60000)
+    for (const indexed of [false, true])
+      test(`public time-partition contract covers default/started/selected cohorts and Task views with ${indexed ? 'indexed' : 'original-atom'} reads`, async () => {
+        await seedCompleteTask(h, 2, 7, discreteRequest)
+        const f = setup(h, undefined, indexed)
+        await f.apply('public-time-contract', [
+          completeFixtureId('invocation', 0),
+          completeFixtureId('invocation', 1),
+        ])
+        for (const query of [
+          all,
+          { ...all, cohort: 'started' as const },
+          { ...all, selection: JSON.stringify({ purpose: 'task' }) },
+        ]) {
+          const expected = await f.oracle(query),
+            report = content(await f.queries.request(actor, query, 'cohort'))
+          expect(report.summary.metrics).toEqual(expected.summary.metrics)
+          for (const section of ['time-partitions', 'time-unassigned'] as const) {
+            expect(report.counts[section]).toBe('0')
+            expect(
+              await f.queries.page(actor, report.header.reportId, { section, limit: 2 }),
+            ).toMatchObject({ items: [], total: '0', nextCursor: null })
+          }
+        }
+        for (const query of [all, { ...all, cohort: 'usage' as const }]) {
+          const report = content(
+            await f.queries.request(actor, query, 'task', 'complete-original-task'),
+          )
+          for (const section of ['time-partitions', 'time-unassigned'] as const)
+            expect(
+              await f.queries.page(actor, report.header.reportId, { section, limit: 2 }),
+            ).toMatchObject({ items: [], total: '0', nextCursor: null })
+        }
+        const query = { ...all, cohort: 'usage' as const },
+          expected = await f.oracle(query),
+          report = content(await f.queries.request(actor, query, 'usage'))
+        const items: unknown[] = []
+        let after: string | null = null
+        do {
+          const page = await f.queries.page(actor, report.header.reportId, {
+            section: 'time-partitions',
+            limit: 2,
+            ...(after ? { after } : {}),
+          })
+          expect(page.total).toBe('7')
+          items.push(...page.items)
+          after = page.nextCursor
+        } while (after !== null)
+        expect(normalized(items)).toEqual(
+          normalized(
+            expected.rows
+              .filter((row) => row.section === 'time-partitions' && row.parent === null)
+              .map((row) => row.document),
+          ),
+        )
+        expect(report.summary.metrics).toEqual(expected.summary.metrics)
+      }, 60000)
     test('a same-ID revision replaces values once while the old retained report stays immutable', async () => {
       await seedCompleteTask(h, 2, 7)
       const f = setup(h)

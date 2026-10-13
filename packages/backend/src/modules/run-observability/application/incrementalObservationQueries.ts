@@ -484,11 +484,23 @@ export function incrementalObservationQueries(input: {
             }) satisfies CompleteObservationTrend,
         ),
     )
+    // Public time partitions exist only for an explicit usage overview. Task
+    // views and default/started cohorts retain their full original numeric
+    // facts, but never publish the private occurrence acceleration rows.
+    if (view.query.cohort !== 'usage' || view.taskId !== undefined) {
+      sections.set(rowSource('time-partitions', null), [])
+      sections.set(rowSource('time-unassigned', null), [])
+    }
     if (window) {
       sections.set(rowSource('trends', null), window.trends)
       sections.set(rowSource('invocations', null), window.invocations)
       sections.set(rowSource('historical-executions', null), window.historical)
-      if (!input.source.windowCells)
+      if (window.mode === 'cohort') {
+        // Occurrence atoms accelerate cohort metrics internally. The public
+        // time-partition rows belong to the explicit usage-window contract.
+        sections.set(rowSource('time-partitions', null), [])
+        sections.set(rowSource('time-unassigned', null), [])
+      } else if (!input.source.windowCells)
         sections.set(rowSource('time-partitions', null), window.timeRows)
       if (!input.source.windowCells)
         sections.set(

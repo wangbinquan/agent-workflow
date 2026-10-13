@@ -245,11 +245,13 @@ test('execution comparison uses the frozen report and an original wait opens in 
   const leftSelect = screen.getByRole('combobox', { name: '左侧任务' })
   fireEvent.click(leftSelect)
   const leftOptions = document.getElementById(leftSelect.getAttribute('aria-controls')!)!
-  fireEvent.click(within(leftOptions).getByRole('option', { name: '原始任务 left' }))
+  fireEvent.mouseDown(within(leftOptions).getByRole('option', { name: '原始任务 left' }))
+  expect(leftSelect.textContent).toContain('原始任务 left')
   const rightSelect = screen.getByRole('combobox', { name: '右侧任务' })
   fireEvent.click(rightSelect)
   const rightOptions = document.getElementById(rightSelect.getAttribute('aria-controls')!)!
-  fireEvent.click(within(rightOptions).getByRole('option', { name: '原始任务 right' }))
+  fireEvent.mouseDown(within(rightOptions).getByRole('option', { name: '原始任务 right' }))
+  expect(rightSelect.textContent).toContain('原始任务 right')
   await waitFor(() =>
     expect(calls.get).toHaveBeenCalledWith(
       '/api/observability/reports/original-frozen-report/comparison?left=left&right=right',

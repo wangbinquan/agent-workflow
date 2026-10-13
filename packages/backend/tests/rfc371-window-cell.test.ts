@@ -3,6 +3,7 @@ import { qualifiedObservationIndexes } from '@/modules/run-observability/domain/
 import { expect, test } from 'bun:test'
 import {
   observationWindowCellKey,
+  originalObservationTimePartition,
   decodeObservationWindowCell,
   completeWindowCell,
 } from '@/modules/run-observability/domain/observationWindowCell'
@@ -182,4 +183,77 @@ test('compact descriptor replay is idempotent and scope metadata is kept outside
   expect(Object.values(indexed.descriptors!)).toContain(
     observationWindowCellKey('owner', document)!,
   )
+})
+
+// CI 38452454414 exposed doubled four-bucket/CNY usage: qualification and replay
+// inserted equivalent cell descriptors in a different JSON property order.
+test('a retained atom replaces all derived index aliases rather than applying its values twice', () => {
+  const document = row('original-record', '9007199254740993'),
+    raw = {
+      key: 'original-atom',
+      component: 'owner',
+      fold: emptyCompleteObservationFold(),
+      aggregates: ['task/' + task.id, 'original-day'],
+      detail: {
+        section: 'time-partitions' as const,
+        parent: null,
+        key: 'original-atom',
+        taskId: task.id,
+        cohortAt: at,
+        document,
+      },
+    },
+    first = qualifiedObservationIndexes(raw),
+    reordered = Object.fromEntries(Object.entries(document).reverse()) as typeof document,
+    legacy = observationWindowCellKey(raw.component, reordered)!
+  expect(legacy).not.toBe(observationWindowCellKey(raw.component, document))
+  const polluted = {
+      ...first,
+      aggregates: [
+        ...first.aggregates,
+        legacy,
+        observationRowCountKey('previous-owner', raw.detail),
+      ],
+    },
+    repaired = qualifiedObservationIndexes(polluted)
+  expect(repaired).toEqual(first)
+  expect(repaired.aggregates.filter((key) => key.startsWith('occurrence-cell/'))).toHaveLength(1)
+  expect(repaired.aggregates.filter((key) => key.startsWith('row-count/'))).toHaveLength(1)
+  expect(repaired.aggregates).toContain('task/' + task.id)
+  expect(repaired.aggregates).toContain('original-day')
+  expect(qualifiedObservationIndexes(repaired)).toEqual(repaired)
+  expect(repaired.fold).toBe(raw.fold)
+  expect(repaired.detail.document).toBe(document)
+})
+
+test('public time rows retain all original fields and partitions without private index metadata', () => {
+  const original = row('actual-original', '17'),
+    privateRow = {
+      ...original,
+      candidateCount: '1',
+      visibility: [],
+      dimensions: [],
+      unknownDimensions: [],
+      nativeRecord: true,
+      scopes: [],
+      projectionCell: { from: at, to: at + 3600000 },
+    },
+    { referenceIds: _references, model: _model, ...publicOriginal } = original
+  const publicRow = originalObservationTimePartition(privateRow, 'outside-window')
+  expect(publicRow).toEqual({ ...publicOriginal, partition: 'outside-window' })
+  expect(Object.keys(publicRow).sort()).toEqual(
+    [
+      'identity',
+      'kind',
+      'recordId',
+      'sourceId',
+      'task',
+      'invocation',
+      'occurrence',
+      'metrics',
+      'partition',
+    ].sort(),
+  )
+  expect(publicRow.metrics).toBe(original.metrics)
+  expect(publicRow.occurrence).toBe(original.occurrence)
 })

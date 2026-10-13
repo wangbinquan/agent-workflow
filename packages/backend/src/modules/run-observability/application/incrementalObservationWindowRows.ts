@@ -1,3 +1,4 @@
+import { originalObservationTimePartition } from '../domain/observationWindowCell'
 import type { ProjectionOccurrence } from './incrementalObservationWindow'
 import type { CompleteHistoricalObservationRecord } from '@agent-workflow/shared'
 import { modelDimensionMatch, parseObservationSelection } from '../domain/analysisDimensions'
@@ -42,19 +43,15 @@ export function incrementalObservationWindowRows(
     (typeof at === 'number' && at >= window.query.from && at < window.query.to)
   if (section === 'time-partitions' || section === 'time-unassigned')
     return rows.flatMap((raw) => {
+      // Time partitions diagnose the complete usage candidate population,
+      // including original calls whose records are all outside this window.
+      if (window.mode === 'cohort') return []
       const row = raw as ProjectionOccurrence,
         at = row.occurrence.occurredAt
       if (section === 'time-unassigned' && at !== null) return []
-      if (row.invocation && !calls.has(row.invocation.invocationId)) return []
       const partition =
-        window.mode === 'cohort'
-          ? 'in-window'
-          : at === null
-            ? 'unassigned-time'
-            : inWindow(at)
-              ? 'in-window'
-              : 'outside-window'
-      return [{ ...row, partition }]
+        at === null ? 'unassigned-time' : inWindow(at) ? 'in-window' : 'outside-window'
+      return [originalObservationTimePartition(row, partition)]
     })
   if (section === 'allocations')
     return rows.filter((raw) => {

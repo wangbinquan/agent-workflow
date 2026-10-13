@@ -111,7 +111,10 @@ export function incrementalObservationQualification(input: {
             },
             work.components,
           )
-        if (work.source === 'original-bootstrap-component') {
+        if (
+          work.source === 'original-bootstrap-component' ||
+          work.source === 'original-bootstrap-upgrade'
+        ) {
           let qualified = 0
           for (let at = 0; at < work.components.length; at += 200)
             qualified += (
@@ -126,7 +129,12 @@ export function incrementalObservationQualification(input: {
                 )
                 .all()
             ).length
-          if (qualified === work.components.length) {
+          // Index upgrades replay retained original atoms only; no native read,
+          // model allocation or producer enumeration is needed.
+          if (
+            work.source === 'original-bootstrap-upgrade' ||
+            qualified === work.components.length
+          ) {
             for (let at = 0; at < work.components.length; at += 200) {
               let after: string | undefined
               for (;;) {

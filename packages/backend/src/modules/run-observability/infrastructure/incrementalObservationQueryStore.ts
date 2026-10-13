@@ -3,7 +3,10 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { jsonPathArray } from '@/platform/persistence/jsonPathArray'
 import { CompleteObservationError } from '../domain/completeObservationError'
 import { admitObservationStorage, observationViewAlive } from './observationStorageLifetime'
-import { decodeQualifiedObservationGroup } from '../domain/qualifiedObservationIndexes'
+import {
+  decodeQualifiedObservationGroup,
+  qualifiedObservationIndexVersion,
+} from '../domain/qualifiedObservationIndexes'
 import { decodeObservationRowCount } from '../domain/observationRowCount'
 import {
   observationProjectionIndexedVersions,
@@ -237,7 +240,12 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
       return !!(await db
         .select()
         .from(observationProjectionIndexedVersions)
-        .where(eq(observationProjectionIndexedVersions.revision, version.revision))
+        .where(
+          eq(
+            observationProjectionIndexedVersions.revision,
+            qualifiedObservationIndexVersion(version.revision),
+          ),
+        )
         .get())
     },
     async retainScope(

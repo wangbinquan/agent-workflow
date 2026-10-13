@@ -1,3 +1,4 @@
+import { originalObservationTimePartition } from '../domain/observationWindowCell'
 import type { QualifiedObservationDimensionContribution } from '../ports/incrementalObservationQualified'
 import type {
   CompleteHistoricalObservationExecution,
@@ -67,7 +68,7 @@ export function incrementalObservationWindow(input: {
     >(),
     taskFolds = new Map<string, CompleteObservationFold>(),
     historicalFolds = new Map<string, CompleteObservationFold>()
-  const timeRows: ProjectionOccurrence[] = [],
+  const timeRows: CompleteObservationTimePartition[] = [],
     selectedHistory = new Set<string>(),
     selectedTaskIds = new Set<string>()
   const date = new Intl.DateTimeFormat('en-CA', {
@@ -109,7 +110,7 @@ export function incrementalObservationWindow(input: {
             : 'outside-window'
     const row = { ...original, partition },
       next = clearMemberships(contribution.fold)
-    if (!row.projectionCell) timeRows.push(row)
+    if (!row.projectionCell) timeRows.push(originalObservationTimePartition(row))
     mergeCompleteObservationFold(partitions[partition], next)
     if (row.invocation) {
       const id = row.invocation.invocationId,

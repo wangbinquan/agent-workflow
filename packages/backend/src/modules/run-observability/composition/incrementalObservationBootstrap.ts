@@ -1,3 +1,4 @@
+import { qualifiedObservationIndexChannel } from '../domain/qualifiedObservationIndexes'
 import { observationProjectionCurrent } from '@/db/observationProjection'
 import { and, asc, eq, gt, isNotNull } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -18,7 +19,7 @@ export function composeOriginalProjectionBootstrap(input: {
 }) {
   const channels: ProjectionBootstrapChannel[] = [
     {
-      id: 'indexed-details-v1',
+      id: qualifiedObservationIndexChannel,
       refresh: true,
       async page(after) {
         const rows = await input.db

@@ -33,6 +33,12 @@ import type { IncrementalObservationFold } from '../domain/incrementalObservatio
 import { pendingIncrementalObservationWork } from './incrementalObservationWork'
 import { retainIncrementalObservationVersion } from './incrementalObservationVersions'
 
+import {
+  legacyQualifiedObservationIndexChannel,
+  qualifiedObservationIndexChannel,
+  qualifiedObservationIndexVersion,
+} from '../domain/qualifiedObservationIndexes'
+
 const HEAD = 'incremental-20261012-v1'
 const DOCUMENT_PACKET = 200
 
@@ -58,7 +64,12 @@ export function createIncrementalObservationProjectionStore(
               done: observationProjectionBootstrap.done,
             })
             .from(observationProjectionBootstrap)
-            .where(eq(observationProjectionBootstrap.generation, generation))
+            .where(
+              and(
+                eq(observationProjectionBootstrap.generation, generation),
+                ne(observationProjectionBootstrap.channel, legacyQualifiedObservationIndexChannel),
+              ),
+            )
             .all()
           if (!channels.length || channels.some((row) => !row.done)) return false
           const pending = await reader
@@ -79,7 +90,7 @@ export function createIncrementalObservationProjectionStore(
             .limit(1)
             .get()
           indexedDetails =
-            channels.some((channel) => channel.channel === 'indexed-details-v1') &&
+            channels.some((channel) => channel.channel === qualifiedObservationIndexChannel) &&
             !pending &&
             !changes
           return !pending && !changes
@@ -233,7 +244,12 @@ export function createIncrementalObservationProjectionStore(
               ? !!(await reader
                   .select()
                   .from(observationProjectionIndexedVersions)
-                  .where(eq(observationProjectionIndexedVersions.revision, previous.revision))
+                  .where(
+                    eq(
+                      observationProjectionIndexedVersions.revision,
+                      qualifiedObservationIndexVersion(previous.revision),
+                    ),
+                  )
                   .get())
               : false
             indexedDetails ||= priorIndexed
@@ -285,7 +301,7 @@ export function createIncrementalObservationProjectionStore(
             if (indexedDetails)
               await reader
                 .insert(observationProjectionIndexedVersions)
-                .values({ revision: version.revision })
+                .values({ revision: qualifiedObservationIndexVersion(version.revision) })
                 .onConflictDoNothing()
                 .run()
             for (const taskId of affectedTasks) {

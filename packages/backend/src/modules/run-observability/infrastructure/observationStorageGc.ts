@@ -37,7 +37,10 @@ import {
   observationProjectionIndexedVersions as indexed,
 } from '@/db/observationProjection'
 import { admitObservationStorage } from './observationStorageLifetime'
+import { qualifiedObservationIndexChannel } from '../domain/qualifiedObservationIndexes'
 import { jsonPathText } from '@/platform/persistence/jsonPathText'
+const indexPrefix = qualifiedObservationIndexChannel + '/'
+const indexRevision = sql`CASE WHEN substr(${indexed.revision},1,${indexPrefix.length})=${indexPrefix} THEN substr(${indexed.revision},${indexPrefix.length + 1}) ELSE ${indexed.revision} END`
 const decimalLte = (value: SQL, ceiling: string) =>
   sql`(length(${value})<${ceiling.length} OR (length(${value})=${ceiling.length} AND ${value}<=${ceiling}))`
 async function remove(
@@ -195,7 +198,9 @@ export async function collectObservationStorage(
         indexed,
         ['revision'],
         'indexed',
-        sql`revision<>${floor} AND ${decimalLte(sql`revision`, floor)}`,
+        // Both legacy decimal receipts and current algorithm-qualified receipts
+        // live exactly as long as their original immutable version.
+        sql`NOT EXISTS(SELECT 1 FROM ${versions} v WHERE v.revision=${indexRevision})`,
       )
     }
     removed += await trackedSweep(

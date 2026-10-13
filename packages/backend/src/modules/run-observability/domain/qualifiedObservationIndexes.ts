@@ -34,6 +34,14 @@ interface QualifiedObservationContribution {
 import { observationRowCountKey } from './observationRowCount'
 import { observationWindowCellKey } from './observationWindowCell'
 import type { CompleteObservationTimePartition } from '@agent-workflow/shared'
+// An index receipt qualifies one algorithm version; an older receipt cannot
+// certify a partially upgraded projection. Original decimal revisions stay intact.
+// The superseded checkpoint is retained for diagnosis, not counted as a
+// current required channel. Its pending work still needs a real durable ACK.
+export const legacyQualifiedObservationIndexChannel = 'indexed-details-v1'
+export const qualifiedObservationIndexChannel = 'indexed-details-v2'
+export const qualifiedObservationIndexVersion = (revision: string) =>
+  qualifiedObservationIndexChannel + '/' + revision
 type ProjectionOccurrence = CompleteObservationTimePartition & {
   referenceIds: readonly string[]
   model: { provider: string | null; id: string } | null
@@ -105,7 +113,16 @@ export function qualifiedObservationIndexes(
   return {
     ...row,
     descriptors,
-    aggregates: [...new Set([...row.aggregates, ...keys].map(compact))],
+    // Derived memberships belong to this rebuild. Unioning an older equivalent
+    // descriptor with the rebuilt one applies the same original fold twice.
+    aggregates: [
+      ...new Set([
+        ...row.aggregates.filter(
+          (key) => !/^(row-count|qualified-group|occurrence-cell)\//.test(key),
+        ),
+        ...keys.map(compact),
+      ]),
+    ],
   }
 }
 export function decodeQualifiedObservationGroup(key: string) {

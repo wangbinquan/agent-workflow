@@ -64,6 +64,24 @@ export function observationWindowCellKey(
     ])
   )
 }
+/** Public occurrence documents retain every original field. Private index
+ * metadata is not a second record and must not change the original row oracle. */
+export function originalObservationTimePartition(
+  row: CompleteObservationTimePartition,
+  partition = row.partition,
+): CompleteObservationTimePartition {
+  return {
+    identity: row.identity,
+    kind: row.kind,
+    recordId: row.recordId,
+    sourceId: row.sourceId,
+    task: row.task,
+    invocation: row.invocation,
+    occurrence: row.occurrence,
+    metrics: row.metrics,
+    partition,
+  }
+}
 export function decodeObservationWindowCell(key: string): ObservationWindowCell {
   if (!key.startsWith('occurrence-cell/')) throw new Error('Invalid occurrence cell')
   const parsed: unknown = JSON.parse(key.slice(16))

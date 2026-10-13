@@ -999,10 +999,10 @@ function mountSidebarPage() {
   return { router, history }
 }
 
-function defaultWeek(): ObservationOverviewQuery {
+function defaultWeek(now = NOW): ObservationOverviewQuery {
   return {
-    from: NOW + 1 - 7 * 86400000,
-    to: NOW + 1,
+    from: now + 1 - 7 * 86400000,
+    to: now + 1,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   }
 }
@@ -1125,6 +1125,18 @@ test.each(['ready', 'incomplete'] as const)(
     expect(reopened.some((request) => request.path.endsWith('/pages'))).toBe(true)
     expect(reopened.every((request) => request.reportId === original.header.reportId)).toBe(true)
 
+    const mountedOriginal = client.getQueriesData<CompleteObservationReport>({
+      queryKey: ['run-observability-complete', 'scope-metrics/14', originalScope],
+    })
+    expect(mountedOriginal).toHaveLength(1)
+    expect(mountedOriginal[0]![1]).toBeDefined()
+    expect(completeObservationReportContent(mountedOriginal[0]![1]!)?.header.reportId).toBe(
+      original.header.reportId,
+    )
+    expect(
+      client.getQueriesData({ queryKey: ['run-observability-complete', 'scope-metrics/13'] }),
+    ).toHaveLength(0)
+
     fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     await waitFor(() => expect(f.reports).toHaveLength(2))
     await screen.findByText(i18n.t('runObservability.refreshingPrevious'))
@@ -1135,7 +1147,10 @@ test.each(['ready', 'incomplete'] as const)(
     expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
     await f.finish(f.reports[1]!)
     await screen.findByRole('button', { name: /1 个任务.*132 Token/ })
-    expect(f.reports[1]!.header.filters).toEqual(originalScope)
+    // Returning via the sidebar preserves the prior dated report. An explicit
+    // preset refresh advances to the current clock, as the real page does.
+    const refreshedScope = defaultWeek(NOW + 2 * 3600000)
+    expect(f.reports[1]!.header.filters).toEqual(refreshedScope)
     expect(screen.queryByText(originalTime)).toBeNull()
     const refreshedCostCard = screen
       .getByRole('heading', { name: i18n.t('runObservability.cost') })
@@ -1143,16 +1158,6 @@ test.each(['ready', 'incomplete'] as const)(
     expect(within(refreshedCostCard).getByText('¥0.132')).toBeTruthy()
     expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(2)
 
-    const initialCache = client.getQueryData<CompleteObservationReport>([
-      'run-observability-complete',
-      'scope-metrics/13',
-      originalScope,
-      null,
-      0,
-    ])
-    expect(completeObservationReportContent(initialCache!)?.header.reportId).toBe(
-      original.header.reportId,
-    )
     fireEvent.click(screen.getByRole('link', { name: '离开观测' }))
     await screen.findByRole('heading', { name: '任务路由' })
     await waitFor(() =>
@@ -1187,15 +1192,15 @@ test.each(['ready', 'incomplete'] as const)(
 
     discardObservationReportBookmark(original.header.reportId)
     expect(validateObservationSearch({})).toMatchObject({
-      from: originalScope.from,
-      to: originalScope.to,
+      from: refreshedScope.from,
+      to: refreshedScope.to,
     })
     // A remount resets revision to zero. Its next explicit refresh must create
     // a new report, rather than GET the previous visit's revision=1 report.
     fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     await waitFor(() => expect(f.reports).toHaveLength(3))
     expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
-    expect(f.reports[2]!.header.filters).toEqual(originalScope)
+    expect(f.reports[2]!.header.filters).toEqual(refreshedScope)
     const newest = {
       ...f.reports[2]!,
       header: { ...f.reports[2]!.header, asOf: NOW + 20000 },
@@ -1208,7 +1213,7 @@ test.each(['ready', 'incomplete'] as const)(
     )
     expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
     discardObservationReportBookmark(f.reports[1]!.header.reportId)
-    expect(validateObservationSearch({}).to).toBe(originalScope.to)
+    expect(validateObservationSearch({}).to).toBe(refreshedScope.to)
     discardObservationReportBookmark(newest.header.reportId)
     expect(validateObservationSearch({}).to).toBe(NOW + 2 * 3600000 + 1)
   },

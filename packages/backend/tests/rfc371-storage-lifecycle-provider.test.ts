@@ -14,6 +14,7 @@ import {
   observationProjectionCurrent as current,
   observationProjectionHeads as heads,
   observationProjectionVersions as versions,
+  observationProjectionIndexedVersions as indexed,
   observationProjectionHistory as history,
   observationProjectionMemberships as members,
   observationProjectionViews as views,
@@ -31,6 +32,8 @@ import { incrementalObservationViews } from '@/modules/run-observability/infrast
 import { collectObservationStorage } from '@/modules/run-observability/infrastructure/observationStorageGc'
 import { observationStorageStatus } from '@/modules/run-observability/infrastructure/observationStorageStatus'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { qualifiedObservationIndexVersion } from '@/modules/run-observability/domain/qualifiedObservationIndexes'
+
 const input = (revision: string) => ({
   actorScope: 'original-admin',
   generation: 'original-db',
@@ -71,6 +74,54 @@ describeEachProvider('RFC-371 long running derived storage without population tr
     const fresh = await store.retain(input('7'))
     expect(fresh.id).not.toBe(a.id)
     expect(fresh.version.revision).toBe('12')
+  })
+  test('legacy and current index receipts expire with their original version without losing an active retained view', async () => {
+    await seed()
+    await h.db
+      .insert(indexed)
+      .values(
+        ['3', '7', '12'].flatMap((revision) => [
+          { revision },
+          { revision: qualifiedObservationIndexVersion(revision) },
+        ]),
+      )
+      .run()
+    const store = incrementalObservationViews(h.db),
+      retained = await store.retain(input('7')),
+      recording = h.recordStatements()
+    try {
+      for (let n = 0; n < 3; n++) await collectObservationStorage(h.db)
+    } finally {
+      recording.stop()
+    }
+    const probes = recording
+      .selects()
+      .filter(
+        (row) =>
+          row.sql.includes('observation_projection_indexed_versions') &&
+          row.sql.includes('NOT EXISTS') &&
+          row.sql.includes('observation_projection_versions'),
+      )
+    expect(probes.length).toBeGreaterThan(0)
+    if (h.capabilities.isolation === 'exclusive')
+      for (const probe of probes) {
+        const plan = await h.explain(probe)
+        expect(plan).toMatch(/SEARCH v USING.*revision=\?/)
+      }
+    expect((await h.db.select().from(indexed).all()).map((row) => row.revision).sort()).toEqual(
+      [
+        '7',
+        '12',
+        qualifiedObservationIndexVersion('7'),
+        qualifiedObservationIndexVersion('12'),
+      ].sort(),
+    )
+    expect(await store.get(retained.id, retained.actorScope)).toEqual(retained)
+    await h.db.update(leases).set({ expiresAt: 0 }).where(eq(leases.id, retained.id)).run()
+    for (let n = 0; n < 3; n++) await collectObservationStorage(h.db)
+    expect((await h.db.select().from(indexed).all()).map((row) => row.revision).sort()).toEqual(
+      ['12', qualifiedObservationIndexVersion('12')].sort(),
+    )
   })
   test('upgrade grants seven days to existing views and retains an interval crossing the protected floor', async () => {
     await seed()
