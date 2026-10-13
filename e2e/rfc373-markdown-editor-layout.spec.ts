@@ -265,7 +265,18 @@ test('Skill edit: short-window scroll reaches source, preview and technical deta
   await expect(workspace.locator('.skill-detail__technical')).toHaveAttribute('open', '')
   await page.getByTestId('markdown-mode-edit').click()
   await expect(source).toHaveValue(updated)
-  await page.getByTestId('skill-save-button').click()
+  // A Skill save publishes a new file generation. Read back only after that
+  // specific save completes, rather than racing its intermediate state.
+  const [saved] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/skills/${skill.id}/save`,
+    ),
+    page.getByTestId('skill-save-button').click(),
+  ])
+  expect(saved.ok()).toBe(true)
+  expect((await saved.json()).bodyMd).toBe(updated)
   await expect
     .poll(async () => (await api<{ bodyMd: string }>(`/api/skills/${skill.id}/content`)).bodyMd)
     .toBe(updated)
