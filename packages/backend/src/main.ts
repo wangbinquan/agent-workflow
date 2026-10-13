@@ -28,6 +28,11 @@ import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/fra
 import { migrateCommand } from './cli/migrate'
 import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand } from './cli/start'
+import {
+  createDevelopmentDaemonState,
+  reloadDevelopmentDaemon,
+  type DevelopmentDaemonState,
+} from './cli/dev'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
 import {
@@ -362,7 +367,17 @@ async function main(): Promise<void> {
       if (port !== undefined) opts.port = port
       const host = readFlag(Bun.argv, '--host')
       if (host !== undefined) opts.host = host
-      await startCommand(opts)
+      if (process.env.AGENT_WORKFLOW_DEV_HOT_RELOAD === '1') {
+        const retained = globalThis as typeof globalThis & {
+          agentWorkflowDevelopment?: DevelopmentDaemonState
+        }
+        const state = (retained.agentWorkflowDevelopment ??= createDevelopmentDaemonState())
+        await reloadDevelopmentDaemon(state, (development) =>
+          startCommand({ ...opts, ...development }),
+        )
+      } else {
+        await startCommand(opts)
+      }
       break
     }
 

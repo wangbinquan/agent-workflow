@@ -471,6 +471,8 @@ import {
 export interface StartOptions {
   port?: number
   host?: string
+  /** Process-local preparation shared only by the development hot reloader. */
+  developmentIntegrity?: { validatedDatabase?: string }
   configuration?: ApplicationConfigurationQueries
   applicationConfiguration?: ApplicationConfigurationBinding
   runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
@@ -1337,6 +1339,9 @@ export async function serveDaemon(input: {
   readonly log: ReturnType<typeof createLogger>
 }): Promise<never> {
   const server = Bun.serve({
+    // Bun --hot otherwise aliases the HTTP and control listeners when both
+    // request an ephemeral port. Keep this application's reload identity distinct.
+    id: `agent-workflow-http:${input.bindHost}:${input.bindPort}`,
     port: input.bindPort,
     hostname: input.bindHost,
     idleTimeout: 255,
@@ -1668,6 +1673,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           mmapMib: config.sqliteMmapMib,
           slowQueryMs: config.sqliteSlowQueryMs,
           skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
+          developmentIntegrity: opts.developmentIntegrity,
         },
         beforeSqliteOpen: () =>
           maybePreMigrationBackup({

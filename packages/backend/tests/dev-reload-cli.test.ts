@@ -1,0 +1,95 @@
+// Exercise Bun --hot through the original CLI entrypoint, including its real
+// HTTP/control listeners, database preparation, source reload and shutdown.
+import { expect, test } from 'bun:test'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+
+test('real CLI hot reload keeps its PID, checks the database once, and serves HTTP after a save', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'aw-dev-cli-hot-'))
+  const entry = join(root, 'entry.ts')
+  const main = resolve(import.meta.dir, '..', 'src', 'main.ts')
+  const source = (probe: string) =>
+    `import ${JSON.stringify(main)};\nconsole.info(${JSON.stringify(probe)});\n`
+  writeFileSync(entry, source('dev-cli-source-one'))
+  const child = Bun.spawn([process.execPath, 'run', '--hot', entry, 'start'], {
+    cwd: resolve(import.meta.dir, '..'),
+    env: {
+      ...process.env,
+      AGENT_WORKFLOW_HOME: root,
+      AGENT_WORKFLOW_DEV_HOT_RELOAD: '1',
+      AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS: '35000',
+      AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY: '1',
+    },
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  let output = ''
+  const waiting = new Map<string, ReturnType<typeof Promise.withResolvers<void>>>()
+  const consume = async (stream: ReadableStream<Uint8Array>) => {
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    for (;;) {
+      const result = await reader.read()
+      if (result.done) return
+      output += decoder.decode(result.value, { stream: true })
+      for (const [text, ack] of waiting) {
+        if (output.includes(text)) {
+          waiting.delete(text)
+          ack.resolve()
+        }
+      }
+    }
+  }
+  const pumps = [consume(child.stdout), consume(child.stderr)]
+  const waitFor = async (text: string) => {
+    if (output.includes(text)) return
+    const ack = Promise.withResolvers<void>()
+    waiting.set(text, ack)
+    await Promise.race([
+      ack.promise,
+      child.exited.then((code) => {
+        throw new Error(`CLI exited ${code} before ${text}: ${output.slice(-3000)}`)
+      }),
+    ])
+  }
+  const infoPath = join(root, '.daemon.info')
+  const controlPath = join(root, '.daemon.control')
+  try {
+    await waitFor('source generation 1 ready')
+    const first = JSON.parse(readFileSync(infoPath, 'utf8')) as {
+      pid: number
+      url: string
+      startedAt: string
+    }
+    const before = await fetch(`${first.url}health`)
+    expect(before.status).toBe(200)
+    expect(((await before.json()) as { ok: boolean }).ok).toBe(true)
+    writeFileSync(entry, source('dev-cli-source-two'))
+    await waitFor('source generation 2 ready')
+    await waitFor('dev-cli-source-two')
+    const second = JSON.parse(readFileSync(infoPath, 'utf8')) as typeof first
+    expect(second.pid).toBe(first.pid)
+    expect(second.startedAt).not.toBe(first.startedAt)
+    const after = await fetch(`${second.url}health`)
+    expect(after.status).toBe(200)
+    expect(((await after.json()) as { ok: boolean }).ok).toBe(true)
+    expect(output.match(/startup database quick_check completed/g)).toHaveLength(1)
+    expect(output.match(/reusing database integrity check/g)).toHaveLength(1)
+    expect(output).not.toContain('Requested module is not instantiated yet')
+    const control = JSON.parse(readFileSync(controlPath, 'utf8')) as { url: string; nonce: string }
+    await fetch(`${control.url}/shutdown`, {
+      method: 'POST',
+      headers: { 'x-agent-workflow-control': control.nonce },
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => undefined)
+    expect(await child.exited).toBe(0)
+    expect(existsSync(infoPath)).toBe(false)
+    expect(existsSync(controlPath)).toBe(false)
+  } finally {
+    child.kill()
+    await child.exited
+    await Promise.all(pumps)
+    rmSync(root, { recursive: true, force: true })
+  }
+}, 60_000)

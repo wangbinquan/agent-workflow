@@ -38,14 +38,24 @@ export function createNativeDaemonHostLifecycle(
         devWatch: options.devWatch,
         onShutdown: () => request('control-shutdown'),
       })
-      process.on('SIGTERM', () => request('SIGTERM'))
-      process.on('SIGINT', () => request('SIGINT'))
-      process.on('exit', () => {
+      const onTerm = (): void => request('SIGTERM')
+      const onInt = (): void => request('SIGINT')
+      const onExit = (): void => {
         withdrawReady()
         control.close()
         callbacks.onExit()
-      })
-      return { close: () => control.close() }
+      }
+      process.on('SIGTERM', onTerm)
+      process.on('SIGINT', onInt)
+      process.on('exit', onExit)
+      return {
+        close() {
+          process.off('SIGTERM', onTerm)
+          process.off('SIGINT', onInt)
+          process.off('exit', onExit)
+          control.close()
+        },
+      }
     },
     announceReady(browserUrl) {
       process.stdout.write(

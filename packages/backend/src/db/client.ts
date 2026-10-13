@@ -3,8 +3,8 @@
 
 import { Database, type Changes } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { chmodSync, mkdirSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { chmodSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import * as schema from './schema'
 import {
   assertMigrationHistory,
@@ -43,6 +43,9 @@ export interface OpenDbOptions {
   skipMigrations?: boolean
   /** RFC-213: skip the PRAGMA quick_check integrity gate (escape hatch). */
   skipIntegrityCheck?: boolean
+  /** Only the in-process development reloader supplies this. A new process
+   * starts empty; replaced databases and changed migration journals recheck. */
+  developmentIntegrity?: { validatedDatabase?: string }
   /** RFC-213: PRAGMA synchronous mode (default NORMAL — byte-equivalent to prior). */
   synchronous?: 'NORMAL' | 'FULL'
   /** RFC-311: PRAGMA cache_size budget in MiB (default 128). The daemon runs a
@@ -70,6 +73,18 @@ export interface OpenDbOptions {
   observeStatementMs?: (ms: number, sql?: string, cpuMs?: number) => void
   /** RFC-338: Worker-only timing sink for dbTxSync critical sections. */
   observeTransactionMs?: (ms: number) => void
+}
+
+function developmentDatabaseIdentity(opts: OpenDbOptions): string {
+  const path = resolve(opts.path)
+  const file = statSync(path)
+  return JSON.stringify([
+    path,
+    file.dev,
+    file.ino,
+    file.birthtimeMs,
+    readFileSync(join(opts.migrationsFolder, 'meta', '_journal.json'), 'utf8'),
+  ])
 }
 
 const transactionObservers = new WeakMap<object, (ms: number) => void>()
@@ -275,22 +290,49 @@ export function openDb(opts: OpenDbOptions): DbClient {
   // RFC-213 fail-closed integrity gate, BEFORE migrations. Catches a header-intact
   // but page-corrupt DB that opened fine above. quick_check is ~an order of
   // magnitude faster than integrity_check and enough for structural corruption.
-  if (opts.skipIntegrityCheck !== true) {
+  let developmentIdentity: string | undefined
+  try {
+    if (opts.developmentIntegrity !== undefined && !opts.skipMigrations) {
+      developmentIdentity = developmentDatabaseIdentity(opts)
+    }
+  } catch (error) {
+    sqlite.close()
+    if (opts.developmentIntegrity !== undefined) {
+      opts.developmentIntegrity.validatedDatabase = undefined
+    }
+    throw error
+  }
+  const reuseIntegrity =
+    developmentIdentity !== undefined &&
+    opts.developmentIntegrity?.validatedDatabase === developmentIdentity
+  if (opts.skipIntegrityCheck !== true && !reuseIntegrity) {
+    const checkedAt = Date.now()
     let rows: { quick_check: string }[]
     try {
       rows = sqlite.query('PRAGMA quick_check;').all() as { quick_check: string }[]
     } catch (err) {
       sqlite.close()
+      if (opts.developmentIntegrity !== undefined) {
+        opts.developmentIntegrity.validatedDatabase = undefined
+      }
       throw new DbCorruptionError(opts.path, [err instanceof Error ? err.message : String(err)])
     }
     const ok = rows.length === 1 && rows[0]?.quick_check === 'ok'
     if (!ok) {
       sqlite.close()
+      if (opts.developmentIntegrity !== undefined) {
+        opts.developmentIntegrity.validatedDatabase = undefined
+      }
       throw new DbCorruptionError(
         opts.path,
         rows.map((r) => r.quick_check),
       )
     }
+    if (opts.developmentIntegrity !== undefined) {
+      console.info(`[dev] startup database quick_check completed in ${Date.now() - checkedAt}ms`)
+    }
+  } else if (reuseIntegrity && opts.skipIntegrityCheck !== true) {
+    console.info('[dev] reusing database integrity check for source reload')
   }
 
   normalizeDirectStatementChanges(sqlite)
@@ -317,26 +359,28 @@ export function openDb(opts: OpenDbOptions): DbClient {
       // review_comments wiped via ON DELETE cascade; 0035/0041 are the same shape
       // for node_runs). Toggle OUTSIDE drizzle's tx, then re-enable + verify.
       sqlite.exec('PRAGMA foreign_keys = OFF;')
-      migrateSqlite(sqlite, { migrationsFolder })
+      const appliedMigrations = migrateSqlite(sqlite, { migrationsFolder })
       // F1-followup (Codex gate): WARN, don't throw. foreign_key_check runs AFTER
       // drizzle's migration tx has COMMITTED, so throwing can't roll back — it would
       // only brick startup on a pre-existing orphan (a half-upgraded DB that fails
       // every boot). Normal INSERT..SELECT rebuilds introduce no violations; a real
       // one is a migration bug for migration tests to catch, not a reason to fail
       // every boot. Surface it (scoped to the offending rows) and continue.
-      const violations = sqlite.query('PRAGMA foreign_key_check;').all()
-      if (violations.length > 0) {
-        console.warn(
-          `[db] post-migration foreign_key_check found ${violations.length} violation(s); ` +
-            `continuing (a committed migration cannot be rolled back here): ${JSON.stringify(violations)}`,
-        )
+      if (appliedMigrations > 0) {
+        const violations = sqlite.query('PRAGMA foreign_key_check;').all()
+        if (violations.length > 0) {
+          console.warn(
+            `[db] post-migration foreign_key_check found ${violations.length} violation(s); ` +
+              `continuing (a committed migration cannot be rolled back here): ${JSON.stringify(violations)}`,
+          )
+        }
+        assertMigrationHistory(sqlite, {
+          dbPath: opts.path,
+          expected,
+          stage: 'migration-history-postflight',
+          allowPrefix: false,
+        })
       }
-      assertMigrationHistory(sqlite, {
-        dbPath: opts.path,
-        expected,
-        stage: 'migration-history-postflight',
-        allowPrefix: false,
-      })
       sqlite.exec('PRAGMA foreign_keys = ON;')
       assertPhysicalSchema(sqlite, {
         dbPath: opts.path,
@@ -352,11 +396,18 @@ export function openDb(opts: OpenDbOptions): DbClient {
     // RFC-311 — armed after migrations so one-time upgrade work stays out of
     // the steady-state slow log.
     instrumentSlowStatements(sqlite, opts.slowQueryMs ?? 50, undefined, opts.observeStatementMs)
+    if (opts.developmentIntegrity !== undefined) {
+      opts.developmentIntegrity.validatedDatabase =
+        opts.skipIntegrityCheck === true ? undefined : developmentIdentity
+    }
     return db
   } catch (err) {
     // Admission/migration failures happen before the caller owns the client.
     // Close here so repair tools can immediately obtain an exclusive handle.
     sqlite.close()
+    if (opts.developmentIntegrity !== undefined) {
+      opts.developmentIntegrity.validatedDatabase = undefined
+    }
     throw err
   }
 }

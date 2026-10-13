@@ -94,7 +94,7 @@ export function migrateSqlite(
   sqlite: Database,
   config: MigrationConfig,
   options: SqliteMigrationExecutionOptions = {},
-): void {
+): number {
   const migrations = migrationsForEngine(
     readMigrationFiles(config),
     options.orderedJsonAggregateSupport ?? sqliteSupportsOrderedJsonAggregates(sqlite),
@@ -118,13 +118,16 @@ export function migrateSqlite(
   const insertReceipt = sqlite.query(`INSERT INTO ${table} (hash, created_at) VALUES (?, ?)`)
 
   sqlite.exec('BEGIN')
+  let applied = 0
   try {
     for (const migration of migrations) {
       if (lastAppliedAt !== null && lastAppliedAt >= migration.folderMillis) continue
       for (const statement of migration.sql) sqlite.exec(statement)
       insertReceipt.run(migration.hash, migration.folderMillis)
+      applied += 1
     }
     sqlite.exec('COMMIT')
+    return applied
   } catch (error) {
     sqlite.exec('ROLLBACK')
     throw error
