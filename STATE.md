@@ -1,3 +1,13 @@
+## 2026-10-13 RFC-370：MCP、continuation、事件失权生命周期续推
+
+按用户“先继续推进 RFC”继续生产实现：MCP 增加同实例冷读、显式 host 生命周期、未发 turn 保留原请求／ID、首轮原 lease 重领和在途 capture／verification／释放／落库／通知排空。正常 pause 保留原业务取消，失权不借 shutdown 排空；unreaped／释放未证明使 drain 拒绝 ACK。人工确认 continuation 停止下一项，事件 dispatcher 在尚未调用 consumer 时以原事务归还 claim、保持事件及重试预算，已发 consumer 仍走原结果结算。
+
+新增真实双 provider 与 owner 用例，尚未执行。根侧绑定代码现七项，三启动根的十九项完整接线、报告／其它 owner、状态 API／UI、不确定结算恢复、A-G、CS adapter 和 M0～M4 仍开放，AW 未部署 CS。仅必要读码、格式与语法静态自查，无本机产品验证、逐片门、跨 session 信息或他人代码回退；新生命周期候选未提交／推送／部署。共享主干最近核对为 `038ca9866e8daceaf356fa6df3b0afd531884ea2` 与远端相同，index 空；该 SHA 包含并发保留的共同 session host 转发，不能据此签本批或总 CI。详见 [H7 最新进度](design/RFC-370-crewstation-hosted-deployment/host-execution-root-assembly.md)。以下并发与历史正文保留。
+
+## 2026-10-13 RFC-213：修正 CLI 回归的重载代次等待并补 Linux 超时诊断
+
+`038ca9866` 的 macOS 两项真实 CLI 回归通过，Ubuntu 普通保存通过、首次检查期间保存外层 60 秒超时；原日志无阶段证据。相同 Bun 1.4.0/seed/coverage 的 Linux arm64 临时小库复现 2 pass，尚未复现原超时。测试原本写死连续第 2/3 代，与 reloader 合并连续事件的既有行为冲突；现改为源码标记后等待更大的实际 ready revision，保留同 PID、健康 API、一次检查、后续复用和正常关闭断言。阶段超时带最后输出，HTTP/退出有期限，失败清理不再等待被诊断的优雅退出；用例总预算仍 60 秒。最终候选集中验证 6 pass / 0 fail / 37 expects，实际记录 generation 1→4，定向 lint／格式／diff 通过；新 GitHub Ubuntu 证据仍待取得，不把本次容器通过写成原超时已定因或远端通过。仅测试与记录改动，不动运行代码或他人产出。原服务未重启，诊断容器使用只读主仓和临时小库，现已删除。详见 [开发启动记录](design/RFC-213-disaster-recovery/dev-reload-and-migration-checks.md)。以下并发与历史正文保留。
+
 ## 2026-10-13 RFC-213：补齐本次启动改动的旧源码断言兼容
 
 `038ca9866` 的 Windows 已终态 1492 pass / 3 skip / 14 fail。十四个名称与前一 SHA 相同，但两项 start.ts 全文逆向仍包含本次三处开发准备和静态导入的净 340 字节，不能把这部分归给别人。仅补测试侧精确逆向及接线，原 fixture/摘要/断言、运行代码和并发 host runtime 全部保留；其余 631 字节基底及并发差异仍失败。集中验证新增四项全部通过，原组合回归 3 pass / 3 fail，SQLite 残余 received 186448 / expected 185817，PG 残余 131154 / 130746；定向 lint／格式／diff 通过，未跑完整 gate 或重启服务。主 CI 仍排队、维护窗口已 success，尚未取得新 CLI 用例 hosted 结果，后继确切 SHA 另验。详见 [开发启动记录](design/RFC-213-disaster-recovery/dev-reload-and-migration-checks.md)。以下并发与历史正文保留。

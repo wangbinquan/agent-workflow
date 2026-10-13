@@ -92,6 +92,7 @@ test('rapid saves while the old application drains coalesce into one replacement
   const third = reloadDevelopmentDaemon(state, f.start, f.createHost)
   f.drain.resolve()
   await Promise.all([first, second, third])
+  expect(state.revision).toBe(4)
   expect(f.events.filter((event) => event.startsWith('start-'))).toEqual(['start-1', 'start-2'])
   expect(f.events.filter((event) => event === 'release-1')).toHaveLength(1)
   await state.current!.stop()
