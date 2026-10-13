@@ -129,7 +129,11 @@ describeEachProvider('RFC-370 selected employee input presence', (harness) => {
           }),
         },
       })
-      const typeRef = { typeId: 'development', revision: 10 }
+      const typeRef = (
+        JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
+          typeRef: { typeId: string; revision: number }
+        }
+      ).typeRef
       const tool = await module.commands.createTool({
         typeRef,
         workItemRef: 'analyze-implement',

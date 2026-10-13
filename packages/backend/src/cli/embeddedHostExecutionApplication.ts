@@ -91,7 +91,9 @@ export async function composeEmbeddedHostExecutionApplication(input: {
   })
   const driveBinding = Object.freeze({ executionModule: module, persistence, driverLifecycle })
   const readiness: Promise<unknown>[] = []
-  let runtimeTests: ReturnType<typeof composeLocalMcpDiagnostics> | undefined
+  const constructedRuntimeTests =
+    Promise.withResolvers<ReturnType<typeof composeLocalMcpDiagnostics>>()
+  const runtimeDisposals: Array<() => Promise<void>> = []
   let shutdownIdentity: (() => void | Promise<void>) | undefined
   let closeConstructedSession: (() => Promise<void>) | undefined
   const disposeTasks = async (reason: string) => {
@@ -110,8 +112,10 @@ export async function composeEmbeddedHostExecutionApplication(input: {
       return ready
     },
     createMcpRuntimeTests(deps) {
-      if (runtimeTests) throw new Error('embedded-host-mcp-already-composed')
-      runtimeTests = composeLocalMcpDiagnostics({ ...deps, executionMode: 'host' })
+      if (runtimeDisposals.length) throw new Error('embedded-host-mcp-already-composed')
+      const runtimeTests = composeLocalMcpDiagnostics({ ...deps, executionMode: 'host' })
+      runtimeDisposals.push(() => runtimeTests.dispose())
+      constructedRuntimeTests.resolve(runtimeTests)
       return runtimeTests
     },
   }
@@ -132,7 +136,9 @@ export async function composeEmbeddedHostExecutionApplication(input: {
       composition.core.identityAccess,
     )
     await resourceReady
-    if (!runtimeTests?.execution) throw new Error('embedded-host-mcp-lifecycle-missing')
+    if (runtimeDisposals.length !== 1) throw new Error('embedded-host-mcp-lifecycle-missing')
+    const runtimeTests = await constructedRuntimeTests.promise
+    if (!runtimeTests.execution) throw new Error('embedded-host-mcp-lifecycle-missing')
     const handles = Object.freeze([
       bindEmbeddedTaskHostOwner({ module, onError: input.onFailure }),
       bindEmbeddedIntentHostOwner(intentTurnExecution),
@@ -286,7 +292,7 @@ export async function composeEmbeddedHostExecutionApplication(input: {
       ? [closeConstructedSession]
       : [
           () => disposeTasks('embedded-application-construction-failed'),
-          ...(runtimeTests ? [runtimeTests.dispose.bind(runtimeTests)] : []),
+          ...runtimeDisposals,
           ...(shutdownIdentity ? [shutdownIdentity] : []),
           bootstrap.beforeCloseProvider,
         ]

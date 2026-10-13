@@ -18,7 +18,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { ResourceLimitOperations } from '@/modules/system-operations/public/operations'
 import type { TaskExecutionModule } from '@/modules/task-execution/composition'
-import { ownershipTokenKey } from '@/modules/task-execution/domain/ownership'
+import { ownershipTokenKey } from '@/modules/task-execution/public/participants'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import {
   runTaskIdleTimeoutSweep,

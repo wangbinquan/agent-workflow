@@ -17,7 +17,10 @@ import {
   runIntentTurn,
   type SelectedIntentTurnConfig,
 } from '../src/modules/intent/application/turnEngine'
-import { createIntentTurnExecutionLifecycle } from '../src/modules/intent/application/executionLifecycle'
+import {
+  createIntentTurnExecutionLifecycle,
+  IntentExecutionDeferredError,
+} from '../src/modules/intent/application/executionLifecycle'
 import { recoverIntentTurnsOnBoot } from '../src/modules/intent/application/maintenance'
 import type { IntentExecutionCheckpoint } from '../src/modules/intent/application/ports/intentExecution'
 import type { IntentSystemAgentRunFamily } from '../src/modules/intent/application/ports/intentSystemAgent'
@@ -586,4 +589,31 @@ describeEachProvider('RFC-370 Intent primary receipts and original recovery', (s
     })
     expect(await recoverIntentTurnsOnBoot(persistence)).toBe(0)
   })
+})
+
+test('activation observes a detached original turn failure once and drain retains it', async () => {
+  const owner = createIntentTurnExecutionLifecycle()
+  const failure = new Error('original-turn-failed')
+  const reported = deferred<void>()
+  const errors: unknown[] = []
+  let runs = 0
+  await owner.dispatch('deferred-original-turn', async (control) => {
+    runs += 1
+    if (!control.current()) throw new IntentExecutionDeferredError()
+    throw failure
+  })
+  expect(runs).toBe(1)
+  const handle = owner.start({
+    current: () => true,
+    reportFailure(error) {
+      errors.push(error)
+      reported.resolve()
+    },
+  })
+  await reported.promise
+  handle.stop()
+  await expect(handle.drain()).rejects.toBe(failure)
+  expect(errors).toEqual([failure])
+  expect(runs).toBe(2)
+  expect(await owner.recoverOriginal('deferred-original-turn')).toBe(false)
 })

@@ -310,7 +310,14 @@ async function dispatchOwnedIntentTurn(
       } else if (outcome?.graphRepair) {
         // The durable reservation was minted with the original result. Let
         // the same owner retain it without authorizing a new invocation.
-        void dispatchIntentTurn(deps, sessionId, actor, outcome.graphRepair)
+        const successor = outcome.graphRepair
+        void dispatchIntentTurn(deps, sessionId, actor, successor).catch((error: unknown) => {
+          log.warn('intent-original-successor-dispatch-failed', {
+            sessionId,
+            turnId: successor.turnId,
+            err: error instanceof Error ? error.message : String(error),
+          })
+        })
       }
     }
   } catch (escaped) {

@@ -2,6 +2,18 @@
 
 2026-10-14。本文件记录候选和确切证据，不能替代 GitHub 总绿、独立 Codex 实现门或实际 CS 部署。
 
+## 后续确切 CI 缺陷收口
+
+完整源码及首轮修复已经发布；`1f1e9bd3805e0004a6c85ca926863f3ce42fef04` 的原源码 inverse 组合配套发布为 `1ab87945287e8506adde15a549b6976000da83e4`。对应主 CI `38459523717` 尚未终态，默认 Windows `38459523776` 已失败，不能签阶段 A 完成。
+
+本轮候选修正本任务新增的异步拒绝链：Intent 启动、冷恢复和原预约激活各自在调用点观察拒绝，原失败仍由同一 turn 记录、报告并向 drain 暴露，不重复通知、不确认未知结果。Memory journal 的材料类型来自其 required System family 的 Task public 合同，取消直接 runtime-management 类型边；owner 的 token key 复用已存在的 Task public 合同。embedded MCP 构造结果由一次完成的 promise 转交、清理动作当场登记；webhook controller 由同作用域完整 const 构造。
+
+同步补齐三份真实 CLI 装配入口分类、执行／Memory 原恢复 HTTP 合同清单、event-center 的实际宿主装配导入、Memory 稳定 ID 算子，以及 Fusion 异步定时器、信号回调和 employee descriptor 的原测试适配。组合根清单显式登记新文件的一次性双 family 安装和五处原工作 lifetime 状态；前者是本 RFC 设计中已记录的构造环，后者用于保留原 pause tickets、blocked Memory owner 和未 drain frame，不把它们宣称为已拆除的依赖。
+
+候选定向诊断：Intent 原主回执／恢复、embedded 实际根、双 family bootstrap 和 employee input 四文件 SQLite 合计 24 pass，Fusion 相关三项 3 pass；HTTP 合同与 Event Center 清单两文件 18 pass。Promise 拒绝链／Memory offered DAG／微算子通过；同组仅余原 `cli/dev.ts` 和完整 report composition 的两处计数差。模块边界仅余先前 observation projection 的三条导入差。单引擎清单另补原 embedded AppDeps／DbClient 真实 SQLite 根，保留 open 记录，不编造文件名豁免；相关八项通过。变更 TS 的语法及 lint／格式检查通过；Bun 执行 backend Typecheck 仅报告先前五处 signalCode 和当前并发 RFC-371 测试两处错误，没有本轮候选文件的错误。原完整摘要／负向断言均保留；这些结果不代签全仓 CI。
+
+阶段 A 剩余三项收口：本轮缺陷与架构配套完整提交；独立实现门；对应发布 SHA 的主流水线和默认 Windows 全绿并签 A-G。既有 CI 阻塞修复预览和独立子代理仍等用户答复，没有应用预览、启动代理或向其他会话发消息。阶段 B / M0 不提前启动。
+
 - 完整生产及用例源码：`b9b27bfd84e0b39dac6b6f7dd76eee78343cc511`。
 - 对应 canonical 投影：`1e085af8e14bb6b7657fd6be9402f88ff78276d3`。
 - 该 SHA 主 CI `38442493702`、默认 Windows `38442493555` 均终态 failure。

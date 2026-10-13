@@ -819,6 +819,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/memory-distill-jobs' },
   { method: 'GET', path: '/api/memory-distill-jobs/:id' },
   { method: 'GET', path: '/api/memory-distill-jobs/:id/session' },
+  { method: 'POST', path: '/api/memory-distill-jobs/:id/recover' },
   { method: 'POST', path: '/api/memory-distill-jobs/:id/retry' },
   { method: 'POST', path: '/api/memory-distill-jobs/:id/cancel' },
 
@@ -847,6 +848,7 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- daemon effective binding (settings:read; Network tab readout) ----
   { method: 'GET', path: '/api/daemon' },
+  { method: 'POST', path: '/api/execution/recover' },
   { method: 'GET', path: '/api/execution/status', happy: { schema: HostExecutionStatusSchema } },
   { method: 'POST', path: '/api/mcps/:id/runtime-test-sessions/:sessionId/recover' },
 

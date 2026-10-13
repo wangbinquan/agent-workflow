@@ -918,7 +918,14 @@ self.onmessage = (event: MessageEvent<unknown>) => {
         if (draining) return
         dispatchEnabled = true
         armQueuePolling()
-        void processQueue()
+        void processQueue().catch((error: unknown) => {
+          emit({
+            type: 'degraded',
+            version: MAINTENANCE_PROTOCOL_VERSION,
+            at: Date.now(),
+            error: errorMessage(error),
+          })
+        })
         return
       case 'drain':
         draining = true

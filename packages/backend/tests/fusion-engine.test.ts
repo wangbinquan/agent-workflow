@@ -976,6 +976,7 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
       scope: { provider: 'sqlite', generationId: context.generation, operationId: 'fusion-root' },
     })
     try {
+      for (let i = 0; i < 12; i++) await Promise.resolve()
       const index = timer.mock.calls.findIndex((args) => args[1] === DAEMON_CADENCE.fusionReconcile)
       const args = timer.mock.calls[index],
         result = timer.mock.results[index]

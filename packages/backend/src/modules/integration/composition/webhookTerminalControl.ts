@@ -45,7 +45,6 @@ export function composeMrTerminalControlWithPorts(input: {
       typeof input.execution.settlement?.settleClaim !== 'function')
   )
     throw new Error('mr-terminal-invalid-host-execution-selection')
-  let execution: MrTerminalExecutionController | undefined
   const canDispatch =
     input.execution === undefined
       ? input.canDispatch
@@ -71,7 +70,8 @@ export function composeMrTerminalControlWithPorts(input: {
     canDispatch,
     input.execution?.settlement,
   )
-  if (input.execution !== undefined) execution = new MrTerminalExecutionController(worker)
+  const execution: MrTerminalExecutionController | undefined =
+    input.execution === undefined ? undefined : new MrTerminalExecutionController(worker)
   return {
     ...(execution === undefined ? {} : { execution }),
     reserveLaunch: (input) => launchGuards.reserve(input),

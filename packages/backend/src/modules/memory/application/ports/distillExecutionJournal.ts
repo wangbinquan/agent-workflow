@@ -1,8 +1,12 @@
 import type { SystemAgentExecutionReceipt } from '@/modules/task-execution/public/participants'
-import type { SystemAgentWorkspaceScope } from '@/modules/runtime-management/public/participants'
-import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import type { SystemAgentRunRequest } from '@/modules/task-execution/public/participants'
 import type { PreparedSystemAgentRunResult } from '@/modules/task-execution/public/participants'
 import type { MemoryDistillJobRecord } from './distillReadStore'
+
+// Memory's required System family owns these references; their provider may
+// be native or remote without introducing a direct runtime-management edge.
+type SystemAgentWorkspaceScope = SystemAgentRunRequest['workspaceScope']
+type AgentMaterialContentReference = NonNullable<SystemAgentRunRequest['runtimeBinding']>
 
 export interface MemoryDistillExecutionContext {
   readonly jobId: string

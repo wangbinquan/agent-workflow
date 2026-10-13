@@ -148,7 +148,9 @@ export function createIntentTurnExecutionLifecycle(): IntentTurnExecutionLifecyc
           changed: new Set(),
         }
         turns.set(turnId, cold)
-        void run(cold, () => false)
+        // run records the failure on this original turn; recovery below and
+        // drain expose it. Observe the detached promise without reporting twice.
+        void run(cold, () => false).catch(() => {})
         await waitState(cold)
         if (cold.acknowledged) return true
         return recoverOriginal(turnId)
@@ -172,7 +174,7 @@ export function createIntentTurnExecutionLifecycle(): IntentTurnExecutionLifecyc
             predecessor: turn,
           }
           turns.set(turnId, resumed)
-          void run(resumed, () => false)
+          void run(resumed, () => false).catch(() => {})
           await waitState(resumed)
           if (resumed.failure) throw resumed.failure
           return resumed.acknowledged
@@ -224,7 +226,7 @@ export function createIntentTurnExecutionLifecycle(): IntentTurnExecutionLifecyc
         turns.set(turnId, turn)
         if (checkpoint.phase !== 'reserved') {
           // Cold recovery enters the same result tail, never the model call.
-          void run(turn, () => false)
+          void run(turn, () => false).catch(() => {})
           await waitState(turn)
         }
       }
@@ -276,7 +278,8 @@ export function createIntentTurnExecutionLifecycle(): IntentTurnExecutionLifecyc
       current = frame
       const activate = () => {
         if (!admit(frame)) return
-        for (const turn of turns.values()) if (!turn.done) void run(turn, () => admit(frame))
+        for (const turn of turns.values())
+          if (!turn.done) void run(turn, () => admit(frame)).catch(() => {})
       }
       if (authority.whenActive)
         frame.activating = waitForExecutionActivation(

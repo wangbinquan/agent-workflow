@@ -396,6 +396,11 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
   'rfc359-w8-logical-source-conformance.test.ts: 1',
   'rfc359-w8-migrator-conformance.test.ts: 1',
+  // RFC-370: the real embedded HTTP composition currently accepts AppDeps /
+  // DbClient and builds the native SQLite graph. Its lifecycle test is kept
+  // visible here; the generic root name does not satisfy the provider-named
+  // composition matcher. Do not classify it by a test filename exception.
+  'rfc370-embedded-host-root.test.ts: 1',
   // RFC-371：嵌套子会话数字采集的原生只读 SQLite 夹具，AW 账本另做双 provider 回归。
   // RFC-370: one native SQLite client records real writer-lease/transaction ACKs.
   // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
@@ -952,6 +957,10 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   // 补上拼法之后它们离开本名单——「还剩多少要迁」少了两条**假待办**。
   // RFC-370: SQLite is real, while the held PG transaction ACK/rejection is a protocol fixture.
   // This is not registered as a sanctioned single-engine exception.
+  // The actual embedded AppDeps root remains SQLite-specific. Retire this
+  // entry when its production composition has an explicit provider contract
+  // or when the same real root can be exercised on both providers.
+  'rfc370-embedded-host-root.test.ts',
   'rfc370-workgroup-commit-queue.test.ts',
 ]
 
