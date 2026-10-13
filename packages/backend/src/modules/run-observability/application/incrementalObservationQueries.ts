@@ -971,7 +971,8 @@ export function incrementalObservationQueries(input: {
       })
       // Keep the prior complete report visible while initial enumeration runs;
       // an unfinished population is never substituted for that report.
-      if (!version) return { state: 'building', reportId: view.id, phase: 'projection-bootstrap' }
+      if (view.version.revision === '0')
+        return { state: 'building', reportId: view.id, phase: 'projection-bootstrap' }
       return report(actor, view)
     },
     async status(actor, id) {
@@ -983,6 +984,8 @@ export function incrementalObservationQueries(input: {
         if (!version || !(await input.source.bootstrapComplete(version)))
           return { state: 'building', reportId: id, phase: 'projection-bootstrap' }
         view = await input.source.activateView(id, input.scopeOf(actor), version)
+        if (view.version.revision === '0')
+          return { state: 'building', reportId: id, phase: 'projection-bootstrap' }
       }
       return report(actor, view)
     },

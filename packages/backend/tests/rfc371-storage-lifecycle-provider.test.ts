@@ -162,6 +162,209 @@ describeEachProvider('RFC-371 long running derived storage without population tr
     expect((await h.db.select().from(history).all()).map((x) => x.fromRevision)).toEqual(['12'])
     expect(await h.db.select().from(members).all()).toHaveLength(0)
   })
+  test.each([0n, 100000000000000000000n])(
+    'an active old report retains its exact anchors without pinning every later revision at offset %s',
+    async (offset) => {
+      await seedCompleteTask(h, 2, 211)
+      const original = await h.db.select().from(observationUsageCurrent).all()
+      const revision = (value: number) => String(offset + BigInt(value))
+      await h.db
+        .insert(heads)
+        .values({ id: 'incremental-20261012-v1', revision: revision(12), asOf: 100 })
+        .run()
+      await h.db
+        .insert(versions)
+        .values(
+          [3, 7, 8, 9, 10, 11, 12].map((n) => ({
+            revision: revision(n),
+            asOf: 100,
+            bootstrapComplete: true,
+          })),
+        )
+        .run()
+      await h.db
+        .insert(indexed)
+        .values(
+          [3, 7, 8, 9, 10, 11, 12].flatMap((n) => [
+            { revision: revision(n) },
+            { revision: qualifiedObservationIndexVersion(revision(n)) },
+          ]),
+        )
+        .run()
+      const store = incrementalObservationViews(h.db)
+      const retained = await store.retain(input(revision(7)))
+      await h.db
+        .insert(work)
+        .values({ id: 'pending-anchor', document: '{}', fingerprint: 'original' })
+        .run()
+      await h.db
+        .insert(workRetention)
+        .values({ id: 'pending-anchor', revision: revision(10), queuedAt: 1 })
+        .run()
+      const rows = Array.from({ length: 1201 }, (_, n) =>
+        [7, 8, 10, 12].map((start) => ({
+          kind: 'aggregate' as const,
+          key: 'stable/' + String(n).padStart(4, '0'),
+          fromRevision: revision(start),
+          toRevision: start === 12 ? null : revision(start + 1),
+          document: JSON.stringify({
+            input: String(n),
+            cacheRead: '23',
+            cacheWrite: '5',
+            output: '17',
+            cny: '0.000045',
+          }),
+        })),
+      ).flat()
+      // Transport packets do not cap the 4,804 history/membership population.
+      for (let at = 0; at < rows.length; at += 100) {
+        const packet = rows.slice(at, at + 100)
+        await h.db.insert(history).values(packet).run()
+        await h.db
+          .insert(members)
+          .values(
+            packet.map((row) => ({
+              aggregate: 'sum',
+              key: row.key,
+              fromRevision: row.fromRevision,
+              toRevision: row.toRevision,
+            })),
+          )
+          .run()
+      }
+      const verify = async (anchors: number[]) => {
+        const expected = rows.filter((row) => anchors.some((n) => row.fromRevision === revision(n)))
+        const actual = await h.db
+          .select({
+            kind: history.kind,
+            key: history.key,
+            fromRevision: history.fromRevision,
+            toRevision: history.toRevision,
+            document: history.document,
+          })
+          .from(history)
+          .all()
+        expect(actual.map((row) => JSON.stringify(row)).sort()).toEqual(
+          expected.map((row) => JSON.stringify(row)).sort(),
+        )
+        expect(
+          (await h.db.select().from(members).all()).map((row) => JSON.stringify(row)).sort(),
+        ).toEqual(
+          expected
+            .map((row) =>
+              JSON.stringify({
+                aggregate: 'sum',
+                key: row.key,
+                fromRevision: row.fromRevision,
+                toRevision: row.toRevision,
+              }),
+            )
+            .sort(),
+        )
+        expect(
+          (await h.db.select().from(versions).all()).map((row) => row.revision).sort(),
+        ).toEqual(anchors.map(revision).sort())
+        expect((await h.db.select().from(indexed).all()).map((row) => row.revision).sort()).toEqual(
+          anchors
+            .flatMap((n) => [revision(n), qualifiedObservationIndexVersion(revision(n))])
+            .sort(),
+        )
+        expect(await h.db.select().from(observationUsageCurrent).all()).toEqual(original)
+      }
+      const recording = h.recordStatements()
+      try {
+        await collectObservationStorage(h.db)
+      } finally {
+        recording.stop()
+      }
+      const intervalDeletes = recording.statements.filter(
+        (row) => row.sql.includes('observation_projection_history') && /\bDELETE\b/.test(row.sql),
+      )
+      expect(intervalDeletes.length).toBeGreaterThan(0)
+      for (const statement of intervalDeletes) {
+        const plan = await h.explain(statement)
+        expect(plan).toMatch(
+          h.capabilities.isolation === 'exclusive'
+            ? /MATERIALIZE protected_revisions/i
+            : /CTE (?:Scan on )?protected_revisions/i,
+        )
+      }
+      for (let n = 0; n < 19; n++) await collectObservationStorage(h.db)
+      await verify([7, 10, 12])
+      expect(await store.get(retained.id, retained.actorScope)).toEqual(retained)
+      await h.db
+        .update(work)
+        .set({ completedRevision: revision(12), appliedRevision: revision(12) })
+        .where(eq(work.id, 'pending-anchor'))
+        .run()
+      for (let n = 0; n < 20; n++) await collectObservationStorage(h.db)
+      await verify([7, 12])
+      expect(await store.get(retained.id, retained.actorScope)).toEqual(retained)
+      await h.db.update(leases).set({ expiresAt: 0 }).where(eq(leases.id, retained.id)).run()
+      for (let n = 0; n < 20; n++) await collectObservationStorage(h.db)
+      await verify([12])
+      await expect(store.get(retained.id, retained.actorScope)).rejects.toMatchObject({
+        code: 'not-found',
+      })
+    },
+    60_000,
+  )
+  test('pending activation rechecks the selected version after head advancement and exact-reference GC', async () => {
+    await seed()
+    const store = incrementalObservationViews(h.db)
+    const pending = await store.retain(input('0'))
+    const active = await store.retain(input('7'))
+    const selected = await h.db
+      .select()
+      .from(heads)
+      .where(eq(heads.id, 'incremental-20261012-v1'))
+      .get()
+    if (!selected) throw new Error('Original selected head missing')
+    await h.db
+      .insert(versions)
+      .values({ revision: '13', asOf: 200, bootstrapComplete: false })
+      .run()
+    await h.db
+      .update(heads)
+      .set({ revision: '13', asOf: 200 })
+      .where(eq(heads.id, selected.id))
+      .run()
+    for (let n = 0; n < 3; n++) await collectObservationStorage(h.db)
+    expect(
+      await h.db.select().from(versions).where(eq(versions.revision, selected.revision)).get(),
+    ).toBeUndefined()
+    expect(await store.activate(pending.id, pending.actorScope, selected)).toEqual(pending)
+    expect(
+      (await h.db.select().from(leases).where(eq(leases.id, pending.id)).get())?.revision,
+    ).toBe('0')
+    const retry = await store.retain({
+      ...input(selected.revision),
+      query: { from: 1, to: 100, timezone: 'UTC' },
+    })
+    expect(retry.version).toEqual({ revision: '0', asOf: 0 })
+    await h.db.insert(versions).values({ revision: '14', asOf: 300, bootstrapComplete: true }).run()
+    await h.db
+      .update(heads)
+      .set({ revision: '14', asOf: 300 })
+      .where(eq(heads.id, selected.id))
+      .run()
+    const activated = await store.activate(pending.id, pending.actorScope, selected)
+    expect(activated).toEqual({ ...pending, version: { revision: '14', asOf: 300 } })
+    expect(
+      (await h.db.select().from(leases).where(eq(leases.id, pending.id)).get())?.revision,
+    ).toBe('14')
+    expect(await store.get(pending.id, pending.actorScope)).toEqual(activated)
+    expect(await store.activate(active.id, active.actorScope, selected)).toEqual(active)
+    const withoutHead = await store.retain({
+      ...input('0'),
+      query: { from: 2, to: 100, timezone: 'UTC' },
+    })
+    await h.db.delete(heads).where(eq(heads.id, selected.id)).run()
+    await expect(
+      store.activate(withoutHead.id, withoutHead.actorScope, selected),
+    ).rejects.toMatchObject({ code: 'not-ready' })
+    expect((await store.get(withoutHead.id, withoutHead.actorScope)).version.revision).toBe('0')
+  })
   test('concurrent renewal and expiry serialize without resurrecting a retired view', async () => {
     await seed()
     const store = incrementalObservationViews(h.db),

@@ -9,6 +9,7 @@ import { incrementalObservationHistoricalScope } from '@/modules/run-observabili
 import {
   emptyCompleteObservationFold,
   addCompleteObservationAllocation,
+  completeObservationMetrics,
 } from '@/modules/run-observability/domain/completeObservationMetrics'
 import type { QualifiedObservationContribution } from '@/modules/run-observability/ports/incrementalObservationQualified'
 
@@ -153,4 +154,45 @@ test('unknown owner clocks remain unresolved and local days use the requested DS
       query: { from: clockA, to: clockB + 1, timezone: 'Europe/Berlin' },
     })?.detail.cohortAt,
   ).toBe(clockA)
+})
+
+// Windows exact-SHA CI exposed loss of historical coverage while rebuilding an unchanged time row.
+test('matched native time partitions preserve their independently sealed reference coverage and all received buckets including zero', () => {
+  for (const tokens of [
+    { input: '9007199254740997', cacheRead: '19', cacheWrite: '23', output: '29' },
+    { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+  ]) {
+    const f = fixture([owner('memory')]),
+      metrics = completeObservationMetrics({
+        ...f.row.fold,
+        tokens,
+        historicalReferences: '1',
+        observedHistoricalReferences: '1',
+        gaps: ['native-model-unavailable'],
+      }),
+      document = {
+        identity: 'historical/memory',
+        kind: 'historical',
+        task: null,
+        invocation: null,
+        sourceId: 'original',
+        recordId: 'original-record',
+        partition: 'in-window',
+        occurrence: { occurredAt: at, basis: 'native-step' },
+        metrics,
+      },
+      original = {
+        ...f.row,
+        detail: { ...f.row.detail, section: 'time-partitions' as const, document },
+      },
+      scoped = incrementalObservationHistoricalScope(original, { ...f, ids: new Set() })!
+    expect(scoped.detail.document).toEqual(document)
+    expect(scoped.detail.document).toBe(document)
+    expect(scoped.fold).toEqual(original.fold)
+    expect(metrics.state).toBe('not-ready')
+    if (metrics.state !== 'not-ready') throw new Error('Original received metrics fixture missing')
+    expect(metrics.tokenCoverage?.historicalReferences).toBe('1')
+    expect(metrics.tokenCoverage?.observedHistoricalReferences).toBe('1')
+    expect(metrics.recordedUsage?.tokens).toMatchObject(tokens)
+  }
 })

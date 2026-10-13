@@ -46,7 +46,14 @@ export function incrementalObservationViews(db: ProviderNeutralDatabase) {
             .get()
           if (!head)
             throw new CompleteObservationError('not-ready', 'Current complete projection missing')
-          version = { revision: head.revision, asOf: head.asOf }
+          const complete = await tx
+            .select()
+            .from(observationProjectionVersions)
+            .where(eq(observationProjectionVersions.revision, head.revision))
+            .get()
+          version = complete?.bootstrapComplete
+            ? { revision: head.revision, asOf: head.asOf }
+            : { revision: '0', asOf: 0 }
         }
         const document = { ...input, version },
           requestKey = sha256Hex(JSON.stringify(document)),
@@ -112,13 +119,39 @@ export function incrementalObservationViews(db: ProviderNeutralDatabase) {
         await renewObservationView(tx, id, 'projection')
         const pending = JSON.parse(row.document) as IncrementalObservationView
         if (pending.version.revision !== '0') return pending
-        const view = { ...pending, version }
+        // The caller read the head before taking this lifecycle lock. Exact
+        // reference GC may have retired that unbound intermediate version.
+        let selected = version
+        if (
+          version.revision !== '0' &&
+          !(await tx
+            .select()
+            .from(observationProjectionVersions)
+            .where(eq(observationProjectionVersions.revision, version.revision))
+            .get())
+        ) {
+          const head = await tx
+            .select()
+            .from(observationProjectionHeads)
+            .where(eq(observationProjectionHeads.id, 'incremental-20261012-v1'))
+            .get()
+          if (!head)
+            throw new CompleteObservationError('not-ready', 'Current complete projection missing')
+          const complete = await tx
+            .select()
+            .from(observationProjectionVersions)
+            .where(eq(observationProjectionVersions.revision, head.revision))
+            .get()
+          if (!complete?.bootstrapComplete) return pending
+          selected = { revision: head.revision, asOf: head.asOf }
+        }
+        const view = { ...pending, version: selected }
         await tx
           .update(observationProjectionViews)
           .set({ document: JSON.stringify(view) })
           .where(eq(observationProjectionViews.id, id))
           .run()
-        await renewObservationView(tx, id, 'projection', version.revision)
+        await renewObservationView(tx, id, 'projection', selected.revision)
         return view
       })
     },

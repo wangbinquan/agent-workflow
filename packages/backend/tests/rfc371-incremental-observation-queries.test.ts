@@ -238,6 +238,54 @@ function fixture() {
     visible,
   }
 }
+// A lifecycle fallback can return pending0 after the caller chose a ready head.
+// Both formal entrypoints must keep it building, then resume the same report.
+test.each([undefined, 'task-0000'])(
+  'formal request/status wait for the retained version and resume exact values for %s',
+  async (taskId) => {
+    const f = fixture()
+    const retain = f.source.retainView,
+      activate = f.source.activateView
+    let canBind = false
+    f.source.bootstrapComplete = async (version) => version.revision !== '0'
+    f.source.retainView = (value) => retain({ ...value, version: { revision: '0', asOf: 0 } })
+    f.source.activateView = (id, scope, version) =>
+      canBind ? activate(id, scope, version) : f.source.view(id, scope)
+    const pending = await f.queries.request(
+      actor,
+      { from: 0, to: NOW + 1, timezone: 'UTC' },
+      'all',
+      taskId,
+    )
+    if (pending.state !== 'building')
+      throw new Error('Retained pending report was assembled prematurely')
+    expect(pending).toEqual({
+      state: 'building',
+      reportId: pending.reportId,
+      phase: 'projection-bootstrap',
+    })
+    expect(f.reads).toEqual([])
+    expect(await f.queries.status(actor, pending.reportId)).toEqual(pending)
+    expect(f.reads).toEqual([])
+    canBind = true
+    const ready = content(await f.queries.status(actor, pending.reportId))
+    expect(ready.header.reportId).toBe(pending.reportId)
+    expect(ready.header.sourceRevision).toBe('1')
+    expect(ready.summary.inventory.tasks).toBe(taskId ? '1' : '270')
+    if (ready.summary.metrics.state !== 'ready')
+      throw new Error('Original committed metrics missing')
+    expect(ready.summary.metrics.tokens).toEqual(
+      taskId
+        ? { input: '1', cacheRead: '2', cacheWrite: '3', output: '5', total: '11' }
+        : { input: '36585', cacheRead: '540', cacheWrite: '810', output: '1350', total: '39285' },
+    )
+    expect(ready.summary.metrics.cost).toEqual({
+      currency: 'CNY',
+      state: 'complete',
+      amount: taskId ? '0.000000000001' : '0.00000000027',
+    })
+  },
+)
 test('all 270 Tasks are included past the old 100/200 thresholds, and pagination never supplies the summary', async () => {
   const f = fixture(),
     report = content(

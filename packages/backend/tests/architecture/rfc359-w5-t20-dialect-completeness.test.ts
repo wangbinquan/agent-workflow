@@ -354,6 +354,7 @@ const SQL_KEYWORDS = new Set([
   'left',
   'like',
   'limit',
+  'materialized',
   'not',
   'nothing',
   'null',
@@ -712,6 +713,14 @@ describe('RFC-359 W5-T20 —— J1 渲染权垄断', () => {
       sqlFunctionNames(
         'services/insert.ts',
         'const insert = sql`INSERT INTO ${table}(id) SELECT id FROM ${source} WHERE true ON CONFLICT(id) DO NOTHING`',
+      ),
+    ).toEqual([])
+
+    // AS MATERIALIZED is shared CTE grammar, not a function named materialized.
+    expect(
+      sqlFunctionNames(
+        'services/retention.ts',
+        'const reclaim = sql`WITH protected_revisions AS MATERIALIZED (SELECT revision FROM ${source}) DELETE FROM ${table} WHERE revision NOT IN (SELECT revision FROM protected_revisions)`',
       ),
     ).toEqual([])
 

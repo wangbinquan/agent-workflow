@@ -66,6 +66,7 @@ export function incrementalObservationHistoricalScope(
   }
   let document = row.detail.document
   if (
+    !matched &&
     row.detail.nativeRecord &&
     row.detail.section === 'time-partitions' &&
     document &&

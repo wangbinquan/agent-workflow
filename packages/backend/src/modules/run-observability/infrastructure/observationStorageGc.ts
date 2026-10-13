@@ -41,21 +41,25 @@ import { qualifiedObservationIndexChannel } from '../domain/qualifiedObservation
 import { jsonPathText } from '@/platform/persistence/jsonPathText'
 const indexPrefix = qualifiedObservationIndexChannel + '/'
 const indexRevision = sql`CASE WHEN substr(${indexed.revision},1,${indexPrefix.length})=${indexPrefix} THEN substr(${indexed.revision},${indexPrefix.length + 1}) ELSE ${indexed.revision} END`
-const decimalLte = (value: SQL, ceiling: string) =>
-  sql`(length(${value})<${ceiling.length} OR (length(${value})=${ceiling.length} AND ${value}<=${ceiling}))`
+// Revisions are arbitrary-precision decimal strings; never cast them to a
+// machine integer or compare their raw lexicographic order.
+const decimalLte = (value: SQL, ceiling: SQL) =>
+  sql`(length(${value})<length(${ceiling}) OR (length(${value})=length(${ceiling}) AND ${value}<=${ceiling}))`
+const decimalLt = (value: SQL, ceiling: SQL) =>
+  sql`(length(${value})<length(${ceiling}) OR (length(${value})=length(${ceiling}) AND ${value}<${ceiling}))`
 async function remove(
   tx: DatabaseTransaction,
   table: SQLiteTable,
   keys: readonly string[],
   condition: SQL,
+  prefix?: SQL,
 ) {
   const columns = sql.join(
     keys.map((k) => sql`${sql.identifier(k)}`),
     sql`, `,
   )
-  const rows = await tx.all(
-    sql`DELETE FROM ${table} WHERE (${columns}) IN (SELECT ${columns} FROM ${table} WHERE ${condition} LIMIT 500) RETURNING ${sql.identifier(keys[0]!)}`,
-  )
+  const statement = sql`DELETE FROM ${table} WHERE (${columns}) IN (SELECT ${columns} FROM ${table} WHERE ${condition} LIMIT 500) RETURNING ${sql.identifier(keys[0]!)}`
+  const rows = await tx.all(prefix ? sql`${prefix} ${statement}` : statement)
   return rows.length
 }
 /** Scan one ordered key page, including currently protected rows, so a large live prefix cannot stall GC. */
@@ -66,6 +70,7 @@ async function sweep(
   name: string,
   condition: SQL,
   onScanned?: (rows: number) => void,
+  prefix?: SQL,
 ) {
   const saved = await tx
       .select()
@@ -94,7 +99,7 @@ async function sweep(
       end.map((x) => sql`${x}`),
       sql`, `,
     )})`
-    removed = await remove(tx, table, keys, sql`${start} AND ${upper} AND ${condition}`)
+    removed = await remove(tx, table, keys, sql`${start} AND ${upper} AND ${condition}`, prefix)
   }
   const document = JSON.stringify(end)
   await tx
@@ -116,10 +121,19 @@ export async function collectObservationStorage(
       keys: readonly string[],
       name: string,
       condition: SQL,
+      prefix?: SQL,
     ) =>
-      sweep(tx, table, keys, name, condition, (rows) => {
-        scanned += rows
-      })
+      sweep(
+        tx,
+        table,
+        keys,
+        name,
+        condition,
+        (rows) => {
+          scanned += rows
+        },
+        prefix,
+      )
     await admitObservationStorage(tx)
     const expired = sql`retiring=false AND expires_at<${Date.now()} AND NOT EXISTS(SELECT 1 FROM ${maintenance} m WHERE ${jsonPathText(tx, sql`m.document`, ['request', 'reportId'])}=${leases.id} AND m.state IN ('preparing','preview','running')) AND NOT EXISTS(SELECT 1 FROM ${reports} r WHERE r.id=${leases.id} AND r.state='building' AND r.lease_until>${Date.now()})`
     await tx.run(
@@ -170,29 +184,38 @@ export async function collectObservationStorage(
       'scopes',
       sql`NOT EXISTS(SELECT 1 FROM ${refs} r WHERE r.scope=${scopes.id}) AND NOT EXISTS(SELECT 1 FROM ${scopeMembers} m WHERE m.scope=${scopes.id})`,
     )
-    const floorRows = await tx.all<{ revision: string }>(
-      sql`SELECT revision FROM (SELECT revision FROM ${heads} WHERE id='incremental-20261012-v1' UNION ALL SELECT revision FROM ${leases} WHERE retiring=false AND revision IS NOT NULL UNION ALL SELECT p.revision FROM ${workRetention} p JOIN ${work} w ON w.id=p.id WHERE w.completed_revision IS NULL AND w.applied_revision IS NULL AND p.revision IS NOT NULL) protected ORDER BY length(revision),revision LIMIT 1`,
+    const protectedRevisions = sql`SELECT revision FROM ${heads} WHERE id='incremental-20261012-v1' UNION ALL SELECT revision FROM ${leases} WHERE retiring=false AND revision IS NOT NULL UNION ALL SELECT p.revision FROM ${workRetention} p JOIN ${work} w ON w.id=p.id WHERE w.completed_revision IS NULL AND w.applied_revision IS NULL AND p.revision IS NOT NULL`
+    const protectedRows = await tx.all<{ revision: string }>(
+      sql`SELECT revision FROM (${protectedRevisions}) protected LIMIT 1`,
     )
-    const floor = floorRows[0]?.revision
-    if (floor !== undefined) {
-      // A [3,12) row remains visible at 7. Only closed intervals ending at/before the floor expire.
+    if (protectedRows.length) {
+      // Build the reference set once per bounded DELETE, rather than scanning
+      // every lease/work reference again for each candidate history row.
+      const protection = sql`WITH protected_revisions AS MATERIALIZED (SELECT DISTINCT revision FROM (${protectedRevisions}) original_references)`
+      // A [3,12) row is needed at 7; [8,9) is not needed merely because an
+      // old report at 7 remains open. Keep every actually referenced point.
+      const unreferencedInterval = (from: SQL, to: SQL) =>
+        sql`NOT EXISTS(SELECT 1 FROM protected_revisions protected WHERE ${decimalLte(from, sql`protected.revision`)} AND ${decimalLt(sql`protected.revision`, to)})`
       removed += await trackedSweep(
         history,
         ['kind', 'key', 'from_revision'],
         'history',
-        sql`to_revision IS NOT NULL AND ${decimalLte(sql`to_revision`, floor)}`,
+        sql`to_revision IS NOT NULL AND ${unreferencedInterval(sql`${history.fromRevision}`, sql`${history.toRevision}`)}`,
+        protection,
       )
       removed += await trackedSweep(
         members,
         ['aggregate', 'key', 'from_revision'],
         'members',
-        sql`to_revision IS NOT NULL AND ${decimalLte(sql`to_revision`, floor)}`,
+        sql`to_revision IS NOT NULL AND ${unreferencedInterval(sql`${members.fromRevision}`, sql`${members.toRevision}`)}`,
+        protection,
       )
       removed += await trackedSweep(
         versions,
         ['revision'],
         'versions',
-        sql`revision<>${floor} AND ${decimalLte(sql`revision`, floor)}`,
+        sql`NOT EXISTS(SELECT 1 FROM protected_revisions protected WHERE protected.revision=${versions.revision})`,
+        protection,
       )
       removed += await trackedSweep(
         indexed,
