@@ -149616,8 +149616,7 @@
       },
       "consumerEdgeIds": [
         "import:368cb8a2690df0bdfa0b",
-        "import:8078f9b81b1778b41dea",
-        "import:c739855e2d6faf6b0bc4"
+        "import:8078f9b81b1778b41dea"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -149677,12 +149676,6 @@
           "edgeId": "import:8078f9b81b1778b41dea",
           "file": "packages/backend/src/modules/task-execution/application/ports/systemAgentRunFamily.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/systemAgentRunFamily.ts#$file"
-        },
-        {
-          "context": "memory",
-          "edgeId": "import:c739855e2d6faf6b0bc4",
-          "file": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -161794,7 +161787,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:881a0d11e60b67d1456e",
         "import:f2189a0612f8a271fb22"
       ],
       "context": "runtime-management",
@@ -161824,12 +161816,6 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
       "productionConsumers": [
-        {
-          "context": "memory",
-          "edgeId": "import:881a0d11e60b67d1456e",
-          "file": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file"
-        },
         {
           "context": "task-execution",
           "edgeId": "import:f2189a0612f8a271fb22",
@@ -214031,7 +214017,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
+        "import:075f63d0c44a4eb0cc24",
+        "import:973118a4c92c02e71dc6"
       ],
       "context": "task-execution",
       "dataClass": "secret",
@@ -214049,6 +214036,12 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:973118a4c92c02e71dc6",
+          "file": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -219843,7 +219836,8 @@
         "maxUnionVariants": 59
       },
       "consumerEdgeIds": [
-        "import:075f63d0c44a4eb0cc24"
+        "import:075f63d0c44a4eb0cc24",
+        "import:b6f5dc7f3f23775f24ea"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -220136,7 +220130,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:b6f5dc7f3f23775f24ea"
+          ],
           "fieldPath": "isSandbox",
           "type": "boolean"
         },
@@ -220286,7 +220282,9 @@
           "type": "'playground'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:b6f5dc7f3f23775f24ea"
+          ],
           "fieldPath": "prompt",
           "type": "string"
         },
@@ -220371,12 +220369,16 @@
           "type": "readonly AgentMaterialSeedFile[]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:b6f5dc7f3f23775f24ea"
+          ],
           "fieldPath": "systemPrompt",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:b6f5dc7f3f23775f24ea"
+          ],
           "fieldPath": "timeoutMs",
           "type": "number"
         },
@@ -220436,7 +220438,9 @@
           "signatureDigest": "sha256:bb17eb06e4d205353b081d672b01d1f696660388d23c1fa8692294c08cbf799e"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:b6f5dc7f3f23775f24ea"
+          ],
           "name": "prepared",
           "signatureDigest": "sha256:faefb2dcd570ee44960879da7f7ddad46a5d256909098593208cbeb703537b47"
         },
@@ -220446,7 +220450,9 @@
           "signatureDigest": "sha256:4ef141946a2de4acebfd707e45591d4f073caa34689df0d40c13457e7af4a2d5"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:b6f5dc7f3f23775f24ea"
+          ],
           "name": "started",
           "signatureDigest": "sha256:a4fb929b44c0f1cf97e8abced43360914a2bd95f4afc167b0c1cfe511fa049aa"
         },
@@ -220463,6 +220469,12 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "memory",
+          "edgeId": "import:b6f5dc7f3f23775f24ea",
+          "file": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -239637,7 +239649,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cbe629d32cd83232ab03ebe54c3a96572bfebdeb2048c63e666198583258ad22",
+  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced",
   "targetContexts": [
     "collaboration",
     "development-automation",

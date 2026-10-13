@@ -1312,23 +1312,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#$file",
-      "fromPath": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:0320d927274d88712774",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/ownership.ts#ownershipTokenKey",
-      "toPath": "packages/backend/src/modules/task-execution/domain/ownership.ts",
-      "toSymbol": "ownershipTokenKey",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -57903,23 +57886,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:881a0d11e60b67d1456e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W9-D",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "toSymbol": "SystemAgentWorkspaceScope",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#$file",
@@ -63698,6 +63664,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#$file",
+      "fromPath": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:973118a4c92c02e71dc6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#ownershipTokenKey",
+      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toSymbol": "ownershipTokenKey",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -84251,23 +84234,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "runtimes",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c739855e2d6faf6b0bc4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W9-D",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "toSymbol": "AgentMaterialContentReference",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "type",
@@ -109465,9 +109431,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6439,
+    "architectureExceptions": 6437,
     "implementationSccs": 0,
-    "observedEdges": 7348,
+    "observedEdges": 7347,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -110690,22 +110656,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#IntegrationTriggerResourceRequest"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#$file",
-      "id": "import:0320d927274d88712774",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/domain/ownership",
-      "syntax": "static-import",
-      "targetSymbol": "ownershipTokenKey",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/domain/ownership.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/ownership.ts#ownershipTokenKey"
     },
     {
       "edgeKind": "value",
@@ -171620,22 +171570,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file",
-      "id": "import:881a0d11e60b67d1456e",
-      "owner": "memory",
-      "removeAfterWave": "W9-D",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/runtime-management/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "SystemAgentWorkspaceScope",
-      "toContext": "runtime-management",
-      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/portArtifacts.ts",
@@ -177938,6 +177872,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#$file",
+      "id": "import:973118a4c92c02e71dc6",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "ownershipTokenKey",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#ownershipTokenKey"
     },
     {
       "edgeKind": "type",
@@ -192756,6 +192706,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file",
+      "id": "import:b6f5dc7f3f23775f24ea",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/task-execution/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "SystemAgentRunRequest",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
@@ -200178,22 +200144,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#$file",
-      "id": "import:c739855e2d6faf6b0bc4",
-      "owner": "memory",
-      "removeAfterWave": "W9-D",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/runtime-management/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "AgentMaterialContentReference",
-      "toContext": "runtime-management",
-      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -227935,7 +227885,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cbe629d32cd83232ab03ebe54c3a96572bfebdeb2048c63e666198583258ad22",
+  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

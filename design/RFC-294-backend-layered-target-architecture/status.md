@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:cbe629d32cd83232ab03ebe54c3a96572bfebdeb2048c63e666198583258ad22`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -21,7 +21,7 @@
 | background work entries | 411 |
 | direct native `setInterval`（call / files） | 26 / 22 |
 | direct native timers（全部） | 87 |
-| RFC-317 boundary census（inbound / outbound） | 360 / 46 |
+| RFC-317 boundary census（inbound / outbound） | 334 / 46 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 522 |
-| `architectureExceptions` | 6439 |
+| `architectureExceptions` | 6437 |
 | `backgroundJobs` | 411 |
-| `crossContextImports` | 7348 |
+| `crossContextImports` | 7347 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 28678 |
+| `moduleSymbolOwners` | 28686 |
 | `mutationEntrypoints` | 2034 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1293 |
@@ -210,10 +210,10 @@
 | --- | --- |
 | legacy-outbound | 4102 |
 | legacy-inbound | 2105 |
-| offered-consumption | 389 |
+| offered-consumption | 390 |
 | infrastructure-external | 365 |
 | temporary-internal-debt | 113 |
-| off-dag-offered | 103 |
+| off-dag-offered | 101 |
 | required-implementation | 83 |
 | authority-type-only | 78 |
 | external-layer-debt | 8 |
@@ -226,7 +226,7 @@
 | legacy-outbound | 4102 |
 | legacy-inbound | 2105 |
 | temporary-internal-debt | 113 |
-| off-dag-offered | 103 |
+| off-dag-offered | 101 |
 | external-layer-debt | 8 |
 | no-circular | 6 |
 | no-util-to-upper | 2 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3513 |
-| W9-D | 1148 |
-| W4-E1 | 863 |
+| W9 | 3514 |
+| W9-D | 1146 |
+| W4-E1 | 862 |
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 189 |

@@ -6,7 +6,7 @@
     "moduleFiles": 1940,
     "productionFiles": 3429,
     "sharedFiles": 177,
-    "symbolsIncludingFileRoots": 28678
+    "symbolsIncludingFileRoots": 28686
   },
   "entries": [
     {
@@ -78353,6 +78353,18 @@
     {
       "currentContext": "memory",
       "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
+      "id": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#AgentMaterialContentReference",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentMaterialContentReference",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
       "id": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#MemoryDistillExecutionContext",
@@ -78383,6 +78395,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "MemoryDistillExecutionRecord",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts",
+      "id": "owner:packages/backend/src/modules/memory/application/ports/distillExecutionJournal.ts#SystemAgentWorkspaceScope",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SystemAgentWorkspaceScope",
       "targetContext": "memory",
       "targetLayer": "application"
     },
@@ -117450,6 +117474,18 @@
     {
       "currentContext": "run-observability",
       "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/observationWindowCell.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/observationWindowCell.ts#originalObservationTimePartition",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "originalObservationTimePartition",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/domain/observationWindowCell.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/observationWindowCell.ts#QualifiedObservationDimensionContribution",
@@ -117906,6 +117942,18 @@
     {
       "currentContext": "run-observability",
       "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts#legacyQualifiedObservationIndexChannel",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "legacyQualifiedObservationIndexChannel",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts#ProjectionOccurrence",
@@ -117932,10 +117980,34 @@
       "currentLayer": "domain",
       "exported": true,
       "file": "packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts#qualifiedObservationIndexChannel",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "qualifiedObservationIndexChannel",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts#qualifiedObservationIndexes",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "qualifiedObservationIndexes",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts#qualifiedObservationIndexVersion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "qualifiedObservationIndexVersion",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -120384,6 +120456,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "decimalLte",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#indexPrefix",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "indexPrefix",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#indexRevision",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "indexRevision",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -344879,5 +344975,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cbe629d32cd83232ab03ebe54c3a96572bfebdeb2048c63e666198583258ad22"
+  "sourceDigest": "sha256:1ee378ce76e75da8e94d3acb50de941b9bd4064dcac5383e9bff131fa22eaced"
 }
