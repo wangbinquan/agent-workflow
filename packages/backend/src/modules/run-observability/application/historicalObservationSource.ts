@@ -118,7 +118,11 @@ export async function stageHistoricalObservationSources(
   if (!sources) return null
   const prepared = await originalInput.historicalPreparation?.read()
   if (prepared) {
-    await qualifyPreparedHistoricalExecutions(originalInput, prepared, membership)
+    await qualifyPreparedHistoricalExecutions(
+      originalInput,
+      prepared,
+      historicalObservationMembership,
+    )
     // A preparation preserves every original gap; each unreadable root is retried on this report.
     for await (const root of completeWorkingTraversal<{
       rootSessionId: string

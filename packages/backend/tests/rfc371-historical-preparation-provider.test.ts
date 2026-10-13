@@ -1,5 +1,7 @@
 // RFC-371: a different range must use the complete sealed historical population,
 // avoid parsing original owners/native artifacts again, and qualify the new range afresh.
+// CI 38407775413: the prepared branch must use its historical membership;
+// an undefined generic membership breaks both warm-range reuse and missing-root retries.
 import { afterEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import {
