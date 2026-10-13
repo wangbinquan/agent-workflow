@@ -147,6 +147,16 @@ const PROVIDER_FORK_LEDGER = {
   // RFC-371: baseline reads select the original SQLite file or reserved PG snapshot channel;
   // memory/one-channel fallbacks remain explicit and every unknown provider reaches the never sink.
   'platform/persistence/nativeUsageBaselineRead.ts': { forks: 2, fence: 'fenced-dispatch' },
+  // RFC-371: native JSON rendering is confined to persistence and every
+  // residual provider reaches the canonical never sink. No feature-level fork.
+  'platform/persistence/jsonPathText.ts': { forks: 2, fence: 'fenced-dispatch' },
+  'platform/persistence/jsonPathArray.ts': { forks: 2, fence: 'fenced-dispatch' },
+  'platform/persistence/observationProjectionRoutes.ts': { forks: 2, fence: 'fenced-dispatch' },
+  'platform/persistence/observationProjectionChangeSchema.ts': {
+    forks: 2,
+    fence: 'fenced-dispatch',
+  },
+  'platform/persistence/observationSourceRevisionSchema.ts': { forks: 2, fence: 'fenced-dispatch' },
   // RFC-359 W8 销账：`legacySqliteNodeRollback.ts` 的 `rollbackEffectPersistence` 品牌分派已删除——
   // effect 持久化那一对合一为单份 `DrizzleTaskExecutionEffectPersistence`，观察者不再需要按品牌挑；
   // W1-T2b 记的「两个 provider 各有一份 persistence」这个前提至此不成立，条目退役。

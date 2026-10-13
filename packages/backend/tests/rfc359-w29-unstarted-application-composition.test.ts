@@ -1899,10 +1899,17 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       .filter(ts.isConditionalExpression)
       .filter((node) => compact(node.whenTrue, pg) === '{reports:observationReports.queries}')
     expect(reportChoices.map((node) => compact(node.whenFalse, pg))).toEqual(['{}'])
+    const projectionChoices = descendants(pgBody, (node) => isDaemonChoice(node, pg))
+      .filter(ts.isConditionalExpression)
+      .filter((node) =>
+        compact(node.whenTrue, pg).includes('projection:composeOriginalObservationProjection('),
+      )
+    expect(projectionChoices.map((node) => compact(node.whenFalse, pg))).toEqual(['{}'])
     expect(alternatives).toEqual([
       'phase.scope.createMcpRuntimeTests',
       '(input.opencodeVersion??null)',
-      '{}',
+      '{}', // original incremental projection in the serving daemon only
+      '{}', // retained report queries in the serving daemon only
       '(input.workflowRuntime??Object.freeze({}))',
     ])
   })

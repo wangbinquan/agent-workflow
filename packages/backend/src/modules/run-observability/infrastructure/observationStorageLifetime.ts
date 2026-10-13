@@ -3,6 +3,7 @@ import { observationReportLeases, observationStorageState } from '@/db/observati
 import { observationProjectionViews } from '@/db/observationProjection'
 import { observationReports } from '@/db/observationReports'
 import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { jsonPathText } from '@/platform/persistence/jsonPathText'
 export const observationStorageLock = 'observation-storage-lifecycle'
 export const observationReportIdleMs = 7 * 86400000
 /** Called inside the same transaction as choosing/registering/renewing/reclaiming a version. */
@@ -18,7 +19,7 @@ export async function admitObservationStorage(tx: DatabaseTransaction) {
     return
   const grace = Date.now() + observationReportIdleMs
   await tx.run(
-    sql`INSERT INTO ${observationReportLeases}(id,kind,revision,expires_at,retiring) SELECT id,'projection',json_extract(document,'$.version.revision'),${grace},false FROM ${observationProjectionViews} WHERE true ON CONFLICT(id) DO NOTHING`,
+    sql`INSERT INTO ${observationReportLeases}(id,kind,revision,expires_at,retiring) SELECT id,'projection',${jsonPathText(tx, observationProjectionViews.document, ['version', 'revision'])},${grace},false FROM ${observationProjectionViews} WHERE true ON CONFLICT(id) DO NOTHING`,
   )
   await tx.run(
     sql`INSERT INTO ${observationReportLeases}(id,kind,expires_at,retiring) SELECT id,'legacy',${grace},false FROM ${observationReports} WHERE true ON CONFLICT(id) DO NOTHING`,

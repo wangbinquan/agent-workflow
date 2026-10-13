@@ -93,6 +93,11 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
         // RFC-371 calculation rows are hashed incrementally across bounded pages on read and import.
         'modules/run-observability/infrastructure/completeCalculationFactReader.ts',
         'modules/run-observability/infrastructure/completeCalculationFactStore.ts',
+        // RFC-371: all original staged/history/index packets are folded incrementally.
+        'modules/run-observability/infrastructure/historicalObservationPreparationCollector.ts',
+        'modules/run-observability/infrastructure/historicalObservationPreparationImport.ts',
+        'modules/run-observability/infrastructure/incrementalObservationPreparationSpool.ts',
+        'modules/run-observability/infrastructure/incrementalObservationPreparedStore.ts',
         // RFC-371 native EOF reader streams the original session/part traversal, without a population array.
         'modules/runtime-management/infrastructure/opencodeUsagePass.ts',
         // RFC-308 policy/profile content-addressed receipts:

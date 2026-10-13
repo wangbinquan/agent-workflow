@@ -37,6 +37,7 @@ import {
   observationProjectionIndexedVersions as indexed,
 } from '@/db/observationProjection'
 import { admitObservationStorage } from './observationStorageLifetime'
+import { jsonPathText } from '@/platform/persistence/jsonPathText'
 const decimalLte = (value: SQL, ceiling: string) =>
   sql`(length(${value})<${ceiling.length} OR (length(${value})=${ceiling.length} AND ${value}<=${ceiling}))`
 async function remove(
@@ -117,7 +118,7 @@ export async function collectObservationStorage(
         scanned += rows
       })
     await admitObservationStorage(tx)
-    const expired = sql`retiring=false AND expires_at<${Date.now()} AND NOT EXISTS(SELECT 1 FROM ${maintenance} m WHERE json_extract(m.document,'$.request.reportId')=${leases.id} AND m.state IN ('preparing','preview','running')) AND NOT EXISTS(SELECT 1 FROM ${reports} r WHERE r.id=${leases.id} AND r.state='building' AND r.lease_until>${Date.now()})`
+    const expired = sql`retiring=false AND expires_at<${Date.now()} AND NOT EXISTS(SELECT 1 FROM ${maintenance} m WHERE ${jsonPathText(tx, sql`m.document`, ['request', 'reportId'])}=${leases.id} AND m.state IN ('preparing','preview','running')) AND NOT EXISTS(SELECT 1 FROM ${reports} r WHERE r.id=${leases.id} AND r.state='building' AND r.lease_until>${Date.now()})`
     await tx.run(
       sql`UPDATE ${leases} SET retiring=true,request_key=NULL WHERE id IN(SELECT id FROM ${leases} WHERE ${expired} ORDER BY expires_at,id LIMIT 100)`,
     )

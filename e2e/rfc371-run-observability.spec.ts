@@ -526,7 +526,7 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(page.getByRole('heading', { name: 'Run observability', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
   await page
-    .getByRole('textbox', { name: 'Task name or ID', exact: true })
+    .getByRole('searchbox', { name: 'Task name or ID', exact: true })
     .fill('Observed parallel task')
   await expect(page.getByRole('textbox', { name: /Workflow ID|Linked workflow ID/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /More filters/ })).toHaveCount(0)
@@ -1208,10 +1208,10 @@ test('overview omits attention, labels every token column and aligns collection 
   await page.getByRole('tab', { name: 'Performance and data quality', exact: true }).click()
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
-    // The current formal page has timing facts and capture capabilities. Keep
-    // the centering check on both actual lists, rather than the removed status card.
+    // Timing facts, capture capabilities and the new storage facts all keep
+    // the shared label/value alignment at both widths.
     const facts = page.getByRole('tabpanel').locator('dl.detail-grid')
-    await expect(facts).toHaveCount(2)
+    await expect(facts).toHaveCount(3)
     for (const list of await facts.all()) {
       const differences = await list.evaluate((element) =>
         Array.from(element.querySelectorAll('dt')).map((title) => {
@@ -1412,18 +1412,26 @@ test('actual attempt swimlanes fill aligned tracks on one ruler at desktop and n
 }, testInfo) => {
   const { task } = await seedTask()
   await prime(page)
-  const reportResponse = page.waitForResponse((response) => {
-    const request = response.request()
-    return (
-      new URL(response.url()).pathname === '/api/observability/reports' &&
-      request.method() === 'POST' &&
-      request.postDataJSON()?.taskId === task.id
-    )
-  })
-  await page.goto(`${daemon.baseUrl}/observability?task=${task.id}`)
-  const response = await reportResponse
-  expect(response.ok()).toBe(true)
-  const original = completeObservationReportContent(await settledReport(await response.json()))
+  const reportResponse = page
+    .waitForResponse((response) => {
+      const request = response.request()
+      return (
+        new URL(response.url()).pathname === '/api/observability/reports' &&
+        request.method() === 'POST' &&
+        request.postDataJSON()?.taskId === task.id
+      )
+    })
+    .then(async (response) => {
+      expect(response.ok()).toBe(true)
+      // Consume the actual response as soon as it completes, before navigation/
+      // later background requests can retire Chromium's retained response body.
+      return (await response.json()) as CompleteObservationReport
+    })
+  const [, value] = await Promise.all([
+    page.goto(`${daemon.baseUrl}/observability?task=${task.id}`),
+    reportResponse,
+  ])
+  const original = completeObservationReportContent(await settledReport(value))
   expect(original).not.toBeNull()
   const attempts = await originalRows<CompleteObservationAttempt>(original!, 'attempts')
   expect(attempts.length).toBeGreaterThan(0)

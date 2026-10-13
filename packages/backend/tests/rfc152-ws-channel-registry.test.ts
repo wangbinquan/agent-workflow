@@ -111,10 +111,11 @@ const ALL_KINDS: WsChannelKind[] = [
   'intent-sessions', // RFC-234
   'mcp-runtime-tests', // RFC-238
   'presence', // RFC-312
+  'observability', // RFC-371: incremental revision notifications
 ]
 
 describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
-  test('registry keys are exactly the twelve channels (and WS_CHANNEL_KINDS mirrors them)', () => {
+  test('registry keys are exactly the thirteen channels (and WS_CHANNEL_KINDS mirrors them)', () => {
     expect(Object.keys(WS_CHANNELS).sort()).toEqual([...ALL_KINDS].sort())
     expect([...WS_CHANNEL_KINDS].sort()).toEqual([...ALL_KINDS].sort())
     for (const kind of ALL_KINDS) {

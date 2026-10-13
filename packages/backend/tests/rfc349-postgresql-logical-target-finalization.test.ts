@@ -232,7 +232,9 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
       (statement) =>
         (statement.kind === 'function' || statement.kind === 'trigger') &&
         !statement.logicalId.startsWith('observation_source_revisions:') &&
-        !statement.logicalId.includes(':observation-source:'),
+        !statement.logicalId.includes(':observation-source:') &&
+        !statement.logicalId.startsWith('observation_projection_changes:') &&
+        !statement.logicalId.endsWith(':observation-change'),
     )
     expect(native.filter((statement) => statement.kind === 'function')).toHaveLength(3)
     expect(native.filter((statement) => statement.kind === 'trigger')).toHaveLength(12)

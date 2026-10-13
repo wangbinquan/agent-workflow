@@ -108,6 +108,7 @@ function fixture() {
     refreshKey: string
   }[] = []
   const requests: { path: string; method: string; reportId?: string }[] = []
+  const projectionReads: string[] = []
   const states = new Map<string, CompleteObservationReport>()
   const blocked = new Map<
     string,
@@ -118,6 +119,10 @@ function fixture() {
     const url = new URL(String(raw)),
       method = init?.method ?? 'GET'
     const match = /^\/api\/observability\/reports\/([^/]+)(\/pages)?$/.exec(url.pathname)
+    if (url.pathname === '/api/observability/projection-version' && method === 'GET') {
+      projectionReads.push(url.pathname)
+      return Response.json(null)
+    }
     requests.push({ path: url.pathname, method, ...(match ? { reportId: match[1] } : {}) })
     if (url.pathname === '/api/observability/reports' && method === 'POST') {
       const body = JSON.parse(String(init?.body)) as {
@@ -199,6 +204,7 @@ function fixture() {
     reports,
     admissions,
     requests,
+    projectionReads,
     states,
     control,
     block(id: string) {
@@ -533,7 +539,8 @@ test.each(['abort', 'identity-change'] as const)(
       expect(client.isFetching({ queryKey: ['run-observability-complete'] })).toBe(0),
     )
     expect(screen.queryByTestId('snapshot')).toBeNull()
-    expect(bookmark.read()).toBeNull()
+    // Cancellation cannot qualify a late response or revoke an already saved valid pointer.
+    expect(bookmark.read()).toBe(change === 'abort' ? original.header.reportId : null)
     expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(1)
   },
 )
@@ -1105,7 +1112,8 @@ test.each(['ready', 'incomplete'] as const)(
       })
       .closest<HTMLElement>('.card')!
     expect(within(costCard).getByText(mode === 'ready' ? '¥0.102' : '¥0.068')).toBeTruthy()
-    if (mode === 'incomplete') expect(within(tokenCard).getByText(/记录不完整/)).toBeTruthy()
+    if (mode === 'incomplete')
+      expect(within(tokenCard).getAllByText(/记录不完整/).length).toBeGreaterThan(0)
     expect(f.reports).toHaveLength(1)
     expect(f.requests.filter((request) => request.method === 'POST')).toHaveLength(1)
     const reopened = f.requests.slice(beforeReturn)
@@ -1229,23 +1237,31 @@ test('a warm application returning after B is evicted never revives readable A a
       false,
     ),
   )
+  // Retain a readable legacy-family A in the same warm client while current-family B leaves the page.
+  const legacyKey = [
+    'run-observability-complete',
+    'scope-metrics/13',
+    original.header.filters,
+    null,
+    0,
+  ] as const
+  client.setQueryData<CompleteObservationReport>(legacyKey, original)
   expect(
-    completeObservationReportContent(
-      client.getQueryData<CompleteObservationReport>([
-        'run-observability-complete',
-        'scope-metrics/13',
-        original.header.filters,
-        null,
-        0,
-      ])!,
-    )?.header.reportId,
+    completeObservationReportContent(client.getQueryData<CompleteObservationReport>(legacyKey)!)
+      ?.header.reportId,
   ).toBe(original.header.reportId)
   const release = f.block(refreshed.header.reportId)
   fireEvent.click(screen.getByRole('link', { name: '离开观测' }))
   await screen.findByRole('heading', { name: '任务路由' })
   await waitFor(() =>
-    expect(client.getQueriesData({ queryKey: ['run-observability-complete'] })).toHaveLength(0),
+    expect(
+      client.getQueriesData({ queryKey: ['run-observability-complete', 'scope-metrics/14'] }),
+    ).toHaveLength(0),
   )
+  expect(
+    completeObservationReportContent(client.getQueryData<CompleteObservationReport>(legacyKey)!)
+      ?.header.reportId,
+  ).toBe(original.header.reportId)
   const beforeReturn = f.requests.length
   fireEvent.click(screen.getByRole('link', { name: '侧栏返回观测' }))
   await waitFor(() =>

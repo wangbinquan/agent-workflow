@@ -22,9 +22,10 @@ test('the separate readonly sampler returns every table and index byte exactly w
     })()
     db.query('INSERT INTO retained_fact VALUES(?,?)').run(1, 'original retained evidence')
     const expected = db
-      .query(
-        `SELECT s.tbl_name AS name,cast(sum(d.pgsize) AS text) AS bytes,cast(sum(CASE WHEN s.type='index' THEN d.pgsize ELSE 0 END) AS text) AS indexBytes FROM dbstat d JOIN sqlite_schema s ON s.name=d.name GROUP BY s.tbl_name ORDER BY s.tbl_name`,
-      )
+      .query<
+        { name: string; bytes: string; indexBytes: string },
+        []
+      >(`SELECT s.tbl_name AS name,cast(sum(d.pgsize) AS text) AS bytes,cast(sum(CASE WHEN s.type='index' THEN d.pgsize ELSE 0 END) AS text) AS indexBytes FROM dbstat d JOIN sqlite_schema s ON s.name=d.name GROUP BY s.tbl_name ORDER BY s.tbl_name`)
       .all()
     const before = db.query('SELECT * FROM observation_usage ORDER BY id').all()
     let yielded = false
@@ -79,19 +80,28 @@ test('cancellation terminates the dedicated measurement and preserves the origin
 
 test('an in-memory database keeps observed totals and never performs a physical dbstat scan on its serving connection', async () => {
   const reads: string[] = [],
-    get = async (statement: unknown) => {
+    namedRows = [
+      [{ page_count: 12 }],
+      [{ page_size: 4096 }],
+      [{ freelist_count: 2 }],
+      [{ name: 'main', file: '' }],
+    ],
+    all = async (statement: unknown) => {
       reads.push(String(statement))
-      return { page_count: 12, page_size: 4096, freelist_count: 2 }
+      return namedRows.shift() ?? []
     },
-    all = async () => [{ name: 'main', file: '' }]
-  const usage = await sqliteStorageUsage({ get, all } as unknown as ProviderNeutralDatabase)
+    get = () => {
+      throw new Error('Raw get returns tuple rows; use the original named-row read')
+    }
+  const usage = await sqliteStorageUsage({ all, get } as unknown as ProviderNeutralDatabase)
   expect(usage).toMatchObject({
     databaseBytes: '49152',
     reusableBytes: '8192',
     tables: null,
     freeBytes: null,
   })
-  expect(reads).toHaveLength(3)
+  expect(reads).toHaveLength(4)
+  expect(namedRows).toEqual([])
 })
 
 test('the published binary explicitly includes the capacity Worker and the foreground sampler has no dbstat fallback', () => {

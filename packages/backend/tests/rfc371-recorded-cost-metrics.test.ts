@@ -336,9 +336,21 @@ test('empty proof keeps original partial Token and CNY sums without manufacturin
     },
   })
   if (value.state !== 'not-ready') throw new Error('Original gaps lost')
-  expect(value.gaps).toEqual(['usage-incomplete', 'native-capture-unobserved', 'usage-unobserved'])
+  expect(value.gaps).toEqual(['native-capture-unobserved', 'usage-incomplete', 'usage-unobserved'])
   expect(qualifiedCostEvidence(value)).toBe(true)
   expect(completeObservationMetrics(completeMetricsFold(value))).toEqual(value)
+})
+
+test('original missing-evidence facts have one stable ordering in every arrival order', () => {
+  const a = emptyCompleteObservationFold('1'),
+    b = emptyCompleteObservationFold('1')
+  for (const reason of ['usage-unobserved', 'native-capture-unobserved', 'usage-incomplete'])
+    completeObservationGap(a, reason)
+  for (const reason of ['usage-incomplete', 'native-capture-unobserved', 'usage-unobserved'])
+    completeObservationGap(b, reason)
+  expect(completeObservationMetrics(a)).toEqual(completeObservationMetrics(b))
+  expect(a.gaps).toHaveLength(3)
+  expect(b.gaps).toHaveLength(3)
 })
 test('visible empty cost proof survives a ready scope with other fully observed but unpriced records', () => {
   const fold = completeMetricsFold(completeEmptyCalls)

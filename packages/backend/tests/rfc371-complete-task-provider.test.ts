@@ -125,8 +125,8 @@ describeEachProvider('RFC-371 complete original Task statistics', (harness) => {
     expect(result.summary.metrics.state).toBe('not-ready')
     if (result.summary.metrics.state === 'not-ready')
       expect(result.summary.metrics.gaps).toEqual([
-        'native-capture-unobserved',
         'invocation-unobserved',
+        'native-capture-unobserved',
       ])
     expect(result.attempts.find((row) => row.id === 'uncaptured-run')?.metrics.state).toBe(
       'not-ready',

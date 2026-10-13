@@ -38,6 +38,7 @@ const status = {
 function mount(allowed: boolean) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['auth', 'me', 'storage-admin'], {
+    user: { id: 'storage-admin', status: 'active' },
     permissions: allowed ? ['settings:write'] : [],
   })
   render(

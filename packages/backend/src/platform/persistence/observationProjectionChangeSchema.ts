@@ -3,6 +3,7 @@ import { OBSERVATION_SOURCE_REVISION } from './observationSourceRevisionSchema'
 import type { LogicalSchemaContract, LogicalTableContract } from './schemaContract'
 import type { PostgresqlSchemaStatement } from './postgresqlSchema'
 import { observationDocumentRouteSQL } from './observationProjectionRoutes'
+import { unhandledDatabaseProvider, type DatabaseProvider } from './databaseProviders'
 
 const OUTBOX = 'observation_projection_changes'
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`
@@ -23,7 +24,7 @@ function routeColumns(table: LogicalTableContract) {
 function jsonObject(
   table: LogicalTableContract,
   row: 'OLD' | 'NEW',
-  engine: 'sqlite' | 'postgresql',
+  engine: DatabaseProvider,
   primary = false,
 ) {
   const columns = primary ? table.primaryKey : routeColumns(table).map((column) => column.name)
@@ -36,7 +37,9 @@ function jsonObject(
           expression,
         ])),
   ].join(',')
-  return `${engine === 'sqlite' ? 'json_object' : 'json_build_object'}(${fields})${engine === 'postgresql' ? '::text' : ''}`
+  if (engine === 'sqlite') return `json_object(${fields})`
+  if (engine === 'postgresql') return `json_build_object(${fields})::text`
+  return unhandledDatabaseProvider(engine)
 }
 
 /** Capture routing identities, not another copy of numeric authority. Existing

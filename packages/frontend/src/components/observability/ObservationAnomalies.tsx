@@ -98,12 +98,12 @@ export function ObservationAnomalies({ from, to }: { from: number; to: number })
               if (data.nextCursor) setCursor({ from, to, after: data.nextCursor })
             }}
           >
-            {t('runObservability.nextPage')}
+            {t('runObservability.next')}
           </button>
         ) : null}
         {after ? (
           <button type="button" className="btn btn--sm" onClick={() => setCursor(undefined)}>
-            {t('runObservability.firstPage')}
+            {t('runObservability.first')}
           </button>
         ) : null}
       </div>

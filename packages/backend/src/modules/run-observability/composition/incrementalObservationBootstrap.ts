@@ -1,5 +1,5 @@
 import { observationProjectionCurrent } from '@/db/observationProjection'
-import { and, asc, eq, gt, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, isNotNull } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { observationInvocations } from '@/db/schema'
 import {
@@ -28,7 +28,7 @@ export function composeOriginalProjectionBootstrap(input: {
               and(
                 eq(observationProjectionCurrent.kind, 'contribution'),
                 after ? gt(observationProjectionCurrent.component, after) : undefined,
-                sql`${observationProjectionCurrent.component} IS NOT NULL`,
+                isNotNull(observationProjectionCurrent.component),
               ),
             )
             .groupBy(observationProjectionCurrent.component)

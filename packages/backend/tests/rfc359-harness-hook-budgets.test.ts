@@ -35,6 +35,9 @@ const MINIMUM_HOOK_BUDGET_MS = 10_000
  */
 const REAL_WORK_SYMBOLS = [
   'createInMemoryDb',
+  // RFC-371: SQLite fixture restoration delegates the same real migration/
+  // template-copy work to this helper; the original explicit budget remains.
+  'restoreDatabase',
   'MIGRATIONS',
   'setupDatabases',
   'resetDatabases',

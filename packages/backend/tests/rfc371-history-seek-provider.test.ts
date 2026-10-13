@@ -51,7 +51,7 @@ describeEachProvider('RFC-371 exact historical section seeks', (h) => {
           component: original.component,
           section: 'qualified-group/' + section,
           taskId: 'task-' + n,
-          descriptor: original.descriptors![key],
+          descriptor: original.descriptors![key]!,
         }
       })
       await h.db

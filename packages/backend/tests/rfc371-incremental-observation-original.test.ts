@@ -26,6 +26,7 @@ import {
 } from '@/db/observationProjection'
 import {
   nodeRuns,
+  observationUsageCaptures,
   observationUsageCurrent,
   observationInvocations,
   tasks as originalTasks,
@@ -207,7 +208,9 @@ function setup(
         keyOf: sha256Hex,
         usageWorkspace: completeUsageWorkspace,
         value: value.value,
-        ...(query.cohort === 'usage' ? { projectionCohort: true } : {}),
+        // Trace/occurrence annotation is identical on both canonical paths;
+        // the selected time cohort still controls the numerical population.
+        projectionCohort: true,
       }
       const base = await buildCompleteObservationCohort(input),
         result =
@@ -240,6 +243,23 @@ function content(report: CompleteObservationReport) {
   if (report.state === 'ready') return report
   if (report.state === 'not-ready' && report.facts) return report.facts
   throw new Error('Original projection facts missing: ' + report.state)
+}
+function discreteRequest(record: ReturnType<typeof completeTaskRecord>) {
+  return {
+    ...record,
+    measurement: {
+      ...record.measurement,
+      scope: {
+        level: 'request' as const,
+        root: record.measurement.nodeRunId!,
+        session: record.measurement.nodeRunId!,
+        parentSession: null,
+        ancestors: [],
+        turn: record.measurement.recordId,
+        turnIndex: 0,
+      },
+    },
+  }
 }
 const normalized = (items: readonly unknown[]) =>
   // Object property insertion order is not a usage fact. Canonical JSON keeps
@@ -275,6 +295,14 @@ describeEachProvider(
               : actual,
         }
         const f = setup(selected)
+        // PG reset restores baseline seed rows through original triggers.
+        // This controlled empty-source fixture contains no Task or invocation;
+        // acknowledge only that baseline outbox before the synthetic channel.
+        expect(await db.select({ id: originalTasks.id }).from(originalTasks).all()).toEqual([])
+        expect(
+          await db.select({ id: observationInvocations.id }).from(observationInvocations).all(),
+        ).toEqual([])
+        await db.delete(observationProjectionChanges).run()
         const boot = incrementalObservationBootstrap(db, generation, [
             { id: 'indexed-details-v1', page: async () => ({ items: [], nextCursor: null }) },
           ]),
@@ -315,6 +343,10 @@ describeEachProvider(
           name: 'Second original task',
         })
         .run()
+      // The zero-record helper also creates a synthetic zero-use capture.
+      // Historical-only fixtures remove that capture with its accepted call,
+      // while retaining every physical native record and historical owner.
+      await h.db.delete(observationUsageCaptures).run()
       await h.db.delete(observationInvocations).run()
       await h.db
         .update(nodeRuns)
@@ -352,6 +384,7 @@ describeEachProvider(
     }, 60_000)
     test('temporary missing native EOF retains every known bucket and record until recovery without duplicate usage', async () => {
       await seedCompleteTask(h, 1, 0)
+      await h.db.delete(observationUsageCaptures).run()
       await h.db.delete(observationInvocations).run()
       await h.db.update(nodeRuns).set({ runtime: 'opencode', opencodeSessionId: 'root' }).run()
       const native = persistentNativeFixture({ steps: 3, depth: 1 })
@@ -409,6 +442,7 @@ describeEachProvider(
           status: 'failed',
         })
         .run()
+      await h.db.delete(observationUsageCaptures).run()
       await h.db.delete(observationInvocations).run()
       await h.db.update(nodeRuns).set({ runtime: 'opencode', opencodeSessionId: 'root' }).run()
       await h.db
@@ -527,7 +561,7 @@ describeEachProvider(
           }
         }, 60_000)
     test('periods share original increments and complete days; UTC half-open boundaries preserve every bucket, category and page', async () => {
-      await seedCompleteTask(h, 2, 7)
+      await seedCompleteTask(h, 2, 7, discreteRequest)
       const f = setup(h)
       await f.apply('initial', [
         completeFixtureId('invocation', 0),
@@ -630,7 +664,7 @@ describeEachProvider(
       expect(second.header.sourceRevision).not.toBe(first.header.sourceRevision)
     }, 60_000)
     test('indexed ordinary counts and keyset pages retain every original allocation while metadata/cells share the same version', async () => {
-      await seedCompleteTask(h, 2, 211)
+      await seedCompleteTask(h, 2, 211, discreteRequest)
       const f = setup(h, undefined, true)
       await f.apply('indexed-original', [
         completeFixtureId('invocation', 0),

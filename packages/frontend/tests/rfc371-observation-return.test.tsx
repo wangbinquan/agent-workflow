@@ -10,6 +10,7 @@ function DelayedContributions() {
   const page = useRef<HTMLDivElement>(null)
   const [task, setTask] = useState<string>()
   const [mounted, setMounted] = useState(true)
+  const [background, setBackground] = useState(false)
   const save = useObservationReturn('same-parent-report', task, page, !task)
   return (
     <main>
@@ -25,7 +26,14 @@ function DelayedContributions() {
           </button>
         ) : (
           <>
-            <button onClick={() => setMounted(true)}>Mount contributions</button>
+            <button onClick={() => setBackground(true)}>Mount background cards</button>
+            {background && <div data-restored-background>Full background</div>}
+            <button
+              data-observation-dimension="runtime:original-runtime"
+              onClick={() => setMounted(true)}
+            >
+              Mount contributions
+            </button>
             {mounted ? (
               <div role="dialog">
                 <div className="dialog__body">
@@ -64,6 +72,31 @@ test('two ready frames cannot consume a return position before its real dialog r
   const restored = screen.getByRole('button', { name: 'Child task' })
   await waitFor(() => expect(document.activeElement).toBe(restored))
   expect(document.querySelector<HTMLElement>('.dialog__body')!.scrollTop).toBe(137)
+})
+
+test('a returned portal cannot consume the main offset while background cards are still too short', async () => {
+  render(<DelayedContributions />)
+  const main = document.querySelector('main')!
+  Object.defineProperty(main, 'clientHeight', { configurable: true, value: 500 })
+  Object.defineProperty(main, 'scrollHeight', { configurable: true, value: 4000 })
+  main.scrollTop = 3000
+  fireEvent.click(screen.getByRole('button', { name: 'Child task' }))
+  Object.defineProperty(main, 'scrollHeight', {
+    configurable: true,
+    get: () => (document.querySelector('[data-restored-background]') ? 4000 : 700),
+  })
+  main.scrollTop = 0
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Mount contributions' }))
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  })
+  expect(main.scrollTop).toBe(0)
+  const restored = screen.getByRole('button', { name: 'Child task' })
+  expect(document.activeElement).not.toBe(restored)
+  fireEvent.click(screen.getByRole('button', { name: 'Mount background cards' }))
+  await waitFor(() => expect(document.activeElement).toBe(restored))
+  expect(main.scrollTop).toBe(3000)
 })
 
 // CI 37346463785: the shared initial-focus callback ran after return restoration

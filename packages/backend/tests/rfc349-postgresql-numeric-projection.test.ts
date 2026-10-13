@@ -29,6 +29,9 @@ const srcRoot = resolve(import.meta.dir, '..', 'src')
 
 /** `文件相对路径 -> 列名 -> 谁负责把驱动交回的字符串解码成 number`。 */
 const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
+  'platform/persistence/storageUsage.ts': {
+    text: 'The three counter projections CAST counts/sums AS text intentionally: decodeDatabaseStorageCounters folds pending with BigInt and publishes exact decimal strings; timestamps use Number with safe-integer validation. The SQL scanner names the raw CAST column text. rfc371-storage-lifecycle-provider and storage-counter-worker cover both original providers, >10000 pending rows and decimal precision.',
+  },
   'platform/persistence/capabilities.ts': {
     '?':
       'RFC-359 W4-D19c 的 `greatest` 能力：SQLite 分支渲染的是**两参数的标量** max(a, b)（SQLite 只有多参数' +

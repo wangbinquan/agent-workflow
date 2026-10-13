@@ -84,19 +84,19 @@ export function ObservationExecutionAnalysis({ report }: { report: ReadableObser
         {comparison.isFetching ? <LoadingState /> : null}
         {comparison.error ? <ErrorBanner error={comparison.error} /> : null}
         {comparison.data && !comparison.error ? (
-          <div className="run-observability__summary">
+          <div className="observation-columns">
             <div>
               <strong>{comparison.data.left.task.name}</strong>
               <CompleteMetrics value={comparison.data.left.metrics} />
               <p>
-                {t('runObservability.wallTime')}: {comparison.data.left.timing.wallMs ?? '—'} ms
+                {t('runObservability.wall')}: {comparison.data.left.timing.wallMs ?? '—'} ms
               </p>
             </div>
             <div>
               <strong>{comparison.data.right.task.name}</strong>
               <CompleteMetrics value={comparison.data.right.metrics} />
               <p>
-                {t('runObservability.wallTime')}: {comparison.data.right.timing.wallMs ?? '—'} ms
+                {t('runObservability.wall')}: {comparison.data.right.timing.wallMs ?? '—'} ms
               </p>
             </div>
           </div>

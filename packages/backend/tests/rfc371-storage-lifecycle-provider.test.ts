@@ -63,6 +63,11 @@ describeEachProvider('RFC-371 long running derived storage without population tr
     await h.db.update(leases).set({ expiresAt: 0 }).where(eq(leases.id, a.id)).run()
     await collectObservationStorage(h.db)
     await expect(store.get(a.id, a.actorScope)).rejects.toMatchObject({ code: 'not-found' })
+    // Fair cursor sweeps wrap on a subsequent packet; retired rows must not require a full-table scan.
+    for (let n = 0; n < 3; n++) await collectObservationStorage(h.db)
+    expect(
+      await h.db.select().from(versions).where(eq(versions.revision, '7')).get(),
+    ).toBeUndefined()
     const fresh = await store.retain(input('7'))
     expect(fresh.id).not.toBe(a.id)
     expect(fresh.version.revision).toBe('12')

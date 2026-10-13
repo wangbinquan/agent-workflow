@@ -10,6 +10,7 @@ interface ReturnPosition {
   readonly dialogTop: number | null
   readonly dialogLeft: number | null
   readonly dialogContainer: string | null
+  readonly dimensionKey: string | null
 }
 
 /** A task route temporarily unmounts its source table and contribution Dialog. */
@@ -59,12 +60,24 @@ export function useObservationReturn(
       // Portal/table mounting can finish after the parent query becomes ready.
       // Keep the saved position until the actual source row has returned.
       if (!target?.isConnected) return
+      if (
+        saved.dimensionKey !== null &&
+        !Array.from(
+          pageRef.current?.querySelectorAll<HTMLElement>('[data-observation-dimension]') ?? [],
+        ).some((node) => node.dataset.observationDimension === saved.dimensionKey)
+      )
+        return
+      // A cached contribution portal can mount before the background dimension
+      // cards. Restoring early clamps the saved main offset to that shorter
+      // page and permanently loses the original position.
+      if (main && main.scrollHeight - main.clientHeight < saved.mainTop) return
       // The shared Dialog may run initial focus after these frames. Give its
       // existing autofocus resolver the same row so it cannot replace the return.
       if (body) target.setAttribute('data-dialog-autofocus', '')
       if (retainNested) nested.current.delete(scope)
       else position.current = null
       observer.disconnect()
+      resize?.disconnect()
       target.focus({ preventScroll: true })
       if (main) {
         main.scrollTop = saved.mainTop
@@ -87,9 +100,12 @@ export function useObservationReturn(
     }
     const observer = new MutationObserver(schedule)
     observer.observe(document.body, { childList: true, subtree: true })
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    if (pageRef.current) resize?.observe(pageRef.current)
     schedule()
     return () => {
       observer.disconnect()
+      resize?.disconnect()
       cancelAnimationFrame(firstFrame)
       cancelAnimationFrame(secondFrame)
     }
@@ -111,6 +127,13 @@ export function useObservationReturn(
       dialogTop: body?.scrollTop ?? null,
       dialogLeft: body?.scrollLeft ?? null,
       dialogContainer: contributions?.dataset.observationContributions ?? null,
+      dimensionKey:
+        Array.from(
+          pageRef.current?.querySelectorAll<HTMLElement>('[data-observation-dimension]') ?? [],
+        ).find(
+          (node) =>
+            node.dataset.observationDimension === contributions?.dataset.observationContributions,
+        )?.dataset.observationDimension ?? null,
     }
     if (retainNested) nested.current.set(scope, saved)
     else position.current = saved

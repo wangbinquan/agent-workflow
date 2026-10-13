@@ -136,7 +136,8 @@ export async function buildCompleteObservationCohort(
         task,
         namespace: taskSpace,
         trace: input.task !== undefined || input.projectionCohort === true,
-        ...(input.query.cohort === 'usage' && input.task === undefined
+        ...((input.query.cohort === 'usage' || input.projectionCohort === true) &&
+        input.task === undefined
           ? {
               occurrenceVersions: async function* (source: string, stepId: string) {
                 if (!historicalStage) return

@@ -149,26 +149,38 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
 
   test('③ SQLite 上那个补齐触发器确实已经删掉了（否则①证明不了任何事）', async () => {
     if (harness.capabilities.provider !== 'sqlite') {
-      // The current contract projects twelve RFC-371 report triggers; the lineage
-      // invariant still requires zero triggers on the original node_runs relation.
+      // RFC-371 adds original source-revision and row-routing observers. These
+      // four named observers never supply the retired lineage default.
       const rows = await harness.db.all<{ n: unknown }>(
         sql`select count(*) as n from pg_trigger t join pg_class c on c.oid = t.tgrelid
             join pg_namespace ns on ns.oid = c.relnamespace
             where ns.nspname = 'agent_workflow' and not t.tgisinternal`,
       )
-      expect(harness.capabilities.numericFromRawRow(rows[0]?.n, 'n')).toBe(12)
-      const lineage = await harness.db.all<{ n: unknown }>(
-        sql`select count(*) as n from pg_trigger t join pg_class c on c.oid = t.tgrelid
+      expect(harness.capabilities.numericFromRawRow(rows[0]?.n, 'n')).toBe(232)
+      const lineage = await harness.db.all<{ name: string }>(
+        sql`select t.tgname as name from pg_trigger t join pg_class c on c.oid = t.tgrelid
             join pg_namespace ns on ns.oid = c.relnamespace
             where ns.nspname = 'agent_workflow' and c.relname = 'node_runs' and not t.tgisinternal`,
       )
-      expect(harness.capabilities.numericFromRawRow(lineage[0]?.n, 'n')).toBe(0)
+      expect(lineage.map((row) => row.name).sort()).toEqual([
+        'obs_delta_node_runs_d3d6de02630e',
+        'obs_src_node_runs_d3d6de02630e_delete',
+        'obs_src_node_runs_d3d6de02630e_insert',
+        'obs_src_node_runs_d3d6de02630e_update',
+      ])
       return
     }
     const rows = await harness.db.all<{ name: string }>(
       sql`select name from sqlite_master where type = 'trigger' and tbl_name = 'node_runs'`,
     )
-    expect(rows.map((row) => row.name)).toEqual([])
+    expect(rows.map((row) => row.name).sort()).toEqual([
+      'obs_delta_node_runs_d3d6de02630e_delete',
+      'obs_delta_node_runs_d3d6de02630e_insert',
+      'obs_delta_node_runs_d3d6de02630e_update',
+      'obs_src_node_runs_d3d6de02630e_delete',
+      'obs_src_node_runs_d3d6de02630e_insert',
+      'obs_src_node_runs_d3d6de02630e_update',
+    ])
   })
 })
 

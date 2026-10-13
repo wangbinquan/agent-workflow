@@ -105,13 +105,45 @@ function statementCount(chunk: string): number {
   // A trigger body legitimately carries inner `;` inside BEGIN … END. Collapse
   // it to a single terminator so a future trigger migration is judged on its
   // outer statement, not its body.
-  const collapsed = /\bCREATE\s+TRIGGER\b/i.test(bare)
-    ? bare.replace(/\bBEGIN\b[\s\S]*?\bEND\b/i, 'BEGIN_END')
-    : bare
+  let collapsed = bare
+  // CASE ... END inside a trigger is not its outer END. Match balanced tokens;
+  // preserve all text and terminators after that outer END, including a second statement.
+  let after = 0
+  for (;;) {
+    const trigger = /\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?TRIGGER\b/i.exec(collapsed.slice(after))
+    if (!trigger) break
+    const header = after + trigger.index + trigger[0].length
+    const begin = /\bBEGIN\b/i.exec(collapsed.slice(header))
+    if (!begin) break
+    const start = header + begin.index
+    let depth = 1,
+      end: number | undefined
+    for (const token of collapsed.slice(start + begin[0].length).matchAll(/\bCASE\b|\bEND\b/gi)) {
+      if (token[0].toUpperCase() === 'CASE') depth++
+      else if (--depth === 0) {
+        end = start + begin[0].length + token.index! + token[0].length
+        break
+      }
+    }
+    if (end === undefined) break
+    collapsed = collapsed.slice(0, start) + 'BEGIN_END' + collapsed.slice(end)
+    after = start + 'BEGIN_END'.length
+  }
   return collapsed.split(';').filter((segment) => segment.trim().length > 0).length
 }
 
 describe('migration statement policy', () => {
+  test('nested CASE in an original trigger remains one statement; following statements are never swallowed', () => {
+    const trigger =
+      "CREATE TRIGGER delta AFTER INSERT ON original BEGIN INSERT INTO retained(value) VALUES(CASE WHEN NEW.value IS NULL THEN 'END; ignored' ELSE CASE WHEN NEW.value=1 THEN 'one' ELSE 'other' END END); UPDATE retained SET value=value; END;"
+    expect(statementCount(trigger)).toBe(1)
+    expect(statementCount(trigger + 'INSERT INTO original VALUES(2);')).toBe(2)
+    expect(statementCount(trigger + trigger.replace('TRIGGER delta', 'TRIGGER next_delta'))).toBe(2)
+    expect(
+      statementCount('CREATE TABLE original(value TEXT); INSERT INTO original VALUES(1);'),
+    ).toBe(2)
+  })
+
   test('there is at least one migration to police', () => {
     // Fails closed: if the directory ever moves, this file must not degrade
     // into a vacuously green loop over zero files.

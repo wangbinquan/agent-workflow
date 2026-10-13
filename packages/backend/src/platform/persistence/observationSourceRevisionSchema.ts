@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { PostgresqlSchemaStatement } from './postgresqlSchema'
 import type { LogicalSchemaContract } from './schemaContract'
 import { sha256Hex } from '@/util/hash'
+import { unhandledDatabaseProvider, type DatabaseProvider } from './databaseProviders'
 
 export const OBSERVATION_SOURCE_REVISION = {
   kind: 'observation-source-revision',
@@ -91,12 +92,14 @@ export function observationSourceRevisionStatements(contract: LogicalSchemaContr
     !isDeepStrictEqual(revisions[0]!.sourceRevisionProjection, OBSERVATION_SOURCE_REVISION)
   )
     throw new Error('Unsupported observation-source-revision schema projection')
-  const physical = (id: string, provider: 'sqlite' | 'postgresql') => {
+  const physical = (id: string, provider: DatabaseProvider) => {
     const table = contract.tables.find((table) => table.id === id)
     const name = table?.providerTables[provider]
     if (!table || table.disposition !== 'KEEP' || !name)
       throw new Error('Observation source revision requires its complete KEEP relation: ' + id)
-    return provider === 'sqlite' ? quote(name) : '"agent_workflow".' + quote(name)
+    if (provider === 'sqlite') return quote(name)
+    if (provider === 'postgresql') return '"agent_workflow".' + quote(name)
+    return unhandledDatabaseProvider(provider)
   }
   const sqliteTarget = physical(TABLE, 'sqlite'),
     postgresTarget = physical(TABLE, 'postgresql')

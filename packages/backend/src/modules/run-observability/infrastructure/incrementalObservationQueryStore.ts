@@ -1,5 +1,6 @@
 import { observationScopeRefs } from '@/db/observationStorage'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { jsonPathArray } from '@/platform/persistence/jsonPathArray'
 import { CompleteObservationError } from '../domain/completeObservationError'
 import { admitObservationStorage, observationViewAlive } from './observationStorageLifetime'
 import { decodeQualifiedObservationGroup } from '../domain/qualifiedObservationIndexes'
@@ -26,7 +27,6 @@ import type {
   IncrementalObservationVersion,
 } from '../ports/incrementalObservationProjection'
 import type { QualifiedObservationContribution } from '../ports/incrementalObservationQualified'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
 
 /** Revisions are arbitrary precision decimal strings. Compare length then digits;
  * neither provider may silently coerce them to floating point or 64-bit numbers. */
@@ -476,22 +476,11 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
       readonly components?: readonly string[]
     }) {
       await qualify(input.version)
-      const scopes =
-        engineOf(db).provider === 'sqlite'
-          ? sql<
-              string | null
-            >`json_extract(${observationProjectionHistory.document}, '$.detail.scopes')`
-          : sql<
-              string | null
-            >`${observationProjectionHistory.document}::jsonb #>> '{detail,scopes}'`
-      const visibility =
-        engineOf(db).provider === 'sqlite'
-          ? sql<
-              string | null
-            >`json_extract(${observationProjectionHistory.document}, '$.detail.visibility')`
-          : sql<
-              string | null
-            >`${observationProjectionHistory.document}::jsonb #>> '{detail,visibility}'`
+      const scopes = jsonPathArray(db, observationProjectionHistory.document, ['detail', 'scopes'])
+      const visibility = jsonPathArray(db, observationProjectionHistory.document, [
+        'detail',
+        'visibility',
+      ])
       let after: string | undefined
       for (;;) {
         const page = await db
@@ -575,7 +564,10 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
       const rows = await db
         .select({
           section: observationProjectionHistory.section,
-          total: sql<string>`CAST(COUNT(DISTINCT ${observationProjectionHistory.originalKey}) AS TEXT)`,
+          total:
+            sql<string>`CAST(COUNT(DISTINCT ${observationProjectionHistory.originalKey}) AS TEXT)`.mapWith(
+              String,
+            ),
         })
         .from(observationProjectionHistory)
         .where(

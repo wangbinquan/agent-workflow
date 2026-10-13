@@ -207,7 +207,8 @@ export function completeObservationMetrics(
         : undefined
     return {
       state: 'not-ready',
-      gaps: [...fold.gaps],
+      // Gaps are a set of facts; component arrival order must not change a report.
+      gaps: [...fold.gaps].sort(),
       ...(fold.tokenCoverageKnown !== false ? { tokenCoverage } : {}),
       ...(recordedUsage ? { recordedUsage } : {}),
       ...(records !== '0' || !fold.visible || BigInt(knownZeroCostInvocations) > 0n
@@ -224,7 +225,11 @@ export function completeObservationMetrics(
       ...(recordedCost ? { recordedCost } : {}),
     }
   }
-  if (fold.invocations === '0' && BigInt(fold.historicalReferences ?? '0') === 0n)
+  if (
+    fold.invocations === '0' &&
+    BigInt(fold.historicalReferences ?? '0') === 0n &&
+    fold.records === '0'
+  )
     return { state: 'not-applicable' }
   const state = !fold.visible ? 'hidden' : fold.priced ? 'complete' : 'unpriced'
   return {

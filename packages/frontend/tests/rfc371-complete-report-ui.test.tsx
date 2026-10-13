@@ -839,7 +839,9 @@ test('a background projection keeps the open contribution on its labelled immuta
   expect(within(dialog).getByRole('button', { name: '子任务' })).toBeTruthy()
   fireEvent.click(within(dialog).getAllByRole('button', { name: '关闭' }).at(-1)!)
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-  expect(document.activeElement?.getAttribute('data-observation-dimension')).toBe(agent.key)
+  await waitFor(() =>
+    expect(document.activeElement?.getAttribute('data-observation-dimension')).toBe(agent.key),
+  )
 })
 
 // A retained contribution must also observe its own report validity after the

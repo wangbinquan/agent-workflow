@@ -6474,6 +6474,7 @@ export interface Resources {
     }
     distillJobs: {
       empty: string
+      recoveredOriginal: string
       emptyDescription: string
       colId: string
       colStatus: string
@@ -6492,6 +6493,7 @@ export interface Resources {
       action: {
         retry: string
         cancel: string
+        recover: string
       }
     }
     // RFC-043: aliases existing candidate.source.* at top level so the

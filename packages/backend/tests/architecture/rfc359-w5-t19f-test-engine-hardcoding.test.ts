@@ -448,6 +448,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc371-report-snapshot-file.test.ts: 1',
   // RFC-371: physical SQLite dbstat/WAL capacity and cancellation use actual readonly files;
   // neutral capacity and durable hourly samples remain covered by both application providers.
+  // RFC-371: original physical SQLite counter Worker; neutral lifecycle stays dual provider.
+  'rfc371-storage-counter-worker.test.ts: 1',
   'rfc371-storage-sampling-worker.test.ts: 2',
   // RFC-371: this one real file is the external OpenCode SQLite format;
   // System persistence, EOF, resume and CNY are covered by both AW providers.

@@ -1,3 +1,5 @@
+import { unhandledDatabaseProvider, type DatabaseProvider } from './databaseProviders'
+
 /** Only identities needed to route a committed row; no numeric document is
  * copied into the source outbox. Preserve old identities on UPDATE/DELETE. */
 const paths: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
@@ -43,13 +45,17 @@ export function originalObservationRoute(
 export function observationDocumentRouteSQL(
   source: string,
   row: 'OLD' | 'NEW',
-  provider: 'sqlite' | 'postgresql',
+  provider: DatabaseProvider,
 ) {
+  const expression = (path: readonly string[]) => {
+    if (provider === 'sqlite')
+      return `CASE WHEN json_valid(${row}."document") AND json_type(${row}."document",'$.${path.join('.')}')='text' THEN CAST(json_extract(${row}."document",'$.${path.join('.')}') AS TEXT) ELSE NULL END`
+    if (provider === 'postgresql')
+      return `CASE WHEN pg_input_is_valid(${row}."document",'jsonb') THEN CASE WHEN jsonb_typeof(${row}."document"::jsonb #> '{${path.join(',')}}')='string' THEN ${row}."document"::jsonb #>> '{${path.join(',')}}' ELSE NULL END ELSE NULL END`
+    return unhandledDatabaseProvider(provider)
+  }
   return Object.entries(observationDocumentRoutePaths(source)).map(([name, path]) => ({
     name,
-    expression:
-      provider === 'sqlite'
-        ? `CASE WHEN json_valid(${row}."document") AND json_type(${row}."document",'$.${path.join('.')}')='text' THEN CAST(json_extract(${row}."document",'$.${path.join('.')}') AS TEXT) ELSE NULL END`
-        : `CASE WHEN pg_input_is_valid(${row}."document",'jsonb') THEN CASE WHEN jsonb_typeof(${row}."document"::jsonb #> '{${path.join(',')}}')='string' THEN ${row}."document"::jsonb #>> '{${path.join(',')}}' ELSE NULL END ELSE NULL END`,
+    expression: expression(path),
   }))
 }

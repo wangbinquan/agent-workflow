@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { sha256Hex } from '@/util/hash'
 import type {
   CompleteObservationSection,
   HistoricalObservationExecution,
@@ -98,7 +98,7 @@ export function qualifiedObservationIndexes(
       )
         return key
       const prefix = key.slice(0, key.indexOf('/') + 1),
-        id = prefix + createHash('sha256').update(key).digest('hex')
+        id = prefix + sha256Hex(key)
       descriptors[id] = key
       return id
     }

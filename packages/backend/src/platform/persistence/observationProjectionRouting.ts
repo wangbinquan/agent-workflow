@@ -15,6 +15,12 @@ import {
 } from './observationProjectionRoutes'
 import { sha256Hex } from '@/util/hash'
 import { jsonPathText } from './jsonPathText'
+import type { DatabaseProvider } from './databaseProviders'
+
+const relationPrefix = { sqlite: '', postgresql: '"agent_workflow".' } satisfies Record<
+  DatabaseProvider,
+  string
+>
 
 const quoted = (name: string) => '"' + name.replaceAll('"', '""') + '"'
 const roots =
@@ -39,7 +45,7 @@ export function originalObservationProjectionRouter(): OriginalObservationChange
     const physical = table.providerTables[provider]
     if (!physical || table.disposition !== 'KEEP')
       throw new Error('Original projection relation missing: ' + table.id)
-    return sql.raw((provider === 'postgresql' ? '"agent_workflow".' : '') + quoted(physical))
+    return sql.raw(relationPrefix[provider] + quoted(physical))
   }
   async function rows(
     tx: DatabaseTransaction,

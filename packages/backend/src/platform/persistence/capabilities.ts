@@ -49,6 +49,9 @@ import {
   sqliteStorageUsage,
   postgresqlStorageUsage,
   type DatabaseStorageUsage,
+  sqliteStorageCounters,
+  postgresqlStorageCounters,
+  type DatabaseStorageCounters,
 } from './storageUsage'
 
 /** SQLite 的绑定参数预算：保守值，见 `EngineCapabilities.batchInsertMax` 的注释。 */
@@ -76,6 +79,10 @@ export type EngineErrorClass = 'unique-violation' | 'serialization' | 'busy' | '
 
 export interface EngineCapabilities {
   storageUsage(db: ProviderNeutralDatabase, signal?: AbortSignal): Promise<DatabaseStorageUsage>
+  storageCounters(
+    db: ProviderNeutralDatabase,
+    signal?: AbortSignal,
+  ): Promise<DatabaseStorageCounters>
   /** 只供矩阵自身的测试与诊断日志读；业务代码读它就是分叉，W5 守卫会红。 */
   readonly provider: DatabaseProvider
   /** 事务体看到的隔离形态：PG 是多写并发（须显式行锁）；SQLite 在 BEGIN IMMEDIATE 下独占。 */
@@ -339,6 +346,7 @@ function classifySqliteError(error: unknown): EngineErrorClass {
 export function createSqliteCapabilities(): EngineCapabilities {
   return Object.freeze({
     storageUsage: sqliteStorageUsage,
+    storageCounters: sqliteStorageCounters,
     provider: 'sqlite',
     isolation: 'exclusive',
     maxBindParameters: SQLITE_MAX_BIND_PARAMETERS,
@@ -439,6 +447,7 @@ export function postgresqlUniqueViolationConstraint(error: unknown): string | un
 export function createPostgresqlCapabilities(): EngineCapabilities {
   return Object.freeze({
     storageUsage: postgresqlStorageUsage,
+    storageCounters: postgresqlStorageCounters,
     provider: 'postgresql',
     isolation: 'read-committed',
     maxBindParameters: POSTGRESQL_MAX_BIND_PARAMETERS,

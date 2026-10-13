@@ -404,7 +404,7 @@ test('pagination requests the opaque cursor and disabling next does not erase fi
 test('task filters reach list and analysis queries, survive drill-down and reset pagination', async () => {
   const f = fixture({ ...search, after: 'old-page', workflow: 'workflow-1' })
   await screen.findByRole('button', { name: '真实任务' })
-  fireEvent.change(screen.getByRole('textbox', { name: '任务名称或 ID' }), {
+  fireEvent.change(screen.getByRole('searchbox', { name: i18n.t('runObservability.taskQuery') }), {
     target: { value: '真实任务' },
   })
   await waitFor(() => expect(f.paths.at(-1)?.searchParams.get('q')).toBe('真实任务'))
@@ -583,9 +583,7 @@ test.each(['zh-CN', 'en-US'])(
       }),
     )
     fireEvent.change(
-      screen.getByRole('textbox', {
-        name: language === 'zh-CN' ? '任务名称或 ID' : 'Task name or ID',
-      }),
+      screen.getByRole('searchbox', { name: i18n.t('runObservability.taskQuery') }),
       { target: { value: 'new-scope' } },
     )
     expect(f.changes.at(-1)?.runtime).toBeUndefined()

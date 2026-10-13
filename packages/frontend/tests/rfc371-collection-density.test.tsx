@@ -20,6 +20,7 @@ const value: CompleteObservationMetrics = {
     invocations: '0',
     observedInvocations: '0',
     records: '1',
+    bucketRecords: { input: '1', cacheRead: '1', cacheWrite: '1', output: '1' },
     historicalReferences: '1',
     observedHistoricalReferences: '1',
   },
