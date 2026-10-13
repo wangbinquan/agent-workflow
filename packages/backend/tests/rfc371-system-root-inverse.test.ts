@@ -1,7 +1,8 @@
 // Full original bootstrap body oracles remain in their existing RFC-370 suites.
 // These regressions reject disconnected System capture rather than normalizing it away.
-// CI 38375430917: the exact statement receipt also covers the published incremental
-// projection and build shutdown fields; the original complete-body oracle is unchanged.
+// CI 38393362575: native-fact hooks are inversed before statement fingerprinting.
+// The receipt therefore covers projection after the exact closeBuild inverse; a
+// disconnected closeBuild must fail that earlier guard. Original body oracles stay intact.
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -77,7 +78,9 @@ for (const entry of reviewed.roots) {
         actual.text.slice(statement.end)
       const disconnected = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
       expect(() => inverseTaskLaunchRootStatements(disconnected, entry.rootName)).toThrow(
-        'task-launch inverse unreviewed statement: observationReports',
+        lostField === 'closeBuild'
+          ? 'native-fact root inverse unreviewed or incomplete hooks'
+          : 'task-launch inverse unreviewed statement: observationReports',
       )
     })
   }
