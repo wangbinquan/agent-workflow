@@ -241,11 +241,9 @@ test('Skill edit: short-window scroll reaches source, preview and technical deta
   expect(await workspace.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
     true,
   )
-  const workspaceBox = (await workspace.boundingBox())!
-  await page.mouse.move(
-    workspaceBox.x + workspaceBox.width - 10,
-    workspaceBox.y + workspaceBox.height / 2,
-  )
+  // The editor also scrolls in a short window. Wheel over the description so
+  // the outer workspace, rather than that nested scroll owner, receives it.
+  await page.getByTestId('skill-description-input').hover()
   await page.mouse.wheel(0, 600)
   await expect.poll(() => workspace.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
   await source.scrollIntoViewIfNeeded()

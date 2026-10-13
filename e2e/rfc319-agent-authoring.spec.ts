@@ -77,7 +77,7 @@
 //   packages/frontend/src/components/split/UnsavedChangesGuard.tsx:76-90   dirty ⇒ 阻断一切站内导航
 //   packages/frontend/src/components/split/UnsavedChangesGuard.tsx:155-195 三个 testid
 //   packages/frontend/src/routes/agents.detail.tsx:52-53   remountDeps：换 param 就重挂载
-//   packages/frontend/src/components/MarkdownEditor.tsx:34-57  编辑 / 预览两栏（不是页签）
+//   packages/frontend/src/components/MarkdownEditor.tsx  编辑 / 双栏 / 预览与可调分隔条
 //   packages/frontend/src/components/MultiSelect.tsx:350-363   rowDisabled = 未选中 ∧ disabled ⇒ aria-disabled + 点不动
 //   packages/frontend/src/components/SkillsPicker.tsx:80-84    不可用引用的选项**无条件**并入候选（这才让置灰可达）
 //   packages/frontend/src/components/AgentForm.tsx:459-471     state==='unavailable' ⇒ disabled: true
@@ -1042,6 +1042,10 @@ test('RFC-319 AGENT-X3: Prompt 页写 Markdown 正文实时出预览，并随保
 
   const editor = promptPanel.locator('textarea')
   await editor.fill(body)
+
+  // RFC-373: compact containers show one pane; the explicit preview control
+  // reaches the same renderer on both compact and desktop layouts.
+  await promptPanel.getByTestId('markdown-mode-preview').click()
 
   const preview = promptPanel.locator('.md-editor__pane--preview')
   await expect(

@@ -85,12 +85,10 @@ describe('RFC-198 specialized mobile layouts', () => {
     expect(block).toMatch(
       /\.file-tree__add,\s*\.file-tree__actions,\s*\.task-outputs-panel__actions\s*\{\s*flex-wrap: wrap;/,
     )
-    expect(block).toMatch(
-      /\.md-editor,\s*\.memory-compare\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/,
-    )
-    expect(block).toMatch(
-      /\.md-editor--fill\s*\{[^}]*grid-template-rows: minmax\(16rem, 1fr\) minmax\(16rem, 1fr\);[^}]*overflow-y: auto;/,
-    )
+    // RFC-373 replaced the Markdown-specific mobile stack with a container-
+    // aware single pane. Its behavior is covered in the interaction + real
+    // browser suites; memory comparison retains its existing mobile stack.
+    expect(block).toMatch(/\.memory-compare\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/)
     expect(block).toMatch(/\.workgroup-room__runlog-row\s*\{\s*flex-wrap: wrap;/)
   })
 
