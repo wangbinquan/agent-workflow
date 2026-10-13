@@ -1,3 +1,15 @@
+## 2026-10-13 RFC-370：按用户指示恢复完整实现
+
+用户最新要求“先继续推进 RFC”，本会话恢复开发，不再等待其它归属的 CI 失败。当前已新增同一 SO／Task 写入上下文的宿主 bootstrap、一次安装真实 recovery／runtime 的构造合同，以及先资源 resume 后 authority start 的 session 装配方法；共同入口转交完整 host runtime 选择。Task、Intent、Maintenance、after-commit 四个 owner 的独立绑定与 MCP 持久查询面已写入候选，对应回归随实现编写，尚未执行。
+
+按现行硬规则，剩余生产实现、真实接线和测试用例全部完成后再集中验证。三个根尚未选择完整十九个 owner，MCP／report 完整生命周期、状态 API／UI、A-T7／A-G 与 CS 独立 adapter、先 M0 再 M1～M4 继续开放；AW 尚未部署到 CS。本轮仅必要格式／语法／差异静态自查，无本机 AW 功能验证、逐片门、跨 session 信息或他人代码回退；新候选未提交、未推送、未部署，不代签共享 CI。详见 [H7 实现记录](design/RFC-370-crewstation-hosted-deployment/host-execution-root-assembly.md)。以下原正文及所有并发产出保留。
+
+## 2026-10-13 RFC-213：补修首次大库检查期间保存源码导致的启动退出
+
+用户反馈 09:27–09:29 启动自行退出。新增真实 CLI 用例在首次同步完整性检查期间保存源码，稳定复现 `Requested module is not instantiated yet`；原验证只覆盖了已就绪后的保存。原运行时自检的两处动态导入改为静态导入，检查与安全备份保持，开发检查开始及错误栈可见。受影响三文件 10 pass / 0 fail，定向 lint／格式通过；本机约 20 GiB 库实际检查期间保存源码，103.678 秒只扫描一次，同 PID 的后续两轮均复用并健康监听。后端／前端／登录 200，未登录转发 API 401，随后服务 exit 0。首次冷启动的全库检查成本仍约 90–120 秒。
+
+`6849c1073` 主 CI 已终态 20 success／52 failure，Windows failure，维护窗口 success。补本次漏登的 CLI bootstrap owner；紧邻基底相同的三处格式失败与其他归属失败保留。新候选十三份架构配套已在临时目录生成，共享清单的并发在制不能覆盖；共享 start.ts 的 host-execution 转发与本 STATE 的 RFC-370 记录保留并一同提交，未知无关路径不扫入。新 SHA 的 hosted CI 另验，未签全仓绿。见 [启动与重载记录](design/RFC-213-disaster-recovery/dev-reload-and-migration-checks.md)。以下历史与并发正文完整保留。
+
 ## 2026-10-13 RFC-213：恢复开发源码热重载与迁移后检查范围
 
 按用户批准的最小范围，已迁移的库不重复执行迁移后的全库外键检查与历史后验；真正启动的完整性检查和迁移前安全备份保持。backend dev 沿原 main.ts start 入口使用 Bun --hot，源码保存先完整关闭旧应用，再复用同一进程、同一数据库文件和未变 journal 的校验准备。新进程、库文件替换、新迁移及启动失败不能复用；本次信号监听关闭时注销。

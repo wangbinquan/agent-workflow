@@ -426,6 +426,7 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/cli/daemonRealtimePolicy.ts': 'bootstrap',
   'packages/backend/src/cli/database.ts': 'bootstrap',
   'packages/backend/src/cli/dbCompact.ts': 'bootstrap',
+  'packages/backend/src/cli/dev.ts': 'bootstrap',
   'packages/backend/src/cli/doctor.ts': 'bootstrap',
   'packages/backend/src/cli/frameBackfill.ts': 'bootstrap',
   'packages/backend/src/cli/migrate.ts': 'bootstrap',

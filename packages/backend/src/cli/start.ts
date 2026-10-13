@@ -245,7 +245,8 @@ import {
 } from '@/ws/broadcaster'
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
-import { getRuntimeDriver } from '@/services/runtime'
+import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
+import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'
 import { Paths, appHome as systemAgentAppHome } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, statSync } from 'node:fs'
@@ -399,6 +400,7 @@ import {
 import {
   createDaemonProviderRuntimeSession,
   type DaemonProviderCloseParticipant,
+  type DaemonProviderHostExecutionRuntimeSelection,
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
 } from './daemonProviderRuntimeSession'
@@ -578,6 +580,7 @@ interface DaemonProviderRuntimeComposition {
   readonly webSocket: ReturnType<typeof buildWebSocketAdapter>
   readonly runtimeFactories?: readonly DaemonProviderRuntimeHandleFactory[]
   readonly backgroundWriterFactories?: readonly DaemonProviderRuntimeHandleFactory[]
+  readonly hostExecutionRuntime?: DaemonProviderHostExecutionRuntimeSelection
   readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
   readonly shutdownIdentity: () => void | Promise<void>
   readonly closeProvider: () => void | Promise<void>
@@ -620,6 +623,9 @@ async function _createComposedDaemonProviderRuntimeSession(
     ...(input.backgroundWriterFactories === undefined
       ? {}
       : { backgroundWriterFactories: input.backgroundWriterFactories }),
+    ...(input.hostExecutionRuntime === undefined
+      ? {}
+      : { hostExecutionRuntime: input.hostExecutionRuntime }),
     ...(input.providerCloseParticipants === undefined
       ? {}
       : { providerCloseParticipants: input.providerCloseParticipants }),
@@ -1906,8 +1912,6 @@ async function composeSqliteProviderSession(
   // believe it is verifying — RFC-247 rationale). 'not-modeled' policy rows
   // are reported separately so the gap stays visible.
   {
-    const { assertRuntimeDeclarations } = await import('@/services/runtime/selfCheck')
-    const { getRuntimeDriver, RUNTIME_KINDS } = await import('@/services/runtime')
     const { notModeled } = assertRuntimeDeclarations(RUNTIME_KINDS.map(getRuntimeDriver))
     if (notModeled.length > 0) {
       log.info('runtime declaration self-check: not-modeled dispositions', { notModeled })

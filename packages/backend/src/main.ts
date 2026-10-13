@@ -74,6 +74,7 @@ import {
 import { runManagedProcess } from './services/execution/managedProcess'
 import { resolveMigrationsFolder } from './util/migrationsFolder'
 import { Paths } from './util/paths'
+import { createLogger } from './util/log'
 import { createPostgresqlResourcePackageExecutionAdapter } from './services/resourcePackage/executionAdapter'
 
 declare const AW_E2E_BUILD: boolean | undefined
@@ -637,6 +638,15 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   const msg = err instanceof Error ? err.message : String(err)
-  console.error(msg)
+  // Keep the failing development generation's stack in both the terminal and daemon log.
+  if (process.env.AGENT_WORKFLOW_DEV_HOT_RELOAD === '1') {
+    createLogger('dev').error('development startup failed', {
+      error: msg,
+      stack: err instanceof Error ? err.stack : undefined,
+    })
+    console.error(err)
+  } else {
+    console.error(msg)
+  }
   process.exit(1)
 })

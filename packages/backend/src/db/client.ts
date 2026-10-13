@@ -307,6 +307,9 @@ export function openDb(opts: OpenDbOptions): DbClient {
     opts.developmentIntegrity?.validatedDatabase === developmentIdentity
   if (opts.skipIntegrityCheck !== true && !reuseIntegrity) {
     const checkedAt = Date.now()
+    if (opts.developmentIntegrity !== undefined) {
+      console.info('[dev] checking database integrity before startup (PRAGMA quick_check)')
+    }
     let rows: { quick_check: string }[]
     try {
       rows = sqlite.query('PRAGMA quick_check;').all() as { quick_check: string }[]
