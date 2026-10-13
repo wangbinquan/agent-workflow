@@ -212,7 +212,10 @@ test('a retained atom replaces all derived index aliases rather than applying it
       aggregates: [
         ...first.aggregates,
         legacy,
-        observationRowCountKey('previous-owner', raw.detail),
+        observationRowCountKey('previous-owner', {
+          ...raw.detail,
+          document: { ...document, invocationId: undefined },
+        }),
       ],
     },
     repaired = qualifiedObservationIndexes(polluted)

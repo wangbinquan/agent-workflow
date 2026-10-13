@@ -8,16 +8,16 @@
 
 ## 运维 / 部署面（daemon 自身读取）
 
-| 变量                                      | 读取点                                                  | 语义                                                                                 |
-| ----------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                             | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
-| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                           | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
-| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/cli/start.ts`                              | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
-| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/cli/start.ts`                              | dev 模式下单实例 flock 交接的等待毫秒数                                              |
-| `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/cli/start.ts`                              | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
-| `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts`       | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
-| `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts` | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值  |
-| `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`  | `backend/src/platform/background/maintenanceService.ts` | 事件循环停顿记 WARN 的门槛毫秒（默认 1000，夹在 [采样周期×2, 60000]）；调低用于归因  |
+| 变量                                      | 读取点                                                                                                                                     | 语义                                                                                                                                                                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                                                                                                                | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                                                                                                                                                                                |
+| `AGENT_WORKFLOW_VERSION`                  | `backend/src/util/version.ts`                                                                                                              | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                                                                                                                                                                             |
+| `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/cli/start.ts`                                                                                                                 | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                                                                                                                                                                              |
+| `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/cli/start.ts`                                                                                                                 | dev 模式下单实例 flock 交接的等待毫秒数                                                                                                                                                                                                    |
+| `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/cli/start.ts`                                                                                                                 | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行                                                                                                                                                       |
+| `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts`                                                                                          | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）                                                                                                                                                        |
+| `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts`                                                                                    | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值                                                                                                                                                        |
+| `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`  | `backend/src/platform/background/maintenanceService.ts`                                                                                    | 事件循环停顿记 WARN 的门槛毫秒（默认 1000，夹在 [采样周期×2, 60000]）；调低用于归因                                                                                                                                                        |
 | `AW_NATIVE_OBSERVATION_ADMISSIONS`        | `backend/src/cli/start.ts`、`backend/src/cli/postgresqlDaemonApplication.ts` → `backend/src/platform/persistence/nativeUsageAdmissions.ts` | 原生采集准入的 JSON 数组；每项为已注册运行时的 `registrationId` 与正整数 `configurationRevision`，只允许这两个字段，重复身份或无效 JSON 会拒绝启动。未设置或空字符串按空数组处理。它选择安装配置，不限制任务或用量统计总量，也不配置费率。 |
 
 ## 框架 ↔ 子进程契约（daemon 写入、child 读取）
@@ -133,3 +133,7 @@ define 固定为 `false`，所以同名进程变量不会暂停正式服务。
 | 变量                                 | 处置                                                                                                                                                 |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS` | RFC-284 T26 删除：`/api/runtimes/status` 探针超时的测试注入改走 `runtimeDiagnosticTestDependencies.probeTimeoutMsForTest`（deps 缝），生产恒 5s 默认 |
+
+### `AGENT_WORKFLOW_DEV_HOT_RELOAD`
+
+内部开发监督器的模式标记，`bun dev` 的原启动链设置为 `1`。用于同一进程来源重载的数据库检查复用与失败日志；冷启动完整性检查、迁移和备份保持。普通启动缺省不设置，不是运行时或模型配置项。

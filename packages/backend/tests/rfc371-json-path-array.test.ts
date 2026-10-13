@@ -4,6 +4,7 @@ import { expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { jsonPathArray } from '@/platform/persistence/jsonPathArray'
 import { jsonPathText } from '@/platform/persistence/jsonPathText'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-371 original nested JSON identities and scope arrays', (h) => {
@@ -25,10 +26,32 @@ describeEachProvider('RFC-371 original nested JSON identities and scope arrays',
       ${jsonPathText(h.db, sql`${document}`, ['request', 'reportId'])} AS identity,
       ${jsonPathText(h.db, sql`${document}`, ['detail', 'scopes'])} AS "wrongIdentity"`)
     )[0]
+    expect(engineOf(h.db)).toBe(h.session.engine)
     expect(JSON.parse(row!.scopes!)).toEqual(scopes)
     expect(JSON.parse(row!.empty!)).toEqual([])
     expect(row!.identity).toBe('report-7')
     expect(row!.wrongIdentity).toBeNull()
+  })
+  // The client has no resultKind, while its real transaction does. Both must
+  // render the original nested path rather than PG's top-level SQLite shim.
+  test('plain client and transaction retain the same original nested arrays and strings', async () => {
+    const document = JSON.stringify({
+      detail: { scopes: [{ task: 'original', count: '9007199254740993' }, { task: 'original' }] },
+      request: { reportId: 'nested-original' },
+    })
+    const query = (handle: Parameters<typeof jsonPathArray>[0]) =>
+      sql`SELECT ${jsonPathArray(handle, sql`${document}`, ['detail', 'scopes'])} AS scopes, ${jsonPathText(handle, sql`${document}`, ['request', 'reportId'])} AS identity`
+    const direct = await h.db.all<{ scopes: string; identity: string }>(query(h.db))
+    const retained = await h.session.snapshotRead(async (tx) => {
+      expect(engineOf(tx)).toBe(h.session.engine)
+      return await tx.all<{ scopes: string; identity: string }>(query(tx))
+    })
+    expect(retained).toEqual(direct)
+    expect(JSON.parse(direct[0]!.scopes)).toEqual([
+      { task: 'original', count: '9007199254740993' },
+      { task: 'original' },
+    ])
+    expect(direct[0]!.identity).toBe('nested-original')
   })
   test('missing, malformed and scalar members cannot become an array', async () => {
     for (const document of [

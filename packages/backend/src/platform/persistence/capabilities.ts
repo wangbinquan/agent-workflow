@@ -194,6 +194,9 @@ export interface EngineCapabilities {
    *     `AND` 的求值顺序（planner 会按代价重排），只有 `CASE` 才保证非法 JSON 上不去做那次转换。
    */
   jsonMemberText(document: SQLWrapper, member: string): SQL
+  /** Validated nested paths retain native string/array values, without JSON scalar coercion. */
+  jsonPathText(document: SQLWrapper, path: readonly string[]): SQL
+  jsonPathArray(document: SQLWrapper, path: readonly string[]): SQL<string | null>
 
   /** `ORDER BY col ASC`，按 SQLite 的 NULL 落位（NULL 最前）。 */
   ascNullsFirst(column: SQLWrapper): SQL
@@ -384,6 +387,16 @@ export function createSqliteCapabilities(): EngineCapabilities {
       await db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`)
       await db.run(sql`VACUUM`)
     },
+    jsonPathText: (document, path) => {
+      const literal = sql.raw("'$." + path.join('.') + "'")
+      return sql`CASE WHEN json_valid(${document}) THEN CASE WHEN json_type(${document}, ${literal}) = 'text' THEN json_extract(${document}, ${literal}) ELSE NULL END ELSE NULL END`
+    },
+    jsonPathArray: (document, path) => {
+      const literal = sql.raw("'$." + path.join('.') + "'")
+      return sql<
+        string | null
+      >`CASE WHEN json_valid(${document}) THEN CASE WHEN json_type(${document}, ${literal}) = 'array' THEN json_extract(${document}, ${literal}) ELSE NULL END ELSE NULL END`
+    },
     ascNullsFirst: (column) => sql`${column} asc`,
     descNullsLast: (column) => sql`${column} desc`,
     likeCaseInsensitive: (column, pattern, escape) =>
@@ -485,6 +498,16 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     },
     async reclaimScrubbedStorage() {
       // PostgreSQL 由 autovacuum 回收页面；凭据单元格是事务内改写的，daemon 侧不做 VACUUM。
+    },
+    jsonPathText: (document, path) => {
+      const literal = sql.raw("'{" + path.join(',') + "}'")
+      return sql`CASE WHEN pg_input_is_valid(${document}, 'jsonb') THEN CASE WHEN jsonb_typeof((${document})::jsonb #> ${literal}) = 'string' THEN (${document})::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
+    },
+    jsonPathArray: (document, path) => {
+      const literal = sql.raw("'{" + path.join(',') + "}'")
+      return sql<
+        string | null
+      >`CASE WHEN pg_input_is_valid(${document}, 'jsonb') THEN CASE WHEN jsonb_typeof((${document})::jsonb #> ${literal}) = 'array' THEN (${document})::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
     },
     ascNullsFirst: (column) => sql`${column} asc nulls first`,
     descNullsLast: (column) => sql`${column} desc nulls last`,

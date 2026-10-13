@@ -103,9 +103,14 @@ const POSTGRESQL_ENGINE = createPostgresqlCapabilities()
  * 这比品牌字段更稳：事务句柄是 drizzle 的 `SQLiteTransaction`，不带 `$provider`。
  */
 export function engineOf(handle: DatabaseTransaction): EngineCapabilities {
-  return (handle as unknown as { readonly resultKind?: unknown }).resultKind === 'async'
-    ? POSTGRESQL_ENGINE
-    : SQLITE_ENGINE
+  const kind = (handle as unknown as { readonly resultKind?: unknown }).resultKind
+  // Database clients expose the registered session; only transaction handles
+  // carry resultKind. A plain PG client must never borrow SQLite JSON shims.
+  return kind === undefined
+    ? databaseSessionFor(handle as ProviderNeutralDatabase).engine
+    : kind === 'async'
+      ? POSTGRESQL_ENGINE
+      : SQLITE_ENGINE
 }
 
 /**

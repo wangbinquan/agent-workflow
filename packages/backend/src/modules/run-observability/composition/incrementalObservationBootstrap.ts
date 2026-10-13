@@ -1,5 +1,6 @@
 import { qualifiedObservationIndexChannel } from '../domain/qualifiedObservationIndexes'
 import { observationProjectionCurrent } from '@/db/observationProjection'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { and, asc, eq, gt, isNotNull } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { observationInvocations } from '@/db/schema'
@@ -33,7 +34,7 @@ export function composeOriginalProjectionBootstrap(input: {
               ),
             )
             .groupBy(observationProjectionCurrent.component)
-            .orderBy(asc(observationProjectionCurrent.component))
+            .orderBy(engineOf(input.db).ascNullsFirst(observationProjectionCurrent.component))
             .limit(201)
             .all(),
           items = rows.slice(0, 200)

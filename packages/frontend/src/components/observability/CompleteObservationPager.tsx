@@ -26,7 +26,9 @@ export function CompleteObservationPage<T>({
 }) {
   const { t, i18n } = useTranslation()
   if (query.error) return <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-  if (!query.data || query.isFetching) return <LoadingState />
+  // A refetch of this same qualified immutable page keeps its rows and layout.
+  // New report/cursor keys have no data; any failed read still withdraws above.
+  if (!query.data) return <LoadingState />
   return (
     <div className="stack--md">
       {children(query.data.items)}

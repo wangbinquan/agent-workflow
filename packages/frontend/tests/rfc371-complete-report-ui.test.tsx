@@ -987,3 +987,31 @@ test.each<HostExecutionStatus>([
     expect(screen.queryByText(i18n.t('hostExecution.checking'))).toBeNull()
   },
 )
+
+// Real CI returned the Dialog before a same-snapshot page revalidation collapsed
+// its background cards. Keep the qualified page while its own read is pending.
+test('same immutable dimension page revalidation preserves its row and exact metrics', async () => {
+  const f = fixture({ ...initial, task: 'parent' })
+  const trigger = await screen.findByRole('button', { name: '实现 Agent' })
+  const report = [...f.reports.values()].at(-1)!
+  trigger.focus()
+  f.state.holdAgentRevision = report.header.sourceRevision
+  const refresh = f.client.invalidateQueries({
+    queryKey: ['run-observability-complete-page', report.header.reportId, 'agents'],
+  })
+  await waitFor(() => expect(f.state.releaseAgentPage).not.toBeNull())
+  expect(screen.getByRole('button', { name: '实现 Agent' })).toBe(trigger)
+  expect(document.activeElement).toBe(trigger)
+  expect(f.reports.size).toBe(1)
+  const summary = screen.getByRole('heading', { name: '任务整体' }).closest('.card')!
+  for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const)
+    expect(summary.querySelector('[data-token-bucket="' + bucket + '"] dd')?.textContent).toBe(
+      BigInt(metrics.tokens[bucket]).toLocaleString('zh'),
+    )
+  expect(summary.textContent).toContain('¥2500.75005')
+  f.state.holdAgentRevision = null
+  f.state.releaseAgentPage!()
+  await refresh
+  expect(screen.getByRole('button', { name: '实现 Agent' })).toBe(trigger)
+  expect(document.activeElement).toBe(trigger)
+})

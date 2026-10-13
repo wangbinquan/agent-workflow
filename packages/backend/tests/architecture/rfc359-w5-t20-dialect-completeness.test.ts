@@ -83,6 +83,8 @@ const SCHEMA_PROJECTOR_FILE = 'platform/persistence/postgresqlSchema.ts'
  * NULL 排序模块（RFC-359 W11 已随最后一个调用方改指矩阵而删除）；例子退役了，理由没退役。
  */
 const DIALECT_RENDERERS: Readonly<Record<string, string>> = {
+  'platform/persistence/storageUsage.ts':
+    'RFC-371 的具名物理存储观测渲染器，唯一由 EngineCapabilities.storageUsage/storageCounters 选择原生 SQLite PRAGMA/dbstat Worker 或 PostgreSQL catalog/size 查询；不借宿主磁盘冒充远端容量，不扩散到业务 SQL。原双 provider storage-lifecycle 和物理 Worker/计数对拍保持。',
   [MATRIX_FILE]:
     '能力矩阵本体：每个方言点在 createSqliteCapabilities / createPostgresqlCapabilities 里各渲染一次，' +
     '这是 RFC-359 design §5 指定的 provider 差异容身处。',
@@ -328,6 +330,7 @@ const SQL_KEYWORDS = new Set([
   'by',
   'case',
   'cast',
+  'conflict',
   'desc',
   'delete',
   'distinct',
@@ -703,6 +706,14 @@ describe('RFC-359 W5-T20 —— J1 渲染权垄断', () => {
     const tsOnly = 'const bump = sql`update t set v = ${Math.max(a, b)} where id = ${id}`'
     expect(dialectConstructFindings('services/bump.ts', tsOnly)).toEqual([])
     expect(sqlFunctionNames('services/bump.ts', tsOnly)).toEqual([])
+
+    // ON CONFLICT(column) is SQL grammar, not a function named conflict.
+    expect(
+      sqlFunctionNames(
+        'services/insert.ts',
+        'const insert = sql`INSERT INTO ${table}(id) SELECT id FROM ${source} WHERE true ON CONFLICT(id) DO NOTHING`',
+      ),
+    ).toEqual([])
 
     // 非 sql 标签的模板字面量不是 SQL（散文 / 日志里出现关键词不该报）。
     const prose = 'const note = `this query used to say for update, we removed it`'

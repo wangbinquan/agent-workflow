@@ -19,7 +19,10 @@ export function incrementalObservationHistoricalScope(
     readonly taskId?: string
   },
 ): QualifiedObservationContribution | null {
-  if (!row.detail.scopes?.length) return row
+  if (!row.detail.scopes?.length)
+    // Ordinary Task rows are not standalone historical facts. An admin read
+    // must still retain the requested workflow/status/text/repository cohort.
+    return row.detail.taskId !== null && !input.ids.has(row.detail.taskId) ? null : row
   const task = input.taskId
     ? (input.originals.get(input.taskId)?.detail.document as CompleteObservationTask | undefined)
         ?.task

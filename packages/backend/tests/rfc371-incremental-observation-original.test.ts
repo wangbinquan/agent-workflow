@@ -895,6 +895,63 @@ describeEachProvider(
             1,
           )
       }, 60000)
+    test('ordinary Task dimensions outside a selected cohort never become standalone history', async () => {
+      await seedCompleteTask(h, 2, 7, discreteRequest)
+      const f = setup(h)
+      await f.apply('original-cohort-filter-boundaries', [
+        completeFixtureId('invocation', 0),
+        completeFixtureId('invocation', 1),
+      ])
+      for (const query of [
+        { ...all, q: 'no-original-task-matches' },
+        { ...all, status: 'running' as const },
+        { ...all, workflow: 'unrelated-original-workflow' },
+        { ...all, repository: 'unrelated-original-repository' },
+        { ...all, status: 'done' as const },
+      ]) {
+        const expected = await f.oracle(query),
+          actual = content(await f.queries.request(actor, query, 'original-filter'))
+        expect(actual.summary.metrics).toEqual(expected.summary.metrics)
+        expect(actual.summary.inventory).toEqual(expected.summary.inventory)
+        for (const section of [
+          'tasks',
+          'agents',
+          'runtimes',
+          'models',
+          'purposes',
+          'sources',
+        ] as const) {
+          expect(actual.counts[section]).toBe(
+            String(
+              expected.rows.filter((row) => row.section === section && row.parent === null).length,
+            ),
+          )
+          const rows: unknown[] = [],
+            seen = new Set<string>()
+          let after: string | null = null
+          do {
+            const page: CompleteObservationReportPage<unknown> = await f.queries.page(
+              actor,
+              actual.header.reportId,
+              { section, limit: 2, ...(after ? { after } : {}) },
+            )
+            expect(page.total).toBe(actual.counts[section] ?? '0')
+            rows.push(...page.items)
+            if (page.nextCursor !== null) {
+              expect(page.items.length).toBeGreaterThan(0)
+              expect(seen.has(page.nextCursor)).toBe(false)
+              seen.add(page.nextCursor)
+            }
+            after = page.nextCursor
+          } while (after !== null)
+          expect(rows).toEqual(
+            expected.rows
+              .filter((row) => row.section === section && row.parent === null)
+              .map((row) => row.document),
+          )
+        }
+      }
+    }, 60000)
     for (const indexed of [false, true])
       test(`public time-partition contract covers default/started/selected cohorts and Task views with ${indexed ? 'indexed' : 'original-atom'} reads`, async () => {
         await seedCompleteTask(h, 2, 7, discreteRequest)
@@ -933,11 +990,15 @@ describeEachProvider(
         const items: unknown[] = []
         let after: string | null = null
         do {
-          const page = await f.queries.page(actor, report.header.reportId, {
-            section: 'time-partitions',
-            limit: 2,
-            ...(after ? { after } : {}),
-          })
+          const page: CompleteObservationReportPage<unknown> = await f.queries.page(
+            actor,
+            report.header.reportId,
+            {
+              section: 'time-partitions',
+              limit: 2,
+              ...(after ? { after } : {}),
+            },
+          )
           expect(page.total).toBe('7')
           items.push(...page.items)
           after = page.nextCursor

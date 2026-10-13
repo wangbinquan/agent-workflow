@@ -30,7 +30,7 @@ jobs:
         with:
           # Keep CI byte-for-byte aligned with packageManager. Patch releases
           # can change test-runner isolation/coverage semantics; bump together.
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         # setup-bun caches only the bun binary, not the dependency tree, so
@@ -212,7 +212,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -357,7 +357,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -455,7 +455,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -489,7 +489,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -582,7 +582,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -693,7 +693,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         uses: actions/cache@v6
@@ -867,7 +867,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.0'
+          bun-version: '1.4.3'
 
       - name: Cache bun package downloads
         # On windows-latest this ~313 MB archive consistently takes 41–105s

@@ -136,8 +136,10 @@ describe('createBackup', () => {
       sourceProvider: 'sqlite',
       sourceGenerationId: 'dbg_legacy_sqlite',
       schemaDigest: manifest.database.schemaDigest,
-      // RFC-372 removes ten companions; the shared RFC-371 projection adds fourteen.
-      activeTableCount: 252,
+      // The complete schema retains all sixteen RFC-371 derived/maintenance
+      // tables and the committed concurrent Memory receipt; all source tables
+      // remain covered by the original logical contract.
+      activeTableCount: 269,
       archiveOnlyTableCount: 6,
     })
   })
