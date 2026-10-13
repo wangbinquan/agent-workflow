@@ -66,6 +66,8 @@ export interface AgentFormProps {
   idPrefix?: string
   /** When true the name input is read-only (editing an existing agent). */
   nameLocked?: boolean
+  /** Preserve source selection and layout controls for a read-only prompt. */
+  bodyReadOnly?: boolean
   /** Optional controlled tab, used by route-level repair links. */
   activeTab?: AgentTab
   onTabChange?: (tab: AgentTab) => void
@@ -336,6 +338,7 @@ export function AgentForm({
   resourceId,
   idPrefix = 'agent-form',
   nameLocked,
+  bodyReadOnly,
   activeTab,
   onTabChange,
   hasExternalPortAlert,
@@ -580,6 +583,7 @@ export function AgentForm({
       value={value.bodyMd ?? ''}
       onChange={(v) => patch('bodyMd', v)}
       placeholder={t('agentForm.bodyPlaceholder')}
+      readOnly={bodyReadOnly}
       fill
     />
   )

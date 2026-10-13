@@ -1,4 +1,22 @@
+## 2026-10-13 RFC-373：Markdown 自适应分栏完成实现，准备发布与 CI 验收
+
+用户已审核原型并批准正式实现、提交与远端推送。Agent 新建/编辑和 Skill 编辑已接入编辑/双栏/预览、拖动与键盘分隔条、容器宽度回退、布局偏好及短窗口滚动。完整实现与纯函数/组件/真实页面 E2E 已写齐后集中检查，本次 ESLint、前端 TypeScript 和独立功能设计/实现门通过；正式功能结果待 exact-SHA CI。共享架构清单已混有其他 RFC 未提交源码结果，不能不经核对将其及关联在制品扫入本次提交，清单同步仍开放。范围与证据见 [RFC-373](design/RFC-373-markdown-editor-layout/gates.md)。以下并发产出完整保留。
+
+## 2026-10-13 RFC-370：十九项宿主 owner 绑定候选已写齐
+
+本会话补齐 memory distill、development wake、digital employee、event center、fusion 与 report 的独立绑定，十九项绑定代码现已写齐。报告 owner 同时覆盖原完整报告、并发新增的增量统计及存储维护；冷查询读取原持久状态，未发构建归还原领取，已发构建等待原结果和清理，不确定 ACK 只重试原结算。普通暂停保留原取消政策，失权关闭下一项准入。公共轮询绑定已让 quiesce 和 drain 各自承担原调度关闭与原在途完成，并将本轮关闭状态传给逐项检查。
+
+真实双 provider 报告/领取/原 spool、worker 以及其余业务循环用例均已编写未执行；本批十五份业务 TS 和十一份报告 TS 仅完成语法零错误、格式/diff 静态自查。三个真实根尚未完成十九项选择，执行状态 API/UI、不确定运行时恢复、A-T7/A-G、CS adapters、先 M0 再 M1～M4 均开放，AW 尚未部署 CS。共享主干最近 fetch 为 `e35275f83dfbdfb03ae90f18e3d80ed3d7c052a1` 与远端相同、index 空；新候选未提交/推送/部署，未代签 CI，也无跨 session 信息。继续完整实现和测试写作后集中验证，详见 [H7 接线进度](design/RFC-370-crewstation-hosted-deployment/host-execution-root-assembly.md)。以下并发与历史输出完整保留。
+
 ## 2026-10-13 RFC-370：MCP、continuation、事件失权生命周期续推
+
+## 2026-10-13 RFC-370：五项定时 owner 接口与候选接线续推
+
+备份、仓库刷新、导入 GC、额度和 idle timeout 已增加独立宿主绑定及逐项准入检查；实际在途操作与原结果写回保持，未受理条目保留。绑定代码累计十三项，三个启动根、其余六项及完整 RFC 仍未完成。新增双 provider/原 Git/配置通知/定时器/任务树回归均只编写未执行，十一份 TS 语法零错误及格式/diff 自查不代签功能验收；无本机测试、服务、实现门、跨 session 消息或新发布/部署。继续完整开发后集中验证，详见 [H7 定时 owner 进度](design/RFC-370-crewstation-hosted-deployment/host-execution-root-assembly.md)。以下并发与历史内容保留。
+
+## 2026-10-13 RFC-370：webhook 冷宿主与真实领取结算续推
+
+webhook terminal control 已增加完整冷宿主生命周期、原启动 guard 完成追踪和独立根侧绑定；未发任务的原领取可即时归还，已发操作等待原 receipt 与精确 claim 结算，未确认的数据库 ACK 只重试原写入。失权和普通 pause 分离，补齐准备异常的 guard 清理。新增九项双 provider 宿主用例及真实 dispatcher 回归已编写；十一份 TS 语法零错误和格式/diff 静态自查不代替功能验证，未运行测试或实现门。八个独立 owner 绑定仍未构成三个真实根的完整十九项接线，完整 RFC、CS adapter 和 M0～M4 均未完成；本候选未提交/推送/部署，无跨 session 信息。最近 scoped fetch 后 main 与 origin/main 同为 `dafc651e01741d4ae78add273c6502ac045996be`，index 空，不代签 CI。详见 [H7 续推](design/RFC-370-crewstation-hosted-deployment/host-execution-root-assembly.md)。以下并发与历史产出完整保留。
 
 按用户“先继续推进 RFC”继续生产实现：MCP 增加同实例冷读、显式 host 生命周期、未发 turn 保留原请求／ID、首轮原 lease 重领和在途 capture／verification／释放／落库／通知排空。正常 pause 保留原业务取消，失权不借 shutdown 排空；unreaped／释放未证明使 drain 拒绝 ACK。人工确认 continuation 停止下一项，事件 dispatcher 在尚未调用 consumer 时以原事务归还 claim、保持事件及重试预算，已发 consumer 仍走原结果结算。
 

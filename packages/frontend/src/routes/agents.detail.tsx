@@ -298,6 +298,7 @@ function AgentDetailPage() {
         )}
       </FeedbackStack>
       <AgentForm
+        bodyReadOnly={!canUpdate}
         value={draft ?? emptyAgent()}
         onChange={canUpdate ? setDraft : () => undefined}
         resourceId={id}

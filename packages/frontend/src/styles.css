@@ -8352,22 +8352,75 @@ details.form-section[open] > summary {
 /* ---- Markdown editor ---- */
 
 .md-editor {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   padding: 8px;
 }
 
+.md-editor__toolbar,
+.md-editor__tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.md-editor__toolbar {
+  flex-shrink: 0;
+}
+
+.md-editor__tools {
+  margin-inline-start: auto;
+  max-width: 100%;
+}
+
+.md-editor__tools .segmented {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.md-editor__tools .segmented__option:disabled {
+  cursor: not-allowed;
+}
+
+.md-editor__hint {
+  flex: 1 0 100%;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.md-editor__panes {
+  display: grid;
+  min-width: 0;
+}
+
 .md-editor__pane {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   gap: 4px;
 }
 
+.md-editor__pane[hidden],
+.md-editor__separator[hidden] {
+  display: none;
+}
+
+.md-editor__pane textarea {
+  min-width: 0;
+}
+
 .md-editor__label {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--muted);
   text-transform: uppercase;
@@ -8378,12 +8431,59 @@ details.form-section[open] > summary {
  * lists, code, tables, callouts, etc.) is owned by prose.css now that
  * the preview renders via <Prose>. */
 .md-editor__preview {
+  flex: 1;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel);
   padding: 10px 14px;
   min-height: 200px;
+  /* Keep rendered content from supplying the grid's intrinsic block size. */
+  contain: size;
   overflow: auto;
+}
+
+.md-editor__separator {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  border-radius: 4px;
+}
+
+.md-editor__separator::before {
+  content: '';
+  position: absolute;
+  inset: 0 -6px;
+}
+
+.md-editor__separator::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 32px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 3px;
+  background: var(--border);
+  pointer-events: none;
+}
+
+.md-editor__separator:hover::after,
+.md-editor__separator:focus-visible::after,
+.md-editor[data-dragging] .md-editor__separator::after {
+  background: var(--accent);
+}
+
+.md-editor__separator:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: -2px;
+}
+
+.md-editor[data-dragging] {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .md-preview__empty {
@@ -23043,17 +23143,21 @@ button.status-chip {
 .md-editor--fill {
   flex: 1;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr);
+  overflow: auto;
 }
-.md-editor--fill .md-editor__pane {
-  min-height: 0;
+.md-editor--fill .md-editor__panes {
+  flex: 1;
+  min-height: 16rem;
+  grid-template-rows: minmax(0, 1fr);
 }
 .md-editor--fill .md-editor__pane--edit textarea {
   flex: 1;
-  height: 100%;
+  height: 0;
+  min-height: 0;
   resize: none;
 }
 .md-editor--fill .md-editor__preview {
+  min-height: 0;
   overflow: auto;
 }
 
@@ -23085,11 +23189,17 @@ button.status-chip {
   flex-direction: column;
   gap: var(--space-4);
   min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+.skill-detail__edit > .form-field {
+  flex-shrink: 0;
 }
 .skill-detail__body {
   display: flex;
   flex: 1;
   min-height: 18rem;
+  min-width: 0;
 }
 .skill-detail__body > .md-editor {
   flex: 1;
@@ -24206,19 +24316,12 @@ button.status-chip {
     flex: 1 1 auto;
   }
 
-  .md-editor,
   .memory-compare {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .md-editor__pane,
   .memory-compare__col {
     min-width: 0;
-  }
-
-  .md-editor--fill {
-    grid-template-rows: minmax(16rem, 1fr) minmax(16rem, 1fr);
-    overflow-y: auto;
   }
 
   .memory-compare__body {

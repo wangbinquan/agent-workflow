@@ -14,8 +14,10 @@ import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingZh, type ObservationPricingMessages } from './observationPricing'
 import { runObservabilityZh, type RunObservabilityMessages } from './runObservability'
 import { mindmapZh, type MindmapMessages } from './mindmap'
+import { markdownEditorZh, type MarkdownEditorMessages } from './markdownEditor'
 
 export interface Resources {
+  markdownEditor: MarkdownEditorMessages
   mindmap: MindmapMessages
   observationPricing: ObservationPricingMessages
   runObservability: RunObservabilityMessages
@@ -6787,6 +6789,7 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  markdownEditor: markdownEditorZh,
   mindmap: mindmapZh,
   observationPricing: observationPricingZh,
   runObservability: runObservabilityZh,

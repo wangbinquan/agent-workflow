@@ -6,8 +6,10 @@ import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingEn } from './observationPricing'
 import { runObservabilityEn } from './runObservability'
 import { mindmapEn } from './mindmap'
+import { markdownEditorEn } from './markdownEditor'
 
 export const enUS: Resources = {
+  markdownEditor: markdownEditorEn,
   mindmap: mindmapEn,
   observationPricing: observationPricingEn,
   runObservability: runObservabilityEn,
