@@ -1,3 +1,7 @@
+## 2026-10-13 RFC-213：补齐本次启动改动的旧源码断言兼容
+
+`038ca9866` 的 Windows 已终态 1492 pass / 3 skip / 14 fail。十四个名称与前一 SHA 相同，但两项 start.ts 全文逆向仍包含本次三处开发准备和静态导入的净 340 字节，不能把这部分归给别人。仅补测试侧精确逆向及接线，原 fixture/摘要/断言、运行代码和并发 host runtime 全部保留；其余 631 字节基底及并发差异仍失败。集中验证新增四项全部通过，原组合回归 3 pass / 3 fail，SQLite 残余 received 186448 / expected 185817，PG 残余 131154 / 130746；定向 lint／格式／diff 通过，未跑完整 gate 或重启服务。主 CI 仍排队、维护窗口已 success，尚未取得新 CLI 用例 hosted 结果，后继确切 SHA 另验。详见 [开发启动记录](design/RFC-213-disaster-recovery/dev-reload-and-migration-checks.md)。以下并发与历史正文保留。
+
 ## 2026-10-13 RFC-370：按用户指示恢复完整实现
 
 用户最新要求“先继续推进 RFC”，本会话恢复开发，不再等待其它归属的 CI 失败。当前已新增同一 SO／Task 写入上下文的宿主 bootstrap、一次安装真实 recovery／runtime 的构造合同，以及先资源 resume 后 authority start 的 session 装配方法；共同入口转交完整 host runtime 选择。Task、Intent、Maintenance、after-commit 四个 owner 的独立绑定与 MCP 持久查询面已写入候选，对应回归随实现编写，尚未执行。
