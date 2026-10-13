@@ -23,7 +23,6 @@ export function createEventCenterNotificationWake() {
           resolve()
         }
         const timer = setTimeout(finish, intervalMs)
-        timer.unref?.()
         waiting = finish
         signal.addEventListener('abort', finish, { once: true })
         if (signal.aborted || pending) finish()

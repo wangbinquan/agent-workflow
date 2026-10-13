@@ -14,9 +14,11 @@ import type {
   HostExecutionRuntimeFamily,
   HostExecutionWriteLeaseFacts,
 } from '@/modules/system-operations/public/participants'
-import { composeTaskHostExecutionAdmission } from '@/modules/task-execution/composition/hostExecutionAdmission'
+import {
+  composeTaskHostExecutionAdmission,
+  createTaskHostWriteContextAdapter,
+} from '@/modules/task-execution/composition/hostExecutionAdmission'
 import type { TaskExecutionProviderHostSelection } from '@/modules/task-execution/composition/taskDriveBinding'
-import { createTaskHostWriteContextAdapter } from '@/modules/task-execution/infrastructure/hostExecutionWriteContext'
 import {
   DaemonProviderRuntimeSessionError,
   type DaemonProviderRuntimeSession,

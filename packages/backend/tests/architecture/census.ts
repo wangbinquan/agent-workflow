@@ -75,6 +75,7 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 export const BOOTSTRAP_FILES = [
   'packages/backend/src/main.ts',
   // RFC-370: these are actual root assembly, never business consumers.
+  'packages/backend/src/cli/daemonHostExecutionBootstrap.ts',
   'packages/backend/src/cli/daemonHostExecutionOwners.ts',
   'packages/backend/src/cli/daemonHostExecutionRecovery.ts',
   'packages/backend/src/cli/embeddedHostExecutionApplication.ts',

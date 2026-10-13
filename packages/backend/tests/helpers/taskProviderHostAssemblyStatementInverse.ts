@@ -8,6 +8,24 @@ import { inverseRfc372ClarifyRootBinding } from './rfc372ClarifyRootInverse'
 
 /** Compose only the reviewed predecessors before locating Task assembly edits. */
 export function normalizeTaskProviderHostAssemblyInput(source: ts.SourceFile): ts.SourceFile {
+  // The reviewed CI boundary correction exposes the original lifecycle
+  // factory through composition. Retain the older complete native oracle.
+  const factoryExport = 'export { createDatabaseTaskDriverLifecyclePort }\n'
+  if (
+    source.fileName
+      .replaceAll('\\', '/')
+      .endsWith('modules/task-execution/composition/providerRuntime.ts') &&
+    source.text.includes(factoryExport)
+  ) {
+    if (source.text.split(factoryExport).length !== 2)
+      throw new Error('host composition factory inverse unreviewed export')
+    source = ts.createSourceFile(
+      source.fileName,
+      source.text.replace(factoryExport, ''),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+  }
   source = inverseRfc213DevStartupRoot(source)
   source = inverseRfc372ClarifyRootBinding(source)
   source = inverseRfc371NativeFactRootHooks(source)

@@ -3,6 +3,9 @@ import type { TaskHostNewWorkAdmission } from '../application/ports/taskHostAdmi
 import type { TaskHostWriteContext } from '../application/ports/taskHostWriteContext'
 import { captureTaskHostWriteContext } from '../application/taskHostWriteCapture'
 
+// Bootstrap selects the Task-owned adapter through its composition boundary.
+export { createTaskHostWriteContextAdapter } from '../infrastructure/hostExecutionWriteContext'
+
 /** Independent Task adapter: SO admission never enters Task application contracts. */
 export function composeTaskHostExecutionAdmission(input: {
   readonly admission: HostExecutionAdmission

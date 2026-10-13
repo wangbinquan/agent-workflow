@@ -1,5 +1,15 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 已批准旧账本发布及其后本人 CI 修复
+
+两条原 holder 的有限接手已完整发布为 `d78792ca58f5d44dc0511c4c2954e99afd20b9a7`／`3e809ce90b76d3c8e0123cff82b7f89b4b3d045e`，生成物只改 4 个实际有差异的治理文件，13 份完整生成输出保持一致；生产 sourceDigest 仍为 `sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d`。原账本 7→9、严格扫描 3 pass，原五条 growth 已消费退役，本次新增仅对应两条原槽的实际增长。main CI `38486154259` 已触发，未据此宣称总绿。
+
+旧 `c4adc1975` 完成功能作业提供了本阶段其他确定责任：job `115591398567` 的新通知 deadline unref；job `115591398588` 中本阶段新 root/内部适配器导入；job `115591398904` 中资源限额中立装配与原 PG 函数的重复实现。此次候选移除等待 timer 的 unref，保留 wake latch／abort／原 drain；把实际 daemonHostExecutionBootstrap 精确登记进原 bootstrap 集合，两处 Task 适配器通过原 composition 对外装配；将逐字相同的 PG 兼容装配收敛为原中立函数别名，legacy SQLite 的原取消路径保持。原完整 native 对账 helper 只逆新增的确切 composition export；原摘要和未知变异判据保持。
+
+新增四个实际 host roots 的边界回归与普通 business consumer 负向控制。集中诊断 9 文件 45 pass，涵盖 deadline 原 guard、实际根边界／原同文件严格 guard、真实 bootstrap／embedded／周期限额、原 PG 限额合同、真实 webhook，以及十一原完整 caller。新增根用例的只读 bootstrap 集合改为显式 string Set，修正 Bun expect 的窄字面量类型匹配；该两项复验通过。没有全仓本地 gate、没有以增加债务代替修复本阶段直接内部导入。
+
+其余确定归属单列：`main.ts` 中两处 startCommand 调用引入于 `6849c1073`，不属于本阶段；Migrator 读数从 4/3→5/4 来自 RFC213 dev reload 测试；dev 和 observation 剩余旧 R1 导入、Bun 1.4.3 断言、development@11 对旧夹具及原统计成员失败保持原证据。用户本次例外仅为两条 holder 及其生成配套，未据此接管其它旧业务或账本。并发 `4d22bc95e` 修复保持，候选内容无关的移动不触发重复全门。backend Typecheck（8 GiB Node 堆）exit 0，限定 ESLint／Prettier／diff 检查通过；生成配套、确切源码提交及总 CI 各自验收；A-G 未签，B/M0 未开始。
+
 ## 2026-10-14 两处旧装配计数接手授权
 
 用户已明确批准原预览中的两条 `COMPOSITION_ROOT_PLACEHOLDER_DEBT`：`cli/dev.ts: holder=1` 和 `modules/run-observability/composition/completeObservationReports.ts: holder=1`。原完整测试扫描器和严格相等断言保持，原实际源码保持；两文件从失败提交 `3472c9fc2` 到已发布 `c4adc1975` 的 blob 一致。生成配套将该账本 7→9，按新提交记录准确 provenance，并退役已消费的一次性增长声明。

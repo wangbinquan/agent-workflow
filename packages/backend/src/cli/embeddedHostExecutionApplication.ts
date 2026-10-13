@@ -7,7 +7,7 @@ import {
 } from '@/server'
 import { TaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/composition/providerRuntime'
 import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'

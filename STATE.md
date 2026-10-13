@@ -1,3 +1,11 @@
+## 2026-10-14 RFC-370：两处旧账本已上库，继续修复本阶段 CI 遗漏
+
+刚获批的两条原 holder 账本已发布：源码 `d78792ca5`／配套 `3e809ce90`，原装配账本 7→9，旧五条一次性增长回执退役；推后 main/origin 已同步，原业务／扫描／断言保持。新主 CI `38486154259` 已启动，非终态成功不能签 A-G。
+
+旧 `c4adc1975` 的其余已失败功能日志进一步归因到本阶段：新 Event Center 通知等待定时器不能 unref；真实 daemonHostExecutionBootstrap 未登记为装配根，两个根还直达 Task infrastructure；资源限额中立装配与 PG 兼容函数复制同一实现。候选已移除该 unref、精确登记真实根、通过原 Task composition 导出原适配器并收敛 PG 为中立别名，新增实际四根／普通消费者边界回归，旧 scanner 和 native 完整指纹保持。9 文件定向诊断 45 pass；新增根边界用例的类型修正后 2 pass，backend Typecheck exit 0，限定 lint／格式和 diff 检查通过；生成配套与精确发布另验，完整实现门的原三项关闭结论保留。
+
+旧 main.ts 两次 startCommand 调用引入于 `6849c1073`，Migrator 覆盖账本变化来自 rfc213 dev reload 测试，另有 dev/observation 旧 R1 导入及 Bun/员工夹具/统计失败，继续按真实 diff 保留责任，不扩大两条 holder 授权，不联系其他会话。并发 `4d22bc95e` 原修复提交保留在 main；不因其 SHA 前进重跑已有效的本候选功能测试。A-G／全仓总绿未取得，B/M0 未启动，AW 尚未部署 CS。以下全部历史及并发正文完整保留。
+
 ## 2026-10-14 RFC-370：两处历史装配账本接手已批准
 
 用户明确批准接手 `cli/dev.ts` 和 `completeObservationReports.ts` 两个已有 holder 的原账本漏项及其生成配套。只在原有序账本新增两条原实际计数和用途说明，原扫描器、严格逐文件断言、业务和并发在制内容保持；canonical 装配计数 7→9，消费旧一次性增长回执。此前源码 `7f3244667`／配套 `c4adc1975` 已完整发布并同步，完整实现门 PASS／0 findings 保持。

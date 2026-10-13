@@ -58,6 +58,7 @@ import {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,
 } from '../infrastructure/taskDriverLifecycle'
+export { createDatabaseTaskDriverLifecyclePort }
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { composePostgresqlMemoryInjectionQueries } from '@/modules/memory/composition'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
