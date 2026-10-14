@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 // RFC-371: source binding bootstrap cannot wait on a derived index that is
 // itself produced only after the original source has been routed.
 import { expect, test } from 'bun:test'
@@ -62,4 +64,20 @@ describeEachProvider('RFC-371 original platform routing before derived bootstrap
       .where(eq(observationPlatformSources.id, source!.id))
       .run()
   })
+})
+
+// The platform routes neutral change facts; only the actual daemon assembly root imports owner compositions.
+test('projection source routing keeps its platform I/O contract independent of private module composition', () => {
+  const root = resolve(import.meta.dir, '..', 'src'),
+    router = readFileSync(
+      resolve(root, 'platform/persistence/observationProjectionRouting.ts'),
+      'utf8',
+    ),
+    ports = readFileSync(
+      resolve(root, 'modules/run-observability/ports/incrementalObservationChanges.ts'),
+      'utf8',
+    )
+  expect(router).not.toContain('@/modules/')
+  expect(router).toContain("from './observationChangeContract'")
+  expect(ports).toContain("from '@/platform/persistence/observationChangeContract'")
 })

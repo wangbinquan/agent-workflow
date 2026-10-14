@@ -243,6 +243,35 @@ export function migratedProtections(
   return out
 }
 
+/** Expand the actual three-event observer to SQLite's three named event triggers; reject other declarations. */
+export function nativeTriggerProtections(statement: {
+  sql: string
+  logicalId: string
+}): SchemaProtection[] {
+  if (statement.logicalId.endsWith(':observation-change')) {
+    const declared =
+      /^CREATE TRIGGER "([^"]+)" AFTER INSERT OR UPDATE OR DELETE ON "agent_workflow"\."([^"]+)" FOR EACH ROW EXECUTE FUNCTION "agent_workflow"\."\1"\(\)$/.exec(
+        statement.sql,
+      )
+    if (!declared || statement.logicalId !== declared[2] + ':observation-change')
+      throw new Error(
+        'RFC-359 T19g: unsupported native observation trigger declaration: ' + statement.sql,
+      )
+    return ['insert', 'update', 'delete'].map((event) => ({
+      table: declared[2]!,
+      name: declared[1]! + '_' + event,
+      def: 'TRIGGER ' + declared[1]! + '_' + event,
+    }))
+  }
+  const declared =
+    /^CREATE TRIGGER "([^"]+)" AFTER (?:INSERT|UPDATE|DELETE) ON "agent_workflow"\."([^"]+)" REFERENCING /.exec(
+      statement.sql,
+    )
+  if (!declared)
+    throw new Error('RFC-359 T19g: unsupported native trigger declaration: ' + statement.sql)
+  return [{ table: declared[2]!, name: declared[1]!, def: 'TRIGGER ' + declared[1]! }]
+}
+
 /** 逻辑契约声明的保护面——也就是 PostgreSQL 侧**将会**生成的那些约束与索引。 */
 export function contractProtections(): SchemaProtection[] {
   const out: SchemaProtection[] = []
@@ -287,13 +316,7 @@ export function contractProtections(): SchemaProtection[] {
   for (const statement of buildPostgresqlSchemaPlan(contract).statements.filter(
     (statement) => statement.kind === 'trigger',
   )) {
-    const declared =
-      /^CREATE TRIGGER "([^"]+)" AFTER (?:INSERT|UPDATE|DELETE) ON "agent_workflow"\."([^"]+)" REFERENCING /.exec(
-        statement.sql,
-      )
-    if (declared === null)
-      throw new Error('RFC-359 T19g: unsupported native trigger declaration: ' + statement.sql)
-    out.push({ table: declared[2]!, name: declared[1]!, def: 'TRIGGER ' + declared[1]! })
+    out.push(...nativeTriggerProtections(statement))
   }
   return out
 }
@@ -618,4 +641,33 @@ describe('RFC-359 W5-T19g —— 对账判据自证', () => {
       'fake_rows :: UNIQUE(TAG)',
     ])
   })
+})
+
+// The unchanged original schema reconciliation also counts all event-journal triggers.
+test('native original change observers retain all three SQLite events and reject missing or foreign declarations', () => {
+  const statement = {
+    logicalId: 'agents:observation-change',
+    sql: 'CREATE TRIGGER "obs_delta_agents_original" AFTER INSERT OR UPDATE OR DELETE ON "agent_workflow"."agents" FOR EACH ROW EXECUTE FUNCTION "agent_workflow"."obs_delta_agents_original"()',
+  }
+  expect(nativeTriggerProtections(statement)).toEqual(
+    ['insert', 'update', 'delete'].map((event) => ({
+      table: 'agents',
+      name: 'obs_delta_agents_original_' + event,
+      def: 'TRIGGER obs_delta_agents_original_' + event,
+    })),
+  )
+  for (const sql of [
+    statement.sql.replace(' OR DELETE', ''),
+    statement.sql.replace('"agents"', '"other"'),
+    statement.sql.replace(
+      'FUNCTION "agent_workflow"."obs_delta_agents_original"',
+      'FUNCTION "agent_workflow"."other"',
+    ),
+  ])
+    expect(() => nativeTriggerProtections({ ...statement, sql })).toThrow(
+      'unsupported native observation trigger declaration',
+    )
+  expect(() => nativeTriggerProtections({ ...statement, logicalId: 'agents:other' })).toThrow(
+    'unsupported native trigger declaration',
+  )
 })

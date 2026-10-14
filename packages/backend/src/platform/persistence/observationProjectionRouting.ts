@@ -6,7 +6,7 @@ import { OBSERVATION_SOURCE_REVISION } from './observationSourceRevisionSchema'
 import type {
   OriginalObservationChange,
   OriginalObservationChangeRouter,
-} from '@/modules/run-observability/composition/incrementalObservationProjection'
+} from './observationChangeContract'
 import { and, eq } from 'drizzle-orm'
 import { observationProjectionBindings } from '@/db/observationProjection'
 import {

@@ -53,6 +53,41 @@ describeEachProvider('RFC-371 original nested JSON identities and scope arrays',
     ])
     expect(direct[0]!.identity).toBe('nested-original')
   })
+  // Bun.SQL can infer a bare parameter as JSONB; text-first decoding must match a real TEXT column.
+  test('bound original JSON text and an original persisted TEXT cell retain identical nested arrays and string identities', async () => {
+    const scopes = [{ task: 'original', count: '9007199254740993' }, { task: 'original' }],
+      document = JSON.stringify({
+        detail: { scopes, visibility: [] },
+        request: { reportId: 'original-text' },
+      })
+    await h.executeFixtureDdl(
+      'CREATE TABLE rfc371_original_json (id TEXT PRIMARY KEY, document TEXT NOT NULL)',
+    )
+    await h.db.run(
+      sql`INSERT INTO rfc371_original_json (id,document) VALUES ('original',${document})`,
+    )
+    const read = (handle: Parameters<typeof jsonPathArray>[0]) => sql`SELECT
+      ${jsonPathArray(handle, sql.raw('"document"'), ['detail', 'scopes'])} AS stored,
+      ${jsonPathArray(handle, sql`${document}`, ['detail', 'scopes'])} AS bound,
+      ${jsonPathText(handle, sql.raw('"document"'), ['request', 'reportId'])} AS stored_identity,
+      ${jsonPathText(handle, sql`${document}`, ['request', 'reportId'])} AS bound_identity
+      FROM rfc371_original_json WHERE id='original'`
+    const direct = await h.db.all<{
+      stored: string | null
+      bound: string | null
+      stored_identity: string | null
+      bound_identity: string | null
+    }>(read(h.db))
+    const snapshot = await h.session.snapshotRead((tx) => tx.all(read(tx)))
+    expect(snapshot).toEqual(direct)
+    expect(direct).toHaveLength(1)
+    expect(direct[0]!.stored).not.toBeNull()
+    expect(direct[0]!.bound).not.toBeNull()
+    expect(JSON.parse(direct[0]!.stored!)).toEqual(scopes)
+    expect(JSON.parse(direct[0]!.bound!)).toEqual(scopes)
+    expect(direct[0]!.stored_identity).toBe('original-text')
+    expect(direct[0]!.bound_identity).toBe('original-text')
+  })
   test('missing, malformed and scalar members cannot become an array', async () => {
     for (const document of [
       '{',

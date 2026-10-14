@@ -83,6 +83,8 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/cli/postgresqlDaemonApplication.ts',
   'packages/backend/src/cli/start.ts',
   'packages/backend/src/platform/background/maintenanceWorker.ts',
+  // RFC-371: the daemon projection root assembles the original owners; it is not a business consumer.
+  'packages/backend/src/platform/background/observationProjection.ts',
   'packages/backend/src/platform/background/observationReportWorker.ts',
   'packages/backend/src/server.ts',
 ] as const
