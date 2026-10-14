@@ -1,5 +1,7 @@
 # RFC-371 剩余工作与关闭条件
 
+> 历史记录：本文件记录 v1 的剩余工作，已被 [v2 精简重设计](./redesign-v2-20261014.md) 取代（RFC-371 已 Done）。文中源码路径与链接指向 v1 当时的代码。
+
 ## 2026-10-11 当前 CI、登录与剩余工作
 
 已发布生产源码 `bbc2347fb2e730d3a420f9ccb1b9ccd7b291bca0` 的[主 CI 38136506544](https://github.com/wangbinquan/agent-workflow/actions/runs/38136506544)全部 72 作业终态 success；[Windows 38136506682](https://github.com/wangbinquan/agent-workflow/actions/runs/38136506682)和[定时维护 38136506527](https://github.com/wangbinquan/agent-workflow/actions/runs/38136506527)也终态 success。原 TEMP 夹具、生成文档逐字投影与内存配置修复已得到这份精确 SHA 的 hosted 结果；旧失败保留。原 `bun dev` 当前一起运行 5174／7456／7460，实际开发角色登录页已就绪，未额外启动登录替身。
@@ -147,7 +149,7 @@ CS 的原生留存联合基线当前已发布并本机部署为 `75dd427227fc7e3
 | v2 配套修正     | `904ccfdaa0de41d63472d1a4c251a657a32857fa` 已推送；[视觉 CI 36514863164](https://github.com/wangbinquan/agent-workflow/actions/runs/36514863164) success；主 CI 36514863155 终态 failure | 三个 capture matcher 类型错误、Node JSON 加载及一次性 allowGrowth 已随 `8c6e9a0766a1a184170dec1e9685a07b580334e5` 修正并推送；[CI 36619139778](https://github.com/wangbinquan/agent-workflow/actions/runs/36619139778) 终态 failure（46 success / 4 failure）；类型、后端及构建通过，两个浏览器分片在页面加载前读取卡片，修正及最终验证见 AW-R01；静态扫描只记录失败状态 |
 | 双部署真实闭环  | 协议、双数据库和浏览器夹具已有回归                                                                                                                                                       | 独立实际运行、CS 托管装配及实际运行不能由上述夹具替代                                                                                                                                                                                                                                                                                                                    |
 
-源码核对锚点：[查询与 DTO](../../packages/shared/src/schemas/observationTasks.ts) 的 cohort 仍固定 `started`；[观测应用层](../../packages/backend/src/modules/run-observability/application/taskObservations.ts) 当前按调用/尝试聚合；[来源证据](./protocol-evidence.md) 明确实录、夹具和实际运行的区别。
+源码核对锚点（v1，两文件已随 RFC-371 v2 删除）：查询与 DTO `packages/shared/src/schemas/observationTasks.ts` 的 cohort 仍固定 `started`；观测应用层 `packages/backend/src/modules/run-observability/application/taskObservations.ts` 当前按调用/尝试聚合；[来源证据](./protocol-evidence.md) 明确实录、夹具和实际运行的区别。
 
 ## 下一步执行顺序
 

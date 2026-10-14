@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "note": "RFC-319 R1：跑完默认全量 e2e 后，allRouteMeta() 声明的端点里一次都没被打到的那些。只减不增；采集端 e2e/route-journal.ts，聚合端 packages/backend/tests/architecture/routeHitLedger.ts。 RFC-349 的 12 条 /api/database* 在这里：浏览器腿的 rfc349-database-migration-settings.spec.ts 用 page.route('**/api/database**') 把它们全部在浏览器里以夹具应答——那是刻意的，它要在没有真 PostgreSQL 的情况下逐相位驱动 UI（一键、重载续跑、割接关掉回滚、回执可下载）。这些端点的**真实**覆盖在 postgresql-evidence 那条腿上（真 daemon + 真外置 PostgreSQL，跑 preflight/start/status/artifacts/legacy/resume/cancel/rollback 全链），journal 采集不到它，因为采集端只读被测 daemon 的 req 日志。要把这 12 条从账本里减掉，就得让浏览器腿真打服务端。",
+  "note": "RFC-319 R1：跑完默认全量 e2e 后，allRouteMeta() 声明的端点里一次都没被打到的那些。只减不增；采集端 e2e/route-journal.ts，聚合端 packages/backend/tests/architecture/routeHitLedger.ts。 RFC-349 的 12 条 /api/database* 在这里：浏览器腿的 rfc349-database-migration-settings.spec.ts 用 page.route('**/api/database**') 把它们全部在浏览器里以夹具应答——那是刻意的，它要在没有真 PostgreSQL 的情况下逐相位驱动 UI（一键、重载续跑、割接关掉回滚、回执可下载）。这些端点的**真实**覆盖在 postgresql-evidence 那条腿上（真 daemon + 真外置 PostgreSQL，跑 preflight/start/status/artifacts/legacy/resume/cancel/rollback 全链），journal 采集不到它，因为采集端只读被测 daemon 的 req 日志。要把这 12 条从账本里减掉，就得让浏览器腿真打服务端。 RFC-370 阶段 A 的四个原始执行恢复端点（execution / intent turn / MCP 运行测试会话 / 记忆蒸馏任务的 recover）在这里：它们只对「原进程已中断、需要显式恢复」的原始执行生效，浏览器腿造不出这种被中断的原进程；真实覆盖在后端 HTTP 用例（rfc370-host-recovery-http、rfc370-embedded-host-root、routes-memory-distill-jobs、rfc370-system-agent-callers）与前端恢复入口单测（intent-detail-inline、mcp-runtime-test-dialog、distill-job-detail-table-row-click）。销账要求：e2e 能可复现地中断一次原始执行再从界面恢复。",
   "recordedAtSha": "acb518f81337b19633b39081265ad75259baea51",
   "declaredTotal": 495,
   "uncovered": [
@@ -71,10 +71,14 @@
     "POST /api/employee-cases/worker/run-one",
     "POST /api/event-center/committed-deliveries/:eventId/:consumerId/retry",
     "POST /api/event-center/sources/:id/retire",
+    "POST /api/execution/recover",
     "POST /api/integrations/development-adapters/:id/archive",
     "POST /api/intent-sessions/:id/answers",
+    "POST /api/intent-sessions/:id/turns/:turnId/recover",
     "POST /api/mcps/:id/runtime-test-sessions/:sessionId/messages",
+    "POST /api/mcps/:id/runtime-test-sessions/:sessionId/recover",
     "POST /api/memories/:id/move",
+    "POST /api/memory-distill-jobs/:id/recover",
     "PUT /api/capability-templates/:id/acl",
     "PUT /api/code/automation-policies/:id/acl",
     "PUT /api/code/digital-employees/:id",

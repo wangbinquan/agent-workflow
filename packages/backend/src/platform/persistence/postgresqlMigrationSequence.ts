@@ -1300,10 +1300,11 @@ function applyPostgresqlIndexUpgrade(
   return version
 }
 
-export function replayPostgresqlMigrationHistory(
+/** One replay, advanced a version at a time so a caller may yield between versions. */
+function* replayVersions(
   root: PostgresqlMigrationRoot,
   steps: readonly PostgresqlIndexUpgrade[],
-): PostgresqlMigrationHistory {
+): Generator<void, PostgresqlMigrationHistory, void> {
   validateVersion(root)
   let head: PostgresqlMigrationVersion = {
     contract: root.contract,
@@ -1315,6 +1316,7 @@ export function replayPostgresqlMigrationHistory(
   const versions = [head]
   const seenContracts = new Set([head.contract.digest])
   for (const [index, step] of steps.entries()) {
+    yield
     head = applyPostgresqlIndexUpgrade(head, step, previousDigest, index + 1)
     requireSequence(
       !seenContracts.has(head.contract.digest),
@@ -1325,6 +1327,38 @@ export function replayPostgresqlMigrationHistory(
     previousDigest = step.digest
   }
   return { root, steps, versions, head }
+}
+
+export function replayPostgresqlMigrationHistory(
+  root: PostgresqlMigrationRoot,
+  steps: readonly PostgresqlIndexUpgrade[],
+): PostgresqlMigrationHistory {
+  const replay = replayVersions(root, steps)
+  let next = replay.next()
+  while (next.done !== true) next = replay.next()
+  return next.value
+}
+
+const nextTurn = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
+/**
+ * The same replay for a running daemon. Each version costs tens of milliseconds of
+ * canonical JSON and digests, and the whole history about two seconds, so the event
+ * loop gets a turn between versions instead of one block (RFC-349 evidence
+ * 38613687770: 2.2 s event-loop gaps during a migration).
+ */
+export async function replayPostgresqlMigrationHistoryYielding(
+  root: PostgresqlMigrationRoot,
+  steps: readonly PostgresqlIndexUpgrade[],
+  yieldTurn: () => Promise<void> = nextTurn,
+): Promise<PostgresqlMigrationHistory> {
+  const replay = replayVersions(root, steps)
+  let next = replay.next()
+  while (next.done !== true) {
+    await yieldTurn()
+    next = replay.next()
+  }
+  return next.value
 }
 
 export function assertPostgresqlMigrationHead(

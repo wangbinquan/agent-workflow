@@ -7,7 +7,10 @@
 - **Markdown 链接检查每轮 15 分钟超时被取消**：design 里约 225 个本仓 Actions 运行链接经 remap 走 `api.github.com` 逐个核验，每轮约 370 次请求、成功率 55%，与其他作业共享的 `GITHUB_TOKEN` 配额被打满后退避涨到每次 30 秒。改为不在线核验本仓运行链接（证据指针会随保留期过期），去掉 remap / basic-auth 与只为它加的 `actions: read`，其余链接策略不变。
 - **夜间 e2e（full / webkit）自 10-12 起红**：RFC-371 v1 把内置 development 类型包升到 11 时，`rfc319-de-and-resource-lifecycle.spec.ts` 仍写死 10（DE-02 / DE-10 全 404）。新增 `e2e/development-type-ref.ts` 从生产 descriptor 派生，三个写死版本的 spec 改用它；`tests/e2e-development-type-ref.test.ts` 禁止 e2e 再写死 `development@N`。
 - **偶发**：OPS-022（macOS）是发行二进制 CLI 冷启动超过 15 秒通用上限被杀、输出为空——五个调用发行二进制 CLI 的 spec 统一用 `RELEASE_CLI_TIMEOUT_MS`（30 秒），`tests/e2e-release-cli-budget.test.ts` 守住；webkit INTENT-32 经失败录像逐帧确认是提交对话框切步后下一帧把焦点移到步骤标题、抢走了刚聚焦的改名框（以默认名提交），产品侧改为焦点已在本步输入控件时不再抢（`intent-detail-inline` 单测 + 变异验证）；webkit INTENT-X1 从工作流编辑器跨页 `goto` 报 WebKit 内部错误，改在同一登录上下文新开页面；`rfc370-host-root-boundaries` 在 macOS 解析全量语料超过 5 秒默认超时，改为加载期读取一次。
-- **postgresql-evidence 周跑（10-11）超预算**：大迁移期间状态接口最大值 10-04 1632 ms → 10-05 1427 → 10-07 2452 → 10-11 2659 ms（≥ 2500），吞吐从约 6000 行/秒降到约 3100，时间上对应 RFC-371 v1 在 PostgreSQL 他域表上加的 232 个触发器；v2 已全部退役，已在 `518b2e701` 手动触发 `38613687770` 复验，结论见下一次更新。
+- **postgresql-evidence 超预算**：迁移期间事件循环最长停顿与割接时状态接口最大值一路上涨（10-04 863 / 1632 ms → 10-14 v2 上 2246 / 2987 ms，门槛 2000 / 2500）。剖析定位为 `loadPostgresqlMigrationHistory()` 每次调用都在主线程同步回放并校验整段 PG 迁移历史（本机约 1.9 秒，73% 在逐版本的规范化 JSON 与摘要），迁移开始、定稿 schema 与割接组装会话各回放一次，且随迁移累积变慢。改为运行时目录的已校验历史按进程缓存一次，回放在版本之间让出事件循环（最长连续阻塞本机 110 ms）；`rfc349-postgresql-migration-history-load` 锁定。本机小规模证据：事件循环最大 113 ms、割接状态最大 832 ms，PASS。v1 触发器退役后迁移吞吐也已恢复（427 秒 → 246 秒）。
+- **Markdown 链接检查跑完后暴露的真实断链**：`design/RFC-371-run-observability/remaining-work.md` 指向 v2 已删除的两个源文件（此前被超时掩盖），改为纯文本路径并标注该文为 v1 历史记录。
+- **e2e-full 分片转绿后才运行的端点覆盖对账**：RFC-370 阶段 A 的四个原始执行恢复端点没有 e2e 打到、也没登记。它们只对已中断的原进程生效，浏览器腿造不出这种状态，真实覆盖在后端 HTTP 用例与前端恢复入口单测；按账本机制登记（80 → 84，配套提交注册一次性 `allowGrowth`，同次推送的下一笔退役），用该次运行的真实 journal 本机完整对账通过。
+- **macOS 后端分片 1 一次 13 秒停顿**：`rfc370-purpose-root-selection` 首条用例 13.2 秒超时，同文件其余用例 0.1 ms；上一轮同位置整文件 0.44 秒，本机按同一随机种子跑整个分片 1/12（1665 项）无复现——托管机一次性卡顿，未改代码。
 
 ## 2026-10-14 RFC-371 v2：运行观测精简重设计（Done）
 

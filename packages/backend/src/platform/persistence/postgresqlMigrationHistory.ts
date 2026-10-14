@@ -24,7 +24,7 @@ import {
   postgresqlMigrationJournal as expectedJournal,
   PostgresqlMigrationSequenceError,
   renderPostgresqlUpgradeSql,
-  replayPostgresqlMigrationHistory,
+  replayPostgresqlMigrationHistoryYielding,
   validatePostgresqlMigrationRoot,
   type PostgresqlIndexUpgrade,
   type PostgresqlMigrationHistory,
@@ -580,7 +580,7 @@ export async function readPostgresqlMigrationHistoryPrefix(input: {
   steps.sort((left, right) => left.sequence - right.sequence)
   try {
     validatePostgresqlMigrationRoot(root, baseline, journal)
-    const history = replayPostgresqlMigrationHistory(root, steps)
+    const history = await replayPostgresqlMigrationHistoryYielding(root, steps)
     const expectedSql = ['0000_rfc349_baseline.sql', ...steps.map((step) => step.sqlFile)].sort()
     const actualSql = (await readdir(folder))
       .filter(
@@ -603,6 +603,16 @@ export async function readPostgresqlMigrationHistoryPrefix(input: {
   }
 }
 
+/**
+ * The runtime folder's history is immutable for the life of the process (embedded in
+ * the binary, or the source tree), while reading, replaying and checking it costs about
+ * two seconds of CPU. Migration preparation, schema finalization and the cutover's
+ * session composition each replayed it again (RFC-349 evidence 38613687770). One
+ * checked history per process serves every default call; a failed load is not kept.
+ * Explicit folders, plans or contracts (authoring, tests) are always read fresh.
+ */
+let runtimeHistory: Promise<PostgresqlMigrationHistory> | null = null
+
 export async function loadPostgresqlMigrationHistory(
   input: {
     readonly plan?: PostgresqlSchemaPlan
@@ -610,6 +620,25 @@ export async function loadPostgresqlMigrationHistory(
     readonly migrationsFolder?: string
   } = {},
 ): Promise<PostgresqlMigrationHistory> {
+  if (
+    input.plan === undefined &&
+    input.contract === undefined &&
+    input.migrationsFolder === undefined
+  ) {
+    runtimeHistory ??= readCheckedPostgresqlMigrationHistory({}).catch((error: unknown) => {
+      runtimeHistory = null
+      throw error
+    })
+    return await runtimeHistory
+  }
+  return await readCheckedPostgresqlMigrationHistory(input)
+}
+
+async function readCheckedPostgresqlMigrationHistory(input: {
+  readonly plan?: PostgresqlSchemaPlan
+  readonly contract?: LogicalSchemaContract
+  readonly migrationsFolder?: string
+}): Promise<PostgresqlMigrationHistory> {
   const contract = input.contract ?? buildLogicalSchemaContract()
   const plan = input.plan ?? buildPostgresqlSchemaPlan(contract)
   const history = await readPostgresqlMigrationHistoryPrefix({
@@ -635,7 +664,9 @@ export async function verifyPostgresqlMigrationHistory(input: {
   ) {
     return await verifyFlatPostgresqlMigrationHistory({ ...input, migrationsFolder })
   }
-  const history = await loadPostgresqlMigrationHistory({ migrationsFolder })
+  const history = await loadPostgresqlMigrationHistory(
+    input.migrationsFolder === undefined ? {} : { migrationsFolder },
+  )
   const node = history.versions.find(
     (version) => canonicalSchemaJson(version.plan) === canonicalSchemaJson(input.plan),
   )
