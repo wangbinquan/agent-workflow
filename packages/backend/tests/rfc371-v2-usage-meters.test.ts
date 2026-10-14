@@ -8,9 +8,13 @@
 //  - Claude Code: split assistant events keep the largest usage per message; the
 //    result's modelUsage replaces the stream view unless the session was resumed
 //    or the result is an error_during_execution all-zero report.
+// Windows (CI 38601555253): the store path follows the child's own home
+// (`USERPROFILE` first) with win32 separators; fixture stores are closed and
+// their directories removed through fixtures/tempDir (an open SQLite file
+// cannot be deleted there), and bulk fixture rows share one transaction.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createOpencodeUsageMeter } from '@/services/runtime/opencode/usage'
@@ -21,10 +25,13 @@ import {
 } from '@/services/runtime/opencode/nativeUsage'
 import { usageMeter as claudeUsageMeter } from '@/services/runtime/claudeCode/usage'
 import { getRuntimeDriver } from '@/services/runtime'
+import { removeTempDirSync } from './fixtures/tempDir'
 
 const dirs: string[] = []
+const stores: Database[] = []
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+  for (const db of stores.splice(0)) db.close()
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir)
 })
 
 const step = (session: string, id: string, input: number, output: number, reasoning = 0) => ({
@@ -39,6 +46,9 @@ function nativeStore() {
   dirs.push(dir)
   const path = join(dir, 'opencode.db')
   const db = new Database(path)
+  stores.push(db)
+  // A fixture needs no durability; per-row journal files and syncs are slow on Windows.
+  db.exec('PRAGMA journal_mode = MEMORY; PRAGMA synchronous = OFF;')
   db.exec(`
     CREATE TABLE session (id TEXT PRIMARY KEY, parent_id TEXT);
     CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, time_created INTEGER NOT NULL, data TEXT NOT NULL);
@@ -126,13 +136,33 @@ describe('RFC-371 v2 OpenCode stream meter', () => {
 
 describe('RFC-371 v2 OpenCode native summary', () => {
   test('the database path follows OPENCODE_DB and the XDG data directory', () => {
-    expect(opencodeUsageDatabasePath({ OPENCODE_DB: ':memory:' })).toBeNull()
-    expect(opencodeUsageDatabasePath({ OPENCODE_DB: '/abs/x.db' })).toBe('/abs/x.db')
-    expect(opencodeUsageDatabasePath({ XDG_DATA_HOME: '/data' })).toBe('/data/opencode/opencode.db')
-    expect(opencodeUsageDatabasePath({ HOME: '/home/u', OPENCODE_DB: 'other.db' })).toBe(
+    const linux = (env: Record<string, string>) => opencodeUsageDatabasePath(env, 'linux')
+    expect(linux({ OPENCODE_DB: ':memory:', HOME: '/home/u' })).toBeNull()
+    expect(linux({ OPENCODE_DB: '/abs/x.db' })).toBe('/abs/x.db')
+    expect(linux({ XDG_DATA_HOME: '/data', HOME: '/home/u' })).toBe('/data/opencode/opencode.db')
+    expect(linux({ HOME: '/home/u', OPENCODE_DB: 'other.db' })).toBe(
       '/home/u/.local/share/opencode/other.db',
     )
-    expect(opencodeUsageDatabasePath({ HOME: 'relative' })).toBeNull()
+    // USERPROFILE is a Windows variable; POSIX children resolve their home from HOME.
+    expect(linux({ USERPROFILE: '/home/u' })).toBeNull()
+    expect(linux({ HOME: 'relative' })).toBeNull()
+    expect(linux({ XDG_DATA_HOME: 'relative', HOME: '/home/u' })).toBeNull()
+  })
+
+  test('a Windows child resolves its store from USERPROFILE with win32 paths', () => {
+    const windows = (env: Record<string, string>) => opencodeUsageDatabasePath(env, 'win32')
+    expect(windows({ USERPROFILE: 'C:\\Users\\u', HOME: 'C:\\other' })).toBe(
+      'C:\\Users\\u\\.local\\share\\opencode\\opencode.db',
+    )
+    expect(windows({ HOME: 'C:\\Users\\u' })).toBe(
+      'C:\\Users\\u\\.local\\share\\opencode\\opencode.db',
+    )
+    expect(windows({ XDG_DATA_HOME: 'D:\\xdg', USERPROFILE: 'C:\\Users\\u' })).toBe(
+      'D:\\xdg\\opencode\\opencode.db',
+    )
+    expect(windows({ OPENCODE_DB: 'D:\\stores\\x.db' })).toBe('D:\\stores\\x.db')
+    expect(windows({ USERPROFILE: 'relative' })).toBeNull()
+    expect(windows({})).toBeNull()
   })
 
   test('the root tree since the invocation started is summed per actual model', () => {
@@ -228,7 +258,9 @@ describe('RFC-371 v2 OpenCode native summary', () => {
     expect(readOpencodeTreeUsage('/nonexistent/opencode.db', [], 0)).toBeNull()
     const store = nativeStore()
     store.session('root')
-    for (let i = 0; i < OPENCODE_TREE_MAX_SESSIONS; i++) store.session(`child-${i}`, 'root')
+    store.db.transaction(() => {
+      for (let i = 0; i < OPENCODE_TREE_MAX_SESSIONS; i++) store.session(`child-${i}`, 'root')
+    })()
     expect(readOpencodeTreeUsage(store.path, ['root'], 0)).toBeNull()
   })
 })

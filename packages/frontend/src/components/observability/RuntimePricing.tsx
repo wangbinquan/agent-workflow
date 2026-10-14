@@ -1,5 +1,7 @@
 // RFC-371 v2 §6 — Settings → Runtimes → Token cost: each runtime lists its
 // configured model and every model it has reported, each with its own CNY price line.
+// The tables use the small minimum width: the settings column is narrow, and the
+// row actions must stay in view at desktop width.
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -73,7 +75,7 @@ export function RuntimePricing() {
               ) : (
                 <TableViewport
                   label={t('observationPricing.runtimeModels', { name: runtime.name })}
-                  minWidth="lg"
+                  minWidth="sm"
                 >
                   <table
                     className="data-table data-table--compact"

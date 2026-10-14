@@ -126,7 +126,10 @@ afterEach(() => {
 
 test('each runtime lists its configured and reported models with their current price', async () => {
   fixture()
-  await screen.findByRole('table', { name: 'claude-main 的模型' })
+  const table = await screen.findByRole('table', { name: 'claude-main 的模型' })
+  // The settings column is narrow: the small minimum width keeps the row actions
+  // in view at desktop width (visual run 38601555259 showed them scrolled away).
+  expect(table.closest('.table-viewport')?.classList.contains('table-viewport--sm')).toBe(true)
   expect(within(row('sonnet')).getByText('配置模型')).toBeDefined()
   expect(within(row('sonnet')).getByText('未定价')).toBeDefined()
   expect(within(row('haiku')).getByText(/输入 ¥1 · 缓存读取 未定价/)).toBeDefined()

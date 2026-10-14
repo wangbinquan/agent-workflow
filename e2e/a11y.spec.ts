@@ -467,42 +467,31 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await expectNoCriticalOrSeriousAxeViolations(page, '/tasks/:id')
   })
 
-  test('/observability task list, swimlanes and attempt dialog pass a11y', async ({ page }) => {
-    const taskId = await seedTerminalTask('observations')
+  // RFC-371 v2: the four statistics tabs and a task's call detail, light desktop and dark phone.
+  test('/observability tabs and task call detail pass a11y', async ({ page }) => {
+    await seedTerminalTask('observations')
     await setDaemonTheme('light')
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/observability`)
-    const task = page
-      .getByRole('button', { name: 'A11y task observations', exact: true })
-      .and(page.locator(`[data-observation-task="${taskId}"]`))
-    await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Run observability', level: 1 })).toBeVisible()
+    await expect(page.getByText('Tokens in range', { exact: true })).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/observability (overview)')
-    for (const tab of [
-      'Agent analysis',
-      'Tokens and cost',
-      'Performance and data quality',
-      'Task traces',
-    ]) {
+    for (const tab of ['Agents and models', 'System work', 'Tasks']) {
       await page.getByRole('tab', { name: tab, exact: true }).click()
       await expect(page.getByRole('tabpanel')).toBeVisible()
       await expectNoCriticalOrSeriousAxeViolations(page, `/observability (${tab})`)
     }
+    const task = page.getByRole('button', { name: 'View A11y task observations', exact: true })
     await expect(task).toBeVisible()
     await task.click()
-    const attempt = page.getByRole('button', { name: /^Show attempt statistics/ }).first()
-    await expect(attempt).toBeVisible()
+    const heading = page.getByRole('heading', { name: 'A11y task observations', level: 2 })
+    await expect(heading).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/observability (task detail)')
     await page.setViewportSize({ width: 390, height: 844 })
     await setDaemonTheme('dark')
     await page.reload()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-    await expect(attempt).toBeVisible()
+    await expect(heading).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/observability (390 dark)')
-    await attempt.click()
-    await expect(page.getByRole('dialog', { name: /^Attempt / })).toBeVisible()
-    await expectNoCriticalOrSeriousAxeViolations(page, '/observability (attempt dialog)')
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-    await expect(attempt).toBeFocused()
   })
 })

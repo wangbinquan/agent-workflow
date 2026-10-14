@@ -6928,6 +6928,22 @@ button:disabled:hover {
   white-space: nowrap;
 }
 
+/* A row header (`<th scope="row">`) names its row for assistive technology;
+   visually it is the row's first cell, not a column title — agent and model
+   names keep their own case and wrap like any other cell. */
+.data-table tbody th {
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+}
+
+.data-table tbody tr:last-child th {
+  border-bottom: none;
+}
+
 .data-table tr:last-child td {
   border-bottom: none;
 }
@@ -7067,6 +7083,10 @@ button:disabled:hover {
 .data-table--compact th,
 .data-table--compact td {
   padding: 6px 10px;
+  font-size: var(--font-sm);
+}
+
+.data-table--compact tbody th {
   font-size: var(--font-sm);
 }
 

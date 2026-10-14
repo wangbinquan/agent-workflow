@@ -40,8 +40,9 @@
   gap: var(--space-2);
 }
 
+/* Outranks the shared row-header reset (.data-table tbody th). */
 .observability__selected > td,
-.observability__selected > th {
+.data-table .observability__selected > th {
   background: color-mix(in srgb, var(--accent) 8%, var(--panel));
 }
 
@@ -67,9 +68,11 @@
   font: inherit;
 }
 
+/* The day columns fill the scrolling chart edge to edge, so an outset ring is
+   cut by the scroll box on every side; draw it inside the column instead. */
 .observability-chart__day:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
+  outline-offset: var(--focus-ring-offset-inset);
 }
 
 .observability-chart__stack {

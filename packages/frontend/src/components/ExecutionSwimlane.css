@@ -7,10 +7,6 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.execution-swimlane tbody th {
-  text-transform: none;
-  letter-spacing: normal;
-}
 .execution-swimlane .execution-swimlane__select {
   width: 100%;
   display: flex;

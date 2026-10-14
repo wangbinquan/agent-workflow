@@ -2,11 +2,12 @@
 // after an invocation drained. Only numeric step-finish fields and the assistant
 // message's provider/model are read; no prompt, output or tool content.
 
-import { isAbsolute, join } from 'node:path'
+import { posix, win32 } from 'node:path'
 import {
   openReadonlySqliteDatabase,
   type ReadonlySqliteDatabase,
 } from '@/platform/persistence/sqlite/readonlySqliteDatabase'
+import { platformHomeEnv } from '@/util/platformExec'
 import type { RuntimeUsageModel } from '../usage'
 
 /** Delegation depth below a root session that the summary follows. */
@@ -14,20 +15,28 @@ export const OPENCODE_TREE_MAX_DEPTH = 8
 /** A tree larger than this is not summarized (the stream snapshot is kept). */
 export const OPENCODE_TREE_MAX_SESSIONS = 500
 
-/** Mirrors OpenCode's explicit DB path and standard data directory for this child environment. */
+/**
+ * Mirrors where OpenCode puts its store for this child environment: an
+ * absolute `OPENCODE_DB`, else `OPENCODE_DB` (or `opencode.db`) under
+ * xdg-basedir's `$XDG_DATA_HOME` or `<home>/.local/share` plus `opencode`
+ * (opencode packages/core/src/database/database.ts:44-53,
+ * packages/core/src/global.ts:3-11). The home is the one the child's
+ * `os.homedir()` reads — `USERPROFILE` first on Windows, `HOME` elsewhere.
+ * A relative data directory would resolve against the child's cwd, which is
+ * not known here, so it yields no path rather than a guessed store.
+ */
 export function opencodeUsageDatabasePath(
   env: Readonly<Record<string, string | undefined>>,
+  platform: NodeJS.Platform = process.platform,
 ): string | null {
+  const path = platform === 'win32' ? win32 : posix
   const explicit = env.OPENCODE_DB
   if (explicit === ':memory:') return null
-  if (explicit && isAbsolute(explicit)) return explicit
-  const data =
-    env.XDG_DATA_HOME && isAbsolute(env.XDG_DATA_HOME)
-      ? env.XDG_DATA_HOME
-      : env.HOME && isAbsolute(env.HOME)
-        ? join(env.HOME, '.local', 'share')
-        : null
-  return data ? join(data, 'opencode', explicit || 'opencode.db') : null
+  if (explicit && path.isAbsolute(explicit)) return explicit
+  const home = platformHomeEnv(env, platform)
+  const data = env.XDG_DATA_HOME || (home ? path.join(home, '.local', 'share') : '')
+  if (!data || !path.isAbsolute(data)) return null
+  return path.join(data, 'opencode', explicit || 'opencode.db')
 }
 
 const count = (value: unknown): number => {
