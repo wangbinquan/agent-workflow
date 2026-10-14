@@ -44,6 +44,11 @@ test('the committed report counts the selected module corpus without consulting 
     resolve(root, 'missing-rfc370-snapshot-report-directory'),
     selected,
   )
+  expect(
+    new Set(
+      (artifacts.moduleSymbolOwners.entries as Array<{ file: string }>).map((entry) => entry.file),
+    ).size,
+  ).toBeGreaterThan(1000)
   const backend = selected.units.filter((unit) => unit.path.startsWith('packages/backend/src/'))
   const modules = backend.filter((unit) => unit.path.startsWith('packages/backend/src/modules/'))
   const contexts = [...new Set(modules.map((unit) => unit.path.split('/')[4]!))].sort()

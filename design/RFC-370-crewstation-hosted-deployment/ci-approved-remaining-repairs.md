@@ -27,3 +27,5 @@
 源码 `655181228` 已提交并完整保留三份并发夹具，随后并发 `1ccc07525` 保留在 main。首轮原生成没有发布：其 report.moduleContexts 仍走 live moduleShapes，把原 source-ref 外的新文件计为 185，而该已选 Git 人口是 184。这个 committed-source 输入遗漏属于本会话原生成能力；首轮产物留为无效证据，不代签一致。
 
 报表现在从同一选定 backend corpus 汇总 context 文件数；普通模式仍读取完整 live backendUnits，显式 source-ref 则只计原 Git 输入。原 moduleShapes 的形状规则、其余采数和并发文件保持。新增回归用真实完整 Git 输入和从不创建的不存在目录构建，逐 context 与总人口对账，明确不依赖文件系统副本。原 Git 读取与新增报告回归 2 pass／0 fail，限定 lint／格式通过；同一获批功能门对这两文件必要续审 PASS／0 findings。先前 25／27 项有效结果沿用。修复实际提交后重新生成本会话尚未发布的配套，全部 130 条 ledger、原预算和共享输出继续保留。
+
+新回归直接消费原生成器后，原 corpus 守卫要求可追溯的显式下限。追加对其实际唯一生产文件集合 >1000 的断言，保留原全部人口与结果预言；未改扫描器、预算或豁免表。原下限守卫定向通过。修正后的八份 canonical 输出、四份 provenance 和 status 已逐项相等；130 条 ledger 的完整字段／顺序相同，无 allowGrowth。最初对全部生成文档做的额外 Prettier 检查涉及不在仓内 format:check 范围的原 status renderer 输出，因此保持原生成字节和严格投影，不为这个范围外诊断改渲染器。
