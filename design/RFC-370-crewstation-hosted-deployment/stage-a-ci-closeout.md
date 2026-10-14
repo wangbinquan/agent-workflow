@@ -2,6 +2,10 @@
 
 ## 2026-10-14 native 状态刷新回归与完整 CI 边界
 
+原 13 份配套已发布为 `366165c6720f28587c7a486d2d7f3eba0e11897b`，原生产／测试候选保持，远端精确同步；主 CI `38568979583` 的质量作业已成功，其余继续等待实际结论。为补足 Markdown 超时归因所缺的等待点，只给原 Lychee 步骤增加 `--verbose` 与 `--host-stats`。这两项由实际安装的 0.24.2 原 CLI 支持，仅输出逐链接和按主机统计；原 design 全集、15 分钟预算、并发 4、重试 5、单请求 30 秒、接受码和完整 run-ID remap 均保持，没有接手尚未确认责任的修复，也未作检查降级。CI 日志选项微调不增加生产或测试逻辑，随后以新确切 SHA 的原作业确认参数执行和归因数据。
+
+同版本、同参数的阶段 A 前 Markdown job `115263656205` 已实际耗时 870248ms，1711 total／1704 successful／3 excluded／4 unsupported／0 errors；本轮取消时摘要为 1775 total／1768 successful／3 excluded／4 unsupported／0 errors。原成功检查距 15 分钟仅约 30 秒，说明容量余量不足值得排查，但具体未完成等待点与责任仍未确定，不能把增长比例直接当成根因。两项定时启动接手预览仍等待当前用户明确答复，不因增加诊断日志扩大授权。
+
 修复源码已完整发布为 `4328d428b57b0b6c61154dcbd183f70513daae57`，推后 main／origin 精确同步。该 SHA 的质量作业 `115845591197`、完整 Windows `38562228834` 和视觉回归 `38562141998` 均已 success，九个跨平台前端分片已成功；macOS `115845591288` 与 Windows `115845591456` 日志均确认原 retry 文件 8 tests 全通过，包含五条新增回归。前置 f6fc 的原定时 Windows `38560283870` 也已完整成功，较早手动作业被原并发策略取消的事实保留。
 
 `4328d428b` Ubuntu 24 job `115845591725` 的两个 canonical 严格对账失败归于本会话：前端生产源码也参与三目录 sourceDigest，此次发布漏了必要配套。使用原 `architecture-census.ts --write --source-ref 4328d428b --seed-ref 4328d428b --snapshot-sha 4328d428b` 仅从主 checkout 的已提交 Git 对象生成原 13 份文件；新 sourceDigest 为 `sha256:acc38fb091f84e8f70b8e6e4477306c531a0191745fd3a3d6131612d3250b94f`，与实际 CI 期望一致。八份 canonical、四份治理投影与内容 provenance、原 status 投影逐项一致，原结构校验零错误；全部 130 条账本原内容保持，无增长声明、计数或判据修改。并发 RFC-372 在制源码未被读入生成快照，也未被覆盖或移除。配套发布后的确切 SHA 主 CI 继续验收。

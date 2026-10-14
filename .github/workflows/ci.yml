@@ -644,6 +644,8 @@ jobs:
           # links subject to normal failure; it never accepts 5xx or skips URLs.
           args: >-
             --no-progress
+            --verbose
+            --host-stats
             --max-concurrency 4
             --accept 200,206,403,429
             --max-retries 5
