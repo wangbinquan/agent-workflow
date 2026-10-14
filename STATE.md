@@ -1,3 +1,7 @@
+## 2026-10-14 RFC-370 接手：v2 重设计（进行中）
+
+用户要求接手 RFC-370、按最优架构重新设计并实现（免 Codex 设计门），裁定：CrewStation 表达不了的能力由本 RFC 在 CS 仓补平台合同、完整等价后才关闭；首次托管只做全新安装，不做旧单机实例迁入；原会话已停，可直接替换阶段 A 代码。设计见 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md)，进度只记 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)。要点：单机与托管同一业务路径；执行权改为“崩溃即退出”（单机启动即 active，托管按 CS 租约，首次 active 才启动后台任务、失权即退出由平台重启），删除只有测试在走的 19 owner 平行路径；执行端口改为“调用 + 归一化事件”，本地与 CS 两个实现；托管装配集中到 `src/bootstrap/`。交付顺序 P1 单机统一 → M0 控制面上线本机 CS → M1 远程执行闭环 → M2 能力等价（含 CS 侧 RFC）→ M3 事件与运维。
+
 ## 2026-10-14 RFC-372 O8：分支追问改为异步（Done）
 
 按用户「RFC-371、RFC-372 整体重构完成」的要求补做 [审视后优化](design/RFC-372-mindmap-clarify/review-followups-20261014.md) 中原建议暂缓的 O8（§4.7）：`POST /api/clarify/:nodeRunId/followup` 在前置校验通过后即返回 202 `{state:'running'}`（已受理过的请求 200 `{state:'done'}`），模型在后台生成；校验失败仍是原 409/422。轮次详情增加可选 `followup`（生成中，或最近一次失败，保留 10 分钟、下次受理清除；错误码与文案同 HTTP 层），受理与结束时发任务频道合成帧 `clarify.followup.updated`。前端按轮次状态显示「生成中 / 查看生成中的分支 / 取消」，刷新后与其他成员同样可见，生成中每 1.5 秒重取轮次兜底；后台失败显示在对应分支（取消不算失败）。三份 RFC-372 e2e 改为等待轮次状态，journey 增加「生成中刷新→恢复→在分支上取消」。
