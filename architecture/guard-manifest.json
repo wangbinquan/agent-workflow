@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e",
+    "sourceDigest": "sha256:21eab659b7c702f52c18bb62879bd4b50cccc0a69d9a41710ac79a7841259887",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
@@ -2179,6 +2179,18 @@
       "lines": 35
     },
     {
+      "id": "rfc370-host-root-boundaries",
+      "file": "packages/backend/tests/architecture/rfc370-host-root-boundaries.test.ts",
+      "runner": "bun",
+      "mechanism": "ast",
+      "corpusScanner": true,
+      "minCorpusFiles": 2000,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 31
+    },
+    {
       "assertsAbsence": true,
       "classified": true,
       "corpusScanner": false,
@@ -2592,8 +2604,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "dba70f0fceaf12b7a4e07a724aae47ef1ff49495",
-    "contentDigest": "sha256:4459e3141a61e9a24fbf6f0fb58aa9902ea3d12064a137c9ec0c766e0e62042d",
+    "currentSnapshotSha": "bfd79020ed60ae5caff2135731d214b2b31a3e45",
+    "contentDigest": "sha256:751dd192d5d857795a2781e49c620242c4198a1904d0f086c1d1c07bedc62c24",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

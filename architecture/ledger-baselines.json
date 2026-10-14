@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e",
+    "sourceDigest": "sha256:21eab659b7c702f52c18bb62879bd4b50cccc0a69d9a41710ac79a7841259887",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -919,8 +919,11 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 28688,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 28689,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 CI repair source 02f64fe7: move the two original observation change interfaces intact to neutral platform/persistence/observationChangeContract.ts; their two former module symbols become the two platform symbols and one actual $file owner, 28688→28689. Measured once by the original census; consume this one-use permit on the next non-growing projection."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。 RFC-370 历史记录：981ae0f4dd28f6711adac2bec65c96fb231fd77d 相对父提交5a0e315c51ffa51ec56fc5c626049296d944dc67增加生命周期双 purpose 切面：mutation-entrypoints 1988→1989、cross-context observed imports 6902→6905、architecture exceptions 6044→6047、public surfaces 1259→1260、module symbol owners 27775→27782；遗漏当次allowGrowth声明，主CI的RFC-317 T17正式失败。已有批准覆盖一个新公开selector、三个bootstrap消费边、七个owner及一个观测写入口；原规则和其他125个baseline保持。此处记录遗漏，不补造后继未增长提交的许可，不改旧历史，不把后继CI追记为981ae0f准入通过；详见design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md。 RFC-371 CI 配套（source 1603b9c7）：按原 T17 一次性规则消费上一份匹配 RFC-370 投影的七条未增长 permit，原历史与 why 全部保留；本次实际只增长 physical SQLite fixture 347→348 和 platform owner 28664→28674，按原计数逐条登记，下一次无增长时正常退役。没有修改清点规则、人口、required SPI、债务条款或完工信用。",
@@ -928,8 +931,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "dba70f0fceaf12b7a4e07a724aae47ef1ff49495",
-    "contentDigest": "sha256:3016ee34636b52c98756f2f0b6ea876beb4a193bce0577599cb0c50016ba3913",
+    "currentSnapshotSha": "bfd79020ed60ae5caff2135731d214b2b31a3e45",
+    "contentDigest": "sha256:5d08c354011ded187b037525e5a6b3869606dc007405b14caa12ffed6b72589d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

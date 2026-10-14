@@ -7,7 +7,7 @@
     "crossContextImports": 7347,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 28688,
+    "moduleSymbolOwners": 28689,
     "mutationEntrypoints": 2035,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1293,
@@ -18,7 +18,7 @@
     "appDepsConsumers": [
       "packages/backend/src/cli/embeddedHostExecutionApplication.ts"
     ],
-    "backendProductionFiles": 2564,
+    "backendProductionFiles": 2565,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -54,7 +54,7 @@
     ],
     "directNativeIntervals": 26,
     "directNativeTimers": 88,
-    "inboundBoundaryEdges": 324,
+    "inboundBoundaryEdges": 315,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -166,5 +166,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e"
+  "sourceDigest": "sha256:21eab659b7c702f52c18bb62879bd4b50cccc0a69d9a41710ac79a7841259887"
 }

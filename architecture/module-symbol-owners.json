@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2564,
+    "backendFiles": 2565,
     "frontendFiles": 689,
-    "legacyFiles": 623,
+    "legacyFiles": 624,
     "moduleFiles": 1941,
-    "productionFiles": 3430,
+    "productionFiles": 3431,
     "sharedFiles": 177,
-    "symbolsIncludingFileRoots": 28688
+    "symbolsIncludingFileRoots": 28689
   },
   "entries": [
     {
@@ -121902,30 +121902,6 @@
     {
       "currentContext": "run-observability",
       "currentLayer": "ports",
-      "exported": true,
-      "file": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#OriginalObservationChange",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "OriginalObservationChange",
-      "targetContext": "run-observability",
-      "targetLayer": "ports"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "ports",
-      "exported": true,
-      "file": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#OriginalObservationChangeRouter",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "OriginalObservationChangeRouter",
-      "targetContext": "run-observability",
-      "targetLayer": "ports"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "ports",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/ports/incrementalObservationProjection.ts",
       "id": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationProjection.ts#$file",
@@ -188896,6 +188872,42 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "SOURCE_TERMINATION_BLOCKED_NODE_STATUSES",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "id": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "id": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChange",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "OriginalObservationChange",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "id": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChangeRouter",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "OriginalObservationChangeRouter",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -344999,5 +345011,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e"
+  "sourceDigest": "sha256:21eab659b7c702f52c18bb62879bd4b50cccc0a69d9a41710ac79a7841259887"
 }

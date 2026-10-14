@@ -2024,23 +2024,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationProjectionRouting.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/observationProjectionRouting.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:04e3b416d5f77db7a5ca",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "RFC-371",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts#$file",
-      "toPath": "packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts",
-      "toSymbol": "OriginalObservationChangeRouter",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -30295,23 +30278,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
-      "fromPath": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:44dbcc94d270b0f17a21",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "run-observability",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
-      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
-      "toSymbol": "DatabaseTransaction",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/domain/uploads.ts#$file",
@@ -42737,6 +42703,23 @@
       "toPath": "packages/backend/src/modules/collaboration/domain/reviewDecision.ts",
       "toSymbol": "encodeReviewDecisionReceipt",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:63508ddb304a984eda2d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChange",
+      "toPath": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "toSymbol": "OriginalObservationChange",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -69618,23 +69601,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationProjectionRouting.ts#$file",
-      "fromPath": "packages/backend/src/platform/persistence/observationProjectionRouting.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a4cf523675219240770e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "platform",
-      "removeAfterWave": "RFC-371",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts#$file",
-      "toPath": "packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts",
-      "toSymbol": "OriginalObservationChange",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
       "fromSymbol": "$file",
@@ -81191,6 +81157,23 @@
       "toPath": "packages/backend/src/modules/integration/composition/digitalEmployeeToolConnections.ts",
       "toSymbol": "composeDevelopmentToolConnectionCatalog",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c0681b25db349cdff1ef",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChangeRouter",
+      "toPath": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "toSymbol": "OriginalObservationChangeRouter",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -100012,6 +99995,23 @@
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:eb5897934c20d17cd96b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChangeRouter",
+      "toPath": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "toSymbol": "OriginalObservationChangeRouter",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/configOperations.ts#$file",
@@ -111456,22 +111456,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkgroupCatalogDetail"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/observationProjectionRouting.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationProjectionRouting.ts#$file",
-      "id": "import:04e3b416d5f77db7a5ca",
-      "owner": "platform",
-      "removeAfterWave": "RFC-371",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/run-observability/composition/incrementalObservationProjection",
-      "syntax": "static-import",
-      "targetSymbol": "OriginalObservationChangeRouter",
-      "toContext": "run-observability",
-      "toFile": "packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -141714,22 +141698,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/workspaceBoundary.ts#scanSiblingTaskRoots"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "run-observability",
-      "fromFile": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
-      "id": "import:44dbcc94d270b0f17a21",
-      "owner": "run-observability",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/databaseTransaction",
-      "syntax": "static-import",
-      "targetSymbol": "DatabaseTransaction",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/domain/uploads.ts",
@@ -155312,6 +155280,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/domain/reviewDecision.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/domain/reviewDecision.ts#encodeReviewDecisionReceipt"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
+      "id": "import:63508ddb304a984eda2d",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/observationChangeContract",
+      "syntax": "export",
+      "targetSymbol": "OriginalObservationChange",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChange"
     },
     {
       "edgeKind": "type",
@@ -184355,22 +184339,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/platform/persistence/observationProjectionRouting.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationProjectionRouting.ts#$file",
-      "id": "import:a4cf523675219240770e",
-      "owner": "platform",
-      "removeAfterWave": "RFC-371",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/run-observability/composition/incrementalObservationProjection",
-      "syntax": "static-import",
-      "targetSymbol": "OriginalObservationChange",
-      "toContext": "run-observability",
-      "toFile": "packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationProjection.ts#$file"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginCachedPathQuery.ts#$file",
@@ -196944,6 +196912,22 @@
       "toContext": "integration",
       "toFile": "packages/backend/src/modules/integration/composition/digitalEmployeeToolConnections.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/digitalEmployeeToolConnections.ts#composeDevelopmentToolConnectionCatalog"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
+      "id": "import:c0681b25db349cdff1ef",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/observationChangeContract",
+      "syntax": "static-import",
+      "targetSymbol": "OriginalObservationChangeRouter",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChangeRouter"
     },
     {
       "edgeKind": "value",
@@ -217138,6 +217122,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts#acceptHumanGateDecisionTx"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationChanges.ts#$file",
+      "id": "import:eb5897934c20d17cd96b",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/observationChangeContract",
+      "syntax": "export",
+      "targetSymbol": "OriginalObservationChangeRouter",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/observationChangeContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/observationChangeContract.ts#OriginalObservationChangeRouter"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "run-observability",
       "fromFile": "packages/backend/src/modules/run-observability/infrastructure/historicalNativeFactStore.ts",
@@ -227885,7 +227885,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:58fbeaaa9ffafa1dbf59af0e0baf902dce5d82d5ef1dd0f4dead71869971aa1e",
+  "sourceDigest": "sha256:21eab659b7c702f52c18bb62879bd4b50cccc0a69d9a41710ac79a7841259887",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
