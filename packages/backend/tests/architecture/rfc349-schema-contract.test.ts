@@ -1,6 +1,7 @@
-// RFC-349 T2/T8 — locks the exact 275-table source census, the 269-table
+// RFC-349 T2/T8 — locks the exact 197-table source census, the 191-table
 // PostgreSQL parity set, and the only six archive-then-omit tables approved by
-// D9. New/missing/ownerless tables and revived legacy consumers must fail here
+// D9 (RFC-371 v2 retired 81 v1 observation tables and added three).
+// New/missing/ownerless tables and revived legacy consumers must fail here
 // before any migration can prepare a target.
 
 import { describe, expect, test } from 'bun:test'
@@ -27,68 +28,38 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(275)
-    expect(contract.sourceTableCount).toBe(275)
-    expect(contract.activeTableCount).toBe(269)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(197)
+    expect(contract.sourceTableCount).toBe(197)
+    expect(contract.activeTableCount).toBe(191)
     expect(contract.archiveOnlyTableCount).toBe(6)
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
-    const binding = contract.tables.find(
-      (table) => table.id === 'task_execution_native_usage_store_bindings',
-    )!
-    expect(binding.columns.map((column) => column.name).sort()).toEqual([
-      'before_owner_receipt_id',
-      'invocation_id',
-      'source_generation',
-    ])
-    expect(binding.foreignKeys[0]!.foreignTable).toBe('task_execution_native_usage_preparations')
-    // RFC-371 0244 / PostgreSQL 0020: derived pages remain in full schema/migration parity.
-    const roots = contract.tables.find((table) => table.id === 'observation_native_fact_roots')!
-    const pages = contract.tables.find((table) => table.id === 'observation_native_fact_pages')!
-    expect(roots.migrationKey).toEqual(['cache_key'])
-    expect(pages.migrationKey).toEqual(['cache_key', 'cursor'])
-    expect([roots.ownerContext, pages.ownerContext]).toEqual([
-      'run-observability',
-      'run-observability',
-    ])
-    expect(pages.foreignKeys[0]!.foreignTable).toBe('observation_native_fact_roots')
-    // Retain published observation relations while retiring RFC-372 companion tables.
+    // Retired RFC-372 companion tables stay absent.
     expect(contract.tables.filter((t) => /^(clarify_mindmap_|task_clarify_)/.test(t.id))).toEqual(
       [],
     )
-    expect(contract.tables.filter((t) => t.id.startsWith('observation_projection_'))).toHaveLength(
-      18,
-    )
-    // RFC-371 0250 / PostgreSQL 0026: retain every original relation and lock every new analysis/index table.
-    for (const id of [
-      'observation_anomaly_states',
-      'observation_anomaly_history',
-      'observation_maintenance_operations',
-      'observation_maintenance_members',
-      'observation_invocation_price_policies',
-      'observation_invocation_price_audit',
-      'observation_invocation_price_records',
-      'observation_projection_descriptors',
-      'observation_projection_indexed_versions',
-      'observation_projection_query_scopes',
-      'observation_projection_query_scope_members',
+    // RFC-371 v2 (SQLite 0256 / PostgreSQL 0032): one call row, its per-model rows
+    // and append-only prices; no v1 projection, report, native-usage or source table survives.
+    expect(
+      contract.tables
+        .map((table) => table.id)
+        .filter((id) => /^observation_|native_usage|_observation_/.test(id))
+        .sort(),
+    ).toEqual(['observation_call_models', 'observation_calls', 'observation_prices'])
+    for (const [id, key] of [
+      ['observation_calls', ['id']],
+      ['observation_call_models', ['call_id', 'model']],
+      ['observation_prices', ['id']],
     ] as const) {
       const table = contract.tables.find((table) => table.id === id)!
       expect(table.disposition, id).toBe('KEEP')
       expect(table.ownerContext, id).toBe('run-observability')
-      expect(table.providerTables, id).toEqual({ sqlite: id, postgresql: id })
-    }
-    const additions = [
-      ['observation_calculation_rows', 'run-observability', ['cache_key', 'namespace', 'key']],
-      ['observation_calculation_versions', 'run-observability', ['cache_key']],
-      ['observation_source_revisions', 'run-observability', ['source_id']],
-    ] as const
-    for (const [id, owner, key] of additions) {
-      const table = contract.tables.find((table) => table.id === id)!
-      expect(table.disposition, id).toBe('KEEP')
-      expect(table.ownerContext, id).toBe(owner)
       expect(table.migrationKey, id).toEqual([...key])
       expect(table.providerTables, id).toEqual({ sqlite: id, postgresql: id })
     }
+    expect(
+      contract.tables.find((table) => table.id === 'observation_call_models')!.foreignKeys[0]!
+        .foreignTable,
+    ).toBe('observation_calls')
   })
 
   test('every source table has one owner, stable key, codec and provider mapping', () => {

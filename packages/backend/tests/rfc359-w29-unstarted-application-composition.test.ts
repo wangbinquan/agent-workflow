@@ -1,6 +1,7 @@
 import { inversePurposeRootBindings } from './helpers/purposeRootInverse'
 import { inverseStageAOwnerBindings } from './helpers/stageAOwnerStatementInverse'
 import { inverseTaskLaunchRootStatements } from './helpers/taskLaunchRootStatementInverse'
+import { inverseRfc371V2Sources } from './helpers/rfc371V2SourceInverse'
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -14,12 +15,15 @@ import ts from 'typescript'
 const sourceRoot = process.env.AW_RFC359_COMPOSITION_SOURCE_ROOT ?? resolve(import.meta.dir, '..')
 const pgPath = 'src/cli/postgresqlDaemonApplication.ts'
 const serverPath = 'src/server.ts'
+// RFC-371 v2 replaced the v1 observation assembly; its reviewed hunks are restored first.
 const parse = (path: string) =>
-  ts.createSourceFile(
-    path,
-    readFileSync(resolve(sourceRoot, path), 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
+  inverseRfc371V2Sources(
+    ts.createSourceFile(
+      path,
+      readFileSync(resolve(sourceRoot, path), 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    ),
   )
 const pg = parse(pgPath)
 const server = parse(serverPath)

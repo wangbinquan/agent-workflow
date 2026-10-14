@@ -100,8 +100,7 @@ export function createSelectedTaskNodeWritePurposes(input: {
         return await write(work, () => appendEvent.call(nodeExecution, event))
       },
       async appendEvents(chunk) {
-        if (chunk.events.length === 0 && !chunk.observations?.length)
-          return await appendEvents.call(nodeExecution, chunk)
+        if (chunk.events.length === 0) return await appendEvents.call(nodeExecution, chunk)
         const work = captureTaskHostExecutionWrite(binding, chunk)
         return await write(work, () => appendEvents.call(nodeExecution, chunk))
       },

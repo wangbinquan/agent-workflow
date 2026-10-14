@@ -6,8 +6,7 @@ import {
 } from '@/modules/task-execution/composition/localTaskRunSelection'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
-import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
+import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // RFC-359 —— `TaskExecutionRuntimeParticipants` 的双引擎对拍。
 //
@@ -167,10 +166,7 @@ function sharedInput(
     persistence: createTaskExecutionPersistence(db),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     memoryInjectionQueries: sqliteMemoryInjectionQueries(db as unknown as DbClient),
-    observationInvocations: composeLocalInvocationObservations(
-      db,
-      composeObservationUsageSource(db),
-    ),
+    observationInvocations: composeRunObservationCalls(db),
     runtimeRegistry: composeRuntimeRegistryOperations(db),
     nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db),

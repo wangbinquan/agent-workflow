@@ -80,9 +80,7 @@ function selectedInvocation(protocol: 'opencode' | 'claude-code' = 'opencode') {
     materialRef: 'selected:material',
     declared: emptyDeclaredManifest(),
     evidenceCapabilities: {
-      usageNormalizer: false,
-      nativeUsageCapture: false,
-      spanCapture: false,
+      usageMeter: true,
       sessionCapture: false,
       inventory: false,
       finalEvents: false,

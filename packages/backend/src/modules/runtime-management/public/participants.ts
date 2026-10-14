@@ -120,37 +120,6 @@ export interface RuntimeSelectionParticipantInTx {
     input: NodeRunRuntimeSelection,
   ): Promise<FrozenRuntimeRef>
 }
-export type {
-  NativeSpan,
-  NativeSpanCapture,
-  NativeSpanCaptureIdentity,
-  NativeSpanRootBinding,
-} from '../application/ports/nativeSpanCapture'
-export type {
-  NativeUsageCapture,
-  NativeUsageCaptureIdentity,
-} from '../application/ports/nativeUsageCapture'
-export type {
-  HistoricalNativeSourceProof,
-  HistoricalNativeVersionObserver,
-} from '../application/ports/historicalNativeVersion'
-export { HISTORICAL_NATIVE_NUMERIC_PAGE_VERSION } from '../application/ports/historicalNativeVersion'
-export {
-  originalHistoricalNativeIdentity,
-  initialHistoricalNativePagePosition,
-  originalHistoricalNativePageCursor,
-  advanceOriginalHistoricalNativePage,
-} from '../domain/historicalNativePage'
-export type { HistoricalNativePagePosition } from '../domain/historicalNativePage'
-
-/** The accepted runtime owner supplies the original store and full-pass identity. */
-export { openOpencodeUsagePass } from '../infrastructure/opencodeUsagePass'
-export type {
-  NativeUsagePassIdentity,
-  NativeUsagePassPage,
-  NativeUsagePassReader,
-} from '../application/ports/nativeUsagePass'
-
 /** Runtime-owned offered members consumed by task invocation composition. */
 export type { AgentInvocationProtocol } from '../application/ports/agentProtocol'
 export type { AgentMaterialEvidence } from '../application/ports/agentMaterialEvidence'
@@ -188,16 +157,12 @@ export type {
 /** Diagnostic execution retains one selected target identity across effects. */
 export type { RuntimeDiagnosticTarget } from '../application/ports/runtimeManagement'
 
-/** Original usage capture participant and its pure protocol normalization, without IO. */
-export {
-  TOKEN_BUCKETS,
-  object,
-  nativeId,
-  readUsage,
-  common,
-  model,
-  scope,
-  normalizeUsageFrame,
-  createInvocationUsageCapture,
-} from '../domain/runtimeUsage'
-export type { JsonObject, RuntimeUsageContext, RuntimeUsageFrame } from '../domain/runtimeUsage'
+/** RFC-371 v2: protocol-neutral usage metering, parsed by each RuntimeDriver. */
+export { UsageAccumulator, modelKey, objectOf, tokenCount } from '../domain/usageMeter'
+export type {
+  JsonObject,
+  RuntimeUsageMeter,
+  RuntimeUsageMeterInput,
+  RuntimeUsageModel,
+  RuntimeUsageSnapshot,
+} from '../domain/usageMeter'

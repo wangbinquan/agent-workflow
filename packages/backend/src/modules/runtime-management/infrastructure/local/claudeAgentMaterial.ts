@@ -1,8 +1,4 @@
 import { compileLegacyNativeAgentMaterial } from './legacyAgentMaterialBinding'
-import { isAbsolute, resolve } from 'node:path'
-import { sha256Hex } from '@/util/hash'
-import { createRuntimeStreamSpanCapture } from '../../composition/nativeSpanCapture'
-import { normalizeClaudeSpans } from '@/services/runtime/claudeCode/spanFacts'
 // RFC-111 PR-B — the Claude Code RuntimeDriver.
 //
 // The shared seam exposes `parseEvent` (the generic stdout pump consumes it for
@@ -449,24 +445,6 @@ export async function buildClaudeNativeMaterial(ctx: AgentSpawnContext): Promise
 }
 
 export const claudeLocalAgentMaterial = {
-  prepareSpanCapture: ({ env, invocationId }) => {
-    const root =
-      env.CLAUDE_CONFIG_DIR && isAbsolute(env.CLAUDE_CONFIG_DIR)
-        ? resolve(env.CLAUDE_CONFIG_DIR)
-        : env.HOME && isAbsolute(env.HOME)
-          ? resolve(env.HOME, DEFAULT_CONFIG_DIR_PROFILE['claude-code'].name)
-          : null
-    const sourceNamespace = sha256Hex(
-      JSON.stringify(root ? ['claude-native-root', root] : ['claude-invocation', invocationId]),
-    )
-    return {
-      contract: 'runtime-span-facts-v1',
-      sourceNamespace,
-      create: (identity) => createRuntimeStreamSpanCapture({ ...identity, sourceNamespace }),
-      normalize: normalizeClaudeSpans,
-    }
-  },
-
   async captureSessions(ctx: SessionCaptureContext): Promise<void> {
     await captureClaudeSessions({
       rootSessionId: ctx.rootSessionId,
@@ -501,9 +479,7 @@ export const claudeLocalAgentMaterial = {
       context: ctx,
       buildNative: buildClaudeNativeMaterial,
       evidenceCapabilities: {
-        usageNormalizer: false,
-        nativeUsageCapture: false,
-        spanCapture: true,
+        usageMeter: true,
         sessionCapture: true,
         inventory: false,
         finalEvents: false,
@@ -512,4 +488,4 @@ export const claudeLocalAgentMaterial = {
       },
     })
   },
-} satisfies Required<Pick<RuntimeDriver, 'prepareSpanCapture' | 'captureSessions' | 'buildSpawn'>>
+} satisfies Required<Pick<RuntimeDriver, 'captureSessions' | 'buildSpawn'>>

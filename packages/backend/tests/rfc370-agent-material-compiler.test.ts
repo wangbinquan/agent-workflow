@@ -34,9 +34,7 @@ import type {
 import { createLogger } from '../src/util/log'
 
 const capabilities: AgentMaterialEvidenceCapabilities = Object.freeze({
-  usageNormalizer: true,
-  nativeUsageCapture: true,
-  spanCapture: true,
+  usageMeter: true,
   sessionCapture: true,
   inventory: true,
   finalEvents: true,

@@ -33,9 +33,7 @@ test('normal Task preparation retains ordered profiles, omitted config, receiver
     materialRef: 'material:r2',
     declared: emptyDeclaredManifest(),
     evidenceCapabilities: {
-      usageNormalizer: false,
-      nativeUsageCapture: false,
-      spanCapture: false,
+      usageMeter: true,
       sessionCapture: true,
       inventory: false,
       finalEvents: false,
@@ -214,9 +212,7 @@ test('normal Task preparation forwards prototype resource getters without replac
         materialRef: 'material:selected',
         declared: emptyDeclaredManifest(),
         evidenceCapabilities: {
-          usageNormalizer: false,
-          nativeUsageCapture: false,
-          spanCapture: false,
+          usageMeter: true,
           sessionCapture: false,
           inventory: false,
           finalEvents: false,

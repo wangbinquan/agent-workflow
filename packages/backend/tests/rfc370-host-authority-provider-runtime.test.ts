@@ -22,12 +22,14 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+// Nineteen synthetic owner handles. RFC-371 v2 retired the observation group; its
+// slot is a second diagnostics handle so every index-based expectation is unchanged.
 const groups: readonly HostExecutionGroup[] = [
   'intent',
   'task',
   'maintenance',
   'diagnostics',
-  'observation',
+  'diagnostics',
   'event-dispatch',
   'maintenance',
   'development',

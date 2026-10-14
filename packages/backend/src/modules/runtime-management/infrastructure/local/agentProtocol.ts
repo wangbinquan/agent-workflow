@@ -1,5 +1,6 @@
 import type { AgentInvocationProtocol } from '../../application/ports/agentProtocol'
 import type { RuntimeDriver } from '@/services/runtime/types'
+import type { RuntimeUsageMeterInput } from '../../domain/usageMeter'
 
 /** Explicit compatibility projection of pure protocol members. Lookup stays
  * lazy, optional absence stays absent, and methods retain the original driver
@@ -15,9 +16,12 @@ export function bindNativeAgentProtocol(driver: RuntimeDriver): AgentInvocationP
     parseEvent(line) {
       return driver.parseEvent(line)
     },
-    get normalizeUsage() {
-      // Task historically extracts this pure fallback and invokes it unbound.
-      return driver.normalizeUsage
+    get usageMeter() {
+      // Stream-only meter for callers without material evidence (no child environment).
+      const method = driver.usageMeter
+      return method === undefined
+        ? undefined
+        : (input: RuntimeUsageMeterInput) => method.call(driver, input)
     },
     get observeSystemEvent() {
       const method = driver.observeSystemEvent

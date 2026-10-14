@@ -97,14 +97,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-370: exercise Bun SQLite's native Statement.run()/changes() contract,
   // trigger/cascade counts and both DB factories; the existing $client classifier applies.
   'helpers/rfc370SqliteAffectedRowsCases.ts: 1',
-  // RFC-371：OpenCode 原生磁盘 SQLite/WAL 文件的 Worker 基线夹具；
-  // 原 Task/账本/基线由 rfc371-native-baseline-worker-provider 的双 provider 用例验证。
-  'helpers/rfc371NativeBaselineWorkerFixture.ts: 1',
-  // RFC-371：原 OpenCode SQLite/WAL 的批量投影、故障前缀与 EOF 夹具；AW 持久报告另走双 provider。
-  'helpers/rfc371NativeProjectionFixture.ts: 1',
   // RFC-371: one physical OpenCode SQLite/WAL source; derived pages and original Workers
   // are independently exercised against both real AW application providers.
-  'helpers/rfc371PersistentNativeFactFixture.ts: 1',
   'input-port-contract.test.ts: 1',
   'integration-chaos/chaos-scenarios.integration.test.ts: 2',
   'memory-distiller-source-context.test.ts: 1',
@@ -189,6 +183,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'migration-0221-rfc342-memory-scope-move-events.test.ts: 1',
   'migration-0222-rfc341-collaboration-cutover.test.ts: 2',
   'migration-0228-distill-source-kinds.test.ts: 2',
+  'migration-0256-rfc371-observation-v2.test.ts: 2',
   'opencode-session-walk.test.ts: 1',
   'rerun-prior-output-e2e.test.ts: 1',
   'resume-multi-repo-rollback.test.ts: 1',
@@ -405,60 +400,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-370: one native SQLite client records real writer-lease/transaction ACKs.
   // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
   'rfc370-workgroup-commit-queue.test.ts: 1',
-  // RFC-371：外部 OpenCode SQLite 格式与真实 WAL 快照；baseline/membership 同时走双 provider。
-  // RFC-371：原 OpenCode SQLite 磁盘文件一处构造；历史业务 owner/报告保持 describeEachProvider 双引擎。
-  'rfc371-historical-original-report-provider.test.ts: 1',
-  'rfc371-native-baseline-snapshot.test.ts: 1',
-  'rfc371-native-child-capture.test.ts: 1',
-  // RFC-371：首次创建／替换的外部 OpenCode SQLite 文件一处构造；原 Task owner/回滚/ACK 用双 provider。
-  'rfc371-native-first-store-provider.test.ts: 1',
-  // RFC-371：原 OpenCode 外部文件格式夹具；历史原 owner/ledger/cursor 用双 provider，PG另验poolMax1。
-  'rfc371-native-history-provider.test.ts: 1',
-  // RFC-371：真实子进程使用的 OpenCode 外部 SQLite，四处建库/改库/替换；Task/账本/恢复走双 provider。
-  'rfc371-native-invocation-producer.test.ts: 4',
-  // RFC-371：唯一原生 SQLite 文件是 OpenCode 外部数据格式；原 Task／账本／报告仍走双 provider，另验 PG poolMax1。
-  'rfc371-native-ledger-provider.test.ts: 1',
-  // RFC-371：原生 OpenCode 固定 SQLite 文件夹具（建库/修改各一处），不属于 AW 持久 provider。
-  // RFC-371：原 OpenCode 磁盘 SQLite/WAL reader 的消息字段与完整指纹，非应用 provider 实现。
-  'rfc371-native-message-field-reuse.test.ts: 1',
-  'rfc371-native-model.test.ts: 2',
-  // RFC-371：真实外部 OpenCode SQLite 的 Worker 分页及中断夹具；不构造 AW provider 库。
-  'rfc371-native-owner-pass.test.ts: 2',
-  // RFC-371：外部原生格式固定 SQLite，AW durable owner/source/revision/archive 由两个 provider 验证。
-  'rfc371-native-pages-provider.test.ts: 2',
-  // RFC-371：外部 OpenCode SQLite/WAL 文件的原排序、JSON 异常前缀和分页完整性，不构造 AW 持久 provider 库。
-  'rfc371-native-part-key-prefetch.test.ts: 1',
-  // RFC-371：报告内真实原生 SQLite/WAL 根快照、TEMP清理与换代，不属于应用持久 provider。
-  'rfc371-native-reader-connection-reuse.test.ts: 1',
-  // RFC-371：原外部 OpenCode SQLite 的建库与实际子进程各一处；AW 根、数字与恢复全部走双 provider。
-  'rfc371-native-root-collection.test.ts: 2',
-  // RFC-371：实际子进程及本地建库各一处，均操作外部 OpenCode 固定 SQLite 文件；
-  // 原 Task final owner/来源封存仍在 describeEachProvider 内验证两个持久 provider。
-  'rfc371-native-root-final-owner.test.ts: 2',
-  // RFC-371: PRAGMA data_version belongs to the external OpenCode SQLite file and one
-  // continuously open native connection; it is not an AW application-provider fixture.
-  'rfc371-native-source-version.test.ts: 1',
-  // RFC-371（Codex）：OpenCode 原生文件格式的元数据夹具，机械归类 real-file-database；
-  // AW 来源存储、分页与投影仍由 rfc371-span-source-provider 的双 provider 回归验证。
-  'rfc371-native-span-capture.test.ts: 1',
-  // RFC-371：唯一建库用于外部 OpenCode 的真实基线文件；
-  // 原执行 owner/终态/页回执/封存使用 describeEachProvider 的真实双 provider。
-  'rfc371-native-terminal-collection.test.ts: 1',
-  // RFC-371：OpenCode 原生固定 SQLite 文件完整 EOF/Worker 夹具，归类 real-file-database；
-  // AW 原始持久来源、完整投影与人民币关联在 complete-spans-provider 等双 provider 用例验证。
-  'rfc371-native-usage-pass.test.ts: 1',
-  // RFC-371：真实原 WAL 文件快照与 TEMP 可写性；通用报告行为另由两个 provider 实际验证。
-  // RFC-371：SQLite 专用 FILE TEMP 与连接页缓存；报告 staging 和计数由双 provider 套件覆盖。
-  'rfc371-report-snapshot-file-performance.test.ts: 1',
-  'rfc371-report-snapshot-file.test.ts: 1',
-  // RFC-371: physical SQLite dbstat/WAL capacity and cancellation use actual readonly files;
-  // neutral capacity and durable hourly samples remain covered by both application providers.
-  // RFC-371: original physical SQLite counter Worker; neutral lifecycle stays dual provider.
-  'rfc371-storage-counter-worker.test.ts: 1',
-  'rfc371-storage-sampling-worker.test.ts: 2',
-  // RFC-371: this one real file is the external OpenCode SQLite format;
-  // System persistence, EOF, resume and CNY are covered by both AW providers.
-  'rfc371-system-native-provider.test.ts: 2',
+  // RFC-371 v2: one external OpenCode SQLite store fixture (the native file format the
+  // usage meter reads read-only); call persistence itself is covered on both providers.
+  'rfc371-v2-usage-meters.test.ts: 1',
   // RFC-372: the native CLI scheduler harness uses the existing SQLite runtime;
   // original round persistence and submission are separately driven on both providers.
   'rfc372-task-engine.test.ts: 1',
@@ -466,8 +410,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // retained-row reads now also drive the real PostgreSQL source in this suite.
   'rfc372-task-schema.test.ts: 2',
   'runner-subagent-live-capture.test.ts: 6',
-  // RFC-371：runner 本身仍用 describeEachProvider；唯一 new Database 是原生模型证据夹具。
-  'runner.test.ts: 1',
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1',
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1',
   'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts: 1',

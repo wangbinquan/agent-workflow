@@ -10,7 +10,6 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/composition/providerRuntime'
 import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
-import type { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
 import type {
   HostExecutionGrantContext,
   HostExecutionRecoveryFamily,
@@ -29,7 +28,6 @@ import {
   bindEmbeddedTaskHostOwner,
   bindEmbeddedIntentHostOwner,
   bindMcpDiagnosticsHostOwner,
-  bindObservationReportsHostOwner,
   bindWebhookTerminalHostOwner,
 } from './daemonHostExecutionOwners'
 import { createDaemonProviderRuntimeSession } from './daemonProviderRuntimeSession'
@@ -44,7 +42,6 @@ type EmbeddedResourceDependencies = Omit<
   | 'taskExecutionReadModels'
   | 'taskRouteLaunch'
   | 'mcpRuntimeTests'
-  | 'completeObservationReports'
   | 'webhookTerminalControl'
 > & { readonly webhookTerminalControl?: ReturnType<typeof composeMrTerminalControl> }
 
@@ -55,7 +52,6 @@ export async function composeEmbeddedHostExecutionApplication(input: {
   readonly generation: string
   readonly deps: EmbeddedResourceDependencies
   readonly selection: DaemonHostExecutionSelection
-  readonly reports?: ReturnType<typeof composeCompleteObservationReports>
   readonly createWebSocket?: (
     application: SqliteAppComposition,
   ) => ReturnType<typeof buildWebSocketAdapter>
@@ -64,8 +60,6 @@ export async function composeEmbeddedHostExecutionApplication(input: {
   assertDaemonHostExecutionRootSelection(input.selection)
   if (input.deps.webhookTerminalControl && !input.deps.webhookTerminalControl.execution)
     throw new Error('embedded-host-webhook-lifecycle-missing')
-  if (input.reports && !input.reports.execution)
-    throw new Error('embedded-host-report-lifecycle-missing')
   const bootstrap = await composeDaemonHostExecutionBootstrap({
     db: input.deps.db,
     provider: 'sqlite',
@@ -78,7 +72,6 @@ export async function composeEmbeddedHostExecutionApplication(input: {
   const persistence = createTaskExecutionPersistence(input.deps.db, {
     hostWrites: bootstrap.taskHost.writes,
     workspacePresence: input.deps.workspacePresence,
-    nativeUsage: input.deps.nativeUsage,
   })
   const driverLifecycle = createDatabaseTaskDriverLifecyclePort({
     db: input.deps.db,
@@ -127,7 +120,6 @@ export async function composeEmbeddedHostExecutionApplication(input: {
         mcpExecutionMode: 'host',
         hostExecutionHttp: bootstrap.http,
         intentTurnExecution,
-        ...(input.reports ? { completeObservationReports: input.reports.queries } : {}),
       },
       scope,
     )
@@ -146,7 +138,6 @@ export async function composeEmbeddedHostExecutionApplication(input: {
       ...(input.deps.webhookTerminalControl
         ? [bindWebhookTerminalHostOwner(input.deps.webhookTerminalControl.execution!)]
         : []),
-      ...(input.reports ? [bindObservationReportsHostOwner(input.reports.execution!)] : []),
     ])
     const app = createComposedApp(composition),
       socket = input.createWebSocket?.(composition)
@@ -194,14 +185,6 @@ export async function composeEmbeddedHostExecutionApplication(input: {
           close: () => disposeTasks('embedded-application-closed'),
         },
         { id: 'embedded-mcp-final-close', close: () => runtimeTests!.dispose() },
-        ...(input.reports
-          ? [
-              {
-                id: 'embedded-report-final-close',
-                close: input.reports.worker.stop.bind(input.reports.worker),
-              },
-            ]
-          : []),
         ...(input.deps.webhookTerminalControl
           ? [
               {

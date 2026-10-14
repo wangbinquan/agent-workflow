@@ -33,7 +33,6 @@ import { registerConfigAppliedListener } from '@/services/configAppliedListeners
 import { createAuthorityPollingDaemonRuntimeHandleBinding } from './daemonProviderRuntimeHandles'
 import { waitForExecutionActivation } from '@/platform/background/activation'
 import type { McpDiagnosticsExecutionLifecycle } from '@/modules/resource-catalog/composition/mcpDiagnostics'
-import type { ObservationExecutionLifecycle } from '@/modules/run-observability/composition/completeObservationReports'
 import type {
   AuthorityManagedWorkerDefinition,
   BackgroundExecutionLifetime,
@@ -305,28 +304,6 @@ export function bindWebhookTerminalHostOwner(
   return bindOwner({
     id: 'webhook-terminal-control',
     group: 'event-dispatch',
-    async start({ context }) {
-      await start(context)
-      return {
-        stop: () => pause(context),
-        drain: () => drain(context),
-        quiesceAuthorityLoss: () => quiesce(context),
-        drainAuthorityLoss: () => drain(context),
-      }
-    },
-  })
-}
-
-export function bindObservationReportsHostOwner(
-  execution: ObservationExecutionLifecycle,
-): DaemonProviderHostExecutionHandleBinding {
-  const start = execution.start.bind(execution),
-    pause = execution.pause.bind(execution),
-    quiesce = execution.quiesce.bind(execution),
-    drain = execution.awaitDrained.bind(execution)
-  return bindOwner({
-    id: 'observation-reports',
-    group: 'observation',
     async start({ context }) {
       await start(context)
       return {
@@ -900,7 +877,6 @@ export function bindDaemonHostOwners(input: {
   readonly intent: Parameters<typeof bindIntentQueuedHostOwner>[0]
   readonly maintenance: Parameters<typeof bindMaintenanceHostOwner>[0]
   readonly mcp: Parameters<typeof bindMcpDiagnosticsHostOwner>[0]
-  readonly reports: Parameters<typeof bindObservationReportsHostOwner>[0]
   readonly webhook: Parameters<typeof bindWebhookTerminalHostOwner>[0]
   readonly afterCommit: Parameters<typeof bindAfterCommitHostOwner>[0]
   readonly limits: Parameters<typeof bindResourceLimitsHostOwner>[0]
@@ -921,7 +897,6 @@ export function bindDaemonHostOwners(input: {
     bindTaskExecutionHostOwner(input.task),
     bindMaintenanceHostOwner(input.maintenance),
     bindMcpDiagnosticsHostOwner(input.mcp),
-    bindObservationReportsHostOwner(input.reports),
     bindWebhookTerminalHostOwner(input.webhook),
     bindAfterCommitHostOwner(input.afterCommit),
     bindResourceLimitsHostOwner(input.limits),

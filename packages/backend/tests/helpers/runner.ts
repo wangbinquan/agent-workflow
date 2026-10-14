@@ -1,5 +1,4 @@
-import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
-import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
+import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import {
   runNode as runNodeWithProvider,
   type RunNodeOptions as ProviderRunNodeOptions,
@@ -40,9 +39,7 @@ export async function runNode(options: RunNodeOptions) {
   const { db, ...providerOptions } = options
   return await runNodeWithProvider({
     ...providerOptions,
-    observationInvocations:
-      options.observationInvocations ??
-      composeLocalInvocationObservations(db, composeObservationUsageSource(db)),
+    observationInvocations: options.observationInvocations ?? composeRunObservationCalls(db),
     memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
     runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
     persistence: options.persistence ?? createTaskExecutionPersistence(db),

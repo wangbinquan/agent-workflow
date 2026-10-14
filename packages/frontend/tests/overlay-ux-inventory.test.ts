@@ -103,54 +103,10 @@ const OVERLAY_CALLSITES = {
   },
   // Runtime edit/add dialog plus RFC-201's shared destructive confirmation.
   'components/RuntimeList.tsx': { family: 'access-and-settings', count: 2 },
-  // RFC-371: price editor/history and draft-switch confirmation; rendered
-  // retry, recovery, focus and dirty-navigation cases live in rfc371-runtime-pricing.
+  // RFC-371 v2: the price editor (compare-and-set conflict keeps the draft) and the
+  // price history; rendered in rfc371-v2-runtime-pricing.
   'components/observability/PriceEditor.tsx': { family: 'access-and-settings', count: 1 },
   'components/observability/PriceHistory.tsx': { family: 'access-and-settings', count: 1 },
-  'components/observability/RuntimePricing.tsx': { family: 'access-and-settings', count: 1 },
-  // RFC-371: native revision details use the shared Dialog; the rendered flow is
-  // covered by rfc371-run-observability, including close and trigger focus return.
-  'components/observability/ObservationNativeCapture.tsx': { family: 'task-execution', count: 1 },
-  // RFC-371: hosted capture details share the same close/focus and long-list browser coverage.
-  'components/observability/ObservationPlatformCapture.tsx': { family: 'task-execution', count: 1 },
-  // RFC-371: runtime contributions, whole-task return and keyboard focus are covered by the rendered and hosted flows.
-  'components/observability/ObservationRuntimeDetails.tsx': { family: 'task-execution', count: 1 },
-  // RFC-371: model contribution inspection uses the same task-return and focus contract.
-  'components/observability/ObservationDimensionDetails.tsx': {
-    family: 'task-execution',
-    count: 1,
-  },
-  // RFC-371: attempt inspection and focus restoration are rendered in rfc371-run-observability.
-  'components/observability/RunObservability.tsx': { family: 'task-execution', count: 1 },
-  // Full-report call, attempt and dimension inspections share Dialog and have rendered coverage.
-  'components/observability/CompleteObservationDetails.tsx': { family: 'task-execution', count: 2 },
-  // Sealed runtime/model contributions use the same Dialog; rfc371-complete-dimension-ui
-  // covers accepted names, original Task return, closing and trigger focus in both languages.
-  'components/observability/CompleteDimensionDetails.tsx': { family: 'task-execution', count: 1 },
-  // Gap inspection moved out of the root report; rfc371-complete-facts-ui covers its
-  // shared Dialog and full original Task population while numeric usage is unavailable.
-  'components/observability/CompleteObservationQuality.tsx': { family: 'task-execution', count: 1 },
-  // RFC-371: the trace renders one Dialog; its existing tests cover width, pagination and EOF.
-  'components/observability/CompleteObservationTrace.tsx': { family: 'task-execution', count: 1 },
-  // RFC-371: unassigned consumption time uses one shared Dialog; rfc371-usage-time-detail
-  // covers the rendered original Task link, four Token bins, yuan and Escape close.
-  'components/observability/CompleteObservationTimeDetails.tsx': {
-    family: 'task-execution',
-    count: 1,
-  },
-  // Original execution and numeric-record Dialogs retain rendered scope, EOF and close coverage
-  // in rfc371-historical-observations-ui; shared mobile sizing keeps the same owner.
-  'components/observability/CompleteHistoricalObservations.tsx': {
-    family: 'task-execution',
-    count: 2,
-  },
-  // RFC-371 analysis regressions cover original anomaly/phase details and nested maintenance confirmation.
-  'components/observability/ObservationAnomalies.tsx': { family: 'task-execution', count: 1 },
-  'components/observability/ObservationExecutionAnalysis.tsx': {
-    family: 'task-execution',
-    count: 1,
-  },
-  'components/observability/ObservationMaintenance.tsx': { family: 'task-execution', count: 2 },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;
   // rfc269-code-host-settings.test.tsx owns both rendered confirmations.
   'components/settings/CodeHostsSection.tsx': {

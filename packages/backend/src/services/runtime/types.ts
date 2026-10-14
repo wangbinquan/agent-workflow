@@ -10,12 +10,7 @@ export type {
   StartupInventory,
 } from '@/modules/runtime-management/public/participants'
 
-import type { RuntimeUsageContext, RuntimeUsageFrame } from './usage'
-import type { PreparedRuntimeSpanCapture } from './spanCapture'
-import type {
-  NativeUsageCapture,
-  NativeUsageCaptureIdentity,
-} from '@/modules/runtime-management/public/participants'
+import type { RuntimeUsageMeter, RuntimeUsageMeterInput } from './usage'
 // RFC-111 PR-A — runtime abstraction types.
 //
 // The platform drives one agent CLI per node_run. Today that CLI is opencode,
@@ -728,21 +723,16 @@ export interface RuntimeDriver {
    * to the pump's raw-text path.
    */
   parseEvent(line: string): NormalizedEvent | null
-  /** RFC-371: optional native numeric evidence; absence reports unsupported coverage. */
-  normalizeUsage?(raw: unknown, context: RuntimeUsageContext): RuntimeUsageFrame
-  /** Invocation-local native metadata reader; created with the final child environment. */
-  prepareUsageNormalizer?(input: {
-    readonly env: Readonly<Record<string, string | undefined>>
-  }): (raw: unknown, context: RuntimeUsageContext) => RuntimeUsageFrame
-  prepareNativeUsageCapture?(
-    input: NativeUsageCaptureIdentity & {
-      readonly env: Readonly<Record<string, string | undefined>>
+  /**
+   * RFC-371 v2: a per-invocation usage meter over parsed stdout events. `env` is
+   * the final child environment (a driver may read its native store after the
+   * process drained). Absence means this runtime cannot meter usage.
+   */
+  usageMeter?(
+    input: RuntimeUsageMeterInput & {
+      readonly env?: Readonly<Record<string, string | undefined>>
     },
-  ): NativeUsageCapture
-  prepareSpanCapture?(input: {
-    readonly env: Readonly<Record<string, string | undefined>>
-    readonly invocationId: string
-  }): PreparedRuntimeSpanCapture
+  ): RuntimeUsageMeter
   /**
    * RFC-297 T5 — synthetic events to append to the stream once the child has
    * exited. This is how an observation that does NOT arrive on stdout still

@@ -23,6 +23,19 @@ import {
   type PostgresqlSchemaPlan,
 } from '@/platform/persistence/postgresqlSchema'
 import { OBSERVATION_SOURCE_REVISION } from '@/platform/persistence/observationSourceRevisionSchema'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+
+/**
+ * RFC-371 v2 retired every native observation statement from the current plan. The
+ * published plan just before 0032 still carries source-revision initializers and
+ * retained-revision functions/triggers, so it exercises the same logical-target mechanism.
+ */
+async function nativeRevisionPlan(): Promise<PostgresqlSchemaPlan> {
+  const history = await loadPostgresqlMigrationHistory()
+  const index = history.steps.findIndex((step) => step.id === '0032_rfc371_observation_v2')
+  if (index < 0) throw new Error('published 0032 step missing')
+  return history.versions[index]!.plan
+}
 
 const CONTRACT_DIGEST = `sha256:${'a'.repeat(64)}`
 const PLAN_DIGEST = `sha256:${'b'.repeat(64)}`
@@ -192,7 +205,7 @@ const EXPECTED = [
 describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('logical copy keeps source revisions empty for exact copied values while preserving ordinary metadata', async () => {
     const fake = fixture({ rowCount: 0, tableNames: [] })
-    const sourceInitializer = buildPostgresqlSchemaPlan().statements.find(
+    const sourceInitializer = (await nativeRevisionPlan()).statements.find(
       (statement) => statement.logicalId === 'observation_source_revisions:initial-revisions',
     )!
     expect(sourceInitializer.sql).toContain("('agents',gen_random_uuid()::text)")
@@ -228,7 +241,7 @@ describe('RFC-349 PostgreSQL logical target finalization', () => {
   test('retained revision native functions and triggers install after copied rows and constraints, before verified receipt', async () => {
     const copiedTables: string[] = []
     const fake = fixture({ rowCount: 2, tableNames: copiedTables })
-    const native = buildPostgresqlSchemaPlan().statements.filter(
+    const native = (await nativeRevisionPlan()).statements.filter(
       (statement) =>
         (statement.kind === 'function' || statement.kind === 'trigger') &&
         !statement.logicalId.startsWith('observation_source_revisions:') &&

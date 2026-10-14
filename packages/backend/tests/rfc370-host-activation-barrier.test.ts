@@ -73,7 +73,7 @@ async function fixture(
     }),
     createAuthorityPollingDaemonRuntimeHandleBinding({
       id: 'second-original-worker',
-      group: 'observation',
+      group: 'diagnostics',
       intervalMs: 60_000,
       async beforeStart({ context }) {
         await harness.db.select().from(hostExecutionWriteContexts)
@@ -123,7 +123,7 @@ async function fixture(
         kind: 'prepared',
         preparationDigest: 'actual-write-receipt-qualified',
         acceptedTaskContractVersions: [],
-        readyGroups: hooks.memory ? ['task', 'observation', 'memory'] : ['task', 'observation'],
+        readyGroups: hooks.memory ? ['task', 'diagnostics', 'memory'] : ['task', 'diagnostics'],
       }
     },
     quiesce() {},

@@ -2,11 +2,13 @@ import ts from 'typescript'
 import reviewed from '../fixtures/rfc370-task-human-gate-original-sources.json'
 import { inverseTaskResourceRecoverySelections } from './taskResourceRecoveryStatementInverse'
 import { inverseRfc372ClarifyService } from './rfc372ClarifyRootInverse'
+import { inverseRfc371V2Sources } from './rfc371V2SourceInverse'
 
 /** Remove only the declared HumanGate delta. Every introduced fragment must
  * still match; all other bytes pass through to the whole original-source lock.
  * Older lifecycle inverses call this explicitly, never through source(). */
 export function inverseHumanGateTaskSelections(source: ts.SourceFile): ts.SourceFile {
+  source = inverseRfc371V2Sources(source)
   source = inverseRfc372ClarifyService(source)
   source = inverseTaskResourceRecoverySelections(source)
   const entry = reviewed.files.find((row) => source.fileName.endsWith(row.path))

@@ -88,10 +88,13 @@ test('native material keeps fixture presence, early command, late evidence/diagn
     expect(context.cwd).toBe('/original-working')
     return plan
   })
-  const normalize = () => ({ measurements: [], diagnostics: [] })
-  const usage = spyOn(driver, 'prepareUsageNormalizer').mockImplementation((context) => {
+  const meter = {
+    observe: () => false,
+    snapshot: () => ({ state: 'partial' as const, models: [] }),
+  }
+  const usage = spyOn(driver, 'usageMeter').mockImplementation((context) => {
     expect(context.env).toBe(laterEnvironment)
-    return normalize
+    return meter
   })
   const report = spyOn(log, 'info').mockImplementation((message, fields) => {
     expect(message).toBe('spawning agent runtime')
@@ -149,7 +152,9 @@ test('native material keeps fixture presence, early command, late evidence/diagn
       },
     ])
     expect(compiled.readDeclaredMcpServers()).toBe(state.mcpNames)
-    expect(invocation.evidence.prepareUsageNormalizer?.()).toBe(normalize)
+    expect(invocation.evidence.prepareUsageMeter?.({ resumed: false, configuredModel: null })).toBe(
+      meter,
+    )
     await invocation.lifecycle.cleanup?.()
   } finally {
     build.mockRestore()

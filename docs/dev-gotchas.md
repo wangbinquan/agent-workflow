@@ -527,6 +527,16 @@ expect(await repairOutcome).toMatchObject({ code: 'repair-preflight-stale' })
 ~0% 才是真的在等 I/O。要定位空转点，先把「本次改动」二分掉：`git checkout HEAD -- <那几个文件>`
 跑一遍、再 `cp` 回来，比盯着堆栈猜快得多。
 
+## `toMatchObject` 里嵌套 `expect.objectContaining` 会**清空**被比对的子对象（Bun 1.3.13 实撞，2026-10-14）
+
+`expect(value).toMatchObject({ usage: expect.objectContaining({ calls: 2 }) })` 断言能过，但执行完以后
+`value.usage` 变成了 `{}`——Bun 把匹配过的子对象就地改掉了（最小复现：比对前后各 `JSON.stringify` 一次）。
+后续再读同一个对象的断言就会拿到 `undefined`，看起来像实现丢了字段（RFC-371 v2 的 Agent 排序用例因此误报）。
+
+- 需要比对嵌套对象时，**先把后面要用的值取出来**，或拆成两条：`toMatchObject({ … 顶层 … })` +
+  `expect(value.usage).toMatchObject({ calls: 2 })`；
+- 只在比对后不再读取该对象时才用嵌套的非对称匹配器。
+
 ## 改测试**标题**会踩到按名字钉死的账本（RFC-359 §5go 实撞，2026-09-16）
 
 仓里有按**测试名**做外键的账本，典型是 `tests/helpers/rfc349FunctionalEvidence.ts`：

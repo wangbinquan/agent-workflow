@@ -249,7 +249,7 @@ export async function maybeRunCommitPush(
             runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
             runtimeObservationIdentity: frozen.observationIdentity,
             observationInvocations: state.opts.observationInvocations,
-            observationPurpose: 'system',
+            observationSystemKind: 'commit-push',
             inputs: {},
 
             promptTemplate: buildPrompt(envelopeNonce),

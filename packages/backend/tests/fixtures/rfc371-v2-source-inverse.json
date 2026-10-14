@@ -1,0 +1,249 @@
+{
+  "reason": "RFC-371 v2 (design/RFC-371-run-observability/redesign-v2-20261014.md) replaced the v1 observation assembly in these RFC-370-pinned roots; each hunk restores the exact previous text.",
+  "files": [
+    {
+      "path": "cli/postgresqlDaemonApplication.ts",
+      "hunks": [
+        {
+          "current": "} from '@/modules/system-operations/composition'\nimport type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'\nimport {\n  composeRunObservation,\n  composeRunObservationCalls,\n} from '@/modules/run-observability/composition/runObservation'\nimport { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'\nimport { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'\n",
+          "previous": "} from '@/modules/system-operations/composition'\nimport type { ObservationTaskQueries } from '@/modules/run-observability/public/queries'\nimport type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'\nimport { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'\nimport { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'\nimport type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'\nimport { composeObservationPricing } from '@/modules/run-observability/composition/pricing'\nimport { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'\nimport { composeOriginalObservationProjection } from '@/platform/background/observationProjection'\nimport { observationReportBuild } from '@/platform/persistence/observationReportBuild'\nimport { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'\nimport { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'\nimport { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'\nimport { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'\nimport {\n  createCompleteTaskObservationFacts,\n  createTaskObservationFacts,\n} from '@/modules/task-execution/composition/taskObservationFacts'\nimport { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'\n"
+        },
+        {
+          "current": "export interface PostgresqlDaemonApplicationRuntime {\n  readonly hostBootRecovery?: TaskExecutionBootRecoveryInput\n",
+          "previous": "export interface PostgresqlDaemonApplicationRuntime {\n  readonly observationReportExecution?: ReturnType<\n    typeof composeCompleteObservationReports\n  >['execution']\n  readonly hostBootRecovery?: TaskExecutionBootRecoveryInput\n"
+        },
+        {
+          "current": "  readonly hostPreparations?: readonly ((context: HostExecutionGrantContext) => Promise<void>)[]\n  readonly taskExecution: SelectedPostgresqlTaskExecutionProviderRuntime\n",
+          "previous": "  readonly hostPreparations?: readonly ((context: HostExecutionGrantContext) => Promise<void>)[]\n  readonly observationReports: ReturnType<typeof composeCompleteObservationReports>['worker']\n  readonly taskExecution: SelectedPostgresqlTaskExecutionProviderRuntime\n"
+        },
+        {
+          "current": "  )\n  const observationCalls = composeRunObservationCalls(input.db)\n  const systemAgentObservations = composeSystemAgentObservations({ calls: observationCalls })\n  const taskExecutionPersistence = createTaskExecutionPersistence(input.db, {\n",
+          "previous": "  )\n  const nativeUsage = selectedNativeUsageInvocationPersistence(input.db, {\n    binding: { provider: 'postgresql', runtime: input.provider.runtime },\n    admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),\n    postgresqlPoolMax: input.config.database.poolMax,\n  })\n  const systemAgentObservations = composeSystemAgentObservations({\n    db: input.db,\n    observations: composeLocalInvocationObservations(\n      input.db,\n      composeObservationUsageSource(\n        input.db,\n        nativeHistoryRead({ provider: 'postgresql', runtime: input.provider.runtime }),\n      ),\n    ),\n    nativeUsage,\n  })\n  const taskExecutionPersistence = createTaskExecutionPersistence(input.db, {\n"
+        },
+        {
+          "current": "    workspacePresence,\n  })\n",
+          "previous": "    workspacePresence,\n    nativeUsage,\n  })\n"
+        },
+        {
+          "current": "    ...(input.hostExecution ? { host: input.hostExecution.taskHost } : {}),\n    archive: input.taskArchive,\n",
+          "previous": "    ...(input.hostExecution ? { host: input.hostExecution.taskHost } : {}),\n    nativeUsage,\n    archive: input.taskArchive,\n"
+        },
+        {
+          "current": "      workspacePresence,\n      observationInvocations: observationCalls,\n      runtimeRegistry: core.runtimeRegistry,\n",
+          "previous": "      workspacePresence,\n      observationInvocations: composeLocalInvocationObservations(\n        input.db,\n        composeObservationUsageSource(\n          input.db,\n          nativeHistoryRead({ provider: 'postgresql', runtime: input.provider.runtime }),\n        ),\n      ),\n      runtimeRegistry: core.runtimeRegistry,\n"
+        },
+        {
+          "current": "  })\n  const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({\n    observability: composeRunObservation({\n      db: input.db,\n      tasks: createTaskObservationFacts(input.db),\n      runtimes: runtimeManagement.observations,\n    }),\n    config: Object.freeze({\n",
+          "previous": "  })\n  const observationBuild = observationReportBuild(\n    { provider: 'postgresql', runtime: input.provider.runtime },\n    input.appHome,\n    input.db,\n    { taskCalculations: true },\n  )\n  const observationReports = composeCompleteObservationReports({\n    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n    ...(phase.kind === 'daemon'\n      ? {\n          projection: composeOriginalObservationProjection({\n            ...(input.hostExecution ? { executionMode: 'host' as const } : {}),\n            db: input.db,\n            binding: { provider: 'postgresql', runtime: input.provider.runtime },\n            generation: input.provider.runtime.generationId,\n          }),\n        }\n      : {}),\n    taskSource: createCompleteTaskObservationFacts,\n    db: input.db,\n    generation: input.provider.runtime.generationId,\n    appHome: input.appHome,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n    closeBuild: () => observationBuild.close(),\n  })\n  const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({\n    observability: {\n      // Unstarted application scopes are explicit legacy contract fixtures, not serving daemons.\n      ...(phase.kind === 'daemon' ? { reports: observationReports.queries } : {}),\n      ...composeObservationPricing({ db: input.db, runtimes: runtimeManagement.observations }),\n      tasks: composeTaskObservations({\n        db: input.db,\n        taskSource: createTaskObservationFacts satisfies (\n          db: Parameters<typeof createTaskObservationFacts>[0],\n        ) => TaskObservationFactsQuery,\n      }) satisfies ObservationTaskQueries,\n    },\n    config: Object.freeze({\n"
+        },
+        {
+          "current": "    if (input.hostExecution) hostBootRecovery = bootRecovery\n    else {\n      await runTaskExecutionBootRecovery(bootRecovery)\n      // RFC-371 v2: calls still running from before this boot can no longer report.\n      const interruptedCalls = await observationCalls.repairInterrupted(Date.now())\n      if (interruptedCalls > 0)\n        log.info('observation calls interrupted', { count: interruptedCalls })\n    }\n    await prepareOwner(async (context) => {\n",
+          "previous": "    if (input.hostExecution) hostBootRecovery = bootRecovery\n    else await runTaskExecutionBootRecovery(bootRecovery)\n    await prepareOwner(async (context) => {\n"
+        },
+        {
+          "current": "          hostPreparations: Object.freeze(hostPreparations),\n        }\n",
+          "previous": "          hostPreparations: Object.freeze(hostPreparations),\n          observationReportExecution: observationReports.execution,\n        }\n"
+        },
+        {
+          "current": "      : {}),\n    taskExecution: taskExecutionProvider,\n",
+          "previous": "      : {}),\n    observationReports: observationReports.worker,\n    taskExecution: taskExecutionProvider,\n"
+        }
+      ]
+    },
+    {
+      "path": "cli/start.ts",
+      "hunks": [
+        {
+          "current": "import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'\nimport { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'\n",
+          "previous": "import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'\nimport { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'\nimport { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'\n"
+        },
+        {
+          "current": "import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'\nimport { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'\nimport {\n",
+          "previous": "import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'\nimport { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'\nimport { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'\nimport { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'\nimport { composeOriginalObservationProjection } from '@/platform/background/observationProjection'\nimport { observationReportBuild } from '@/platform/persistence/observationReportBuild'\nimport { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'\nimport { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'\nimport { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'\nimport {\n"
+        },
+        {
+          "current": "  )\n  const taskExecutionBindings = await _bindTaskExecutionProviderBackground(\n",
+          "previous": "  )\n  const observationReportBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'observation-reports',\n      closeParticipantId: 'observation-reports-final-close',\n      service: {\n        pause: () => runtime.observationReports.stop(),\n        resume: async () => runtime.observationReports.start(),\n        stop: () => runtime.observationReports.stop(),\n      },\n    },\n    hostExecution !== undefined,\n  )\n  const taskExecutionBindings = await _bindTaskExecutionProviderBackground(\n"
+        },
+        {
+          "current": "        mcp: runtime.mcpRuntimeTests.execution!,\n        webhook: runtime.webhookTerminalControl.execution!,\n",
+          "previous": "        mcp: runtime.mcpRuntimeTests.execution!,\n        reports: runtime.observationReportExecution!,\n        webhook: runtime.webhookTerminalControl.execution!,\n"
+        },
+        {
+          "current": "      mcpRuntimeBindings.runtimeFactory,\n    ],\n",
+          "previous": "      mcpRuntimeBindings.runtimeFactory,\n      observationReportBindings.runtimeFactory,\n    ],\n"
+        },
+        {
+          "current": "      mcpRuntimeBindings.closeParticipant,\n      gracefulTaskShutdown,\n",
+          "previous": "      mcpRuntimeBindings.closeParticipant,\n      observationReportBindings.closeParticipant,\n      gracefulTaskShutdown,\n"
+        },
+        {
+          "current": "  const workspacePresence = createFileWorkspacePresenceQueries()\n  const observationCalls = composeRunObservationCalls(db)\n  const systemAgentObservations = composeSystemAgentObservations({ calls: observationCalls })\n  const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =\n",
+          "previous": "  const workspacePresence = createFileWorkspacePresenceQueries()\n  const nativeUsage = selectedNativeUsageInvocationPersistence(db, {\n    binding: {\n      provider: 'sqlite',\n      db,\n      generationId: databaseProvider.generation.payload.generationId,\n    },\n    admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),\n  })\n  const systemAgentObservations = composeSystemAgentObservations({\n    db: db,\n    observations: composeLocalInvocationObservations(\n      db,\n      composeObservationUsageSource(\n        db,\n        nativeHistoryRead({\n          provider: 'sqlite',\n          db,\n          generationId: databaseProvider.generation.payload.generationId,\n        }),\n      ),\n    ),\n    nativeUsage,\n  })\n  const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =\n"
+        },
+        {
+          "current": "      ...(hostExecution ? { host: hostExecution.taskHost } : {}),\n      archive: input.taskArchive,\n",
+          "previous": "      ...(hostExecution ? { host: hostExecution.taskHost } : {}),\n      nativeUsage,\n      archive: input.taskArchive,\n"
+        },
+        {
+          "current": "        workspacePresence,\n        observationInvocations: observationCalls,\n        memoryInjectionQueries,\n",
+          "previous": "        workspacePresence,\n        observationInvocations: composeLocalInvocationObservations(\n          db,\n          composeObservationUsageSource(\n            db,\n            nativeHistoryRead({\n              provider: 'sqlite',\n              db,\n              generationId: databaseProvider.generation.payload.generationId,\n            }),\n          ),\n        ),\n        memoryInjectionQueries,\n"
+        },
+        {
+          "current": "  }\n  if (!hostExecution) {\n    await runTaskExecutionBootRecovery(bootRecovery)\n    // RFC-371 v2: calls still running from before this boot can no longer report.\n    const interruptedCalls = await observationCalls.repairInterrupted(Date.now())\n    if (interruptedCalls > 0) log.info('observation calls interrupted', { count: interruptedCalls })\n  }\n  await prepareOwner(async (context) => {\n",
+          "previous": "  }\n  if (!hostExecution) await runTaskExecutionBootRecovery(bootRecovery)\n  await prepareOwner(async (context) => {\n"
+        },
+        {
+          "current": "  })\n  const intentTurnExecution = hostExecution ? composeIntentTurnExecution() : undefined\n",
+          "previous": "  })\n  const observationBuild = observationReportBuild(\n    { provider: 'sqlite', db, generationId: databaseProvider.generation.payload.generationId },\n    Paths.root,\n    db,\n    { taskCalculations: true },\n  )\n  const observationReports = composeCompleteObservationReports({\n    ...(hostExecution ? { executionMode: 'host' as const } : {}),\n    projection: composeOriginalObservationProjection({\n      ...(hostExecution ? { executionMode: 'host' as const } : {}),\n      db,\n      binding: {\n        provider: 'sqlite',\n        db,\n        generationId: databaseProvider.generation.payload.generationId,\n      },\n      generation: databaseProvider.generation.payload.generationId,\n    }),\n    taskSource: createCompleteTaskObservationFacts,\n    db,\n    generation: databaseProvider.generation.payload.generationId,\n    appHome: Paths.root,\n    heartbeatDuringRead: observationBuild.heartbeatDuringRead,\n    build: (report, _spool, signal) => observationBuild.build(report, signal),\n    closeBuild: () => observationBuild.close(),\n  })\n  const observationReportBindings = await _bindPausableProviderService(\n    {\n      runtimeId: 'observation-reports',\n      closeParticipantId: 'observation-reports-final-close',\n      service: {\n        pause: () => observationReports.worker.stop(),\n        resume: async () => observationReports.worker.start(),\n        stop: () => observationReports.worker.stop(),\n      },\n    },\n    hostExecution !== undefined,\n  )\n  const intentTurnExecution = hostExecution ? composeIntentTurnExecution() : undefined\n"
+        },
+        {
+          "current": "    ...(intentTurnExecution ? { intentTurnExecution } : {}),\n    nodeRunPrompts,\n",
+          "previous": "    ...(intentTurnExecution ? { intentTurnExecution } : {}),\n    nativeUsage,\n    nativeUsageHistory: nativeHistoryRead({\n      provider: 'sqlite',\n      db,\n      generationId: databaseProvider.generation.payload.generationId,\n    }),\n    completeObservationReports: observationReports.queries,\n    nodeRunPrompts,\n"
+        },
+        {
+          "current": "    mcpRuntimeTestBindings.runtimeFactory,\n  ] satisfies readonly DaemonProviderRuntimeHandleFactory[])\n",
+          "previous": "    mcpRuntimeTestBindings.runtimeFactory,\n    observationReportBindings.runtimeFactory,\n  ] satisfies readonly DaemonProviderRuntimeHandleFactory[])\n"
+        },
+        {
+          "current": "    mcpRuntimeTestBindings.closeParticipant,\n    gracefulTaskShutdown,\n",
+          "previous": "    mcpRuntimeTestBindings.closeParticipant,\n    observationReportBindings.closeParticipant,\n    gracefulTaskShutdown,\n"
+        },
+        {
+          "current": "        mcp: mcpRuntimeTests.execution!,\n        webhook: webhookTerminalControl.execution!,\n",
+          "previous": "        mcp: mcpRuntimeTests.execution!,\n        reports: observationReports.execution!,\n        webhook: webhookTerminalControl.execution!,\n"
+        }
+      ]
+    },
+    {
+      "path": "server.ts",
+      "hunks": [
+        {
+          "current": "import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'\nimport {\n  composeRunObservation,\n  composeRunObservationCalls,\n  type RunObservation,\n} from '@/modules/run-observability/composition/runObservation'\nimport type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'\nimport { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'\nimport type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'\n",
+          "previous": "import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'\nimport type {\n  CompleteObservationReportQueries,\n  ObservationTaskQueries,\n} from '@/modules/run-observability/public/queries'\nimport type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'\nimport { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'\nimport { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'\nimport type { ObservationNativeHistorySource } from '@/modules/run-observability/public/participants'\nimport type { NativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'\nimport type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'\nimport { composeObservationPricing } from '@/modules/run-observability/composition/pricing'\nimport { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'\nimport { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'\nimport { mountObservationRoutes } from '@/modules/run-observability/composition/observationRoutes'\nimport type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'\n"
+        },
+        {
+          "current": "  runtimeRegistry?: RuntimeRegistryOperations\n  /** Daemon-scoped live concurrency mutation composed by bootstrap. */\n",
+          "previous": "  runtimeRegistry?: RuntimeRegistryOperations\n  /** Both formal provider roots supply full reports; direct legacy fixtures may omit them. */\n  completeObservationReports?: CompleteObservationReportQueries\n  /** Frozen bootstrap selection; shared by ordinary and host-task original persistence. */\n  nativeUsage?: NativeUsageInvocationPersistence\n  /** The original selected provider supplies the same full history reader to HTTP System calls. */\n  nativeUsageHistory?: ObservationNativeHistorySource['prepare']\n  /** Daemon-scoped live concurrency mutation composed by bootstrap. */\n"
+        },
+        {
+          "current": "export interface ProviderPlatformRouteComposition {\n  readonly observability: RunObservation\n  readonly config: Parameters<typeof mountConfigRoutes>[1]\n",
+          "previous": "export interface ProviderPlatformRouteComposition {\n  readonly observability: Parameters<typeof mountObservationRoutes>[1]\n  readonly config: Parameters<typeof mountConfigRoutes>[1]\n"
+        },
+        {
+          "current": "    config: (app: Hono) => mountConfigRoutes(app, input.platform.config),\n    observability: (app: Hono) => input.platform.observability.mount(app),\n    maintenance: (app: Hono) => mountMaintenanceRoutes(app, input.platform.maintenance),\n",
+          "previous": "    config: (app: Hono) => mountConfigRoutes(app, input.platform.config),\n    observability: (app: Hono) => mountObservationRoutes(app, input.platform.observability),\n    maintenance: (app: Hono) => mountMaintenanceRoutes(app, input.platform.maintenance),\n"
+        },
+        {
+          "current": "      workspacePresence: deps.workspacePresence,\n    })\n",
+          "previous": "      workspacePresence: deps.workspacePresence,\n      nativeUsage: deps.nativeUsage,\n    })\n"
+        },
+        {
+          "current": "      workspacePresence,\n    })\n",
+          "previous": "      workspacePresence,\n      nativeUsage: deps.nativeUsage,\n    })\n"
+        },
+        {
+          "current": "            workspacePresence,\n            observationInvocations: composeRunObservationCalls(deps.db),\n            workgroupTurns: composeWorkgroupTurnsOperations(\n",
+          "previous": "            workspacePresence,\n            observationInvocations: composeLocalInvocationObservations(\n              deps.db,\n              composeObservationUsageSource(deps.db),\n            ),\n            workgroupTurns: composeWorkgroupTurnsOperations(\n"
+        },
+        {
+          "current": "    deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)\n  const systemAgentObservations = composeSystemAgentObservations({\n    calls: composeRunObservationCalls(deps.db),\n  })\n  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({\n",
+          "previous": "    deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)\n  const systemAgentObservations = composeSystemAgentObservations({\n    db: deps.db,\n    observations: composeLocalInvocationObservations(\n      deps.db,\n      composeObservationUsageSource(deps.db, deps.nativeUsageHistory),\n    ),\n    nativeUsage: deps.nativeUsage,\n  })\n  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({\n"
+        },
+        {
+          "current": "  const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace\n  const systemAgentObservations = composeSystemAgentObservations({\n    calls: composeRunObservationCalls(deps.db),\n  })\n  const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({\n",
+          "previous": "  const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace\n  const systemAgentObservations = composeSystemAgentObservations({\n    db: deps.db,\n    observations: composeLocalInvocationObservations(\n      deps.db,\n      composeObservationUsageSource(deps.db, deps.nativeUsageHistory),\n    ),\n    nativeUsage: deps.nativeUsage,\n  })\n  const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({\n"
+        },
+        {
+          "current": "    observability: (app) =>\n      composeRunObservation({\n        db: deps.db,\n        tasks: createTaskObservationFacts(deps.db),\n        runtimes: runtimeManagement.observations,\n      }).mount(app),\n    maintenance: (app) =>\n",
+          "previous": "    observability: (app) =>\n      mountObservationRoutes(app, {\n        reports: deps.completeObservationReports,\n        ...composeObservationPricing({ db: deps.db, runtimes: runtimeManagement.observations }),\n        tasks: composeTaskObservations({\n          db: deps.db,\n          taskSource: createTaskObservationFacts satisfies (\n            db: Parameters<typeof createTaskObservationFacts>[0],\n          ) => TaskObservationFactsQuery,\n        }) satisfies ObservationTaskQueries,\n      }),\n    maintenance: (app) =>\n"
+        }
+      ]
+    },
+    {
+      "path": "modules/system-operations/application/ports/hostExecutionAuthority.ts",
+      "hunks": [
+        {
+          "current": "  | 'verification'\n  | 'memory'\n",
+          "previous": "  | 'verification'\n  | 'observation'\n  | 'memory'\n"
+        }
+      ]
+    },
+    {
+      "path": "modules/task-execution/public/participants.ts",
+      "hunks": [
+        {
+          "current": "import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'\nimport { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'\n",
+          "previous": "import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'\nimport { finalizeNativeUsageInvocation as finalizeNativeUsageInvocationInternal } from '../application/finalizeNativeUsageInvocation'\nimport { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'\n"
+        },
+        {
+          "current": "export { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'\n/** Required runtime participants; production construction has no fallback. */\n",
+          "previous": "export { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'\n/** Invocation ownership remains on the participant seam, outside public value types. */\nexport type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'\n\n/** Retain the exact original EOF finalizer behind the Task participant boundary. */\nexport const finalizeNativeUsageInvocation = finalizeNativeUsageInvocationInternal\n\n/** Required runtime participants; production construction has no fallback. */\n"
+        }
+      ]
+    },
+    {
+      "path": "modules/task-execution/composition/providerRuntime.ts",
+      "hunks": [
+        {
+          "current": "import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'\nimport type { TaskExecutionRuntimeParticipants } from '../application/ports/taskExecutionRuntimeParticipants'\n",
+          "previous": "import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'\nimport type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'\nimport type { TaskExecutionRuntimeParticipants } from '../application/ports/taskExecutionRuntimeParticipants'\n"
+        },
+        {
+          "current": "> {\n  readonly host?: TaskExecutionProviderHostSelection\n  readonly archive?: TaskArchiveContentBinding\n  readonly workspaceReads?: RepositoryWorkspaceReadQueries\n",
+          "previous": "> {\n  readonly host?: TaskExecutionProviderHostSelection\n  readonly nativeUsage?: NativeUsageInvocationPersistence\n  readonly archive?: TaskArchiveContentBinding\n  readonly workspaceReads?: RepositoryWorkspaceReadQueries\n"
+        },
+        {
+          "current": "    workspacePresence: dependencies.runtime.workspacePresence,\n  })\n",
+          "previous": "    workspacePresence: dependencies.runtime.workspacePresence,\n    nativeUsage: dependencies.nativeUsage,\n  })\n"
+        },
+        {
+          "current": "  // RFC-359 AC-1（第 8 刀）：自动修复循环与 PostgreSQL 共用**同一个**绑定。\n  const lifecycleRepair = createTaskLifecycleAutoRepairCommand({\n    ...taskRoutes.automaticRepair({ resume, ...dependencies.lifecycleRepair }),\n    operations: persistence.recoveryAdministration,\n    ...(dependencies.lifecycleRepair.now === undefined\n      ? {}\n      : { now: dependencies.lifecycleRepair.now }),\n  })\n  const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)\n  const background = composeTaskExecutionProviderBackground({\n    module: executionModule,\n    lifecycleRepair,\n    autoResume,\n    recovery: persistence.recoveryAdministration,\n    recoveryWriteMode: persistence.recoveryWriteMode,\n    recoveryWritePurposes: persistence.recoveryWritePurposes,\n    taskHasDriver: runtime.schedulerDriver.isTaskActive,\n    buildScheduleLaunch,\n  })\n  return Object.freeze({\n",
+          "previous": "  // RFC-359 AC-1（第 8 刀）：自动修复循环与 PostgreSQL 共用**同一个**绑定。\n  const lifecycleRepair = createTaskLifecycleAutoRepairCommand({\n    ...taskRoutes.automaticRepair({ resume, ...dependencies.lifecycleRepair }),\n    operations: persistence.recoveryAdministration,\n    ...(dependencies.lifecycleRepair.now === undefined\n      ? {}\n      : { now: dependencies.lifecycleRepair.now }),\n  })\n  const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)\n  const background = composeTaskExecutionProviderBackground({\n    reconcileObservationUsage: dependencies.runtime.observationInvocations.reconcile,\n    module: executionModule,\n    lifecycleRepair,\n    autoResume,\n    recovery: persistence.recoveryAdministration,\n    recoveryWriteMode: persistence.recoveryWriteMode,\n    recoveryWritePurposes: persistence.recoveryWritePurposes,\n    taskHasDriver: runtime.schedulerDriver.isTaskActive,\n    buildScheduleLaunch,\n  })\n  return Object.freeze({\n"
+        },
+        {
+          "current": "export interface PostgresqlTaskExecutionProviderRuntimeDependencies {\n  readonly host?: TaskExecutionProviderHostSelection\n  readonly archive?: TaskArchiveContentBinding\n  readonly workspaceReads?: RepositoryWorkspaceReadQueries\n",
+          "previous": "export interface PostgresqlTaskExecutionProviderRuntimeDependencies {\n  readonly host?: TaskExecutionProviderHostSelection\n  readonly nativeUsage?: NativeUsageInvocationPersistence\n  readonly archive?: TaskArchiveContentBinding\n  readonly workspaceReads?: RepositoryWorkspaceReadQueries\n"
+        },
+        {
+          "current": "      workspacePresence: dependencies.runtime.workspacePresence,\n    })\n",
+          "previous": "      workspacePresence: dependencies.runtime.workspacePresence,\n      nativeUsage: dependencies.nativeUsage,\n    })\n"
+        },
+        {
+          "current": "  })\n  const lifecycleRepair = createTaskLifecycleAutoRepairCommand({\n    ...taskRoutes.automaticRepair({ resume, ...dependencies.lifecycleRepair }),\n    operations: persistence.recoveryAdministration,\n    ...(dependencies.lifecycleRepair.now === undefined\n      ? {}\n      : { now: dependencies.lifecycleRepair.now }),\n  })\n  const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)\n  const background = composeTaskExecutionProviderBackground({\n    module: executionModule,\n    lifecycleRepair,\n    autoResume,\n    recovery: persistence.recoveryAdministration,\n    recoveryWriteMode: persistence.recoveryWriteMode,\n    recoveryWritePurposes: persistence.recoveryWritePurposes,\n    taskHasDriver: runtime.schedulerDriver.isTaskActive,\n    buildScheduleLaunch,\n  })\n  return Object.freeze({\n",
+          "previous": "  })\n  const lifecycleRepair = createTaskLifecycleAutoRepairCommand({\n    ...taskRoutes.automaticRepair({ resume, ...dependencies.lifecycleRepair }),\n    operations: persistence.recoveryAdministration,\n    ...(dependencies.lifecycleRepair.now === undefined\n      ? {}\n      : { now: dependencies.lifecycleRepair.now }),\n  })\n  const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)\n  const background = composeTaskExecutionProviderBackground({\n    reconcileObservationUsage: dependencies.runtime.observationInvocations.reconcile,\n    module: executionModule,\n    lifecycleRepair,\n    autoResume,\n    recovery: persistence.recoveryAdministration,\n    recoveryWriteMode: persistence.recoveryWriteMode,\n    recoveryWritePurposes: persistence.recoveryWritePurposes,\n    taskHasDriver: runtime.schedulerDriver.isTaskActive,\n    buildScheduleLaunch,\n  })\n  return Object.freeze({\n"
+        }
+      ]
+    },
+    {
+      "path": "modules/task-execution/application/ports/taskExecutionPersistence.ts",
+      "hunks": [
+        {
+          "current": "import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOperations'\nimport type { TaskNodeWritePurposes } from './taskNodeWritePurposes'\n",
+          "previous": "import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOperations'\nimport type { NativeUsageInvocationPersistence } from './nativeUsageInvocation'\nimport type { TaskNodeWritePurposes } from './taskNodeWritePurposes'\n"
+        },
+        {
+          "current": "export interface TaskExecutionPersistence {\n  readonly nodeWriteMode?: 'host-selected'\n",
+          "previous": "export interface TaskExecutionPersistence {\n  readonly nativeUsage?: NativeUsageInvocationPersistence\n  readonly nodeWriteMode?: 'host-selected'\n"
+        }
+      ]
+    },
+    {
+      "path": "modules/task-execution/composition/taskExecutionPersistence.ts",
+      "hunks": [
+        {
+          "current": "import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'\nimport type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'\n",
+          "previous": "import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'\nimport type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'\nimport type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'\n"
+        },
+        {
+          "current": "  /** Selected by the original owner only after all runtime entrypoints pass acceptance. */\n}\n",
+          "previous": "  /** Selected by the original owner only after all runtime entrypoints pass acceptance. */\n  readonly nativeUsage?: NativeUsageInvocationPersistence\n}\n"
+        },
+        {
+          "current": "  return Object.freeze({\n    drive: projections.drive,\n",
+          "previous": "  return Object.freeze({\n    ...(dependencies.nativeUsage ? { nativeUsage: dependencies.nativeUsage } : {}),\n    drive: projections.drive,\n"
+        }
+      ]
+    }
+  ]
+}

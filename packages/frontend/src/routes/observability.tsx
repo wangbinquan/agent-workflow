@@ -1,137 +1,57 @@
+import { createRoute, type SearchSchemaInput, type ValidatorFn } from '@tanstack/react-router'
+import { TaskStatusSchema } from '@agent-workflow/shared'
 import {
-  createRoute,
-  useLocation,
-  type SearchSchemaInput,
-  type ValidatorFn,
-} from '@tanstack/react-router'
-import { useEffect, useRef } from 'react'
-import { TaskStatusSchema, ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
-import type { ObservationSearch } from '@/components/observability/RunObservability'
-import { CompleteRunObservability } from '@/components/observability/CompleteRunObservability'
-import { observationDefaultRange } from '@/components/observability/observationDefaultRange'
+  OBSERVATION_TABS,
+  RunObservability,
+  type ObservationSearch,
+  type ObservationTab,
+} from '@/components/observability/RunObservability'
+import { isObservationRange } from '@/components/observability/observationFormat'
 import { Route as RootRoute } from './__root'
 
+const text = (value: unknown, max: number): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' && value.length <= max ? value : undefined
+
+/** RFC-371 v2 §6 — every field is optional in the URL; invalid values fall back to defaults. */
 export function validateObservationSearch(raw: Record<string, unknown>): ObservationSearch {
-  const completedDefault = Object.keys(raw).every((key) => key === 'tab')
-    ? observationDefaultRange()
-    : null
-  const fallbackTo = completedDefault?.to ?? Date.now() + 1
-  const to =
-    typeof raw.to === 'number' && Number.isSafeInteger(raw.to) && raw.to > 0 ? raw.to : fallbackTo
-  const from =
-    typeof raw.from === 'number' && Number.isSafeInteger(raw.from) && raw.from >= 0 && raw.from < to
-      ? raw.from
-      : (completedDefault?.from ?? Math.max(0, to - 7 * 86400000))
   const status = TaskStatusSchema.safeParse(raw.status)
-  const text = (key: string, max: number) =>
-    typeof raw[key] === 'string' && raw[key].trim() && raw[key].length <= max ? raw[key] : undefined
-  const q = text('q', 200),
-    repository = text('repository', 4096),
-    workflow = text('workflow', 200),
-    runtime = text('runtime', 2048),
-    model = text('model', 2048),
-    selection = text('selection', 2048)
-  if (raw.selection !== undefined) {
-    try {
-      if (selection === undefined) throw new Error('invalid selection')
-      ObservationDimensionSelectionSchema.parse(JSON.parse(selection))
-    } catch {
-      throw new Error('Invalid observation dimension selection')
-    }
-  }
+  const task = text(raw.task, 200)
+  const q = text(raw.q, 200)
+  const kind = text(raw.kind, 100)
   return {
-    ...(raw.cohort === 'usage' || raw.cohort === 'started' ? { cohort: raw.cohort } : {}),
+    range: isObservationRange(raw.range) ? raw.range : '7d',
+    tab: OBSERVATION_TABS.includes(raw.tab as ObservationTab)
+      ? (raw.tab as ObservationTab)
+      : 'overview',
+    ...(task === undefined ? {} : { task }),
     ...(q === undefined ? {} : { q }),
-    ...(repository === undefined ? {} : { repository }),
-    ...(workflow === undefined ? {} : { workflow }),
-    ...(runtime === undefined ? {} : { runtime }),
-    ...(model === undefined ? {} : { model }),
-    ...(selection === undefined ? {} : { selection }),
     ...(status.success ? { status: status.data } : {}),
-    from,
-    to,
-    period:
-      raw.period === 'day' ||
-      raw.period === 'all' ||
-      raw.period === 'month' ||
-      raw.period === 'custom'
-        ? raw.period
-        : 'week',
-    tab:
-      raw.tab === 'tasks' ||
-      raw.tab === 'agents' ||
-      raw.tab === 'usage' ||
-      raw.tab === 'performance'
-        ? raw.tab
-        : 'overview',
-    ...(typeof raw.after === 'string' && raw.after ? { after: raw.after } : {}),
-    ...(typeof raw.task === 'string' && raw.task ? { task: raw.task } : {}),
-    ...(typeof raw.attempt === 'string' && raw.attempt && raw.attempt.length <= 512
-      ? { attempt: raw.attempt }
-      : {}),
-    ...(typeof raw.span === 'string' && raw.span && raw.span.length <= 512
-      ? { span: raw.span }
-      : {}),
-    ...(typeof raw.agent === 'string' && raw.agent ? { agent: raw.agent } : {}),
-    ...(typeof raw.quality === 'string' && raw.quality ? { quality: raw.quality } : {}),
+    ...(kind === undefined ? {} : { kind }),
   }
 }
+
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
   path: '/observability',
-  // Empty search is a valid input; the existing validator supplies required defaults.
   validateSearch: validateObservationSearch as ValidatorFn<
     Partial<ObservationSearch> & SearchSchemaInput,
     ObservationSearch
   >,
   component: Page,
 })
+
 function Page() {
-  const search = Route.useSearch(),
-    navigate = Route.useNavigate()
-  const location = useLocation()
-  const searchStr = location.searchStr
-  const pinned = useRef<string | null>(null)
-  useEffect(() => {
-    const { from, to } = location.search
-    if (
-      typeof from === 'number' &&
-      typeof to === 'number' &&
-      Number.isSafeInteger(from) &&
-      Number.isSafeInteger(to) &&
-      from >= 0 &&
-      from < to &&
-      to > 0
-    )
-      return
-    if (pinned.current === searchStr) return
-    pinned.current = searchStr
-    void navigate({ search, replace: true, resetScroll: false })
-  }, [location.search, navigate, search, searchStr])
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
   return (
-    <CompleteRunObservability
+    <RunObservability
       search={search}
-      onChange={(next) => {
-        const openingTask = !search.task && !!next.task
-        const returningFromTask = !!search.task && !next.task
-        const sameScope =
-          search.from === next.from &&
-          search.to === next.to &&
-          search.cohort === next.cohort &&
-          search.tab === next.tab &&
-          search.q === next.q &&
-          search.status === next.status &&
-          search.repository === next.repository &&
-          search.workflow === next.workflow &&
-          search.selection === next.selection &&
-          search.model === next.model &&
-          search.runtime === next.runtime &&
-          search.after === next.after
+      onChange={(next) =>
         void navigate({
           search: next,
-          resetScroll: openingTask || (!returningFromTask && !sameScope),
+          resetScroll: next.task !== search.task || next.tab !== search.tab,
         })
-      }}
+      }
     />
   )
 }

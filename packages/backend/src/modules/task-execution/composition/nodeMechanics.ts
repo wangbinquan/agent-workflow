@@ -1171,7 +1171,7 @@ export async function resolveMergeConflicts(
         runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
         runtimeObservationIdentity: frozen.observationIdentity,
         observationInvocations: state.opts.observationInvocations,
-        observationPurpose: 'system',
+        observationSystemKind: 'merge-resolve',
         inputs: {},
 
         promptTemplate: buildMergeResolvePrompt({ manifest, envelopeNonce }),

@@ -62,9 +62,7 @@ export interface AgentMaterialIntent {
 }
 
 export interface AgentMaterialEvidenceCapabilities {
-  readonly usageNormalizer: boolean
-  readonly nativeUsageCapture: boolean
-  readonly spanCapture: boolean
+  readonly usageMeter: boolean
   readonly sessionCapture: boolean
   readonly inventory: boolean
   readonly finalEvents: boolean

@@ -4,7 +4,7 @@ import type {
   RepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/types'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
-import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
+import type { CallObservations } from '@/modules/run-observability/public/participants'
 import type { AgentRunSettledObserver } from '@/modules/task-execution/application/ports/agentRunSettledObserver'
 // RFC-349 provider-neutral task drive options. Provider clients are captured
 // by infrastructure participants and never cross the scheduler/runtime seam.
@@ -35,7 +35,7 @@ import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/pu
 export interface RunTaskOptions {
   taskId: string
   /** Required in bound production execution; fixtures select their participant explicitly. */
-  observationInvocations?: ObservationInvocationParticipant
+  observationInvocations?: CallObservations
   /** RFC-349 bootstrap-selected provider-neutral memory injection reads.
    * Optional only at legacy direct-test construction sites; the TaskEngine
    * composition rejects a real drive before reading task state when absent. */
@@ -224,7 +224,7 @@ export interface RunTaskOptions {
 }
 
 export type BoundRunTaskOptions = RunTaskOptions & {
-  readonly observationInvocations: ObservationInvocationParticipant
+  readonly observationInvocations: CallObservations
   readonly memoryInjectionQueries: MemoryInjectionQueries
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations

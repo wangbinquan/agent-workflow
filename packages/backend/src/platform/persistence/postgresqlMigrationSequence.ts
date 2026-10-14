@@ -788,6 +788,55 @@ function retirementStatements(
     })),
   ]
 }
+/**
+ * RFC-371 v2: a retired relation may own triggers and functions installed on
+ * SURVIVING tables (the v1 change capture on tasks / node_runs / …). DROP TABLE
+ * never touches those, so the retirement edge drops every trigger, then every
+ * function, that the retained plan no longer projects. An edge whose retired
+ * tables own none (every earlier retirement) produces no statement here.
+ */
+function retiredProjectionStatements(
+  version: PostgresqlMigrationVersion,
+  ids: readonly string[],
+): PostgresqlSchemaStatement[] {
+  if (!ids.length) return []
+  const kept = new Set(retainedStatements(version, ids).map(statementKey))
+  const removed = version.plan.statements.filter(
+    (statement) =>
+      (statement.kind === 'trigger' || statement.kind === 'function') &&
+      !kept.has(statementKey(statement)),
+  )
+  const name = String.raw`(?:"(?:[^"]|"")+"\.)?"(?:[^"]|"")+"`
+  const trigger = new RegExp(
+    String.raw`^CREATE TRIGGER ("(?:[^"]|"")+") AFTER [A-Z ]+? ON (${name})`,
+  )
+  const fn = new RegExp(String.raw`^CREATE FUNCTION (${name})\(\)`)
+  return [
+    ...removed
+      .filter((statement) => statement.kind === 'trigger')
+      .map((statement) => {
+        const match = trigger.exec(statement.sql)
+        requireSequence(match !== null, 'retired trigger statement shape differs')
+        return {
+          kind: 'trigger' as const,
+          logicalId: `retire:${statement.logicalId}`,
+          sql: `DROP TRIGGER ${match[1]} ON ${match[2]}`,
+        }
+      }),
+    ...removed
+      .filter((statement) => statement.kind === 'function')
+      .map((statement) => {
+        const match = fn.exec(statement.sql)
+        requireSequence(match !== null, 'retired function statement shape differs')
+        return {
+          kind: 'function' as const,
+          logicalId: `retire:${statement.logicalId}`,
+          sql: `DROP FUNCTION ${match[1]}()`,
+        }
+      }),
+  ]
+}
+
 function retainedStatements(
   version: PostgresqlMigrationVersion,
   ids: readonly string[],
@@ -974,6 +1023,7 @@ function createPostgresqlUpgrade(
   // The drop must sit immediately before its own re-add so a partially applied
   // file never leaves a table with neither the old nor the new domain.
   const executableStatements = [
+    ...retiredProjectionStatements(from, retiredTables),
     ...retirementStatements(from.contract, retiredTables),
     ...checkReplacements.flatMap((item) => [item.drop, item.after]),
     ...sourceRevisionReplacements.map(sourceRevisionExecutable),
@@ -1222,6 +1272,7 @@ function applyPostgresqlIndexUpgrade(
   exact(
     step.executableStatements,
     [
+      ...retiredProjectionStatements(previous, retiredTables),
       ...retirementStatements(previous.contract, retiredTables),
       ...checkReplacements.flatMap((item) => [item.drop, item.after]),
       ...sourceRevisionReplacements.map(sourceRevisionExecutable),

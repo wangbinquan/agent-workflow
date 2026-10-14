@@ -1,9 +1,4 @@
-import type {
-  MergeStateOrNull,
-  NodeRunStatus,
-  RerunCause,
-  ObservationCapturedUsage,
-} from '@agent-workflow/shared'
+import type { MergeStateOrNull, NodeRunStatus, RerunCause } from '@agent-workflow/shared'
 
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
@@ -112,7 +107,6 @@ export type NodeExecutionEventWrite = Omit<
 > & {
   readonly sessionId?: string | null
   readonly parentSessionId?: string | null
-  readonly observation?: ObservationCapturedUsage
 }
 
 export interface NodeExecutionQuery {
@@ -231,8 +225,6 @@ export interface NodeExecutionPersistence {
   appendEvents(input: {
     readonly nodeRunId: string
     readonly events: readonly NodeExecutionEventWrite[]
-    /** Numeric-only revisions do not duplicate raw stdout or legacy usage. */
-    readonly observations?: readonly ObservationCapturedUsage[]
     readonly executionContext?: TaskExecutionContextRef
   }): Promise<void>
   /** Collapse native-session reset epochs onto the final logical session id. */

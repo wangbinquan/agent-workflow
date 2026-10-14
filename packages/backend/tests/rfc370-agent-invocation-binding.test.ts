@@ -121,13 +121,16 @@ describe('RFC-370 complete native invocation binding', () => {
       },
     } as unknown as NodeExecutionPersistence
     const persistence = {} as TaskExecutionEffectPersistence
-    const normalize = () => ({ measurements: [], diagnostics: [] })
+    const meter = {
+      observe: () => false,
+      snapshot: () => ({ state: 'partial' as const, models: [] }),
+    }
     const hooks: NativeAgentMaterialEvidenceHooks = {
       captureSessions: async () => {},
-      prepareUsageNormalizer(input) {
+      usageMeter(input) {
         expect<NativeAgentMaterialEvidenceHooks>(this).toBe(hooks)
         expect(input.env).toBe(changedEnv)
-        return normalize
+        return meter
       },
     }
     let nativeRequest: AgentProcessRequest | undefined
@@ -160,7 +163,9 @@ describe('RFC-370 complete native invocation binding', () => {
     material.cmd = ['after-wrap-command']
     material.env = changedEnv
     expect(reads).toEqual([])
-    expect(binding.evidence.prepareUsageNormalizer?.()).toBe(normalize)
+    expect(binding.evidence.prepareUsageMeter?.({ resumed: false, configuredModel: null })).toBe(
+      meter,
+    )
     const participants: AgentExecutionParticipants = bindLocalAgentExecutionParticipants({
       persistence,
       nodeExecution: () => nodeExecution,
@@ -319,7 +324,12 @@ describe('RFC-370 complete native invocation binding', () => {
           driver.parseTerminalResultError?.(line),
         )
       }
-      expect(protocol.normalizeUsage).toBe(driver.normalizeUsage)
+      // RFC-371 v2: the stream-only meter delegates to the same driver.
+      expect(protocol.usageMeter === undefined).toBe(driver.usageMeter === undefined)
+      const meter = protocol.usageMeter?.({ resumed: false, configuredModel: null })
+      expect(meter?.snapshot()).toEqual(
+        driver.usageMeter?.({ resumed: false, configuredModel: null }).snapshot(),
+      )
       expect(protocol).not.toHaveProperty('buildSpawn')
       expect(protocol).not.toHaveProperty('captureSessions')
     })

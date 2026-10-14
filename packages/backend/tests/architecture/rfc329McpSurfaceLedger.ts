@@ -69,24 +69,35 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: 'GET /api/fusions/pending-count', group: '/api/fusions', category: 'deliberate' },
   { leaf: 'POST /api/fusions', group: '/api/fusions', category: 'deliberate' },
   { leaf: 'GET /api/overview', group: '/api/overview', category: 'deliberate' },
+  // RFC-371 v2: the six read routes of the run observation page.
+  {
+    leaf: 'GET /api/observability/agents',
+    group: '/api/observability',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/observability/models',
+    group: '/api/observability',
+    category: 'not-in-scope',
+  },
   {
     leaf: 'GET /api/observability/overview',
-    group: '/api/observability/tasks',
+    group: '/api/observability',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/observability/system',
+    group: '/api/observability',
     category: 'not-in-scope',
   },
   {
     leaf: 'GET /api/observability/tasks',
-    group: '/api/observability/tasks',
+    group: '/api/observability',
     category: 'not-in-scope',
   },
   {
     leaf: 'GET /api/observability/tasks/:id',
-    group: '/api/observability/tasks',
-    category: 'not-in-scope',
-  },
-  {
-    leaf: 'GET /api/observability/tasks/:id/spans',
-    group: '/api/observability/tasks',
+    group: '/api/observability',
     category: 'not-in-scope',
   },
   { leaf: 'GET /api/reviews/pending-count', group: '/api/reviews', category: 'deliberate' },
@@ -1140,19 +1151,19 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: 'DELETE /api/restore/pending', group: '/api/restore', category: 'system-point' },
   { leaf: 'GET /api/restore/pending', group: '/api/restore', category: 'system-point' },
   { leaf: 'POST /api/restore', group: '/api/restore', category: 'system-point' },
-  // RFC-371: runtime price configuration follows the existing settings surface.
+  // RFC-371 v2: runtime × model price lines follow the existing settings surface.
   {
-    leaf: 'GET /api/observability/pricing/runtimes',
+    leaf: 'GET /api/observability/pricing',
     group: '/api/observability/pricing',
     category: 'system-point',
   },
   {
-    leaf: 'GET /api/observability/pricing/runtimes/:id/versions',
+    leaf: 'GET /api/observability/pricing/:id/history',
     group: '/api/observability/pricing',
     category: 'system-point',
   },
   {
-    leaf: 'POST /api/observability/pricing/runtimes/:id/versions',
+    leaf: 'POST /api/observability/pricing/:id',
     group: '/api/observability/pricing',
     category: 'system-point',
   },
@@ -1178,10 +1189,10 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
 
 /** 每组一条理由。守卫要求：每个用到的 group 都在这里有非空理由。 */
 export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
-  '/api/observability/tasks':
-    'RFC-371（Codex，2026-10-03）：本批提供运行观测页面的总览、任务列表、同快照 Agent/尝试及原生片段钻取；Agent 查询工具仍须在 RFC-371 后续 MCP 查询合同批次接入，当前登记仅这四个精确读路由，不覆盖其他观测 API。',
+  '/api/observability':
+    'RFC-371 v2（2026-10-14）：运行观测页面的总览、任务、任务详情、Agent、模型与系统执行六个只读统计路由；Agent 查询工具不在本 RFC 范围，需要时另立 RFC 接入 MCP。登记仅限这六个精确路由。',
   '/api/observability/pricing':
-    'RFC-371（Codex，2026-09-28）：运行时人民币价格目录、历史版本与改价是设置页的独立配置接口，沿用运行时配置的 settings:write 合同；不新增 Agent MCP 配置工具。此登记仅限三个精确路由，不覆盖后续观测查询。',
+    'RFC-371 v2（2026-10-14）：运行时 × 模型的人民币价格目录、历史与新增版本是设置页的独立配置接口，沿用运行时配置的 settings:write 合同；不新增 Agent MCP 配置工具。登记仅限这三个精确路由。',
   '(infrastructure)':
     '不是产品 API：/health 是存活探针，/.well-known/mcp 是 MCP 客户端接入前读的 discovery 文档——两者都在认证之前、面向运维与客户端而非模型。给它们做工具等于让模型去读它自己所在通道的说明书。',
   '/api/account':

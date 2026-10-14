@@ -46,4 +46,13 @@ describe('rfc284 T26: env 开关登记面同步', () => {
     collectTokens(SHARED_SRC, tokens)
     expect(tokens.has('AW_RUNTIME_STATUS_PROBE_TIMEOUT_MS')).toBe(false)
   })
+
+  // RFC-371 v2 (design/RFC-371-run-observability/redesign-v2-20261014.md §9): native
+  // usage capture admission was retired with the v1 observation store.
+  test('已删除的 env 通道不得回潮：AW_NATIVE_OBSERVATION_ADMISSIONS 不在 src 出现', () => {
+    const tokens = new Set<string>()
+    collectTokens(BACKEND_SRC, tokens)
+    collectTokens(SHARED_SRC, tokens)
+    expect(tokens.has('AW_NATIVE_OBSERVATION_ADMISSIONS')).toBe(false)
+  })
 })

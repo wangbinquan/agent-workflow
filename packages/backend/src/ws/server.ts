@@ -495,7 +495,6 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
  *     状态而非任务数据；token 是机器身份，不参与「谁在线」。
  */
 export const TOKEN_ALLOWED_WS_CHANNELS: Readonly<Record<WsChannelKind, boolean>> = {
-  observability: true,
   task: true,
   'tasks-list': true,
   workflows: true,

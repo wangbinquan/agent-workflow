@@ -31,7 +31,7 @@ describe('RFC-152 — WS_PATHS ↔ registry pathRe interlock', () => {
         'intentSessions',
         'mcpRuntimeTests',
         'presence',
-        'observability',
+        // RFC-371 v2 retired `observability`: the page refreshes on demand instead of a push stream.
       ].sort(),
     )
   })

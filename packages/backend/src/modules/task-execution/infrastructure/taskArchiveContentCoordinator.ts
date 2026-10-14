@@ -59,7 +59,6 @@ import {
   taskExecutionMaintenanceClaims,
   taskExecutionMaintenanceMembers,
   taskExecutionOwners,
-  taskExecutionObservationSources,
   taskFeedback,
   taskNodeClarifyDirectives,
   taskQuestions,
@@ -91,7 +90,6 @@ import type {
 import type { TerminalMaintenanceStore } from '../application/ports/terminalMaintenanceStore'
 import type { TerminalMaintenanceClaim } from '../domain/ownership'
 import { sweepArchiveTempDirectories } from './archiveTempDirectorySweep'
-import { NATIVE_USAGE_ARCHIVE } from './nativeUsageArchive'
 import {
   assertTerminalMaintenanceClaimTx,
   transitionTerminalMaintenanceClaimTx,
@@ -377,13 +375,6 @@ async function loadArchiveRows(
       async (ids) =>
         await db.select().from(nodeRunEvents).where(inArray(nodeRunEvents.nodeRunId, ids)),
     ),
-    task_execution_observation_sources: await byTask(
-      async (ids) =>
-        await db
-          .select()
-          .from(taskExecutionObservationSources)
-          .where(inArray(taskExecutionObservationSources.taskId, ids)),
-    ),
     task_execution_owners: await byTask(
       async (ids) =>
         await db.select().from(taskExecutionOwners).where(inArray(taskExecutionOwners.taskId, ids)),
@@ -435,14 +426,12 @@ export const ARCHIVED_TABLES: readonly string[] = [
   'node_runs',
   'node_run_outputs',
   'node_run_events',
-  'task_execution_observation_sources',
   'task_execution_owners',
   'task_execution_intents',
   'task_execution_effects',
   'task_execution_effect_attempts',
   'task_execution_effect_fences',
   'task_execution_lineage_operation_records',
-  ...NATIVE_USAGE_ARCHIVE.map((table) => table.name),
 ]
 
 /** 会随删库级联消失、但**故意**不归档的表。
@@ -511,15 +500,6 @@ async function archiveClaimed(
       content.resolve(tmpDir, 'db', `${name}.jsonl`),
       tableRows,
     )
-  }
-  for (const table of NATIVE_USAGE_ARCHIVE) {
-    const reference = content.resolve(tmpDir, 'db', `${table.name}.jsonl`)
-    await content.writeText(reference, '')
-    counts[table.name] = 0
-    for await (const batch of table.batches(db, taskIds)) {
-      await content.appendText(reference, batch.map((row) => JSON.stringify(row) + '\n').join(''))
-      counts[table.name] = counts[table.name]! + batch.length
-    }
   }
   // runs / logs 整体**挪入**（而不是复制+删除：大目录复制会把归档变成一次长 IO）。
   for (const [kind, root] of [

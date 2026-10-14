@@ -138,17 +138,10 @@ const PROVIDER_FORK_LEDGER = {
   'platform/persistence/databaseProviderRuntime.ts': { forks: 4, fence: 'fenced-dispatch' },
   // RFC-359：统一事务原语按客户端品牌挑会话实现（$provider 缺失 = bun:sqlite），残余分支沉入 never 汇。
   'platform/persistence/databaseTransaction.ts': { forks: 2, fence: 'fenced-dispatch' },
-  // RFC-371: original report snapshots require an explicit implementation for every provider.
-  'platform/persistence/reportSnapshot.ts': { forks: 2, fence: 'fenced-dispatch' },
-  // RFC-371: physical Worker/read-channel bootstrap exhaustively selects the original provider.
-  'platform/persistence/observationReportBuild.ts': { forks: 2, fence: 'fenced-dispatch' },
-  // RFC-371: historical native reads use the same actual SQLite Worker / reserved PG channel.
-  'platform/persistence/nativeHistoryRead.ts': { forks: 2, fence: 'fenced-dispatch' },
-  // RFC-371: baseline reads select the original SQLite file or reserved PG snapshot channel;
-  // memory/one-channel fallbacks remain explicit and every unknown provider reaches the never sink.
-  'platform/persistence/nativeUsageBaselineRead.ts': { forks: 2, fence: 'fenced-dispatch' },
-  // RFC-371: both nested JSON adapters now ask the exact capability matrix;
-  // their two real provider branches each converge to zero. No residual fork.
+  // RFC-371 v2 retired the report snapshot, report build, native history and baseline
+  // readers. The three frozen generators below only replay the published PostgreSQL
+  // history: both nested JSON adapters ask the exact capability matrix; their two
+  // real provider branches each converge to zero. No residual fork.
   'platform/persistence/observationProjectionRoutes.ts': { forks: 2, fence: 'fenced-dispatch' },
   'platform/persistence/observationProjectionChangeSchema.ts': {
     forks: 2,

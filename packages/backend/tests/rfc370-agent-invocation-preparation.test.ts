@@ -74,9 +74,7 @@ function material(materialRef = 'selected:compiled'): PreparedAgentMaterial {
     materialRef,
     declared: emptyDeclaredManifest(),
     evidenceCapabilities: {
-      usageNormalizer: false,
-      nativeUsageCapture: false,
-      spanCapture: true,
+      usageMeter: true,
       sessionCapture: true,
       inventory: false,
       finalEvents: false,
@@ -155,11 +153,11 @@ describe('RFC-370 selected invocation preparation', () => {
         calls.push('inventory')
         return null
       },
-      prepareUsageNormalizer(actual) {
+      usageMeter(actual) {
         expect(this).toBe(hooks)
         expect(actual.env).toBe(nativePlan.env)
         calls.push('usage')
-        return () => ({ measurements: [], diagnostics: [] })
+        return { observe: () => false, snapshot: () => ({ state: 'partial', models: [] }) }
       },
       startLiveCapture(actual) {
         expect(this).toBe(hooks)
@@ -268,7 +266,7 @@ describe('RFC-370 selected invocation preparation', () => {
     expect(calls).toEqual(['workspace', 'compile', 'plan', 'hooks', 'protocol', 'workspace'])
     nativePlan.cmd = ['after-bind']
     nativePlan.env = { SELECTED: 'after-bind' }
-    invocation.evidence.prepareUsageNormalizer!()
+    invocation.evidence.prepareUsageMeter!({ resumed: false, configuredModel: null })
     const execution = invocation.bindExecution()
     await execution.effect.submit({
       executionRef: execution.executionRef,

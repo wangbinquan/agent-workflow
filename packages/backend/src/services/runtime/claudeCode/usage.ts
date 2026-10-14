@@ -1,138 +1,100 @@
-import type { ObservationMeasurement } from '@agent-workflow/shared'
+// RFC-371 v2 §4 — Claude Code usage metering (stream-json).
+//
+// One API response is split into several `assistant` events sharing a message
+// id; their usage repeats, and output may grow, so each message keeps the
+// largest value per bucket. Output in assistant events is not final, so the
+// running snapshot is partial. The `result` event's `modelUsage` is the
+// per-model total including sub-agents; it replaces the stream view — except
+// for a resumed session, whose counters may include the restored history
+// (design/RFC-371-run-observability/protocol-evidence.md), and except for an
+// `error_during_execution` all-zero report, which never erases known usage.
+
 import {
-  TOKEN_BUCKETS,
-  object,
-  nativeId,
-  readUsage,
-  common,
-  model,
-  scope,
-  normalizeUsageFrame,
-  type JsonObject,
-  type RuntimeUsageContext,
-  type RuntimeUsageFrame,
+  UsageAccumulator,
+  modelKey,
+  objectOf,
+  tokenCount,
+  type RuntimeUsageMeter,
+  type RuntimeUsageMeterInput,
+  type RuntimeUsageModel,
 } from '../usage'
-function claude(
-  raw: JsonObject,
-  c: RuntimeUsageContext,
-  diagnostics: string[],
-): ObservationMeasurement[] {
-  if (raw.type !== 'assistant' && raw.type !== 'result') return []
-  // A sidechain frame cannot inherit the root's attribution without its owner mapping.
-  if ((raw.parent_tool_use_id != null || raw.isSidechain === true) && c.parentSessionId === null) {
-    diagnostics.push('unmapped-child-session')
-    return []
-  }
-  const message = object(raw.message)
-  if (raw.type === 'assistant') {
-    const id = nativeId(message?.id)
-    if (!id) {
-      diagnostics.push('missing-message-identity')
-      return []
-    }
-    const u = object(message?.usage)
-    const usage = readUsage(
-      {
-        input: u?.input_tokens,
-        output: null,
-        cacheRead: u?.cache_read_input_tokens,
-        cacheWrite: u?.cache_creation_input_tokens,
-      },
-      diagnostics,
-    )
-    return [
-      {
-        ...common(c, raw),
-        recordId: 'claude:message:' + id,
-        adapterVersion: 'claude-stream-json/cost-contract@1',
-        reporting: 'delta',
-        inclusion: 'self',
-        model: model(c, nativeId(message?.model)),
-        coverage: 'partial',
-        validity: 'valid',
-        basis: { kind: 'invocation' },
-        usage,
-        scope: scope(c, 'request'),
-      },
-    ]
-  }
-  const models = object(raw.modelUsage)
-  const entries = models
-    ? Object.entries(models).filter(([id, value]) => nativeId(id) && object(value))
-    : []
-  if (entries.length)
-    return entries.map(([id, value]) => {
-      const u = object(value)!
-      const usage = readUsage(
-        {
-          input: u.inputTokens,
-          output: u.outputTokens,
-          cacheRead: u.cacheReadInputTokens,
-          cacheWrite: u.cacheCreationInputTokens,
-        },
-        diagnostics,
-      )
-      const invalid =
-        raw.subtype === 'error_during_execution' && TOKEN_BUCKETS.every((b) => usage[b] === '0')
-      return {
-        ...common(c, raw),
-        recordId: 'claude:tree:' + c.sessionId + ':' + id,
-        adapterVersion: 'claude-stream-json/cost-contract@1',
-        reporting: 'cumulative',
-        inclusion: 'includes-descendants',
-        model: model(c, id),
-        coverage: TOKEN_BUCKETS.every((b) => usage[b] !== null) ? 'complete' : 'partial',
-        validity: invalid ? 'invalid-final' : 'valid',
-        coveredThroughTurn: c.turnIndex,
-        usage,
-        basis:
-          c.cumulative.kind === 'invocation'
-            ? { kind: 'invocation' }
-            : {
-                kind: 'native-session',
-                lineageKey: c.cumulative.lineageKey,
-                baseline: c.cumulative.modelBaselines?.[id] ?? null,
-              },
-        scope: scope(c, 'tree-total'),
-      }
-    })
-  const u = object(raw.usage),
-    resultId = nativeId(raw.uuid)
-  if (!resultId) {
-    diagnostics.push('missing-result-identity')
-    return []
-  }
-  const usage = readUsage(
-    {
-      input: u?.input_tokens,
-      output: u?.output_tokens,
-      cacheRead: u?.cache_read_input_tokens,
-      cacheWrite: u?.cache_creation_input_tokens,
-    },
-    diagnostics,
-  )
-  const invalid =
-    raw.subtype === 'error_during_execution' && TOKEN_BUCKETS.every((b) => usage[b] === '0')
-  return [
-    {
-      ...common(c, raw),
-      recordId: 'claude:main:' + c.sessionId + ':' + c.turnId,
-      adapterVersion: 'claude-stream-json/cost-contract@1',
-      reporting: 'cumulative',
-      inclusion: 'self',
-      // Main-loop totals can contain several models; never assign the configured model.
-      model: null,
-      coverage: TOKEN_BUCKETS.every((b) => usage[b] !== null) ? 'complete' : 'partial',
-      validity: invalid ? 'invalid-final' : 'valid',
-      coveredThroughTurn: c.turnIndex,
-      basis: { kind: 'invocation' },
-      usage,
-      scope: scope(c, 'self-total'),
-    },
-  ]
+
+interface MessageUsage {
+  readonly model: string
+  readonly input: number
+  readonly cacheRead: number
+  readonly cacheWrite: number
+  readonly output: number
 }
 
-/** Numeric evidence only; vendor currency estimates are deliberately ignored. */
-export function normalizeUsage(raw: unknown, context: RuntimeUsageContext): RuntimeUsageFrame {
-  return normalizeUsageFrame(raw, context, claude)
+export function usageMeter(input: RuntimeUsageMeterInput): RuntimeUsageMeter {
+  const messages = new Map<string, MessageUsage>()
+  let final: RuntimeUsageModel[] | null = null
+  return {
+    observe(event) {
+      if (event.type === 'assistant') {
+        if (final) return false
+        const message = objectOf(event.message)
+        const usage = objectOf(message?.usage)
+        const id = typeof message?.id === 'string' ? message.id : null
+        if (!id || !usage) return false
+        const previous = messages.get(id)
+        const next: MessageUsage = {
+          model: previous?.model || modelKey(message?.model),
+          input: Math.max(previous?.input ?? 0, tokenCount(usage.input_tokens)),
+          cacheRead: Math.max(previous?.cacheRead ?? 0, tokenCount(usage.cache_read_input_tokens)),
+          cacheWrite: Math.max(
+            previous?.cacheWrite ?? 0,
+            tokenCount(usage.cache_creation_input_tokens),
+          ),
+          output: Math.max(previous?.output ?? 0, tokenCount(usage.output_tokens)),
+        }
+        if (
+          previous &&
+          previous.model === next.model &&
+          previous.input === next.input &&
+          previous.cacheRead === next.cacheRead &&
+          previous.cacheWrite === next.cacheWrite &&
+          previous.output === next.output
+        )
+          return false
+        messages.set(id, next)
+        return true
+      }
+      if (event.type !== 'result' || input.resumed) return false
+      const byModel = objectOf(event.modelUsage)
+      const rows = Object.entries(byModel ?? {}).flatMap(([name, value]) => {
+        const usage = objectOf(value)
+        const model = modelKey(name)
+        return usage && model
+          ? [
+              {
+                model,
+                input: tokenCount(usage.inputTokens),
+                cacheRead: tokenCount(usage.cacheReadInputTokens),
+                cacheWrite: tokenCount(usage.cacheCreationInputTokens),
+                output: tokenCount(usage.outputTokens),
+                reasoning: 0,
+              },
+            ]
+          : []
+      })
+      if (!rows.length) return false
+      const empty = rows.every(
+        (row) => row.input + row.cacheRead + row.cacheWrite + row.output === 0,
+      )
+      if (empty && (event.subtype === 'error_during_execution' || messages.size > 0)) return false
+      final = rows
+      return true
+    },
+    snapshot() {
+      const totals = new UsageAccumulator()
+      if (final) {
+        totals.replace(final)
+        return totals.snapshot('complete')
+      }
+      for (const row of messages.values()) totals.add(row.model, { ...row, reasoning: 0 })
+      return totals.snapshot('partial')
+    },
+  }
 }

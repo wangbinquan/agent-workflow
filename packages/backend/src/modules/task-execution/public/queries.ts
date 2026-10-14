@@ -1,4 +1,3 @@
-import type { ObservationPhase } from '@agent-workflow/shared'
 export { readPortArtifact } from '../composition/portArtifacts'
 export type { PortArtifactReader } from '../application/ports/portArtifactContent'
 export {
@@ -25,63 +24,8 @@ export {
   readTaskCommitExcludePatterns,
 } from '../application/operationConfiguration'
 import type { Actor } from '@/auth/actor'
-import type { ObservationNativeScopeSource } from '@/modules/run-observability/public/participants'
 import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
-import type {
-  ObservationAttemptFacts,
-  ObservationTaskFacts,
-  ObservationTaskPageQuery,
-  ObservationSourceBacklog,
-  ObservationSpanSourceInput,
-  ObservationSpanSourcePage,
-} from '@agent-workflow/shared'
-
-/** RFC-371: actor-filtered execution facts, without runtime payloads or private rows. */
-export interface TaskObservationFactsQuery {
-  phasePage?(
-    taskId: string,
-    input: { after?: string; limit: number },
-  ): Promise<{
-    items: readonly ObservationPhase[]
-    nextCursor: string | null
-  }>
-  readonly nativeScopes?: ObservationNativeScopeSource
-  /** Retained span metadata, after the original actor-visible task lookup. */
-  spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
-  list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
-    readonly items: readonly ObservationTaskFacts[]
-    /** Opaque owner continuations for each authorized item, from this same query. */
-    readonly positions: readonly { readonly taskId: string; readonly cursor: string }[]
-    readonly nextCursor: string | null
-  }>
-  get(actor: Actor, taskId: string): Promise<ObservationTaskFacts | null>
-  /** Only task IDs supplied by get/list in this same visible snapshot. */
-  sourceBacklog(taskIds: readonly string[]): Promise<readonly ObservationSourceBacklog[]>
-  /** Called only after get/list supplied this visible task, inside the same read snapshot. */
-  /** Original owner keyset pages; consume every continuation to null in the same snapshot. */
-  attemptPage?(
-    taskId: string,
-    page: { readonly limit: number; readonly after?: string },
-  ): Promise<{
-    readonly items: readonly ObservationAttemptFacts[]
-    readonly nextCursor: string | null
-  }>
-  attempts(
-    taskId: string,
-    limit: number,
-  ): Promise<{
-    readonly items: readonly ObservationAttemptFacts[]
-    readonly truncated: boolean
-  }>
-}
-
-/** Original retained Task/System IDs, qualified by their owner on the supplied reader. */
-export interface CompleteTaskObservationFactsQuery extends TaskObservationFactsQuery {
-  visibleIds(actor: Actor, sourceIds: readonly string[]): Promise<readonly string[]>
-  /** Original retained owner name, or the exact original framework identity. */
-  originalAgentName(id: string): Promise<string | null>
-}
 
 /** The existing Task visibility gate runs before these bound workspace queries. */
 export interface TaskWorkspaceQueries {
@@ -168,5 +112,3 @@ export {
   validateUploadPlan,
 } from '../domain/uploads'
 export { resolveUniqueUploadNameSync } from '../application/workspaceUploads'
-/** Report-only original owner population; never an invocation admission command. */
-export type { HistoricalObservationOwnerQuery as HistoricalTaskObservationQuery } from '@agent-workflow/shared'

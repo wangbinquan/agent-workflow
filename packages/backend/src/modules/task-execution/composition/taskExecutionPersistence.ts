@@ -32,7 +32,6 @@ import {
 } from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from '../infrastructure/runtimeSessionLeaseOperations'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
-import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
 import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
 import { createSelectedTaskExecutionProjectionPersistence } from '../infrastructure/taskHostExecutionProjectionPersistence'
 import { createSelectedTaskNodeWritePurposes } from '../infrastructure/taskHostNodeWritePurposes'
@@ -146,7 +145,6 @@ export interface TaskExecutionPersistenceDependencies {
   readonly hostWrites?: TaskHostWriteBinding
   readonly workspacePresence?: WorkspacePresenceQueries
   /** Selected by the original owner only after all runtime entrypoints pass acceptance. */
-  readonly nativeUsage?: NativeUsageInvocationPersistence
 }
 
 export function createTaskRuntimeLifecyclePersistence(
@@ -184,7 +182,6 @@ export function createTaskExecutionPersistence(
     nodeExecution: new DrizzleNodeExecutionPersistence(db),
   }
   return Object.freeze({
-    ...(dependencies.nativeUsage ? { nativeUsage: dependencies.nativeUsage } : {}),
     drive: projections.drive,
     ownership: new DrizzleTaskOwnershipPersistence(db, dependencies.hostWrites),
     intents: new DrizzleTaskExecutionIntentPersistence(db),

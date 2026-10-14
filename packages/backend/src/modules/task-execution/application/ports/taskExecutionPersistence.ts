@@ -25,14 +25,12 @@ import type { TaskArtifactPathQueries } from './taskArtifactPathQueries'
 import type { TaskRecoveryOperations } from './taskRecoveryOperations'
 import type { RuntimeSessionCapturePersistence } from './runtimeSessionCapturePersistence'
 import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOperations'
-import type { NativeUsageInvocationPersistence } from './nativeUsageInvocation'
 import type { TaskNodeWritePurposes } from './taskNodeWritePurposes'
 import type { TaskRecoveryWritePurposes } from './taskRecoveryWritePurposes'
 
 /** Bootstrap-selected task-execution persistence. Every member is a named
  * Promise port; provider clients remain in infrastructure factories. */
 export interface TaskExecutionPersistence {
-  readonly nativeUsage?: NativeUsageInvocationPersistence
   readonly nodeWriteMode?: 'host-selected'
   readonly nodeWritePurposes?: TaskNodeWritePurposes
   readonly runtimeLifecycleWriteMode?: 'host-selected'

@@ -1,211 +1,186 @@
-import { useEffect, useId, useRef, useState, type RefObject } from 'react'
+// RFC-371 v2 §3.3 — edit one (runtime, model) price line. Saving appends a new
+// version compared against the newest one this draft was based on; on a
+// conflict the draft stays and the latest version can be adopted as the base.
+import { useId, useRef, useState, type RefObject } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { ObservationPricingRuntime, SaveObservationPrice } from '@agent-workflow/shared'
+import type { ObservationPrice, SaveObservationPrice } from '@agent-workflow/shared'
 import { ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { Field, TextInput } from '@/components/Form'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
+import { PRICING_QUERY, pricingApi } from './observationClient'
 import {
   initialPriceDraft,
-  preparePriceRequest,
+  preparePrice,
   PRICE_BUCKETS,
-  type SubmittedPrice,
+  type PriceDraft,
+  type PriceDraftErrors,
 } from './priceDraft'
-import { PRICING_QUERY, runtimePrices } from './priceClient'
 
 export function PriceEditor(props: {
-  runtime: ObservationPricingRuntime
-  open: boolean
+  runtime: { readonly runtimeId: string; readonly name: string }
+  /** null: pricing a model that has no line yet (typed by the administrator). */
+  model: string | null
+  current: ObservationPrice | null
   triggerRef: RefObject<HTMLElement | null>
   onClose: () => void
-  onSaved: () => void
-  onClear: () => void
-  onDirty: (dirty: boolean) => void
 }) {
-  const { t } = useTranslation(),
-    qc = useQueryClient()
+  const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
   const formId = useId()
-  const [runtime, setRuntime] = useState(props.runtime),
-    [initial] = useState(() => initialPriceDraft(runtime, Date.now()))
-  const [draft, setDraft] = useState(initial),
-    [revision, setRevision] = useState(runtime.pricingRevision)
-  const [errors, setErrors] = useState<Readonly<Record<string, string>>>({}),
-    [latest, setLatest] = useState<ObservationPricingRuntime>()
+  const [initial] = useState(() => initialPriceDraft(props.model ?? '', props.current))
+  const [draft, setDraft] = useState<PriceDraft>(initial)
+  const [base, setBase] = useState<string | null>(props.current?.id ?? null)
+  const [errors, setErrors] = useState<PriceDraftErrors>({})
+  const [latest, setLatest] = useState<ObservationPrice | null>(null)
   const [reloadError, setReloadError] = useState<unknown>(null)
-  const receipt = useRef<SubmittedPrice | undefined>(undefined),
-    busy = useRef(false),
-    dirty = useRef<string | null>(null),
-    busySince = useRef<number | null>(null)
+  const dirty = useRef<string | null>(null)
+  const busy = useRef(false)
   const save = useMutation({
-    mutationFn: (input: SaveObservationPrice) => runtimePrices.save(runtime.registrationId, input),
+    mutationFn: (input: SaveObservationPrice) => pricingApi.save(props.runtime.runtimeId, input),
     onSuccess: () => {
       dirty.current = null
-      props.onSaved()
-      void qc.invalidateQueries({ queryKey: PRICING_QUERY })
+      void queryClient.invalidateQueries({ queryKey: PRICING_QUERY })
+      props.onClose()
     },
   })
-  const isDirty = JSON.stringify(initial) !== JSON.stringify(draft)
-  dirty.current = isDirty || save.isPending ? 'runtime-token-price' : null
-  const onDirty = props.onDirty
-  useEffect(() => {
-    onDirty(isDirty || save.isPending)
-    return () => onDirty(false)
-  }, [isDirty, save.isPending, onDirty])
-  const submit = async () => {
-    if (busy.current) return
-    const prepared = preparePriceRequest(
-      draft,
-      runtime,
-      revision,
-      receipt.current,
-      Date.now(),
-      () => crypto.randomUUID(),
-    )
+  busy.current = save.isPending
+  dirty.current = JSON.stringify(draft) !== JSON.stringify(initial) ? 'observation-price' : null
+  const conflict = save.error instanceof ApiError && save.error.code === 'price-conflict'
+  const submit = () => {
+    if (save.isPending) return
+    const prepared = preparePrice(draft, base, Date.now())
     setErrors(prepared.errors)
-    if (!prepared.receipt) return
-    receipt.current = prepared.receipt
-    busy.current = true
-    busySince.current = Date.now()
-    try {
-      await save.mutateAsync(prepared.receipt.input)
-    } catch {
-      /* mutation error is visible */
-    } finally {
-      busy.current = false
-      busySince.current = null
-    }
+    if (prepared.input) save.mutate(prepared.input)
   }
-  const compare = async () => {
-    setLatest(undefined)
+  const loadLatest = async () => {
     setReloadError(null)
     try {
-      const [directory, history] = await Promise.all([
-        runtimePrices.directory(),
-        runtimePrices.history(runtime.registrationId),
-      ])
-      const current = directory.runtimes.find(
-        (row) => row.registrationId === runtime.registrationId,
-      )
-      if (!current) throw new Error(t('observationPricing.reloadFailed'))
-      setLatest({ ...current, pricingRevision: history.revision })
+      const history = await pricingApi.history(props.runtime.runtimeId, draft.model.trim())
+      setLatest(history.items[0] ?? null)
     } catch (error) {
       setReloadError(error)
     }
   }
-  const canCompare =
-    save.error instanceof ApiError &&
-    ['price-conflict', 'runtime-changed'].includes(save.error.code)
+  const rate = (value: string | null) =>
+    value === null
+      ? t('observationPricing.unpriced')
+      : t('observationPricing.rate', { rate: value })
+  const field = (key: keyof PriceDraft, label: string, hint?: string) => (
+    <Field
+      key={key}
+      label={label}
+      labelId={`${formId}-${key}-label`}
+      errorId={`${formId}-${key}-error`}
+      {...(hint ? { hint } : {})}
+      {...(errors[key as keyof PriceDraftErrors]
+        ? { error: t(errors[key as keyof PriceDraftErrors]!) }
+        : {})}
+    >
+      <TextInput
+        value={draft[key]}
+        onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))}
+        disabled={save.isPending || (key === 'model' && props.model !== null)}
+        type={key === 'effectiveFrom' ? 'datetime-local' : 'text'}
+        aria-invalid={Boolean(errors[key as keyof PriceDraftErrors])}
+        aria-labelledby={`${formId}-${key}-label`}
+        {...(errors[key as keyof PriceDraftErrors]
+          ? { 'aria-describedby': `${formId}-${key}-error` }
+          : {})}
+      />
+    </Field>
+  )
   return (
     <>
       <UnsavedChangesGuard
         dirtyRef={dirty}
         busyRef={busy}
-        busySinceRef={busySince}
         onDiscard={() => {
           dirty.current = null
-          props.onClear()
         }}
       />
       <Dialog
-        panelClassName="observation-typography"
-        open={props.open}
-        title={t('observationPricing.editTitle', { name: runtime.name })}
+        open
+        size="lg"
+        title={
+          props.model === null
+            ? t('observationPricing.addTitle', { runtime: props.runtime.name })
+            : t('observationPricing.editTitle', { runtime: props.runtime.name, model: props.model })
+        }
         onClose={props.onClose}
         triggerRef={props.triggerRef}
         dismissDisabled={save.isPending}
-        size="lg"
         footer={
           <>
-            <button className="btn" disabled={save.isPending} onClick={props.onClear}>
-              {t('observationPricing.clear')}
-            </button>
-            <button className="btn" disabled={save.isPending} onClick={props.onClose}>
-              {t('common.close')}
+            <button type="button" className="btn" disabled={save.isPending} onClick={props.onClose}>
+              {t('common.cancel')}
             </button>
             <button
+              type="button"
               className="btn btn--primary"
               disabled={save.isPending}
-              onClick={() => void submit()}
+              onClick={submit}
             >
-              {t('observationPricing.save')}
+              {save.isPending ? t('observationPricing.saving') : t('observationPricing.save')}
             </button>
           </>
         }
       >
         <div className="stack--md">
-          <p>
-            {t('observationPricing.versionHint', {
-              revision,
-              configurationRevision: runtime.configurationRevision,
-            })}
-          </p>
-          {save.error ? <ErrorBanner error={save.error} /> : null}
-          {canCompare ? (
-            <button className="btn" onClick={() => void compare()}>
-              {t('observationPricing.compare')}
-            </button>
+          <p className="muted">{t('observationPricing.hint')}</p>
+          {conflict ? (
+            <NoticeBanner tone="warning">
+              <div className="stack--sm">
+                <p>{t('observationPricing.conflict')}</p>
+                {latest ? (
+                  <>
+                    <p>
+                      {t('observationPricing.latest', {
+                        input: rate(latest.rates.input),
+                        cacheRead: rate(latest.rates.cacheRead),
+                        cacheWrite: rate(latest.rates.cacheWrite),
+                        output: rate(latest.rates.output),
+                        time: new Date(latest.createdAt).toLocaleString(i18n.language),
+                      })}
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => {
+                        setBase(latest.id)
+                        setLatest(null)
+                        save.reset()
+                      }}
+                    >
+                      {t('observationPricing.useLatest')}
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="btn btn--sm" onClick={() => void loadLatest()}>
+                    {t('observationPricing.loadLatest')}
+                  </button>
+                )}
+              </div>
+            </NoticeBanner>
+          ) : save.error ? (
+            <ErrorBanner error={save.error} />
           ) : null}
-          {reloadError ? (
-            <ErrorBanner error={reloadError} message={t('observationPricing.reloadFailed')} />
-          ) : null}
-          {latest ? (
-            <>
-              <p>
-                {t('observationPricing.latest', {
-                  ...latest,
-                  revision: latest.pricingRevision,
-                  model: latest.model ?? '—',
-                })}
-              </p>
-              <button
-                className="btn"
-                onClick={() => {
-                  setRuntime(latest)
-                  setRevision(latest.pricingRevision)
-                  setLatest(undefined)
-                  receipt.current = undefined
-                  save.reset()
-                }}
-              >
-                {t('observationPricing.useLatest')}
-              </button>
-            </>
-          ) : null}
+          {reloadError ? <ErrorBanner error={reloadError} /> : null}
+          {field('model', t('observationPricing.model'), t('observationPricing.modelHint'))}
           <div className="form-grid form-grid--cols-2">
-            {(
-              [
-                'provider',
-                'model',
-                'condition',
-                'effectiveFrom',
-                ...PRICE_BUCKETS,
-                'sourceNote',
-              ] as const
-            ).map((key) => (
-              <Field
-                key={key}
-                label={t('observationPricing.' + key)}
-                labelId={formId + '-' + key + '-label'}
-                errorId={formId + '-' + key + '-error'}
-                {...(errors[key] ? { error: t(errors[key]!) } : {})}
-                {...(PRICE_BUCKETS.includes(key as (typeof PRICE_BUCKETS)[number])
-                  ? { hint: t('observationPricing.rateHint') }
-                  : {})}
-              >
-                <TextInput
-                  value={draft[key]}
-                  onChange={(value) => setDraft((current) => ({ ...current, [key]: value }))}
-                  disabled={save.isPending}
-                  type={key === 'effectiveFrom' ? 'datetime-local' : 'text'}
-                  aria-invalid={Boolean(errors[key])}
-                  aria-labelledby={formId + '-' + key + '-label'}
-                  {...(errors[key] ? { 'aria-describedby': formId + '-' + key + '-error' } : {})}
-                />
-              </Field>
-            ))}
+            {PRICE_BUCKETS.map((bucket) =>
+              field(bucket, t(`observationPricing.${bucket}`), t('observationPricing.rateHint')),
+            )}
           </div>
+          {field(
+            'effectiveFrom',
+            t('observationPricing.effectiveFrom'),
+            t('observationPricing.effectiveFromHint'),
+          )}
+          {field('note', t('observationPricing.note'))}
         </div>
       </Dialog>
     </>

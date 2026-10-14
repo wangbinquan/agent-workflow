@@ -2,10 +2,12 @@ import ts from 'typescript'
 import { createHash } from 'node:crypto'
 import reviewed from '../fixtures/rfc370-stage-a-owner-original-sources.json'
 import { inverseStageAImplementationGateRoots } from './stageAImplementationGateRootInverse'
+import { inverseRfc371V2Sources } from './rfc371V2SourceInverse'
 
 /** Remove only the reviewed stage A owner/recovery additions. Keep every
  * pre-existing native and concurrent hook for the older whole-source oracles. */
 export function inverseStageAOwnerBindings(source: ts.SourceFile): ts.SourceFile {
+  source = inverseRfc371V2Sources(source)
   source = inverseStageAImplementationGateRoots(source)
   const entry = reviewed.sources.find((row) =>
     source.fileName.endsWith(row.path.slice('packages/backend/src/'.length)),

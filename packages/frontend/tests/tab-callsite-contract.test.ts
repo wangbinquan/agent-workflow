@@ -164,7 +164,6 @@ const TRUE_TAB_CALLSITES = [
   'components/AgentForm.tsx::{idPrefix}',
   'components/AgentImportDialog.tsx::agent-import-source',
   'components/NodeDetailDrawer.tsx::node-detail-drawer',
-  'components/observability/CompleteRunObservability.tsx::complete-run-observation',
   'components/canvas/NodeInspector.tsx::workflow-node-inspector',
   'components/observability/RunObservability.tsx::run-observation',
   'components/repos/RepoBulkAddDialog.tsx::repo-group-bulk-add',

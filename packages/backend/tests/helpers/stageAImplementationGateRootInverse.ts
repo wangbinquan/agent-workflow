@@ -1,8 +1,10 @@
 import ts from 'typescript'
+import { inverseRfc371V2Sources } from './rfc371V2SourceInverse'
 
 /** Exact inverse of the implementation gate's two selected Event Center
  * choices. Historical complete native root fingerprints remain unchanged. */
 export function inverseStageAImplementationGateRoots(source: ts.SourceFile): ts.SourceFile {
+  source = inverseRfc371V2Sources(source)
   const selected = source.fileName.endsWith('cli/start.ts')
     ? {
         call: '  const employeeHttpEventCenter = await composeEventCenter({\n',

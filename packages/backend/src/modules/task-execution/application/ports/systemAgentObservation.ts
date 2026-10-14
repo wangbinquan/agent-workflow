@@ -1,15 +1,11 @@
-import type { ObservationCapturedUsage, ObservationNativeProcessFact } from '@agent-workflow/shared'
-import type { ObservationInvocationStart } from '@/modules/run-observability/public/participants'
-import type {
-  NativeUsageCapture,
-  NativeUsageCaptureIdentity,
-} from '@/modules/runtime-management/public/participants'
 import type {
   RuntimeKind,
   RuntimeObservationIdentity,
 } from '@/modules/runtime-management/public/types'
+import type { RuntimeUsageSnapshot } from '@/modules/runtime-management/public/participants'
 
-export type SystemObservationOwnerRef = object
+// RFC-371 v2 §4 — a platform system-agent call is recorded like any other
+// runtime call (purpose `system` with its kind), through the same contract.
 
 export interface SystemAgentObservationDemand {
   readonly kind: string
@@ -21,26 +17,17 @@ export interface SystemAgentObservationDemand {
   readonly purpose?: 'system' | 'memory' | 'playground'
 }
 
-/** Issued only for one original System call, before its selected process starts. */
+/** Issued for one system call before its process starts. */
 export interface SystemAgentObservationRun {
-  readonly invocationId: string
-  readonly taskId: string
-  readonly nodeRunId: string
-  readonly agentId: string | null
-  readonly agentRevision: number | null
-  readonly purpose: 'system' | 'memory' | 'playground'
-  readonly runtime: ObservationInvocationStart['runtime']
-  readonly durableOwner?: NonNullable<NativeUsageCaptureIdentity['durableOwner']>
-  accept(input: {
-    readonly nativeCaptureContract?: ObservationInvocationStart['nativeCaptureContract']
-    readonly nativeCaptureSource?: string
+  readonly callId: string
+  /** Persist the call before spawn; a failure prevents the spawn. */
+  accept(): Promise<void>
+  usage(snapshot: RuntimeUsageSnapshot): Promise<void>
+  finish(outcome: {
+    readonly status: 'done' | 'failed' | 'canceled' | 'interrupted'
+    readonly endedAt: number
+    readonly usage: RuntimeUsageSnapshot | null
   }): Promise<void>
-  root(sessionId: string, previous?: string): Promise<void>
-  append(evidence: readonly ObservationCapturedUsage[]): Promise<void>
-  process(fact: ObservationNativeProcessFact): Promise<void>
-  settle(outcome: string, finishedAt: number): Promise<void>
-  reconcile(): Promise<void>
-  finalize(capture: NativeUsageCapture, rootSessionId: string | null): Promise<void>
 }
 
 export interface SystemAgentObservationFactory {

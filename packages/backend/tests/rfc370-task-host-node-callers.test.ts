@@ -564,10 +564,8 @@ const originalCallerPurposes: readonly string[] = [
   'application/taskAgentRun.ts|runNode|set|issuedResults',
   'application/taskAgentRun.ts|runNode|set|issuedResults',
   'application/taskAgentRun.ts|runNode/makeEventBuffer|appendEvents|issuedResults',
-  'application/taskAgentRun.ts|runNode/flushSpanFacts|appendEvents|issuedResults',
   'application/taskAgentRun.ts|runNode/consumeInventoryPayload|patch|issuedResults',
   'application/taskAgentRun.ts|runNode/persistStderrLine|appendEvent|issuedResults',
-  'application/taskAgentRun.ts|runNode|appendEvents|issuedResults',
   'application/taskAgentRun.ts|runNode|set|issuedResults',
   'application/taskAgentRun.ts|runNode|retagSessionEpochs|issuedResults',
   'application/taskAgentRun.ts|runNode|upsertOutputs|issuedResults',
@@ -675,7 +673,9 @@ function calls(source: ts.SourceFile): ts.CallExpression[] {
   return found
 }
 
-test('all original 80 business actions retain their reviewed preparation or result purpose', () => {
+// RFC-371 v2 removed the span-fact flush and the final usage-observation append from
+// runNode (usage now lives in observation_calls); 80 reviewed actions became 78.
+test('all original 78 business actions retain their reviewed preparation or result purpose', () => {
   const actual: string[] = []
   const rawWrites: string[] = []
   for (const path of callerFiles) {
@@ -713,7 +713,7 @@ test('all original 80 business actions retain their reviewed preparation or resu
       actual.push(`${path}|${operation(call, source)}|${expression.name.text}|${purpose.text}`)
     }
   }
-  expect(originalCallerPurposes).toHaveLength(80)
+  expect(originalCallerPurposes).toHaveLength(78)
   expect(actual.sort()).toEqual([...originalCallerPurposes].sort())
   expect(rawWrites).toEqual([])
 }, 15_000)

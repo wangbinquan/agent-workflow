@@ -625,25 +625,12 @@ async function resetToSnapshot(
 ): Promise<void> {
   if (snapshot.tables.length === 0) return
   await truncateAll(raw, snapshot.tables)
-  // Source triggers recreate revision rows while business seeds are restored.
-  // Restore the complete original revision snapshot last, preserving its values.
-  const revisionTable = getTableName(schema.observationSourceRevisions)
-  const changeTable = getTableName(schema.observationProjectionChanges)
-  const seeds = [
-    ...snapshot.seeds.filter((seed) => seed.table !== revisionTable && seed.table !== changeTable),
-    ...snapshot.seeds.filter((seed) => seed.table === changeTable),
-    ...snapshot.seeds.filter((seed) => seed.table === revisionTable),
-  ]
-  for (const seed of seeds) {
+  for (const seed of snapshot.seeds) {
     // 不走绑定参数：Bun.SQL 会把字符串参数按 json 类型二次序列化成 JSON 标量（"[...]"），
     // json_populate_recordset 收到的就不是数组。用带唯一标签的美元引号把数组文本内联进去。
     if (seed.rowsJson.includes('$aw_seed$')) {
       throw new Error(`seed rows for ${seed.table} contain the dollar-quote tag`)
     }
-    // Restoring original business rows also recreates their journal entries.
-    // Restore the exact original journal and clock together at the end.
-    if (seed.table === revisionTable || seed.table === changeTable)
-      await raw(`delete from "agent_workflow"."${seed.table}"`)
     await raw(
       `insert into "agent_workflow"."${seed.table}" ` +
         `select * from json_populate_recordset(null::"agent_workflow"."${seed.table}", ` +
@@ -686,9 +673,6 @@ async function seedFromSqliteSnapshot(target: ProviderNeutralDatabase): Promise<
   }
   const restoreForWrite = selectDatabaseSchemaProvider('postgresql')
   try {
-    const revisionTable = getTableName(schema.observationSourceRevisions)
-    const revisionSeed = pending.find((entry) => entry.name === revisionTable)
-    if (revisionSeed) pending.splice(pending.indexOf(revisionSeed), 1)
     const seeded = new Set<string>()
     const names = new Set(pending.map((entry) => entry.name))
     while (pending.length > 0) {
@@ -710,14 +694,6 @@ async function seedFromSqliteSnapshot(target: ProviderNeutralDatabase): Promise<
           `seed tables form a foreign-key cycle: ${pending.map((entry) => entry.name).join(', ')}`,
         )
       }
-    }
-    if (revisionSeed) {
-      await target.delete(revisionSeed.table).run()
-      for (let offset = 0; offset < revisionSeed.rows.length; offset += 200)
-        await target
-          .insert(revisionSeed.table)
-          .values(revisionSeed.rows.slice(offset, offset + 200))
-          .run()
     }
   } finally {
     restoreForWrite()

@@ -1,3 +1,8 @@
+// FROZEN HISTORY — RFC-371 v1 schema projection, retired by RFC-371 v2
+// (design/RFC-371-run-observability/redesign-v2-20261014.md §7). The immutable
+// PostgreSQL migration chain (steps 0017–0031) replays plans built from this
+// code, so it must stay byte-stable; no live table carries these projections and
+// no new caller may use it.
 // RFC-371: a closed, derived-output projection. No usage or price values live here.
 import type { PostgresqlSchemaStatement } from './postgresqlSchema'
 import type { LogicalSchemaContract } from './schemaContract'

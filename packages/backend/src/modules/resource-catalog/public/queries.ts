@@ -266,5 +266,3 @@ export interface McpDiagnosticsQueries {
     input: McpDiagnosticsSessionRef,
   ): Promise<McpDiagnosticsTranscript>
 }
-/** Read-only original MCP turn/event population; never creates a diagnostic execution. */
-export type { HistoricalObservationOwnerQuery as HistoricalMcpObservationQuery } from '@agent-workflow/shared'

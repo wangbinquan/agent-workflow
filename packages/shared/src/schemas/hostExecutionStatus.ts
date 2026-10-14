@@ -6,7 +6,6 @@ export const HostExecutionGroupSchema = z.enum([
   'purpose',
   'diagnostics',
   'verification',
-  'observation',
   'memory',
   'development',
   'digital-employee',

@@ -25,8 +25,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { count, eq } from 'drizzle-orm'
-import { insertInBatches } from '../src/platform/persistence/batchInsert'
-import { NATIVE_USAGE_ARCHIVE } from '../src/modules/task-execution/infrastructure/nativeUsageArchive'
 
 import type { Hono } from 'hono'
 
@@ -243,16 +241,6 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     })
     await addRunWithEvents(db, 'root', 'run-root', 3)
     await addRunWithEvents(db, 'child', 'run-child', 2)
-    // RFC-371: both pending and consumed numeric source evidence survives task archival.
-    const sourceEvidence = JSON.stringify({
-      invocationId: 'invocation',
-      measurements: [],
-      diagnostics: ['missing-native-session'],
-    })
-    await db.insert(schema.taskExecutionObservationSources).values([
-      { taskId: 'root', nodeRunId: 'run-root', evidenceJson: sourceEvidence, pending: true },
-      { taskId: 'child', nodeRunId: 'run-child', evidenceJson: sourceEvidence, pending: false },
-    ])
     await db.insert(schema.reviewNodeReviewers).values({
       taskId: 'root',
       reviewNodeId: 'review-node',
@@ -299,18 +287,9 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     expect(manifest.rows.tasks).toBe(2)
     expect(manifest.rows.node_runs).toBe(2)
     expect(manifest.rows.node_run_events).toBe(5)
-    expect(manifest.rows.task_execution_observation_sources).toBe(2)
-    const sourceRows = readFileSync(
-      join(dir, 'db', 'task_execution_observation_sources.jsonl'),
-      'utf-8',
-    )
-      .trim()
-      .split('\n')
-      .map((line) => JSON.parse(line) as { taskId: string; evidenceJson: string; pending: boolean })
-    expect(sourceRows.map((row) => row.taskId).sort()).toEqual(['child', 'root'])
-    expect(sourceRows.map((row) => row.pending).sort()).toEqual([false, true])
-    expect(sourceRows.every((row) => row.evidenceJson === sourceEvidence)).toBe(true)
-    expect(await db.select().from(schema.taskExecutionObservationSources)).toEqual([])
+    // RFC-371 v2: run-observation calls are accounting facts outside the task
+    // tree (no FK); archival neither copies nor deletes them.
+    expect(manifest.rows.task_execution_observation_sources).toBeUndefined()
     expect(manifest.rows.task_repos).toBe(2)
     expect(manifest.rows.review_node_reviewers).toBe(1)
     expect(manifest.rows.task_execution_owners).toBe(0)
@@ -666,141 +645,4 @@ describe('RFC-311 T19 / RFC-317 R8 — 级联闭包与导出清单的对账', ()
     // 豁免是有代价的(数据真的没了),所以清单必须短且逐条有理由。
     expect([...ARCHIVE_EXEMPT_TABLES]).toEqual(['runtime_session_leases'])
   })
-})
-
-describeEachProvider('RFC-371 native evidence archive', (harness) => {
-  test('all original native relations and every membership page survive Task deletion', async () => {
-    const db = harness.db
-    const dirs = tmpDirs()
-    await seedBase(db)
-    await createProviderTaskSeed()(db, {
-      id: 'native-archive',
-      status: 'done',
-      finishedAt: NOW - 300 * DAY,
-    })
-    await addRunWithEvents(db, 'native-archive', 'native-archive-node', 1)
-    const invocationId = 'native-archive-call'
-    const passId = 'native-archive-pass'
-    const document = JSON.stringify({ original: 'native-page-evidence', input: '9007199254740993' })
-    await db.insert(schema.nativeUsagePreparations).values({
-      invocationId,
-      taskId: 'native-archive',
-      nodeRunId: 'native-archive-node',
-      ownerReceiptId: 'original-before-spawn',
-      fence: 'original-claim',
-      document,
-      state: 'sealed',
-    })
-    await db.insert(schema.nativeUsageStoreBindings).values({
-      invocationId,
-      beforeOwnerReceiptId: 'original-before-spawn',
-      sourceGeneration: 'original-native-generation',
-    })
-    await db.insert(schema.nativeUsagePasses).values({
-      passId,
-      invocationId,
-      headKey: 'original-head',
-      ownerReceiptId: 'original-owner',
-      identity: document,
-      initialCursor: 'original-cursor',
-      admission: document,
-      rootCreatedAt: 100,
-      state: 'eof',
-      nextOrdinal: '2',
-      nextCursor: null,
-      digest: 'a'.repeat(64),
-      position: '1002',
-      counts: JSON.stringify({ sessions: '1', parts: '1001', steps: '1001' }),
-      lastAck: document,
-    })
-    await db.insert(schema.nativeUsagePassHeads).values({ key: 'original-head', passId })
-    await db.insert(schema.nativeUsagePassPages).values(
-      [0, 1].map((ordinal) => ({
-        passId,
-        ordinal: String(ordinal),
-        payloadDigest: 'a'.repeat(64),
-        cumulativeDigest: 'b'.repeat(64),
-        document,
-        ack: document,
-      })),
-    )
-    await db.insert(schema.nativeUsageSessionParents).values({
-      passId,
-      sessionId: 'original-root',
-      parentSessionId: null,
-      ordinal: '0',
-      pathDigest: 'c'.repeat(64),
-      depth: '0',
-    })
-    const members = Array.from({ length: 1001 }, (_, n) => ({
-      passId,
-      stepId: 'original-step-' + String(n).padStart(6, '0'),
-      sessionId: 'original-root',
-      ordinal: n < 1000 ? '0' : '1',
-      document: JSON.stringify({ stepId: n, original: document }),
-    }))
-    await insertInBatches(db, schema.nativeUsageStepMembers, members, (batch) =>
-      db.insert(schema.nativeUsageStepMembers).values([...batch]),
-    )
-    const [source] = await db
-      .insert(schema.taskExecutionObservationSources)
-      .values({
-        taskId: 'native-archive',
-        nodeRunId: 'native-archive-node',
-        evidenceJson: JSON.stringify({ invocationId, measurements: [], diagnostics: [] }),
-      })
-      .returning({ id: schema.taskExecutionObservationSources.id })
-    await db.insert(schema.nativeUsageEmissions).values({
-      invocationId,
-      eventId: 'original-frame',
-      fingerprint: 'd'.repeat(64),
-      sourceRowId: source!.id,
-      document,
-      ack: document,
-    })
-    await db.insert(schema.nativeUsageRevisionHeads).values({
-      invocationId,
-      recordId: 'original-record',
-      revision: 17,
-    })
-    const tables = [
-      schema.nativeUsagePreparations,
-      schema.nativeUsageStoreBindings,
-      schema.nativeUsagePasses,
-      schema.nativeUsagePassHeads,
-      schema.nativeUsagePassPages,
-      schema.nativeUsageSessionParents,
-      schema.nativeUsageStepMembers,
-      schema.nativeUsageEmissions,
-      schema.nativeUsageRevisionHeads,
-    ]
-    const expected = await Promise.all(tables.map((table) => db.select().from(table)))
-    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runManual(
-      {
-        retentionDays: 90,
-        maxTrees: 2,
-        actorUserId: 'u1',
-        now: NOW,
-      },
-      { ...dirs, now: NOW },
-    )
-    expect(result.archived).toHaveLength(1)
-    const archive = result.archived[0]!
-    for (let n = 0; n < tables.length; n++) {
-      const name = NATIVE_USAGE_ARCHIVE[n]!.name
-      const actual = readFileSync(join(archive.dir, 'db', name + '.jsonl'), 'utf8')
-        .trim()
-        .split('\n')
-        .map((line) => JSON.parse(line))
-      expect(actual).toHaveLength(expected[n]!.length)
-      expect(actual.map((row) => JSON.stringify(row)).sort()).toEqual(
-        expected[n]!.map((row) => JSON.stringify(row)).sort(),
-      )
-      expect(archive.rows[name]).toBe(expected[n]!.length)
-      expect(await db.select().from(tables[n]!)).toHaveLength(0)
-    }
-    expect(archive.rows.task_execution_native_usage_step_members).toBe(1001)
-    expect(archive.rows.task_execution_native_usage_store_bindings).toBe(1)
-    expect(await taskCount(db)).toBe(0)
-  }, 30_000)
 })

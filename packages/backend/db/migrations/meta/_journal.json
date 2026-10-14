@@ -1786,6 +1786,13 @@
       "when": 1791953593843,
       "tag": "0255_rfc371_committed_source_clocks",
       "breakpoints": true
+    },
+    {
+      "idx": 255,
+      "version": "6",
+      "when": 1791988700180,
+      "tag": "0256_rfc371_observation_v2",
+      "breakpoints": true
     }
   ]
 }

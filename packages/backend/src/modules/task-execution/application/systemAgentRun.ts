@@ -16,7 +16,7 @@ import type {
 } from '@/modules/runtime-management/public/participants'
 import type { Logger } from '@/util/log'
 import type { SystemAgentObservationRun } from './ports/systemAgentObservation'
-import { createSystemAgentUsageCapture } from './systemAgentUsageCapture'
+import { createSystemAgentUsageCapture, systemCallStatus } from './systemAgentUsageCapture'
 
 export const DEFAULT_TIMEOUT_MS = 600_000
 export const DEFAULT_MAX_EVENT_TEXT_BYTES = 8 * 1024 * 1024
@@ -121,9 +121,7 @@ export async function runSystemAgentCore(
   // verification so no consumer re-renders it (§2.1b-2).
   let declaredForResult: DeclaredInjectionManifest | undefined
   let result: PreparedSystemAgentRunResult | undefined
-  let observationRun: SystemAgentObservationRun | undefined
   let usageCapture: ReturnType<typeof createSystemAgentUsageCapture> | undefined
-  let usageFinished = false
   let observedSessionId: string | null = null
   let sinkTerminal = false
   let sinkFailed = false
@@ -133,10 +131,8 @@ export async function runSystemAgentCore(
     | undefined
   const originalSink = opts.eventSink
   const originalMarkTerminal = originalSink?.markTerminal.bind(originalSink)
-  const finishOriginalUsage = async () => {
-    if (usageCapture === undefined || usageFinished) return
-    await usageCapture.finish(observedSessionId)
-    usageFinished = true
+  const finishOriginalUsage = async (status: Parameters<typeof systemCallStatus>[0]) => {
+    await usageCapture?.finish(systemCallStatus(status))
   }
 
   const markSinkTerminal = async (
@@ -239,7 +235,7 @@ export async function runSystemAgentCore(
       const materialEvidence = invocation.evidence
       const protocol = invocation.protocol
       if (input.invocation.observe) {
-        observationRun = await input.invocation.observe(startedAt)
+        const observationRun: SystemAgentObservationRun = await input.invocation.observe(startedAt)
         usageCapture = createSystemAgentUsageCapture({
           run: observationRun,
           invocation,
@@ -266,9 +262,7 @@ export async function runSystemAgentCore(
       let receiptError: unknown
       let capturedStartupInventory: StartupInventory | null = null
 
-      const localExecution = invocation.bindExecution(
-        usageCapture ? { observeNativeProcess: usageCapture.process } : undefined,
-      )
+      const localExecution = invocation.bindExecution()
       const recoverOriginal = localExecution.effect.recoverOriginal.bind(localExecution.effect)
       const cleanupOriginal = invocation.lifecycle.cleanup?.bind(invocation.lifecycle)
       executionReceipt = Object.freeze({
@@ -358,7 +352,7 @@ export async function runSystemAgentCore(
               }
             }
             if (ev === null) {
-              await usageCapture?.line(line, sessionId ?? null)
+              await usageCapture?.line(line)
               outputEvidence.unparsedStdoutSeen = true
               await appendSink({
                 ts: Date.now(),
@@ -381,7 +375,6 @@ export async function runSystemAgentCore(
                   throw new Error('runtime native session claim failed')
                 }
                 observedSessionId = ev.sessionId
-                await usageCapture?.root(ev.sessionId)
               } else if (sessionId !== ev.sessionId) {
                 if (
                   pendingConversationReset === undefined ||
@@ -400,7 +393,6 @@ export async function runSystemAgentCore(
                   throw new Error('runtime native session rotation failed')
                 }
                 observedSessionId = sessionId
-                await usageCapture?.root(sessionId, previousSessionId)
               }
             }
             if (ev.conversationReset !== undefined) {
@@ -420,7 +412,7 @@ export async function runSystemAgentCore(
                 throw new Error('runtime native session reset fence failed')
               }
             }
-            await usageCapture?.line(line, sessionId ?? null)
+            await usageCapture?.line(line)
             if (typeof ev.text === 'string' && ev.text.length > 0) {
               const bytes = Buffer.byteLength(ev.text, 'utf8')
               outputEvidence.assistantTextSeen = true
@@ -496,7 +488,7 @@ export async function runSystemAgentCore(
                       return false
                     physicalAcknowledged = true
                   }
-                  await finishOriginalUsage()
+                  await finishOriginalUsage('unreaped')
                   await markSinkTerminal('incomplete', 'post-exit-flush-timeout')
                   if (originalMarkTerminal !== undefined && !sinkTerminal) return false
                   await cleanupOriginal?.()
@@ -616,15 +608,8 @@ export async function runSystemAgentCore(
       return { status: 'ok', ...base }
     })()
   } finally {
-    const flushOriginalUsage = async () => {
-      try {
-        await finishOriginalUsage()
-      } catch (error) {
-        if (result?.status !== 'unreaped') throw error
-        // Unknown work keeps the original capability and material for its ACK.
-      }
-    }
-    await flushOriginalUsage()
+    // Unknown (unreaped) work keeps its call open until recovery acknowledges it.
+    if (result?.status !== 'unreaped') await finishOriginalUsage(result?.status)
     if (!sinkTerminal) {
       await markSinkTerminal(
         sinkFailed || result?.status === 'unreaped' ? 'incomplete' : 'complete',
@@ -681,15 +666,6 @@ export async function runSystemAgentCore(
             })
           }
         }
-      }
-    }
-    if (observationRun) {
-      try {
-        await observationRun.settle(result?.status ?? 'spawn-failed', Date.now())
-      } catch {
-        log.warn('system-agent-observation-settlement-remains-pending', {
-          invocationId: observationRun.invocationId,
-        })
       }
     }
   }

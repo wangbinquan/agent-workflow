@@ -17,10 +17,9 @@ import {
   memoryDistillExecutionReceipts,
   runtimes,
 } from '../src/db/schema'
-import { systemAgentObservationOwners } from '../src/db/observationSystem'
+import { observationCalls } from '../src/db/schema'
 import { composeSystemAgentObservations } from '../src/modules/task-execution/composition/systemAgentObservations'
-import { composeLocalInvocationObservations } from '../src/modules/run-observability/composition/localInvocations'
-import { composeObservationUsageSource } from '../src/modules/task-execution/composition/observationUsageSource'
+import { composeRunObservationCalls } from '../src/modules/run-observability/composition/runObservation'
 import { deferred } from './helpers/taskHostExecution'
 
 const roots: string[] = []
@@ -329,10 +328,7 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
       probeFence: identity.configurationRevision,
       model: 'original-model',
     })
-    const observations = composeSystemAgentObservations({
-      db,
-      observations: composeLocalInvocationObservations(db, composeObservationUsageSource(db)),
-    })
+    const observations = composeSystemAgentObservations({ calls: composeRunObservationCalls(db) })
     const first = memoryJournalOperations(db, root, {
       observations,
       preparedRecovery: true,
@@ -384,14 +380,20 @@ describeEachProvider('RFC-370 reconstructed Memory business recovery', (scope) =
       model: 'original-model',
       resumeSessionId: 'original-memory-native-session',
     })
-    const owner = (
+    // RFC-371 v2: the recorded call keeps the frozen runtime identity, not the renamed profile.
+    const call = (
       await db
         .select()
-        .from(systemAgentObservationOwners)
-        .where(eq(systemAgentObservationOwners.id, restored.state.observationIds[0]!))
+        .from(observationCalls)
+        .where(eq(observationCalls.id, restored.state.observationIds[0]!))
     )[0]!
-    expect(JSON.parse(owner.runtime)).toEqual({ ...identity, protocol: 'opencode' })
-    expect(owner.originalAttempt).toBe('0:1')
+    expect(call).toMatchObject({
+      purpose: 'system',
+      runtimeId: identity.registrationId,
+      runtimeName: identity.acceptedName,
+      protocol: 'opencode',
+      status: 'done',
+    })
     expect(
       (await journal.findByJob(queued.jobId)).every(
         (row) => JSON.stringify(row.runtimeObservationIdentity) === JSON.stringify(identity),

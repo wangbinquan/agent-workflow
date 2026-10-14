@@ -29,7 +29,6 @@ import type {
   TaskAutoResumeCommand,
 } from '../application/ports/taskAutoResumeCommand'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
-import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
 import type { TaskExecutionRuntimeParticipants } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskLifecycleAutoRepairCommand } from '../application/ports/taskLifecycleAutoRepairCommand'
 import type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
@@ -256,7 +255,6 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
   readonly host?: TaskExecutionProviderHostSelection
-  readonly nativeUsage?: NativeUsageInvocationPersistence
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<
@@ -298,7 +296,6 @@ export function composeSqliteTaskExecutionProviderRuntime<
   const persistence = createTaskExecutionPersistence(db, {
     ...(host === undefined ? {} : { hostWrites: host.writes }),
     workspacePresence: dependencies.runtime.workspacePresence,
-    nativeUsage: dependencies.nativeUsage,
   })
   const log = createLogger('task')
   const executionModule =
@@ -415,7 +412,6 @@ export function composeSqliteTaskExecutionProviderRuntime<
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({
-    reconcileObservationUsage: dependencies.runtime.observationInvocations.reconcile,
     module: executionModule,
     lifecycleRepair,
     autoResume,
@@ -502,7 +498,6 @@ type ProviderRuntimeWithoutChildLaunch<Runtime> = Runtime extends unknown
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly host?: TaskExecutionProviderHostSelection
-  readonly nativeUsage?: NativeUsageInvocationPersistence
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: ProviderRuntimeWithoutChildLaunch<PostgresqlTaskExecutionRuntimeDependencies>
@@ -549,7 +544,6 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     createTaskExecutionPersistence(db, {
       ...(host === undefined ? {} : { hostWrites: host.writes }),
       workspacePresence: dependencies.runtime.workspacePresence,
-      nativeUsage: dependencies.nativeUsage,
     })
   const executionModule =
     dependencies.runtime.executionModule ??
@@ -679,7 +673,6 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({
-    reconcileObservationUsage: dependencies.runtime.observationInvocations.reconcile,
     module: executionModule,
     lifecycleRepair,
     autoResume,

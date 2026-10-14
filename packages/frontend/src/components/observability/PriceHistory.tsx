@@ -1,94 +1,69 @@
-import { useState, type RefObject } from 'react'
+// RFC-371 v2 §3.3 — every saved version of one (runtime, model) price line, newest first.
+import type { RefObject } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { ObservationPricingRuntime } from '@agent-workflow/shared'
 import { Dialog } from '@/components/Dialog'
+import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { TableViewport } from '@/components/TableViewport'
+import { PRICING_QUERY, pricingApi } from './observationClient'
 import { PRICE_BUCKETS } from './priceDraft'
-import { PRICING_QUERY, runtimePrices } from './priceClient'
 
-export function PriceHistory({
-  runtime,
-  onClose,
-  triggerRef,
-}: {
-  runtime: ObservationPricingRuntime
-  onClose: () => void
+export function PriceHistory(props: {
+  runtime: { readonly runtimeId: string; readonly name: string }
+  model: string
   triggerRef: RefObject<HTMLElement | null>
+  onClose: () => void
 }) {
-  const { t } = useTranslation(),
-    [cursors, setCursors] = useState<Array<number | undefined>>([undefined])
-  const before = cursors.at(-1)
+  const { t, i18n } = useTranslation()
   const query = useQuery({
-    queryKey: [...PRICING_QUERY, 'history', runtime.registrationId, before],
-    queryFn: ({ signal }) => runtimePrices.history(runtime.registrationId, before, signal),
+    queryKey: [...PRICING_QUERY, 'history', props.runtime.runtimeId, props.model],
+    queryFn: ({ signal }) => pricingApi.history(props.runtime.runtimeId, props.model, signal),
   })
-  const rows = query.data?.items ?? []
+  const date = (at: number) => new Date(at).toLocaleString(i18n.language)
+  const title = t('observationPricing.historyTitle', {
+    runtime: props.runtime.name,
+    model: props.model,
+  })
   return (
-    <Dialog
-      panelClassName="observation-typography"
-      open
-      onClose={onClose}
-      title={runtime.name + ' · ' + t('observationPricing.history')}
-      triggerRef={triggerRef}
-      size="lg"
-      footer={
-        <>
-          <button
-            className="btn"
-            disabled={cursors.length === 1 || query.isFetching}
-            onClick={() => setCursors((current) => current.slice(0, -1))}
-          >
-            {t('observationPricing.newer')}
-          </button>
-          <button
-            className="btn"
-            disabled={!query.data?.nextBeforeRevision || query.isFetching}
-            onClick={() => setCursors((current) => [...current, query.data!.nextBeforeRevision])}
-          >
-            {t('observationPricing.older')}
-          </button>
-        </>
-      }
-    >
-      <p>{t('observationPricing.historyHint')}</p>
+    <Dialog open size="lg" title={title} onClose={props.onClose} triggerRef={props.triggerRef}>
       {query.isLoading ? (
         <LoadingState />
       ) : query.error ? (
         <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
-      ) : rows.length === 0 ? (
-        <p>{t('observationPricing.unpriced')}</p>
+      ) : !query.data || query.data.items.length === 0 ? (
+        <EmptyState title={t('observationPricing.historyEmpty')} size="compact" />
       ) : (
-        <TableViewport label={t('observationPricing.history')} minWidth="lg">
-          <table className="data-table">
+        <TableViewport label={title} minWidth="lg">
+          <table className="data-table data-table--compact" aria-label={title}>
             <thead>
               <tr>
-                {['version', 'model', 'effectiveFrom', ...PRICE_BUCKETS, 'sourceNote'].map(
-                  (key) => (
-                    <th key={key}>{t('observationPricing.' + key)}</th>
-                  ),
-                )}
+                <th scope="col">{t('observationPricing.colSavedAt')}</th>
+                <th scope="col">{t('observationPricing.colEffectiveFrom')}</th>
+                {PRICE_BUCKETS.map((bucket) => (
+                  <th key={bucket} scope="col" className="observability__num">
+                    {t(`observationPricing.${bucket}`)}
+                  </th>
+                ))}
+                <th scope="col">{t('observationPricing.colSavedBy')}</th>
+                <th scope="col">{t('observationPricing.colNote')}</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>CNY-v{row.revision}</td>
-                  <td>
-                    {row.provider} / {row.model}
-                    {row.condition ? <p>{row.condition}</p> : null}
-                  </td>
-                  <td>{new Date(row.effectiveFrom).toLocaleString()}</td>
-                  {PRICE_BUCKETS.map((key) => (
-                    <td key={key}>
-                      {row.rates[key] === null
+              {query.data.items.map((version) => (
+                <tr key={version.id}>
+                  <th scope="row">{date(version.createdAt)}</th>
+                  <td>{date(Math.max(version.effectiveFrom, version.createdAt))}</td>
+                  {PRICE_BUCKETS.map((bucket) => (
+                    <td key={bucket} className="observability__num">
+                      {version.rates[bucket] === null
                         ? t('observationPricing.unpriced')
-                        : '¥' + row.rates[key]}
+                        : t('observationPricing.rate', { rate: version.rates[bucket] })}
                     </td>
                   ))}
-                  <td>{row.sourceNote}</td>
+                  <td>{version.createdBy}</td>
+                  <td>{version.note || '—'}</td>
                 </tr>
               ))}
             </tbody>

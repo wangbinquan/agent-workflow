@@ -117,11 +117,7 @@ export async function runRuntimeSmokeCore(
   const usageCapture = observationRun
     ? createSystemAgentUsageCapture({ run: observationRun, invocation, log })
     : undefined
-  let usageSessionId: string | null = null
-  let usageReset: { outgoingSessionId: string; newConversationId: string } | undefined
-  const localExecution = invocation.bindExecution(
-    usageCapture ? { observeNativeProcess: usageCapture.process } : undefined,
-  )
+  const localExecution = invocation.bindExecution()
   const run = await localExecution.effect.submit({
     executionRef: localExecution.executionRef,
     materialRef: localExecution.materialRef,
@@ -136,32 +132,8 @@ export async function runRuntimeSmokeCore(
       : {}),
     capture: {
       onStdoutLine: async (line) => {
-        // Numeric/session evidence continues after the diagnostic text-retention cap.
-        const numericEvent = usageCapture ? invocation.protocol.parseEvent(line) : null
-        if (numericEvent?.sessionId !== undefined) {
-          if (usageSessionId === null) {
-            usageSessionId = numericEvent.sessionId
-            await usageCapture?.root(usageSessionId)
-          } else if (
-            numericEvent.sessionId !== usageSessionId &&
-            usageReset?.outgoingSessionId === usageSessionId
-          ) {
-            const previous = usageSessionId
-            usageSessionId = numericEvent.sessionId
-            usageReset = undefined
-            await usageCapture?.root(usageSessionId, previous)
-          } else if (numericEvent.sessionId !== usageSessionId) nativeSessionProtocolInvalid = true
-        }
-        if (numericEvent?.conversationReset !== undefined) {
-          if (
-            usageSessionId === null ||
-            numericEvent.conversationReset.outgoingSessionId !== usageSessionId ||
-            usageReset !== undefined
-          )
-            nativeSessionProtocolInvalid = true
-          else usageReset = numericEvent.conversationReset
-        }
-        await usageCapture?.line(line, usageSessionId)
+        // Usage metering continues after the diagnostic text-retention cap.
+        await usageCapture?.line(line)
         if (outBytes >= MAX_OUTPUT_BYTES) return
         outBytes += Buffer.byteLength(line, 'utf8') + 1
         // raw line (capped) feeds the auth/model classifier — claude's error is
@@ -170,7 +142,7 @@ export async function runRuntimeSmokeCore(
         if (line.includes('"type":"result"') || line.includes('"is_error":true')) {
           lastResultLine = line
         }
-        const ev = usageCapture ? numericEvent : invocation.protocol.parseEvent(line)
+        const ev = invocation.protocol.parseEvent(line)
         if (ev !== null) {
           sawEvent = true
           if (ev.sessionId !== undefined) {
@@ -212,22 +184,9 @@ export async function runRuntimeSmokeCore(
     },
     log,
   })
-  await usageCapture?.finish(usageSessionId)
   const settleSmoke = async (result: SmokeResult): Promise<SmokeResult> => {
-    if (observationRun) {
-      try {
-        await observationRun.settle(result.outcome, Date.now())
-      } catch {
-        log.warn('runtime-smoke-observation-settlement-remains-pending', {
-          invocationId: observationRun.invocationId,
-        })
-      }
-    }
+    await usageCapture?.finish(result.outcome === 'conforms' ? 'done' : 'failed')
     return result
-  }
-  if (usageCapture) {
-    sessionId = usageSessionId ?? undefined
-    pendingConversationReset = usageReset
   }
 
   if (run.outcome === 'spawn-failed') {

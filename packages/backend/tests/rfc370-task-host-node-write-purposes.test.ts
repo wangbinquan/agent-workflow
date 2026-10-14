@@ -3,15 +3,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
-  taskExecutionObservationSources,
-  taskExecutionOwners,
-  tasks,
-} from '@/db/schema'
-import type { ObservationCapturedUsage } from '@agent-workflow/shared'
+import { nodeRunEvents, nodeRunOutputs, nodeRuns, taskExecutionOwners, tasks } from '@/db/schema'
 import type { NodeExecutionPersistence } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import type { TaskNodeWritePurposes } from '@/modules/task-execution/application/ports/taskNodeWritePurposes'
@@ -124,11 +116,6 @@ async function nodeFixture(
       parentSessionId: 'old-2',
     },
   ])
-  const observation: ObservationCapturedUsage = {
-    invocationId: `invocation-${runId}`,
-    measurements: [],
-    diagnostics: [],
-  }
   const rows = async () => ({
     owners: await db
       .select()
@@ -145,11 +132,6 @@ async function nodeFixture(
       .from(nodeRunEvents)
       .where(eq(nodeRunEvents.nodeRunId, runId))
       .orderBy(nodeRunEvents.id),
-    observations: await db
-      .select()
-      .from(taskExecutionObservationSources)
-      .where(eq(taskExecutionObservationSources.taskId, taskId))
-      .orderBy(taskExecutionObservationSources.id),
   })
   calls.newWork = 0
   calls.issuedAck = 0
@@ -163,7 +145,6 @@ async function nodeFixture(
     mintedId,
     views,
     native: { nodeRuns: h.persistence.nodeRuns, nodeExecution: h.persistence.nodeExecution },
-    observation,
     rows,
   }
 }
@@ -206,7 +187,6 @@ async function write(f: Fixture, purpose: Purpose, operation: Operation): Promis
     return view.nodeExecution.appendEvents({
       nodeRunId: f.runId,
       events: [{ ts: 75, kind: 'stderr', payload: 'original chunk', sessionId: 'old-1' }],
-      observations: [f.observation],
     })
   if (operation === 'retagSessionEpochs')
     return view.nodeExecution.retagSessionEpochs({
@@ -291,8 +271,6 @@ async function expectWrittenRows(f: Fixture, operation: Operation, result: unkno
     expect(result).toBeUndefined()
     expect(after.events).toHaveLength(3)
     expect(after.events[2]).toMatchObject({ ts: 75, kind: 'stderr', payload: 'original chunk' })
-    expect(after.observations).toHaveLength(1)
-    expect(JSON.parse(after.observations[0]!.evidenceJson)).toEqual(f.observation)
     expect(after.owners[0]?.updatedAt).toBe(75)
   } else if (operation === 'retagSessionEpochs') {
     expect(result).toBeUndefined()
@@ -433,7 +411,6 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
       const chunk = {
         nodeRunId: f.runId,
         events: [{ ts: 303, kind: 'stderr' as const, payload: 'traced chunk' }],
-        observations: [f.observation],
         executionContext: f.context,
       }
       const epochs = {
@@ -527,8 +504,7 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
       expect(currentTaskExecutionContext()).toBeUndefined()
       const second = {
         nodeRunId: f.runId,
-        events: [],
-        observations: [f.observation],
+        events: [{ ts: 402, kind: 'stderr' as const, payload: 'explicit chunk' }],
         executionContext: f.context,
       }
       await runWithTaskExecutionContext(other.context, async () => {
@@ -545,8 +521,7 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
           }
           const chunk = {
             nodeRunId: f.runId,
-            events: [],
-            observations: [f.observation],
+            events: [{ ts: 404, kind: 'stderr' as const, payload: environment }],
             executionContext: f.context,
           }
           const output = {
@@ -638,7 +613,10 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
       for (const call of calls) expect(call.context).toBe(f.context)
       const after = await f.rows()
       expect(after.runs.find((row) => row.id === f.runId)?.promptText).toBe('explicit without ALS')
-      expect(after.observations).toHaveLength(3)
+      // The three explicit-context appendEvents chunks (appendEvent writes text rows at ts 402).
+      expect(
+        after.events.filter((row) => row.kind === 'stderr' && (row.ts === 402 || row.ts === 404)),
+      ).toHaveLength(3)
       const expectedWrites = purpose === 'preparation' ? 20 : 18
       expect(after.owners[0]?.revision).toBe(before.owners[0]!.revision + expectedWrites)
       expect(await other.rows()).toEqual(otherBefore)
@@ -646,36 +624,6 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
       expectOriginalWork(f, 2)
       expectOriginalWork(other, 2)
     }, 15_000)
-
-    test(`${purpose}: observation-only is a real write and an empty replacement deletes`, async () => {
-      const f = await nodeFixture(harness.db, `${purpose}-observation-only`)
-      const before = await f.rows()
-      if (purpose === 'issuedResults') f.h.lose()
-      const view = f.views[purpose]
-      await view.nodeExecution.appendEvents({
-        nodeRunId: f.runId,
-        events: [],
-        observations: [f.observation],
-        executionContext: f.context,
-      })
-      const observed = await f.rows()
-      expect(observed.events).toEqual(before.events)
-      expect(observed.observations).toHaveLength(1)
-      expect(JSON.parse(observed.observations[0]!.evidenceJson)).toEqual(f.observation)
-      await view.nodeExecution.replaceOutputs({
-        nodeRunId: f.runId,
-        outputs: [],
-        executionContext: f.context,
-        now: 501,
-      })
-      const replaced = await f.rows()
-      expect(replaced.outputs).toEqual([])
-      expect(replaced.observations).toEqual(observed.observations)
-      expect(replaced.owners[0]?.revision).toBe(before.owners[0]!.revision + 2)
-      expect(replaced.owners[0]?.updatedAt).toBe(501)
-      expectConsume(f, purpose, 2)
-      expectOriginalWork(f)
-    })
 
     test(`${purpose}: original source-terminal and missing-node errors precede host consumption`, async () => {
       let fail = false
@@ -852,7 +800,6 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
         expect(await view.nodeRuns.loadEnvelopeNonce(f.runId)).toBe('original-envelope')
         expect(await view.nodeRuns.loadEnvelopeNonce('missing')).toBe('')
         await view.nodeExecution.upsertOutputs({ nodeRunId: f.runId, outputs: [] })
-        await view.nodeExecution.appendEvents({ nodeRunId: f.runId, events: [], observations: [] })
         await view.nodeExecution.appendEvents({ nodeRunId: f.runId, events: [] })
         await view.nodeExecution.retagSessionEpochs({
           nodeRunId: f.runId,
@@ -1000,7 +947,10 @@ describeEachProvider('RFC-370 selected native Task Node write purposes', (harnes
       })
       await view.replaceOutputs({ nodeRunId: 'missing', outputs: [] })
       await view.appendEvent({ nodeRunId: 'missing', ts: 1, kind: 'text', payload: 'ignored' })
-      await view.appendEvents({ nodeRunId: 'missing', events: [], observations: [f.observation] })
+      await view.appendEvents({
+        nodeRunId: 'missing',
+        events: [{ ts: 1, kind: 'text', payload: 'ignored' }],
+      })
       await view.retagSessionEpochs({
         nodeRunId: 'missing',
         supersededSessionIds: ['old-1'],

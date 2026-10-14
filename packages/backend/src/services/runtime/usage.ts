@@ -1,17 +1,14 @@
-// RFC-371 compatibility facade; the original numeric algorithm is owned by runtime-management.
+// RFC-371 v2 compatibility facade; the neutral metering contract is owned by runtime-management.
 export {
-  TOKEN_BUCKETS,
-  object,
-  nativeId,
-  readUsage,
-  common,
-  model,
-  scope,
-  normalizeUsageFrame,
-  createInvocationUsageCapture,
+  UsageAccumulator,
+  modelKey,
+  objectOf,
+  tokenCount,
 } from '@/modules/runtime-management/public/participants'
 export type {
   JsonObject,
-  RuntimeUsageContext,
-  RuntimeUsageFrame,
+  RuntimeUsageMeter,
+  RuntimeUsageMeterInput,
+  RuntimeUsageModel,
+  RuntimeUsageSnapshot,
 } from '@/modules/runtime-management/public/participants'

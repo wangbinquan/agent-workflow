@@ -83,9 +83,6 @@ export function bindNativeAgentInvocation(input: {
         workingDirectory: input.workingDirectory,
         environment,
         stdin: () => input.plan.stdin,
-        ...(participants?.observeNativeProcess === undefined
-          ? {}
-          : { observeNativeProcess: participants.observeNativeProcess }),
         ...(input.requireSpawnReceipt === undefined
           ? {}
           : { requireSpawnReceipt: input.requireSpawnReceipt }),
@@ -98,9 +95,6 @@ export function bindNativeAgentInvocation(input: {
               taskEffect: {
                 persistence: task.persistence,
                 nodeExecution: task.nodeExecution,
-                ...(task.observeNativeProcess === undefined
-                  ? {}
-                  : { observeNativeProcess: task.observeNativeProcess }),
                 argv: command(),
                 cwd: input.workingDirectory(),
                 // Preserve the exact original writer resource fingerprint.

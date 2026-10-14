@@ -10,8 +10,7 @@ import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/pu
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
-import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
-import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
+import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 // RFC-359 W5-T21b: construct the complete provider runtime, then use its real
@@ -265,10 +264,7 @@ export async function createEachProviderTaskExecution(
           workgroupTurns,
           dynamicWorkflow,
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-          observationInvocations: composeLocalInvocationObservations(
-            sqlite,
-            composeObservationUsageSource(sqlite),
-          ),
+          observationInvocations: composeRunObservationCalls(sqlite),
           runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
           nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
           repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
@@ -403,10 +399,7 @@ export async function createEachProviderTaskExecution(
           ? {}
           : { isolationWorkspaces: options.isolationWorkspaces }),
         workspacePresence,
-        observationInvocations: composeLocalInvocationObservations(
-          db,
-          composeObservationUsageSource(db),
-        ),
+        observationInvocations: composeRunObservationCalls(db),
         runtimeRegistry: composeRuntimeRegistryOperations(db),
         nodeRunRuntime: composeNodeRunRuntimePersistence(db),
         persistence,

@@ -6,8 +6,7 @@ import { workflows, tasks, nodeRuns, nodeRunOutputs } from '../src/db/schema'
 import { eq } from 'drizzle-orm'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { composeLocalInvocationObservations } from '../src/modules/run-observability/composition/localInvocations'
-import { composeObservationUsageSource } from '../src/modules/task-execution/composition/observationUsageSource'
+import { composeRunObservationCalls } from '../src/modules/run-observability/composition/runObservation'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { runSelectedTaskAgent } from '../src/modules/task-execution/composition/taskAgentRun'
@@ -146,10 +145,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime: 'opencode',
         persistence: createTaskExecutionPersistence(db),
-        observationInvocations: composeLocalInvocationObservations(
-          db,
-          composeObservationUsageSource(db),
-        ),
+        observationInvocations: composeRunObservationCalls(db),
         memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
         runtimeRegistry: composeRuntimeRegistryOperations(db),
         runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
@@ -221,9 +217,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         materialRef: 'material:selected-v2',
         declared: emptyDeclaredManifest(),
         evidenceCapabilities: {
-          usageNormalizer: false,
-          nativeUsageCapture: false,
-          spanCapture: false,
+          usageMeter: true,
           sessionCapture: false,
           inventory: false,
           finalEvents: false,
@@ -442,10 +436,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime,
         persistence: createTaskExecutionPersistence(db),
-        observationInvocations: composeLocalInvocationObservations(
-          db,
-          composeObservationUsageSource(db),
-        ),
+        observationInvocations: composeRunObservationCalls(db),
         memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
         runtimeRegistry: composeRuntimeRegistryOperations(db),
         runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),

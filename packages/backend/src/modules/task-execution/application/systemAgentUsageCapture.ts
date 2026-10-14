@@ -1,80 +1,65 @@
-import type { ObservationNativeProcessFact } from '@agent-workflow/shared'
+// RFC-371 v2 §4 — usage of one system-agent call: accepted before spawn,
+// metered from stdout by the selected driver, written in place at most every
+// few seconds, finished once with the native summary when the driver has one.
+
 import type { AgentInvocationBinding } from './ports/agentInvocation'
 import type { SystemAgentObservationRun } from './ports/systemAgentObservation'
-import { createInvocationUsageCapture } from '@/modules/runtime-management/public/participants'
+import { createCallUsageWriter, type ObservedCallStatus } from './callUsageWriter'
 import type { Logger } from '@/util/log'
 
-/** Numeric capture is independent of text retention and reuses the original full native reader. */
 export function createSystemAgentUsageCapture(input: {
   readonly run: SystemAgentObservationRun
   readonly invocation: AgentInvocationBinding
   readonly resumeSessionId?: string
   readonly log: Logger
+  readonly now?: () => number
 }) {
   const { run, invocation } = input
-  const capture = createInvocationUsageCapture({
-    invocationId: run.invocationId,
-    taskId: run.taskId,
-    nodeRunId: run.nodeRunId,
-    agentId: run.agentId,
-    normalize: invocation.evidence.prepareUsageNormalizer?.() ?? invocation.protocol.normalizeUsage,
-    ...(input.resumeSessionId ? { resumeSessionId: input.resumeSessionId } : {}),
-    includeMeasurement: (row) => native?.includesRecord(row.recordId) ?? true,
+  const now = input.now ?? Date.now
+  const meterInput = { resumed: Boolean(input.resumeSessionId), configuredModel: null }
+  const writer = createCallUsageWriter({
+    meter:
+      invocation.evidence.prepareUsageMeter?.(meterInput) ??
+      invocation.protocol.usageMeter?.(meterInput),
+    write: (snapshot) => run.usage(snapshot),
+    log: input.log,
+    callId: run.callId,
+    now,
   })
-  // Never fall back to the old capped native snapshot for a System invocation.
-  const native = run.durableOwner
-    ? invocation.evidence.prepareNativeUsageCapture?.({
-        invocationId: run.invocationId,
-        taskId: run.taskId,
-        nodeRunId: run.nodeRunId,
-        agentId: run.agentId,
-        ...(input.resumeSessionId ? { resumeSessionId: input.resumeSessionId } : {}),
-        nextRevision: capture.nextRevision,
-        durableOwner: run.durableOwner,
-      })
-    : undefined
   let accepted = false
-  const safely = async (operation: () => Promise<void>) => {
-    try {
-      await operation()
-    } catch {
-      input.log.warn('system-agent-usage-source-remains-pending', {
-        invocationId: run.invocationId,
-      })
-    }
-  }
+  let finished = false
   return {
+    /** Runs immediately before spawn: an unrecorded process never starts. */
     async beforeStart() {
-      await run.accept(
-        native
-          ? { nativeCaptureContract: native.contract, nativeCaptureSource: native.nativeSource }
-          : {},
-      )
+      await run.accept()
       accepted = true
-      if (native?.beginDurable) await safely(() => native.beginDurable!())
       await invocation.lifecycle.beforeStart?.()
     },
-    async process(fact: ObservationNativeProcessFact) {
-      await run.process(fact)
-      if (!accepted) return
-      if (native?.recordProcess) await native.recordProcess(fact)
+    async line(line: string) {
+      if (!accepted || finished) return
+      writer.observeLine(line)
+      await writer.flush()
     },
-    async root(sessionId: string, previous?: string) {
-      await safely(() => run.root(sessionId, previous))
-    },
-    async line(line: string, sessionId: string | null) {
-      if (!accepted) return
-      const frame = capture(line, sessionId, Date.now())
-      if (frame) await safely(() => run.append([frame]))
-    },
+    /** End of one stdout chunk. */
     async flush() {
-      if (accepted) await safely(() => run.reconcile())
+      if (accepted && !finished) await writer.flush()
     },
-    async finish(sessionId: string | null) {
-      if (!accepted) return
-      await safely(() => run.append(capture.retryModels(Date.now())))
-      if (native?.finishDurable) await safely(() => run.finalize(native, sessionId))
-      else await safely(() => run.reconcile())
+    async finish(status: ObservedCallStatus) {
+      if (!accepted || finished) return
+      finished = true
+      try {
+        await run.finish({ status, endedAt: now(), usage: writer.final() })
+      } catch {
+        input.log.warn('system-agent-call-finish-failed', { callId: run.callId })
+      }
     },
   }
+}
+
+/** Map a system run result onto the recorded call status. */
+export function systemCallStatus(status: string | undefined): ObservedCallStatus {
+  if (status === 'ok') return 'done'
+  if (status === 'aborted') return 'canceled'
+  if (status === 'unreaped') return 'interrupted'
+  return 'failed'
 }

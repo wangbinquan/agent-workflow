@@ -1,160 +1,107 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  exists,
-  gt,
-  gte,
-  inArray,
-  isNull,
-  lt,
-  or,
-  sql,
-} from 'drizzle-orm'
-import type { ObservationTaskPageQuery } from '@agent-workflow/shared'
+// RFC-371 v2 §2/§5 — task facts offered to run-observability. Task execution is
+// the only owner of task visibility; observation never reads these tables.
+
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskExecutionObservationSources, taskRepos, tasks } from '@/db/schema'
+import {
+  taskVisibilityCondition,
+  taskVisibilitySubjectOf,
+  visibleTaskIdsFor,
+  type ProviderNeutralDatabase,
+} from '@/db/query'
+import { nodeRuns, tasks } from '@/db/schema'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { sha256Hex } from '@/util/hash'
-import type { TaskObservationFactsQuery } from '../public/queries'
-import { createObservationSpanSources } from './observationSpanSources'
-import { createObservationNativeScopes } from './observationNativeScopes'
-import { observationAttemptKinds } from './taskObservationKinds'
-import { identityPacketPage } from '@/platform/persistence/identityPackets'
+import type {
+  ObservationTaskFactsPort,
+  ObservedTaskFact,
+} from '@/modules/run-observability/public/queries'
+
+const MAX_IDS = 500
+const MAX_DURATIONS = 100_000
+const MAX_ATTEMPTS = 5_000
 
 const canRead = (actor: Actor) =>
   actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
-const scope = (query: ObservationTaskPageQuery) => {
-  const filters = [query.q, query.status, query.repository, query.workflow]
-  return JSON.stringify([
-    query.from,
-    query.to,
-    query.timezone,
-    ...(filters.some((value) => value !== undefined) ? [sha256Hex(JSON.stringify(filters))] : []),
-  ])
-}
-function continuation(query: ObservationTaskPageQuery): [number, string] | null {
-  if (query.after === undefined) return null
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(query.after)
-  } catch {
-    throw new RangeError('Invalid task observation cursor')
-  }
-  if (
-    !Array.isArray(parsed) ||
-    parsed.length !== 4 ||
-    parsed[0] !== 1 ||
-    parsed[1] !== scope(query) ||
-    !Number.isSafeInteger(parsed[2]) ||
-    typeof parsed[3] !== 'string' ||
-    !parsed[3]
-  )
-    throw new RangeError('Task observation cursor changed window')
-  return [parsed[2] as number, parsed[3]]
-}
 
-function attemptContinuation(taskId: string, cursor: string | undefined): string | undefined {
-  if (cursor === undefined) return undefined
-  let value: unknown
-  try {
-    value = JSON.parse(cursor)
-  } catch {
-    throw new RangeError('Invalid observation attempt cursor')
-  }
-  if (
-    !Array.isArray(value) ||
-    value.length !== 3 ||
-    value[0] !== 1 ||
-    value[1] !== taskId ||
-    typeof value[2] !== 'string' ||
-    !value[2]
-  )
-    throw new RangeError('Observation attempt cursor changed task')
-  return value[2]
-}
-function attemptFields() {
+// Built per query: schema columns are provider projections and must not be captured at load time.
+function taskFields() {
   return {
-    id: nodeRuns.id,
-    nodeId: nodeRuns.nodeId,
-    status: nodeRuns.status,
-    startedAt: nodeRuns.startedAt,
-    finishedAt: nodeRuns.finishedAt,
-    retryIndex: nodeRuns.retryIndex,
-    iteration: nodeRuns.iteration,
-    wgRound: nodeRuns.wgRound,
-    reviewIteration: nodeRuns.reviewIteration,
-    rerunCause: nodeRuns.rerunCause,
-  }
-}
-
-/** Bind to the snapshot handle supplied by bootstrap; do not open another transaction. */
-export function createTaskObservationFacts(
-  db: ProviderNeutralDatabase,
-  projectionAttemptIds?: readonly string[],
-): TaskObservationFactsQuery {
-  const taskFields = {
     id: tasks.id,
     name: tasks.name,
     status: tasks.status,
-    errorSummary: tasks.errorSummary,
-    parentTaskId: tasks.parentTaskId,
     startedAt: tasks.startedAt,
     finishedAt: tasks.finishedAt,
     runningMs: tasks.runningMs,
-    runningSince: tasks.runningSince,
   }
-  const visible = (actor: Actor) =>
-    taskVisibilityCondition(db, {
-      userId: actor.user.id,
-      canReadAllTasks: actor.permissions.has('tasks:read:all'),
-    })
+}
+
+function fact(row: {
+  readonly id: string
+  readonly name: string
+  readonly status: ObservedTaskFact['status']
+  readonly startedAt: number
+  readonly finishedAt: number | null
+  readonly runningMs: number
+}): ObservedTaskFact {
   return {
-    nativeScopes: createObservationNativeScopes(db),
-    spanSources: createObservationSpanSources(db, projectionAttemptIds),
-    async sourceBacklog(taskIds) {
-      if (taskIds.length > 200)
-        throw new RangeError('Observation source cohort exceeds read budget')
-      if (!taskIds.length) return []
-      const source = taskExecutionObservationSources
-      const rows = await db
-        .select({
-          taskId: nodeRuns.taskId,
-          retainedRecords: count(),
-          pendingRecords: sql`sum(case when ${source.pending} then 1 else 0 end)`,
-        })
-        .from(nodeRuns)
-        .innerJoin(
-          source,
-          and(eq(source.nodeRunId, nodeRuns.id), eq(source.taskId, nodeRuns.taskId)),
-        )
-        .where(inArray(nodeRuns.taskId, [...new Set(taskIds)]))
-        .groupBy(nodeRuns.taskId)
-        .all()
-      const byTask = new Map(rows.map((row) => [row.taskId, row]))
-      return [...new Set(taskIds)].map((taskId) => {
-        const row = byTask.get(taskId)
-        return {
-          taskId,
-          retainedRecords: row
-            ? engineOf(db).numericFromRawRow(row.retainedRecords, 'retainedRecords')
-            : 0,
-          pendingRecords: row
-            ? engineOf(db).numericFromRawRow(row.pendingRecords, 'pendingRecords')
-            : 0,
-        }
-      })
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    startedAt: Number(row.startedAt),
+    finishedAt: row.finishedAt === null ? null : Number(row.finishedAt),
+    runningMs: Number(row.runningMs),
+  }
+}
+
+function decodeAfter(after: string | undefined): [number, string] | null {
+  if (after === undefined) return null
+  try {
+    const value: unknown = JSON.parse(Buffer.from(after, 'base64url').toString('utf8'))
+    if (
+      Array.isArray(value) &&
+      value.length === 2 &&
+      Number.isSafeInteger(value[0]) &&
+      typeof value[1] === 'string'
+    )
+      return [value[0] as number, value[1]]
+  } catch {
+    /* fall through */
+  }
+  throw new RangeError('invalid-cursor')
+}
+
+export function createTaskObservationFacts(db: ProviderNeutralDatabase): ObservationTaskFactsPort {
+  const visible = (actor: Actor) => taskVisibilityCondition(db, taskVisibilitySubjectOf(actor))
+  const bounded = (ids: readonly string[]) => {
+    if (ids.length > MAX_IDS) throw new RangeError('task id batch exceeds 500')
+    return [...new Set(ids)]
+  }
+  return {
+    async visibleTaskIds(actor, ids) {
+      const unique = bounded(ids)
+      if (!unique.length || !canRead(actor)) return []
+      // The single task authorization predicate (db/query.ts).
+      return [...(await visibleTaskIdsFor(db, taskVisibilitySubjectOf(actor), unique))]
     },
-    async list({ actor, query }) {
-      const after = continuation(query)
-      if (!canRead(actor)) return { items: [], positions: [], nextCursor: null }
+
+    async summaries(ids) {
+      const unique = bounded(ids)
+      if (!unique.length) return []
+      const rows = await db
+        .select(taskFields())
+        .from(tasks)
+        .where(and(inArray(tasks.id, unique), isNull(tasks.deletedAt)))
+        .all()
+      return rows.map(fact)
+    },
+
+    async page(actor, query) {
+      if (!canRead(actor)) return { items: [], nextCursor: null }
+      const after = decodeAfter(query.after)
       const engine = engineOf(db)
       const search = query.q === undefined ? null : engine.likeEscape(query.q)
       const rows = await db
-        .select(taskFields)
+        .select(taskFields())
         .from(tasks)
         .where(
           and(
@@ -163,33 +110,14 @@ export function createTaskObservationFacts(
             eq(tasks.catalogVisibility, 'public'),
             gte(tasks.startedAt, query.from),
             lt(tasks.startedAt, query.to),
-            query.status === undefined ? undefined : eq(tasks.status, query.status),
-            query.workflow === undefined ? undefined : eq(tasks.workflowId, query.workflow),
+            query.status === undefined
+              ? undefined
+              : eq(tasks.status, query.status as ObservedTaskFact['status']),
             search === null
               ? undefined
               : or(
                   engine.likeCaseInsensitive(tasks.name, search.pattern, search.escape),
                   engine.likeCaseInsensitive(tasks.id, search.pattern, search.escape),
-                ),
-            query.repository === undefined
-              ? undefined
-              : or(
-                  eq(tasks.repoPath, query.repository),
-                  eq(tasks.repoUrl, query.repository),
-                  exists(
-                    db
-                      .select({ id: taskRepos.taskId })
-                      .from(taskRepos)
-                      .where(
-                        and(
-                          eq(taskRepos.taskId, tasks.id),
-                          or(
-                            eq(taskRepos.repoPath, query.repository),
-                            eq(taskRepos.repoUrl, query.repository),
-                          ),
-                        ),
-                      ),
-                  ),
                 ),
             after === null
               ? undefined
@@ -202,74 +130,59 @@ export function createTaskObservationFacts(
         .orderBy(desc(tasks.startedAt), desc(tasks.id))
         .limit(query.limit + 1)
         .all()
-      const items = rows.slice(0, query.limit),
-        last = items.at(-1)
+      const items = rows.slice(0, query.limit).map(fact)
+      const last = items.at(-1)
       return {
         items,
-        positions: items.map((task) => ({
-          taskId: task.id,
-          cursor: JSON.stringify([1, scope(query), task.startedAt, task.id]),
-        })),
         nextCursor:
           rows.length > query.limit && last
-            ? JSON.stringify([1, scope(query), last.startedAt, last.id])
+            ? Buffer.from(JSON.stringify([last.startedAt, last.id])).toString('base64url')
             : null,
       }
     },
-    async get(actor, taskId) {
-      if (!canRead(actor)) return null
-      return (
-        (await db
-          .select(taskFields)
-          .from(tasks)
-          .where(and(eq(tasks.id, taskId), visible(actor), isNull(tasks.deletedAt)))
-          .get()) ?? null
+
+    async counts(actor, window) {
+      if (!canRead(actor)) return { statuses: {}, durations: [] }
+      const scope = and(
+        visible(actor),
+        isNull(tasks.deletedAt),
+        eq(tasks.catalogVisibility, 'public'),
+        gte(tasks.startedAt, window.from),
+        lt(tasks.startedAt, window.to),
       )
-    },
-    async attemptPage(taskId, page) {
-      if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 1000)
-        throw new RangeError('Attempt page size must be 1 through 1000')
-      const after = attemptContinuation(taskId, page.after)
-      const rows = await identityPacketPage({
-        ids: projectionAttemptIds,
-        limit: page.limit,
-        read: (ids, limit) =>
-          db
-            .select(attemptFields())
-            .from(nodeRuns)
-            .where(
-              and(
-                eq(nodeRuns.taskId, taskId),
-                ids === undefined ? undefined : inArray(nodeRuns.id, [...ids]),
-                after === undefined ? undefined : gt(nodeRuns.id, after),
-              ),
-            )
-            .orderBy(asc(nodeRuns.id))
-            .limit(limit)
-            .all(),
-        key: (row) => row.id,
-      })
-      const items = rows.slice(0, page.limit),
-        last = items.at(-1)
-      return {
-        items: await observationAttemptKinds(db, taskId, items),
-        nextCursor: rows.length > page.limit && last ? JSON.stringify([1, taskId, last.id]) : null,
-      }
-    },
-    async attempts(taskId, limit) {
-      if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
-        throw new RangeError('Attempt limit must be 1 through 1000')
       const rows = await db
-        .select(attemptFields())
+        .select({ status: tasks.status, startedAt: tasks.startedAt, finishedAt: tasks.finishedAt })
+        .from(tasks)
+        .where(scope)
+        .all()
+      const statuses: Record<string, number> = {}
+      const durations: number[] = []
+      for (const row of rows) {
+        statuses[row.status] = (statuses[row.status] ?? 0) + 1
+        if (
+          (row.status === 'done' || row.status === 'failed' || row.status === 'canceled') &&
+          row.finishedAt !== null &&
+          durations.length < MAX_DURATIONS
+        )
+          durations.push(Math.max(0, Number(row.finishedAt) - Number(row.startedAt)))
+      }
+      durations.sort((a, b) => a - b)
+      return { statuses, durations }
+    },
+
+    async attempts(taskId) {
+      const rows = await db
+        .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId, retryIndex: nodeRuns.retryIndex })
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .orderBy(asc(nodeRuns.id))
-        .limit(limit + 1)
+        .limit(MAX_ATTEMPTS)
         .all()
-      return {
-        items: await observationAttemptKinds(db, taskId, rows.slice(0, limit)),
-        truncated: rows.length > limit,
-      }
+      return rows.map((row) => ({
+        nodeRunId: row.id,
+        nodeId: row.nodeId,
+        retryIndex: Number(row.retryIndex),
+      }))
     },
   }
 }

@@ -48,7 +48,7 @@ import type {
   TriggerContext,
 } from '@agent-workflow/shared'
 
-import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
+import type { CallObservations } from '@/modules/run-observability/public/participants'
 
 import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
 
@@ -322,9 +322,10 @@ export interface RunNodeOptions {
    * the runner boundary. */
   persistence: TaskExecutionPersistence
   /** Bootstrap-selected durable accounting; no deployment inference in the runner. */
-  observationInvocations: ObservationInvocationParticipant
+  observationInvocations: CallObservations
   runtimeObservationIdentity?: RuntimeObservationIdentity
-  observationPurpose?: 'task' | 'system' | 'playground' | 'memory'
+  /** Platform work inside a task (merge / commit) records as a system call of this kind. */
+  observationSystemKind?: string
   /** Bootstrap-selected runtime registry operations. */
   runtimeRegistry: Pick<RuntimeExecutionQueries, 'resolveAgentRuntime'>
   /** Bootstrap-selected durable ownership for native runtime conversations. */

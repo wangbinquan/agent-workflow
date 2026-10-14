@@ -40,7 +40,6 @@ import type {
   ClarifyQuestion,
   ClarifyTruncationWarning,
   InventorySnapshot,
-  ObservationCapturedUsage,
 } from '@agent-workflow/shared'
 import {
   DAEMON_SHUTDOWN_ABORT_REASON,
@@ -56,7 +55,8 @@ import {
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 
-import { createInvocationUsageCapture } from '@/services/runtime/usage'
+import { callStatusOfNodeRun, createCallUsageWriter } from './callUsageWriter'
+import type { RuntimeUsageSnapshot } from '@/modules/runtime-management/public/participants'
 
 import {
   createProcessEffectAttemptObserver,
@@ -67,7 +67,6 @@ import type {
   ExecutionStartReceipt,
 } from '@/modules/task-execution/application/ports/executionEffect'
 
-import { finalizeNativeUsageInvocation } from '@/modules/task-execution/public/participants'
 import { createLogger } from '@/util/log'
 import {
   BRANCH_MARKER_MALFORMED_PREFIX,
@@ -104,10 +103,6 @@ import { renderUserPrompt } from '@/services/protocol'
 import { type RuntimeKind } from '@/services/runtime'
 import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
 
-import type {
-  NativeSpanCapture,
-  NativeSpanRootBinding,
-} from '@/modules/runtime-management/public/participants'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 
 import type {
@@ -190,16 +185,6 @@ export async function runNode(
   const log = opts.log ?? createLogger('runner')
   // A resumed/follow-up process is a new invocation even when nodeRunId is reused.
   const invocationId = ulid()
-  const durableNativeUsageOwner = opts.persistence.nativeUsage?.forInvocation({
-    invocationId,
-    taskId: opts.taskId,
-    nodeRunId: opts.nodeRunId,
-    ...(opts.runtimeObservationIdentity
-      ? {
-          runtime: { ...opts.runtimeObservationIdentity, protocol: opts.runtime ?? 'opencode' },
-        }
-      : {}),
-  })
   const materialWorkspace = purpose.workspace
   const gitControlObservation: AgentWorkspaceGitControlObservation = purpose.gitControlObservation
   // RFC-200: this persisted value is the single source for BOTH prompt emit
@@ -661,9 +646,6 @@ export async function runNode(
             nodeId: opts.nodeId,
             currentNodeRunId: opts.nodeRunId,
             leaseNonceDigest: runtimeLeaseNonceDigest,
-            ...(runtime === 'opencode' && durableNativeUsageOwner?.rootCollection
-              ? { nativeInvocationId: invocationId }
-              : {}),
           }),
         )
         runtimeLeaseToken = claimedToken
@@ -871,6 +853,35 @@ export async function runNode(
   let aborted = false
   let timedOut = false
   const graceMs = opts.killEscalationGraceMs ?? KILL_ESCALATION_GRACE_MS
+  // RFC-371 v2 §4 — one call row per process: accepted before spawn, metered
+  // by the selected driver, written in place at most every few seconds, ended
+  // once with the node-run's final status.
+  let callAccepted = false
+  let callFinished = false
+  let finalUsage: RuntimeUsageSnapshot | null = null
+  const meterInput = {
+    resumed: Boolean(effectiveResumeSessionId),
+    configuredModel: opts.runtimeParams?.model ? opts.runtimeParams.model : null,
+  }
+  const usageWriter = createCallUsageWriter({
+    meter: materialEvidence.prepareUsageMeter?.(meterInput) ?? protocol.usageMeter?.(meterInput),
+    write: (snapshot) => opts.observationInvocations.usage(invocationId, snapshot),
+    log,
+    callId: invocationId,
+  })
+  const finishCall = async (status: string, endedAt: number) => {
+    if (!callAccepted || callFinished) return
+    callFinished = true
+    try {
+      await opts.observationInvocations.finish(invocationId, {
+        status: callStatusOfNodeRun(status),
+        endedAt,
+        usage: finalUsage ?? usageWriter.snapshot(),
+      })
+    } catch {
+      log.warn('node-run-call-finish-failed', { nodeRunId: opts.nodeRunId })
+    }
+  }
   try {
     // 6. Stream stdout + stderr into node_run_events.
 
@@ -985,60 +996,6 @@ export async function runNode(
     }
     const stdoutEvents = makeEventBuffer('node-run-event/stdout')
     const stderrEvents = makeEventBuffer('node-run-event/stderr')
-    let localObservationAccepted = false
-    const usageNormalizer = materialEvidence.prepareUsageNormalizer?.() ?? protocol.normalizeUsage
-    const captureUsage = createInvocationUsageCapture({
-      ...(usageNormalizer ? { normalize: usageNormalizer } : {}),
-      invocationId,
-      taskId: opts.taskId,
-      nodeRunId: opts.nodeRunId,
-      agentId: opts.agent.id,
-      resumeSessionId: effectiveResumeSessionId,
-      includeMeasurement: (row) => nativeUsageCapture?.includesRecord(row.recordId) ?? true,
-    })
-    const nativeUsageCapture = materialEvidence.prepareNativeUsageCapture?.({
-      invocationId,
-      taskId: opts.taskId,
-      nodeRunId: opts.nodeRunId,
-      agentId: opts.agent.id,
-      resumeSessionId: effectiveResumeSessionId,
-      nextRevision: captureUsage.nextRevision,
-      ...(durableNativeUsageOwner ? { durableOwner: durableNativeUsageOwner } : {}),
-    })
-    const preparedSpans = materialEvidence.prepareSpanCapture?.({ invocationId })
-    let nativeSpanCapture: NativeSpanCapture | undefined
-    let observationSpawnedAt: number | null = null
-    const observationRoots: NativeSpanRootBinding[] = []
-    const bindObservationRoot = (rootSessionId: string) => {
-      if (!nativeSpanCapture) return
-      const epoch = nativeSessionEpochIds.length - 1
-      const binding: NativeSpanRootBinding = {
-        rootSessionId,
-        epoch,
-        mode:
-          epoch === 0 ? (effectiveResumeSessionId === rootSessionId ? 'resume' : 'fresh') : 'reset',
-        sourceNamespace: nativeSpanCapture.sourceNamespace,
-        originalRootAccepted: true,
-        spawnedAt: observationSpawnedAt,
-      }
-      observationRoots.push(binding)
-      nativeSpanCapture.bindRoot(binding)
-    }
-    const flushSpanFacts = async () => {
-      const spanFacts = nativeSpanCapture?.flush(Date.now()) ?? []
-      if (!spanFacts.length) return
-      try {
-        await persistRunnerWrite('node-run-observation/spans', () =>
-          selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvents({
-            nodeRunId: opts.nodeRunId,
-            events: [],
-            observations: spanFacts,
-          }),
-        )
-      } catch {
-        log.warn('node-run-observation-span-write-failed', { nodeRunId: opts.nodeRunId })
-      }
-    }
     /** 抛错前把已缓冲的取证事件写下去——它们恰恰在失败时最重要。冲刷本身再失败也不能
      *  盖住原始错误（那才是这次运行失败的原因）。 */
     const flushEventsBeforeThrow = async (): Promise<void> => {
@@ -1187,16 +1144,12 @@ export async function runNode(
                     nodeId: opts.nodeId,
                     currentNodeRunId: opts.nodeRunId,
                     leaseNonceDigest: runtimeLeaseNonceDigest,
-                    ...(runtime === 'opencode' && durableNativeUsageOwner?.rootCollection
-                      ? { nativeInvocationId: invocationId }
-                      : {}),
                   }),
                 )
               } else if (runtimeLeaseToken.sessionId !== sessionId) {
                 throw new Error('runtime returned a different native session id')
               }
               nativeSessionEpochIds.push(nativeSessionId)
-              bindObservationRoot(nativeSessionId)
             } else if (sessionId !== ev.sessionId) {
               if (pendingConversationReset === undefined) {
                 throw new Error('runtime changed native session id without a conversation reset')
@@ -1221,7 +1174,6 @@ export async function runNode(
               runtimeLeaseInvalidatedByReset = false
               sessionId = nextSessionId
               nativeSessionEpochIds.push(nextSessionId)
-              bindObservationRoot(nextSessionId)
               pendingConversationReset = undefined
             }
           }
@@ -1307,18 +1259,7 @@ export async function runNode(
         // stdout 行都解析不出它，而 `node_run_events.kind` 的 enum 里也没有它。
         // 读进局部常量是必要的：`kind` 是可变属性，窄化跨不进下面的延迟回调。
         const persistedKind: PersistedEventKind = ev.kind === 'startup_inventory' ? 'text' : ev.kind
-        if (nativeSpanCapture && preparedSpans && sessionId) {
-          try {
-            const raw: unknown = JSON.parse(ev.rawLine)
-            for (const span of preparedSpans.normalize(raw, sessionId))
-              nativeSpanCapture.observe(span, sessionId, nativeSessionEpochIds.length - 1)
-          } catch {
-            log.warn('node-run-observation-span-normalize-failed', { nodeRunId: opts.nodeRunId })
-          }
-        }
-        const observation = localObservationAccepted
-          ? captureUsage(ev.rawLine, evtSessionId, Date.now())
-          : undefined
+        if (callAccepted) usageWriter.observeLine(ev.rawLine)
         stdoutEvents.push({
           nodeRunId: opts.nodeRunId,
           ts,
@@ -1326,7 +1267,6 @@ export async function runNode(
           payload: ev.rawLine,
           sessionId: evtSessionId,
           parentSessionId: null,
-          ...(observation ? { observation } : {}),
         })
         broadcastParentRunning()
       } else {
@@ -1434,9 +1374,6 @@ export async function runNode(
         persistence: taskEffects,
         nodeExecution: () => selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults'),
         readOnlyWorkspace: () => opts.gitMutationPolicy === 'read-only',
-        ...(nativeUsageCapture?.recordProcess
-          ? { observeNativeProcess: nativeUsageCapture.recordProcess }
-          : {}),
       }),
     )
     processEffect = createProcessEffectAttemptObserver({
@@ -1457,63 +1394,22 @@ export async function runNode(
       ...(opts.signal !== undefined ? { abortSignal: opts.signal } : {}),
       beforeStart: async () => {
         await activeProcessEffect?.beforeSpawn()
-        const accepted = await opts.observationInvocations.accept({
-          invocationId,
+        await opts.observationInvocations.accept({
+          id: invocationId,
+          purpose: opts.observationSystemKind ? 'system' : 'task',
           taskId: opts.taskId,
           nodeRunId: opts.nodeRunId,
+          systemKind: opts.observationSystemKind ?? null,
           agentId: opts.agent.id,
-          agentRevision: opts.agent.updatedAt,
-          purpose: opts.observationPurpose ?? 'task',
-          ...(preparedSpans && opts.observationInvocations.spanOwners
-            ? {
-                spanCaptureContract: preparedSpans.contract,
-                spanCaptureSource: preparedSpans.sourceNamespace,
-              }
-            : {}),
-          ...(nativeUsageCapture
-            ? {
-                nativeCaptureContract: nativeUsageCapture.contract,
-                nativeCaptureSource: nativeUsageCapture.nativeSource,
-              }
-            : {}),
-          runtime: opts.runtimeObservationIdentity
-            ? { ...opts.runtimeObservationIdentity, protocol: runtime }
-            : null,
+          agentName: opts.agent.name,
+          runtimeId: opts.runtimeObservationIdentity?.registrationId ?? null,
+          runtimeName: opts.runtimeObservationIdentity?.acceptedName ?? null,
+          protocol: runtime,
+          startedAt: Date.now(),
         })
-        localObservationAccepted = accepted.authority.kind === 'local'
-        if (localObservationAccepted) {
-          try {
-            if (nativeUsageCapture?.beginDurable) await nativeUsageCapture.beginDurable()
-            else nativeUsageCapture?.begin()
-          } catch {
-            log.warn('node-run-observation-baseline-failed', { nodeRunId: opts.nodeRunId })
-          }
-          if (
-            preparedSpans &&
-            accepted.spanCaptureContract === preparedSpans.contract &&
-            accepted.spanCaptureSource === preparedSpans.sourceNamespace
-          ) {
-            try {
-              nativeSpanCapture = preparedSpans.create({
-                accepted,
-                ...(effectiveResumeSessionId ? { resumeSessionId: effectiveResumeSessionId } : {}),
-                lookupOwners: (query) =>
-                  opts.observationInvocations.spanOwners?.({ invocationId, ...query }) ??
-                  Promise.resolve({
-                    owners: [],
-                    complete: false,
-                    issues: ['native-span-owner-source-unavailable'],
-                  }),
-              })
-              await nativeSpanCapture.begin()
-            } catch {
-              log.warn('node-run-observation-span-baseline-failed', { nodeRunId: opts.nodeRunId })
-            }
-          }
-        }
+        callAccepted = true
       },
       onStarted: async (receipt: ExecutionStartReceipt) => {
-        observationSpawnedAt = receipt.startedAt
         // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside
         // pid so the stale-process reaper can match a live pid against THIS
         // specific binary, not a fuzzy regex.
@@ -1531,7 +1427,7 @@ export async function runNode(
         // RFC-314 D3：一个 chunk 的行投递完 ⇒ 合并成一条多行 INSERT 落库。
         onStdoutChunkEnd: async () => {
           await stdoutEvents.flush()
-          await flushSpanFacts()
+          await usageWriter.flush()
         },
         onStderrChunkEnd: () => stderrEvents.flush(),
         // impl-gate P2-B: the OLD runner applied settlePump to BOTH streams —
@@ -1548,79 +1444,9 @@ export async function runNode(
     // 之前。
     await stdoutEvents.flush()
     await stderrEvents.flush()
-    if (localObservationAccepted && runResult.outcome !== 'unreaped') {
-      const observedAt = Date.now()
-      let spanFacts: readonly ObservationCapturedUsage[] = [],
-        modelRevisions: readonly ObservationCapturedUsage[] = []
-      try {
-        spanFacts = nativeSpanCapture
-          ? await nativeSpanCapture.finish(
-              observationRoots,
-              observedAt,
-              runResult.drainTimedOut || runResult.pumpError || nativeSessionIdentityInvalidObserved
-                ? ['native-span-output-incomplete']
-                : [],
-            )
-          : []
-      } catch {
-        log.warn('node-run-observation-span-final-failed', { nodeRunId: opts.nodeRunId })
-      }
-      if (nativeUsageCapture?.finishDurable) {
-        try {
-          await finalizeNativeUsageInvocation({
-            capture: nativeUsageCapture,
-            observations: opts.observationInvocations,
-            invocationId,
-            nodeRunId: opts.nodeRunId,
-            rootSessionId: sessionId ?? effectiveResumeSessionId ?? null,
-          })
-        } catch (error) {
-          log.warn('node-run-observation-native-final-failed', {
-            nodeRunId: opts.nodeRunId,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-      }
-      try {
-        const observations = [
-          ...captureUsage.retryModels(observedAt),
-          ...(nativeUsageCapture?.finish(
-            sessionId ?? effectiveResumeSessionId ?? null,
-            observedAt,
-            runResult.drainTimedOut || runResult.pumpError ? ['native-output-incomplete'] : [],
-          ) ?? []),
-        ]
-        modelRevisions = observations
-      } catch (error) {
-        log.warn('node-run-observation-model-revision-failed', {
-          nodeRunId: opts.nodeRunId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-      // Reaping produces one atomic final write. Metadata and numeric readers
-      // fail independently; a failed write never replays either batch.
-      const observations = [...modelRevisions, ...spanFacts]
-      try {
-        if (observations.length)
-          await persistRunnerWrite('node-run-observation/model-revision', () =>
-            selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvents({
-              nodeRunId: opts.nodeRunId,
-              events: [],
-              observations,
-            }),
-          )
-      } catch (error) {
-        // Original numeric evidence remains durable and unpriced. A metadata
-        // repair failure cannot turn a successful process into a failed task.
-        if (modelRevisions.length)
-          log.warn('node-run-observation-model-revision-failed', {
-            nodeRunId: opts.nodeRunId,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        if (spanFacts.length)
-          log.warn('node-run-observation-span-final-failed', { nodeRunId: opts.nodeRunId })
-      }
-    }
+    const processEndedAt = Date.now()
+    // The native summary (delegated sub-agents) is read once the process drained.
+    if (callAccepted && runResult.outcome !== 'unreaped') finalUsage = usageWriter.final()
     let gitMutationViolation: string | undefined
     if (gitControlBefore !== undefined && runResult.outcome !== 'unreaped') {
       const gitControlAfter = await gitControlObservation.capture()
@@ -1690,6 +1516,7 @@ export async function runNode(
         reason: 'runtime-spawn-failed',
         extra: { finishedAt: Date.now(), errorMessage },
       })
+      await finishCall('failed', processEndedAt)
       return {
         status: 'failed',
         exitCode: null,
@@ -2345,6 +2172,7 @@ export async function runNode(
       status === 'canceled' && opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
         ? 'interrupted'
         : status
+    await finishCall(childUnkillable ? 'interrupted' : persistedStatus, processEndedAt)
     await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
       nodeRunId: opts.nodeRunId,
       to: persistedStatus,
@@ -2460,6 +2288,7 @@ export async function runNode(
     ? 'runtime-session-identity-invalid'
     : undefined
   const postSpawnErrorMessage = postSpawnFailureCode ?? 'runtime-spawn-failed'
+  await finishCall('failed', Date.now())
   try {
     await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
       nodeRunId: opts.nodeRunId,

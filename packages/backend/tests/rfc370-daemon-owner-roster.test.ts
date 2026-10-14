@@ -29,7 +29,8 @@ function calls(file: ts.SourceFile, root: ts.Node, name: string) {
   return result
 }
 
-test('the full daemon roster contains nineteen concrete owner selections, with no duplicate or omission', () => {
+// RFC-371 v2 retired the observation report owner; eighteen owners remain.
+test('the full daemon roster contains eighteen concrete owner selections, with no duplicate or omission', () => {
   const file = source('cli/daemonHostExecutionOwners.ts'),
     root = declared(file, 'bindDaemonHostOwners')
   const selected = calls(file, root, 'Object.freeze')[0]?.arguments[0]
@@ -45,7 +46,6 @@ test('the full daemon roster contains nineteen concrete owner selections, with n
     ['bindTaskExecutionHostOwner', 'input.task'],
     ['bindMaintenanceHostOwner', 'input.maintenance'],
     ['bindMcpDiagnosticsHostOwner', 'input.mcp'],
-    ['bindObservationReportsHostOwner', 'input.reports'],
     ['bindWebhookTerminalHostOwner', 'input.webhook'],
     ['bindAfterCommitHostOwner', 'input.afterCommit'],
     ['bindResourceLimitsHostOwner', 'input.limits'],
@@ -77,7 +77,7 @@ test('both daemon provider roots install that same selected roster on the actual
   }
 })
 
-test('the actual embedded root selects its Task/Intent/MCP and supplied webhook/report owners', () => {
+test('the actual embedded root selects its Task/Intent/MCP and supplied webhook owners', () => {
   const file = source('cli/embeddedHostExecutionApplication.ts'),
     root = declared(file, 'composeEmbeddedHostExecutionApplication')
   expect(calls(file, root, 'bindDaemonHostOwners')).toHaveLength(0)
@@ -86,9 +86,9 @@ test('the actual embedded root selects its Task/Intent/MCP and supplied webhook/
     'bindEmbeddedIntentHostOwner',
     'bindMcpDiagnosticsHostOwner',
     'bindWebhookTerminalHostOwner',
-    'bindObservationReportsHostOwner',
   ])
     expect(calls(file, root, name)).toHaveLength(1)
+  expect(calls(file, root, 'bindObservationReportsHostOwner')).toHaveLength(0)
   expect(calls(file, root, 'createDaemonProviderRuntimeSession')).toHaveLength(1)
   expect(calls(file, root, 'installDaemonHostExecutionSession')).toHaveLength(1)
   expect(calls(file, root, 'resumeDaemonResourcesForServing')).toHaveLength(1)

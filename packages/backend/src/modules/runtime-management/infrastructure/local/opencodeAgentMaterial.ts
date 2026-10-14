@@ -1,12 +1,4 @@
 import { compileLegacyNativeAgentMaterial } from './legacyAgentMaterialBinding'
-import {
-  createOpencodeUsageNormalizer,
-  opencodeUsageDatabasePath,
-} from '@/services/runtime/opencode/nativeUsage'
-import { createOpencodeNativeUsageCapture } from '../../composition/nativeUsageCapture'
-import { createOpencodeNativeSpanCapture } from '../../composition/nativeSpanCapture'
-import { sha256Hex } from '@/util/hash'
-import { normalizeOpencodeSpans } from '@/services/runtime/opencode/spanFacts'
 // RFC-111 PR-A — the opencode RuntimeDriver.
 //
 // PR-A slice A1 implements `parseEvent` (delegating to ./events). Later slices
@@ -346,24 +338,6 @@ export async function buildOpencodeNativeMaterial(ctx: AgentSpawnContext): Promi
 }
 
 export const opencodeLocalAgentMaterial = {
-  prepareSpanCapture: ({ env }) => {
-    const path = opencodeUsageDatabasePath(env)
-    return {
-      contract: 'runtime-span-facts-v1',
-      sourceNamespace: sha256Hex(JSON.stringify(['opencode-native-db', path])),
-      create: (identity) => createOpencodeNativeSpanCapture({ ...identity, path }),
-      normalize: normalizeOpencodeSpans,
-    }
-  },
-
-  prepareUsageNormalizer: ({ env }) => createOpencodeUsageNormalizer(env),
-
-  prepareNativeUsageCapture: ({ env, ...identity }) =>
-    createOpencodeNativeUsageCapture({
-      ...identity,
-      path: opencodeUsageDatabasePath(env),
-    }),
-
   async captureSessions(ctx: SessionCaptureContext): Promise<void> {
     await captureChildSessions({
       rootSessionId: ctx.rootSessionId,
@@ -388,9 +362,7 @@ export const opencodeLocalAgentMaterial = {
       context: ctx,
       buildNative: buildOpencodeNativeMaterial,
       evidenceCapabilities: {
-        usageNormalizer: true,
-        nativeUsageCapture: true,
-        spanCapture: true,
+        usageMeter: true,
         sessionCapture: true,
         inventory: true,
         finalEvents: true,
@@ -458,9 +430,6 @@ export const opencodeLocalAgentMaterial = {
 } satisfies Required<
   Pick<
     RuntimeDriver,
-    | 'prepareSpanCapture'
-    | 'prepareUsageNormalizer'
-    | 'prepareNativeUsageCapture'
     | 'captureSessions'
     | 'buildSpawn'
     | 'readInventory'

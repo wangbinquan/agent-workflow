@@ -108,13 +108,22 @@ export function memoryJournalOperations(
         ...(request.observationDemand ? { demand: request.observationDemand } : {}),
       })
       if (observation) {
-        state.observationIds.push(observation.invocationId)
-        await observation.accept({})
+        state.observationIds.push(observation.callId)
+        await observation.accept()
       }
       const response = (await input.respond?.(request, state.calls)) ?? {
         text: memoryEnvelope(request),
       }
-      await observation?.settle(response.status ?? 'ok', Date.now())
+      await observation?.finish({
+        status:
+          (response.status ?? 'ok') === 'ok'
+            ? 'done'
+            : response.status === 'unreaped'
+              ? 'interrupted'
+              : 'failed',
+        endedAt: Date.now(),
+        usage: null,
+      })
       return {
         status: response.status ?? 'ok',
         exitCode: response.status === 'unreaped' ? null : 0,

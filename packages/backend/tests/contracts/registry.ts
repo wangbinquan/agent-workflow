@@ -30,7 +30,6 @@ import {
   MaintenanceStatusSchema,
   HostExecutionStatusSchema,
   OverviewResponseSchema,
-  ObservationPriceVersionSchema,
   ScheduledTaskListItemSchema,
   SkillSchema,
   TaskCatalogPageSchema,
@@ -893,97 +892,121 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/runtimes/:name/probe' },
   { method: 'POST', path: '/api/runtimes/:name/enabled' },
 
-  // RFC-371: full save/conflict fixtures also run against both providers in
-  // rfc371-pricing-provider.test.ts; this inventory covers the mounted app.
-  {
-    method: 'GET',
-    path: '/api/observability/overview',
-    happy: {
-      query: { from: '0', to: '4102444800000' },
-      schema: z.object({
-        metrics: z.object({ cost: z.object({ currency: z.literal('CNY') }) }),
-        tasks: z.array(z.object({ task: z.object({ id: z.string() }) })),
-        agents: z.array(z.object({ agentId: z.string().nullable() })),
-        models: z.array(z.object({ sourceId: z.string().nullable() })),
-        runtimes: z.array(z.object({ sourceId: z.string().nullable() })),
-        collection: z.object({
-          retainedRecords: z.number().int().nonnegative(),
-          pendingRecords: z.number().int().nonnegative(),
-          firstObservedAt: z.number().nullable(),
-          lastObservedAt: z.number().nullable(),
-          tasks: z.array(z.object({ taskId: z.string() })),
-          platforms: z.array(z.object({ taskId: z.string(), sourceId: z.string() })),
-        }),
-        asOf: z.number(),
-        taskScope: z.literal('direct'),
-        cohort: z.literal('started'),
-        partial: z.boolean(),
-      }),
-    },
-  },
-  {
-    method: 'GET',
-    path: '/api/observability/tasks',
-    happy: {
-      query: { from: '0', to: '4102444800000' },
-      schema: z.object({
-        items: z.array(
-          z.object({
-            task: z.object({ id: z.string() }),
-            metrics: z.object({ cost: z.object({ currency: z.literal('CNY') }) }),
+  // RFC-371 v2: on-demand statistics over run calls; provider behaviour is
+  // covered by rfc371-v2-observation-store.test.ts, this inventory the mounted app.
+  ...(() => {
+    // Thirty whole UTC days, so the overview carries exactly thirty daily buckets.
+    const from = Date.UTC(2026, 8, 1)
+    const window = { from: String(from), to: String(from + 30 * 86_400_000) }
+    const usage = z.object({
+      calls: z.number().int().nonnegative(),
+      input: z.number().int().nonnegative(),
+      costNano: z.number().int().nonnegative(),
+    })
+    return [
+      {
+        method: 'GET' as const,
+        path: '/api/observability/overview',
+        happy: {
+          query: window,
+          schema: z.object({
+            asOf: z.number(),
+            partial: z.boolean(),
+            usage,
+            taskUsage: usage,
+            systemUsage: usage,
+            tasks: z.object({ total: z.number().int().nonnegative() }),
+            daily: z.array(z.object({ day: z.string() })).length(30),
+            topTasks: z.array(z.object({ taskId: z.string() })),
+            topAgents: z.array(z.object({ agentName: z.string() })),
           }),
-        ),
-        asOf: z.number(),
-        taskScope: z.literal('direct'),
-        cohort: z.literal('started'),
-        nextCursor: z.string().nullable(),
-      }),
-    },
-  },
-  { method: 'GET', path: '/api/observability/tasks/:id' },
-  { method: 'GET', path: '/api/observability/tasks/:id/spans' },
-  { method: 'GET', path: '/api/observability/projection-version' },
-  { method: 'POST', path: '/api/observability/reports' },
-  { method: 'GET', path: '/api/observability/reports/:id' },
-  { method: 'GET', path: '/api/observability/reports/:id/pages' },
-  { method: 'GET', path: '/api/observability/reports/:id/comparison' },
-  { method: 'GET', path: '/api/observability/storage' },
-  { method: 'GET', path: '/api/observability/anomalies' },
-  { method: 'POST', path: '/api/observability/maintenance' },
-  { method: 'GET', path: '/api/observability/maintenance/:id' },
-  { method: 'POST', path: '/api/observability/maintenance/:id/confirm' },
-  {
-    method: 'GET',
-    path: '/api/observability/pricing/runtimes',
-    happy: {
-      schema: z.object({
-        runtimes: z.array(
-          z.object({
-            registrationId: z.string(),
-            configurationRevision: z.number().int(),
-            name: z.string(),
-            protocol: z.enum(['opencode', 'claude-code']),
-            model: z.string().nullable(),
-            enabled: z.boolean(),
-            pricingRevision: z.number().int(),
+        },
+      },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/tasks',
+        happy: {
+          query: window,
+          schema: z.object({
+            asOf: z.number(),
+            items: z.array(z.object({ taskId: z.string(), usage })),
+            nextCursor: z.string().nullable(),
           }),
-        ),
-      }),
-    },
-  },
-  {
-    method: 'GET',
-    path: '/api/observability/pricing/runtimes/:registrationId/versions',
-    happy: {
-      pathParams: { registrationId: 'contract-pricing-empty-history' },
-      schema: z.object({
-        items: z.array(ObservationPriceVersionSchema),
-        revision: z.number().int(),
-        nextBeforeRevision: z.number().int().optional(),
-      }),
-    },
-  },
-  { method: 'POST', path: '/api/observability/pricing/runtimes/:registrationId/versions' },
+        },
+      },
+      { method: 'GET' as const, path: '/api/observability/tasks/:id' },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/agents',
+        happy: {
+          query: window,
+          schema: z.object({
+            partial: z.boolean(),
+            truncated: z.boolean(),
+            items: z.array(z.object({ agentName: z.string(), usage })),
+          }),
+        },
+      },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/models',
+        happy: {
+          query: window,
+          schema: z.object({
+            partial: z.boolean(),
+            truncated: z.boolean(),
+            items: z.array(z.object({ model: z.string(), usage })),
+          }),
+        },
+      },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/system',
+        happy: {
+          query: window,
+          schema: z.object({
+            kinds: z.array(z.object({ kind: z.string(), usage })),
+            recent: z.array(z.object({ id: z.string() })),
+            nextCursor: z.string().nullable(),
+          }),
+        },
+      },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/pricing',
+        happy: {
+          schema: z.object({
+            runtimes: z.array(
+              z.object({
+                runtimeId: z.string(),
+                name: z.string(),
+                configuredModel: z.string().nullable(),
+                models: z.array(z.object({ model: z.string(), calls: z.number().int() })),
+              }),
+            ),
+          }),
+        },
+      },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/pricing/:runtimeId/history',
+        happy: {
+          pathParams: { runtimeId: 'contract-pricing-empty-history' },
+          query: { model: 'provider/model' },
+          schema: z.object({
+            items: z.array(
+              z.object({
+                id: z.string(),
+                model: z.string(),
+                rates: z.object({ input: z.string().nullable(), output: z.string().nullable() }),
+              }),
+            ),
+          }),
+        },
+      },
+      { method: 'POST' as const, path: '/api/observability/pricing/:runtimeId' },
+    ]
+  })(),
 
   // ---- RFC-349 database provider + one-click migration ----
   {

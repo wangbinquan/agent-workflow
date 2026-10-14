@@ -88,9 +88,7 @@ function selectedRun() {
     materialRef: 'selected:material',
     declared: emptyDeclaredManifest(),
     evidenceCapabilities: {
-      usageNormalizer: false,
-      nativeUsageCapture: false,
-      spanCapture: false,
+      usageMeter: true,
       sessionCapture: true,
       inventory: false,
       finalEvents: false,

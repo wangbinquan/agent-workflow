@@ -1,115 +1,135 @@
-import { SaveObservationPriceSchema } from '@agent-workflow/shared'
-import type { SaveObservationPrice, ObservationPriceVersion } from '@agent-workflow/shared'
-import { ObservationPriceError } from '../domain/priceError'
-import type { ObservationPricingDependencies } from '../ports/pricing'
-import type { ObservationPricingCommands } from '../ports/pricingCommands'
-import type { ObservationPricingQueries } from '../ports/pricingQueries'
+// RFC-371 v2 §3.3 — price lines per (runtime registration, actual model).
 
-async function savePrice(
-  deps: ObservationPricingDependencies,
-  registrationId: string,
-  raw: SaveObservationPrice,
-  createdBy: string,
-): Promise<ObservationPriceVersion> {
-  const parsed = SaveObservationPriceSchema.safeParse(raw)
-  if (!parsed.success || !createdBy)
-    throw new ObservationPriceError('invalid-price', 'Token price is invalid')
-  const input = parsed.data,
-    fingerprint = JSON.stringify(input)
-  // Owner queries use the base pool: resolve before taking the price transaction's
-  // connection. The immutable version stays keyed to this configuration revision.
-  const runtime = (await deps.runtimes.directory()).runtimes.find(
-    (row) => row.registrationId === registrationId,
-  )
-  return deps.store.change(registrationId, async (scope) => {
-    const receipt = await scope.receipt(registrationId, input.requestKey)
-    if (receipt) {
-      if (receipt.fingerprint !== fingerprint)
-        throw new ObservationPriceError(
-          'request-conflict',
-          'Request key already describes a different price',
-        )
-      return receipt.version
-    }
-    if (!runtime)
-      throw new ObservationPriceError('runtime-not-found', 'Runtime registration no longer exists')
-    if (
-      runtime.configurationRevision !== input.configurationRevision ||
-      runtime.protocol !== input.protocol
-    ) {
-      throw new ObservationPriceError(
-        'runtime-changed',
-        'Runtime configuration changed; keep the draft and review its current revision',
-        { configurationRevision: runtime.configurationRevision },
-      )
-    }
-    const revision = await scope.head(registrationId)
-    if (revision !== input.expectedRevision)
-      throw new ObservationPriceError(
-        'price-conflict',
-        'Price changed; keep the draft and review its current version',
-        { revision },
-      )
-    const now = deps.now(),
-      at = Date.parse(input.effectiveFrom)
-    if (!Number.isFinite(at) || at < now)
-      throw new ObservationPriceError(
-        'invalid-price',
-        'New prices cannot become effective before saving',
-      )
-    const previous = await scope.latest(registrationId, input)
-    if (previous && at <= Date.parse(previous.effectiveFrom))
-      throw new ObservationPriceError(
-        'activation-conflict',
-        'The new activation must follow the previous price for this exact model and condition',
-      )
-    const { requestKey, expectedRevision: _expected, ...price } = input
-    const version: ObservationPriceVersion = {
-      ...price,
-      id: deps.newId(),
-      registrationId,
-      revision: revision + 1,
-      effectiveFrom: new Date(at).toISOString(),
-      createdAt: new Date(now).toISOString(),
-      createdBy,
-    }
-    await scope.append(version, requestKey, fingerprint)
-    return version
-  })
+import { ulid } from 'ulid'
+import {
+  observationMicroToRate,
+  observationRateToMicro,
+  type ObservationPrice,
+  type ObservationPriceHistory,
+  type ObservationPricingDirectory,
+  type SaveObservationPrice,
+} from '@agent-workflow/shared'
+import type { PriceVersion } from '../domain/pricing'
+import type { CallStore } from './ports/callStore'
+import type { PriceStore } from './ports/priceStore'
+import type { RuntimeDirectoryPort } from './ports/runtimeDirectory'
+
+export class ObservationPriceError extends Error {
+  constructor(
+    readonly code: 'runtime-not-found' | 'price-conflict',
+    message: string,
+  ) {
+    super(message)
+  }
 }
 
-export function createObservationPricing(deps: ObservationPricingDependencies): {
-  readonly commands: ObservationPricingCommands
-  readonly queries: ObservationPricingQueries
-} {
+export function priceView(version: PriceVersion): ObservationPrice {
+  const rate = (micro: number | null) => (micro === null ? null : observationMicroToRate(micro))
   return {
-    commands: { save: (id, input, createdBy) => savePrice(deps, id, input, createdBy) },
-    queries: {
-      runtimes: async () => {
-        const { runtimes } = await deps.runtimes.directory()
-        const heads = await deps.store.heads(runtimes.map((row) => row.registrationId))
-        return {
-          runtimes: runtimes.map((row) => ({
-            ...row,
-            pricingRevision: heads.get(row.registrationId) ?? 0,
-          })),
-        }
-      },
-      history: async (id, query) => {
-        const rows = await deps.store.history(id, { ...query, limit: query.limit + 1 })
-        const revision = (await deps.store.heads([id])).get(id) ?? 0
-        const items = rows.slice(0, query.limit)
-        return {
-          items,
-          revision,
-          ...(rows.length > query.limit ? { nextBeforeRevision: items.at(-1)!.revision } : {}),
-        }
-      },
-      priceAtAcceptance: async ({ registrationId, acceptedAt, ...identity }) => {
-        if (!Number.isSafeInteger(acceptedAt))
-          throw new ObservationPriceError('invalid-price', 'Invalid acceptance time')
-        return (await deps.store.priceAt(registrationId, identity, acceptedAt)) ?? null
-      },
+    id: version.id,
+    runtimeId: version.runtimeId,
+    model: version.model,
+    rates: {
+      input: rate(version.inputMicro),
+      cacheRead: rate(version.cacheReadMicro),
+      cacheWrite: rate(version.cacheWriteMicro),
+      output: rate(version.outputMicro),
+    },
+    effectiveFrom: version.effectiveFrom,
+    createdAt: version.createdAt,
+    createdBy: version.createdBy,
+    note: version.note,
+  }
+}
+
+const newest = (a: PriceVersion, b: PriceVersion) =>
+  b.createdAt - a.createdAt || (b.id < a.id ? -1 : b.id > a.id ? 1 : 0)
+
+export interface ObservationPricing {
+  directory(): Promise<ObservationPricingDirectory>
+  history(runtimeId: string, model: string): Promise<ObservationPriceHistory>
+  save(runtimeId: string, input: SaveObservationPrice, actorId: string): Promise<ObservationPrice>
+}
+
+export function createObservationPricing(deps: {
+  readonly prices: PriceStore
+  readonly calls: Pick<CallStore, 'runtimeModels'>
+  readonly runtimes: RuntimeDirectoryPort
+  readonly clock?: () => number
+}): ObservationPricing {
+  const clock = deps.clock ?? Date.now
+  return {
+    async directory() {
+      const [{ runtimes }, versions, seen] = await Promise.all([
+        deps.runtimes.directory(),
+        deps.prices.all(),
+        deps.calls.runtimeModels(),
+      ])
+      return {
+        runtimes: runtimes.map((runtime) => {
+          const lines = new Map<string, { calls: number; versions: PriceVersion[] }>()
+          const line = (model: string) => {
+            let found = lines.get(model)
+            if (!found) {
+              found = { calls: 0, versions: [] }
+              lines.set(model, found)
+            }
+            return found
+          }
+          if (runtime.model) line(runtime.model)
+          for (const row of seen)
+            if (row.runtimeId === runtime.registrationId) line(row.model).calls += row.calls
+          for (const version of versions)
+            if (version.runtimeId === runtime.registrationId)
+              line(version.model).versions.push(version)
+          return {
+            runtimeId: runtime.registrationId,
+            name: runtime.name,
+            protocol: runtime.protocol,
+            configuredModel: runtime.model,
+            models: [...lines.entries()]
+              .map(([model, value]) => ({
+                model,
+                calls: value.calls,
+                current: value.versions.length
+                  ? priceView([...value.versions].sort(newest)[0]!)
+                  : null,
+              }))
+              .sort((a, b) => b.calls - a.calls || a.model.localeCompare(b.model)),
+          }
+        }),
+      }
+    },
+
+    async history(runtimeId, model) {
+      const versions = await deps.prices.line(runtimeId, model)
+      return { items: [...versions].sort(newest).map(priceView) }
+    },
+
+    async save(runtimeId, input, actorId) {
+      const { runtimes } = await deps.runtimes.directory()
+      if (!runtimes.some((runtime) => runtime.registrationId === runtimeId))
+        throw new ObservationPriceError('runtime-not-found', 'Runtime registration not found')
+      const micro = (rate: string | null) => (rate === null ? null : observationRateToMicro(rate))
+      const version: PriceVersion = {
+        id: ulid(),
+        runtimeId,
+        model: input.model,
+        inputMicro: micro(input.rates.input),
+        cacheReadMicro: micro(input.rates.cacheRead),
+        cacheWriteMicro: micro(input.rates.cacheWrite),
+        outputMicro: micro(input.rates.output),
+        effectiveFrom: input.effectiveFrom,
+        createdAt: clock(),
+        createdBy: actorId,
+        note: input.note,
+      }
+      if ((await deps.prices.append(version, input.expectedLatestId)) === 'conflict')
+        throw new ObservationPriceError(
+          'price-conflict',
+          'This price line changed since it was opened; reload before saving',
+        )
+      return priceView(version)
     },
   }
 }

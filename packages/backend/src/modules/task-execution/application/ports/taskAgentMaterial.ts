@@ -1,4 +1,3 @@
-import type { ObservationNativeProcessFact } from '@agent-workflow/shared'
 import type {
   AgentMaterialIntent,
   AgentMaterialWorkspace,
@@ -48,13 +47,11 @@ export interface TaskAgentMaterialPreparation {
   compile(declaration: TaskAgentMaterialDeclaration): Promise<TaskCompiledAgentInvocation>
 }
 
-/** The selected execution owner interprets its own opaque task participant.
- * This optional observation is a capture fact, never an execution payload. */
+/** The selected execution owner interprets its own opaque task participant. */
 export interface TaskAgentExecutionParticipantInput {
   readonly persistence: TaskExecutionEffectPersistence
   readonly nodeExecution: () => NodeExecutionPersistence
   readonly readOnlyWorkspace: () => boolean
-  readonly observeNativeProcess?: (fact: ObservationNativeProcessFact) => Promise<void>
 }
 
 export type TaskAgentExecutionParticipants = AgentExecutionParticipants &

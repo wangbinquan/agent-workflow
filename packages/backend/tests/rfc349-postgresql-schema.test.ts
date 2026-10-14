@@ -22,11 +22,13 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(269)
+    // RFC-371 v2 retired 81 v1 observation tables and added the three call / model / price tables.
+    expect(tables).toHaveLength(191)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
-      true,
+      false,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(269)
+    expect(tables.some((table) => table.logicalId === 'observation_calls')).toBe(true)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(191)
     expect(
       tables
         .map((statement) => statement.logicalId)
@@ -40,94 +42,15 @@ describe('RFC-349 PostgreSQL schema projection', () => {
         .filter((id) => id.startsWith('clarify_mindmap_'))
         .sort(),
     ).toEqual([])
-    expect(
-      tables.some((table) => table.logicalId === 'task_execution_native_usage_store_bindings'),
-    ).toBe(true)
-    // RFC-371 adds sixteen original observation tables, two derived numeric page
-    // tables (0244 / PostgreSQL 0020), three derived calculation/source-revision
-    // tables (0245 / PostgreSQL 0021), and one execution source table.
-    expect(
-      tables
-        .map((statement) => statement.logicalId)
-        .filter((id) => id.startsWith('observation_'))
-        .sort(),
-    ).toEqual([
-      'observation_anomaly_history',
-      'observation_anomaly_states',
-      'observation_calculation_rows',
-      'observation_calculation_versions',
-      'observation_invocation_price_audit',
-      'observation_invocation_price_policies',
-      'observation_invocation_price_records',
-      'observation_invocations',
-      'observation_maintenance_members',
-      'observation_maintenance_operations',
-      'observation_native_fact_pages',
-      'observation_native_fact_roots',
-      'observation_platform_records',
-      'observation_platform_sources',
-      'observation_price_heads',
-      'observation_price_versions',
-      'observation_projection_bindings',
-      'observation_projection_bootstrap',
-      'observation_projection_changes',
-      'observation_projection_components',
-      'observation_projection_current',
-      'observation_projection_dependencies',
-      'observation_projection_descriptors',
-      'observation_projection_heads',
-      'observation_projection_history',
-      'observation_projection_indexed_versions',
-      'observation_projection_memberships',
-      'observation_projection_prepared',
-      'observation_projection_query_scope_members',
-      'observation_projection_query_scopes',
-      'observation_projection_versions',
-      'observation_projection_views',
-      'observation_projection_work',
-      'observation_projection_work_components',
-      'observation_report_counts',
-      'observation_report_leases',
-      'observation_report_pages',
-      'observation_report_receipts',
-      'observation_report_retained_revisions',
-      'observation_report_rows',
-      'observation_reports',
-      'observation_scope_refs',
-      'observation_source_revisions',
-      'observation_storage_samples',
-      'observation_storage_state',
-      'observation_usage_captures',
-      'observation_usage_current',
-      'observation_usage_events',
-      'observation_usage_native_records',
-      'observation_usage_sources',
-      'observation_work_retention',
+    // RFC-371 v2 (PostgreSQL 0032): the three call / model / price tables are the whole
+    // observation store; no v1 projection, report, native-usage or system source table remains.
+    const ids = tables.map((statement) => statement.logicalId)
+    expect(ids.filter((id) => /^observation_|native_usage|_observation_/.test(id)).sort()).toEqual([
+      'observation_call_models',
+      'observation_calls',
+      'observation_prices',
     ])
-    // RFC-371 0243 / PostgreSQL 0019 adds this exact original System table set.
-    expect(
-      tables
-        .map((statement) => statement.logicalId)
-        .filter((id) => id.startsWith('system_agent_'))
-        .sort(),
-    ).toEqual([
-      'system_agent_native_usage_emissions',
-      'system_agent_native_usage_pass_heads',
-      'system_agent_native_usage_pass_pages',
-      'system_agent_native_usage_passes',
-      'system_agent_native_usage_preparations',
-      'system_agent_native_usage_revision_heads',
-      'system_agent_native_usage_root_heads',
-      'system_agent_native_usage_root_results',
-      'system_agent_native_usage_root_sets',
-      'system_agent_native_usage_root_transitions',
-      'system_agent_native_usage_session_parents',
-      'system_agent_native_usage_step_members',
-      'system_agent_native_usage_store_bindings',
-      'system_agent_observation_groups',
-      'system_agent_observation_owners',
-      'system_agent_observation_sources',
-    ])
+    expect(ids.filter((id) => id.startsWith('system_agent_'))).toEqual([])
     expect(plan.activeTableCount).toBe(contract.activeTableCount)
     expect(plan.archiveOnlyTableCount).toBe(6)
   })

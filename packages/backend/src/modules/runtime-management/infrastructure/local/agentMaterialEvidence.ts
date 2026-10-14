@@ -3,7 +3,7 @@ import type {
   AgentSessionCaptureRequest,
   AgentLiveCaptureRequest,
 } from '../../application/ports/agentMaterialEvidence'
-import type { NativeUsageCaptureIdentity } from '../../application/ports/nativeUsageCapture'
+import type { RuntimeUsageMeterInput } from '../../domain/usageMeter'
 import type {
   RuntimeDriver,
   SessionCaptureContext,
@@ -13,9 +13,7 @@ import type {
 /** Native API compatibility inputs; never an application or deployment port. */
 export type NativeAgentMaterialEvidenceHooks = Pick<
   RuntimeDriver,
-  | 'prepareUsageNormalizer'
-  | 'prepareNativeUsageCapture'
-  | 'prepareSpanCapture'
+  | 'usageMeter'
   | 'captureSessions'
   | 'readInventory'
   | 'drainFinalEvents'
@@ -42,39 +40,12 @@ export function createLocalAgentMaterialEvidence(input: {
   readonly scope: NativeAgentMaterialEvidenceScope
 }): AgentMaterialEvidence {
   return {
-    get prepareUsageNormalizer() {
-      const method = input.hooks.prepareUsageNormalizer
+    get prepareUsageMeter() {
+      const method = input.hooks.usageMeter
       return method === undefined
         ? undefined
-        : () => method.call(input.hooks, { env: input.scope.environment() })
-    },
-    get prepareNativeUsageCapture() {
-      const method = input.hooks.prepareNativeUsageCapture
-      return method === undefined
-        ? undefined
-        : (identity: NativeUsageCaptureIdentity) =>
-            method.call(input.hooks, {
-              env: input.scope.environment(),
-              invocationId: identity.invocationId,
-              taskId: identity.taskId,
-              nodeRunId: identity.nodeRunId,
-              agentId: identity.agentId,
-              ...('resumeSessionId' in identity
-                ? { resumeSessionId: identity.resumeSessionId }
-                : {}),
-              ...('nextRevision' in identity ? { nextRevision: identity.nextRevision } : {}),
-              ...('durableOwner' in identity ? { durableOwner: identity.durableOwner } : {}),
-            })
-    },
-    get prepareSpanCapture() {
-      const method = input.hooks.prepareSpanCapture
-      return method === undefined
-        ? undefined
-        : (identity: { readonly invocationId: string }) =>
-            method.call(input.hooks, {
-              env: input.scope.environment(),
-              invocationId: identity.invocationId,
-            })
+        : (request: RuntimeUsageMeterInput) =>
+            method.call(input.hooks, { ...request, env: input.scope.environment() })
     },
     get captureSessions() {
       const method = input.hooks.captureSessions

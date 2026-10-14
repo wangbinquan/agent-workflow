@@ -57,6 +57,7 @@ import {
   taskExecutionResourceBinding,
 } from './helpers/integrationTriggerResourceBinding'
 import { inverseTaskResourceRecoverySelections } from './helpers/taskResourceRecoveryStatementInverse'
+import { inverseRfc371V2Sources } from './helpers/rfc371V2SourceInverse'
 import type { StatementRecording } from './helpers/statementRecorder'
 import originalSources from './fixtures/rfc370-task-resource-recovery-original-sources.json'
 
@@ -71,9 +72,13 @@ test('R17 finite recovery inverse preserves the exact preceding H and L source o
   const sha = (text: string) => createHash('sha256').update(text).digest('hex')
   expect(originalSources.files).toHaveLength(3)
   for (const original of originalSources.files) {
-    const text = readFileSync(new URL(`../../../${original.path}`, import.meta.url), 'utf8')
     const source = (content: string) =>
       ts.createSourceFile(original.path, content, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    // RFC-371 v2 later edited two of these roots; the reviewed offsets address the text
+    // before those edits, so mutations are applied after restoring them.
+    const text = inverseRfc371V2Sources(
+      source(readFileSync(new URL(`../../../${original.path}`, import.meta.url), 'utf8')),
+    ).text
     const restored = inverseTaskResourceRecoverySelections(source(text)).text
     expect(Buffer.byteLength(restored)).toBe(original.bytes)
     expect(sha(restored)).toBe(original.sha256)

@@ -15,12 +15,7 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core'
 import * as sqliteSchema from '@/db/schema'
-import {
-  concreteDatabaseTable,
-  renderPostgresqlDatabaseDefault,
-  retainedOutputRevisionFor,
-  observationSourceRevisionFor,
-} from '@/db/providerSchema'
+import { concreteDatabaseTable, renderPostgresqlDatabaseDefault } from '@/db/providerSchema'
 import type { RetainedOutputRevisionContract } from './retainedOutputRevisionSchema'
 import type { ObservationSourceRevisionContract } from './observationSourceRevisionSchema'
 
@@ -152,57 +147,9 @@ export const RFC349_SOURCE_TABLES = [
   'node_run_events',
   'node_run_outputs',
   'node_runs',
-  'observation_calculation_rows',
-  'observation_calculation_versions',
-  'observation_anomaly_history',
-  'observation_anomaly_states',
-  'observation_invocation_price_audit',
-  'observation_invocation_price_policies',
-  'observation_invocation_price_records',
-  'observation_maintenance_members',
-  'observation_maintenance_operations',
-  'observation_projection_descriptors',
-  'observation_projection_indexed_versions',
-  'observation_projection_query_scope_members',
-  'observation_projection_query_scopes',
-  'observation_invocations',
-  'observation_platform_records',
-  'observation_platform_sources',
-  'observation_price_heads',
-  'observation_price_versions',
-  'observation_projection_bindings',
-  'observation_projection_bootstrap',
-  'observation_projection_changes',
-  'observation_projection_components',
-  'observation_projection_current',
-  'observation_projection_dependencies',
-  'observation_projection_heads',
-  'observation_projection_history',
-  'observation_projection_memberships',
-  'observation_projection_prepared',
-  'observation_projection_versions',
-  'observation_projection_views',
-  'observation_projection_work',
-  'observation_projection_work_components',
-  'observation_native_fact_pages',
-  'observation_native_fact_roots',
-  'observation_report_counts',
-  'observation_report_pages',
-  'observation_report_receipts',
-  'observation_report_retained_revisions',
-  'observation_report_rows',
-  'observation_reports',
-  'observation_report_leases',
-  'observation_scope_refs',
-  'observation_storage_samples',
-  'observation_storage_state',
-  'observation_work_retention',
-  'observation_source_revisions',
-  'observation_usage_sources',
-  'observation_usage_captures',
-  'observation_usage_native_records',
-  'observation_usage_current',
-  'observation_usage_events',
+  'observation_call_models',
+  'observation_calls',
+  'observation_prices',
   'observer_activations',
   'oidc_providers',
   'plugins',
@@ -227,22 +174,6 @@ export const RFC349_SOURCE_TABLES = [
   'skill_operations',
   'skill_versions',
   'skills',
-  'system_agent_native_usage_emissions',
-  'system_agent_native_usage_pass_heads',
-  'system_agent_native_usage_pass_pages',
-  'system_agent_native_usage_passes',
-  'system_agent_native_usage_preparations',
-  'system_agent_native_usage_revision_heads',
-  'system_agent_native_usage_root_heads',
-  'system_agent_native_usage_root_results',
-  'system_agent_native_usage_root_sets',
-  'system_agent_native_usage_root_transitions',
-  'system_agent_native_usage_session_parents',
-  'system_agent_native_usage_step_members',
-  'system_agent_native_usage_store_bindings',
-  'system_agent_observation_groups',
-  'system_agent_observation_owners',
-  'system_agent_observation_sources',
   'system_host_execution_write_contexts',
   'task_archive_audit',
   'task_collaborators',
@@ -253,20 +184,6 @@ export const RFC349_SOURCE_TABLES = [
   'task_execution_lineage_operation_records',
   'task_execution_maintenance_claims',
   'task_execution_maintenance_members',
-  'task_execution_native_usage_emissions',
-  'task_execution_native_usage_pass_heads',
-  'task_execution_native_usage_pass_pages',
-  'task_execution_native_usage_passes',
-  'task_execution_native_usage_preparations',
-  'task_execution_native_usage_revision_heads',
-  'task_execution_native_usage_root_heads',
-  'task_execution_native_usage_root_results',
-  'task_execution_native_usage_root_sets',
-  'task_execution_native_usage_root_transitions',
-  'task_execution_native_usage_session_parents',
-  'task_execution_native_usage_step_members',
-  'task_execution_native_usage_store_bindings',
-  'task_execution_observation_sources',
   'task_execution_owners',
   'task_feedback',
   'task_node_clarify_directives',
@@ -425,7 +342,9 @@ export interface ArchiveContract {
 }
 
 export interface LogicalTableContract {
+  /** Historical (RFC-371 v1, retired by RFC-371 v2): only replayed PostgreSQL history carries it. */
   readonly nativeProjection?: RetainedOutputRevisionContract
+  /** Historical (RFC-371 v1, retired by RFC-371 v2): only replayed PostgreSQL history carries it. */
   readonly sourceRevisionProjection?: ObservationSourceRevisionContract
   readonly id: string
   readonly schemaSymbol: string
@@ -770,8 +689,6 @@ export function buildLogicalSchemaContract(): LogicalSchemaContract {
     const entry = byName.get(name)
     if (!entry) throw new Error(`RFC-349 schema contract missing ${name}`)
     const { config } = entry
-    const nativeProjection = retainedOutputRevisionFor(entry.table)
-    const sourceRevisionProjection = observationSourceRevisionFor(entry.table)
     const ownerContext = ownerFor(name)
     const disposition = dispositionFor(name)
     const columnPrimary = config.columns
@@ -807,8 +724,6 @@ export function buildLogicalSchemaContract(): LogicalSchemaContract {
     ]
 
     const result: LogicalTableContract = {
-      ...(nativeProjection === undefined ? {} : { nativeProjection }),
-      ...(sourceRevisionProjection === undefined ? {} : { sourceRevisionProjection }),
       id: name,
       schemaSymbol: entry.symbol,
       ownerContext,

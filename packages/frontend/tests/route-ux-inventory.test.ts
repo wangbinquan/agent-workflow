@@ -549,12 +549,12 @@ export const ROUTE_UX_INVENTORY = {
     owners: [rendered('tasks-list-surgery.test.tsx')],
     header: { mode: 'direct', sourceFile: 'routes/tasks.tsx', primitive: 'PageHeader' },
   },
-  // RFC-371: one query-backed surface switches between task cohort and task /
-  // attempt inspection. CompleteRunObservability owns the shared PageHeader and Dialog.
+  // RFC-371 v2: one query-backed surface switches between statistics tabs and a
+  // task's call detail. RunObservability owns the shared PageHeader and TabBar.
   '@/routes/observability#Route': {
     surface: '/observability',
     classification: 'specialized',
-    owners: [rendered('rfc371-complete-report-ui.test.tsx')],
+    owners: [rendered('rfc371-v2-run-observability.test.tsx')],
   },
   '@/routes/tasks.new#TaskWizardRoute': {
     surface: '/tasks/new',

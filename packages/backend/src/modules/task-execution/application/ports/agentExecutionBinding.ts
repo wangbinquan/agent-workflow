@@ -5,7 +5,6 @@ import type {
 } from './executionEffect'
 import type { ProcessEffectProjection } from './processEffectProjection'
 import type { Logger } from '@/util/log'
-import type { ObservationNativeProcessFact } from '@agent-workflow/shared'
 
 /** The execution owner issues this participant in the same selected
  * composition as its binding. Implementations keep persistence and receipt
@@ -17,8 +16,6 @@ interface AgentExecutionTaskParticipant {
 
 export interface AgentExecutionParticipants {
   readonly taskEffect?: AgentExecutionTaskParticipant
-  /** Evidence only; an original System execution does not acquire a Task claim. */
-  readonly observeNativeProcess?: (fact: ObservationNativeProcessFact) => Promise<void>
 }
 
 /** One material-bound attempt. Receipts and terminal projections are opaque

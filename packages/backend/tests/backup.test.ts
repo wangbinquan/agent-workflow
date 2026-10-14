@@ -139,7 +139,8 @@ describe('createBackup', () => {
       // The complete schema retains all sixteen RFC-371 derived/maintenance
       // tables and the committed concurrent Memory receipt; all source tables
       // remain covered by the original logical contract.
-      activeTableCount: 269,
+      // RFC-371 v2 retired 81 v1 observation tables and added three.
+      activeTableCount: 191,
       archiveOnlyTableCount: 6,
     })
   })

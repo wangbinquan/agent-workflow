@@ -45,15 +45,11 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(provider).toContain('createPostgresqlReviewRepairParticipant(db)')
     expect(provider).toContain('composeTaskExecutionProviderBackground({')
 
-    for (const loop of [
-      'auto-repair',
-      'heartbeat-kill',
-      'orphan-reconcile',
-      'scheduled-task',
-      'observation-usage',
-    ]) {
+    for (const loop of ['auto-repair', 'heartbeat-kill', 'orphan-reconcile', 'scheduled-task']) {
       expect(background).toContain(`name: '${loop}'`)
     }
+    // RFC-371 v2: usage is written by the call itself; no background usage loop remains.
+    expect(background).not.toContain(`name: 'observation-usage'`)
     expect(background).toContain('await Promise.all(loops.map((loop) => loop.pause()))')
     expect(background).toContain('runtime.module.pause(')
     expect(background).toContain('await Promise.all(loops.map((loop) => loop.stop()))')

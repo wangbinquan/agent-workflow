@@ -1,86 +1,71 @@
-import { SaveObservationPriceSchema } from '@agent-workflow/shared'
-import type { ObservationPricingRuntime, SaveObservationPrice } from '@agent-workflow/shared'
+// RFC-371 v2 §3.3 — a price-line draft: four CNY rates per million tokens
+// (empty is unknown, never free), an optional future effective time, and the
+// newest version the draft was based on (compare-and-set on save).
+import type { ObservationPrice, SaveObservationPrice } from '@agent-workflow/shared'
 
 export const PRICE_BUCKETS = ['input', 'cacheRead', 'cacheWrite', 'output'] as const
-export interface ObservationPriceDraft {
-  provider: string
-  model: string
-  condition: string
-  effectiveFrom: string
-  sourceNote: string
-  input: string
-  cacheRead: string
-  cacheWrite: string
-  output: string
+export type PriceBucket = (typeof PRICE_BUCKETS)[number]
+
+export interface PriceDraft {
+  readonly model: string
+  readonly input: string
+  readonly cacheRead: string
+  readonly cacheWrite: string
+  readonly output: string
+  /** `datetime-local` value; empty applies on save. */
+  readonly effectiveFrom: string
+  readonly note: string
 }
-export function initialPriceDraft(
-  runtime: ObservationPricingRuntime,
-  now: number,
-): ObservationPriceDraft {
-  const date = new Date(now + 300_000)
+
+const RATE = /^(0|[1-9]\d{0,8})(\.\d{1,6})?$/
+/** A few seconds of slack between picking "now" and pressing save. */
+const PAST_TOLERANCE_MS = 60_000
+
+export function initialPriceDraft(model: string, current: ObservationPrice | null): PriceDraft {
   return {
-    provider: '',
-    model: runtime.model ?? '',
-    condition: '',
-    sourceNote: '',
-    input: '',
-    cacheRead: '',
-    cacheWrite: '',
-    output: '',
-    effectiveFrom: new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-      .toISOString()
-      .slice(0, 16),
+    model,
+    input: current?.rates.input ?? '',
+    cacheRead: current?.rates.cacheRead ?? '',
+    cacheWrite: current?.rates.cacheWrite ?? '',
+    output: current?.rates.output ?? '',
+    effectiveFrom: '',
+    note: '',
   }
 }
-export interface SubmittedPrice {
-  readonly signature: string
-  readonly input: SaveObservationPrice
-}
-export function preparePriceRequest(
-  draft: ObservationPriceDraft,
-  runtime: ObservationPricingRuntime,
-  revision: number,
-  previous: SubmittedPrice | undefined,
+
+export type PriceDraftErrors = Partial<Record<'model' | PriceBucket | 'effectiveFrom', string>>
+
+export function preparePrice(
+  draft: PriceDraft,
+  expectedLatestId: string | null,
   now: number,
-  newKey: () => string,
-): {
-  receipt?: SubmittedPrice
-  errors: Readonly<Record<string, string>>
-} {
-  const signature = JSON.stringify({
-    draft,
-    revision,
-    registrationId: runtime.registrationId,
-    configurationRevision: runtime.configurationRevision,
-    protocol: runtime.protocol,
-  })
-  if (previous?.signature === signature) return { receipt: previous, errors: {} }
-  const at = new Date(draft.effectiveFrom)
-  const parsed = SaveObservationPriceSchema.safeParse({
-    expectedRevision: revision,
-    requestKey: newKey(),
-    configurationRevision: runtime.configurationRevision,
-    protocol: runtime.protocol,
-    provider: draft.provider,
-    model: draft.model,
-    condition: draft.condition || null,
-    currency: 'CNY',
-    rates: {
-      input: draft.input || null,
-      cacheRead: draft.cacheRead || null,
-      cacheWrite: draft.cacheWrite || null,
-      output: draft.output || null,
+): { readonly errors: PriceDraftErrors; readonly input?: SaveObservationPrice } {
+  const errors: PriceDraftErrors = {}
+  const model = draft.model.trim()
+  if (!model) errors.model = 'observationPricing.invalidModel'
+  const rates = {} as Record<PriceBucket, string | null>
+  for (const bucket of PRICE_BUCKETS) {
+    const value = draft[bucket].trim()
+    if (value === '') rates[bucket] = null
+    else if (RATE.test(value)) rates[bucket] = value
+    else errors[bucket] = 'observationPricing.invalidRate'
+  }
+  let effectiveFrom = now
+  if (draft.effectiveFrom !== '') {
+    const at = new Date(draft.effectiveFrom).getTime()
+    if (!Number.isFinite(at) || at < now - PAST_TOLERANCE_MS)
+      errors.effectiveFrom = 'observationPricing.invalidEffectiveFrom'
+    else effectiveFrom = Math.max(at, now)
+  }
+  if (Object.keys(errors).length > 0) return { errors }
+  return {
+    errors,
+    input: {
+      model,
+      rates,
+      effectiveFrom,
+      note: draft.note.trim(),
+      expectedLatestId,
     },
-    effectiveFrom: Number.isFinite(at.getTime()) ? at.toISOString() : '',
-    sourceNote: draft.sourceNote,
-  })
-  const errors: Record<string, string> = {}
-  if (!parsed.success)
-    for (const issue of parsed.error.issues)
-      errors[String(issue.path.at(-1) ?? '')] = 'observationPricing.invalid'
-  if (!Number.isFinite(at.getTime()) || at.getTime() < now)
-    errors.effectiveFrom = 'observationPricing.future'
-  return Object.keys(errors).length || !parsed.success
-    ? { errors }
-    : { receipt: { signature, input: parsed.data }, errors }
+  }
 }

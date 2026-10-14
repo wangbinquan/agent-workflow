@@ -42,7 +42,6 @@ import type {
   MemoryDistillJobWsMessage,
   ScheduledTaskWsMessage,
   MemoryWsMessage,
-  ObservationProjectionWsMessage,
   RepoImportWsMessage,
   TaskWsMessage,
   TasksListWsMessage,
@@ -67,8 +66,6 @@ import {
   AUTHORITY_CHANNEL,
   authorityBroadcaster,
   MEMORY_CHANNEL,
-  OBSERVABILITY_CHANNEL,
-  observabilityBroadcaster,
   MEMORY_DISTILL_JOB_CHANNEL,
   INTENT_SESSIONS_CHANNEL,
   intentSessionsBroadcaster,
@@ -105,7 +102,6 @@ const log = createLogger('ws.registry')
 // -----------------------------------------------------------------------------
 
 export interface ChannelParamsByKind {
-  observability: { kind: 'observability' }
   authority: { kind: 'authority' }
   task: { kind: 'task'; taskId: string; since?: number }
   'tasks-list': { kind: 'tasks-list' }
@@ -121,7 +117,6 @@ export interface ChannelParamsByKind {
 }
 
 export interface ChannelMessageByKind {
-  observability: ObservationProjectionWsMessage
   authority: WsControlMessage
   task: TaskWsMessage
   'tasks-list': TasksListWsMessage
@@ -138,7 +133,6 @@ export interface ChannelMessageByKind {
 
 /** Process-local metadata delivered beside frames; never part of JSON wire. */
 export interface ChannelBroadcastContextByKind {
-  observability: never
   authority: never
   task: never
   'tasks-list': TasksListBroadcastContext
@@ -567,20 +561,6 @@ export type WsChannelRegistry = {
 }
 
 export const WS_CHANNELS: WsChannelRegistry = {
-  observability: {
-    kind: 'observability',
-    revalidation: {
-      refreshActor: true,
-      cache: { kind: 'none', why: 'projection version notification carries no task facts' },
-      rerunUpgradeGate: { na: 'authenticated version channel has no scoped facts' },
-    },
-    helloName: () => 'observability',
-    pathRe: /^\/ws\/observability$/,
-    samplePath: '/ws/observability',
-    parse: () => ({ kind: 'observability' }),
-    broadcaster: observabilityBroadcaster,
-    channelKeyOf: () => OBSERVABILITY_CHANNEL,
-  },
   authority: {
     kind: 'authority',
     revalidation: {

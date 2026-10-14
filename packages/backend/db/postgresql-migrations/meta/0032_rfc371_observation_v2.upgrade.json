@@ -1,0 +1,4265 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:32c305d87968bc9cd4bf179e3f94d5cee2a92a8dc3cfa5fbfbce93f2336da22b', 191, 6)"
+    },
+    "beforeDigest": "sha256:9035b8e99fd43c3359330e4b3a6ebfb2a4aa8027540e189c7db765e4d91dd86c"
+  },
+  "digest": "sha256:82c4eac31f41d8e8c65e7f9f0fe4fbac4731624de6a2f514a50548c205d199c6",
+  "executableStatements": [
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_pages:retained:insert",
+      "sql": "DROP TRIGGER \"observation_report_pages_retained_insert\" ON \"agent_workflow\".\"observation_report_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_pages:retained:update",
+      "sql": "DROP TRIGGER \"observation_report_pages_retained_update\" ON \"agent_workflow\".\"observation_report_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_pages:retained:delete",
+      "sql": "DROP TRIGGER \"observation_report_pages_retained_delete\" ON \"agent_workflow\".\"observation_report_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_rows:retained:insert",
+      "sql": "DROP TRIGGER \"observation_report_rows_retained_insert\" ON \"agent_workflow\".\"observation_report_rows\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_rows:retained:update",
+      "sql": "DROP TRIGGER \"observation_report_rows_retained_update\" ON \"agent_workflow\".\"observation_report_rows\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_rows:retained:delete",
+      "sql": "DROP TRIGGER \"observation_report_rows_retained_delete\" ON \"agent_workflow\".\"observation_report_rows\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_counts:retained:insert",
+      "sql": "DROP TRIGGER \"observation_report_counts_retained_insert\" ON \"agent_workflow\".\"observation_report_counts\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_counts:retained:update",
+      "sql": "DROP TRIGGER \"observation_report_counts_retained_update\" ON \"agent_workflow\".\"observation_report_counts\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_counts:retained:delete",
+      "sql": "DROP TRIGGER \"observation_report_counts_retained_delete\" ON \"agent_workflow\".\"observation_report_counts\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_receipts:retained:insert",
+      "sql": "DROP TRIGGER \"observation_report_receipts_retained_insert\" ON \"agent_workflow\".\"observation_report_receipts\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_receipts:retained:update",
+      "sql": "DROP TRIGGER \"observation_report_receipts_retained_update\" ON \"agent_workflow\".\"observation_report_receipts\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_report_receipts:retained:delete",
+      "sql": "DROP TRIGGER \"observation_report_receipts_retained_delete\" ON \"agent_workflow\".\"observation_report_receipts\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:agents:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_agents_8c70b25cbbbe_insert\" ON \"agent_workflow\".\"agents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:agents:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_agents_8c70b25cbbbe_update\" ON \"agent_workflow\".\"agents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:agents:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_agents_8c70b25cbbbe_delete\" ON \"agent_workflow\".\"agents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_sessions:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_intent_sessions_f4fc994cf568_insert\" ON \"agent_workflow\".\"intent_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_sessions:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_intent_sessions_f4fc994cf568_update\" ON \"agent_workflow\".\"intent_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_sessions:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_intent_sessions_f4fc994cf568_delete\" ON \"agent_workflow\".\"intent_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turn_events:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_intent_turn_events_9577a85373ce_insert\" ON \"agent_workflow\".\"intent_turn_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turn_events:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_intent_turn_events_9577a85373ce_update\" ON \"agent_workflow\".\"intent_turn_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turn_events:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_intent_turn_events_9577a85373ce_delete\" ON \"agent_workflow\".\"intent_turn_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turns:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_intent_turns_a0c059001e55_insert\" ON \"agent_workflow\".\"intent_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turns:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_intent_turns_a0c059001e55_update\" ON \"agent_workflow\".\"intent_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turns:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_intent_turns_a0c059001e55_delete\" ON \"agent_workflow\".\"intent_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_events:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_events_3026f434cf19_insert\" ON \"agent_workflow\".\"mcp_runtime_test_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_events:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_events_3026f434cf19_update\" ON \"agent_workflow\".\"mcp_runtime_test_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_events:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_events_3026f434cf19_delete\" ON \"agent_workflow\".\"mcp_runtime_test_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_sessions:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_sessions_9f19ae79a165_insert\" ON \"agent_workflow\".\"mcp_runtime_test_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_sessions:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_sessions_9f19ae79a165_update\" ON \"agent_workflow\".\"mcp_runtime_test_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_sessions:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_sessions_9f19ae79a165_delete\" ON \"agent_workflow\".\"mcp_runtime_test_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_turns:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_turns_5facdc2dda15_insert\" ON \"agent_workflow\".\"mcp_runtime_test_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_turns:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_turns_5facdc2dda15_update\" ON \"agent_workflow\".\"mcp_runtime_test_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_turns:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_mcp_runtime_test_turns_5facdc2dda15_delete\" ON \"agent_workflow\".\"mcp_runtime_test_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_events:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_memory_distill_events_9222b906089a_insert\" ON \"agent_workflow\".\"memory_distill_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_events:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_memory_distill_events_9222b906089a_update\" ON \"agent_workflow\".\"memory_distill_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_events:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_memory_distill_events_9222b906089a_delete\" ON \"agent_workflow\".\"memory_distill_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_jobs:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_memory_distill_jobs_7c1cff75edd4_insert\" ON \"agent_workflow\".\"memory_distill_jobs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_jobs:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_memory_distill_jobs_7c1cff75edd4_update\" ON \"agent_workflow\".\"memory_distill_jobs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_jobs:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_memory_distill_jobs_7c1cff75edd4_delete\" ON \"agent_workflow\".\"memory_distill_jobs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_run_events:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_node_run_events_01109c2fd4cf_insert\" ON \"agent_workflow\".\"node_run_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_run_events:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_node_run_events_01109c2fd4cf_update\" ON \"agent_workflow\".\"node_run_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_run_events:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_node_run_events_01109c2fd4cf_delete\" ON \"agent_workflow\".\"node_run_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_runs:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_node_runs_d3d6de02630e_insert\" ON \"agent_workflow\".\"node_runs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_runs:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_node_runs_d3d6de02630e_update\" ON \"agent_workflow\".\"node_runs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_runs:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_node_runs_d3d6de02630e_delete\" ON \"agent_workflow\".\"node_runs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_invocations:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_invocations_ddde8c4db0d6_insert\" ON \"agent_workflow\".\"observation_invocations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_invocations:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_invocations_ddde8c4db0d6_update\" ON \"agent_workflow\".\"observation_invocations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_invocations:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_invocations_ddde8c4db0d6_delete\" ON \"agent_workflow\".\"observation_invocations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_records:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_platform_records_b9c238a11799_insert\" ON \"agent_workflow\".\"observation_platform_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_records:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_platform_records_b9c238a11799_update\" ON \"agent_workflow\".\"observation_platform_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_records:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_platform_records_b9c238a11799_delete\" ON \"agent_workflow\".\"observation_platform_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_sources:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_platform_sources_0d51a229caf9_insert\" ON \"agent_workflow\".\"observation_platform_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_sources:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_platform_sources_0d51a229caf9_update\" ON \"agent_workflow\".\"observation_platform_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_sources:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_platform_sources_0d51a229caf9_delete\" ON \"agent_workflow\".\"observation_platform_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_heads:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_price_heads_e45105caf86d_insert\" ON \"agent_workflow\".\"observation_price_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_heads:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_price_heads_e45105caf86d_update\" ON \"agent_workflow\".\"observation_price_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_heads:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_price_heads_e45105caf86d_delete\" ON \"agent_workflow\".\"observation_price_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_versions:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_price_versions_40e139831493_insert\" ON \"agent_workflow\".\"observation_price_versions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_versions:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_price_versions_40e139831493_update\" ON \"agent_workflow\".\"observation_price_versions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_versions:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_price_versions_40e139831493_delete\" ON \"agent_workflow\".\"observation_price_versions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_captures:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_captures_69ed66269937_insert\" ON \"agent_workflow\".\"observation_usage_captures\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_captures:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_captures_69ed66269937_update\" ON \"agent_workflow\".\"observation_usage_captures\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_captures:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_captures_69ed66269937_delete\" ON \"agent_workflow\".\"observation_usage_captures\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_current:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_current_5c718590978a_insert\" ON \"agent_workflow\".\"observation_usage_current\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_current:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_current_5c718590978a_update\" ON \"agent_workflow\".\"observation_usage_current\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_current:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_current_5c718590978a_delete\" ON \"agent_workflow\".\"observation_usage_current\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_events:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_events_20955815b204_insert\" ON \"agent_workflow\".\"observation_usage_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_events:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_events_20955815b204_update\" ON \"agent_workflow\".\"observation_usage_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_events:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_events_20955815b204_delete\" ON \"agent_workflow\".\"observation_usage_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_native_records:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_native_rec_80ccf5536f6c_insert\" ON \"agent_workflow\".\"observation_usage_native_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_native_records:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_native_rec_80ccf5536f6c_update\" ON \"agent_workflow\".\"observation_usage_native_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_native_records:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_native_rec_80ccf5536f6c_delete\" ON \"agent_workflow\".\"observation_usage_native_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_sources:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_sources_b509b15c3b1b_insert\" ON \"agent_workflow\".\"observation_usage_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_sources:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_sources_b509b15c3b1b_update\" ON \"agent_workflow\".\"observation_usage_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_sources:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_observation_usage_sources_b509b15c3b1b_delete\" ON \"agent_workflow\".\"observation_usage_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_emissions:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_em_364e7e46c5e0_insert\" ON \"agent_workflow\".\"system_agent_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_emissions:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_em_364e7e46c5e0_update\" ON \"agent_workflow\".\"system_agent_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_emissions:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_em_364e7e46c5e0_delete\" ON \"agent_workflow\".\"system_agent_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_heads:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_ba37186c0936_insert\" ON \"agent_workflow\".\"system_agent_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_heads:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_ba37186c0936_update\" ON \"agent_workflow\".\"system_agent_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_heads:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_ba37186c0936_delete\" ON \"agent_workflow\".\"system_agent_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_pages:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_771477690e2b_insert\" ON \"agent_workflow\".\"system_agent_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_pages:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_771477690e2b_update\" ON \"agent_workflow\".\"system_agent_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_pages:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_771477690e2b_delete\" ON \"agent_workflow\".\"system_agent_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_passes:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_6520d2339bb5_insert\" ON \"agent_workflow\".\"system_agent_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_passes:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_6520d2339bb5_update\" ON \"agent_workflow\".\"system_agent_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_passes:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pa_6520d2339bb5_delete\" ON \"agent_workflow\".\"system_agent_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_preparations:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pr_ec4ab414cf07_insert\" ON \"agent_workflow\".\"system_agent_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_preparations:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pr_ec4ab414cf07_update\" ON \"agent_workflow\".\"system_agent_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_preparations:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_pr_ec4ab414cf07_delete\" ON \"agent_workflow\".\"system_agent_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_revision_heads:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_re_1baf88801307_insert\" ON \"agent_workflow\".\"system_agent_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_revision_heads:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_re_1baf88801307_update\" ON \"agent_workflow\".\"system_agent_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_revision_heads:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_re_1baf88801307_delete\" ON \"agent_workflow\".\"system_agent_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_heads:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_9ed202dd645c_insert\" ON \"agent_workflow\".\"system_agent_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_heads:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_9ed202dd645c_update\" ON \"agent_workflow\".\"system_agent_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_heads:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_9ed202dd645c_delete\" ON \"agent_workflow\".\"system_agent_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_results:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_60f7ad4db013_insert\" ON \"agent_workflow\".\"system_agent_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_results:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_60f7ad4db013_update\" ON \"agent_workflow\".\"system_agent_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_results:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_60f7ad4db013_delete\" ON \"agent_workflow\".\"system_agent_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_sets:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_64e30e7a3e2c_insert\" ON \"agent_workflow\".\"system_agent_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_sets:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_64e30e7a3e2c_update\" ON \"agent_workflow\".\"system_agent_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_sets:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_64e30e7a3e2c_delete\" ON \"agent_workflow\".\"system_agent_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_transitions:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_32f58d5077c1_insert\" ON \"agent_workflow\".\"system_agent_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_transitions:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_32f58d5077c1_update\" ON \"agent_workflow\".\"system_agent_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_transitions:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_ro_32f58d5077c1_delete\" ON \"agent_workflow\".\"system_agent_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_session_parents:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_se_71b41666d29a_insert\" ON \"agent_workflow\".\"system_agent_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_session_parents:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_se_71b41666d29a_update\" ON \"agent_workflow\".\"system_agent_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_session_parents:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_se_71b41666d29a_delete\" ON \"agent_workflow\".\"system_agent_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_step_members:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_st_7414b1fb4392_insert\" ON \"agent_workflow\".\"system_agent_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_step_members:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_st_7414b1fb4392_update\" ON \"agent_workflow\".\"system_agent_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_step_members:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_st_7414b1fb4392_delete\" ON \"agent_workflow\".\"system_agent_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_store_bindings:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_st_d569eb209fc4_insert\" ON \"agent_workflow\".\"system_agent_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_store_bindings:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_st_d569eb209fc4_update\" ON \"agent_workflow\".\"system_agent_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_store_bindings:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_native_usage_st_d569eb209fc4_delete\" ON \"agent_workflow\".\"system_agent_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_groups:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_gro_f79391caed8d_insert\" ON \"agent_workflow\".\"system_agent_observation_groups\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_groups:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_gro_f79391caed8d_update\" ON \"agent_workflow\".\"system_agent_observation_groups\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_groups:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_gro_f79391caed8d_delete\" ON \"agent_workflow\".\"system_agent_observation_groups\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_owners:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_own_67b3c6637001_insert\" ON \"agent_workflow\".\"system_agent_observation_owners\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_owners:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_own_67b3c6637001_update\" ON \"agent_workflow\".\"system_agent_observation_owners\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_owners:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_own_67b3c6637001_delete\" ON \"agent_workflow\".\"system_agent_observation_owners\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_sources:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_sou_e2eb3c17fdf9_insert\" ON \"agent_workflow\".\"system_agent_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_sources:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_sou_e2eb3c17fdf9_update\" ON \"agent_workflow\".\"system_agent_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_sources:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_system_agent_observation_sou_e2eb3c17fdf9_delete\" ON \"agent_workflow\".\"system_agent_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_collaborators:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_collaborators_a2cc5248664c_insert\" ON \"agent_workflow\".\"task_collaborators\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_collaborators:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_collaborators_a2cc5248664c_update\" ON \"agent_workflow\".\"task_collaborators\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_collaborators:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_collaborators_a2cc5248664c_delete\" ON \"agent_workflow\".\"task_collaborators\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_emissions:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__c8b1327ae70a_insert\" ON \"agent_workflow\".\"task_execution_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_emissions:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__c8b1327ae70a_update\" ON \"agent_workflow\".\"task_execution_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_emissions:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__c8b1327ae70a_delete\" ON \"agent_workflow\".\"task_execution_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_heads:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__65f2373ec8b0_insert\" ON \"agent_workflow\".\"task_execution_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_heads:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__65f2373ec8b0_update\" ON \"agent_workflow\".\"task_execution_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_heads:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__65f2373ec8b0_delete\" ON \"agent_workflow\".\"task_execution_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_pages:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__a6a06b98c7fd_insert\" ON \"agent_workflow\".\"task_execution_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_pages:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__a6a06b98c7fd_update\" ON \"agent_workflow\".\"task_execution_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_pages:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__a6a06b98c7fd_delete\" ON \"agent_workflow\".\"task_execution_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_passes:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__bdc22d8b4973_insert\" ON \"agent_workflow\".\"task_execution_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_passes:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__bdc22d8b4973_update\" ON \"agent_workflow\".\"task_execution_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_passes:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__bdc22d8b4973_delete\" ON \"agent_workflow\".\"task_execution_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_preparations:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__4253a159b085_insert\" ON \"agent_workflow\".\"task_execution_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_preparations:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__4253a159b085_update\" ON \"agent_workflow\".\"task_execution_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_preparations:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__4253a159b085_delete\" ON \"agent_workflow\".\"task_execution_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_revision_heads:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__93d68d4e5e09_insert\" ON \"agent_workflow\".\"task_execution_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_revision_heads:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__93d68d4e5e09_update\" ON \"agent_workflow\".\"task_execution_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_revision_heads:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__93d68d4e5e09_delete\" ON \"agent_workflow\".\"task_execution_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_heads:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__a5adc08382bc_insert\" ON \"agent_workflow\".\"task_execution_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_heads:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__a5adc08382bc_update\" ON \"agent_workflow\".\"task_execution_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_heads:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__a5adc08382bc_delete\" ON \"agent_workflow\".\"task_execution_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_results:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__d6f5b5fad9a7_insert\" ON \"agent_workflow\".\"task_execution_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_results:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__d6f5b5fad9a7_update\" ON \"agent_workflow\".\"task_execution_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_results:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__d6f5b5fad9a7_delete\" ON \"agent_workflow\".\"task_execution_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_sets:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__84a2186b134d_insert\" ON \"agent_workflow\".\"task_execution_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_sets:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__84a2186b134d_update\" ON \"agent_workflow\".\"task_execution_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_sets:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__84a2186b134d_delete\" ON \"agent_workflow\".\"task_execution_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_transitions:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__e20c6c58809d_insert\" ON \"agent_workflow\".\"task_execution_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_transitions:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__e20c6c58809d_update\" ON \"agent_workflow\".\"task_execution_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_transitions:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__e20c6c58809d_delete\" ON \"agent_workflow\".\"task_execution_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_session_parents:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__1503f7a42ca6_insert\" ON \"agent_workflow\".\"task_execution_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_session_parents:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__1503f7a42ca6_update\" ON \"agent_workflow\".\"task_execution_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_session_parents:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__1503f7a42ca6_delete\" ON \"agent_workflow\".\"task_execution_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_step_members:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__7d6b31fa31e2_insert\" ON \"agent_workflow\".\"task_execution_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_step_members:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__7d6b31fa31e2_update\" ON \"agent_workflow\".\"task_execution_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_step_members:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__7d6b31fa31e2_delete\" ON \"agent_workflow\".\"task_execution_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_store_bindings:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__cac99809a707_insert\" ON \"agent_workflow\".\"task_execution_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_store_bindings:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__cac99809a707_update\" ON \"agent_workflow\".\"task_execution_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_store_bindings:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_native_usage__cac99809a707_delete\" ON \"agent_workflow\".\"task_execution_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_observation_sources:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_observation_s_47fab48faf75_insert\" ON \"agent_workflow\".\"task_execution_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_observation_sources:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_observation_s_47fab48faf75_update\" ON \"agent_workflow\".\"task_execution_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_observation_sources:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_execution_observation_s_47fab48faf75_delete\" ON \"agent_workflow\".\"task_execution_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_repos:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_task_repos_e002384bcdaf_insert\" ON \"agent_workflow\".\"task_repos\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_repos:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_task_repos_e002384bcdaf_update\" ON \"agent_workflow\".\"task_repos\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_repos:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_task_repos_e002384bcdaf_delete\" ON \"agent_workflow\".\"task_repos\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:tasks:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_tasks_085154084c74_insert\" ON \"agent_workflow\".\"tasks\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:tasks:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_tasks_085154084c74_update\" ON \"agent_workflow\".\"tasks\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:tasks:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_tasks_085154084c74_delete\" ON \"agent_workflow\".\"tasks\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:users:observation-source:insert",
+      "sql": "DROP TRIGGER \"obs_src_users_7dfb4cf67742_insert\" ON \"agent_workflow\".\"users\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:users:observation-source:update",
+      "sql": "DROP TRIGGER \"obs_src_users_7dfb4cf67742_update\" ON \"agent_workflow\".\"users\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:users:observation-source:delete",
+      "sql": "DROP TRIGGER \"obs_src_users_7dfb4cf67742_delete\" ON \"agent_workflow\".\"users\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:agents:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_agents_8c70b25cbbbe\" ON \"agent_workflow\".\"agents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_sessions:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_intent_sessions_f4fc994cf568\" ON \"agent_workflow\".\"intent_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turn_events:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_intent_turn_events_9577a85373ce\" ON \"agent_workflow\".\"intent_turn_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:intent_turns:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_intent_turns_a0c059001e55\" ON \"agent_workflow\".\"intent_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_events:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_mcp_runtime_test_events_3026f434cf19\" ON \"agent_workflow\".\"mcp_runtime_test_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_sessions:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_mcp_runtime_test_sessions_9f19ae79a165\" ON \"agent_workflow\".\"mcp_runtime_test_sessions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:mcp_runtime_test_turns:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_mcp_runtime_test_turns_5facdc2dda15\" ON \"agent_workflow\".\"mcp_runtime_test_turns\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_events:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_memory_distill_events_9222b906089a\" ON \"agent_workflow\".\"memory_distill_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:memory_distill_jobs:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_memory_distill_jobs_7c1cff75edd4\" ON \"agent_workflow\".\"memory_distill_jobs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_run_events:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_node_run_events_01109c2fd4cf\" ON \"agent_workflow\".\"node_run_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:node_runs:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_node_runs_d3d6de02630e\" ON \"agent_workflow\".\"node_runs\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_invocations:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_invocations_ddde8c4db0d6\" ON \"agent_workflow\".\"observation_invocations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_records:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_platform_records_b9c238a11799\" ON \"agent_workflow\".\"observation_platform_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_platform_sources:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_platform_sources_0d51a229caf9\" ON \"agent_workflow\".\"observation_platform_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_heads:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_price_heads_e45105caf86d\" ON \"agent_workflow\".\"observation_price_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_price_versions:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_price_versions_40e139831493\" ON \"agent_workflow\".\"observation_price_versions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_captures:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_usage_captures_69ed66269937\" ON \"agent_workflow\".\"observation_usage_captures\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_current:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_usage_current_5c718590978a\" ON \"agent_workflow\".\"observation_usage_current\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_events:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_usage_events_20955815b204\" ON \"agent_workflow\".\"observation_usage_events\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_native_records:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_usage_native_rec_80ccf5536f6c\" ON \"agent_workflow\".\"observation_usage_native_records\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:observation_usage_sources:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_observation_usage_sources_b509b15c3b1b\" ON \"agent_workflow\".\"observation_usage_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_emissions:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_em_364e7e46c5e0\" ON \"agent_workflow\".\"system_agent_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_heads:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_pa_ba37186c0936\" ON \"agent_workflow\".\"system_agent_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_pass_pages:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_pa_771477690e2b\" ON \"agent_workflow\".\"system_agent_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_passes:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_pa_6520d2339bb5\" ON \"agent_workflow\".\"system_agent_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_preparations:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_pr_ec4ab414cf07\" ON \"agent_workflow\".\"system_agent_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_revision_heads:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_re_1baf88801307\" ON \"agent_workflow\".\"system_agent_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_heads:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_ro_9ed202dd645c\" ON \"agent_workflow\".\"system_agent_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_results:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_ro_60f7ad4db013\" ON \"agent_workflow\".\"system_agent_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_sets:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_ro_64e30e7a3e2c\" ON \"agent_workflow\".\"system_agent_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_root_transitions:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_ro_32f58d5077c1\" ON \"agent_workflow\".\"system_agent_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_session_parents:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_se_71b41666d29a\" ON \"agent_workflow\".\"system_agent_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_step_members:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_st_7414b1fb4392\" ON \"agent_workflow\".\"system_agent_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_native_usage_store_bindings:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_native_usage_st_d569eb209fc4\" ON \"agent_workflow\".\"system_agent_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_groups:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_observation_gro_f79391caed8d\" ON \"agent_workflow\".\"system_agent_observation_groups\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_owners:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_observation_own_67b3c6637001\" ON \"agent_workflow\".\"system_agent_observation_owners\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:system_agent_observation_sources:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_system_agent_observation_sou_e2eb3c17fdf9\" ON \"agent_workflow\".\"system_agent_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_collaborators:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_collaborators_a2cc5248664c\" ON \"agent_workflow\".\"task_collaborators\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_emissions:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__c8b1327ae70a\" ON \"agent_workflow\".\"task_execution_native_usage_emissions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_heads:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__65f2373ec8b0\" ON \"agent_workflow\".\"task_execution_native_usage_pass_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_pass_pages:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__a6a06b98c7fd\" ON \"agent_workflow\".\"task_execution_native_usage_pass_pages\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_passes:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__bdc22d8b4973\" ON \"agent_workflow\".\"task_execution_native_usage_passes\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_preparations:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__4253a159b085\" ON \"agent_workflow\".\"task_execution_native_usage_preparations\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_revision_heads:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__93d68d4e5e09\" ON \"agent_workflow\".\"task_execution_native_usage_revision_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_heads:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__a5adc08382bc\" ON \"agent_workflow\".\"task_execution_native_usage_root_heads\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_results:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__d6f5b5fad9a7\" ON \"agent_workflow\".\"task_execution_native_usage_root_results\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_sets:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__84a2186b134d\" ON \"agent_workflow\".\"task_execution_native_usage_root_sets\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_root_transitions:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__e20c6c58809d\" ON \"agent_workflow\".\"task_execution_native_usage_root_transitions\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_session_parents:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__1503f7a42ca6\" ON \"agent_workflow\".\"task_execution_native_usage_session_parents\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_step_members:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__7d6b31fa31e2\" ON \"agent_workflow\".\"task_execution_native_usage_step_members\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_native_usage_store_bindings:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_native_usage__cac99809a707\" ON \"agent_workflow\".\"task_execution_native_usage_store_bindings\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_execution_observation_sources:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_execution_observation_s_47fab48faf75\" ON \"agent_workflow\".\"task_execution_observation_sources\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:task_repos:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_task_repos_e002384bcdaf\" ON \"agent_workflow\".\"task_repos\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:tasks:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_tasks_085154084c74\" ON \"agent_workflow\".\"tasks\""
+    },
+    {
+      "kind": "trigger",
+      "logicalId": "retire:users:observation-change",
+      "sql": "DROP TRIGGER \"obs_delta_users_7dfb4cf67742\" ON \"agent_workflow\".\"users\""
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_report_retained_revisions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"observation_report_retained_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_report_retained_revisions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"observation_report_retained_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_report_retained_revisions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"observation_report_retained_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:agents:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_agents_8c70b25cbbbe_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:agents:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_agents_8c70b25cbbbe_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:agents:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_agents_8c70b25cbbbe_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_sessions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_sessions_f4fc994cf568_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_sessions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_sessions_f4fc994cf568_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_sessions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_sessions_f4fc994cf568_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_turn_events:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_turn_events_9577a85373ce_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_turn_events:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_turn_events_9577a85373ce_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_turn_events:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_turn_events_9577a85373ce_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_turns:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_turns_a0c059001e55_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_turns:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_turns_a0c059001e55_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:intent_turns:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_intent_turns_a0c059001e55_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_events:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_events_3026f434cf19_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_events:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_events_3026f434cf19_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_events:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_events_3026f434cf19_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_sessions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_sessions_9f19ae79a165_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_sessions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_sessions_9f19ae79a165_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_sessions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_sessions_9f19ae79a165_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_turns:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_turns_5facdc2dda15_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_turns:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_turns_5facdc2dda15_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:mcp_runtime_test_turns:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_mcp_runtime_test_turns_5facdc2dda15_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:memory_distill_events:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_memory_distill_events_9222b906089a_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:memory_distill_events:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_memory_distill_events_9222b906089a_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:memory_distill_events:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_memory_distill_events_9222b906089a_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:memory_distill_jobs:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_memory_distill_jobs_7c1cff75edd4_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:memory_distill_jobs:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_memory_distill_jobs_7c1cff75edd4_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:memory_distill_jobs:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_memory_distill_jobs_7c1cff75edd4_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:node_run_events:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_node_run_events_01109c2fd4cf_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:node_run_events:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_node_run_events_01109c2fd4cf_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:node_run_events:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_node_run_events_01109c2fd4cf_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:node_runs:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_node_runs_d3d6de02630e_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:node_runs:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_node_runs_d3d6de02630e_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:node_runs:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_node_runs_d3d6de02630e_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_invocations:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_invocations_ddde8c4db0d6_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_invocations:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_invocations_ddde8c4db0d6_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_invocations:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_invocations_ddde8c4db0d6_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_platform_records:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_platform_records_b9c238a11799_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_platform_records:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_platform_records_b9c238a11799_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_platform_records:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_platform_records_b9c238a11799_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_platform_sources:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_platform_sources_0d51a229caf9_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_platform_sources:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_platform_sources_0d51a229caf9_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_platform_sources:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_platform_sources_0d51a229caf9_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_price_heads:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_price_heads_e45105caf86d_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_price_heads:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_price_heads_e45105caf86d_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_price_heads:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_price_heads_e45105caf86d_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_price_versions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_price_versions_40e139831493_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_price_versions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_price_versions_40e139831493_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_price_versions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_price_versions_40e139831493_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_captures:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_captures_69ed66269937_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_captures:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_captures_69ed66269937_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_captures:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_captures_69ed66269937_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_current:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_current_5c718590978a_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_current:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_current_5c718590978a_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_current:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_current_5c718590978a_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_events:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_events_20955815b204_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_events:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_events_20955815b204_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_events:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_events_20955815b204_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_native_records:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_native_rec_80ccf5536f6c_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_native_records:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_native_rec_80ccf5536f6c_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_native_records:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_native_rec_80ccf5536f6c_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_sources:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_sources_b509b15c3b1b_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_sources:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_sources_b509b15c3b1b_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:observation_usage_sources:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_observation_usage_sources_b509b15c3b1b_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_emissions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_em_364e7e46c5e0_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_emissions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_em_364e7e46c5e0_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_emissions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_em_364e7e46c5e0_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_pass_heads:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_ba37186c0936_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_pass_heads:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_ba37186c0936_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_pass_heads:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_ba37186c0936_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_pass_pages:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_771477690e2b_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_pass_pages:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_771477690e2b_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_pass_pages:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_771477690e2b_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_passes:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_6520d2339bb5_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_passes:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_6520d2339bb5_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_passes:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pa_6520d2339bb5_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_preparations:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pr_ec4ab414cf07_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_preparations:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pr_ec4ab414cf07_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_preparations:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_pr_ec4ab414cf07_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_revision_heads:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_re_1baf88801307_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_revision_heads:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_re_1baf88801307_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_revision_heads:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_re_1baf88801307_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_heads:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_9ed202dd645c_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_heads:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_9ed202dd645c_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_heads:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_9ed202dd645c_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_results:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_60f7ad4db013_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_results:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_60f7ad4db013_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_results:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_60f7ad4db013_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_sets:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_64e30e7a3e2c_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_sets:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_64e30e7a3e2c_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_sets:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_64e30e7a3e2c_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_transitions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_32f58d5077c1_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_transitions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_32f58d5077c1_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_root_transitions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_ro_32f58d5077c1_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_session_parents:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_se_71b41666d29a_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_session_parents:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_se_71b41666d29a_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_session_parents:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_se_71b41666d29a_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_step_members:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_st_7414b1fb4392_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_step_members:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_st_7414b1fb4392_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_step_members:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_st_7414b1fb4392_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_store_bindings:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_st_d569eb209fc4_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_store_bindings:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_st_d569eb209fc4_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_native_usage_store_bindings:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_native_usage_st_d569eb209fc4_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_groups:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_gro_f79391caed8d_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_groups:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_gro_f79391caed8d_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_groups:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_gro_f79391caed8d_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_owners:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_own_67b3c6637001_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_owners:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_own_67b3c6637001_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_owners:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_own_67b3c6637001_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_sources:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_sou_e2eb3c17fdf9_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_sources:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_sou_e2eb3c17fdf9_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:system_agent_observation_sources:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_system_agent_observation_sou_e2eb3c17fdf9_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_collaborators:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_collaborators_a2cc5248664c_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_collaborators:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_collaborators_a2cc5248664c_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_collaborators:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_collaborators_a2cc5248664c_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_emissions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__c8b1327ae70a_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_emissions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__c8b1327ae70a_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_emissions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__c8b1327ae70a_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_pass_heads:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__65f2373ec8b0_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_pass_heads:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__65f2373ec8b0_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_pass_heads:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__65f2373ec8b0_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_pass_pages:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__a6a06b98c7fd_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_pass_pages:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__a6a06b98c7fd_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_pass_pages:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__a6a06b98c7fd_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_passes:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__bdc22d8b4973_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_passes:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__bdc22d8b4973_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_passes:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__bdc22d8b4973_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_preparations:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__4253a159b085_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_preparations:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__4253a159b085_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_preparations:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__4253a159b085_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_revision_heads:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__93d68d4e5e09_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_revision_heads:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__93d68d4e5e09_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_revision_heads:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__93d68d4e5e09_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_heads:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__a5adc08382bc_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_heads:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__a5adc08382bc_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_heads:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__a5adc08382bc_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_results:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__d6f5b5fad9a7_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_results:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__d6f5b5fad9a7_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_results:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__d6f5b5fad9a7_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_sets:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__84a2186b134d_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_sets:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__84a2186b134d_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_sets:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__84a2186b134d_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_transitions:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__e20c6c58809d_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_transitions:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__e20c6c58809d_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_root_transitions:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__e20c6c58809d_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_session_parents:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__1503f7a42ca6_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_session_parents:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__1503f7a42ca6_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_session_parents:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__1503f7a42ca6_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_step_members:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__7d6b31fa31e2_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_step_members:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__7d6b31fa31e2_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_step_members:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__7d6b31fa31e2_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_store_bindings:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__cac99809a707_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_store_bindings:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__cac99809a707_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_native_usage_store_bindings:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_native_usage__cac99809a707_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_observation_sources:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_observation_s_47fab48faf75_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_observation_sources:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_observation_s_47fab48faf75_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_execution_observation_sources:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_execution_observation_s_47fab48faf75_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_repos:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_repos_e002384bcdaf_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_repos:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_repos_e002384bcdaf_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:task_repos:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_task_repos_e002384bcdaf_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:tasks:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_tasks_085154084c74_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:tasks:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_tasks_085154084c74_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:tasks:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_tasks_085154084c74_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:users:insert",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_users_7dfb4cf67742_insert\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:users:update",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_users_7dfb4cf67742_update\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_source_revisions:users:delete",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_src_users_7dfb4cf67742_delete\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:agents",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_agents_8c70b25cbbbe\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:intent_sessions",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_intent_sessions_f4fc994cf568\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:intent_turn_events",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_intent_turn_events_9577a85373ce\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:intent_turns",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_intent_turns_a0c059001e55\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:mcp_runtime_test_events",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_mcp_runtime_test_events_3026f434cf19\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:mcp_runtime_test_sessions",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_mcp_runtime_test_sessions_9f19ae79a165\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:mcp_runtime_test_turns",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_mcp_runtime_test_turns_5facdc2dda15\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:memory_distill_events",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_memory_distill_events_9222b906089a\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:memory_distill_jobs",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_memory_distill_jobs_7c1cff75edd4\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:node_run_events",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_node_run_events_01109c2fd4cf\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:node_runs",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_node_runs_d3d6de02630e\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_invocations",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_invocations_ddde8c4db0d6\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_platform_records",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_platform_records_b9c238a11799\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_platform_sources",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_platform_sources_0d51a229caf9\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_price_heads",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_price_heads_e45105caf86d\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_price_versions",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_price_versions_40e139831493\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_usage_captures",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_usage_captures_69ed66269937\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_usage_current",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_usage_current_5c718590978a\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_usage_events",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_usage_events_20955815b204\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_usage_native_records",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_usage_native_rec_80ccf5536f6c\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:observation_usage_sources",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_observation_usage_sources_b509b15c3b1b\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_emissions",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_em_364e7e46c5e0\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_pass_heads",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_pa_ba37186c0936\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_pass_pages",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_pa_771477690e2b\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_passes",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_pa_6520d2339bb5\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_preparations",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_pr_ec4ab414cf07\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_revision_heads",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_re_1baf88801307\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_root_heads",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_ro_9ed202dd645c\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_root_results",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_ro_60f7ad4db013\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_root_sets",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_ro_64e30e7a3e2c\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_root_transitions",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_ro_32f58d5077c1\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_session_parents",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_se_71b41666d29a\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_step_members",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_st_7414b1fb4392\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_native_usage_store_bindings",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_native_usage_st_d569eb209fc4\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_observation_groups",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_observation_gro_f79391caed8d\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_observation_owners",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_observation_own_67b3c6637001\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:system_agent_observation_sources",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_system_agent_observation_sou_e2eb3c17fdf9\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_collaborators",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_collaborators_a2cc5248664c\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_emissions",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__c8b1327ae70a\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_pass_heads",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__65f2373ec8b0\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_pass_pages",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__a6a06b98c7fd\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_passes",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__bdc22d8b4973\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_preparations",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__4253a159b085\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_revision_heads",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__93d68d4e5e09\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_root_heads",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__a5adc08382bc\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_root_results",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__d6f5b5fad9a7\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_root_sets",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__84a2186b134d\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_root_transitions",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__e20c6c58809d\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_session_parents",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__1503f7a42ca6\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_step_members",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__7d6b31fa31e2\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_native_usage_store_bindings",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_native_usage__cac99809a707\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_execution_observation_sources",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_execution_observation_s_47fab48faf75\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:task_repos",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_task_repos_e002384bcdaf\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:tasks",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_tasks_085154084c74\"()"
+    },
+    {
+      "kind": "function",
+      "logicalId": "retire:observation_projection_changes:users",
+      "sql": "DROP FUNCTION \"agent_workflow\".\"obs_delta_users_7dfb4cf67742\"()"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_calculation_rows:observation_calculation_rows_cache_key_observation_calculation_versions_cache_key_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_calculation_rows\" DROP CONSTRAINT \"observation_calculation_rows_cache_key_observation_calculation_versions_cache_key_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_projection_prepared:observation_projection_prepared_work_id_observation_projection_work_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_projection_prepared\" DROP CONSTRAINT \"observation_projection_prepared_work_id_observation_projection_work_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_projection_work_components:observation_projection_work_components_work_id_observation_projection_work_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_projection_work_components\" DROP CONSTRAINT \"observation_projection_work_components_work_id_observation_projection_work_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_native_fact_pages:observation_native_fact_pages_cache_key_observation_native_fact_roots_cache_key_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_native_fact_pages\" DROP CONSTRAINT \"observation_native_fact_pages_cache_key_observation_native_fact_roots_cache_key_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_report_counts:observation_report_counts_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_counts\" DROP CONSTRAINT \"observation_report_counts_report_id_observation_reports_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_report_pages:observation_report_pages_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_pages\" DROP CONSTRAINT \"observation_report_pages_report_id_observation_reports_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_report_receipts:observation_report_receipts_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_receipts\" DROP CONSTRAINT \"observation_report_receipts_report_id_observation_reports_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_report_retained_revisions:observation_report_retained_revisions_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_retained_revisions\" DROP CONSTRAINT \"observation_report_retained_revisions_report_id_observation_reports_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:observation_report_rows:observation_report_rows_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_rows\" DROP CONSTRAINT \"observation_report_rows_report_id_observation_reports_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_emissions:system_agent_native_usage_emissions_invocation_id_system_agent_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_emissions\" DROP CONSTRAINT \"system_agent_native_usage_emissions_invocation_id_system_agent_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_pass_heads:system_agent_native_usage_pass_heads_pass_id_system_agent_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_pass_heads\" DROP CONSTRAINT \"system_agent_native_usage_pass_heads_pass_id_system_agent_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_pass_pages:system_agent_native_usage_pass_pages_pass_id_system_agent_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_pass_pages\" DROP CONSTRAINT \"system_agent_native_usage_pass_pages_pass_id_system_agent_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_passes:system_agent_native_usage_passes_invocation_id_system_agent_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_passes\" DROP CONSTRAINT \"system_agent_native_usage_passes_invocation_id_system_agent_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_preparations:system_agent_native_usage_preparations_task_id_system_agent_observation_groups_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_preparations\" DROP CONSTRAINT \"system_agent_native_usage_preparations_task_id_system_agent_observation_groups_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_revision_heads:system_agent_native_usage_revision_heads_invocation_id_system_agent_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_revision_heads\" DROP CONSTRAINT \"system_agent_native_usage_revision_heads_invocation_id_system_agent_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_root_heads:system_agent_native_usage_root_heads_task_id_system_agent_observation_groups_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_root_heads\" DROP CONSTRAINT \"system_agent_native_usage_root_heads_task_id_system_agent_observation_groups_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_root_results:system_agent_native_usage_root_results_invocation_id_system_agent_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_root_results\" DROP CONSTRAINT \"system_agent_native_usage_root_results_invocation_id_system_agent_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_root_sets:system_agent_native_usage_root_sets_invocation_id_system_agent_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_root_sets\" DROP CONSTRAINT \"system_agent_native_usage_root_sets_invocation_id_system_agent_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_root_transitions:system_agent_native_usage_root_transitions_invocation_id_system_agent_native_usage_root_heads_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_root_transitions\" DROP CONSTRAINT \"system_agent_native_usage_root_transitions_invocation_id_system_agent_native_usage_root_heads_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_session_parents:system_agent_native_usage_session_parents_pass_id_system_agent_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_session_parents\" DROP CONSTRAINT \"system_agent_native_usage_session_parents_pass_id_system_agent_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_step_members:system_agent_native_usage_step_members_pass_id_system_agent_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_step_members\" DROP CONSTRAINT \"system_agent_native_usage_step_members_pass_id_system_agent_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_native_usage_store_bindings:system_agent_native_usage_store_bindings_invocation_id_system_agent_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_native_usage_store_bindings\" DROP CONSTRAINT \"system_agent_native_usage_store_bindings_invocation_id_system_agent_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_observation_owners:system_agent_observation_owners_group_id_system_agent_observation_groups_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_observation_owners\" DROP CONSTRAINT \"system_agent_observation_owners_group_id_system_agent_observation_groups_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_observation_sources:system_agent_observation_sources_task_id_system_agent_observation_groups_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_observation_sources\" DROP CONSTRAINT \"system_agent_observation_sources_task_id_system_agent_observation_groups_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:system_agent_observation_sources:system_agent_observation_sources_node_run_id_system_agent_observation_owners_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"system_agent_observation_sources\" DROP CONSTRAINT \"system_agent_observation_sources_node_run_id_system_agent_observation_owners_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_emissions:task_execution_native_usage_emissions_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_emissions\" DROP CONSTRAINT \"task_execution_native_usage_emissions_invocation_id_task_execution_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_pass_heads:task_execution_native_usage_pass_heads_pass_id_task_execution_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_pass_heads\" DROP CONSTRAINT \"task_execution_native_usage_pass_heads_pass_id_task_execution_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_pass_pages:task_execution_native_usage_pass_pages_pass_id_task_execution_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_pass_pages\" DROP CONSTRAINT \"task_execution_native_usage_pass_pages_pass_id_task_execution_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_passes:task_execution_native_usage_passes_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_passes\" DROP CONSTRAINT \"task_execution_native_usage_passes_invocation_id_task_execution_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_preparations:task_execution_native_usage_preparations_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_preparations\" DROP CONSTRAINT \"task_execution_native_usage_preparations_task_id_tasks_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_revision_heads:task_execution_native_usage_revision_heads_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_revision_heads\" DROP CONSTRAINT \"task_execution_native_usage_revision_heads_invocation_id_task_execution_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_root_heads:task_execution_native_usage_root_heads_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_heads\" DROP CONSTRAINT \"task_execution_native_usage_root_heads_task_id_tasks_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_root_results:task_execution_native_usage_root_results_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_results\" DROP CONSTRAINT \"task_execution_native_usage_root_results_invocation_id_task_execution_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_root_sets:task_execution_native_usage_root_sets_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_sets\" DROP CONSTRAINT \"task_execution_native_usage_root_sets_invocation_id_task_execution_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_root_transitions:task_execution_native_usage_root_transitions_invocation_id_task_execution_native_usage_root_heads_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_root_transitions\" DROP CONSTRAINT \"task_execution_native_usage_root_transitions_invocation_id_task_execution_native_usage_root_heads_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_session_parents:task_execution_native_usage_session_parents_pass_id_task_execution_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_session_parents\" DROP CONSTRAINT \"task_execution_native_usage_session_parents_pass_id_task_execution_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_step_members:task_execution_native_usage_step_members_pass_id_task_execution_native_usage_passes_pass_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_step_members\" DROP CONSTRAINT \"task_execution_native_usage_step_members_pass_id_task_execution_native_usage_passes_pass_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_native_usage_store_bindings:task_execution_native_usage_store_bindings_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_store_bindings\" DROP CONSTRAINT \"task_execution_native_usage_store_bindings_invocation_id_task_execution_native_usage_preparations_invocation_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_observation_sources:task_execution_observation_sources_task_id_tasks_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_observation_sources\" DROP CONSTRAINT \"task_execution_observation_sources_task_id_tasks_id_fk\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "retire:task_execution_observation_sources:task_execution_observation_sources_node_run_id_node_runs_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_observation_sources\" DROP CONSTRAINT \"task_execution_observation_sources_node_run_id_node_runs_id_fk\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_calculation_rows",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_calculation_rows\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_calculation_versions",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_calculation_versions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_anomaly_history",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_anomaly_history\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_anomaly_states",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_anomaly_states\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_invocation_price_audit",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_invocation_price_audit\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_invocation_price_policies",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_invocation_price_policies\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_invocation_price_records",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_invocation_price_records\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_maintenance_members",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_maintenance_members\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_maintenance_operations",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_maintenance_operations\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_descriptors",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_descriptors\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_indexed_versions",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_indexed_versions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_query_scope_members",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_query_scope_members\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_query_scopes",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_query_scopes\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_invocations",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_invocations\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_platform_records",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_platform_records\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_platform_sources",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_platform_sources\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_price_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_price_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_price_versions",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_price_versions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_bindings",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_bindings\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_bootstrap",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_bootstrap\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_changes",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_changes\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_components",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_components\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_current",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_current\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_dependencies",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_dependencies\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_history",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_history\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_memberships",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_memberships\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_prepared",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_prepared\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_versions",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_versions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_views",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_views\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_work",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_work\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_projection_work_components",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_projection_work_components\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_native_fact_pages",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_native_fact_pages\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_native_fact_roots",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_native_fact_roots\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_report_counts",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_report_counts\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_report_pages",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_report_pages\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_report_receipts",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_report_receipts\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_report_retained_revisions",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_report_retained_revisions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_report_rows",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_report_rows\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_reports",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_reports\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_report_leases",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_report_leases\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_scope_refs",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_scope_refs\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_storage_samples",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_storage_samples\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_storage_state",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_storage_state\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_work_retention",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_work_retention\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_source_revisions",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_source_revisions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_usage_sources",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_usage_sources\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_usage_captures",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_usage_captures\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_usage_native_records",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_usage_native_records\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_usage_current",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_usage_current\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:observation_usage_events",
+      "sql": "DROP TABLE \"agent_workflow\".\"observation_usage_events\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_emissions",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_emissions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_pass_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_pass_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_pass_pages",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_pass_pages\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_passes",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_passes\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_preparations",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_preparations\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_revision_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_revision_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_root_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_root_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_root_results",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_root_results\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_root_sets",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_root_sets\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_root_transitions",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_root_transitions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_session_parents",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_session_parents\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_step_members",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_step_members\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_native_usage_store_bindings",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_native_usage_store_bindings\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_observation_groups",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_observation_groups\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_observation_owners",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_observation_owners\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_agent_observation_sources",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_agent_observation_sources\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_emissions",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_emissions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_pass_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_pass_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_pass_pages",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_pass_pages\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_passes",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_passes\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_preparations",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_preparations\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_revision_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_revision_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_root_heads",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_root_heads\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_root_results",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_root_results\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_root_sets",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_root_sets\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_root_transitions",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_root_transitions\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_session_parents",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_session_parents\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_step_members",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_step_members\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_native_usage_store_bindings",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_native_usage_store_bindings\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:task_execution_observation_sources",
+      "sql": "DROP TABLE \"agent_workflow\".\"task_execution_observation_sources\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_call_models",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_call_models\" (\n  \"call_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"model\" TEXT COLLATE \"C\" NOT NULL,\n  \"input_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_read_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_write_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"output_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"reasoning_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"price_id\" TEXT COLLATE \"C\",\n  \"cost_nano\" BIGINT,\n  \"cost_state\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_call_models_pkey\" PRIMARY KEY (\"call_id\", \"model\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_calls",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_calls\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"purpose\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\",\n  \"node_run_id\" TEXT COLLATE \"C\",\n  \"system_kind\" TEXT COLLATE \"C\",\n  \"system_label\" TEXT COLLATE \"C\",\n  \"owner_user_id\" TEXT COLLATE \"C\",\n  \"agent_id\" TEXT COLLATE \"C\",\n  \"agent_name\" TEXT COLLATE \"C\" NOT NULL,\n  \"runtime_id\" TEXT COLLATE \"C\",\n  \"runtime_name\" TEXT COLLATE \"C\",\n  \"protocol\" TEXT COLLATE \"C\" NOT NULL,\n  \"status\" TEXT COLLATE \"C\" NOT NULL,\n  \"started_at\" BIGINT NOT NULL,\n  \"ended_at\" BIGINT,\n  \"usage_state\" TEXT COLLATE \"C\" NOT NULL,\n  \"input_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_read_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_write_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"output_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"reasoning_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cost_nano\" BIGINT NOT NULL DEFAULT 0,\n  \"cost_state\" TEXT COLLATE \"C\" NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"observation_calls_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_prices",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_prices\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"runtime_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"model\" TEXT COLLATE \"C\" NOT NULL,\n  \"input_micro\" BIGINT,\n  \"cache_read_micro\" BIGINT,\n  \"cache_write_micro\" BIGINT,\n  \"output_micro\" BIGINT,\n  \"effective_from\" BIGINT NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"created_by\" TEXT COLLATE \"C\" NOT NULL,\n  \"note\" TEXT COLLATE \"C\" NOT NULL DEFAULT '',\n  CONSTRAINT \"observation_prices_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_calls:index:observation_calls_started_idx",
+      "sql": "CREATE INDEX \"observation_calls_started_idx\" ON \"agent_workflow\".\"observation_calls\" (\"started_at\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_calls:index:observation_calls_task_idx",
+      "sql": "CREATE INDEX \"observation_calls_task_idx\" ON \"agent_workflow\".\"observation_calls\" (\"task_id\", \"started_at\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_calls:index:observation_calls_status_idx",
+      "sql": "CREATE INDEX \"observation_calls_status_idx\" ON \"agent_workflow\".\"observation_calls\" (\"status\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_prices:index:observation_prices_line_idx",
+      "sql": "CREATE INDEX \"observation_prices_line_idx\" ON \"agent_workflow\".\"observation_prices\" (\"runtime_id\", \"model\", \"created_at\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_call_models:check:observation_call_models_cost_state_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_call_models\" ADD CONSTRAINT \"observation_call_models_cost_state_ck\" CHECK (\"cost_state\" IN ('none','priced','partial','unpriced'))"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_call_models:fk:observation_call_models_call_id_observation_calls_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_call_models\" ADD CONSTRAINT \"observation_call_models_call_id_observation_calls_id_fk\" FOREIGN KEY (\"call_id\") REFERENCES \"agent_workflow\".\"observation_calls\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_calls:check:observation_calls_purpose_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_purpose_ck\" CHECK (\"purpose\" IN ('task','system'))"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_calls:check:observation_calls_status_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_status_ck\" CHECK (\"status\" IN ('running','done','failed','canceled','interrupted'))"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_calls:check:observation_calls_usage_state_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_usage_state_ck\" CHECK (\"usage_state\" IN ('pending','partial','complete','none'))"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_calls:check:observation_calls_cost_state_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_cost_state_ck\" CHECK (\"cost_state\" IN ('none','priced','partial','unpriced'))"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:32c305d87968bc9cd4bf179e3f94d5cee2a92a8dc3cfa5fbfbce93f2336da22b', active_table_count = 191, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:2cb9da99ba7e74d9863bc0c3733a7075ee228ff78d6205ae83e00785d3bbd5c9' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:2cb9da99ba7e74d9863bc0c3733a7075ee228ff78d6205ae83e00785d3bbd5c9",
+    "planDigest": "sha256:ad97af563f4f1932f6647acc68552beb8266cf6abcb7ee6e02bae9af639f7c9c"
+  },
+  "id": "0032_rfc371_observation_v2",
+  "indexAdditions": [
+    {
+      "position": 129,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_call_models",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_call_models\" (\n  \"call_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"model\" TEXT COLLATE \"C\" NOT NULL,\n  \"input_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_read_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_write_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"output_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"reasoning_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"price_id\" TEXT COLLATE \"C\",\n  \"cost_nano\" BIGINT,\n  \"cost_state\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_call_models_pkey\" PRIMARY KEY (\"call_id\", \"model\")\n)"
+      }
+    },
+    {
+      "position": 130,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_calls",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_calls\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"purpose\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\",\n  \"node_run_id\" TEXT COLLATE \"C\",\n  \"system_kind\" TEXT COLLATE \"C\",\n  \"system_label\" TEXT COLLATE \"C\",\n  \"owner_user_id\" TEXT COLLATE \"C\",\n  \"agent_id\" TEXT COLLATE \"C\",\n  \"agent_name\" TEXT COLLATE \"C\" NOT NULL,\n  \"runtime_id\" TEXT COLLATE \"C\",\n  \"runtime_name\" TEXT COLLATE \"C\",\n  \"protocol\" TEXT COLLATE \"C\" NOT NULL,\n  \"status\" TEXT COLLATE \"C\" NOT NULL,\n  \"started_at\" BIGINT NOT NULL,\n  \"ended_at\" BIGINT,\n  \"usage_state\" TEXT COLLATE \"C\" NOT NULL,\n  \"input_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_read_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cache_write_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"output_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"reasoning_tokens\" BIGINT NOT NULL DEFAULT 0,\n  \"cost_nano\" BIGINT NOT NULL DEFAULT 0,\n  \"cost_state\" TEXT COLLATE \"C\" NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"observation_calls_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 131,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_prices",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_prices\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"runtime_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"model\" TEXT COLLATE \"C\" NOT NULL,\n  \"input_micro\" BIGINT,\n  \"cache_read_micro\" BIGINT,\n  \"cache_write_micro\" BIGINT,\n  \"output_micro\" BIGINT,\n  \"effective_from\" BIGINT NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"created_by\" TEXT COLLATE \"C\" NOT NULL,\n  \"note\" TEXT COLLATE \"C\" NOT NULL DEFAULT '',\n  CONSTRAINT \"observation_prices_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 424,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_calls:index:observation_calls_started_idx",
+        "sql": "CREATE INDEX \"observation_calls_started_idx\" ON \"agent_workflow\".\"observation_calls\" (\"started_at\")"
+      }
+    },
+    {
+      "position": 425,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_calls:index:observation_calls_task_idx",
+        "sql": "CREATE INDEX \"observation_calls_task_idx\" ON \"agent_workflow\".\"observation_calls\" (\"task_id\", \"started_at\")"
+      }
+    },
+    {
+      "position": 426,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_calls:index:observation_calls_status_idx",
+        "sql": "CREATE INDEX \"observation_calls_status_idx\" ON \"agent_workflow\".\"observation_calls\" (\"status\")"
+      }
+    },
+    {
+      "position": 427,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_prices:index:observation_prices_line_idx",
+        "sql": "CREATE INDEX \"observation_prices_line_idx\" ON \"agent_workflow\".\"observation_prices\" (\"runtime_id\", \"model\", \"created_at\")"
+      }
+    },
+    {
+      "position": 754,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_call_models:check:observation_call_models_cost_state_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_call_models\" ADD CONSTRAINT \"observation_call_models_cost_state_ck\" CHECK (\"cost_state\" IN ('none','priced','partial','unpriced'))"
+      }
+    },
+    {
+      "position": 755,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_call_models:fk:observation_call_models_call_id_observation_calls_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_call_models\" ADD CONSTRAINT \"observation_call_models_call_id_observation_calls_id_fk\" FOREIGN KEY (\"call_id\") REFERENCES \"agent_workflow\".\"observation_calls\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 756,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_calls:check:observation_calls_purpose_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_purpose_ck\" CHECK (\"purpose\" IN ('task','system'))"
+      }
+    },
+    {
+      "position": 757,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_calls:check:observation_calls_status_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_status_ck\" CHECK (\"status\" IN ('running','done','failed','canceled','interrupted'))"
+      }
+    },
+    {
+      "position": 758,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_calls:check:observation_calls_usage_state_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_usage_state_ck\" CHECK (\"usage_state\" IN ('pending','partial','complete','none'))"
+      }
+    },
+    {
+      "position": 759,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_calls:check:observation_calls_cost_state_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_calls\" ADD CONSTRAINT \"observation_calls_cost_state_ck\" CHECK (\"cost_state\" IN ('none','priced','partial','unpriced'))"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 125,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"observation_call_models\".\"cost_state\" IN ('none','priced','partial','unpriced')",
+            "name": "observation_call_models_cost_state_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "call_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "model",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "input_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cache_read_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cache_write_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "output_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "reasoning_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "price_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cost_nano",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["none", "priced", "partial", "unpriced"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "cost_state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["call_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "observation_calls",
+            "name": "observation_call_models_call_id_observation_calls_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "observation_call_models",
+        "indexes": [],
+        "migrationKey": ["call_id", "model"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["call_id", "model"],
+        "providerTables": {
+          "postgresql": "observation_call_models",
+          "sqlite": "observation_call_models"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationCallModels",
+        "sourceTable": "observation_call_models",
+        "unique": []
+      }
+    },
+    {
+      "position": 126,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"observation_calls\".\"purpose\" IN ('task','system')",
+            "name": "observation_calls_purpose_ck"
+          },
+          {
+            "columns": [],
+            "expression": "\"observation_calls\".\"status\" IN ('running','done','failed','canceled','interrupted')",
+            "name": "observation_calls_status_ck"
+          },
+          {
+            "columns": [],
+            "expression": "\"observation_calls\".\"usage_state\" IN ('pending','partial','complete','none')",
+            "name": "observation_calls_usage_state_ck"
+          },
+          {
+            "columns": [],
+            "expression": "\"observation_calls\".\"cost_state\" IN ('none','priced','partial','unpriced')",
+            "name": "observation_calls_cost_state_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["task", "system"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "purpose",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "node_run_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "system_kind",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "system_label",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "owner_user_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "agent_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "agent_name",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "runtime_id",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "runtime_name",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "protocol",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["running", "done", "failed", "canceled", "interrupted"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "status",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "started_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "ended_at",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["pending", "partial", "complete", "none"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "usage_state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "input_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cache_read_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cache_write_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "output_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "reasoning_tokens",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cost_nano",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["none", "priced", "partial", "unpriced"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "cost_state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_calls",
+        "indexes": [
+          {
+            "columns": ["started_at"],
+            "name": "observation_calls_started_idx",
+            "unique": false,
+            "where": null
+          },
+          {
+            "columns": ["task_id", "started_at"],
+            "name": "observation_calls_task_idx",
+            "unique": false,
+            "where": null
+          },
+          {
+            "columns": ["status"],
+            "name": "observation_calls_status_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "observation_calls",
+          "sqlite": "observation_calls"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationCalls",
+        "sourceTable": "observation_calls",
+        "unique": []
+      }
+    },
+    {
+      "position": 127,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "runtime_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "model",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "input_micro",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cache_read_micro",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "cache_write_micro",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "output_micro",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "effective_from",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "created_by",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"\"",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "note",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "''",
+              "sqlite": "''"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_prices",
+        "indexes": [
+          {
+            "columns": ["runtime_id", "model", "created_at"],
+            "name": "observation_prices_line_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "observation_prices",
+          "sqlite": "observation_prices"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationPrices",
+        "sourceTable": "observation_prices",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:cdd61d47b8321976e3471452b37fec695a3d0d7ff7b5bff5d7f9728c1362688a",
+  "retiredTables": [
+    "observation_calculation_rows",
+    "observation_calculation_versions",
+    "observation_anomaly_history",
+    "observation_anomaly_states",
+    "observation_invocation_price_audit",
+    "observation_invocation_price_policies",
+    "observation_invocation_price_records",
+    "observation_maintenance_members",
+    "observation_maintenance_operations",
+    "observation_projection_descriptors",
+    "observation_projection_indexed_versions",
+    "observation_projection_query_scope_members",
+    "observation_projection_query_scopes",
+    "observation_invocations",
+    "observation_platform_records",
+    "observation_platform_sources",
+    "observation_price_heads",
+    "observation_price_versions",
+    "observation_projection_bindings",
+    "observation_projection_bootstrap",
+    "observation_projection_changes",
+    "observation_projection_components",
+    "observation_projection_current",
+    "observation_projection_dependencies",
+    "observation_projection_heads",
+    "observation_projection_history",
+    "observation_projection_memberships",
+    "observation_projection_prepared",
+    "observation_projection_versions",
+    "observation_projection_views",
+    "observation_projection_work",
+    "observation_projection_work_components",
+    "observation_native_fact_pages",
+    "observation_native_fact_roots",
+    "observation_report_counts",
+    "observation_report_pages",
+    "observation_report_receipts",
+    "observation_report_retained_revisions",
+    "observation_report_rows",
+    "observation_reports",
+    "observation_report_leases",
+    "observation_scope_refs",
+    "observation_storage_samples",
+    "observation_storage_state",
+    "observation_work_retention",
+    "observation_source_revisions",
+    "observation_usage_sources",
+    "observation_usage_captures",
+    "observation_usage_native_records",
+    "observation_usage_current",
+    "observation_usage_events",
+    "system_agent_native_usage_emissions",
+    "system_agent_native_usage_pass_heads",
+    "system_agent_native_usage_pass_pages",
+    "system_agent_native_usage_passes",
+    "system_agent_native_usage_preparations",
+    "system_agent_native_usage_revision_heads",
+    "system_agent_native_usage_root_heads",
+    "system_agent_native_usage_root_results",
+    "system_agent_native_usage_root_sets",
+    "system_agent_native_usage_root_transitions",
+    "system_agent_native_usage_session_parents",
+    "system_agent_native_usage_step_members",
+    "system_agent_native_usage_store_bindings",
+    "system_agent_observation_groups",
+    "system_agent_observation_owners",
+    "system_agent_observation_sources",
+    "task_execution_native_usage_emissions",
+    "task_execution_native_usage_pass_heads",
+    "task_execution_native_usage_pass_pages",
+    "task_execution_native_usage_passes",
+    "task_execution_native_usage_preparations",
+    "task_execution_native_usage_revision_heads",
+    "task_execution_native_usage_root_heads",
+    "task_execution_native_usage_root_results",
+    "task_execution_native_usage_root_sets",
+    "task_execution_native_usage_root_transitions",
+    "task_execution_native_usage_session_parents",
+    "task_execution_native_usage_step_members",
+    "task_execution_native_usage_store_bindings",
+    "task_execution_observation_sources"
+  ],
+  "sequence": 32,
+  "sqlDigest": "sha256:cebb382047a55b36e48b0cd0a5c593788c09cc875fd62e805041cde9145b5f90",
+  "sqlFile": "0032_rfc371_observation_v2.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791988700180,
+        "hash": "f3facc92b09341c278b2b90c4b966081f30cee635e531b6f639f4f28776a4b59",
+        "index": 255,
+        "tag": "0256_rfc371_observation_v2"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:fe30250ce7200ccdf0f6fbdfb353daf9ac9bfd7428c88b21d6aa015314eb8632",
+      "count": 255,
+      "last": {
+        "folderMillis": 1791953593843,
+        "hash": "cfe447615c290bc139babfa0cd1b233e38a08347f8b90e973256d137ccea1ab5",
+        "index": 254,
+        "tag": "0255_rfc371_committed_source_clocks"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:440dbb341aee79183da2e950fc22322c6d3d8d2dce0fa53356616d108d00ab04",
+      "count": 256,
+      "last": {
+        "folderMillis": 1791988700180,
+        "hash": "f3facc92b09341c278b2b90c4b966081f30cee635e531b6f639f4f28776a4b59",
+        "index": 255,
+        "tag": "0256_rfc371_observation_v2"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:32c305d87968bc9cd4bf179e3f94d5cee2a92a8dc3cfa5fbfbce93f2336da22b",
+    "planDigest": "sha256:99c39eca34db24ea8fa68f700e98460072aefac8d054dad449f7777b312c135d"
+  },
+  "version": 4
+}

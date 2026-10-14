@@ -83,8 +83,6 @@ const SCHEMA_PROJECTOR_FILE = 'platform/persistence/postgresqlSchema.ts'
  * NULL 排序模块（RFC-359 W11 已随最后一个调用方改指矩阵而删除）；例子退役了，理由没退役。
  */
 const DIALECT_RENDERERS: Readonly<Record<string, string>> = {
-  'platform/persistence/storageUsage.ts':
-    'RFC-371 的具名物理存储观测渲染器，唯一由 EngineCapabilities.storageUsage/storageCounters 选择原生 SQLite PRAGMA/dbstat Worker 或 PostgreSQL catalog/size 查询；不借宿主磁盘冒充远端容量，不扩散到业务 SQL。原双 provider storage-lifecycle 和物理 Worker/计数对拍保持。',
   [MATRIX_FILE]:
     '能力矩阵本体：每个方言点在 createSqliteCapabilities / createPostgresqlCapabilities 里各渲染一次，' +
     '这是 RFC-359 design §5 指定的 provider 差异容身处。',

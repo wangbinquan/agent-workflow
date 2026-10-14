@@ -219,9 +219,7 @@ describe('RFC-370 selected native execution binding', () => {
         plugin: unavailable,
       },
       evidenceCapabilities: {
-        usageNormalizer: false,
-        nativeUsageCapture: false,
-        spanCapture: false,
+        usageMeter: true,
         sessionCapture: false,
         inventory: false,
         finalEvents: false,

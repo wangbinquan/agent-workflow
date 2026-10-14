@@ -1,5 +1,3 @@
-import { createUsageLedgerStore } from '@/modules/run-observability/infrastructure/usageLedgerPersistence'
-import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 // Integration tests for the opencode runner (P-1-13b).
 //
 // Strategy: opencode is replaced with a Bun-script mock fixture that the
@@ -9,8 +7,6 @@ import { composeObservationUsageSource } from '@/modules/task-execution/composit
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { Database } from 'bun:sqlite'
-import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { eq, sql } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,13 +20,13 @@ import {
   nodeRuns,
   tasks,
   workflows,
-  taskExecutionObservationSources,
+  observationCalls,
+  observationCallModels,
 } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import type { Logger } from '../src/util/log'
-import { createObservationInvocationStore } from '../src/modules/run-observability/infrastructure/invocationPersistence'
-import { composeLocalInvocationObservations } from '../src/modules/run-observability/composition/localInvocations'
-import type { ObservationInvocationParticipant } from '../src/modules/run-observability/public/participants'
+import { composeRunObservationCalls } from '../src/modules/run-observability/composition/runObservation'
+import type { CallObservations } from '../src/modules/run-observability/public/participants'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -194,24 +190,24 @@ describeEachProvider('runNode', (harness) => {
   })
   afterEach(() => h.cleanup())
 
-  // RFC-371: a process must have durable acceptance before the first spawn;
-  // successive processes sharing a node run must still have separate identities.
-  test('persists frozen invocation facts before spawning and gives each process its own ID', async () => {
+  // RFC-371 v2 §4: every runtime process is recorded as its own call before it
+  // is spawned; a node run that dispatches twice records two calls.
+  test('records each process as a call before spawning and ends it with the node status', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    const participant = composeLocalInvocationObservations(
-      h.db,
-      composeObservationUsageSource(h.db),
-    )
-    const store = createObservationInvocationStore(h.db)
-    const receipts: string[] = []
-    const observationInvocations: ObservationInvocationParticipant = {
-      async accept(input) {
-        const receipt = await participant.accept(input)
-        expect(await store.get(receipt.invocationId)).toEqual(receipt)
-        receipts.push(receipt.invocationId)
-        return receipt
+    const calls = composeRunObservationCalls(h.db)
+    const accepted: string[] = []
+    const observationInvocations: CallObservations = {
+      async accept(call) {
+        await calls.accept(call)
+        // Persisted (running) before the child exists.
+        expect(
+          await h.db.select().from(observationCalls).where(eq(observationCalls.id, call.id)).get(),
+        ).toMatchObject({ status: 'running', usageState: 'pending' })
+        accepted.push(call.id)
       },
+      usage: (id, usage) => calls.usage(id, usage),
+      finish: (id, outcome) => calls.finish(id, outcome),
     }
     const invoke = () =>
       runNode({
@@ -227,40 +223,46 @@ describeEachProvider('runNode', (harness) => {
         templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         observationInvocations,
-        runtimeObservationIdentity: { registrationId: 'frozen-runtime', configurationRevision: 7 },
-        observationPurpose: 'system',
+        runtimeObservationIdentity: {
+          registrationId: 'frozen-runtime',
+          configurationRevision: 7,
+          acceptedName: 'frozen-profile',
+        },
+        observationSystemKind: 'commit-push',
       })
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'accepted' }) }, async () => {
       expect((await invoke()).status).toBe('done')
-      // The owner may dispatch another process against the same durable row.
       await h.db.update(nodeRuns).set({ status: 'pending' }).where(eq(nodeRuns.id, nodeRunId))
       expect((await invoke()).status).toBe('done')
     })
-    expect(receipts).toHaveLength(2)
-    expect(new Set(receipts).size).toBe(2)
-    for (const id of receipts) {
-      expect(await store.get(id)).toMatchObject({
+    expect(accepted).toHaveLength(2)
+    expect(new Set(accepted).size).toBe(2)
+    for (const id of accepted) {
+      const row = await h.db
+        .select()
+        .from(observationCalls)
+        .where(eq(observationCalls.id, id))
+        .get()
+      expect(row).toMatchObject({
+        purpose: 'system',
+        systemKind: 'commit-push',
         taskId: h.taskId,
         nodeRunId,
         agentId: agent.id,
-        agentRevision: agent.updatedAt,
-        purpose: 'system',
-        priceBookRevision: 0,
-        authority: {
-          kind: 'local',
-          runtime: {
-            registrationId: 'frozen-runtime',
-            configurationRevision: 7,
-            protocol: 'opencode',
-          },
-        },
+        agentName: agent.name,
+        runtimeId: 'frozen-runtime',
+        runtimeName: 'frozen-profile',
+        protocol: 'opencode',
+        status: 'done',
       })
+      expect(row!.endedAt).not.toBeNull()
     }
   })
 
   test('acceptance failure prevents the child from starting', async () => {
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const marker = join(h.appHome, 'must-not-spawn.jsonl')
+    const finished: string[] = []
     const result = await withEnv({ MOCK_OPENCODE_CAPTURE_ENV_TO: marker }, () =>
       runNode({
         taskId: h.taskId,
@@ -278,33 +280,39 @@ describeEachProvider('runNode', (harness) => {
           accept: async () => {
             throw new Error('observation-unavailable')
           },
+          usage: async () => {},
+          finish: async (id) => {
+            finished.push(id)
+          },
         },
       }),
     )
     expect(result.status).toBe('failed')
     expect(existsSync(marker)).toBe(false)
+    expect(finished).toEqual([])
     expect(
       (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get())?.pid,
     ).toBeNull()
   })
 
-  test('commits runtime usage without waiting for the independently replayable projection', async () => {
+  // RFC-371 v2 §4: the stream meter de-duplicates steps by id; the final write
+  // replaces the snapshot in place (no ledger, no background projection).
+  test('records metered usage in place and ends the call', async () => {
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    const source = composeObservationUsageSource(h.db)
-    const local = composeLocalInvocationObservations(h.db, source)
-    let projectionCalls = 0
-    const step = {
+    const step = (id: string) => ({
       type: 'step_finish',
       sessionID: 'usage-native',
       part: {
-        id: 'step',
-        tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 20, write: 0 } },
+        id,
+        tokens: { input: 100, output: 10, reasoning: 5, cache: { read: 20, write: 3 } },
       },
-    }
+    })
     const result = await withEnv(
       {
         MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'observed' }),
-        MOCK_OPENCODE_EVENTS: JSON.stringify([step, step]),
+        MOCK_OPENCODE_EVENTS: JSON.stringify([step('a'), step('a'), step('b')]),
+        // No native store for this fixture: the stream snapshot is final.
+        OPENCODE_DB: ':memory:',
       },
       () =>
         runNode({
@@ -319,198 +327,32 @@ describeEachProvider('runNode', (harness) => {
           db: h.db,
           templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-          observationInvocations: {
-            ...local,
-            reconcile: async () => {
-              projectionCalls++
-              throw new Error('runner must not await the background projector')
-            },
-          },
+          observationInvocations: composeRunObservationCalls(h.db),
         }),
     )
     expect(result.status).toBe('done')
-    expect(projectionCalls).toBe(0)
-    expect((await source.pending({ limit: 100 })).length).toBeGreaterThan(0)
-    const store = createUsageLedgerStore(h.db)
-    expect((await store.records(h.taskId, { limit: 10 })).items).toEqual([])
-    await local.reconcile!()
-    expect(await source.pending({ limit: 100 })).toEqual([])
-    const rows = (await store.records(h.taskId, { limit: 10 })).items
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.contribution).toEqual({
-      input: '100',
-      output: '10',
-      cacheRead: '20',
-      cacheWrite: '0',
+    const row = await h.db
+      .select()
+      .from(observationCalls)
+      .where(eq(observationCalls.nodeRunId, nodeRunId))
+      .get()
+    expect(row).toMatchObject({
+      purpose: 'task',
+      status: 'done',
+      usageState: 'complete',
+      inputTokens: 200,
+      cacheReadTokens: 40,
+      cacheWriteTokens: 6,
+      outputTokens: 30,
+      reasoningTokens: 10,
+      costState: 'unpriced',
     })
-    expect(rows[0]?.measurement.model).toBeNull()
-  })
-
-  // RFC-371: model repair failures must not change an already successful process result.
-  for (const rejectCorrection of [false, true])
-    test(
-      'late native model repair preserves process success, write rejected=' + rejectCorrection,
-      async () => {
-        const nodeRunId = await insertNodeRun(h.db, h.taskId)
-        const file = join(h.appHome, 'native-usage.db'),
-          source = composeObservationUsageSource(h.db),
-          local = composeLocalInvocationObservations(h.db, source),
-          persistence = createTaskExecutionPersistence(h.db),
-          { log, warnings } = captureWarnings()
-        const originalAppend = persistence.nodeExecution.appendEvents.bind(
-          persistence.nodeExecution,
-        )
-        let writes = 0
-        persistence.nodeExecution.appendEvents = async (input) => {
-          if (input.observations?.length) {
-            writes++
-            if (rejectCorrection) throw new Error('model-write-unavailable')
-          }
-          await originalAppend(input)
-          if (
-            !existsSync(file) &&
-            input.events.some((event) => event.observation?.measurements.length)
-          ) {
-            const db = new Database(file)
-            db.exec(
-              'CREATE TABLE message(id TEXT PRIMARY KEY, session_id TEXT, data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, data TEXT)',
-            )
-            db.query('INSERT INTO message VALUES(?,?,?)').run(
-              'native-message',
-              'usage-native',
-              JSON.stringify({
-                role: 'assistant',
-                providerID: 'native-provider',
-                modelID: 'native-model',
-              }),
-            )
-            db.query('INSERT INTO part VALUES(?,?,?,?)').run(
-              'native-step',
-              'native-message',
-              'usage-native',
-              JSON.stringify({ type: 'step-finish' }),
-            )
-            db.close()
-          }
-        }
-        const result = await withEnv(
-          {
-            OPENCODE_DB: file,
-            MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'success preserved' }),
-            MOCK_OPENCODE_EVENTS: JSON.stringify([
-              {
-                type: 'step_finish',
-                sessionID: 'usage-native',
-                part: {
-                  id: 'native-step',
-                  sessionID: 'usage-native',
-                  messageID: 'native-message',
-                  tokens: { input: 100, output: 10, cache: { read: 20, write: 0 } },
-                },
-              },
-            ]),
-          },
-          () =>
-            runNode({
-              taskId: h.taskId,
-              nodeRunId,
-              nodeId: 'node1',
-              agent: makeAgent(),
-              inputs: {},
-              worktreePath: h.worktreePath,
-              skills: [],
-              appHome: h.appHome,
-              db: h.db,
-              persistence,
-              log,
-              templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
-              binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-              observationInvocations: local,
-            }),
-        )
-        expect(writes).toBe(1)
-        expect(result.status).toBe('done')
-        expect(result.outputs.summary).toBe('success preserved')
-        expect(
-          (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get())?.status,
-        ).toBe('done')
-        const events = await h.db
-          .select()
-          .from(nodeRunEvents)
-          .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-          .all()
-        expect(events.filter((event) => event.kind === 'step_finish')).toHaveLength(1)
-        await local.reconcile!()
-        const rows = (await createUsageLedgerStore(h.db).records(h.taskId, { limit: 10 })).items
-        expect(rows).toHaveLength(1)
-        expect(rows[0]?.contribution.input).toBe('100')
-        expect(rows[0]?.measurement.model).toEqual(
-          rejectCorrection ? null : { provider: 'native-provider', id: 'native-model' },
-        )
-        expect(
-          warnings.filter((row) => row.message === 'node-run-observation-model-revision-failed'),
-        ).toHaveLength(rejectCorrection ? 1 : 0)
-      },
-    )
-
-  test('an injected CS participant retains platform authority through the real runner', async () => {
-    const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    const store = createObservationInvocationStore(h.db)
-    let receiptId = ''
-    const result = await withEnv(
-      {
-        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'hosted' }),
-        MOCK_OPENCODE_EVENTS: JSON.stringify([
-          {
-            type: 'step_finish',
-            sessionID: 'platform-native',
-            part: {
-              id: 'duplicate',
-              tokens: { input: 500, output: 10, cache: { read: 0, write: 0 } },
-            },
-          },
-        ]),
-      },
-      () =>
-        runNode({
-          taskId: h.taskId,
-          nodeRunId,
-          nodeId: 'node1',
-          agent: makeAgent(),
-          inputs: {},
-          worktreePath: h.worktreePath,
-          skills: [],
-          appHome: h.appHome,
-          db: h.db,
-          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
-          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
-          observationInvocations: {
-            async accept({ runtime: _runtime, ...input }) {
-              const receipt = await store.accept({
-                ...input,
-                authority: {
-                  kind: 'crewstation',
-                  sourceId: 'cs-installation',
-                  projectId: 'project',
-                  taskId: 'platform-task',
-                  subtaskId: 'subtask',
-                  executionResourceId: 'execution',
-                  executionGeneration: 1,
-                },
-              })
-              receiptId = receipt.invocationId
-              return receipt
-            },
-          },
-        }),
-    )
-    expect(result.status).toBe('done')
-    expect(await store.get(receiptId)).toMatchObject({
-      priceBookRevision: null,
-      authority: { kind: 'crewstation', executionResourceId: 'execution', executionGeneration: 1 },
-    })
-    expect(await h.db.select().from(taskExecutionObservationSources)).toEqual([])
-    expect((await createUsageLedgerStore(h.db).records(h.taskId, { limit: 10 })).items).toEqual([])
+    const models = await h.db
+      .select()
+      .from(observationCallModels)
+      .where(eq(observationCallModels.callId, row!.id))
+    expect(models).toHaveLength(1)
+    expect(models[0]).toMatchObject({ model: '', inputTokens: 200, costNano: null })
   })
 
   test('happy path: parses envelope, persists outputs, status=done', async () => {

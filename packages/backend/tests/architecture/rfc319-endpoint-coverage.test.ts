@@ -20,7 +20,6 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { EXEMPT_MOUNTS, allRouteMeta } from '@/routes/registry'
-import { mountCompleteObservationRoutes } from '@/modules/run-observability/composition/observationRoutes'
 
 import { buildContractHarness } from '../contracts/harness'
 import { buildHitReport, parseLedger, readJournalDir } from './routeHitLedger'
@@ -36,17 +35,9 @@ function declaredRoutes(): Array<{ method: string; path: string }> {
   return allRouteMeta().map((m) => ({ method: m.method, path: m.path }))
 }
 
-/** The daemon mounts complete reports; the legacy contract harness alone does not. */
+/** RFC-371 v2: the contract harness mounts every route, observation included. */
 async function buildFullRouteInventory(): Promise<void> {
-  const harness = await buildContractHarness()
-  const declarationsOnly = async (): Promise<never> => {
-    throw new Error('Route inventory must not execute observation queries')
-  }
-  mountCompleteObservationRoutes(harness.app, {
-    request: declarationsOnly,
-    status: declarationsOnly,
-    page: declarationsOnly,
-  })
+  await buildContractHarness()
 }
 
 describe('RFC-319 R1 —— 端点命中账本的结构（无 journal 也必须成立）', () => {
@@ -58,19 +49,24 @@ describe('RFC-319 R1 —— 端点命中账本的结构（无 journal 也必须�
     ).toBeGreaterThan(400)
   })
 
-  test('formal report routes are mounted by the actual adapter, alongside every legacy alias', async () => {
+  test('RFC-371 v2 run observation routes are mounted by the actual adapter', async () => {
     await buildFullRouteInventory()
     const mounted = new Set(declaredRoutes().map((r) => `${r.method} ${r.path}`))
     for (const key of [
-      'POST /api/observability/reports',
-      'GET /api/observability/reports/:id',
-      'GET /api/observability/reports/:id/pages',
       'GET /api/observability/overview',
       'GET /api/observability/tasks',
       'GET /api/observability/tasks/:id',
-      'GET /api/observability/tasks/:id/spans',
+      'GET /api/observability/agents',
+      'GET /api/observability/models',
+      'GET /api/observability/system',
+      'GET /api/observability/pricing',
+      'GET /api/observability/pricing/:runtimeId/history',
+      'POST /api/observability/pricing/:runtimeId',
     ])
       expect(mounted.has(key), key).toBe(true)
+    expect(
+      [...mounted].filter((key) => /observability\/(reports|tasks\/:id\/spans)/.test(key)),
+    ).toEqual([])
   })
 
   test('账本升序去重（顺序不稳会让 diff 噪声淹没真实变化）', () => {

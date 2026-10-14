@@ -63,20 +63,13 @@ import type {
   VerificationCommandEffectsFactory,
 } from '@/modules/development-automation/composition'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
-import type {
-  CompleteObservationReportQueries,
-  ObservationTaskQueries,
-} from '@/modules/run-observability/public/queries'
-import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
-import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
-import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
-import type { ObservationNativeHistorySource } from '@/modules/run-observability/public/participants'
-import type { NativeUsageInvocationPersistence } from '@/modules/task-execution/public/participants'
+import {
+  composeRunObservation,
+  composeRunObservationCalls,
+  type RunObservation,
+} from '@/modules/run-observability/composition/runObservation'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
-import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
-import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
-import { mountObservationRoutes } from '@/modules/run-observability/composition/observationRoutes'
 import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import {
   composeLocalHttpAuthentication,
@@ -1015,12 +1008,6 @@ export interface AppDeps {
   webhookIngressPersistence?: WebhookIngressPersistence
   /** RFC-349 bootstrap-selected runtime registry. */
   runtimeRegistry?: RuntimeRegistryOperations
-  /** Both formal provider roots supply full reports; direct legacy fixtures may omit them. */
-  completeObservationReports?: CompleteObservationReportQueries
-  /** Frozen bootstrap selection; shared by ordinary and host-task original persistence. */
-  nativeUsage?: NativeUsageInvocationPersistence
-  /** The original selected provider supplies the same full history reader to HTTP System calls. */
-  nativeUsageHistory?: ObservationNativeHistorySource['prepare']
   /** Daemon-scoped live concurrency mutation composed by bootstrap. */
   configConcurrencyHotApply?: ConfigConcurrencyHotApplyCommand
   /**
@@ -1403,7 +1390,7 @@ export interface ProviderPublicRouteComposition {
 }
 
 export interface ProviderPlatformRouteComposition {
-  readonly observability: Parameters<typeof mountObservationRoutes>[1]
+  readonly observability: RunObservation
   readonly config: Parameters<typeof mountConfigRoutes>[1]
   readonly maintenance: Parameters<typeof mountMaintenanceRoutes>[1]
   readonly daemon: Parameters<typeof mountDaemonRoutes>[1]
@@ -1614,7 +1601,7 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
 
   const apiRoutes = Object.freeze({
     config: (app: Hono) => mountConfigRoutes(app, input.platform.config),
-    observability: (app: Hono) => mountObservationRoutes(app, input.platform.observability),
+    observability: (app: Hono) => input.platform.observability.mount(app),
     maintenance: (app: Hono) => mountMaintenanceRoutes(app, input.platform.maintenance),
     daemon: (app: Hono) => mountDaemonRoutes(app, input.platform.daemon),
     plantuml: (app: Hono) => mountPlantumlRoutes(app, input.platform.plantuml),
@@ -2079,7 +2066,6 @@ function composeFallbackDevelopmentAutomation(
     deps.taskDriveBinding?.persistence ??
     createTaskExecutionPersistence(deps.db, {
       workspacePresence: deps.workspacePresence,
-      nativeUsage: deps.nativeUsage,
     })
   const hostLaunchStartDeps =
     taskLaunchConfiguration.selectedQueries === undefined
@@ -2337,7 +2323,6 @@ export function composeSqliteApplicationDeps(
     deps.taskDriveBinding?.persistence ??
     createTaskExecutionPersistence(deps.db, {
       workspacePresence,
-      nativeUsage: deps.nativeUsage,
     })
   // RFC-359 W11：读模型先定下来，再决定要不要装配 runtime。此前是反过来的——先装 runtime、
   // 再从 `deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels` 取，于是类型上多出
@@ -2357,10 +2342,7 @@ export function composeSqliteApplicationDeps(
             isolationWorkspaces,
             repositoryGitWorkspaces,
             workspacePresence,
-            observationInvocations: composeLocalInvocationObservations(
-              deps.db,
-              composeObservationUsageSource(deps.db),
-            ),
+            observationInvocations: composeRunObservationCalls(deps.db),
             workgroupTurns: composeWorkgroupTurnsOperations(
               deps.db,
               composeWorkgroupHostLedgerParticipantFactory({
@@ -2444,12 +2426,7 @@ export function composeSqliteApplicationDeps(
   const maintenanceDisk =
     deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)
   const systemAgentObservations = composeSystemAgentObservations({
-    db: deps.db,
-    observations: composeLocalInvocationObservations(
-      deps.db,
-      composeObservationUsageSource(deps.db, deps.nativeUsageHistory),
-    ),
-    nativeUsage: deps.nativeUsage,
+    calls: composeRunObservationCalls(deps.db),
   })
   const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({
     appHome: systemAgentAppHome,
@@ -3089,12 +3066,7 @@ function composeSqliteApiRouteMounts(
   const schedulerDriver = deps.schedulerDriver
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
   const systemAgentObservations = composeSystemAgentObservations({
-    db: deps.db,
-    observations: composeLocalInvocationObservations(
-      deps.db,
-      composeObservationUsageSource(deps.db, deps.nativeUsageHistory),
-    ),
-    nativeUsage: deps.nativeUsage,
+    calls: composeRunObservationCalls(deps.db),
   })
   const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({
     observations: () => systemAgentObservations,
@@ -4029,16 +4001,11 @@ function composeSqliteApiRouteMounts(
         }),
       }),
     observability: (app) =>
-      mountObservationRoutes(app, {
-        reports: deps.completeObservationReports,
-        ...composeObservationPricing({ db: deps.db, runtimes: runtimeManagement.observations }),
-        tasks: composeTaskObservations({
-          db: deps.db,
-          taskSource: createTaskObservationFacts satisfies (
-            db: Parameters<typeof createTaskObservationFacts>[0],
-          ) => TaskObservationFactsQuery,
-        }) satisfies ObservationTaskQueries,
-      }),
+      composeRunObservation({
+        db: deps.db,
+        tasks: createTaskObservationFacts(deps.db),
+        runtimes: runtimeManagement.observations,
+      }).mount(app),
     maintenance: (app) =>
       mountMaintenanceRoutes(app, {
         configuration,

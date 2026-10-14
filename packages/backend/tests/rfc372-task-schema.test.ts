@@ -237,7 +237,15 @@ describe('RFC-372 companion retirement', () => {
         expect(copied).toContain('clarify_rounds')
         expect(copied).toContain('tasks')
         expect(copied.some((id) => retired.includes(id))).toBe(false)
-        expect(receipt.rowsRestored).toBe(exported.envelope.payload.activeRows - 1)
+        // Rows of every table the head contract no longer has are skipped: the RFC-372
+        // companion row and, since RFC-371 v2, the v1 observation rows its triggers wrote.
+        const headTables = new Set(history.head.contract.tables.map((table) => table.id))
+        const retainedRows = Object.entries(snapshot.tableRows)
+          .filter(([table]) => headTables.has(table))
+          .reduce((sum, [, rows]) => sum + rows, 0)
+        expect(snapshot.tableRows['clarify_mindmap_sessions']).toBe(1)
+        expect(retainedRows).toBeLessThan(exported.envelope.payload.activeRows)
+        expect(receipt.rowsRestored).toBe(retainedRows)
         expect(progress.at(-1)?.chunksRestored).toBe(progress.at(-1)?.chunksTotal)
         expect(readFileSync(join(artifactRoot, 'logical-manifest.json'), 'utf8')).toBe(
           originalManifest,

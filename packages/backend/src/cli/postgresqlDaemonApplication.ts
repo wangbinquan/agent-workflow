@@ -48,23 +48,12 @@ import {
   readDaemonStartupRecoveryAuthority,
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
-import type { ObservationTaskQueries } from '@/modules/run-observability/public/queries'
-import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
-import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
-import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
-import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
-import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
-import { composeOriginalObservationProjection } from '@/platform/background/observationProjection'
-import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
-import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
-import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
-import { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'
-import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import {
-  createCompleteTaskObservationFacts,
-  createTaskObservationFacts,
-} from '@/modules/task-execution/composition/taskObservationFacts'
+  composeRunObservation,
+  composeRunObservationCalls,
+} from '@/modules/run-observability/composition/runObservation'
+import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
@@ -612,12 +601,8 @@ export interface PostgresqlDaemonApplication {
  * builders and cannot accidentally re-compose a second provider graph.
  */
 export interface PostgresqlDaemonApplicationRuntime {
-  readonly observationReportExecution?: ReturnType<
-    typeof composeCompleteObservationReports
-  >['execution']
   readonly hostBootRecovery?: TaskExecutionBootRecoveryInput
   readonly hostPreparations?: readonly ((context: HostExecutionGrantContext) => Promise<void>)[]
-  readonly observationReports: ReturnType<typeof composeCompleteObservationReports>['worker']
   readonly taskExecution: SelectedPostgresqlTaskExecutionProviderRuntime
   /**
    * RFC-359 —— 装配好的协作命令上下文。暴露它不是为了给 daemon 用（daemon 不碰它），
@@ -1139,25 +1124,10 @@ export async function composePostgresqlApplication(
     input.db,
     taskExecutionResourceSnapshots,
   )
-  const nativeUsage = selectedNativeUsageInvocationPersistence(input.db, {
-    binding: { provider: 'postgresql', runtime: input.provider.runtime },
-    admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),
-    postgresqlPoolMax: input.config.database.poolMax,
-  })
-  const systemAgentObservations = composeSystemAgentObservations({
-    db: input.db,
-    observations: composeLocalInvocationObservations(
-      input.db,
-      composeObservationUsageSource(
-        input.db,
-        nativeHistoryRead({ provider: 'postgresql', runtime: input.provider.runtime }),
-      ),
-    ),
-    nativeUsage,
-  })
+  const observationCalls = composeRunObservationCalls(input.db)
+  const systemAgentObservations = composeSystemAgentObservations({ calls: observationCalls })
   const taskExecutionPersistence = createTaskExecutionPersistence(input.db, {
     workspacePresence,
-    nativeUsage,
   })
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
@@ -1267,7 +1237,6 @@ export async function composePostgresqlApplication(
   }
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
     ...(input.hostExecution ? { host: input.hostExecution.taskHost } : {}),
-    nativeUsage,
     archive: input.taskArchive,
     workspaceReads,
     runtime: {
@@ -1276,13 +1245,7 @@ export async function composePostgresqlApplication(
       isolationWorkspaces,
       repositoryGitWorkspaces,
       workspacePresence,
-      observationInvocations: composeLocalInvocationObservations(
-        input.db,
-        composeObservationUsageSource(
-          input.db,
-          nativeHistoryRead({ provider: 'postgresql', runtime: input.provider.runtime }),
-        ),
-      ),
+      observationInvocations: observationCalls,
       runtimeRegistry: core.runtimeRegistry,
       nodeRunRuntime: composeNodeRunRuntimePersistence(
         input.db,
@@ -2389,44 +2352,12 @@ export async function composePostgresqlApplication(
       : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
     appHome: () => Paths.root,
   })
-  const observationBuild = observationReportBuild(
-    { provider: 'postgresql', runtime: input.provider.runtime },
-    input.appHome,
-    input.db,
-    { taskCalculations: true },
-  )
-  const observationReports = composeCompleteObservationReports({
-    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),
-    ...(phase.kind === 'daemon'
-      ? {
-          projection: composeOriginalObservationProjection({
-            ...(input.hostExecution ? { executionMode: 'host' as const } : {}),
-            db: input.db,
-            binding: { provider: 'postgresql', runtime: input.provider.runtime },
-            generation: input.provider.runtime.generationId,
-          }),
-        }
-      : {}),
-    taskSource: createCompleteTaskObservationFacts,
-    db: input.db,
-    generation: input.provider.runtime.generationId,
-    appHome: input.appHome,
-    heartbeatDuringRead: observationBuild.heartbeatDuringRead,
-    build: (report, _spool, signal) => observationBuild.build(report, signal),
-    closeBuild: () => observationBuild.close(),
-  })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
-    observability: {
-      // Unstarted application scopes are explicit legacy contract fixtures, not serving daemons.
-      ...(phase.kind === 'daemon' ? { reports: observationReports.queries } : {}),
-      ...composeObservationPricing({ db: input.db, runtimes: runtimeManagement.observations }),
-      tasks: composeTaskObservations({
-        db: input.db,
-        taskSource: createTaskObservationFacts satisfies (
-          db: Parameters<typeof createTaskObservationFacts>[0],
-        ) => TaskObservationFactsQuery,
-      }) satisfies ObservationTaskQueries,
-    },
+    observability: composeRunObservation({
+      db: input.db,
+      tasks: createTaskObservationFacts(input.db),
+      runtimes: runtimeManagement.observations,
+    }),
     config: Object.freeze({
       configuration: applicationConfiguration.composeCommands({
         runtimeRegistry:
@@ -2710,7 +2641,13 @@ export async function composePostgresqlApplication(
       log,
     }
     if (input.hostExecution) hostBootRecovery = bootRecovery
-    else await runTaskExecutionBootRecovery(bootRecovery)
+    else {
+      await runTaskExecutionBootRecovery(bootRecovery)
+      // RFC-371 v2: calls still running from before this boot can no longer report.
+      const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
+      if (interruptedCalls > 0)
+        log.info('observation calls interrupted', { count: interruptedCalls })
+    }
     await prepareOwner(async (context) => {
       // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在
       // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与
@@ -2873,10 +2810,8 @@ export async function composePostgresqlApplication(
       ? {
           hostBootRecovery,
           hostPreparations: Object.freeze(hostPreparations),
-          observationReportExecution: observationReports.execution,
         }
       : {}),
-    observationReports: observationReports.worker,
     taskExecution: taskExecutionProvider,
     collaborationContext: boundCollaborationContext,
     scheduledTasks: scheduledTaskRuntime,

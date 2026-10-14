@@ -96,8 +96,9 @@ function providerGraph(
     finalizeWorkspace: async () => {},
     taskRunBinding: { bind: unused('task runs') },
     observationInvocations: {
-      accept: unused('observation invocation acceptance'),
-      reconcile: unused('observation reconciliation'),
+      accept: unused('observation call acceptance'),
+      usage: unused('observation call usage'),
+      finish: unused('observation call finish'),
     },
     workspacePresence: unused('workspace presence'),
     runtimeSessionLeases: unused('runtime session leases'),

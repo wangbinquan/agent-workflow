@@ -9,7 +9,6 @@ export type HostExecutionGroup =
   | 'purpose'
   | 'diagnostics'
   | 'verification'
-  | 'observation'
   | 'memory'
   | 'development'
   | 'digital-employee'

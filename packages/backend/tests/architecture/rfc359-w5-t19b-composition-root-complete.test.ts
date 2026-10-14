@@ -159,8 +159,6 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // 仍保留 `dynamic-workflow-operations-not-composed`，它是
   // **条件依赖**的 fail-closed（只有选了 dynamic-workflow 生成引擎的任务才需要它），
   // 不是「装配未完成」，只是错误码里恰好带 `not-composed` 才被本守卫计入。
-  // RFC-371: the existing report build retains its live execution lifetime until the original drain ACK.
-  'modules/run-observability/composition/completeObservationReports.ts: marker=0, prose=0, holder=1',
   'modules/task-execution/composition/taskEngineApplication.ts: marker=1, prose=0, holder=0',
   // RFC-359 W11 销账：`server.ts` marker 6 → 1、holder 2 → 0。五处里三处是与 PG 根同一形状的
   // 词法环（`composeFallbackDevelopmentAutomation` 的 `automationRef`、`agentCatalogRef`、

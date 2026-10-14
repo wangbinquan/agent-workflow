@@ -31,11 +31,7 @@ export * from './schemas/humanGate'
 export * from './schemas/review'
 export * from './schemas/reviewCollab' // RFC-340
 export * from './schemas/runtime'
-export * from './schemas/observationPricing'
-export * from './schemas/observationUsage'
-export * from './schemas/observationSpans'
-export * from './schemas/observationPlatform'
-export * from './schemas/observationInvocation'
+export * from './schemas/observation'
 export * from './schemas/mcp'
 export * from './schemas/mcpProbe'
 export * from './schemas/mcpRuntimeTest' // RFC-238
@@ -184,19 +180,8 @@ export * from './uploadNaming'
 // 完整请求体的纯函数。创建对话框调它发请求，后端契约测试调它打真实 app，
 // 两边不可能对不上（此前对不上两次，都是用户在 UI 上撞出来的）。
 export * from './developmentConfigCreate'
-export * from './schemas/observationTasks'
-export * from './schemas/observationReport'
-export * from './schemas/observationProjectionWs'
-export * from './schemas/observationComplete'
-export * from './schemas/observationHistorical'
 
 // RFC-371 original durable native owner contracts.
-export * from './schemas/observationNativePages'
-export * from './schemas/observationNativeCompletion'
-export * from './schemas/observationNativeRootCompletion'
-export * from './schemas/observationNativeEmission'
 export * from './workflowOutputEvidence'
 
-export * from './schemas/observationAnalysis'
-export * from './schemas/observationStorage'
 export * from './schemas/hostExecutionStatus'

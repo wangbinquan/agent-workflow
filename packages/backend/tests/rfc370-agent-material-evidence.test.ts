@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionCaptureRequest } from '../src/modules/runtime-management/application/ports/agentMaterialEvidence'
-import type { NativeUsageCapture } from '../src/modules/runtime-management/application/ports/nativeUsageCapture'
+import type { RuntimeUsageMeter } from '../src/services/runtime/usage'
 import type {
   NativeAgentMaterialEvidenceHooks,
   NativeAgentMaterialEvidenceScope,
@@ -42,7 +42,7 @@ describe('RFC-370 selected material evidence', () => {
     let methodReads = 0
     const hooks: NativeAgentMaterialEvidenceHooks = {
       captureSessions: async () => {},
-      get prepareUsageNormalizer() {
+      get usageMeter() {
         methodReads++
         return undefined
       },
@@ -57,17 +57,17 @@ describe('RFC-370 selected material evidence', () => {
       liveLocation: unavailable,
     })
     expect(methodReads).toBe(0)
-    expect(evidence.prepareUsageNormalizer).toBeUndefined()
+    expect(evidence.prepareUsageMeter).toBeUndefined()
     expect(methodReads).toBe(1)
-    expect(evidence.prepareNativeUsageCapture).toBeUndefined()
-    expect(evidence.prepareSpanCapture).toBeUndefined()
     expect(evidence.readInventory).toBeUndefined()
     expect(evidence.drainFinalEvents).toBeUndefined()
     expect(evidence.startLiveCapture).toBeUndefined()
     expect(evidence.captureSessionsToSink).toBeUndefined()
   })
 
-  test('usage and spans keep the selected receiver, final env and complete inherited identity', () => {
+  // RFC-371 v2: the usage meter is the only usage hook; it keeps the selected
+  // receiver and reads the final child environment at preparation time.
+  test('the usage meter keeps the selected receiver and the final child environment', () => {
     let currentEnv = { HOME: '/before-wrap' },
       reads = 0
     const selectedScope: NativeAgentMaterialEvidenceScope = {
@@ -78,76 +78,24 @@ describe('RFC-370 selected material evidence', () => {
         return currentEnv
       },
     }
-    const normalize = () => ({ measurements: [], diagnostics: [] })
-    const capture: NativeUsageCapture = {
-      contract: 'opencode-child-steps-v1',
-      nativeSource: 'fixture-native',
-      includesRecord: () => false,
-      begin: () => {},
-      finish: () => [],
+    const meter: RuntimeUsageMeter = {
+      observe: () => false,
+      snapshot: () => ({ state: 'partial', models: [] }),
     }
-    const spans = getRuntimeDriver('claude-code').prepareSpanCapture!({
-      env: {},
-      invocationId: 'i',
-    })
-    const nextRevision = () => 7
     const seen: unknown[] = []
     const hooks: NativeAgentMaterialEvidenceHooks = {
       captureSessions: async () => {},
-      prepareUsageNormalizer(input) {
+      usageMeter(input) {
         expect<NativeAgentMaterialEvidenceHooks>(this).toBe(hooks)
         seen.push(input)
-        return normalize
-      },
-      prepareNativeUsageCapture(input) {
-        expect<NativeAgentMaterialEvidenceHooks>(this).toBe(hooks)
-        seen.push(input)
-        return capture
-      },
-      prepareSpanCapture(input) {
-        expect<NativeAgentMaterialEvidenceHooks>(this).toBe(hooks)
-        seen.push(input)
-        return spans
+        return meter
       },
     }
     const evidence = bindNativeAgentMaterialEvidence(hooks, selectedScope)
     currentEnv = { HOME: '/after-wrap' }
-    const identity = Object.create({
-      invocationId: 'i',
-      taskId: 't',
-      nodeRunId: 'n',
-      agentId: null,
-      resumeSessionId: 'resume',
-      nextRevision,
-    })
-    identity.env = { HOME: '/unselected' }
-    expect(evidence.prepareUsageNormalizer!()).toBe(normalize)
-    expect(evidence.prepareNativeUsageCapture!(identity)).toBe(capture)
-    expect(evidence.prepareSpanCapture!(identity)).toBe(spans)
-    expect(seen).toEqual([
-      { env: currentEnv },
-      {
-        env: currentEnv,
-        invocationId: 'i',
-        taskId: 't',
-        nodeRunId: 'n',
-        agentId: null,
-        resumeSessionId: 'resume',
-        nextRevision,
-      },
-      { env: currentEnv, invocationId: 'i' },
-    ])
-    expect(reads).toBe(3)
-    seen.length = 0
-    evidence.prepareNativeUsageCapture!({
-      invocationId: 'i',
-      taskId: 't',
-      nodeRunId: 'n',
-      agentId: null,
-    })
-    expect(seen).toEqual([
-      { env: currentEnv, invocationId: 'i', taskId: 't', nodeRunId: 'n', agentId: null },
-    ])
+    expect(evidence.prepareUsageMeter!({ resumed: true, configuredModel: 'p/m' })).toBe(meter)
+    expect(seen).toEqual([{ resumed: true, configuredModel: 'p/m', env: currentEnv }])
+    expect(reads).toBe(1)
   })
 
   test('capture preserves epochs, persistence and dedupe while native location stays selected', async () => {
@@ -510,9 +458,9 @@ test('system evidence reads the prepared plan lazily and preserves later environ
   const evidence = bindNativeAgentMaterialEvidence(
     {
       captureSessions: async () => {},
-      prepareUsageNormalizer(context) {
-        environments.push(context.env)
-        return () => ({ measurements: [], diagnostics: [] })
+      usageMeter(context) {
+        environments.push(context.env!)
+        return { observe: () => false, snapshot: () => ({ state: 'partial', models: [] }) }
       },
     },
     {
@@ -523,7 +471,7 @@ test('system evidence reads the prepared plan lazily and preserves later environ
   expect(environments).toEqual([])
   const finalEnvironment = { SELECTED_PROFILE: 'final' }
   plan.env = finalEnvironment
-  evidence.prepareUsageNormalizer!()
+  evidence.prepareUsageMeter!({ resumed: false, configuredModel: null })
   expect(environments).toEqual([finalEnvironment])
   expect(environments[0]).toBe(finalEnvironment)
 })

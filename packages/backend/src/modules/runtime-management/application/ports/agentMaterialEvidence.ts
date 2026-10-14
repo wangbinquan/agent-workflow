@@ -1,6 +1,4 @@
-import type { NativeUsageCapture, NativeUsageCaptureIdentity } from './nativeUsageCapture'
-import type { PreparedRuntimeSpanCapture } from '@/services/runtime/spanCapture'
-import type { RuntimeUsageContext, RuntimeUsageFrame } from '@/services/runtime/usage'
+import type { RuntimeUsageMeter, RuntimeUsageMeterInput } from '../../domain/usageMeter'
 import type {
   NormalizedEvent,
   SessionCaptureContext,
@@ -36,9 +34,8 @@ export interface AgentMaterialLiveCaptureHandle {
  * callers never manufacture an empty or complete observation for it. This
  * contract contains no environment, run directory, binary or transcript path. */
 export interface AgentMaterialEvidence {
-  prepareUsageNormalizer?(): (raw: unknown, context: RuntimeUsageContext) => RuntimeUsageFrame
-  prepareNativeUsageCapture?(identity: NativeUsageCaptureIdentity): NativeUsageCapture
-  prepareSpanCapture?(input: { readonly invocationId: string }): PreparedRuntimeSpanCapture
+  /** RFC-371 v2: invocation-local usage meter bound to the final child environment. */
+  prepareUsageMeter?(input: RuntimeUsageMeterInput): RuntimeUsageMeter
   captureSessions(request: AgentSessionCaptureRequest): Promise<void>
   readInventory?(input: { readonly nodeKind: string }): Promise<InventorySnapshot | null>
   drainFinalEvents?(input: {

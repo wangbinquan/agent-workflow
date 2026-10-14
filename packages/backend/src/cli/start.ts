@@ -1,7 +1,6 @@
 import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'
 import { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'
 import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
-import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
@@ -45,14 +44,7 @@ import type {
   VerificationCommandEffectsFactory,
 } from '@/modules/development-automation/composition'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
-import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
-import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
-import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
-import { composeOriginalObservationProjection } from '@/platform/background/observationProjection'
-import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
-import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
-import { nativeUsageAdmissions } from '@/platform/persistence/nativeUsageAdmissions'
-import { selectedNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/selectedNativeUsageInvocation'
+import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -906,18 +898,6 @@ async function composePostgresqlProviderSession(
     },
     hostExecution !== undefined,
   )
-  const observationReportBindings = await _bindPausableProviderService(
-    {
-      runtimeId: 'observation-reports',
-      closeParticipantId: 'observation-reports-final-close',
-      service: {
-        pause: () => runtime.observationReports.stop(),
-        resume: async () => runtime.observationReports.start(),
-        stop: () => runtime.observationReports.stop(),
-      },
-    },
-    hostExecution !== undefined,
-  )
   const taskExecutionBindings = await _bindTaskExecutionProviderBackground(
     runtime.taskExecution.background,
     {
@@ -1344,7 +1324,6 @@ async function composePostgresqlProviderSession(
         },
         maintenance: coldMaintenance!,
         mcp: runtime.mcpRuntimeTests.execution!,
-        reports: runtime.observationReportExecution!,
         webhook: runtime.webhookTerminalControl.execution!,
         afterCommit: coldCommittedEventPump!,
         limits: {
@@ -1424,7 +1403,6 @@ async function composePostgresqlProviderSession(
       taskExecutionBindings.runtimeFactory,
       maintenanceBindings.runtimeFactory,
       mcpRuntimeBindings.runtimeFactory,
-      observationReportBindings.runtimeFactory,
     ],
     backgroundWriterFactories: [
       webhookTerminalRuntimeFactory,
@@ -1447,7 +1425,6 @@ async function composePostgresqlProviderSession(
       taskExecutionBindings.closeParticipant,
       maintenanceBindings.closeParticipant,
       mcpRuntimeBindings.closeParticipant,
-      observationReportBindings.closeParticipant,
       gracefulTaskShutdown,
       webhookTerminalClose,
     ],
@@ -2404,33 +2381,11 @@ async function composeSqliteProviderSession(
       : {}),
   })
   const workspacePresence = createFileWorkspacePresenceQueries()
-  const nativeUsage = selectedNativeUsageInvocationPersistence(db, {
-    binding: {
-      provider: 'sqlite',
-      db,
-      generationId: databaseProvider.generation.payload.generationId,
-    },
-    admissions: nativeUsageAdmissions(process.env.AW_NATIVE_OBSERVATION_ADMISSIONS),
-  })
-  const systemAgentObservations = composeSystemAgentObservations({
-    db: db,
-    observations: composeLocalInvocationObservations(
-      db,
-      composeObservationUsageSource(
-        db,
-        nativeHistoryRead({
-          provider: 'sqlite',
-          db,
-          generationId: databaseProvider.generation.payload.generationId,
-        }),
-      ),
-    ),
-    nativeUsage,
-  })
+  const observationCalls = composeRunObservationCalls(db)
+  const systemAgentObservations = composeSystemAgentObservations({ calls: observationCalls })
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
       ...(hostExecution ? { host: hostExecution.taskHost } : {}),
-      nativeUsage,
       archive: input.taskArchive,
       workspaceReads: input.workspaceReads,
       runtime: {
@@ -2439,17 +2394,7 @@ async function composeSqliteProviderSession(
         isolationWorkspaces: input.isolationWorkspaces,
         repositoryGitWorkspaces: input.repositoryGitWorkspaces,
         workspacePresence,
-        observationInvocations: composeLocalInvocationObservations(
-          db,
-          composeObservationUsageSource(
-            db,
-            nativeHistoryRead({
-              provider: 'sqlite',
-              db,
-              generationId: databaseProvider.generation.payload.generationId,
-            }),
-          ),
-        ),
+        observationInvocations: observationCalls,
         memoryInjectionQueries,
         collaborationRuntime: createCollaborationRuntimeMechanics(db, {
           portArtifactReaderFor: () => portArtifacts,
@@ -2820,7 +2765,12 @@ async function composeSqliteProviderSession(
       }),
     log,
   }
-  if (!hostExecution) await runTaskExecutionBootRecovery(bootRecovery)
+  if (!hostExecution) {
+    await runTaskExecutionBootRecovery(bootRecovery)
+    // RFC-371 v2: calls still running from before this boot can no longer report.
+    const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
+    if (interruptedCalls > 0) log.info('observation calls interrupted', { count: interruptedCalls })
+  }
   await prepareOwner(async (context) => {
     // RFC-328 terminal maintenance is durable and outlives task-row deletion.
     // Resume exact delete claims before any automatic continuation is opened.
@@ -3804,54 +3754,9 @@ async function composeSqliteProviderSession(
       developmentEmployeeTypePackage.descriptorJson,
     ],
   })
-  const observationBuild = observationReportBuild(
-    { provider: 'sqlite', db, generationId: databaseProvider.generation.payload.generationId },
-    Paths.root,
-    db,
-    { taskCalculations: true },
-  )
-  const observationReports = composeCompleteObservationReports({
-    ...(hostExecution ? { executionMode: 'host' as const } : {}),
-    projection: composeOriginalObservationProjection({
-      ...(hostExecution ? { executionMode: 'host' as const } : {}),
-      db,
-      binding: {
-        provider: 'sqlite',
-        db,
-        generationId: databaseProvider.generation.payload.generationId,
-      },
-      generation: databaseProvider.generation.payload.generationId,
-    }),
-    taskSource: createCompleteTaskObservationFacts,
-    db,
-    generation: databaseProvider.generation.payload.generationId,
-    appHome: Paths.root,
-    heartbeatDuringRead: observationBuild.heartbeatDuringRead,
-    build: (report, _spool, signal) => observationBuild.build(report, signal),
-    closeBuild: () => observationBuild.close(),
-  })
-  const observationReportBindings = await _bindPausableProviderService(
-    {
-      runtimeId: 'observation-reports',
-      closeParticipantId: 'observation-reports-final-close',
-      service: {
-        pause: () => observationReports.worker.stop(),
-        resume: async () => observationReports.worker.start(),
-        stop: () => observationReports.worker.stop(),
-      },
-    },
-    hostExecution !== undefined,
-  )
   const intentTurnExecution = hostExecution ? composeIntentTurnExecution() : undefined
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
     ...(intentTurnExecution ? { intentTurnExecution } : {}),
-    nativeUsage,
-    nativeUsageHistory: nativeHistoryRead({
-      provider: 'sqlite',
-      db,
-      generationId: databaseProvider.generation.payload.generationId,
-    }),
-    completeObservationReports: observationReports.queries,
     nodeRunPrompts,
     portArtifacts,
     taskRunSelection: input.taskRunSelection,
@@ -4482,7 +4387,6 @@ async function composeSqliteProviderSession(
     taskExecutionBackgroundBindings.runtimeFactory,
     maintenanceRuntimeBindings.runtimeFactory,
     mcpRuntimeTestBindings.runtimeFactory,
-    observationReportBindings.runtimeFactory,
   ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
   // RFC-349 — the MR terminal-control worker owns an interval timer and a
   // fire-and-forget drain against the SQLite client. A migration freeze must
@@ -4563,7 +4467,6 @@ async function composeSqliteProviderSession(
     taskExecutionBackgroundBindings.closeParticipant,
     maintenanceRuntimeBindings.closeParticipant,
     mcpRuntimeTestBindings.closeParticipant,
-    observationReportBindings.closeParticipant,
     gracefulTaskShutdown,
     webhookTerminalClose,
   ] satisfies readonly DaemonProviderCloseParticipant[])
@@ -4586,7 +4489,6 @@ async function composeSqliteProviderSession(
         },
         maintenance: coldMaintenance!,
         mcp: mcpRuntimeTests.execution!,
-        reports: observationReports.execution!,
         webhook: webhookTerminalControl.execution!,
         afterCommit: coldCommittedEventPump!,
         limits: {

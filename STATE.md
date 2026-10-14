@@ -1,3 +1,11 @@
+## 2026-10-14 RFC-371 v2：运行观测精简重设计（Done）
+
+按用户授权（完整重设计、无需 Codex 门、无现网存量）完成 [v2 重设计](design/RFC-371-run-observability/redesign-v2-20261014.md)：每次运行时调用一行、受理先于 spawn、运行中最多每 3 秒原地更新、结束一次写终态；统计按需聚合（窗口过滤 + GROUP BY，非管理员先批量判定可见任务，超 20,000 标 partial），无派生表 / 触发器 / 后台投影。SQLite `0256` 与 PostgreSQL `0032` 退役 v1 的 81 张表及他域表上的全部变更捕获触发器 / 函数，只建 `observation_calls` / `observation_call_models` / `observation_prices`；迁移引擎的退役边先删连带的他表触发器与函数。运行时驱动各自计量（OpenCode 结束后有界只读一次原生库汇总含子 Agent 的按模型用量；Claude Code 用 `result.modelUsage`，恢复会话保持下界）；价格按运行时 × 实际模型只追加、CAS 冲突保留草稿，新价只影响之后受理的调用。前端重写为总览 / 任务 / Agent 与模型 / 系统执行四页签与任务详情（调用泳道 + 调用表），设置页按运行时 × 模型配置价格。删除 v1 platform 观测代码、投影 / 报告 / 原生补采 worker、WS `observability` 频道、托管 `observation` 执行组、`observability-scale` 作业与 `AW_NATIVE_OBSERVATION_ADMISSIONS`（能力影响见 v2 §9）。RFC-370 源码 oracle 以 `tests/helpers/rfc371V2SourceInverse.ts` 逐块还原后接续原逆变换链。
+
+本地集中验证：三包 tsc、改动文件 eslint（含 promises 规则与 e2e）/ prettier、depcheck 通过；shared 2324 项、前端全量 854 文件 7182 项通过；后端（SQLite）全量 6 分片两轮，按完整分片日志逐项处理后仅余两类：依赖 Bun 1.4 `changes` 计数行为的 21 项 affected-rows 用例（本机 Bun 1.3.13，CI 为 1.4.3，本次未改 `db/client.ts` 与事务原语），以及须在源码提交后由架构配套提交刷新的 RFC-294 provenance / canonical / 索引类断言。随删改同步了 RFC-370 owner 名册（19→18）与写入目的清单（80→78）、各类账本与基线（RFC-294 债务计数全部下降，仅 MCP 豁免叶子 406→408 登记一次性 allowGrowth）。PostgreSQL 与 e2e 以确切 SHA 的 CI 为准。升级后本机库里 v1 派生数据（约 23 GB）进入空闲页，可在「数据库维护」或 `VACUUM` 回收。
+
+RFC-372 审视后优化 `d13835eb0` 的主 CI `38573440190` 终态 cancelled：后端分片 6 失败为 RFC-359 AC-1「定时启动两个引擎落库对等」，与此前纯文档提交 `f6fc5f9ef` 同现，非 RFC-372 引入，保留证据不代改；Markdown 与 Windows e2e 4/4 被取消。
+
 ## 2026-10-14 RFC-370：补足剩余 CI 超时的归因日志
 
 当前远端 `d13835eb` 的原默认完整 Windows `38574852365` 与视觉回归 `38573440273` 已终态成功，主 CI `38573440190` 仍在执行。本人 canonical 配套在 `366165c67` 原 Ubuntu 24 严格对账已实际通过，native 刷新回归继续保持。`95be043d4` Markdown 仍在 15 分钟到限后取消，GitHub API 主机表为 370 requests、55.4% success rate、32ms median，缓存命中也计入该成功率；Windows E2E 1 仍为同一受控发布任务停在 running，不能据此归属根因。

@@ -4,10 +4,12 @@ import { inverseStageAOwnerBindings } from './stageAOwnerStatementInverse'
 import reviewed from '../fixtures/rfc370-task-provider-host-assembly-original-sources.json'
 import { inverseRfc213DevStartupRoot } from './rfc213DevStartupRootInverse'
 import { inverseRfc371NativeFactRootHooks } from './rfc371NativeFactRootInverse'
+import { inverseRfc371V2Sources } from './rfc371V2SourceInverse'
 import { inverseRfc372ClarifyRootBinding } from './rfc372ClarifyRootInverse'
 
 /** Compose only the reviewed predecessors before locating Task assembly edits. */
 export function normalizeTaskProviderHostAssemblyInput(source: ts.SourceFile): ts.SourceFile {
+  source = inverseRfc371V2Sources(source)
   // The reviewed CI boundary correction exposes the original lifecycle
   // factory through composition. Retain the older complete native oracle.
   const factoryExport = 'export { createDatabaseTaskDriverLifecyclePort }\n'

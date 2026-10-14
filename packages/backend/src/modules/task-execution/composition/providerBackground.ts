@@ -83,7 +83,6 @@ interface ProviderBackgroundRuntime extends TaskRecoveryWriteSelection {
   readonly recovery: TaskRecoveryOperations
   readonly taskHasDriver: (taskId: string) => boolean
   readonly buildScheduleLaunch: BuildScheduleLaunch
-  readonly reconcileObservationUsage?: () => Promise<number>
 }
 
 interface TaskProviderAuthorityLifetime {
@@ -302,20 +301,7 @@ function createProviderLoops(
     },
   })
 
-  const observations =
-    runtime.reconcileObservationUsage === undefined
-      ? []
-      : [
-          createRestartableLoop({
-            name: 'observation-usage',
-            canDispatch,
-            delayMs: () => DAEMON_CADENCE.observationUsage,
-            run: async () => {
-              await runtime.reconcileObservationUsage!()
-            },
-          }),
-        ]
-  return Object.freeze([autoRepair, heartbeatKill, orphanReconcile, scheduled, ...observations])
+  return Object.freeze([autoRepair, heartbeatKill, orphanReconcile, scheduled])
 }
 
 /**
