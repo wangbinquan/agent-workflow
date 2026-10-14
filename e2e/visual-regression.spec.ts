@@ -1197,7 +1197,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.setViewportSize({ width: 1280, height: 900 })
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%4010?view=toolbox`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%4011?view=toolbox`)
     const responsibilityMap = page.getByTestId('employee-toolbox-responsibility-map')
     await expect(responsibilityMap).toBeVisible()
     await expect(responsibilityMap.locator('[data-work-item-ref]')).toHaveCount(20)
@@ -1555,7 +1555,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await prepareScene(page, { theme: 'light', fixture: 'clean' })
     await primeAuth(page)
     await page.goto(
-      `${requireDaemon().baseUrl}/digital-employees/development%4010?view=toolbox&workItem=analyze-implement`,
+      `${requireDaemon().baseUrl}/digital-employees/development%4011?view=toolbox&workItem=analyze-implement`,
     )
     const toolbox = page.getByTestId('employee-node-toolbox')
     await expect(toolbox).toBeVisible()
@@ -1632,7 +1632,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
               visibility: 'public',
               access: 'own',
               name: 'Java delivery employee',
-              typeRef: { typeId: 'development', revision: 10 },
+              typeRef: { typeId: 'development', revision: 11 },
               configuration: {
                 displayName: 'Java delivery employee',
                 jobTemplateRef: { id: 'visual-java-job', revision: 3 },
@@ -1661,7 +1661,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
               visibility: 'public',
               access: 'own',
               name: 'C++ pipeline repair employee',
-              typeRef: { typeId: 'development', revision: 10 },
+              typeRef: { typeId: 'development', revision: 11 },
               configuration: {
                 displayName: 'C++ pipeline repair employee',
                 jobTemplateRef: { id: 'visual-cpp-job', revision: 2 },
@@ -1757,7 +1757,7 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
       })
     })
     await primeAuth(page)
-    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%4010?view=employees`)
+    await page.goto(`${requireDaemon().baseUrl}/digital-employees/development%4011?view=employees`)
     await expect(page.getByTestId('digital-employee-outcomes-visual-java-employee')).toContainText(
       '18',
     )

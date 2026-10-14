@@ -803,13 +803,6 @@ test('runtime last-row contributions preserve Dialog, URL, scroll and focus acro
         await expect(row).toContainText('¥1.25')
         await expect(row).not.toContainText('470,100')
         const main = page.getByTestId('app-shell-main')
-        const saved = {
-          main: await main.evaluate((element) => element.scrollTop),
-          body: await body.evaluate((element) => element.scrollTop),
-          window: await page.evaluate(() => scrollY),
-          url: page.url(),
-        }
-        expect(saved.body).toBeGreaterThan(100)
         await page.keyboard.press(nextControl)
         await expect(
           dialog
@@ -817,6 +810,15 @@ test('runtime last-row contributions preserve Dialog, URL, scroll and focus acro
             .last(),
         ).toBeFocused()
         await taskButton.focus()
+        // The product snapshots on task activation, after the final keyboard
+        // focus action; pre-footer scroll is not the requested return position.
+        const saved = {
+          main: await main.evaluate((element) => element.scrollTop),
+          body: await body.evaluate((element) => element.scrollTop),
+          window: await page.evaluate(() => scrollY),
+          url: page.url(),
+        }
+        expect(saved.body).toBeGreaterThan(100)
         await page.keyboard.press('Enter')
         await expect(
           page.getByRole('heading', {
