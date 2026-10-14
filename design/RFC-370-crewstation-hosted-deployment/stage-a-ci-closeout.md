@@ -2,6 +2,12 @@
 
 ## 2026-10-14 native 状态刷新回归与完整 CI 边界
 
+修复源码已完整发布为 `4328d428b57b0b6c61154dcbd183f70513daae57`，推后 main／origin 精确同步。该 SHA 的质量作业 `115845591197`、完整 Windows `38562228834` 和视觉回归 `38562141998` 均已 success，九个跨平台前端分片已成功；macOS `115845591288` 与 Windows `115845591456` 日志均确认原 retry 文件 8 tests 全通过，包含五条新增回归。前置 f6fc 的原定时 Windows `38560283870` 也已完整成功，较早手动作业被原并发策略取消的事实保留。
+
+`4328d428b` Ubuntu 24 job `115845591725` 的两个 canonical 严格对账失败归于本会话：前端生产源码也参与三目录 sourceDigest，此次发布漏了必要配套。使用原 `architecture-census.ts --write --source-ref 4328d428b --seed-ref 4328d428b --snapshot-sha 4328d428b` 仅从主 checkout 的已提交 Git 对象生成原 13 份文件；新 sourceDigest 为 `sha256:acc38fb091f84e8f70b8e6e4477306c531a0191745fd3a3d6131612d3250b94f`，与实际 CI 期望一致。八份 canonical、四份治理投影与内容 provenance、原 status 投影逐项一致，原结构校验零错误；全部 130 条账本原内容保持，无增长声明、计数或判据修改。并发 RFC-372 在制源码未被读入生成快照，也未被覆盖或移除。配套发布后的确切 SHA 主 CI 继续验收。
+
+同一轮 Markdown job `115845591174` 实为 15 分钟预算取消，日志只留下 1775 total／957 unique、1768 successful、3 excluded、4 unsupported、0 HTTP errors 的取消时摘要，不能据此断言所有未完成请求已通过。前置 f6fc 的 Ubuntu 6 仍只失败两条已提交预览的定时启动相位对等用例；其有限接手答复尚未到达。f6fc Windows E2E 1 的最终报告为 125 passed／1 failed／2 flaky／4 skipped／2 did not run，业务修复任务两次仍停在 running；原同一夹具在阶段 A 前耗时 1.3 分钟且通过，前后均有事件循环停顿，具体超时根因尚不能归属。原任务夹具、预算、重试和断言保持，没有把原失败尝试数误记成最终失败数。
+
 统计四处类型修复已由原负责会话发布为 `48edfbfed`，原生成配套为 `c47f1c855`；包含提交及并发审阅文档的远端 head 为 `f6fc5f9ef2d93d2fac32e25f19965ded61a0ac3e`。前述 JSON、Memory 恢复夹具的候选 hash 保持。此前 `e6fb19d07` 的主 CI 共有 67 success、3 failure、2 cancelled，原十个后端失败作业已经实际成功；余下的两条定时启动行级对等用例尚无确切责任归属，有限接手预览已交当前用户，未获新答复前不应用。
 
 同一已获授权的阶段 A 功能审阅者针对新增质疑作必要续核，确认 1 个 P2：同一登录会话成功取得 native 后，后台刷新失败时 Provider 无条件丢弃 Query 保留的 native 状态，使原本可用的执行入口被禁用。此前 PASS／0 findings 保留为历史，由本次 NEEDS_FIX／1 P2 修正。默认 native 的 owner 装配以及执行端口的方法数量本身未形成额外阶段 A 功能 finding；CS 的 cursor、消息、取消和原 attempt 恢复语义仍须由阶段 B 的实际适配证明，不能据此提前宣称满足。

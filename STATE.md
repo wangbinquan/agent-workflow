@@ -1,5 +1,9 @@
 ## 2026-10-14 RFC-370：native 后台状态刷新回归修复
 
+修复源码已上库 `4328d428b` 并精确同步远端；该 SHA 主 CI 质量作业、九个跨平台前端分片、完整 Windows `38562228834`、视觉 `38562141998` 已成功，macOS／Windows 的原 retry 文件均实际 8 tests 全通过。Ubuntu 24 `115845591725` 的两个 canonical 失败为本人漏同步前端生产源码参与的 sourceDigest；已用原生成器读取已提交 4328 对象更新原 13 份配套，sourceDigest 精确匹配 CI 期望 acc38fb0，八 canonical／四治理和 provenance／status 投影一致、原结构校验零错误、130 条账本内容保持。并发 RFC-372 在制源码保持，未纳入固定快照；配套发布后验新确切 SHA 主 CI。
+
+总绿仍未取得：4328 Markdown 为 15 分钟预算取消，取消时摘要没有 HTTP 错误但不代表所有未完成请求通过；前置 f6fc 的两条定时启动相位对等失败仍等待有限接手答复，Windows E2E 1 还有一条业务任务状态超时，具体责任尚无足够依据。原预算、重试和严格断言保持，无跨独立 session 消息；A-G 未签，B/M0 未开始。
+
 统计四处类型修复与必要配套已发布并包含于远端 `f6fc5f9ef`，本人 JSON／Memory 候选 hash 保持。同一已获授权的阶段 A 功能门续核确认 native 已成功后因状态刷新错误禁用执行入口的 P2，历史 PASS 经 NEEDS_FIX／1 P2 修正。生产修复和五条真实 QueryClient 生命周期回归已写齐；仅保留当前 auth revision 已确认的 native，首次未知、托管错误及新会话仍等待有效状态。限定 ESLint／Prettier／diff 检查通过；同一审阅者必要续核确认该 P2 关闭、PASS／0 新 findings，源码实现门恢复为 PASS；新确切 SHA GitHub 验证另验，未运行本地功能套件。
 
 `f6fc5f9ef` 默认完整 Windows `38559524176`／job `115836972958` 实为 cancelled：平台套件中途取消，后续 Memory／Shared／Typecheck 未执行，不能记 failure 断言或通过。主 CI `38558760663` 尚待终态；此前 e6fb 的十个后端失败作业已实际成功。两条尚不能归因的定时启动对等用例已提供有限接手预览，等待当前用户答复，不擅自认领。A-G 未签，B/M0 未启动，AW 未部署 CS，没有跨独立 session 消息。详见 [阶段 A 修复](design/RFC-370-crewstation-hosted-deployment/stage-a-ci-closeout.md)。以下历史与并发内容保持。
