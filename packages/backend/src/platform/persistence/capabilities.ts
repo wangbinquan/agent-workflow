@@ -501,13 +501,17 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     },
     jsonPathText: (document, path) => {
       const literal = sql.raw("'{" + path.join(',') + "}'")
-      return sql`CASE WHEN pg_input_is_valid((${document})::text, 'jsonb') THEN CASE WHEN jsonb_typeof(((${document})::text)::jsonb #> ${literal}) = 'string' THEN ((${document})::text)::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
+      // Guard the cast's input: a cast inside a CASE arm can still be folded
+      // during PostgreSQL planning when its argument is a literal or parameter.
+      const decoded = sql`(CASE WHEN pg_input_is_valid((${document})::text, 'jsonb') THEN (${document})::text ELSE NULL END)::jsonb`
+      return sql`CASE WHEN jsonb_typeof(${decoded} #> ${literal}) = 'string' THEN ${decoded} #>> ${literal} ELSE NULL END`
     },
     jsonPathArray: (document, path) => {
       const literal = sql.raw("'{" + path.join(',') + "}'")
+      const decoded = sql`(CASE WHEN pg_input_is_valid((${document})::text, 'jsonb') THEN (${document})::text ELSE NULL END)::jsonb`
       return sql<
         string | null
-      >`CASE WHEN pg_input_is_valid((${document})::text, 'jsonb') THEN CASE WHEN jsonb_typeof(((${document})::text)::jsonb #> ${literal}) = 'array' THEN ((${document})::text)::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
+      >`CASE WHEN jsonb_typeof(${decoded} #> ${literal}) = 'array' THEN ${decoded} #>> ${literal} ELSE NULL END`
     },
     ascNullsFirst: (column) => sql`${column} asc nulls first`,
     descNullsLast: (column) => sql`${column} desc nulls last`,

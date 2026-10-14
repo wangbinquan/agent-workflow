@@ -140,4 +140,27 @@ describeEachProvider('RFC-371 original nested JSON identities and scope arrays',
       expect(snapshot).toEqual(direct)
     }
   })
+  // A constant cast in an unselected CASE arm can fail during PG planning.
+  test('malformed SQL literals and NULL return null on plain and snapshot reads', async () => {
+    const read = (handle: Parameters<typeof jsonPathArray>[0]) => sql`SELECT
+      ${jsonPathArray(handle, sql`'{'`, ['detail', 'scopes'])} AS malformed_array,
+      ${jsonPathText(handle, sql`'{'`, ['request', 'reportId'])} AS malformed_identity,
+      ${jsonPathArray(handle, sql`''`, ['detail', 'scopes'])} AS empty_array,
+      ${jsonPathText(handle, sql`''`, ['request', 'reportId'])} AS empty_identity,
+      ${jsonPathArray(handle, sql`NULL`, ['detail', 'scopes'])} AS null_array,
+      ${jsonPathText(handle, sql`NULL`, ['request', 'reportId'])} AS null_identity`
+    const direct = await h.db.all(read(h.db))
+    const snapshot = await h.session.snapshotRead(async (tx) => await tx.all(read(tx)))
+    expect(direct).toEqual([
+      {
+        malformed_array: null,
+        malformed_identity: null,
+        empty_array: null,
+        empty_identity: null,
+        null_array: null,
+        null_identity: null,
+      },
+    ])
+    expect(snapshot).toEqual(direct)
+  })
 })
