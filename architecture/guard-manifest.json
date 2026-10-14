@@ -2220,7 +2220,7 @@
       "corpusScanner": false,
       "file": "packages/backend/tests/rfc371-source-clock-upgrade.test.ts",
       "id": "rfc371-source-clock-upgrade",
-      "lines": 120,
+      "lines": 122,
       "mechanism": "behaviour",
       "minCorpusFiles": null,
       "negativeFixture": false,

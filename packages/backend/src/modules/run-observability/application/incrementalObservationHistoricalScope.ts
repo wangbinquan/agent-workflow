@@ -168,9 +168,9 @@ export function incrementalObservationHistoricalScope(
     cohortAt = clocks.size === 1 ? scopes[0]!.cohortAt : null
   }
   const referenceFold = (
-    value: CompleteObservationFold,
+    value: QualifiedObservationContribution['fold'],
     executionDocument = false,
-  ): CompleteObservationFold => {
+  ): QualifiedObservationContribution['fold'] => {
     if (excluded) return emptyCompleteObservationFold()
     const selectedNumeric = emptyCompleteObservationFold()
     if (executionDocument)
@@ -203,8 +203,7 @@ export function incrementalObservationHistoricalScope(
       completeObservationGap(next, 'historical-scope-unresolved')
     // Receipt inventory counts the original selected records, including an
     // unresolved physical candidate. It is independent of admitted numbers.
-    if (value.inventory) next.inventory = value.inventory
-    return next
+    return { ...next, ...(value.inventory ? { inventory: value.inventory } : {}) }
   }
   let fold = row.fold
   if (excluded) fold = emptyCompleteObservationFold()

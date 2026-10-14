@@ -642,7 +642,12 @@ test('distinct physical candidate sets preserve a uniquely observed record and d
     ]),
     source = {
       ...f.row,
-      fold: { ...f.row.fold, historicalReferences: '1', observedHistoricalReferences: '1' },
+      fold: {
+        ...f.row.fold,
+        historicalReferences: '1',
+        observedHistoricalReferences: '1',
+        inventory: { tasks: '0', attempts: '0', numericRecords: '2', nativeCaptures: '1' },
+      },
       detail: {
         ...f.row.detail,
         nativeRecord: false,
@@ -657,6 +662,7 @@ test('distinct physical candidate sets preserve a uniquely observed record and d
   })!
   expect(actual.fold.tokens).toEqual(source.fold.tokens)
   expect(actual.fold.records).toBe(source.fold.records)
+  expect(actual.fold.inventory).toEqual(source.fold.inventory)
   expect(actual.fold.observedHistoricalReferences).toBe('1')
   expect(actual.fold.gaps).toContain('historical-scope-unresolved')
   const coveredGroups = new Map(scopeGroups)
@@ -671,6 +677,7 @@ test('distinct physical candidate sets preserve a uniquely observed record and d
     { ...f, query, ids: new Set(), scopeGroups: coveredGroups },
   )!
   expect(covered.fold.observedHistoricalReferences).toBe('0')
+  expect(covered.fold.inventory).toEqual(source.fold.inventory)
   expect(
     incrementalObservationHistoricalScope(source, {
       ...f,

@@ -44,6 +44,8 @@ test('V5 replaces exactly the original 165 source clock functions and retains ev
     const current = after.plan.statements.find(
       (entry) => entry.kind === original.kind && entry.logicalId === original.logicalId,
     )
+    expect(current).toBeDefined()
+    if (!current) throw new Error('Original statement missing from the source clock successor')
     if (changed.has(original.kind + ':' + original.logicalId)) {
       const pair = step.sourceRevisionReplacements!.find(
         (entry) => entry.logicalId === original.logicalId,
