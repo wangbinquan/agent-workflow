@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
-      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:870",
+      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:847",
       "kind": "register-call",
-      "line": 870,
+      "line": 847,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#bindAfterCommitHostOwner",
       "removeAfterWave": "W6/W9",
       "symbol": "bindAfterCommitHostOwner",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
-      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:872",
+      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerAfterCommitEventPump:849",
       "kind": "register-call",
-      "line": 872,
+      "line": 849,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#bindAfterCommitHostOwner",
       "removeAfterWave": "W6/W9",
       "symbol": "bindAfterCommitHostOwner",
@@ -25,9 +25,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
-      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerConfigAppliedListener:455",
+      "id": "ambient:packages/backend/src/cli/daemonHostExecutionOwners.ts#registerConfigAppliedListener:432",
       "kind": "register-call",
-      "line": 455,
+      "line": 432,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#bindSubmoduleRefreshHostOwner",
       "removeAfterWave": "W6/W9",
       "symbol": "bindSubmoduleRefreshHostOwner",
@@ -36,9 +36,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:787",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:772",
       "kind": "register-call",
-      "line": 787,
+      "line": 772,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -47,9 +47,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1058",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1038",
       "kind": "register-call",
-      "line": 1058,
+      "line": 1038,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1064",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:1044",
       "kind": "register-call",
-      "line": 1064,
+      "line": 1044,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3613",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3563",
       "kind": "register-call",
-      "line": 3613,
+      "line": 3563,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -80,9 +80,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3619",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3569",
       "kind": "register-call",
-      "line": 3619,
+      "line": 3569,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1236",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1216",
       "kind": "register-call",
-      "line": 1236,
+      "line": 1216,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -102,9 +102,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:4060",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3965",
       "kind": "register-call",
-      "line": 4060,
+      "line": 3965,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -113,9 +113,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:2175",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:2152",
       "kind": "register-call",
-      "line": 2175,
+      "line": 2152,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -124,9 +124,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:1087",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:1067",
       "kind": "global-setter",
-      "line": 1087,
+      "line": 1067,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -135,9 +135,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:4112",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:4017",
       "kind": "global-setter",
-      "line": 4112,
+      "line": 4017,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -574,187 +574,99 @@
     },
     {
       "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:103",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:109",
       "kind": "register-call",
-      "line": 103,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:127",
-      "kind": "register-call",
-      "line": 127,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:161",
-      "kind": "register-call",
-      "line": 161,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:172",
-      "kind": "register-call",
-      "line": 172,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:198",
-      "kind": "register-call",
-      "line": 198,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:211",
-      "kind": "register-call",
-      "line": 211,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:33",
-      "kind": "register-call",
-      "line": 33,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:45",
-      "kind": "register-call",
-      "line": 45,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:68",
-      "kind": "register-call",
-      "line": 68,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#registerRoute:88",
-      "kind": "register-call",
-      "line": 88,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/completeObservationRoutes.ts#mountCompleteObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountCompleteObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:129",
-      "kind": "register-call",
-      "line": 129,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "line": 109,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
       "targetContext": "run-observability"
     },
     {
       "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:153",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:126",
       "kind": "register-call",
-      "line": 153,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "line": 126,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
       "targetContext": "run-observability"
     },
     {
       "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:188",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:136",
       "kind": "register-call",
-      "line": 188,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "line": 136,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
       "targetContext": "run-observability"
     },
     {
       "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:216",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:150",
       "kind": "register-call",
-      "line": 216,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "line": 150,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
       "targetContext": "run-observability"
     },
     {
       "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:226",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:41",
       "kind": "register-call",
-      "line": 226,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "line": 41,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
       "targetContext": "run-observability"
     },
     {
       "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:243",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:54",
       "kind": "register-call",
-      "line": 243,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "line": 54,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
       "targetContext": "run-observability"
     },
     {
       "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:50",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:69",
       "kind": "register-call",
-      "line": 50,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "line": 69,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountObservationRoutes",
+      "targetContext": "run-observability"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:83",
+      "kind": "register-call",
+      "line": 83,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountObservationRoutes",
+      "targetContext": "run-observability"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#registerRoute:96",
+      "kind": "register-call",
+      "line": 96,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/inbound/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
       "targetContext": "run-observability"
@@ -5679,9 +5591,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:4356",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:4323",
       "kind": "register-call",
-      "line": 4356,
+      "line": 4323,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5690,9 +5602,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1656",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1643",
       "kind": "register-call",
-      "line": 1656,
+      "line": 1643,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5701,9 +5613,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:4130",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:4097",
       "kind": "register-call",
-      "line": 4130,
+      "line": 4097,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5712,9 +5624,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:4416",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:4383",
       "kind": "register-call",
-      "line": 4416,
+      "line": 4383,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -5760,13 +5672,13 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 522,
+    "ambientWiring": 514,
     "disabled": 9,
-    "entries": 412,
+    "entries": 391,
     "executionLocal": 54,
-    "longRunning": 118,
+    "longRunning": 110,
     "managed": 13,
-    "periodic": 231
+    "periodic": 218
   },
   "entries": [
     {
@@ -5817,7 +5729,7 @@
       ],
       "file": "packages/backend/src/cli/daemonHostExecutionOwners.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/cli/daemonHostExecutionOwners.ts#$setInterval:172",
+      "id": "background:packages/backend/src/cli/daemonHostExecutionOwners.ts#$setInterval:171",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -5831,7 +5743,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/cli/daemonHostExecutionOwners.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:172",
+      "symbol": "$setInterval:171",
       "targetContext": "bootstrap"
     },
     {
@@ -6035,27 +5947,6 @@
       "phase": "after-ready",
       "symbol": "createDaemonProviderRuntimeRouter",
       "targetContext": "runtime-management"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/db/observationStorage.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/db/observationStorage.ts#observationWorkRetention",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/db/observationStorage.ts#observationWorkRetention",
-      "phase": "unknown",
-      "symbol": "observationWorkRetention",
-      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -8441,297 +8332,6 @@
     },
     {
       "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/run-observability/application/completeObservationReportService.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:102",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": true,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:102",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/run-observability/application/completeWorkingCache.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/completeWorkingCache.ts#completeWorkingCache",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/completeWorkingCache.ts#completeWorkingCache",
-      "phase": "unknown",
-      "symbol": "completeWorkingCache",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/run-observability/application/incrementalObservationWorker.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/incrementalObservationWorker.ts#$setTimeout:43",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/incrementalObservationWorker.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:43",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/run-observability/application/incrementalObservationWorker.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/incrementalObservationWorker.ts#incrementalObservationWorker",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/incrementalObservationWorker.ts#incrementalObservationWorker",
-      "phase": "before-ready",
-      "symbol": "incrementalObservationWorker",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/run-observability/application/nativeUsageRevisions.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/nativeUsageRevisions.ts#reconcileNativeUsageRevisions",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/nativeUsageRevisions.ts#reconcileNativeUsageRevisions",
-      "phase": "unknown",
-      "symbol": "reconcileNativeUsageRevisions",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/run-observability/application/observationStorageWorker.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/observationStorageWorker.ts#$setTimeout:19",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/observationStorageWorker.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:19",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/run-observability/application/observationStorageWorker.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/observationStorageWorker.ts#observationStorageWorker",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/observationStorageWorker.ts#observationStorageWorker",
-      "phase": "unknown",
-      "symbol": "observationStorageWorker",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts#$setInterval:1202",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setInterval:1202",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/run-observability/domain/usageLedger.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/domain/usageLedger.ts#reconcileUsage",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/usageLedger.ts#reconcileUsage",
-      "phase": "unknown",
-      "symbol": "reconcileUsage",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts#$setInterval:544",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setInterval:544",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#sweep",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/observationStorageGc.ts#sweep",
-      "phase": "unknown",
-      "symbol": "sweep",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts#readPendingCaptureRepairs",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts#readPendingCaptureRepairs",
-      "phase": "unknown",
-      "symbol": "readPendingCaptureRepairs",
-      "targetContext": "run-observability"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#$setTimeout:258",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:258",
-      "targetContext": "runtime-management"
-    },
-    {
-      "dependencies": [
         "client",
         "config",
         "db",
@@ -9593,7 +9193,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:143",
+      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:142",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9607,7 +9207,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:143",
+      "symbol": "$setTimeout:142",
       "targetContext": "task-execution"
     },
     {
@@ -11576,132 +11176,6 @@
       "targetContext": "platform"
     },
     {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts#withNativeUsageBaselineWorker",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsageBaselineWorkerHost.ts#withNativeUsageBaselineWorker",
-      "phase": "before-ready",
-      "symbol": "withNativeUsageBaselineWorker",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts#openNativeUsagePassWorker",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts#openNativeUsagePassWorker",
-      "phase": "unknown",
-      "symbol": "openNativeUsagePassWorker",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runNativeHistoryWorker",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runNativeHistoryWorker",
-      "phase": "unknown",
-      "symbol": "runNativeHistoryWorker",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorker",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorker",
-      "phase": "unknown",
-      "symbol": "runObservationReportWorker",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorkerWithFacts",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorkerWithFacts",
-      "phase": "unknown",
-      "symbol": "runObservationReportWorkerWithFacts",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runOriginalObservationWorker",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runOriginalObservationWorker",
-      "phase": "unknown",
-      "symbol": "runOriginalObservationWorker",
-      "targetContext": "platform"
-    },
-    {
       "dependencies": [
         "timer"
       ],
@@ -12910,29 +12384,6 @@
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteLogicalSourceWorkerSupervisor.ts#SQLITE_LOGICAL_SOURCE_WORKER_ENTRY",
       "phase": "unknown",
       "symbol": "SQLITE_LOGICAL_SOURCE_WORKER_ENTRY",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts#$setTimeout:41",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqliteStorageWorkerHost.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:41",
       "targetContext": "platform"
     },
     {
@@ -14807,5 +14258,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54"
+  "sourceDigest": "sha256:eb72c6a2892186d38c59221a08f107e267c57eeee3ad3138c161cb14f6651d2c"
 }

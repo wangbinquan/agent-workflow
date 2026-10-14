@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54",
+    "sourceDigest": "sha256:eb72c6a2892186d38c59221a08f107e267c57eeee3ad3138c161cb14f6651d2c",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
@@ -2191,39 +2191,15 @@
       "lines": 33
     },
     {
-      "assertsAbsence": false,
-      "classified": true,
-      "corpusScanner": false,
-      "file": "packages/backend/tests/rfc371-committed-source-clock-provider.test.ts",
-      "id": "rfc371-committed-source-clock-provider",
-      "lines": 184,
-      "mechanism": "behaviour",
-      "minCorpusFiles": null,
-      "negativeFixture": false,
-      "runner": "bun"
-    },
-    {
       "assertsAbsence": true,
       "classified": true,
-      "corpusScanner": false,
-      "file": "packages/backend/tests/rfc371-native-participant-boundary.test.ts",
-      "id": "rfc371-native-participant-boundary",
-      "lines": 17,
-      "mechanism": "source-text",
-      "minCorpusFiles": null,
-      "negativeFixture": false,
-      "runner": "bun"
-    },
-    {
-      "assertsAbsence": true,
-      "classified": true,
-      "corpusScanner": false,
-      "file": "packages/backend/tests/rfc371-source-clock-upgrade.test.ts",
-      "id": "rfc371-source-clock-upgrade",
-      "lines": 122,
-      "mechanism": "behaviour",
-      "minCorpusFiles": null,
-      "negativeFixture": false,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc371-v2-observation-boundaries.test.ts",
+      "id": "rfc371-v2-observation-boundaries",
+      "lines": 120,
+      "mechanism": "ast",
+      "minCorpusFiles": 1000,
+      "negativeFixture": true,
       "runner": "bun"
     },
     {
@@ -2628,8 +2604,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "d13835eb032c52f320dad4f39ce046d733a3cfd1",
-    "contentDigest": "sha256:c79ffc8c280e107d254ac4faa78fb9956edee28474f6908889fb79fd758befa6",
+    "currentSnapshotSha": "ba4571553d513e43857b6887cb5bf20422cb005d",
+    "contentDigest": "sha256:3e694d128d1722f4ae74ae049a3b7721ebb1bdd9b120fc4daa5441d6714accab",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

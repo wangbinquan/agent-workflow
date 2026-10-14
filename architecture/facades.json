@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 298,
+    "serviceFiles": 295,
     "thinFacades": 63
   },
   "entries": [
@@ -3687,22 +3687,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0ff8df59fe9adec116ce",
-        "import:3c42cbe78d4b7c2b99a8"
-      ],
-      "exportedSymbols": [
-        "normalizeClaudeSpans"
-      ],
-      "file": "packages/backend/src/services/runtime/claudeCode/spanFacts.ts",
-      "id": "facade:packages/backend/src/services/runtime/claudeCode/spanFacts.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/spanFacts.ts#$file",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-implementation",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:9fc1ba487f5802ce7ff9"
       ],
       "exportedSymbols": [
@@ -3726,7 +3710,7 @@
     {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
-        "normalizeUsage"
+        "usageMeter"
       ],
       "file": "packages/backend/src/services/runtime/claudeCode/usage.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/usage.ts",
@@ -3775,11 +3759,9 @@
         "import:7fffe1f742017d910ca9",
         "import:835ec062b66a4ad7e8a4",
         "import:c507036df92521701751",
-        "import:c8b81a1ae2ed25b25efe",
         "import:d50add293d533727c6e4",
         "import:d84409822ef4e47283a6",
         "import:d98eada297d0a956485e",
-        "import:df5fccea1dd4c4c28c55",
         "import:e476ae62c20624ad3827",
         "import:ea97292b0b4cff7fc31f",
         "import:ec966ccb441f6ab979e4",
@@ -3791,7 +3773,6 @@
         "getNativeAgentMaterialReference",
         "getRuntimeDriver",
         "isKnownRuntimeKind",
-        "normalizeRuntimeUsage",
         "tryGetRuntimeDriver"
       ],
       "file": "packages/backend/src/services/runtime/index.ts",
@@ -3931,14 +3912,13 @@
       "targetLayer": "domain"
     },
     {
-      "boundaryEdgeIds": [
-        "import:05e478ce9cbc4189df30",
-        "import:1e9810966e808f2802bd"
-      ],
+      "boundaryEdgeIds": [],
       "exportedSymbols": [
-        "createOpencodeUsageNormalizer",
+        "OPENCODE_TREE_MAX_DEPTH",
+        "OPENCODE_TREE_MAX_SESSIONS",
+        "OpencodeTreeUsage",
         "opencodeUsageDatabasePath",
-        "readOpencodeUsageModel"
+        "readOpencodeTreeUsage"
       ],
       "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/nativeUsage.ts",
@@ -4043,22 +4023,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:317c33689480a13e3838",
-        "import:fcfddd6e072c42be4bba"
-      ],
-      "exportedSymbols": [
-        "normalizeOpencodeSpans"
-      ],
-      "file": "packages/backend/src/services/runtime/opencode/spanFacts.ts",
-      "id": "facade:packages/backend/src/services/runtime/opencode/spanFacts.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/spanFacts.ts#$file",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-implementation",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:a0b618f3b1d353cb081e"
       ],
       "exportedSymbols": [
@@ -4107,7 +4071,8 @@
     {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
-        "normalizeUsage"
+        "createOpencodeUsageMeter",
+        "usageMeter"
       ],
       "file": "packages/backend/src/services/runtime/opencode/usage.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/usage.ts",
@@ -4167,28 +4132,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:15453fccce1fc656d583",
-        "import:15723441b28ca0566236",
-        "import:3fbaf72709184ea25ffa",
-        "import:c8c3946c2415ba7280d7"
-      ],
-      "exportedSymbols": [
-        "PreparedRuntimeSpanCapture",
-        "isoSpanTime",
-        "spanId",
-        "spanObject",
-        "spanTime"
-      ],
-      "file": "packages/backend/src/services/runtime/spanCapture.ts",
-      "id": "facade:packages/backend/src/services/runtime/spanCapture.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/runtime/spanCapture.ts#$file",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-implementation",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:17d4897bd737040077bc",
         "import:6579da5cbb2188dbd509",
         "import:905b55867400e3deda7c",
@@ -4236,7 +4179,6 @@
         "import:22dac30375c049c459e3",
         "import:22e2a3e43b9aded6811d",
         "import:245a680b074fc5b0ab8a",
-        "import:25d6e3fda5a55ab36a5d",
         "import:2b90a8a54fb31fdf5cde",
         "import:2c57d5f26601e387e86e",
         "import:32c6ecba0c3967af4295",
@@ -4282,7 +4224,6 @@
         "import:b7d325a8d761ddf10b9f",
         "import:bc66a63defffbd003625",
         "import:d070f91205f306479806",
-        "import:d70a8f2b0aab923f89f4",
         "import:dc3c32ec5d84e4835f82",
         "import:df6b655178f56883e1ff",
         "import:e6f1c034a5c2c26ed0b1",
@@ -4337,23 +4278,15 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:010835eb694fc32a3963",
-        "import:0501d94fdd56bf478a67",
-        "import:0fd2261883806c478773",
-        "import:154f3ffdc0465ed7ac2b",
-        "import:24e348f91bc98bf33e1c",
+        "import:0e3d63f5c034fa4f2ce2",
+        "import:103ee1f1405bdc8236f3",
         "import:33feb34c17e91e225da1",
-        "import:3c87480c758b2bd7c0b7",
-        "import:51fcb372b391bf220b2f",
-        "import:5f5a6a53e4103104f67d",
-        "import:73e38b90cec8dc8a7732",
-        "import:7e263a6736599507e23e",
-        "import:839932493ad3aac3bb20",
-        "import:83a7ff35d143708a5830",
-        "import:9ad7dca107ceee6cae4c",
-        "import:da19feebd4b9f65a1ce4",
-        "import:f5eef367e6cf5c4cb039",
-        "import:fb3a89d8731f00d87bf0"
+        "import:683f5cc1294f8b78344c",
+        "import:9a36b73adc35af0d1c6e",
+        "import:a5df83fe033737185ddc",
+        "import:c4a1a8cbb4092a214add",
+        "import:cceaa279b4ee7cc839fe",
+        "import:f7b25b58aa27496eb7f6"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/runtime/usage.ts",
@@ -6489,5 +6422,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54"
+  "sourceDigest": "sha256:eb72c6a2892186d38c59221a08f107e267c57eeee3ad3138c161cb14f6651d2c"
 }

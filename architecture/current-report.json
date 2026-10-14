@@ -1,24 +1,24 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 522,
-    "architectureExceptions": 6441,
-    "backgroundJobs": 412,
-    "crossContextImports": 7353,
-    "facades": 298,
+    "ambientWiring": 514,
+    "architectureExceptions": 5817,
+    "backgroundJobs": 391,
+    "crossContextImports": 6620,
+    "facades": 295,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 28710,
-    "mutationEntrypoints": 2039,
+    "moduleSymbolOwners": 27141,
+    "mutationEntrypoints": 1959,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1293,
-    "transactionExternalEffects": 309
+    "publicSurfaces": 1246,
+    "transactionExternalEffects": 274
   },
   "metrics": {
-    "ambientWiringEntries": 522,
+    "ambientWiringEntries": 514,
     "appDepsConsumers": [
       "packages/backend/src/cli/embeddedHostExecutionApplication.ts"
     ],
-    "backendProductionFiles": 2567,
+    "backendProductionFiles": 2279,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -27,7 +27,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 412,
+    "backgroundEntries": 391,
     "directNativeIntervalFiles": [
       "packages/backend/src/cli/daemonHostExecutionOwners.ts",
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
@@ -36,8 +36,6 @@
       "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
       "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
-      "packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts",
-      "packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts",
       "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "packages/backend/src/platform/background/maintenanceService.ts",
@@ -52,9 +50,9 @@
       "packages/backend/src/services/scheduledTaskScheduler.ts",
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
-    "directNativeIntervals": 26,
-    "directNativeTimers": 88,
-    "inboundBoundaryEdges": 313,
+    "directNativeIntervals": 24,
+    "directNativeTimers": 81,
+    "inboundBoundaryEdges": 309,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -91,7 +89,7 @@
       },
       {
         "context": "intent",
-        "files": 79
+        "files": 76
       },
       {
         "context": "knowledge-evolution",
@@ -99,19 +97,19 @@
       },
       {
         "context": "memory",
-        "files": 44
+        "files": 42
       },
       {
         "context": "resource-catalog",
-        "files": 268
+        "files": 266
       },
       {
         "context": "run-observability",
-        "files": 185
+        "files": 17
       },
       {
         "context": "runtime-management",
-        "files": 85
+        "files": 62
       },
       {
         "context": "source-control",
@@ -127,10 +125,10 @@
       },
       {
         "context": "task-execution",
-        "files": 503
+        "files": 455
       }
     ],
-    "moduleFiles": 1943,
+    "moduleFiles": 1697,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -143,7 +141,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 46,
+    "outboundBoundaryEdges": 42,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -161,10 +159,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 298,
+    "serviceFiles": 295,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54"
+  "sourceDigest": "sha256:eb72c6a2892186d38c59221a08f107e267c57eeee3ad3138c161cb14f6651d2c"
 }
