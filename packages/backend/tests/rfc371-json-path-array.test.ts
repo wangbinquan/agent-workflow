@@ -78,7 +78,7 @@ describeEachProvider('RFC-371 original nested JSON identities and scope arrays',
       stored_identity: string | null
       bound_identity: string | null
     }>(read(h.db))
-    const snapshot = await h.session.snapshotRead((tx) => tx.all(read(tx)))
+    const snapshot = await h.session.snapshotRead(async (tx) => await tx.all(read(tx)))
     expect(snapshot).toEqual(direct)
     expect(direct).toHaveLength(1)
     expect(direct[0]!.stored).not.toBeNull()
