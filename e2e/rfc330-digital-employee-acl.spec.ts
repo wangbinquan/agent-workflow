@@ -16,7 +16,8 @@ import { startDaemon, type DaemonHandle } from './harness'
 
 let daemon: DaemonHandle
 
-const TYPE_REF = 'development@10'
+// Current builtin package published with RFC-371; preserve all exact-version journeys.
+const TYPE_REF = 'development@11'
 
 interface SeededUser {
   username: string

@@ -251,7 +251,7 @@ const PREVIOUS = readPreviousBaselines()
  */
 const NOT_A_LEDGER: Readonly<Record<string, string>> = {
   'packages/backend/tests/architecture/rfc370-host-root-boundaries.test.ts|selected':
-    'RFC-370 四个真实宿主根的必覆盖目标，每个均断言原文件人口、装配登记和零越界；这是正向覆盖清单，不是允许越界的债务或豁免表',
+    'RFC-370 五个真实宿主根的必覆盖目标（含原 dev reload），每个均断言原文件人口、装配登记和零越界；这是正向覆盖清单，不是允许越界的债务或豁免表',
   'packages/backend/tests/rfc370-doctor-diagnostic-family.test.ts|members':
     'RFC-370 Doctor 完整十步协议的有序输入预言，用于调用顺序、ACK、缺成员和错误阶段回归；不是仓库扫描结果、存量债务或豁免清单',
   // 这张表自己：它是「哪些集合不算账本」的声明，不是债务。

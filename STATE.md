@@ -1,3 +1,9 @@
+## 2026-10-14 RFC-370：获批的三组必要 CI 修复
+
+集中诊断：SQLite 五文件 25 pass，原 T19c／五根边界 27 pass，backend Typecheck exit 0、限定 lint／格式通过。一次独立只读功能审阅核对原 15 文件完整 hash，PASS／0 findings。PG 本地未配置，不代签真实 PG；源码精确提交、原生成配套和新 SHA 全 CI 继续验收。
+
+用户明确批准接手 JSON 路径 PG 参数／测试类型、dev 启动合流／根分类、当前员工包夹具及必要生成配套和当前任务内一次只读审阅。共享 main 已包含并发 `ec08bc7ce` 的快照回调类型修复；两份浏览器与列表 seed 的 @11 并发修改完整保留。候选完成原 PG 校验参数 TEXT 化及绑定／持久化／快照非法输入回归、唯一原 startCommand 调用和实际 dev 根、两处从已安装 descriptor 读取当前 typeRef 的后端运行夹具。历史 revision 10、原行为断言／预算及所有统计性能在制输出保持。全部编写后集中验证、功能审阅、精确源码／架构发布和新 SHA 总 CI 依次验收；详见 [本次修复](design/RFC-370-crewstation-hosted-deployment/ci-approved-remaining-repairs.md)。A-G／总绿未签，B/M0 未开始，AW 未部署 CS。以下全文保持。
+
 ## 2026-10-14 RFC-370：退役已消费增长声明
 
 确切 `829e67d54` 主 CI `38491705813` 的 Mac2 job `115618173413` 暴露本会话配套遗漏：已完成 28688→28689 投影的原 module-symbol-owners 一次性声明被后继提交继续保留。仅删除该过期 `allowGrowth` 并按原函数更新单文件 provenance；130 条 baseline、why、顺序、历史 note、原 T17 和生产／并发输出保持。原定向检查及精确发布继续，不重跑无关全门、不新增 census；其他失败按原提交／依赖归因。A-G／总绿未签，B/M0 未启动，AW 未部署 CS。以下全文保持。

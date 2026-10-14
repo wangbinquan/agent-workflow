@@ -501,13 +501,13 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     },
     jsonPathText: (document, path) => {
       const literal = sql.raw("'{" + path.join(',') + "}'")
-      return sql`CASE WHEN pg_input_is_valid(${document}, 'jsonb') THEN CASE WHEN jsonb_typeof(((${document})::text)::jsonb #> ${literal}) = 'string' THEN ((${document})::text)::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
+      return sql`CASE WHEN pg_input_is_valid((${document})::text, 'jsonb') THEN CASE WHEN jsonb_typeof(((${document})::text)::jsonb #> ${literal}) = 'string' THEN ((${document})::text)::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
     },
     jsonPathArray: (document, path) => {
       const literal = sql.raw("'{" + path.join(',') + "}'")
       return sql<
         string | null
-      >`CASE WHEN pg_input_is_valid(${document}, 'jsonb') THEN CASE WHEN jsonb_typeof(((${document})::text)::jsonb #> ${literal}) = 'array' THEN ((${document})::text)::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
+      >`CASE WHEN pg_input_is_valid((${document})::text, 'jsonb') THEN CASE WHEN jsonb_typeof(((${document})::text)::jsonb #> ${literal}) = 'array' THEN ((${document})::text)::jsonb #>> ${literal} ELSE NULL END ELSE NULL END`
     },
     ascNullsFirst: (column) => sql`${column} asc nulls first`,
     descNullsLast: (column) => sql`${column} desc nulls last`,

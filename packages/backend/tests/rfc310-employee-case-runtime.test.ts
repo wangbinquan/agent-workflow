@@ -44,6 +44,7 @@ import {
   MAX_EMPLOYEE_INVOCATION_DEPTH,
 } from '@/modules/digital-employee/domain/runtimeModel'
 import { composeEventCenter } from '@/modules/event-center/composition'
+import { parsePersistedEmployeeTypePackageDescriptor } from '@/modules/digital-employee/domain/model'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 
 /**
@@ -466,7 +467,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
           }),
         },
       })
-      const typeRef = { typeId: 'development', revision: 10 }
+      const typeRef = parsePersistedEmployeeTypePackageDescriptor(
+        JSON.parse(developmentEmployeeTypePackage.descriptorJson),
+      ).typeRef
       const analyzeTool = await module.commands.createTool({
         typeRef,
         workItemRef: 'analyze-implement',
@@ -1070,7 +1073,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         },
       })
       const runtime = module.runtime!
-      const typeRef = { typeId: 'development', revision: 10 }
+      const typeRef = parsePersistedEmployeeTypePackageDescriptor(
+        JSON.parse(developmentEmployeeTypePackage.descriptorJson),
+      ).typeRef
       const typePackage = await module.queries.getType(typeRef)
       const manifest = typePackage.authoringManifest
       const pipelineProblemDefinitions = [

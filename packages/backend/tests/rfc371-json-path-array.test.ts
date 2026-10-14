@@ -107,4 +107,37 @@ describeEachProvider('RFC-371 original nested JSON identities and scope arrays',
     expect(() => jsonPathArray(h.db, sql`'{}'`, [])).toThrow(RangeError)
     expect(() => jsonPathArray(h.db, sql`'{}'`, ['detail.scopes'])).toThrow(RangeError)
   })
+  // CI 38491705813: PostgreSQL must receive malformed bound input as TEXT
+  // before the original CASE can reject it, just as it does for a persisted cell.
+  test('invalid bound text and persisted TEXT return null on both plain and snapshot reads', async () => {
+    await h.executeFixtureDdl(
+      'CREATE TABLE rfc371_invalid_original_json (id TEXT PRIMARY KEY, document TEXT NOT NULL)',
+    )
+    for (const document of [
+      '{',
+      '{}',
+      'null',
+      '{"detail":{"scopes":null},"request":{"reportId":null}}',
+      '{"detail":{"scopes":"[]"},"request":{"reportId":17}}',
+      '{"detail":{"scopes":17},"request":{"reportId":[]}}',
+      '{"detail":{"scopes":{}},"request":{"reportId":{}}}',
+    ]) {
+      await h.db.run(sql`DELETE FROM rfc371_invalid_original_json`)
+      await h.db.run(
+        sql`INSERT INTO rfc371_invalid_original_json (id,document) VALUES ('original',${document})`,
+      )
+      const read = (handle: Parameters<typeof jsonPathArray>[0]) => sql`SELECT
+        ${jsonPathArray(handle, sql.raw('"document"'), ['detail', 'scopes'])} AS stored,
+        ${jsonPathArray(handle, sql`${document}`, ['detail', 'scopes'])} AS bound,
+        ${jsonPathText(handle, sql.raw('"document"'), ['request', 'reportId'])} AS stored_identity,
+        ${jsonPathText(handle, sql`${document}`, ['request', 'reportId'])} AS bound_identity
+        FROM rfc371_invalid_original_json WHERE id='original'`
+      const direct = await h.db.all(read(h.db))
+      const snapshot = await h.session.snapshotRead(async (tx) => await tx.all(read(tx)))
+      expect(direct).toEqual([
+        { stored: null, bound: null, stored_identity: null, bound_identity: null },
+      ])
+      expect(snapshot).toEqual(direct)
+    }
+  })
 })

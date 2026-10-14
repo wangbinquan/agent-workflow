@@ -27,7 +27,7 @@ import { frameBackfillCommand } from './cli/frameBackfill'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { migrateCommand } from './cli/migrate'
 import { migrationReportCommand } from './cli/migrationReport'
-import { startCommand } from './cli/start'
+import { startCommand, type StartOptions } from './cli/start'
 import {
   createDevelopmentDaemonState,
   reloadDevelopmentDaemon,
@@ -368,16 +368,15 @@ async function main(): Promise<void> {
       if (port !== undefined) opts.port = port
       const host = readFlag(Bun.argv, '--host')
       if (host !== undefined) opts.host = host
+      const start = (development?: StartOptions) => startCommand({ ...opts, ...development })
       if (process.env.AGENT_WORKFLOW_DEV_HOT_RELOAD === '1') {
         const retained = globalThis as typeof globalThis & {
           agentWorkflowDevelopment?: DevelopmentDaemonState
         }
         const state = (retained.agentWorkflowDevelopment ??= createDevelopmentDaemonState())
-        await reloadDevelopmentDaemon(state, (development) =>
-          startCommand({ ...opts, ...development }),
-        )
+        await reloadDevelopmentDaemon(state, start)
       } else {
-        await startCommand(opts)
+        await start()
       }
       break
     }

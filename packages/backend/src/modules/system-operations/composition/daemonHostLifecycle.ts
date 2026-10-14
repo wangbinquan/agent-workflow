@@ -9,7 +9,10 @@ import {
   type NativeDaemonHostOptions,
 } from '../infrastructure/local/nativeDaemonHostLifecycle'
 
-export type { DaemonHostLifecyclePort } from '../application/ports/daemonHostLifecycle'
+export type {
+  DaemonHostLifecyclePort,
+  DaemonHostShutdownCallbacks,
+} from '../application/ports/daemonHostLifecycle'
 
 export function selectDaemonHostLifecycle(
   selected: DaemonHostLifecyclePort | undefined,

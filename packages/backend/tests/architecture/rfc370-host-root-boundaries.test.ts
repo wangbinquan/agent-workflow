@@ -6,6 +6,7 @@ import { backendUnits, BOOTSTRAP_FILES, inboundBoundaryEdges, sourceUnit } from 
 
 const root = resolve(import.meta.dir, '../../../..')
 const selected = [
+  'packages/backend/src/cli/dev.ts',
   'packages/backend/src/cli/daemonHostExecutionBootstrap.ts',
   'packages/backend/src/cli/daemonHostExecutionOwners.ts',
   'packages/backend/src/cli/daemonHostExecutionRecovery.ts',
@@ -15,7 +16,7 @@ const selected = [
 test('all actual host roots assemble module composition without reaching into module internals', () => {
   const corpus = backendUnits(root)
   expect(corpus.length).toBeGreaterThanOrEqual(2000)
-  expect(selected).toHaveLength(4)
+  expect(selected).toHaveLength(5)
   const units = corpus.filter((unit) => selected.includes(unit.path))
   expect(units.map((unit) => unit.path).sort()).toEqual([...selected].sort())
   const registeredRoots = new Set<string>(BOOTSTRAP_FILES)
