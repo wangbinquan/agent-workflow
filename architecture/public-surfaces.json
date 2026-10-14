@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 1416,
+    "consumers": 1417,
     "exactEntrypointFiles": 71,
     "governedFieldSurfaces": 5,
     "methods": 1873,
@@ -163237,7 +163237,8 @@
         "import:4c5eb96e7bb086b60701",
         "import:53eb04623e416e8839a8",
         "import:a98760213c9c85577b89",
-        "import:bb57abbc60c2c13e8190"
+        "import:bb57abbc60c2c13e8190",
+        "import:c022cf342061eb5a000c"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -163289,7 +163290,7 @@
             "import:1728ba376dd956cca487",
             "import:203bfee525aeadabe3f6",
             "import:4c5eb96e7bb086b60701",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveAgentRuntime.$return.configDir.env",
           "type": "string"
@@ -163301,7 +163302,7 @@
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveAgentRuntime.$return.configDir.name",
           "type": "string"
@@ -163318,7 +163319,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveAgentRuntime.$return.isSandbox",
           "type": "boolean"
@@ -163350,7 +163351,7 @@
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveAgentRuntime.$return.name",
           "type": "string"
@@ -163455,7 +163456,7 @@
             "import:1728ba376dd956cca487",
             "import:203bfee525aeadabe3f6",
             "import:4c5eb96e7bb086b60701",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.configDir.env",
           "type": "string"
@@ -163467,7 +163468,7 @@
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.configDir.name",
           "type": "string"
@@ -163484,7 +163485,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.isSandbox",
           "type": "boolean"
@@ -163516,7 +163517,7 @@
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.name",
           "type": "string"
@@ -163606,7 +163607,7 @@
             "import:1728ba376dd956cca487",
             "import:203bfee525aeadabe3f6",
             "import:4c5eb96e7bb086b60701",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveRuntimeByName.$return.configDir.env",
           "type": "string"
@@ -163618,7 +163619,7 @@
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveRuntimeByName.$return.configDir.name",
           "type": "string"
@@ -163635,7 +163636,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveRuntimeByName.$return.isSandbox",
           "type": "boolean"
@@ -163667,7 +163668,7 @@
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89",
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "fieldPath": "$method:resolveRuntimeByName.$return.name",
           "type": "string"
@@ -163751,7 +163752,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bb57abbc60c2c13e8190"
+            "import:c022cf342061eb5a000c"
           ],
           "name": "resolveRuntimeByName",
           "signatureDigest": "sha256:6209e73bbef8f4afc74062a6bfbc104c79841125e2d2daa66eded125659bd176"
@@ -163800,6 +163801,12 @@
           "edgeId": "import:bb57abbc60c2c13e8190",
           "file": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:c022cf342061eb5a000c",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -239661,7 +239668,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:acc38fb091f84e8f70b8e6e4477306c531a0191745fd3a3d6131612d3250b94f",
+  "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54",
   "targetContexts": [
     "collaboration",
     "development-automation",

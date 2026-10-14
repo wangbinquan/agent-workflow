@@ -32779,6 +32779,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4a913d2706f3e87ea1c6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
+      "toPath": "packages/backend/src/util/log.ts",
+      "toSymbol": "createLogger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "fromPath": "packages/backend/src/services/task.ts",
       "fromSymbol": "$file",
@@ -54554,6 +54571,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:801c0d0d4c46376f95c6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file",
@@ -57837,23 +57871,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts#$file",
-      "fromPath": "packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8809d8ad7f0695e5bd15",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "collaboration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "ConflictError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#$file",
       "fromPath": "packages/backend/src/services/portArtifacts.ts",
       "fromSymbol": "$file",
@@ -60910,6 +60927,23 @@
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "isFresherNodeRun",
       "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8fa6cd40981bcb448505",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "nodeRuns",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -98720,6 +98754,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e7b5b5abbd461b0fce4c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#$file",
@@ -98751,23 +98802,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e7e467d0a5f30e4e6789",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "nodeRuns",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -100485,6 +100519,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/systemResources.ts#assertNotBuiltin",
       "toPath": "packages/backend/src/services/systemResources.ts",
       "toSymbol": "assertNotBuiltin",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ec156b0cf8815e09cc4f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "tasks",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -103497,23 +103548,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f26676235f48e3373e33",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
-      "toPath": "packages/backend/src/util/log.ts",
-      "toSymbol": "createLogger",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/rerunLedger.ts#$file",
@@ -106419,23 +106453,6 @@
       "toPath": "packages/backend/src/db/transactionScope.ts",
       "toSymbol": "holdsExplicitTransaction",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f9839f473723454b88f3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "external-layer-debt",
-      "toOwnerEntryId": "owner:external:drizzle-orm#$package",
-      "toPath": "external:drizzle-orm",
-      "toSymbol": "*",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "value",
@@ -109482,9 +109499,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6440,
+    "architectureExceptions": 6441,
     "implementationSccs": 0,
-    "observedEdges": 7350,
+    "observedEdges": 7353,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -144454,6 +144471,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "id": "import:4a913d2706f3e87ea1c6",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/log",
+      "syntax": "static-import",
+      "targetSymbol": "createLogger",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/log.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/task.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
@@ -168133,6 +168166,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts#$file",
+      "id": "import:801c0d0d4c46376f95c6",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
@@ -169723,6 +169772,22 @@
       "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCalculationFactReader.ts#$file",
       "id": "import:84217f59a4cdca4dd61d",
       "owner": "run-observability",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "id": "import:84227085462530ee2cc2",
+      "owner": "task-execution",
       "removeAfterWave": null,
       "role": "infrastructure-external",
       "specifier": "drizzle-orm",
@@ -171571,22 +171636,6 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "collaboration",
-      "fromFile": "packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts#$file",
-      "id": "import:8809d8ad7f0695e5bd15",
-      "owner": "collaboration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "ConflictError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
       "edgeKind": "value",
@@ -174963,6 +175012,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/freshness.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#isFresherNodeRun"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "id": "import:8fa6cd40981bcb448505",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "nodeRuns",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
     },
     {
       "edgeKind": "value",
@@ -196837,6 +196902,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "id": "import:c022cf342061eb5a000c",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "RuntimeExecutionQueries",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeExecutionQueries"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts",
@@ -215781,6 +215862,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillCatalogBoot.ts#composeSkillCatalogBoot"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "id": "import:e7b5b5abbd461b0fce4c",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "run-observability",
       "fromFile": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
@@ -215811,22 +215908,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "id": "import:e7e467d0a5f30e4e6789",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "nodeRuns",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
     },
     {
       "edgeKind": "type",
@@ -217683,6 +217764,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "id": "import:ec156b0cf8815e09cc4f",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "tasks",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
     },
     {
       "edgeKind": "value",
@@ -220789,22 +220886,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "id": "import:f26676235f48e3373e33",
-      "owner": "task-execution",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/log",
-      "syntax": "static-import",
-      "targetSymbol": "createLogger",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/log.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/rerunLedger.ts",
@@ -223907,22 +223988,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/transactionScope.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/transactionScope.ts#holdsExplicitTransaction"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/clarifyFollowupGenerator.ts#$file",
-      "id": "import:f9839f473723454b88f3",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "external-layer-debt",
-      "specifier": "drizzle-orm",
-      "syntax": "static-import",
-      "targetSymbol": "*",
-      "toContext": "external",
-      "toFile": "external:drizzle-orm",
-      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "value",
@@ -227984,7 +228049,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:acc38fb091f84e8f70b8e6e4477306c531a0191745fd3a3d6131612d3250b94f",
+  "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

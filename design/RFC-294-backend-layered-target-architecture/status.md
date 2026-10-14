@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:acc38fb091f84e8f70b8e6e4477306c531a0191745fd3a3d6131612d3250b94f`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2566 |
+| backend production TS 文件 | 2567 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1942 / 18 |
+| `modules/**` 文件 / 非空 context | 1943 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 522 |
-| `architectureExceptions` | 6440 |
+| `architectureExceptions` | 6441 |
 | `backgroundJobs` | 412 |
-| `crossContextImports` | 7350 |
+| `crossContextImports` | 7353 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 28704 |
-| `mutationEntrypoints` | 2038 |
+| `moduleSymbolOwners` | 28710 |
+| `mutationEntrypoints` | 2039 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1293 |
 | `transactionExternalEffects` | 309 |
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 183 |
+| task-execution / infrastructure | 184 |
 | task-execution / application | 157 |
 | resource-catalog / infrastructure | 132 |
 | task-execution / composition | 98 |
@@ -55,10 +55,10 @@
 | development-automation / application | 67 |
 | run-observability / application | 53 |
 | run-observability / infrastructure | 53 |
-| collaboration / infrastructure | 48 |
+| collaboration / infrastructure | 49 |
 | development-automation / infrastructure | 48 |
 | resource-catalog / composition | 40 |
-| collaboration / application | 39 |
+| collaboration / application | 38 |
 | run-observability / domain | 37 |
 | source-control / infrastructure | 36 |
 | task-execution / domain | 36 |
@@ -208,26 +208,26 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 4107 |
+| legacy-outbound | 4109 |
 | legacy-inbound | 2103 |
-| offered-consumption | 390 |
-| infrastructure-external | 365 |
+| offered-consumption | 391 |
+| infrastructure-external | 366 |
 | temporary-internal-debt | 113 |
 | off-dag-offered | 101 |
 | required-implementation | 83 |
 | authority-type-only | 78 |
-| external-layer-debt | 8 |
+| external-layer-debt | 7 |
 | provider-mirror | 2 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 4107 |
+| legacy-outbound | 4109 |
 | legacy-inbound | 2103 |
 | temporary-internal-debt | 113 |
 | off-dag-offered | 101 |
-| external-layer-debt | 8 |
+| external-layer-debt | 7 |
 | no-circular | 6 |
 | no-util-to-upper | 2 |
 
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3518 |
+| W9 | 3520 |
 | W9-D | 1147 |
-| W4-E1 | 862 |
+| W4-E1 | 861 |
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 189 |

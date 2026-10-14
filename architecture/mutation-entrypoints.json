@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 2038,
+    "entries": 2039,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -2674,7 +2674,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -2685,7 +2685,6 @@
       "id": "mutation:packages/backend/src/modules/collaboration/application/clarifyFollowup.ts#createClarifyFollowupOperations",
       "missingControls": [
         "audit",
-        "authority",
         "event",
         "transaction"
       ],
@@ -32869,6 +32868,28 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#createClarifyFollowupGeneration",
+      "missingControls": [
+        "audit",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#createClarifyFollowupGeneration",
+      "symbol": "createClarifyFollowupGeneration",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -48745,7 +48766,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:acc38fb091f84e8f70b8e6e4477306c531a0191745fd3a3d6131612d3250b94f",
+  "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

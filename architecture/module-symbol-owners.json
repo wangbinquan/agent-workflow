@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2566,
+    "backendFiles": 2567,
     "frontendFiles": 689,
     "legacyFiles": 624,
-    "moduleFiles": 1942,
-    "productionFiles": 3432,
+    "moduleFiles": 1943,
+    "productionFiles": 3433,
     "sharedFiles": 177,
-    "symbolsIncludingFileRoots": 28704
+    "symbolsIncludingFileRoots": 28710
   },
   "entries": [
     {
@@ -15633,54 +15633,6 @@
       "currentContext": "collaboration",
       "currentLayer": "application",
       "exported": false,
-      "file": "packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts#active",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "active",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts#assertClarifyFollowupIdle",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertClarifyFollowupIdle",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowupActivity.ts#beginClarifyFollowup",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "beginClarifyFollowup",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "application",
-      "exported": false,
       "file": "packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts",
       "id": "owner:packages/backend/src/modules/collaboration/application/collaborationCommittedEventConsumers.ts#$file",
       "removeAfterWave": null,
@@ -15994,10 +15946,34 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts#ClarifyFollowupActivity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ClarifyFollowupActivity",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts",
       "id": "owner:packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts#ClarifyFollowupGenerator",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ClarifyFollowupGenerator",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts#ClarifyFollowupInFlight",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ClarifyFollowupInFlight",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -16034,6 +16010,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ClarifyFollowupStore",
+      "targetContext": "collaboration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/application/ports/clarifyFollowup.ts#ClarifyFollowupTaskContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ClarifyFollowupTaskContext",
       "targetContext": "collaboration",
       "targetLayer": "application"
     },
@@ -21890,6 +21878,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createClarifyDirectiveStore",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts#active",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "active",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts#assertClarifyFollowupIdle",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertClarifyFollowupIdle",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyFollowupActivity.ts#clarifyFollowupActivity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "clarifyFollowupActivity",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -163272,6 +163308,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "validateFrozenTrigger",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/clarifyFollowupGeneration.ts#createClarifyFollowupGeneration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createClarifyFollowupGeneration",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -305352,6 +305412,18 @@
       "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/clarifyMindmap.ts",
+      "id": "owner:packages/shared/src/clarifyMindmap.ts#canonicalClarifyJson",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "canonicalClarifyJson",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/clarifyMindmap.ts",
       "id": "owner:packages/shared/src/clarifyMindmap.ts#CLARIFY_MINDMAP_QUESTION_GUIDANCE",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -345191,5 +345263,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:acc38fb091f84e8f70b8e6e4477306c531a0191745fd3a3d6131612d3250b94f"
+  "sourceDigest": "sha256:26a7ec162fff19437a832b180f753876f17b86a817dc09e51dab672642a96a54"
 }
