@@ -1211,7 +1211,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts",
       "id": "rfc317-ledger-highwater",
-      "lines": 1264,
+      "lines": 1276,
       "mechanism": "ast",
       "minCorpusFiles": 301,
       "negativeFixture": true,
@@ -1860,7 +1860,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc359-w5-provider-runtime-exercised.test.ts",
       "id": "rfc359-w5-provider-runtime-exercised",
-      "lines": 574,
+      "lines": 625,
       "mechanism": "ast",
       "minCorpusFiles": 1500,
       "negativeFixture": true,
@@ -2188,7 +2188,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 31
+      "lines": 32
     },
     {
       "assertsAbsence": true,
@@ -2604,8 +2604,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "bfd79020ed60ae5caff2135731d214b2b31a3e45",
-    "contentDigest": "sha256:751dd192d5d857795a2781e49c620242c4198a1904d0f086c1d1c07bedc62c24",
+    "currentSnapshotSha": "a7eef2d7af78e61ff0d7a268c3e274922e6b2cb2",
+    "contentDigest": "sha256:df942950e6d9a00a6a25c5b7226e9c95f768a45b6c773bfd90cd70a7ac07c773",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
