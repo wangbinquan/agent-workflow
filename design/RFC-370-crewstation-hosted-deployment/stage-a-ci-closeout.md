@@ -1,5 +1,11 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 原具名根分母与正向覆盖清单
+
+73d1e14c5 后续 Mac1/Mac2 的确切日志又确认两项本人配套：resource limit 的 PG 重复函数收敛为同一中立别名后，原命名根分母 14→13；新 selected 四根是正向必覆盖人口，按原 NOT_A_LEDGER 规则具名说明并纳入原精确键集，同时新增 selected 恰有四项断言。原 scanner、空 PROVIDER_RUNTIME_UNEXERCISED、普通 business 负 fixture 和高水位严格判据保持；三个既有 guard rows 由原分类器更新真实字段，不新增债务。此前 floor/manifest 修复已发布源码 bfd79020e／配套 2262b1360；该轮主 CI 38490755588 与 Windows 38490755437 已启动，终态另验。
+
+五文件原 corpus／negative fixture／ledger 高水位／provider 真实构造／根边界集中复验 94 pass、0 fail；限定 ESLint／Prettier／diff 检查通过。生产及 canonical 生成器未变，沿用固定 Git source 的有效八份输出／status 对账证据；只更新实际三个 guard rows 与准确 provenance。新确切 SHA 发布另验。没有把负向 debt 表改成宽松判断，没有退回重复生产函数，也没有接管员工夹具／dev 启动等其它责任范围。共享 main 的当前完整并发产出保持。
+
 ## 2026-10-14 新根语料守卫登记修正
 
 完整源码 `dba70f0fceaf12b7a4e07a724aae47ef1ff49495`／架构 `73d1e14c516ff489621a56c1fd91e52600ad388b` 已发布并验证远端同步。主 run `38487257387` 的质量作业 `115603782464` 成功。Windows run `38487257249` 终态 failure，平台套件 1662 pass／2 fail，分别是原累计使用量成员归属与原生 reader 复用 5s 超时；相关 reader／generation／readonly SQLite 三份依赖及测试从前置 `651f956df` 到本轮源码保持原 blob。此结果不代签总绿。

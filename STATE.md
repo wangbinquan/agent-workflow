@@ -1,3 +1,9 @@
+## 2026-10-14 RFC-370：派生根分母与正向覆盖清单配套
+
+73d1e14c5 后续 Mac1/Mac2 的确切日志又确认两项本人配套：resource limit 的 PG 重复函数收敛为同一中立别名后，原命名根分母 14→13；新 selected 四根是正向必覆盖人口，按原 NOT_A_LEDGER 规则具名说明并纳入原精确键集，同时新增 selected 恰有四项断言。原 scanner、空 PROVIDER_RUNTIME_UNEXERCISED、普通 business 负 fixture 和高水位严格判据保持；三个既有 guard rows 由原分类器更新真实字段，不新增债务。此前 floor/manifest 修复已发布源码 bfd79020e／配套 2262b1360；该轮主 CI 38490755588 与 Windows 38490755437 已启动，终态另验。
+
+本批五文件集中复验 94 pass／0 fail；限定 ESLint／Prettier／diff 通过。固定源码的 canonical 证明继续有效，测试配套未改生产／生成器。限定提交及确切 SHA CI 另验。并发统计实现／测试和历史全部保留，原两次 live-tree canonical race 不代签候选；只复用已证明的固定 Git source 配套。A-G／总绿未取得，B/M0 未开始，AW 尚未部署 CS；无跨 session 信息。以下全文保持。
+
 ## 2026-10-14 RFC-370：已发布候选的确切 CI 与新根守卫配套
 
 源码 `dba70f0fc`／13 份配套 `73d1e14c5` 已完整推送，推后 main/origin 0/0。主 CI `38487257387` 的 lint/typecheck/format/shared/system-mock 作业 `115603782464` 成功；默认 Windows `38487257249` 终态 failure，平台套件 1662 pass／2 fail，原 native 进程、十一 caller 对账和新 webhook owner 的已选组均通过。两处 Windows 失败保留为原 RFC-371 成员归属与连接复用超时；主 CI 尚未终态，不签 A-G。

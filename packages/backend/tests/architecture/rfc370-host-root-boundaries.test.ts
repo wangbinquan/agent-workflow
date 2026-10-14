@@ -15,6 +15,7 @@ const selected = [
 test('all actual host roots assemble module composition without reaching into module internals', () => {
   const corpus = backendUnits(root)
   expect(corpus.length).toBeGreaterThanOrEqual(2000)
+  expect(selected).toHaveLength(4)
   const units = corpus.filter((unit) => selected.includes(unit.path))
   expect(units.map((unit) => unit.path).sort()).toEqual([...selected].sort())
   const registeredRoots = new Set<string>(BOOTSTRAP_FILES)
