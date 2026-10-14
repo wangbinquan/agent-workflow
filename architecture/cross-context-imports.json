@@ -40327,6 +40327,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationChanges.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationChanges.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5c9b6d2fcecf065ef5a5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "observationSourceRevisions",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
       "fromPath": "packages/backend/src/services/developmentDeliveryDeps.ts",
       "fromSymbol": "$file",
@@ -55741,6 +55758,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#affectedRows",
       "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toSymbol": "affectedRows",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCalculationSourceProof.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/completeCalculationSourceProof.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:837c9e046b023789638b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/observationProjection.ts#observationProjectionChanges",
+      "toPath": "packages/backend/src/db/observationProjection.ts",
+      "toSymbol": "observationProjectionChanges",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -109448,9 +109482,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6438,
+    "architectureExceptions": 6440,
     "implementationSccs": 0,
-    "observedEdges": 7348,
+    "observedEdges": 7350,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -152564,6 +152598,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationChanges.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationChanges.ts#$file",
+      "id": "import:5c9b6d2fcecf065ef5a5",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "observationSourceRevisions",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/developmentDeliveryDeps.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
@@ -169393,6 +169443,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#affectedRows"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/completeCalculationSourceProof.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeCalculationSourceProof.ts#$file",
+      "id": "import:837c9e046b023789638b",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/observationProjection",
+      "syntax": "static-import",
+      "targetSymbol": "observationProjectionChanges",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/observationProjection.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/observationProjection.ts#observationProjectionChanges"
     },
     {
       "edgeKind": "value",
@@ -227918,7 +227984,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0230c970a6ef988e2918786e0d13bd3c7b5212753fa97a989761f97a1b6a6ec7",
+  "sourceDigest": "sha256:06875f2c1b99ad1dc31022a113274ef46907a85aba2e9ef7216d40108e8585a5",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

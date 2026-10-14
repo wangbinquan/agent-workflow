@@ -8602,7 +8602,7 @@
       ],
       "file": "packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts#$setInterval:1160",
+      "id": "background:packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts#$setInterval:1202",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8616,7 +8616,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/composition/incrementalObservationQualification.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1160",
+      "symbol": "$setInterval:1202",
       "targetContext": "run-observability"
     },
     {
@@ -14807,5 +14807,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0230c970a6ef988e2918786e0d13bd3c7b5212753fa97a989761f97a1b6a6ec7"
+  "sourceDigest": "sha256:06875f2c1b99ad1dc31022a113274ef46907a85aba2e9ef7216d40108e8585a5"
 }
