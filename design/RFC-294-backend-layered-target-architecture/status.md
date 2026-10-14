@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:21eab659b7c702f52c18bb62879bd4b50cccc0a69d9a41710ac79a7841259887`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:a6f17b7fc94abf02ead50bba62c475c30b5392a13970f1300dfa2b01b0b5454f`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -21,7 +21,7 @@
 | background work entries | 412 |
 | direct native `setInterval`（call / files） | 26 / 22 |
 | direct native timers（全部） | 88 |
-| RFC-317 boundary census（inbound / outbound） | 315 / 46 |
+| RFC-317 boundary census（inbound / outbound） | 313 / 46 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
