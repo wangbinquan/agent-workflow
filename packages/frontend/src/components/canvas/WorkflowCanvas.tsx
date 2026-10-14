@@ -1081,10 +1081,11 @@ function CanvasInner({
     })
     ro.observe(el)
     // Hard stop on the settle window: past it, a resize is the USER resizing
-    // something, and refitting would throw away their pan/zoom.
+    // something, and refitting would throw away their pan/zoom. A canvas still
+    // hidden was never on screen, so it keeps waiting for the reveal.
     const timer = window.setTimeout(() => {
-      refitRef.current = settleCanvasRefit(refitRef.current)
-      ro.disconnect()
+      refitRef.current = expireCanvasSettleWindow(refitRef.current)
+      if (refitRef.current.phase === 'settled') ro.disconnect()
     }, CANVAS_SETTLE_WINDOW_MS)
     return () => {
       ro.disconnect()
@@ -3514,11 +3515,12 @@ export const INITIAL_CANVAS_REFIT: CanvasRefitState = { phase: 'pending', size: 
  *    while watching refits once.
  *
  * Both paths converge on `settled`, which is inert forever after. The caller
- * additionally settles on the user's first pan/zoom and on a
+ * additionally settles on the user's first pan/zoom and closes the watch on a
  * CANVAS_SETTLE_WINDOW_MS timeout, so a resize the user causes later can
  * never clobber their viewport — that guarantee is what the old
  * "a visible mount never arms" rule bought, and it is preserved here by
- * closing the window rather than by never watching at all.
+ * closing the window rather than by never watching at all. The timeout leaves
+ * a hidden mount waiting (expireCanvasSettleWindow): it was never on screen.
  */
 export function resolveCanvasRefit(
   state: CanvasRefitState,
@@ -3550,9 +3552,19 @@ export function resolveCanvasRefit(
   }
 }
 
-/** Close the window early — the user took the viewport, or it timed out. */
+/** Close the window early — the user took the viewport. */
 export function settleCanvasRefit(state: CanvasRefitState): CanvasRefitState {
   return state.phase === 'settled' ? state : { phase: 'settled', size: null }
+}
+
+/**
+ * The settle window timed out. A canvas still waiting for its first real size has
+ * never been on screen, so nobody can have taken its viewport: it keeps waiting and
+ * refits when its pane is revealed, however late (a task opened on Outputs and
+ * switched to Workflow status after the window — the canvas stayed at minZoom).
+ */
+export function expireCanvasSettleWindow(state: CanvasRefitState): CanvasRefitState {
+  return state.phase === 'awaiting-size' ? state : settleCanvasRefit(state)
 }
 
 interface PortInventory {

@@ -34,6 +34,7 @@ import { resolve } from 'node:path'
 import {
   CANVAS_SETTLE_WINDOW_MS,
   INITIAL_CANVAS_REFIT,
+  expireCanvasSettleWindow,
   resolveCanvasRefit,
   settleCanvasRefit,
   type CanvasRefitState,
@@ -123,6 +124,28 @@ describe('settle is terminal — the user pan/zoom guarantee', () => {
     expect(settleCanvasRefit(at('watching-settle', { width: 1, height: 2 }))).toEqual(at('settled'))
   })
 
+  // History, part 3 (2026-10-14, macOS e2e rfc250-workflow-camera on 6c576f8c8): the
+  // timeout settled a hidden mount too, so a pane revealed after the window kept the
+  // minZoom fit forever — a task opened on Outputs and switched to Workflow status a
+  // couple of seconds later. A hidden canvas was never on screen; it keeps waiting.
+  test('the window timing out leaves a hidden mount waiting and closes every other phase', () => {
+    expect(expireCanvasSettleWindow(at('awaiting-size'))).toEqual(at('awaiting-size'))
+    expect(expireCanvasSettleWindow(INITIAL_CANVAS_REFIT)).toEqual(at('settled'))
+    expect(expireCanvasSettleWindow(at('watching-settle', { width: 1, height: 2 }))).toEqual(
+      at('settled'),
+    )
+    const settled = at('settled')
+    expect(expireCanvasSettleWindow(settled)).toBe(settled)
+  })
+
+  test('a pane revealed after the window still refits exactly once', () => {
+    let state = resolveCanvasRefit(INITIAL_CANVAS_REFIT, 0, 0).state
+    state = expireCanvasSettleWindow(state)
+    const revealed = resolveCanvasRefit(state, 1280, 520)
+    expect(revealed).toEqual({ state: at('settled'), refit: true })
+    expect(resolveCanvasRefit(revealed.state, 1000, 400).refit).toBe(false)
+  })
+
   test('settling an already-settled state is identity (no needless re-render churn)', () => {
     const s = at('settled')
     expect(settleCanvasRefit(s)).toBe(s)
@@ -161,7 +184,7 @@ describe('WorkflowCanvas wires the oracle (source-level backstop)', () => {
 
   test('the settle window is closed by BOTH a timeout and the first user move', () => {
     // Timeout arm.
-    expect(src).toMatch(/setTimeout\([\s\S]{0,120}settleCanvasRefit/)
+    expect(src).toMatch(/setTimeout\([\s\S]{0,120}expireCanvasSettleWindow/)
     expect(src).toContain('CANVAS_SETTLE_WINDOW_MS')
     // User-interaction arm. The null check is load-bearing: xyflow passes a
     // null event for PROGRAMMATIC moves, and our own fitView animates through

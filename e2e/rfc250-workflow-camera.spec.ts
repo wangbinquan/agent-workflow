@@ -909,6 +909,10 @@ test('task canvas mounted in a hidden 0x0 pane refits once after reveal', async 
   expect(hiddenRect.width).toBe(0)
   expect(hiddenRect.height).toBe(0)
 
+  // Reveal only after the 1.2 s settle window: a hidden canvas was never on screen,
+  // so a late reveal must still refit (macOS e2e on 6c576f8c8 revealed it late by
+  // accident and the canvas stayed at minZoom).
+  await page.waitForTimeout(1_500)
   await page.locator('[data-task-detail-section-link="workflow-status"]').click()
   await expect(taskCanvas).toBeVisible()
   await expect(taskCanvas.locator('.react-flow__node')).toHaveCount(3)

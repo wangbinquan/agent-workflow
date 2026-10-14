@@ -18,7 +18,9 @@ import {
 } from './postgresqlSchema'
 import {
   canonicalSchemaJson,
+  createCanonicalFragmentCache,
   digestSchemaContract,
+  withCanonicalFragmentCache,
   type LogicalIndexContract,
   type LogicalSchemaContract,
   type LogicalTableContract,
@@ -1305,19 +1307,26 @@ function* replayVersions(
   root: PostgresqlMigrationRoot,
   steps: readonly PostgresqlIndexUpgrade[],
 ): Generator<void, PostgresqlMigrationHistory, void> {
-  validateVersion(root)
+  // Versions share unchanged tables by reference, so one fragment cache serves the
+  // whole replay. It is active only inside each synchronous step, never across a yield.
+  const fragments = createCanonicalFragmentCache()
+  withCanonicalFragmentCache(fragments, () => validateVersion(root))
   let head: PostgresqlMigrationVersion = {
     contract: root.contract,
     plan: root.plan,
     sqliteMigrations: root.sqliteMigrations,
     sqliteMigration: root.sqliteMigration,
   }
-  let previousDigest = postgresqlMigrationDigest(root)
+  let previousDigest = withCanonicalFragmentCache(fragments, () => postgresqlMigrationDigest(root))
   const versions = [head]
   const seenContracts = new Set([head.contract.digest])
   for (const [index, step] of steps.entries()) {
     yield
-    head = applyPostgresqlIndexUpgrade(head, step, previousDigest, index + 1)
+    const previous = head
+    const digestBefore = previousDigest
+    head = withCanonicalFragmentCache(fragments, () =>
+      applyPostgresqlIndexUpgrade(previous, step, digestBefore, index + 1),
+    )
     requireSequence(
       !seenContracts.has(head.contract.digest),
       'schema history has an ambiguous or repeated contract digest',
