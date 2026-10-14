@@ -15,7 +15,7 @@ import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 
 import { tasks } from '@/db/schema'
-import { comparableTaskRow } from './helpers/taskRowParity'
+import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
@@ -240,6 +240,7 @@ describeEachProviderHttpApplication(
           .limit(1)
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
+      expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()
       persisted.set(scope.harness.capabilities.provider, comparableTaskRow(row))
       // 合并之后 `spaceNodes` 回到相等面里一起比（销账，见上面那条断言）。
       launched.set(scope.harness.capabilities.provider, comparableTask(task))

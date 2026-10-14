@@ -16,7 +16,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { tasks } from '@/db/schema'
-import { comparableTaskRow } from './helpers/taskRowParity'
+import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { WORKGROUP_HOST_WORKFLOW_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
@@ -179,6 +179,7 @@ describeEachProviderHttpApplication(
           .limit(1)
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
+      expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()
       persistedRows.set(
         scope.harness.capabilities.provider,
         comparableTaskRow(row, [

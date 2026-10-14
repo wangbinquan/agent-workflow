@@ -914,9 +914,13 @@ test('INTENT-X1 工作流编辑器与工作组详情的入口同样按 intent:wr
       ).toBeVisible({ timeout: 30_000 })
       await expect(page.getByTestId('workflow-intent-entry')).toHaveCount(expected)
 
-      await page.goto(`${daemon.baseUrl}/workgroups/${workgroup.id}`)
-      await page.getByTestId('workgroup-more-actions').click()
-      const actions = page.getByRole('dialog')
+      // A fresh page in the same signed-in context: navigating the editor page
+      // away (autosave + workflow socket live) made WebKit fail the goto with
+      // "encountered an internal error" (webkit nightly 38566442594).
+      const detail = await side.context.newPage()
+      await detail.goto(`${daemon.baseUrl}/workgroups/${workgroup.id}`)
+      await detail.getByTestId('workgroup-more-actions').click()
+      const actions = detail.getByRole('dialog')
       await expect(actions, '工作组的 More 弹窗没打开，入口断言无效').toBeVisible({
         timeout: 30_000,
       })

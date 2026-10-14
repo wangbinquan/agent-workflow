@@ -52,7 +52,7 @@ import { Worker } from 'node:worker_threads'
 
 import { expect, test } from '@playwright/test'
 
-import { querySqlite, runCommandResult, runSqlite } from './command'
+import { querySqlite, RELEASE_CLI_TIMEOUT_MS, runCommandResult, runSqlite } from './command'
 import { defaultBinaryPath, startDaemon, type DaemonHandle } from './harness'
 
 // 一次冷启动（~5s，beforeAll 里只做一次）+ 每条用例若干次 doctor / CLI 调用，
@@ -102,6 +102,7 @@ function runCli(
 ): { out: string; code: number } {
   const result = runCommandResult(defaultBinaryPath(), args, {
     env: { AGENT_WORKFLOW_HOME: home, ...extraEnv },
+    timeoutMs: RELEASE_CLI_TIMEOUT_MS,
   })
   return { out: result.output, code: result.status }
 }

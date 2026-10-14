@@ -13,6 +13,15 @@ import { fileURLToPath } from 'node:url'
 
 const COMMAND_TIMEOUT_MS = 15_000
 
+/**
+ * Budget for one call of the shipped binary's CLI. Every call boots the release
+ * binary, resolves its embedded migrations and opens an isolated SQLite home; on a
+ * saturated macOS runner that alone can pass the generic 15 s fence, and the call
+ * is killed before it prints anything (CI 38601555205: OPS-022 read an empty
+ * `auth password-login status`). The boundary stays hard, just sized for the work.
+ */
+export const RELEASE_CLI_TIMEOUT_MS = 30_000
+
 // THIS FILE IS LOADED BY NODE. Playwright runs the specs (and everything they
 // import) on its own Node runner, so nothing here may import a `bun:` module or
 // touch the `Bun` global — both exist only inside the Bun runtime, and the

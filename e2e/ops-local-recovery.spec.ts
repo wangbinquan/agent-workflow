@@ -23,7 +23,7 @@ import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { runCommandResult } from './command'
+import { RELEASE_CLI_TIMEOUT_MS, runCommandResult } from './command'
 import { defaultBinaryPath, startDaemon, type DaemonHandle } from './harness'
 
 test.setTimeout(180_000)
@@ -38,6 +38,7 @@ const PASSWORD = 'Rfc319LockoutPass!1'
 function runCli(home: string, args: string[]): { out: string; code: number } {
   const res = runCommandResult(defaultBinaryPath(), args, {
     env: { AGENT_WORKFLOW_HOME: home },
+    timeoutMs: RELEASE_CLI_TIMEOUT_MS,
   })
   return { out: res.output, code: res.status }
 }
@@ -132,9 +133,9 @@ test('RFC-319 OPS-022: after password sign-in is switched off, the shipped binar
       '本地找回顺手把引导票也放回来了 ⇒ 一条本该只开门的通道变成了权限提升通道',
     ).toContain('daemon token remains retired')
 
-    expect(runCli(home, ['auth', 'password-login', 'status']).out).toContain(
-      'password login: enabled',
-    )
+    const reopened = runCli(home, ['auth', 'password-login', 'status'])
+    expect(reopened.code, `auth status 退出码非 0: ${reopened.out}`).toBe(0)
+    expect(reopened.out).toContain('password login: enabled')
     // 子命令拼错时必须给可用的用法提示并以非 0 退出，而不是静默什么也不做。
     const misuse = runCli(home, ['auth', 'password-login', 'disable'])
     expect(misuse.code).not.toBe(0)

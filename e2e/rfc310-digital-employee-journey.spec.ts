@@ -11,6 +11,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 
+import { DEVELOPMENT_TYPE_REF as TYPE_REF } from './development-type-ref'
 import { waitForEmployeeCaseUrl } from './employee-case-url'
 import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './harness'
 
@@ -70,8 +71,6 @@ interface ToolDraft {
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
 const PROJECT_PATH = `rfc310/os-browser-${RUN_TAG}`
-// Current builtin package published with RFC-371; preserve all exact-version journeys.
-const TYPE_REF = 'development@11'
 const PROGRAM_FIXTURE = `import { readFileSync } from 'node:fs'
 const inputJson = process.env.AW_PORT_CONTRACT_INPUT ??
   readFileSync(process.env.AW_PORT_FILE_CONTRACT_INPUT ?? '', 'utf8')

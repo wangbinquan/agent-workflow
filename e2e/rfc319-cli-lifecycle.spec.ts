@@ -27,7 +27,7 @@ import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { runCommandResult, runSqlite } from './command'
+import { RELEASE_CLI_TIMEOUT_MS, runCommandResult, runSqlite } from './command'
 import { defaultBinaryPath, startDaemon, type DaemonHandle } from './harness'
 
 // 两次 daemon 冷启动（各 ~3s）+ 一次端口冲突启动 + 若干秒级 CLI 调用；
@@ -75,6 +75,7 @@ interface HealthPayload {
 function runCli(home: string, args: string[]): { out: string; code: number } {
   const result = runCommandResult(defaultBinaryPath(), args, {
     env: { AGENT_WORKFLOW_HOME: home },
+    timeoutMs: RELEASE_CLI_TIMEOUT_MS,
   })
   return { out: result.output, code: result.status }
 }

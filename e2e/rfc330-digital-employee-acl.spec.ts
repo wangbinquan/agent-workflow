@@ -12,12 +12,10 @@
 // ③④ 依赖 ACL 写入后 WS 的 `resource-acl.changed` 帧让三张列表重取（useWebSocket.ts）。
 
 import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import { DEVELOPMENT_TYPE_REF as TYPE_REF } from './development-type-ref'
 import { startDaemon, type DaemonHandle } from './harness'
 
 let daemon: DaemonHandle
-
-// Current builtin package published with RFC-371; preserve all exact-version journeys.
-const TYPE_REF = 'development@11'
 
 interface SeededUser {
   username: string

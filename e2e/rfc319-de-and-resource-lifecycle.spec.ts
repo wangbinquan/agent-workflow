@@ -128,16 +128,15 @@ import { join } from 'node:path'
 // 逐字段钉住。手抄一份默认策略会在后端默认值演进的那天把本文件红在「策略发不出去」上——
 // 与被测行为无关的失败。
 import { defaultPolicyTemplate } from '../packages/frontend/src/data/policyFactCatalog'
+// 内建开发类数字员工分类的当前版本；`@` 在路径里要转义（同 rfc310-zero-config-onboarding）。
+import {
+  DEVELOPMENT_TYPE_PATH as TYPE_PATH,
+  DEVELOPMENT_TYPE_REF as TYPE_REF,
+} from './development-type-ref'
 import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './harness'
 
 /** 同一次运行内的唯一后缀：技能 / MCP / 配置资源的名字都有唯一约束。 */
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
-
-/** 内建开发类数字员工分类；`@` 在路径里要转义（同 rfc310-zero-config-onboarding）。 */
-const TYPE_ID = 'development'
-const TYPE_REVISION = 10
-const TYPE_REF = `${TYPE_ID}@${TYPE_REVISION}`
-const TYPE_PATH = `${TYPE_ID}%40${TYPE_REVISION}`
 
 /** `SKILL_ZIP_LIMITS.totalBytes`（packages/shared/src/skill-zip.ts:24）。 */
 const SKILL_ZIP_TOTAL_BYTES = 64 * 1024 * 1024

@@ -1421,7 +1421,20 @@ function CommitDialog(props: {
   }, [props.open])
   useEffect(() => {
     if (!props.open) return
-    const frame = requestAnimationFrame(() => stepHeadingRef.current?.focus())
+    const frame = requestAnimationFrame(() => {
+      const heading = stepHeadingRef.current
+      const dialog = heading?.closest('[role="dialog"]')
+      const active = document.activeElement
+      // Announce the new step, unless someone already moved into one of its
+      // fields before this frame: pulling focus out mid-entry drops what they
+      // type (webkit e2e INTENT-32 committed the proposed name this way).
+      const typing =
+        dialog != null &&
+        active instanceof HTMLElement &&
+        dialog.contains(active) &&
+        active.matches('input, textarea, [contenteditable="true"]')
+      if (!typing) heading?.focus()
+    })
     return () => cancelAnimationFrame(frame)
   }, [props.open, step])
 

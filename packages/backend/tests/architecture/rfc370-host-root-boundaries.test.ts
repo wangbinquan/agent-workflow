@@ -5,6 +5,10 @@ import { resolve } from 'node:path'
 import { backendUnits, BOOTSTRAP_FILES, inboundBoundaryEdges, sourceUnit } from './census'
 
 const root = resolve(import.meta.dir, '../../../..')
+// Parsing the whole backend corpus takes 2.5 s on Ubuntu and up to 6.2 s on the macOS
+// runners (CI 38601555205 shard 9 timed out at the 5 s default), so it is read once
+// at load time like rfc317-module-boundary's UNITS, outside any single test's budget.
+const CORPUS = backendUnits(root)
 const selected = [
   'packages/backend/src/cli/dev.ts',
   'packages/backend/src/cli/daemonHostExecutionBootstrap.ts',
@@ -14,10 +18,9 @@ const selected = [
 ]
 
 test('all actual host roots assemble module composition without reaching into module internals', () => {
-  const corpus = backendUnits(root)
-  expect(corpus.length).toBeGreaterThanOrEqual(2000)
+  expect(CORPUS.length).toBeGreaterThanOrEqual(2000)
   expect(selected).toHaveLength(5)
-  const units = corpus.filter((unit) => selected.includes(unit.path))
+  const units = CORPUS.filter((unit) => selected.includes(unit.path))
   expect(units.map((unit) => unit.path).sort()).toEqual([...selected].sort())
   const registeredRoots = new Set<string>(BOOTSTRAP_FILES)
   for (const path of selected) expect(registeredRoots.has(path)).toBe(true)

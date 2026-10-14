@@ -1290,6 +1290,22 @@ describe('RFC-234 /intent/$sessionId', () => {
     })
   })
 
+  // webkit e2e INTENT-32: a fill that lands between the step change and the
+  // heading focus frame lost its text, so the proposed name was committed.
+  test('a field entered before the step is announced keeps focus and its text', async () => {
+    installFetch(detailFixture({ currentDraft: CLEAN_DRAFT }))
+    await renderPage()
+    fireEvent.click(await screen.findByTestId('intent-open-commit'))
+    fireEvent.click(await screen.findByTestId('intent-commit-next'))
+    const secretInput = screen.getByPlaceholderText(enUS.intent.secretPlaceholder)
+    secretInput.focus()
+    fireEvent.change(secretInput, { target: { value: 'typed-before-the-frame' } })
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(document.activeElement).toBe(secretInput)
+    expect((secretInput as HTMLInputElement).value).toBe('typed-before-the-frame')
+  })
+
   test('labels commit decisions with resource names instead of raw operation ids', async () => {
     const changeset = CLEAN_DRAFT.changeset as { $schema_version: 1; ops: unknown[] }
     const readableDraft: NonNullable<IntentSessionDetail['currentDraft']> = {

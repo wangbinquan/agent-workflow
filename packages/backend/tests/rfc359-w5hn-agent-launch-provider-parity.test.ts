@@ -20,7 +20,7 @@ import { ulid } from 'ulid'
 
 import { AGENT_HOST_INPUT_KEY, AGENT_HOST_WORKFLOW_ID } from '@/services/agentLaunch'
 import { tasks } from '@/db/schema'
-import { comparableTaskRow } from './helpers/taskRowParity'
+import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
@@ -175,6 +175,7 @@ describeEachProviderHttpApplication(
           .limit(1)
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
+      expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()
       persistedRows.set(
         scope.harness.capabilities.provider,
         comparableTaskRow(row, ['sourceAgentId', 'sourceAgentName', 'name']),

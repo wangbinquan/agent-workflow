@@ -32,6 +32,11 @@ export const VOLATILE_TASK_ROW_COLUMNS: readonly string[] = [
   'lineageSlotPathJson',
   // 调度器异步接手：读回来时可能已经从 pending 翻到 running（时间相关，不是引擎差异）
   'status',
+  // 同一次接手一起翻的另两格：running 段起点与生命周期事件修订号。只摘 status 时它们照样
+  // 随接手早晚不等（CI 38608703903 shard 8：一条 lane lifecycleEventRevision 2 / runningSince
+  // 有值，另一条 1 / null）。三格的自洽改由 earlyLifecycleViolation 逐 lane 守。
+  'runningSince',
+  'lifecycleEventRevision',
 ]
 
 /**
@@ -49,4 +54,22 @@ export function comparableTaskRow(
     comparable[key] = row[key]
   }
   return comparable
+}
+
+/**
+ * 摘掉的三格仍要自洽（RFC-207：进入 running 记下段起点，离开 running 清空并累计
+ * runningMs；每次生命周期转移修订号 +1）：running ⇔ 有段起点；还在 pending 说明一次转移都
+ * 没发生过，修订号是初值 1；其余状态都已转移过，修订号必然前进。返回违例说明，自洽时为 null。
+ */
+export function earlyLifecycleViolation(row: Record<string, unknown>): string | null {
+  const status = String(row['status'])
+  const runningSince = row['runningSince']
+  const revision = Number(row['lifecycleEventRevision'])
+  const started = runningSince !== null && Number.isFinite(Number(runningSince))
+  const facts = `status=${status} runningSince=${String(runningSince)} revision=${revision}`
+  if ((status === 'running') !== started) return `只有 running 段才有起点：${facts}`
+  if (status === 'pending') {
+    return revision === 1 ? null : `pending 尚未发生转移，修订号应为 1：${facts}`
+  }
+  return revision > 1 ? null : `离开 pending 必有转移，修订号应已前进：${facts}`
 }

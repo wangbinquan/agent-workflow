@@ -1,3 +1,14 @@
+## 2026-10-14 CI 全量收口（用户授权：所有 CI 由本会话负责修）
+
+用户明令「所有 CI 都交给你，你来负责修」后，按根因逐项处理 main 上全部红与偶发：
+
+- **RFC-371 v2 首轮托管 CI**（`744709326`，配套 `518b2e701`）：OpenCode 原生库路径按子进程家目录推导（Windows 先 `USERPROFILE`）并按平台选路径；用量测试改显式平台断言、夹具库关闭后经 `fixtures/tempDir` 删除、批量夹具走事务；a11y 观测用例改为 v2 页签；日柱焦点环内缩；共享 `.data-table` 行头按首格呈现（保留大小写）；设置页价格表改小最小宽度。`518b2e701` 上 Windows 平台 `38608797816`（RFC-254 套件 1374 项 0 失败）、opencode 集成、主 CI 的 e2e 与 macOS 分片均通过；`/settings` 的 Linux 视觉基线按 `e2e/visual-regression.README.md` Option A 取视觉运行 `38608703582` 的实际截图审阅后更新（darwin 基线随 `744709326` 只刷了这一张；本机其余 darwin 基线普遍停在 8 月下旬，非 CI 门禁）。Windows 平台作业的 push 路径过滤补登 RFC-371 v2 的计量源码与两份测试。
+- **RFC-359 AC-1 启动对等偶发**（后端分片 8，`f6fc5f9ef` 起反复出现）：持久化行比对只摘了随调度器接手翻转的 `status`，同时翻转的 `runningSince` / `lifecycleEventRevision` 没摘，两条 lane 读库早晚不同即不等。`tests/helpers/taskRowParity.ts` 三格同摘，新增 `earlyLifecycleViolation` 逐 lane 守三格自洽，五份对等测试都接上；本机双引擎（临时 PostgreSQL 17 容器）随机顺序连跑通过。
+- **Markdown 链接检查每轮 15 分钟超时被取消**：design 里约 225 个本仓 Actions 运行链接经 remap 走 `api.github.com` 逐个核验，每轮约 370 次请求、成功率 55%，与其他作业共享的 `GITHUB_TOKEN` 配额被打满后退避涨到每次 30 秒。改为不在线核验本仓运行链接（证据指针会随保留期过期），去掉 remap / basic-auth 与只为它加的 `actions: read`，其余链接策略不变。
+- **夜间 e2e（full / webkit）自 10-12 起红**：RFC-371 v1 把内置 development 类型包升到 11 时，`rfc319-de-and-resource-lifecycle.spec.ts` 仍写死 10（DE-02 / DE-10 全 404）。新增 `e2e/development-type-ref.ts` 从生产 descriptor 派生，三个写死版本的 spec 改用它；`tests/e2e-development-type-ref.test.ts` 禁止 e2e 再写死 `development@N`。
+- **偶发**：OPS-022（macOS）是发行二进制 CLI 冷启动超过 15 秒通用上限被杀、输出为空——五个调用发行二进制 CLI 的 spec 统一用 `RELEASE_CLI_TIMEOUT_MS`（30 秒），`tests/e2e-release-cli-budget.test.ts` 守住；webkit INTENT-32 经失败录像逐帧确认是提交对话框切步后下一帧把焦点移到步骤标题、抢走了刚聚焦的改名框（以默认名提交），产品侧改为焦点已在本步输入控件时不再抢（`intent-detail-inline` 单测 + 变异验证）；webkit INTENT-X1 从工作流编辑器跨页 `goto` 报 WebKit 内部错误，改在同一登录上下文新开页面；`rfc370-host-root-boundaries` 在 macOS 解析全量语料超过 5 秒默认超时，改为加载期读取一次。
+- **postgresql-evidence 周跑（10-11）超预算**：大迁移期间状态接口最大值 10-04 1632 ms → 10-05 1427 → 10-07 2452 → 10-11 2659 ms（≥ 2500），吞吐从约 6000 行/秒降到约 3100，时间上对应 RFC-371 v1 在 PostgreSQL 他域表上加的 232 个触发器；v2 已全部退役，已在 `518b2e701` 手动触发 `38613687770` 复验，结论见下一次更新。
+
 ## 2026-10-14 RFC-371 v2：运行观测精简重设计（Done）
 
 按用户授权（完整重设计、无需 Codex 门、无现网存量）完成 [v2 重设计](design/RFC-371-run-observability/redesign-v2-20261014.md)：每次运行时调用一行、受理先于 spawn、运行中最多每 3 秒原地更新、结束一次写终态；统计按需聚合（窗口过滤 + GROUP BY，非管理员先批量判定可见任务，超 20,000 标 partial），无派生表 / 触发器 / 后台投影。SQLite `0256` 与 PostgreSQL `0032` 退役 v1 的 81 张表及他域表上的全部变更捕获触发器 / 函数，只建 `observation_calls` / `observation_call_models` / `observation_prices`；迁移引擎的退役边先删连带的他表触发器与函数。运行时驱动各自计量（OpenCode 结束后有界只读一次原生库汇总含子 Agent 的按模型用量；Claude Code 用 `result.modelUsage`，恢复会话保持下界）；价格按运行时 × 实际模型只追加、CAS 冲突保留草稿，新价只影响之后受理的调用。前端重写为总览 / 任务 / Agent 与模型 / 系统执行四页签与任务详情（调用泳道 + 调用表），设置页按运行时 × 模型配置价格。删除 v1 platform 观测代码、投影 / 报告 / 原生补采 worker、WS `observability` 频道、托管 `observation` 执行组、`observability-scale` 作业与 `AW_NATIVE_OBSERVATION_ADMISSIONS`（能力影响见 v2 §9）。RFC-370 源码 oracle 以 `tests/helpers/rfc371V2SourceInverse.ts` 逐块还原后接续原逆变换链。

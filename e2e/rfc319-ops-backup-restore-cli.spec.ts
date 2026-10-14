@@ -46,7 +46,7 @@ import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { querySqlite, runCommandResult } from './command'
+import { querySqlite, RELEASE_CLI_TIMEOUT_MS, runCommandResult } from './command'
 import { defaultBinaryPath, startDaemon, type DaemonHandle } from './harness'
 
 // 两条 restore 用例各自要冷启一次 daemon（各 ~8s）、做一次真备份、再跑若干秒级 CLI
@@ -64,12 +64,8 @@ interface CliResult {
 function runCli(home: string, args: string[]): CliResult {
   const result = runCommandResult(defaultBinaryPath(), args, {
     env: { AGENT_WORKFLOW_HOME: home },
-    // Every call boots the release binary, resolves its embedded migrations,
-    // and opens an isolated SQLite home; password calls add memory-hard
-    // Argon2id. A saturated macOS WebKit shard can push even a non-password
-    // `user create` past the generic 15s fixture fence. Keep the boundary hard,
-    // but budget this intentionally process-heavy CLI suite as a whole.
-    timeoutMs: 30_000,
+    // Password calls add memory-hard Argon2id on top of the release-binary boot.
+    timeoutMs: RELEASE_CLI_TIMEOUT_MS,
   })
   return { out: result.output, code: result.status }
 }

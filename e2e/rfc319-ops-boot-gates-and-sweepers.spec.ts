@@ -70,7 +70,14 @@ import { delimiter, join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { initGitRepo, repoRemoteUrl, runCommandResult, runSqlite, querySqlite } from './command'
+import {
+  initGitRepo,
+  querySqlite,
+  RELEASE_CLI_TIMEOUT_MS,
+  repoRemoteUrl,
+  runCommandResult,
+  runSqlite,
+} from './command'
 import { defaultBinaryPath, startDaemon } from './harness'
 
 // 一个 daemon 冷启动 ~4s；最重的几条要起三次 daemon 再加一次 30s 的 boot 首拍，
@@ -133,6 +140,7 @@ function runCli(
 ): { out: string; code: number } {
   const result = runCommandResult(defaultBinaryPath(), args, {
     env: { AGENT_WORKFLOW_HOME: home, ...extraEnv },
+    timeoutMs: RELEASE_CLI_TIMEOUT_MS,
   })
   return { out: result.output, code: result.status }
 }

@@ -619,7 +619,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -638,10 +637,14 @@ jobs:
           # (`os error 104`) and reddened a run whose only change was two i18n
           # files; the URL returned 200 on every manual retry. Being explicit
           # here also beats inheriting lychee's defaults silently.
-          # Run evidence is checked by its exact Actions API resource. GitHub's
-          # historical run HTML pages intermittently return 502 for valid IDs.
-          # The anchored remap keeps malformed paths, missing IDs and all other
-          # links subject to normal failure; it never accepts 5xx or skips URLs.
+          # This repository's own Actions run links are evidence pointers, not
+          # navigation: they are not checked online. Their HTML pages return
+          # intermittent 502s for valid IDs, runs expire with the retention
+          # period, and checking ~225 of them through api.github.com spent the
+          # repository's shared GITHUB_TOKEN budget on every push — 370 requests
+          # at a 55% success rate, host backoff grew to 30 s per request and the
+          # job hit its 15-minute limit on every main run (e.g. 38608703903).
+          # Every other link keeps the normal policy.
           args: >-
             --no-progress
             --verbose
@@ -651,8 +654,7 @@ jobs:
             --max-retries 5
             --retry-wait-time 5
             --timeout 30
-            --remap '^https://github\.com/${{ github.repository }}/actions/runs/([0-9]+)$ https://api.github.com/repos/${{ github.repository }}/actions/runs/$1'
-            --basic-auth '^https://api\.github\.com/ x-access-token:${{ secrets.GITHUB_TOKEN }}'
+            --exclude '^https://github\.com/${{ github.repository }}/actions/runs/'
             'design/**/*.md'
           fail: true
           jobSummary: true
