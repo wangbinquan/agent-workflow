@@ -11,9 +11,12 @@ import { createFileReviewArtifactContent } from '@/modules/collaboration/infrast
 // `now` and a fake `runFn` (RFC-367 seam; was `spawnFn`). Locks: debounce_key construction, sibling
 // merge, exp-backoff retry math, max-attempts flip to `failed`, recovery
 // of leftover `running` rows.
+// RFC-370 Windows run 38532219916: original recovery also acknowledges material
+// release. Fake runtime paths must use the native layout, and the recovery case
+// below proves a real directory survives an unreaped process until release.
 
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
@@ -113,7 +116,7 @@ function okRun(opts: SystemAgentRunOptions, eventText?: string): SystemAgentRunR
     eventText: eventText ?? emptyDistillerEnvelope(opts),
     stderrTail: '',
     durationMs: 1,
-    scratchDir: `${opts.scratchParent}/${opts.scratchName ?? 'unnamed'}`,
+    scratchDir: join(opts.scratchParent, opts.scratchName ?? 'unnamed'),
     scratchRetained: true,
     outputEvidence: emptySystemAgentOutputEvidence(),
     capturedSessionId: 'ses_scheduler_probe',
@@ -881,8 +884,11 @@ describeEachProvider('distillTick', (harness) => {
       physical = 0,
       permitReap = false,
       writes = 0
+    let scratchDir: string | undefined
     const markFailed = memory.store.markFailed.bind(memory.store)
     const write = spyOn(memory.store, 'markFailed').mockImplementation(async (input) => {
+      expect(scratchDir).toBeDefined()
+      expect(existsSync(scratchDir!)).toBe(false)
       writes += 1
       await markFailed(input)
       if (writes === 1) throw new Error('original recovery failure ACK lost')
@@ -894,8 +900,11 @@ describeEachProvider('distillTick', (harness) => {
         now: () => now,
         runFn: async (input) => {
           runs += 1
+          const result = okRun(input)
+          scratchDir = result.scratchDir
+          mkdirSync(scratchDir, { recursive: true })
           return {
-            ...okRun(input),
+            ...result,
             status: 'unreaped',
             exitCode: null,
             executionRecovery: {
@@ -911,7 +920,10 @@ describeEachProvider('distillTick', (harness) => {
       expect(error).toBeInstanceOf(IndeterminateRuntimeProcessError)
       const original = error as IndeterminateRuntimeProcessError
       expect(original.originalJobIds).toEqual([jobId])
+      expect(scratchDir).toBeDefined()
+      expect(existsSync(scratchDir!)).toBe(true)
       expect(await original.recoverOriginal()).toBe(false)
+      expect(existsSync(scratchDir!)).toBe(true)
       expect((await memory.store.loadJobs([jobId]))[0]).toMatchObject({
         status: 'running',
         attempts: 0,
@@ -920,6 +932,7 @@ describeEachProvider('distillTick', (harness) => {
       permitReap = true
       now += 1000000
       await expect(original.recoverOriginal()).rejects.toThrow('original recovery failure ACK lost')
+      expect(existsSync(scratchDir!)).toBe(false)
       expect(original.originalRecoveryAcknowledged()).toBe(false)
       expect(await original.recoverOriginal()).toBe(true)
       expect(await original.recoverOriginal()).toBe(true)
