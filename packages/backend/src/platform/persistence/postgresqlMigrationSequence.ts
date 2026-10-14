@@ -183,6 +183,7 @@ export function logicalSourceRevisionReplacement(
 function applyLogicalSourceRevision(
   contract: LogicalSchemaContract,
   replacement: LogicalSourceRevisionReplacement | undefined,
+  missingRelationMessage = 'source clock original relation missing',
 ): LogicalSchemaContract {
   if (!replacement) return contract
   requireSequence(
@@ -196,7 +197,7 @@ function applyLogicalSourceRevision(
     'source clock journal descriptor differs',
   )
   const original = contract.tables.find((table) => table.id === replacement.tableId)
-  requireSequence(original !== undefined, 'source clock original relation missing')
+  requireSequence(original !== undefined, missingRelationMessage)
   exact(
     original.sourceRevisionProjection,
     replacement.before,
@@ -1390,7 +1391,12 @@ function resolvePostgresqlRowBridge(
         : history.steps
             .slice(from, to)
             .reduce(
-              (contract, step) => applyLogicalSourceRevision(contract, step.logicalSourceRevision),
+              (contract, step) =>
+                applyLogicalSourceRevision(
+                  contract,
+                  step.logicalSourceRevision,
+                  'historical row, codec, key or disposition changed',
+                ),
               source,
             ),
     ),

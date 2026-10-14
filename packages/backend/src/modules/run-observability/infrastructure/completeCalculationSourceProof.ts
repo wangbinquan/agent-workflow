@@ -13,7 +13,7 @@ export async function completeCalculationSourceProof(
   const pending = db
     .select({
       source: observationProjectionChanges.source,
-      changes: sql<string>`CAST(count(*) AS TEXT)`.as('changes'),
+      changes: sql<string>`CAST(count(*) AS TEXT)`.mapWith(String).as('changes'),
     })
     .from(observationProjectionChanges)
     .where(eq(observationProjectionChanges.completed, false))

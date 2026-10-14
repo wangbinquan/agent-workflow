@@ -2191,6 +2191,18 @@
       "lines": 33
     },
     {
+      "assertsAbsence": false,
+      "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/rfc371-committed-source-clock-provider.test.ts",
+      "id": "rfc371-committed-source-clock-provider",
+      "lines": 184,
+      "mechanism": "behaviour",
+      "minCorpusFiles": null,
+      "negativeFixture": false,
+      "runner": "bun"
+    },
+    {
       "assertsAbsence": true,
       "classified": true,
       "corpusScanner": false,
@@ -2198,6 +2210,18 @@
       "id": "rfc371-native-participant-boundary",
       "lines": 17,
       "mechanism": "source-text",
+      "minCorpusFiles": null,
+      "negativeFixture": false,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/rfc371-source-clock-upgrade.test.ts",
+      "id": "rfc371-source-clock-upgrade",
+      "lines": 120,
+      "mechanism": "behaviour",
       "minCorpusFiles": null,
       "negativeFixture": false,
       "runner": "bun"

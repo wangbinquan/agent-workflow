@@ -95,3 +95,26 @@ test('V5 rejects incomplete, reversed and altered clock transitions even after t
     ).toThrow()
   }
 }, 60_000)
+
+// CI 38532219940: a root predating the clock relation still has the original
+// index-only rejection, while the complete additive path retains every edge.
+test('V5 preserves the original index-only rejection from a pre-clock root and the complete additive bridge', async () => {
+  const history = await loadPostgresqlMigrationHistory(),
+    at = history.steps.findIndex((step) => step.id === '0031_rfc371_committed_source_clocks'),
+    target = history.versions[at + 1]!
+  expect(at).toBeGreaterThanOrEqual(0)
+  expect(
+    history.root.contract.tables.some((table) => table.id === 'observation_source_revisions'),
+  ).toBe(false)
+  const input = {
+    fromContractDigest: history.root.contract.digest,
+    toContractDigest: target.contract.digest,
+  }
+  expect(() => resolvePostgresqlIndexOnlyRowBridge(history, input)).toThrow(
+    'historical row, codec, key or disposition changed',
+  )
+  const bridge = resolvePostgresqlAdditiveRowBridge(history, input)
+  expect(bridge.source).toEqual(history.root.contract)
+  expect(bridge.target).toEqual(target.contract)
+  expect(bridge.steps).toEqual(history.steps.slice(0, at + 1))
+}, 60_000)
