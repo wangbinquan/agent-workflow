@@ -226,10 +226,6 @@ export function useCompleteObservationReport(
         // Keep that original handle until its first committed version is
         // admitted; completing this read must not create a second report.
         else if (projectionRevision !== null) pendingIds.current.delete(pendingScope)
-        if (content) {
-          bookmark.remember(reportId)
-          rememberObservationDefaultRange(content, bookmark.current)
-        }
         if (report.state === 'failed' || (report.state === 'not-ready' && !report.facts)) {
           if (restoredId) discardObservationReportBookmark(restoredId)
           // A replacement may be unready while the accepted immutable report
@@ -265,21 +261,34 @@ export function useCompleteObservationReport(
               )
             },
           })
-          await Promise.all(
-            visible.map((entry) => {
-              const section = entry.queryKey[2] as CompleteObservationSection
-              const parent = entry.queryKey[3] as string | null
-              return client.fetchQuery({
-                queryKey: ['run-observability-complete-page', reportId, section, parent, null],
-                queryFn: () => readCompleteObservationPage(content, section, parent, null, signal),
-                // An explicit scope change can leave a prepared page unmounted.
-                // Its short inactive lifetime never accumulates report history.
-                gcTime: 60_000,
-                staleTime: Infinity,
-              })
-            }),
-          )
+          try {
+            await Promise.all(
+              visible.map((entry) => {
+                const section = entry.queryKey[2] as CompleteObservationSection
+                const parent = entry.queryKey[3] as string | null
+                return client.fetchQuery({
+                  queryKey: ['run-observability-complete-page', reportId, section, parent, null],
+                  queryFn: () =>
+                    readCompleteObservationPage(content, section, parent, null, signal),
+                  // An explicit scope change can leave a prepared page unmounted.
+                  // Its short inactive lifetime never accumulates report history.
+                  gcTime: 60_000,
+                  staleTime: Infinity,
+                })
+              }),
+            )
+          } catch (error) {
+            if (!signal.aborted && bookmark.current()) {
+              discardObservationReportBookmark(reportId)
+              client.setQueryData(displayValidityKey(reportId), false)
+            }
+            throw error
+          }
           assertCurrent()
+        }
+        if (content) {
+          bookmark.remember(reportId)
+          rememberObservationDefaultRange(content, bookmark.current)
         }
         return report
       } catch (error) {

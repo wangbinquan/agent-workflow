@@ -281,7 +281,7 @@ export function CompleteRunObservability({
     mainReport,
     'tasks',
     null,
-    !search.task && (tab === 'tasks' || tab === 'overview'),
+    !search.task && tab === 'tasks',
   )
   const contributions = useCompleteObservationPage<CompleteObservationDimensionTask>(
     dimension?.report ?? null,
@@ -314,7 +314,9 @@ export function CompleteRunObservability({
     !!report &&
       (dimension
         ? !!contributions.data && !contributions.isFetching && !contributions.error
-        : !!tasks.data && !tasks.isFetching && !tasks.error),
+        : tab === 'overview'
+          ? !!trends.data && !trends.isFetching && !trends.error
+          : !!tasks.data && !tasks.isFetching && !tasks.error),
     { retainNested: true, resetScope: JSON.stringify([filters, tab, revision]) },
   )
   const onTask = (id: string, trigger: HTMLElement) => {

@@ -307,18 +307,31 @@ function fixture(
     )
   }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
-  render(
-    <QueryClientProvider client={client}>
-      {options.hostStatus ? (
-        <HostExecutionProvider>
+  const mount = () =>
+    render(
+      <QueryClientProvider client={client}>
+        {options.hostStatus ? (
+          <HostExecutionProvider>
+            <Page />
+          </HostExecutionProvider>
+        ) : (
           <Page />
-        </HostExecutionProvider>
-      ) : (
-        <Page />
-      )}
-    </QueryClientProvider>,
-  )
-  return { requests, reports, state, changes, client }
+        )}
+      </QueryClientProvider>,
+    )
+  let view = mount()
+  return {
+    requests,
+    reports,
+    state,
+    changes,
+    client,
+    remount: () => {
+      view.unmount()
+      client.clear()
+      view = mount()
+    },
+  }
 }
 beforeEach(async () => {
   setBaseUrl('http://complete.test')
@@ -845,14 +858,15 @@ test.each([
       f.state.projection = { revision: 'delayed-page', asOf: NOW + 3600000 }
       await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
       await waitFor(() => expect(f.state.releasePage).not.toBeNull())
-      if (tab === 'agents') {
+      if (tab === 'agents' || tab === 'overview') {
         const replacement = [...f.reports.values()].at(-1)!.header.reportId
         expect(
           f.requests.some((row) => row.report === replacement && row.section === 'tasks'),
         ).toBe(false)
-        expect(
-          f.requests.some((row) => row.report === replacement && row.section === 'trends'),
-        ).toBe(false)
+        if (tab === 'agents')
+          expect(
+            f.requests.some((row) => row.report === replacement && row.section === 'trends'),
+          ).toBe(false)
       }
       expect(document.querySelector(selector)).toBe(content)
       expect(screen.getByText(previousAsOf)).toBeTruthy()
@@ -882,6 +896,18 @@ test('a replacement page with a different sealed identity cannot publish new tot
   await screen.findByText('Complete retained page identity or count changed')
   expect(screen.queryByRole('heading', { name: '完整 Token 消耗' })).toBeNull()
   expect(document.querySelector('[data-observation-trend]')).toBeNull()
+  const rejected = [...f.reports.values()].at(-1)!.header.reportId
+  const start = f.requests.length
+  f.state.invalidPageRevision = null
+  f.state.projection = null
+  f.remount()
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
+  expect(f.reports.size).toBe(3)
+  expect(
+    f.requests
+      .slice(start)
+      .some((row) => row.method === 'GET' && row.path === '/api/observability/reports/' + rejected),
+  ).toBe(false)
 })
 
 // RFC-371: a background cutoff must not truncate untouched milliseconds while
