@@ -7,7 +7,7 @@
     "registeredFindings": 79
   },
   "canonicalProjection": {
-    "sourceDigest": "sha256:fd0563cc90b96d5953d73654889a0846c42de9e0024087b1f8a866b4f3fa6161",
+    "sourceDigest": "sha256:daf91ae62f104ecc45da27ab62f94e054462e190b9a91bdcd1bc5cf7f239f2db",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
@@ -9493,8 +9493,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "b4dd4fbd4bb6483b5f4684764c795b287dcef399",
-    "contentDigest": "sha256:701d66f827e7e305c4d540007d206e750bb4c62b23069959e76d8210135e95d2",
+    "currentSnapshotSha": "45122552798d1304fec06472507bb96fac934aa5",
+    "contentDigest": "sha256:487e5b203d80a653974e3a77238a75cdb7700b63bcf2cfe379e73865a0423e4b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
