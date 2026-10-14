@@ -2976,8 +2976,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#transaction:257",
-      "line": 257,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#transaction:258",
+      "line": 258,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#createIncrementalObservationQueryStore",
       "status": "clear",
       "symbol": "createIncrementalObservationQueryStore",
@@ -2988,8 +2988,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#transaction:288",
-      "line": 288,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#transaction:289",
+      "line": 289,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/incrementalObservationQueryStore.ts#createIncrementalObservationQueryStore",
       "status": "clear",
       "symbol": "createIncrementalObservationQueryStore",
@@ -3778,7 +3778,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a6f17b7fc94abf02ead50bba62c475c30b5392a13970f1300dfa2b01b0b5454f",
+  "sourceDigest": "sha256:89271191ab67b0307504c97eaafefef73b84947d7f68d74d1c2e5dd71c63f085",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

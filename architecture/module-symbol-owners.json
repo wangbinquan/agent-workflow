@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2565,
+    "backendFiles": 2566,
     "frontendFiles": 689,
     "legacyFiles": 624,
-    "moduleFiles": 1941,
-    "productionFiles": 3431,
+    "moduleFiles": 1942,
+    "productionFiles": 3432,
     "sharedFiles": 177,
-    "symbolsIncludingFileRoots": 28689
+    "symbolsIncludingFileRoots": 28694
   },
   "entries": [
     {
@@ -114282,6 +114282,18 @@
     {
       "currentContext": "run-observability",
       "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/incrementalObservationHistoricalScope.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/incrementalObservationHistoricalScope.ts#HistoricalScopeGroupMatch",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HistoricalScopeGroupMatch",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/run-observability/application/incrementalObservationHistoricalScope.ts",
       "id": "owner:packages/backend/src/modules/run-observability/application/incrementalObservationHistoricalScope.ts#incrementalObservationHistoricalScope",
@@ -117523,6 +117535,30 @@
       "currentContext": "run-observability",
       "currentLayer": "domain",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/domain/originalHistoricalDiagnostic.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/originalHistoricalDiagnostic.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/originalHistoricalDiagnostic.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/originalHistoricalDiagnostic.ts#originalHistoricalDiagnostic",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "originalHistoricalDiagnostic",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/domain/platformCapture.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/platformCapture.ts#$file",
       "removeAfterWave": null,
@@ -117972,6 +118008,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "legacyQualifiedObservationIndexChannel",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/qualifiedObservationIndexes.ts#legacyQualifiedObservationIndexChannels",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "legacyQualifiedObservationIndexChannels",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -121992,6 +122040,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/ports/incrementalObservationQualified.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/incrementalObservationQualified.ts#HistoricalRecordScopeGroup",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "HistoricalRecordScopeGroup",
       "targetContext": "run-observability",
       "targetLayer": "ports"
     },
@@ -345011,5 +345071,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a6f17b7fc94abf02ead50bba62c475c30b5392a13970f1300dfa2b01b0b5454f"
+  "sourceDigest": "sha256:89271191ab67b0307504c97eaafefef73b84947d7f68d74d1c2e5dd71c63f085"
 }
