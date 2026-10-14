@@ -9493,7 +9493,7 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "ff43d3c80cb6c8c42087459f032b4ff6acccc149",
+    "currentSnapshotSha": "8867925966236dc038e32a06526c2ceb72e7b282",
     "contentDigest": "sha256:7f2850d0ae548a83ab5340fb18363852cf48c2858e5826e0904de33bb2e15186",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
