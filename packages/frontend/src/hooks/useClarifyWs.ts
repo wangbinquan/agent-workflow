@@ -60,6 +60,11 @@ const RULES: WsInvalidationRules<TaskWsMessage, UseClarifyWsOpts> = {
     ctx.onDraftUpdated?.({ questionId: msg.questionId, editor: msg.editor })
     return [CLARIFY_QUERY_KEYS.detail(ctx.intermediaryNodeRunId)]
   },
+  // RFC-372 O8: a follow-up started or settled; the round reports its state.
+  'clarify.followup.updated': (msg, ctx) =>
+    ctx.intermediaryNodeRunId !== null && msg.nodeRunId === ctx.intermediaryNodeRunId
+      ? [CLARIFY_QUERY_KEYS.detail(ctx.intermediaryNodeRunId)]
+      : undefined,
   'clarify.created': (_msg, ctx) => clarifySurface(ctx),
   'clarify.answered': (_msg, ctx) => clarifySurface(ctx),
   'cross-clarify.created': (_msg, ctx) => clarifySurface(ctx),

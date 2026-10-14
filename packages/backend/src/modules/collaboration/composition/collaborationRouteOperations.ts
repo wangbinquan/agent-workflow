@@ -7,7 +7,10 @@ import type {
   CollaborationRouteOperations,
   CollaborationRoutePersistenceOperations,
 } from '../application/ports/collaborationRouteOperations'
-import { createCollaborationClarifyDraftEventPublisher } from '../infrastructure/collaborationClarifyDraftEventPublisher'
+import {
+  clarifyFollowupEvents,
+  createCollaborationClarifyDraftEventPublisher,
+} from '../infrastructure/collaborationClarifyDraftEventPublisher'
 import { createCollaborationRouteOperations } from '../infrastructure/collaborationRouteOperations'
 import {
   dispatchTaskQuestions,
@@ -67,17 +70,27 @@ export function composeCollaborationRouteOperations(input: {
     db: input.db,
     clarifyDraftEvents: events,
   })
+  const followup =
+    input.followupGenerator &&
+    createClarifyFollowupOperations(
+      createClarifyFollowupStore(input.db, events),
+      input.followupGenerator,
+      clarifyFollowupActivity,
+      { events: clarifyFollowupEvents },
+    )
   return bindCollaborationRouteContext(input.context, {
     ...persistence,
     clarify: {
       ...persistence.clarify,
-      ...(input.followupGenerator
+      ...(followup
         ? {
-            followup: createClarifyFollowupOperations(
-              createClarifyFollowupStore(input.db, events),
-              input.followupGenerator,
-              clarifyFollowupActivity,
-            ),
+            followup,
+            // RFC-372 O8: the round detail is where viewers read the generation state.
+            detail: async (intermediaryNodeRunId: string) => {
+              const round = await persistence.clarify.detail(intermediaryNodeRunId)
+              const status = followup.status(intermediaryNodeRunId)
+              return status ? { ...round, followup: status } : round
+            },
           }
         : {}),
     },

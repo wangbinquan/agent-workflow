@@ -1,3 +1,9 @@
+## 2026-10-14 RFC-372 O8：分支追问改为异步（Done）
+
+按用户「RFC-371、RFC-372 整体重构完成」的要求补做 [审视后优化](design/RFC-372-mindmap-clarify/review-followups-20261014.md) 中原建议暂缓的 O8（§4.7）：`POST /api/clarify/:nodeRunId/followup` 在前置校验通过后即返回 202 `{state:'running'}`（已受理过的请求 200 `{state:'done'}`），模型在后台生成；校验失败仍是原 409/422。轮次详情增加可选 `followup`（生成中，或最近一次失败，保留 10 分钟、下次受理清除；错误码与文案同 HTTP 层），受理与结束时发任务频道合成帧 `clarify.followup.updated`。前端按轮次状态显示「生成中 / 查看生成中的分支 / 取消」，刷新后与其他成员同样可见，生成中每 1.5 秒重取轮次兜底；后台失败显示在对应分支（取消不算失败）。三份 RFC-372 e2e 改为等待轮次状态，journey 增加「生成中刷新→恢复→在分支上取消」。
+
+本地集中验证：backend（SQLite）追问与澄清路由 5 个文件 42 项、受 schema 影响的 2 个文件 91 项、架构守卫 71 个文件（除待 census 重生成的两项规范账本外全过；`void` 承诺守卫要求的 `.catch` 已补）；shared 2 个文件 14 项；frontend 23 个文件 180 项；RFC-372 四个 e2e 文件 6 项在 chromium 与 webkit 各一遍全过；三包 tsc、改动文件 eslint（含 promises 规则）/ prettier 通过。PostgreSQL 与全量 e2e 以确切 SHA 的 CI 为准。
+
 ## 2026-10-14 CI 全量收口（用户授权：所有 CI 由本会话负责修）
 
 用户明令「所有 CI 都交给你，你来负责修」后，按根因逐项处理 main 上全部红与偶发：

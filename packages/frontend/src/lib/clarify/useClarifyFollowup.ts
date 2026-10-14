@@ -1,6 +1,10 @@
 import { useRef, useState } from 'react'
-import type { ClarifyFollowup } from '@agent-workflow/shared'
-import { api } from '@/api/client'
+import type {
+  ClarifyFollowup,
+  ClarifyFollowupStart,
+  ClarifyFollowupStatus,
+} from '@agent-workflow/shared'
+import { api, ApiError } from '@/api/client'
 import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
 
 interface Operation {
@@ -10,12 +14,20 @@ interface RoundRequest {
   nodeRunId: string
   request: ClarifyFollowup | null
   operation: Operation | null
+  /** Generations canceled here; the cached round may report them until it refetches. */
+  canceled: Set<string>
 }
 
-/** Requests belong to their original round even when the router reuses the page. */
+/**
+ * Requests belong to their original round even when the router reuses the page.
+ * RFC-372 O8: the daemon generates in the background once it accepts a request;
+ * `server` is the round's reported follow-up, so a refreshed page and the other
+ * members see the generation and can cancel it too.
+ */
 export function useClarifyFollowup(
   nodeRunId: string,
   refresh: (originNodeRunId: string) => Promise<unknown>,
+  server?: ClarifyFollowupStatus,
 ) {
   const execution = useHostExecutionAvailability('task')
   const rounds = useRef(new Map<string, RoundRequest>())
@@ -24,15 +36,30 @@ export function useClarifyFollowup(
   const [, changed] = useState(0)
   let round = rounds.current.get(nodeRunId)
   if (!round) {
-    round = { nodeRunId, request: null, operation: null }
+    round = { nodeRunId, request: null, operation: null, canceled: new Set() }
     rounds.current.set(nodeRunId, round)
   }
   const owner = round
   const notify = () => changed((version) => version + 1)
+  const running =
+    server?.state === 'running' && !owner.canceled.has(server.requestId) ? server : undefined
+  // A cancel is not a failure; whoever canceled already knows.
+  const failed =
+    server?.state === 'failed' && server.error && server.error.code !== 'clarify-followup-canceled'
+      ? server.error
+      : undefined
   return {
-    pending: owner.operation !== null,
+    pending: owner.operation !== null || running !== undefined,
+    /** The round's background generation, wherever it was started. */
+    running,
+    /** The round's last failed generation, shown like a rejected request (status 0:
+     *  the round reported it; it was not this page's HTTP failure). */
+    failure:
+      failed && server
+        ? { target: server.target, error: new ApiError(0, failed.code, failed.message) }
+        : undefined,
     async start(input: Omit<ClarifyFollowup, 'requestId'>, flush: () => Promise<void>) {
-      if (owner.operation) return
+      if (owner.operation || running) return
       execution.assertAvailable()
       const operation: Operation = { canceled: false }
       owner.operation = operation
@@ -50,11 +77,12 @@ export function useClarifyFollowup(
             ? previous
             : { ...input, requestId: crypto.randomUUID() }
         owner.request = request
-        await api.post(`/api/clarify/${owner.nodeRunId}/followup`, request)
+        await api.post<ClarifyFollowupStart>(`/api/clarify/${owner.nodeRunId}/followup`, request)
+        // Accepted: the refreshed round now reports the generation or its questions.
         if (owner.request === request) owner.request = null
         await refresh(owner.nodeRunId)
       } catch (error) {
-        // A lost response may already have appended. Keep the request identity
+        // A lost response may already have been accepted. Keep the request identity
         // for retry, and refresh only its original round's query cache.
         await refresh(owner.nodeRunId)
         if (!operation.canceled && visible.current === owner.nodeRunId) throw error
@@ -65,13 +93,17 @@ export function useClarifyFollowup(
     },
     async cancel() {
       const operation = owner.operation
-      if (!operation) return
-      operation.canceled = true
-      const request = owner.request
-      if (request) await api.delete(`/api/clarify/${owner.nodeRunId}/followup/${request.requestId}`)
-      if (owner.request === request) owner.request = null
+      const requestId = owner.request?.requestId ?? running?.requestId
+      if (!operation && requestId === undefined) return
+      if (operation) operation.canceled = true
+      if (requestId !== undefined) {
+        await api.delete(`/api/clarify/${owner.nodeRunId}/followup/${requestId}`)
+        owner.canceled.add(requestId)
+      }
+      if (owner.request?.requestId === requestId) owner.request = null
       if (owner.operation === operation) owner.operation = null
       notify()
+      await refresh(owner.nodeRunId)
     },
   }
 }

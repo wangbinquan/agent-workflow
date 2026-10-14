@@ -1,4 +1,5 @@
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+import type { ClarifyFollowupEvents } from '../application/ports/clarifyFollowup'
 import type { CollaborationClarifyDraftEventPublisher } from '../application/ports/collaborationRouteOperations'
 
 /** Immediate task-channel projection for committed collaborative draft edits. */
@@ -18,3 +19,16 @@ export function createCollaborationClarifyDraftEventPublisher(): CollaborationCl
   }
   return Object.freeze(publisher)
 }
+
+/** RFC-372 O8: synthetic task-channel frame; the round detail carries the follow-up state. */
+export const clarifyFollowupEvents: ClarifyFollowupEvents = Object.freeze({
+  changed(input: { taskId: string; nodeRunId: string; roundId: string }) {
+    taskBroadcaster.broadcast(TASK_CHANNEL(input.taskId), {
+      id: -1,
+      type: 'clarify.followup.updated',
+      nodeRunId: input.nodeRunId,
+      roundId: input.roundId,
+      ts: Date.now(),
+    })
+  },
+})

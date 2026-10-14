@@ -117,6 +117,9 @@ export function ClarifyDetailPage() {
     queryKey: CLARIFY_QUERY_KEYS.detail(nodeRunId),
     queryFn: ({ signal }) => api.get<ClarifyRound>(`/api/clarify/${nodeRunId}`, undefined, signal),
     refetchOnWindowFocus: false,
+    // RFC-372 O8: a follow-up generates in the background; the task-channel
+    // frame refreshes this early, polling covers a missed frame.
+    refetchInterval: (query) => (query.state.data?.followup?.state === 'running' ? 1500 : false),
   })
 
   // RFC-037: fetch the host task once we know the taskId so the header can
@@ -530,8 +533,11 @@ export function ClarifyDetailPage() {
   // here so the banner renders even after navigation back to this page (the
   // list refetch fills in the data otherwise). For self-clarify this stays
   // false and the legacy redirect-to-task-detail behavior is preserved.
-  const followup = useClarifyFollowup(nodeRunId, (originNodeRunId) =>
-    qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(originNodeRunId) }),
+  const followup = useClarifyFollowup(
+    nodeRunId,
+    (originNodeRunId) =>
+      qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.detail(originNodeRunId) }),
+    session.data?.followup,
   )
   const followupPending = followup.pending
   const startFollowup = async (target: string | readonly string[], instruction: string) => {
@@ -1099,6 +1105,8 @@ export function ClarifyDetailPage() {
             disabled={readonly || submitMut.isPending}
             roundStatus={s.status}
             followupPending={followupPending}
+            followupRunning={followup.running?.target}
+            followupFailure={followup.failure}
             onChange={updateAnswer}
             onFollowup={startFollowup}
             onCancelFollowup={cancelFollowup}

@@ -19,6 +19,11 @@ export interface MindmapNodeSummary {
   counts: MindmapStatusCounts
 }
 const emptyCounts = (): MindmapStatusCounts => ({ done: 0, needs_detail: 0, needs_confirmation: 0 })
+/** The node a follow-up target names: a question, a category, or the root. */
+export function mindmapTargetNodeId(target: string | readonly string[]): string {
+  if (typeof target === 'string') return `q:${target}`
+  return target.length ? `g:${JSON.stringify(target)}` : 'root'
+}
 /** Display-only projection: no separate answers, state transitions or persistence. */
 export function projectClarifyMindmap(
   questions: readonly ClarifyQuestion[],

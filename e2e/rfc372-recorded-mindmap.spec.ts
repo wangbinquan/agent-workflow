@@ -21,6 +21,8 @@ interface Round {
     title: string
     mindmap: { categoryPath: string[]; parentQuestionId?: string }
   }>
+  /** RFC-372 O8: the running follow-up, or its last failure. */
+  followup?: { state: 'running' | 'failed'; error?: { code: string } }
 }
 async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(`${daemon.baseUrl}${path}`, {
@@ -229,7 +231,11 @@ test('recorded real-model task: preset directions, deep hierarchy, rich reading,
   ).toBeVisible()
   await answer(page, 'self', 3)
   const invalid = await deepen(page, recording.hints.invalid)
-  expect((await invalid.response).status()).toBe(422)
+  // RFC-372 O8: accepted at once; the round reports the background failure.
+  expect((await invalid.response).status()).toBe(202)
+  await expect
+    .poll(async () => (await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)).followup)
+    .toMatchObject({ state: 'failed', error: { code: 'clarify-followup-invalid' } })
   await expect(page.getByRole('alert').last()).toContainText('missing mindmap category')
   expect((await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)).questions).toHaveLength(4)
   const retry = await deepen(page, recording.hints.retry)

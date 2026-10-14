@@ -187,6 +187,15 @@ export const TaskWsMessageSchema = z.discriminatedUnion('type', [
     }),
     ts: z.number().int(),
   }),
+  // RFC-372 O8 — synthetic frame when a round's follow-up starts or settles;
+  // viewers refetch the round, whose `followup` field carries the state.
+  z.object({
+    id: z.number().int(),
+    type: z.literal('clarify.followup.updated'),
+    nodeRunId: z.string(),
+    roundId: z.string(),
+    ts: z.number().int(),
+  }),
   // -------------------------------------------------------------------------
   // RFC-056 cross-clarify events. Parallel to clarify.created / clarify.answered
   // but for the cross-agent path (different node kind + multi-source aggregation

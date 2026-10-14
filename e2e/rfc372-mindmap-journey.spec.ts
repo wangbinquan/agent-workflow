@@ -27,6 +27,8 @@ interface Round {
   kind: 'self' | 'cross'
   status: string
   questions: Question[]
+  /** RFC-372 O8: the running follow-up, or its last failure. */
+  followup?: { state: 'running' | 'failed'; error?: { code: string } }
 }
 async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${daemon.baseUrl}${path}`, {
@@ -284,33 +286,51 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await answer(page, '预约数据采用哪种一致性？', ['事务强一致'])
 
   // Cancel a real running model subprocess, then recover from invalid model output.
+  // RFC-372 O8: requests are accepted at once (202); the round reports the outcome.
+  const followupState = async () =>
+    (await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)).followup
+  const accepted = () =>
+    page.waitForResponse(
+      (response) => response.request().method() === 'POST' && response.url().endsWith('/followup'),
+    )
   await page.getByRole('button', { name: 'Deepen this question', exact: true }).click()
   await detail(page).getByRole('textbox').last().fill('验证取消恢复')
+  const generating = accepted()
   await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
+  expect((await generating).status()).toBe(202)
   await expect
     .poll(() => runtimeEvents().some((event) => event.request?.userRequest === '验证取消恢复'), {
       timeout: 30_000,
     })
     .toBe(true)
+  expect((await followupState())?.state).toBe('running')
+  // A refresh keeps the generation: the round reports it, its branch and its cancel.
+  await page.reload()
+  await expect(page.locator('.mindmap-workspace__progress')).toContainText('Generating questions')
+  await page.getByRole('button', { name: 'View generating branch', exact: true }).click()
+  const generatingBranch = page.getByRole('dialog')
+  await expect(
+    generatingBranch.getByRole('heading', { name: '预约数据采用哪种一致性？', exact: true }),
+  ).toBeVisible()
   const canceled = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      response.url().endsWith('/followup') &&
-      response.status() === 409,
+    (response) => response.request().method() === 'DELETE' && response.url().includes('/followup/'),
   )
-  await page.getByRole('button', { name: 'Cancel follow-up', exact: true }).click()
-  expect((await (await canceled).json()).code).toBe('clarify-followup-canceled')
+  await generatingBranch.getByRole('button', { name: 'Cancel follow-up', exact: true }).click()
+  expect((await canceled).ok()).toBe(true)
+  await expect
+    .poll(async () => (await followupState())?.error?.code)
+    .toBe('clarify-followup-canceled')
+  await select(page, '预约数据采用哪种一致性？')
+  await page.getByRole('button', { name: 'Deepen this question', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Ask follow-up', exact: true })).toBeEnabled()
   expect((await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)).questions).toHaveLength(3)
   await detail(page).getByRole('textbox').last().fill('验证失败重试')
-  const failed = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      response.url().endsWith('/followup') &&
-      response.status() === 422,
-  )
+  const failing = accepted()
   await page.getByRole('button', { name: 'Ask follow-up', exact: true }).click()
-  expect((await (await failed).json()).code).toBe('clarify-followup-invalid')
+  expect((await failing).status()).toBe(202)
+  await expect
+    .poll(async () => (await followupState())?.error?.code, { timeout: 30_000 })
+    .toBe('clarify-followup-invalid')
   await expect(page.getByRole('alert').last()).toBeVisible()
   await followup(page, '深入并发预约与冲突恢复', '并发预约如何裁决？')
   let expanded = await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)

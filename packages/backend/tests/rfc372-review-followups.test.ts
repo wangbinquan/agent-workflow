@@ -298,27 +298,28 @@ describeEachProvider('RFC-372 review O4: canonical keys across property order', 
 })
 
 describe('RFC-372 review O3: one in-flight registry shared with the seal', () => {
+  const entry = (requestId: string, abort = new AbortController()) => ({
+    requestId,
+    requestKey: `key-${requestId}`,
+    target: 'a',
+    startedAt: 0,
+    abort,
+    generating: true,
+    accepted: Promise.resolve({ state: 'running' as const }),
+    result: Promise.resolve({ questionIds: [] }),
+  })
+
   test('a canceled generation stops blocking the seal but still occupies its round until settled', () => {
     const abort = new AbortController()
-    const release = clarifyFollowupActivity.begin('round-o3', {
-      requestId: 'r1',
-      requestKey: 'k1',
-      abort,
-      result: Promise.resolve({ questionIds: [] }),
-    })
+    const release = clarifyFollowupActivity.begin('round-o3', entry('r1', abort))
     try {
       expect(() => assertClarifyFollowupIdle('round-o3')).toThrow('follow-up is being generated')
       abort.abort()
       expect(() => assertClarifyFollowupIdle('round-o3')).not.toThrow()
       expect(clarifyFollowupActivity.current('round-o3')?.requestId).toBe('r1')
-      expect(() =>
-        clarifyFollowupActivity.begin('round-o3', {
-          requestId: 'r2',
-          requestKey: 'k2',
-          abort: new AbortController(),
-          result: Promise.resolve({ questionIds: [] }),
-        }),
-      ).toThrow('already being generated')
+      expect(() => clarifyFollowupActivity.begin('round-o3', entry('r2'))).toThrow(
+        'already being generated',
+      )
     } finally {
       release()
     }
@@ -326,19 +327,9 @@ describe('RFC-372 review O3: one in-flight registry shared with the seal', () =>
   })
 
   test('a stale release never removes a newer generation', () => {
-    const first = clarifyFollowupActivity.begin('round-o3-release', {
-      requestId: 'r1',
-      requestKey: 'k1',
-      abort: new AbortController(),
-      result: Promise.resolve({ questionIds: [] }),
-    })
+    const first = clarifyFollowupActivity.begin('round-o3-release', entry('r1'))
     first()
-    const second = clarifyFollowupActivity.begin('round-o3-release', {
-      requestId: 'r2',
-      requestKey: 'k2',
-      abort: new AbortController(),
-      result: Promise.resolve({ questionIds: [] }),
-    })
+    const second = clarifyFollowupActivity.begin('round-o3-release', entry('r2'))
     first()
     expect(clarifyFollowupActivity.current('round-o3-release')?.requestId).toBe('r2')
     second()

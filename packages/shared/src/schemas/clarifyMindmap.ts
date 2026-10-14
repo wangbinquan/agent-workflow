@@ -60,3 +60,19 @@ export const ClarifyFollowupSchema = z
   )
 export type ClarifyFollowup = z.infer<typeof ClarifyFollowupSchema>
 export type ClarifyFollowupTarget = string | readonly string[]
+/** RFC-372 O8: an accepted request generates in the background; a replayed one is done. */
+export const ClarifyFollowupStartSchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('running') }),
+  z.object({ state: z.literal('done'), questionIds: z.array(z.string()) }),
+])
+export type ClarifyFollowupStart = z.infer<typeof ClarifyFollowupStartSchema>
+/** RFC-372 O8: the round's running follow-up, or its last failure until another starts. */
+export const ClarifyFollowupStatusSchema = z.object({
+  requestId: z.string(),
+  state: z.enum(['running', 'failed']),
+  /** The selected question id, or the selected category path (empty = root). */
+  target: z.union([z.string(), z.array(z.string())]),
+  startedAt: z.number().int(),
+  error: z.object({ code: z.string(), message: z.string() }).optional(),
+})
+export type ClarifyFollowupStatus = z.infer<typeof ClarifyFollowupStatusSchema>

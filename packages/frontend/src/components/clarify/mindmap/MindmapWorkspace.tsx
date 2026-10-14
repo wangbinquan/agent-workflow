@@ -9,7 +9,11 @@ import {
 } from '@agent-workflow/shared'
 import { Dialog } from '@/components/Dialog'
 import { Segmented } from '@/components/Segmented'
-import { projectClarifyMindmap, visibleMindmapNodes } from '@/lib/clarify/mindmap/projection'
+import {
+  mindmapTargetNodeId,
+  projectClarifyMindmap,
+  visibleMindmapNodes,
+} from '@/lib/clarify/mindmap/projection'
 import { indexMindmapNavigation, mindmapAncestorPath } from '@/lib/clarify/mindmap/navigation'
 import type { MindmapCamera } from '@/lib/clarify/mindmap/geometry'
 import { MindmapCanvas } from './MindmapCanvas'
@@ -26,6 +30,10 @@ interface Props {
   disabled: boolean
   roundStatus?: string
   followupPending: boolean
+  /** RFC-372 O8: the target of the round's background generation, if any. */
+  followupRunning?: ClarifyFollowupTarget
+  /** RFC-372 O8: the round's last failed generation and its error. */
+  followupFailure?: { target: ClarifyFollowupTarget; error: unknown }
   onChange(questionId: string, answer: ClarifyAnswer): void
   onFollowup(target: ClarifyFollowupTarget, instruction: string): Promise<void>
   onCancelFollowup(): Promise<void>
@@ -72,6 +80,18 @@ export function MindmapWorkspace(props: Props) {
   )
   const ancestors = mindmapAncestorPath(selectedNode.id, navigation.byId)
   const pending = props.followupPending || pendingParent !== null
+  // A refreshed page or another member only knows the generation from the round.
+  const generating =
+    pendingParent ??
+    (props.followupRunning === undefined ? null : mindmapTargetNodeId(props.followupRunning))
+  const reported = props.followupFailure
+  const reportedFailure =
+    !pending && reported
+      ? { id: mindmapTargetNodeId(reported.target), error: reported.error }
+      : null
+  const failed = failedParent ?? reportedFailure?.id ?? null
+  const errorFor = (id: string) =>
+    errors[id] ?? (reportedFailure?.id === id ? reportedFailure.error : undefined)
   const pendingQuestions = nodes.filter((node) => node.questionId && node.ownStatus !== 'done')
   const paneVisible = view === 'focus' || panelOpen
   const target: ClarifyFollowupTarget =
@@ -147,7 +167,7 @@ export function MindmapWorkspace(props: Props) {
   }
   const cancelFollowup = () => {
     void props.onCancelFollowup().catch((error: unknown) => {
-      const id = pendingParent ?? selectedNode.id
+      const id = generating ?? selectedNode.id
       if (id) setErrors((previous) => ({ ...previous, [id]: error }))
     })
   }
@@ -189,12 +209,12 @@ export function MindmapWorkspace(props: Props) {
       }}
       onCancelFollowup={cancelFollowup}
       pending={pending}
-      pendingHere={pendingParent === selectedNode.id}
+      pendingHere={pending && generating === selectedNode.id}
       canAdvance={pendingQuestions.length > 0}
       collapsed={collapsed.has(selectedNode.id)}
       instruction={instructions[selectedNode.id] ?? ''}
       followupOpen={!selectedQuestion || followupOpen.has(selectedNode.id)}
-      error={errors[selectedNode.id]}
+      error={errorFor(selectedNode.id)}
       onSelect={select}
       onToggle={() => toggle(selectedNode.id)}
       onReturn={returnToMap}
@@ -282,11 +302,11 @@ export function MindmapWorkspace(props: Props) {
       <div className="mindmap-workspace__progress" role="status">
         <MindmapCounts counts={nodes[0]!.counts} />
         <span className="mindmap-workspace__progress-hint">{t(progressKey)}</span>
-        {pending && pendingParent && (
+        {pending && generating && (
           <button
             className="btn btn--sm btn--ghost"
             type="button"
-            onClick={() => select(pendingParent)}
+            onClick={() => select(generating)}
           >
             {t('mindmap.viewGenerating')}
           </button>
@@ -308,12 +328,8 @@ export function MindmapWorkspace(props: Props) {
             {t('mindmap.addedQuestions', { count: added.length })}
           </button>
         )}
-        {!pending && failedParent && failedParent !== selectedNode.id && (
-          <button
-            className="btn btn--sm btn--ghost"
-            type="button"
-            onClick={() => select(failedParent)}
-          >
+        {!pending && failed && failed !== selectedNode.id && (
+          <button className="btn btn--sm btn--ghost" type="button" onClick={() => select(failed)}>
             {t('mindmap.viewFailed')}
           </button>
         )}

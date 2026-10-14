@@ -120,7 +120,7 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
-      summary: 'Append classified follow-up questions to this open round',
+      summary: 'Start generating classified follow-up questions for this open round',
     },
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
@@ -137,13 +137,14 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
           'Follow-up generation is not configured.',
           503,
         )
-      return c.json(
-        await followup.append(nodeRunId, parsed.data, {
-          userId: actor.user.id,
-          displayName: actor.user.displayName,
-          role,
-        }),
-      )
+      // RFC-372 O8: accepted requests generate in the background (202); the
+      // round detail reports their progress. A replayed request is already done.
+      const started = await followup.start(nodeRunId, parsed.data, {
+        userId: actor.user.id,
+        displayName: actor.user.displayName,
+        role,
+      })
+      return c.json(started, started.state === 'running' ? 202 : 200)
     },
   )
   registerRoute(

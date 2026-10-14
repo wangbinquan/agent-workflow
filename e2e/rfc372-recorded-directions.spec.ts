@@ -168,13 +168,23 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
           await page.getByRole('button', { name: 'View generating branch' }).click()
           await expect(dialog(page).getByRole('button', { name: 'Cancel follow-up' })).toBeVisible()
           const result = await response
-          expect(result.ok()).toBe(true)
+          // RFC-372 O8: accepted at once; the questions land when generation settles.
+          expect(result.status()).toBe(202)
           const request = result.request().postDataJSON()
           if (stage.kind === 'deep') expect(request.parentQuestionId).toBeTruthy()
           else {
             expect(request.categoryPath).toEqual(stage.categoryPath)
             expect(request.parentQuestionId).toBeUndefined()
           }
+          await expect
+            .poll(
+              async () =>
+                (await api<Round>(`/api/clarify/${roundId}`)).questions.filter((q) =>
+                  q.id.startsWith(`fq-${request.requestId}-`),
+                ).length,
+              { timeout: 30_000 },
+            )
+            .toBe(stage.questionIds.length)
           const current = await api<Round>(`/api/clarify/${roundId}`)
           for (const id of stage.questionIds) {
             const recorded = recording.questions.find((q) => q.id === id)!

@@ -10,7 +10,7 @@
 // node fails with the standard retries path.
 
 import { z } from 'zod'
-import { ClarifyQuestionMindmapSchema } from './clarifyMindmap'
+import { ClarifyFollowupStatusSchema, ClarifyQuestionMindmapSchema } from './clarifyMindmap'
 import { TaskActorRoleSchema } from './resourceAcl'
 import {
   GateDecisionDeferredEntrySchema,
@@ -487,6 +487,9 @@ export const ClarifyRoundSchema = z.object({
    *  falls back to a generic sealed notice. NEVER inferred from the task's
    *  mutable current status (misattributes history after retry/resume). */
   sealedCause: z.string().optional(),
+  /** RFC-372 O8 — this process's running follow-up for the round, or its last
+   *  failure; absent when neither exists. */
+  followup: ClarifyFollowupStatusSchema.optional(),
 })
 export type ClarifyRound = z.infer<typeof ClarifyRoundSchema>
 
