@@ -1,5 +1,15 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 native 状态刷新回归与完整 CI 边界
+
+统计四处类型修复已由原负责会话发布为 `48edfbfed`，原生成配套为 `c47f1c855`；包含提交及并发审阅文档的远端 head 为 `f6fc5f9ef2d93d2fac32e25f19965ded61a0ac3e`。前述 JSON、Memory 恢复夹具的候选 hash 保持。此前 `e6fb19d07` 的主 CI 共有 67 success、3 failure、2 cancelled，原十个后端失败作业已经实际成功；余下的两条定时启动行级对等用例尚无确切责任归属，有限接手预览已交当前用户，未获新答复前不应用。
+
+同一已获授权的阶段 A 功能审阅者针对新增质疑作必要续核，确认 1 个 P2：同一登录会话成功取得 native 后，后台刷新失败时 Provider 无条件丢弃 Query 保留的 native 状态，使原本可用的执行入口被禁用。此前 PASS／0 findings 保留为历史，由本次 NEEDS_FIX／1 P2 修正。默认 native 的 owner 装配以及执行端口的方法数量本身未形成额外阶段 A 功能 finding；CS 的 cursor、消息、取消和原 attempt 恢复语义仍须由阶段 B 的实际适配证明，不能据此提前宣称满足。
+
+此次修复仅在当前 auth revision 的 Query 已有 native 结果时保留该结果，不增加未知状态的默认 native。首次未知、resource-only、selected 错误以及新的登录 revision 仍等待各自有效状态。生产修复及五个新增回归已全部写齐：真实 QueryClient 的 native 成功后后台失败，首次错误与显式重试，两种托管缓存的错误禁用与重试，新登录会话的 pending／error 和恢复。用实际消费 availability 的按钮及当前 guard 断言执行边界，保留资源草稿；没有用预制 context 替换 Query 生命周期。
+
+两份源码的限定 ESLint、Prettier 和 diff 检查通过，未运行本地功能套件。同一已获授权的功能审阅者必要续核确认该 P2 已关闭，PASS／0 新 findings；五个测试实例能识别原错误投影，阶段 A 源码实现门恢复为 PASS，不能代签其 GitHub 执行结果或 A-G。`f6fc5f9ef` 的默认完整 Windows run `38559524176`／job `115836972958` 实际终态为 cancelled：平台套件中途收到取消信号，后续 Memory、Shared、Typecheck 和二进制步骤均未运行；不按 watch 的非零退出码误记为断言 failure，也不记通过。主流水线 `38558760663` 尚待终态。A-G 未签，B/M0 未开始，AW 未部署 CS，没有跨独立 session 消息。
+
 ## 2026-10-14 Windows 原材料恢复夹具
 
 统计完整修复及 13 份配套已发布到 `4c3ec553f979c86d7c7457af347ba829b9cb0497`，本会话已发布的 JSON 源码及回归 hash 完整保留。该 SHA 的默认 Windows run `38532219916`、job `115746513961` 中，原平台套件取得 1677 pass／3 skip／0 fail；后续 Memory 步骤为 78 pass／2 fail，完整 workflow 仍为 failure。两例均在原结算写入前收到 `memory-distill-original-material-release-unproven`，不能用平台套件成功代签完整 Windows。

@@ -16,8 +16,12 @@ export const HostExecutionReadinessContext = createContext<HostExecutionStatus |
 
 export function HostExecutionProvider({ children }: { children: ReactNode }) {
   const query = useHostExecutionStatus()
+  // The query key includes the login revision. Once this session has confirmed
+  // native mode, a background status failure must not suspend local execution.
+  // Unknown and managed modes still require a successful availability response.
+  const view = query.isError && query.data?.mode !== 'native' ? undefined : query.data
   return (
-    <HostExecutionReadinessContext.Provider value={query.isError ? undefined : query.data}>
+    <HostExecutionReadinessContext.Provider value={view}>
       {children}
     </HostExecutionReadinessContext.Provider>
   )

@@ -1,3 +1,9 @@
+## 2026-10-14 RFC-370：native 后台状态刷新回归修复
+
+统计四处类型修复与必要配套已发布并包含于远端 `f6fc5f9ef`，本人 JSON／Memory 候选 hash 保持。同一已获授权的阶段 A 功能门续核确认 native 已成功后因状态刷新错误禁用执行入口的 P2，历史 PASS 经 NEEDS_FIX／1 P2 修正。生产修复和五条真实 QueryClient 生命周期回归已写齐；仅保留当前 auth revision 已确认的 native，首次未知、托管错误及新会话仍等待有效状态。限定 ESLint／Prettier／diff 检查通过；同一审阅者必要续核确认该 P2 关闭、PASS／0 新 findings，源码实现门恢复为 PASS；新确切 SHA GitHub 验证另验，未运行本地功能套件。
+
+`f6fc5f9ef` 默认完整 Windows `38559524176`／job `115836972958` 实为 cancelled：平台套件中途取消，后续 Memory／Shared／Typecheck 未执行，不能记 failure 断言或通过。主 CI `38558760663` 尚待终态；此前 e6fb 的十个后端失败作业已实际成功。两条尚不能归因的定时启动对等用例已提供有限接手预览，等待当前用户答复，不擅自认领。A-G 未签，B/M0 未启动，AW 未部署 CS，没有跨独立 session 消息。详见 [阶段 A 修复](design/RFC-370-crewstation-hosted-deployment/stage-a-ci-closeout.md)。以下历史与并发内容保持。
+
 ## 2026-10-14 RFC-370：Windows 原材料恢复夹具适配
 
 统计修复及完整配套已发布到 `4c3ec553f`，本会话先前 JSON 修复 hash 保持。默认 Windows `38532219916` 的原平台套件 1677 pass／3 skip／0 fail，后续 Memory 78 pass／2 fail，完整 workflow 仍失败。实际 diff 确认本会话 `b9b27bfd84` 的原恢复回归沿用了 POSIX 字符串路径夹具，在 Windows 上无法取得原材料释放回执。此次只改用平台 join，并增强原用例实际创建材料目录、验证未回收时保留及结算前移除；原生产／ACK／替换 job／重试预算和断言保持。代码及断言收齐后做限定静态检查，发布后验新确切 SHA 的主 CI／完整 Windows，不以本机结果代签。
