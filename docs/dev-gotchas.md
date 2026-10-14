@@ -528,6 +528,26 @@ expect(await repairOutcome).toMatchObject({ code: 'repair-preflight-stale' })
 ~0% 才是真的在等 I/O。要定位空转点，先把「本次改动」二分掉：`git checkout HEAD -- <那几个文件>`
 跑一遍、再 `cp` 回来，比盯着堆栈猜快得多。
 
+## 每次 daemon 启动都回放 PostgreSQL 迁移历史：新增 PG 迁移会抬高启动 CPU（2026-10-14 实测）
+
+即使跑的是 SQLite，启动在「extracted embedded migrations」与「config loaded」两行日志之间也会
+`loadPostgresqlMigrationHistory()`：读入全部 upgrade 步骤、逐版本重算合同 / plan 摘要并与日志里记录的
+摘要对账。成本随 PG 迁移条数增长（RFC-371 v1/v2、RFC-372 等陆续追加后本机约 1.9 秒）；托管 macOS
+e2e 分片 4 个 worker 各起 daemon 又各开浏览器，3 核机器严重超订，同一步被拉长到 **22.75 秒**，
+于是一批与改动无关的用例以 `timed out after 30s waiting for daemon ready line` 或恢复类用例的等待超时
+翻红（`6c576f8c8` macOS e2e 分片 2）。同一回放在迁移割接时还会再跑，曾把 postgresql-evidence 的事件循环
+停顿推到 2.2 秒。
+
+- 现状：运行时历史按进程缓存一次、回放在版本间让出事件循环，回放内按「对象 + 缩进」复用规范化片段
+  （本机首调约 1 秒）；`rfc349-postgresql-migration-history-load` 与 `rfc349-canonical-fragment-cache` 锁定。
+- 判据：看到 e2e「daemon ready」超时，先看日志里「extracted embedded migrations」到「config loaded」
+  的间隔，而不是先怀疑自己的用例；本机用 `bun --cpu-prof --cpu-prof-md` 跑一次
+  `loadPostgresqlMigrationHistory()` 即可看到热点。
+- 改规范化 JSON（`canonicalSchemaJson`）的任何实现都必须与原路径**逐字节**一致——摘要已写进迁移日志与
+  清单。两处容易漏：JS 对象总是先按数值升序枚举数组下标形式的键（`"2"`、`"10"`），排序后的键数组不等于
+  `Object.fromEntries` 重建对象后的枚举序；用 `keys.join(分隔符)` 当键集签名会让「单个空串键」与「空对象」
+  撞在一起。真实历史 + 随机数据比对是唯一靠得住的验证。
+
 ## `toMatchObject` 里嵌套 `expect.objectContaining` 会**清空**被比对的子对象（Bun 1.3.13 实撞，2026-10-14）
 
 `expect(value).toMatchObject({ usage: expect.objectContaining({ calls: 2 }) })` 断言能过，但执行完以后
