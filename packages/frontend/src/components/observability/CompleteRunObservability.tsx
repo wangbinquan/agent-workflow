@@ -162,26 +162,10 @@ export function CompleteRunObservability({
     pageRef = useRef<HTMLDivElement | null>(null)
   const [revision, setRevision] = useState(0)
   const [editingTimeRange, setEditingTimeRange] = useState(false)
-  const projectionVersion = useObservationProjectionVersion(!search.task)
-  const lastProjectionRevision = useRef<string | null>(null)
-  useEffect(() => {
-    if (!projectionVersion) return
-    const previous = lastProjectionRevision.current
-    lastProjectionRevision.current = projectionVersion.revision
-    if (
-      previous !== null &&
-      previous !== projectionVersion.revision &&
-      !editingTimeRange &&
-      !search.task &&
-      search.period !== 'custom' &&
-      projectionVersion.asOf >= search.to
-    )
-      onChange({
-        ...search,
-        ...observationPresetRange(search.period ?? 'week', projectionVersion.asOf + 1),
-        after: undefined,
-      })
-  }, [projectionVersion, search, onChange, editingTimeRange])
+  const projectionVersion = useObservationProjectionVersion(true)
+  const [reportProjectionRevision, setReportProjectionRevision] = useState<string | null>(
+    projectionVersion?.revision ?? null,
+  )
   const [timeDetails, setTimeDetails] = useState(false)
   const timeTrigger = useRef<HTMLElement | null>(null)
   const [taskRevisions, setTaskRevisions] = useState<ReadonlyMap<string, number>>(() => new Map())
@@ -239,6 +223,8 @@ export function CompleteRunObservability({
     revision,
     !search.task,
     liveDisplayScope,
+    reportProjectionRevision,
+    true,
   )
   // A contribution opens the full Task tree; returning keeps the parent selection in the URL.
   const task = useCompleteObservationReport(
@@ -246,10 +232,43 @@ export function CompleteRunObservability({
     search.task,
     taskRevision,
     !!search.task,
+    undefined,
+    reportProjectionRevision,
+    true,
   )
   const mainReport = whole.displayContent
   const current = search.task ? task : whole,
     report = current.displayContent
+  useEffect(() => {
+    if (
+      !projectionVersion ||
+      current.busy ||
+      reportProjectionRevision === projectionVersion.revision
+    )
+      return
+    // Finish the accepted in-flight read before taking the latest committed
+    // version. Intermediate notifications never cancel it or move its range.
+    setReportProjectionRevision(projectionVersion.revision)
+    if (
+      reportProjectionRevision !== null &&
+      !editingTimeRange &&
+      !search.task &&
+      search.period !== 'custom' &&
+      projectionVersion.asOf >= search.to
+    )
+      onChange({
+        ...search,
+        ...observationPresetRange(search.period ?? 'week', projectionVersion.asOf + 1),
+        after: undefined,
+      })
+  }, [
+    projectionVersion,
+    reportProjectionRevision,
+    current.busy,
+    search,
+    onChange,
+    editingTimeRange,
+  ])
   // An open contribution keeps its immutable snapshot during a background
   // publication. Its actual query/Task scope still gates visibility.
   const dimensionDisplayScope = JSON.stringify([liveDisplayScope, search.task ?? null])
@@ -520,11 +539,6 @@ export function CompleteRunObservability({
               time: new Date(report.header.asOf).toLocaleString(i18n.language),
             })}
           </p>
-          {current.refreshingPrevious && (
-            <NoticeBanner tone="info" size="compact">
-              {t('runObservability.refreshingPrevious')}
-            </NoticeBanner>
-          )}
           {!search.task && tab === 'overview' && <Summary report={report} />}
           {!search.task && tab === 'overview' && (
             <QualityCard

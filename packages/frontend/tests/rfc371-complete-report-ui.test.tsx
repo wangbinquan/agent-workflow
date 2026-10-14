@@ -141,14 +141,22 @@ function fixture(
     holdHostStatus?: boolean
   } = {},
 ) {
-  const requests: { path: string; method: string; after: string | null; report: string | null }[] =
-    []
+  const requests: {
+    path: string
+    method: string
+    after: string | null
+    report: string | null
+    section: string | null
+  }[] = []
   const reports = new Map<string, Ready>()
   const state = {
     missing: false,
     pageFailureReportId: null as string | null,
     holdAgentRevision: null as string | null,
     releaseAgentPage: null as (() => void) | null,
+    holdPage: null as { revision: string; section: string } | null,
+    releasePage: null as (() => void) | null,
+    invalidPageRevision: null as string | null,
     releaseHostStatus: null as (() => void) | null,
     holdHostStatus: options.holdHostStatus ?? false,
     building: options.building ?? false,
@@ -167,6 +175,7 @@ function fixture(
       method,
       after: url.searchParams.get('after'),
       report: url.pathname.split('/')[4] ?? null,
+      section: url.searchParams.get('section'),
     })
     if (url.pathname === '/api/execution/status' && method === 'GET') {
       if (!options.hostStatus) throw new Error('Unexpected host status request')
@@ -241,6 +250,13 @@ function fixture(
       )
     const section = url.searchParams.get('section')!,
       parent = url.searchParams.get('parent')
+    if (
+      state.holdPage?.revision === report.header.sourceRevision &&
+      state.holdPage.section === section
+    )
+      await new Promise<void>((resolve) => {
+        state.releasePage = resolve
+      })
     expect(url.searchParams.get('limit')).toBe('100')
     const total = report.counts[section as keyof typeof report.counts] ?? '0'
     let items: unknown[] = [],
@@ -266,7 +282,10 @@ function fixture(
     } else if (section === 'trends')
       items = [{ key: '2026-10-03', from: 0, to: NOW + 1, tasks: '1001', metrics }]
     const page: CompleteObservationReportPage<unknown> = {
-      reportId: report.header.reportId,
+      reportId:
+        state.invalidPageRevision === report.header.sourceRevision
+          ? 'incorrect-replacement-report'
+          : report.header.reportId,
       section: section as CompleteObservationReportPage<unknown>['section'],
       parent,
       items,
@@ -398,7 +417,7 @@ test('automatic cutoff advancement retains exact four buckets, CNY and the old a
       i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
     ),
   ).toBeTruthy()
-  expect(screen.getByText(i18n.t('runObservability.refreshingPrevious'))).toBeTruthy()
+  expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
   f.state.holdReport = false
   f.state.releaseReport!()
   await screen.findByText(
@@ -691,8 +710,9 @@ test('a Task opens its whole tree and returning preserves the exact parent dimen
   expect(whole[0]?.header.filters.selection).toBe(selection)
 })
 
-// Continuous committed updates can cancel a pending read without invalidating the displayed, accepted version.
-test('a superseded automatic read cannot clear the previous four buckets, CNY or asOf', async () => {
+// Continuous committed updates wait for one actual read, then consume the latest
+// version. They cannot cancel that read or insert a moving status row.
+test('committed versions coalesce behind the pending read without moving its range or accepted totals', async () => {
   const f = fixture({ ...initial, period: 'week', tab: 'overview' })
   await screen.findByRole('heading', { name: '完整 Token 消耗' })
   f.state.projection = { revision: '1', asOf: NOW }
@@ -709,8 +729,9 @@ test('a superseded automatic read cannot clear the previous four buckets, CNY or
   await waitFor(() => expect(f.reports.size).toBe(3))
   f.state.projection = { revision: '3', asOf: NOW + 7200000 }
   await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
-  await waitFor(() => expect(f.state.abortedReports).toBeGreaterThan(0))
-  await waitFor(() => expect(f.reports.size).toBe(4))
+  expect(f.state.abortedReports).toBe(0)
+  expect(f.reports.size).toBe(3)
+  expect(f.changes.at(-1)?.to).toBe(NOW + 3600001)
   const summary = screen.getByRole('heading', { name: '完整 Token 消耗' }).closest('.card')!
   for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const)
     expect(summary.querySelector('[data-token-bucket="' + bucket + '"] dd')?.textContent).toBe(
@@ -724,12 +745,143 @@ test('a superseded automatic read cannot clear the previous four buckets, CNY or
       i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
     ),
   ).toBeTruthy()
-  expect(screen.getByText(i18n.t('runObservability.refreshingPrevious'))).toBeTruthy()
+  expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
   f.state.holdReport = false
   f.state.releaseReport!()
   await screen.findByText(
     i18n.t('runObservability.completeAsOf', { time: new Date(NOW + 7200000).toLocaleString('zh') }),
   )
+  expect(f.state.abortedReports).toBe(0)
+  expect(f.reports.size).toBe(4)
+})
+
+test('a burst of background versions preserves the same summary node and fetches only the latest queued version', async () => {
+  const f = fixture({ ...initial, period: 'week', tab: 'overview' })
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
+  f.state.projection = { revision: '1', asOf: NOW }
+  await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+  await waitFor(() => expect(f.reports.size).toBe(2))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: '刷新' }).hasAttribute('disabled')).toBe(false),
+  )
+  const summary = screen.getByRole('heading', { name: '完整 Token 消耗' }).closest('.card')!
+  f.state.holdReport = true
+  f.state.projection = { revision: '2', asOf: NOW + 3600000 }
+  await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+  await waitFor(() => expect(f.state.releaseReport).not.toBeNull())
+  const changes = f.changes.length
+  for (const revision of ['3', '4', '5']) {
+    f.state.projection = { revision, asOf: NOW + Number(revision) * 3600000 }
+    await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+    expect(f.state.abortedReports).toBe(0)
+    expect(f.reports.size).toBe(3)
+    expect(f.changes).toHaveLength(changes)
+    expect(screen.getByRole('heading', { name: '完整 Token 消耗' }).closest('.card')).toBe(summary)
+    expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
+  }
+  f.state.holdReport = false
+  f.state.releaseReport!()
+  await screen.findByText(
+    i18n.t('runObservability.completeAsOf', {
+      time: new Date(NOW + 5 * 3600000).toLocaleString('zh'),
+    }),
+  )
+  expect(f.reports.size).toBe(4)
+  expect(
+    [...f.reports.values()].some((row) => ['3', '4'].includes(row.header.sourceRevision)),
+  ).toBe(false)
+  expect(f.state.abortedReports).toBe(0)
+  expect(screen.getByRole('heading', { name: '完整 Token 消耗' }).closest('.card')).toBe(summary)
+})
+
+test('an explicit period change still cancels its previous pending scope and accepts the selected range', async () => {
+  const f = fixture({ ...initial, period: 'week', tab: 'overview' })
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
+  f.state.holdReport = true
+  f.state.projection = { revision: 'changed-period', asOf: NOW + 3600000 }
+  await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+  await waitFor(() => expect(f.state.releaseReport).not.toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.month') }))
+  await waitFor(() => expect(f.state.abortedReports).toBeGreaterThan(0))
+  await waitFor(() =>
+    expect(
+      [...f.reports.values()].some((row) => row.header.filters.from === initial.to - 30 * 86400000),
+    ).toBe(true),
+  )
+  f.state.holdReport = false
+  f.state.releaseReport!()
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
+  expect(f.changes.at(-1)?.period).toBe('month')
+  expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
+})
+
+// A replacement summary arriving before its child pages used to unmount the
+// chart/table for a spinner. The accepted snapshot must switch as one view.
+test.each([
+  ['overview', 'trends', '[data-observation-trend]'],
+  ['tasks', 'tasks', '[data-observation-task="task-0"]'],
+  ['agents', 'agents', '[data-observation-dimension="original-agent"]'],
+] as const)(
+  'a delayed %s page refresh retains its visible DOM until the replacement page is verified',
+  async (tab, section, selector) => {
+    const f = fixture({ ...initial, period: 'week', tab })
+    await waitFor(() => expect(document.querySelector(selector)).not.toBeNull())
+    await waitFor(() => expect(screen.queryAllByTestId('loading-state')).toHaveLength(0))
+    const content = document.querySelector(selector)
+    const panel = screen.getByRole('tabpanel')
+    const previousAsOf = i18n.t('runObservability.completeAsOf', {
+      time: new Date(NOW).toLocaleString('zh'),
+    })
+    const replacements: boolean[] = []
+    const observer = new MutationObserver(() => {
+      replacements.push(
+        document.querySelector(selector) === null ||
+          document.querySelector('[data-testid="loading-state"]') !== null,
+      )
+    })
+    observer.observe(panel, { subtree: true, childList: true })
+    try {
+      f.state.holdPage = { revision: 'delayed-page', section }
+      f.state.projection = { revision: 'delayed-page', asOf: NOW + 3600000 }
+      await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+      await waitFor(() => expect(f.state.releasePage).not.toBeNull())
+      if (tab === 'agents') {
+        const replacement = [...f.reports.values()].at(-1)!.header.reportId
+        expect(
+          f.requests.some((row) => row.report === replacement && row.section === 'tasks'),
+        ).toBe(false)
+        expect(
+          f.requests.some((row) => row.report === replacement && row.section === 'trends'),
+        ).toBe(false)
+      }
+      expect(document.querySelector(selector)).toBe(content)
+      expect(screen.getByText(previousAsOf)).toBeTruthy()
+      expect(screen.queryAllByTestId('loading-state')).toHaveLength(0)
+      f.state.holdPage = null
+      f.state.releasePage!()
+      await screen.findByText(
+        i18n.t('runObservability.completeAsOf', {
+          time: new Date(NOW + 3600000).toLocaleString('zh'),
+        }),
+      )
+      expect(document.querySelector(selector)).toBe(content)
+      expect(replacements).not.toContain(true)
+      expect(f.state.abortedReports).toBe(0)
+    } finally {
+      observer.disconnect()
+    }
+  },
+)
+
+test('a replacement page with a different sealed identity cannot publish new totals or retain unverified values', async () => {
+  const f = fixture({ ...initial, period: 'week', tab: 'overview' })
+  await waitFor(() => expect(document.querySelector('[data-observation-trend]')).not.toBeNull())
+  f.state.invalidPageRevision = 'invalid-page'
+  f.state.projection = { revision: 'invalid-page', asOf: NOW + 3600000 }
+  await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+  await screen.findByText('Complete retained page identity or count changed')
+  expect(screen.queryByRole('heading', { name: '完整 Token 消耗' })).toBeNull()
+  expect(document.querySelector('[data-observation-trend]')).toBeNull()
 })
 
 // RFC-371: a background cutoff must not truncate untouched milliseconds while
@@ -887,17 +1039,13 @@ test.each([
       ).not.toBeNull(),
     )
     const oldTrigger = document.querySelector('[data-observation-dimension="original-agent"]')
-    if (phase === 'agent-page') expect(oldTrigger).toBeNull()
-    else expect(oldTrigger).not.toBeNull()
+    expect(oldTrigger).not.toBeNull()
     expect(screen.getByRole('dialog')).toBe(dialog)
     expect(dialog.textContent).toContain(snapshot)
     expect(within(dialog).getByRole('button', { name: '子任务' })).toBeTruthy()
     fireEvent.click(within(dialog).getAllByRole('button', { name: '关闭' }).at(-1)!)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    const page = document.querySelector('[data-complete-observation]') as HTMLElement
-    await waitFor(() =>
-      expect(document.activeElement).toBe(phase === 'agent-page' ? page : oldTrigger),
-    )
+    await waitFor(() => expect(document.activeElement).toBe(oldTrigger))
     const back = screen.getByRole('button', { name: '← 返回统计分析' })
     if (mode === 'user-input') {
       fireEvent.keyDown(window, { key: 'Tab' })

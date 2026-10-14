@@ -58,17 +58,55 @@ function checkedReportContent(
     throw new Error('Complete report was invalidated')
   return content
 }
+async function readCompleteObservationPage<T>(
+  report: ReadableObservationReport,
+  section: CompleteObservationSection,
+  parent: string | null,
+  after: string | null,
+  signal: AbortSignal,
+  expectedTotal?: string,
+) {
+  const page = await api.get<CompleteObservationReportPage<T>>(
+    '/api/observability/reports/' + encodeURIComponent(report.header.reportId) + '/pages',
+    {
+      section,
+      limit: 100,
+      ...(parent === null ? {} : { parent }),
+      ...(after === null ? {} : { after }),
+    },
+    signal,
+  )
+  if (
+    page.reportId !== report.header.reportId ||
+    page.section !== section ||
+    page.parent !== parent ||
+    (expectedTotal !== undefined && page.total !== expectedTotal) ||
+    (parent === null && page.total !== (report.counts[section] ?? '0')) ||
+    (page.nextCursor !== null && (page.nextCursor === after || page.items.length === 0))
+  )
+    throw new Error('Complete retained page identity or count changed')
+  return page
+}
 export function useCompleteObservationReport(
   filters: ObservationOverviewQuery,
   taskId: string | undefined,
   revision: number,
   enabled: boolean,
   liveDisplayScope?: string,
+  admittedProjectionRevision?: string | null,
+  prepareVisiblePages = false,
 ) {
+  // The formal page admits one shared version after its current read. Other
+  // hook consumers retain their own version subscription and invalidation.
+  const ownProjection = useObservationProjectionVersion(
+    enabled && admittedProjectionRevision === undefined,
+  )
+  const projectionRevision =
+    admittedProjectionRevision === undefined
+      ? (ownProjection?.revision ?? null)
+      : admittedProjectionRevision
   const execution = useHostExecutionAvailability('observation')
   const client = useQueryClient()
-  const projection = useObservationProjectionVersion(enabled)
-  const projectionRevision = projection?.revision ?? null
   const scope = JSON.stringify([
     'scope-metrics/14',
     filters,
@@ -96,6 +134,7 @@ export function useCompleteObservationReport(
   const [previous, setPrevious] = useState<{
     scope: string
     content: ReadableObservationReport
+    requestRevision: number
   } | null>(null)
   const displayScope = JSON.stringify([
     'scope-metrics/14',
@@ -137,7 +176,7 @@ export function useCompleteObservationReport(
               const content = checkedReportContent(restored, filters, taskId, restoredId)
               if (!content) throw new Error('Completed report content is missing')
               client.setQueryData(displayValidityKey(restoredId), true)
-              setPrevious({ scope: displayScope, content })
+              setPrevious({ scope: displayScope, content, requestRevision: revision })
               retainedIds.current.set(scope, restoredId)
               rememberObservationDefaultRange(content, bookmark.current)
               return restored
@@ -183,7 +222,10 @@ export function useCompleteObservationReport(
         const reportId = report.state === 'ready' ? report.header.reportId : report.reportId
         retainedIds.current.set(scope, reportId)
         if (report.state === 'building') pendingIds.current.set(pendingScope, reportId)
-        else pendingIds.current.delete(pendingScope)
+        // A bootstrap read can finish before the first version notification.
+        // Keep that original handle until its first committed version is
+        // admitted; completing this read must not create a second report.
+        else if (projectionRevision !== null) pendingIds.current.delete(pendingScope)
         if (content) {
           bookmark.remember(reportId)
           rememberObservationDefaultRange(content, bookmark.current)
@@ -192,9 +234,52 @@ export function useCompleteObservationReport(
           if (restoredId) discardObservationReportBookmark(restoredId)
           // A replacement may be unready while the accepted immutable report
           // remains valid. Retire only the report actually rejected by this response.
-          if (previous?.scope === displayScope && previous.content.header.reportId === reportId)
+          if (
+            previous?.scope === displayScope &&
+            (previous.content.header.reportId === reportId || previous.requestRevision !== revision)
+          )
             discardObservationReportBookmark(previous.content.header.reportId)
           discardObservationReportBookmark(reportId)
+        }
+        if (
+          content &&
+          prepareVisiblePages &&
+          previous?.scope === displayScope &&
+          previous.content.header.reportId !== reportId
+        ) {
+          // Prepare only the mounted view's next first pages. Each page is
+          // checked against the replacement seal before any new totals appear.
+          // Pinned contribution dialogs keep their own immutable report.
+          const visible = client.getQueryCache().findAll({
+            predicate: (entry) => {
+              const [kind, id, section, parent] = entry.queryKey
+              return (
+                kind === 'run-observability-complete-page' &&
+                id === previous.content.header.reportId &&
+                entry.isActive() &&
+                (parent === null || parent === JSON.stringify(['task-tree', taskId])) &&
+                (content.summary.metrics.state !== 'not-ready' ||
+                  COMPLETE_OBSERVATION_FACT_SECTIONS.includes(
+                    section as CompleteObservationSection,
+                  ))
+              )
+            },
+          })
+          await Promise.all(
+            visible.map((entry) => {
+              const section = entry.queryKey[2] as CompleteObservationSection
+              const parent = entry.queryKey[3] as string | null
+              return client.fetchQuery({
+                queryKey: ['run-observability-complete-page', reportId, section, parent, null],
+                queryFn: () => readCompleteObservationPage(content, section, parent, null, signal),
+                // An explicit scope change can leave a prepared page unmounted.
+                // Its short inactive lifetime never accumulates report history.
+                gcTime: 60_000,
+                staleTime: Infinity,
+              })
+            }),
+          )
+          assertCurrent()
         }
         return report
       } catch (error) {
@@ -233,7 +318,8 @@ export function useCompleteObservationReport(
       query.error ||
       ((query.data?.state === 'failed' ||
         (query.data?.state === 'not-ready' && !query.data.facts)) &&
-        query.data.reportId === previous?.content.header.reportId)
+        (query.data.reportId === previous?.content.header.reportId ||
+          previous?.requestRevision !== revision))
     ) {
       if (previous?.scope === displayScope)
         discardObservationReportBookmark(previous.content.header.reportId)
@@ -242,9 +328,9 @@ export function useCompleteObservationReport(
       // Only a successful original scope-checked response can qualify the snapshot again.
       client.setQueryData(displayValidityKey(content.header.reportId), true)
       setPrevious((old) =>
-        old?.scope === displayScope && old.content === content
+        old?.scope === displayScope && old.content === content && old.requestRevision === revision
           ? old
-          : { scope: displayScope, content },
+          : { scope: displayScope, content, requestRevision: revision },
       )
     } else {
       setPrevious((old) => (old?.scope === displayScope ? old : null))
@@ -258,13 +344,14 @@ export function useCompleteObservationReport(
     query.error,
     query.isFetching,
     previous,
+    revision,
   ])
   const busy =
     query.isPending || query.isFetching || (!query.error && query.data?.state === 'building')
   const rejectedRetained =
     !!retained &&
     (query.data?.state === 'failed' || (query.data?.state === 'not-ready' && !query.data.facts)) &&
-    query.data.reportId === retained.header.reportId
+    (query.data.reportId === retained.header.reportId || previous?.requestRevision !== revision)
   const displayContent =
     !query.error && !rejectedRetained && validity.data !== false ? candidate : null
   return {
@@ -308,26 +395,14 @@ export function useCompleteObservationPage<T>(
     queryFn: async ({ signal }) => {
       if (!report) throw new Error('Complete report not ready')
       try {
-        const page = await api.get<CompleteObservationReportPage<T>>(
-          '/api/observability/reports/' + encodeURIComponent(report.header.reportId) + '/pages',
-          {
-            section,
-            limit: 100,
-            ...(parent === null ? {} : { parent }),
-            ...(after === null ? {} : { after }),
-          },
+        return await readCompleteObservationPage<T>(
+          report,
+          section,
+          parent,
+          after,
           signal,
+          expectedTotal,
         )
-        if (
-          page.reportId !== report.header.reportId ||
-          page.section !== section ||
-          page.parent !== parent ||
-          (expectedTotal !== undefined && page.total !== expectedTotal) ||
-          (parent === null && page.total !== (report.counts[section] ?? '0')) ||
-          (page.nextCursor !== null && (page.nextCursor === after || page.items.length === 0))
-        )
-          throw new Error('Complete retained page identity or count changed')
-        return page
       } catch (error) {
         if (!signal.aborted) {
           discardObservationReportBookmark(report.header.reportId)

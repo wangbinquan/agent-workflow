@@ -664,7 +664,7 @@ test('formal refresh retains the dated four buckets, CNY and bars and blocks dup
   ).textContent
   fireEvent.click(screen.getByRole('button', { name: '刷新' }))
   await waitFor(() => expect(f.reports).toHaveLength(2))
-  await screen.findByText(i18n.t('runObservability.refreshingPrevious'))
+  expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
   expect(values()).toEqual(['12', '34', '0', '56'])
   expect(costs.getByText('¥0.102')).toBeTruthy()
   expect(screen.getByText(originalTime!)).toBeTruthy()
@@ -1139,7 +1139,7 @@ test.each(['ready', 'incomplete'] as const)(
 
     fireEvent.click(screen.getByRole('button', { name: '刷新' }))
     await waitFor(() => expect(f.reports).toHaveLength(2))
-    await screen.findByText(i18n.t('runObservability.refreshingPrevious'))
+    expect(screen.queryByText(i18n.t('runObservability.refreshingPrevious'))).toBeNull()
     expect(screen.getByText(originalTime)).toBeTruthy()
     const refresh = screen.getByRole('button', { name: '刷新' }) as HTMLButtonElement
     expect(refresh.disabled).toBe(true)
