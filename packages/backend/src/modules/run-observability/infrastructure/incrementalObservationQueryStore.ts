@@ -1,3 +1,4 @@
+import { originalHistoricalDiagnostic } from '../domain/originalHistoricalDiagnostic'
 import { observationScopeRefs } from '@/db/observationStorage'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { jsonPathArray } from '@/platform/persistence/jsonPathArray'
@@ -296,7 +297,11 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
           .run()
       })
     },
-    async *countGroups(scope: string, version: IncrementalObservationVersion) {
+    async *countGroups(
+      scope: string,
+      version: IncrementalObservationVersion,
+      diagnostic?: { readonly section: string; readonly parent: string | null },
+    ) {
       await qualify(version)
       let after: string | undefined
       for (;;) {
@@ -320,7 +325,11 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
                 observationProjectionHistory.toRevision,
                 version.revision,
               ),
-              scopeCondition(scope),
+              diagnostic && originalHistoricalDiagnostic(diagnostic.section, diagnostic.parent)
+                ? diagnostic.parent === null
+                  ? isNull(observationProjectionHistory.parent)
+                  : eq(observationProjectionHistory.parent, diagnostic.parent)
+                : scopeCondition(scope),
               after ? gt(observationProjectionHistory.key, after) : undefined,
             ),
           )
@@ -372,7 +381,9 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
                 observationProjectionHistory.toRevision,
                 input.version.revision,
               ),
-              scopeCondition(input.scope),
+              originalHistoricalDiagnostic(input.section, input.parent)
+                ? undefined
+                : scopeCondition(input.scope),
               input.after ? gt(observationProjectionHistory.key, input.after) : undefined,
             ),
           )
@@ -485,6 +496,10 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
     }) {
       await qualify(input.version)
       const scopes = jsonPathArray(db, observationProjectionHistory.document, ['detail', 'scopes'])
+      const historicalRecordScopes = jsonPathArray(db, observationProjectionHistory.document, [
+        'detail',
+        'historicalRecordScopes',
+      ])
       const visibility = jsonPathArray(db, observationProjectionHistory.document, [
         'detail',
         'visibility',
@@ -500,6 +515,7 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
             taskId: observationProjectionHistory.taskId,
             cohortAt: observationProjectionHistory.cohortAt,
             scopes,
+            historicalRecordScopes,
             visibility,
           })
           .from(observationProjectionHistory)
@@ -546,6 +562,13 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
                   ? {
                       scopes: JSON.parse(row.scopes) as NonNullable<
                         QualifiedObservationContribution['detail']['scopes']
+                      >,
+                    }
+                  : {}),
+                ...(row.historicalRecordScopes
+                  ? {
+                      historicalRecordScopes: JSON.parse(row.historicalRecordScopes) as NonNullable<
+                        QualifiedObservationContribution['detail']['historicalRecordScopes']
                       >,
                     }
                   : {}),
@@ -880,6 +903,7 @@ export function createIncrementalObservationQueryStore(db: ProviderNeutralDataba
                   document: completeWindowCell(cell, fold),
                   visibility: cell.original.visibility,
                   scopes: cell.original.scopes,
+                  historicalRecordScopes: cell.original.historicalRecordScopes,
                   nativeRecord: cell.original.nativeRecord,
                 },
               }

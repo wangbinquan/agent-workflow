@@ -22,6 +22,7 @@ interface QualifiedObservationContribution {
     nativeRecord?: boolean
     visibility?: readonly { taskId: string | null; ownerUserId: string | null }[]
     scopes?: readonly HistoricalObservationExecution[]
+    historicalRecordScopes?: readonly string[]
     bindings?: readonly { kind: string; identity: string }[]
     selectors?: {
       workflowId: string | null
@@ -39,7 +40,11 @@ import type { CompleteObservationTimePartition } from '@agent-workflow/shared'
 // The superseded checkpoint is retained for diagnosis, not counted as a
 // current required channel. Its pending work still needs a real durable ACK.
 export const legacyQualifiedObservationIndexChannel = 'indexed-details-v1'
-export const qualifiedObservationIndexChannel = 'indexed-details-v2'
+export const legacyQualifiedObservationIndexChannels = [
+  legacyQualifiedObservationIndexChannel,
+  'indexed-details-v2',
+] as const
+export const qualifiedObservationIndexChannel = 'indexed-details-v3'
 export const qualifiedObservationIndexVersion = (revision: string) =>
   qualifiedObservationIndexChannel + '/' + revision
 type ProjectionOccurrence = CompleteObservationTimePartition & {
@@ -65,6 +70,7 @@ export function qualifiedObservationIndexes(
       cohortAt: detail.cohortAt,
       visibility: detail.visibility,
       scopes: detail.scopes,
+      historicalRecordScopes: detail.historicalRecordScopes,
       nativeRecord: detail.nativeRecord,
       document: {
         invocationId:

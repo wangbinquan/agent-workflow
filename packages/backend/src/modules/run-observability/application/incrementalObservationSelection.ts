@@ -38,6 +38,8 @@ export function incrementalObservationSelection(input: {
   readonly calls: readonly CompleteObservationInvocation[]
   readonly atoms: readonly QualifiedObservationContribution[]
   readonly historical: readonly CompleteHistoricalObservationExecution[]
+  /** Original physical candidate sets already applied all requested predicates. */
+  readonly historicalScopeQualified?: boolean
 }) {
   const selected = { ...input.selection, model: undefined },
     callById = new Map(input.calls.map((call) => [call.invocationId, call]))
@@ -49,18 +51,20 @@ export function incrementalObservationSelection(input: {
       const e = row.execution
       return [
         e.referenceId,
-        compare(selected, {
-          agent: { id: e.agentId, revision: e.agentRevision },
-          purpose: e.purpose,
-          source: { authority: 'local', sourceId: null },
-          runtime: {
-            authority: 'local',
-            sourceId: null,
-            registrationId: e.runtime?.registrationId ?? null,
-            configurationRevision: e.runtime?.configurationRevision ?? null,
-            protocol: e.runtime?.protocol ?? null,
-          },
-        }),
+        input.historicalScopeQualified
+          ? row.scopeMatch
+          : compare(selected, {
+              agent: { id: e.agentId, revision: e.agentRevision },
+              purpose: e.purpose,
+              source: { authority: 'local', sourceId: null },
+              runtime: {
+                authority: 'local',
+                sourceId: null,
+                registrationId: e.runtime?.registrationId ?? null,
+                configurationRevision: e.runtime?.configurationRevision ?? null,
+                protocol: e.runtime?.protocol ?? null,
+              },
+            }),
       ] as const
     }),
   )
@@ -86,7 +90,8 @@ export function incrementalObservationSelection(input: {
       (identities.includes('matched') && identities.includes('excluded')) ||
       model === 'unresolved'
     const fold = { ...atom.fold, gaps: [...atom.fold.gaps] }
-    if (unresolved) completeObservationGap(fold, 'dimension-unresolved')
+    if (unresolved && !(input.historicalScopeQualified && atom.detail.nativeRecord))
+      completeObservationGap(fold, 'dimension-unresolved')
     atoms.push({
       ...atom,
       fold,
@@ -137,6 +142,7 @@ export function incrementalObservationSelection(input: {
           row.metrics.state === 'not-ready'),
     )
     .map((row) => {
+      if (input.historicalScopeQualified) return row
       if (historyMatches.get(row.execution.referenceId) !== 'unresolved') return row
       const fold = completeMetricsFold(row.metrics)
       completeObservationGap(fold, 'dimension-unresolved')

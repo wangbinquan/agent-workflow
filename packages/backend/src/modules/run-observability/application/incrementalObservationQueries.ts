@@ -1,3 +1,4 @@
+import { originalHistoricalDiagnostic } from '../domain/originalHistoricalDiagnostic'
 import type {
   CompleteHistoricalObservationExecution,
   CompleteObservationInvocation,
@@ -25,7 +26,10 @@ import type {
   IncrementalObservationQuerySource,
   ObservationProjectionView,
 } from '../ports/incrementalObservationQueries'
-import type { QualifiedObservationContribution } from '../ports/incrementalObservationQualified'
+import type {
+  QualifiedObservationContribution,
+  HistoricalRecordScopeGroup,
+} from '../ports/incrementalObservationQualified'
 import type { CompleteObservationReportQueries } from '../public/queries'
 import { incrementalObservationWindow } from './incrementalObservationWindow'
 import { incrementalObservationDimensions } from './incrementalObservationDimensions'
@@ -52,6 +56,7 @@ export function incrementalObservationQueries(input: {
   let latestMetadata: { revision: string; rows: QualifiedObservationContribution[] } | undefined
   let metadataLoading: Promise<void> = Promise.resolve()
   const builds = new Map<string, Promise<Awaited<ReturnType<typeof build>>>>()
+  const scopeGroupCache = new Map<string, Promise<Map<string, HistoricalRecordScopeGroup>>>()
   const detailCache = new Map<string, Promise<QualifiedObservationContribution[]>>()
   const countCache = new Map<string, Promise<Partial<Record<CompleteObservationSection, string>>>>()
   function memo<T>(cache: Map<string, Promise<T>>, key: string, create: () => Promise<T>) {
@@ -71,6 +76,7 @@ export function incrementalObservationQueries(input: {
     actor: Actor,
     row: QualifiedObservationContribution,
     ids: ReadonlySet<string>,
+    groupVisibility?: ReadonlyMap<string, boolean>,
   ) {
     if (actor.permissions.has('tasks:read:all')) return true
     const detail = row.detail.document as {
@@ -80,6 +86,8 @@ export function incrementalObservationQueries(input: {
       }[]
     } | null
     const visibility = row.detail.visibility ?? detail?.visibility
+    if (visibility === undefined && row.detail.historicalRecordScopes?.length && groupVisibility)
+      return row.detail.historicalRecordScopes.every((key) => groupVisibility.get(key) === true)
     return (
       visibility !== undefined &&
       visibility.length > 0 &&
@@ -153,6 +161,29 @@ export function incrementalObservationQueries(input: {
     visibilityIds: Set<string>,
     retainedViewId: string,
   ) {
+    const scopeGroups = await memo(scopeGroupCache, view.version.revision, async () => {
+      const groups = new Map<string, HistoricalRecordScopeGroup>()
+      for await (const row of input.source.details({
+        version: view.version,
+        section: 'cohort-fold',
+        parent: 'native-scope-groups',
+      }))
+        groups.set(row.detail.key, row.detail.document as HistoricalRecordScopeGroup)
+      return groups
+    })
+    const scopeMatches: NonNullable<
+        Parameters<typeof incrementalObservationHistoricalScope>[1]['scopeMatches']
+      > = new Map(),
+      groupVisibility = new Map(
+        [...scopeGroups].map(([key, group]) => [
+          key,
+          group.scopes.every((execution) =>
+            execution.parentTaskId !== null
+              ? visibilityIds.has(execution.parentTaskId)
+              : execution.ownerUserId === actor.user.id,
+          ),
+        ]),
+      )
     const entries: QualifiedObservationContribution[] = []
     let tasks: CompleteObservationTask[] = []
     const aggregates = await input.source.aggregates(
@@ -201,18 +232,21 @@ export function incrementalObservationQueries(input: {
       })) {
         if (
           (row.detail.taskId !== null && ids.has(row.detail.taskId)) ||
-          !allowedStandalone(actor, row, visibilityIds)
+          !allowedStandalone(actor, row, visibilityIds, groupVisibility)
         )
           continue
         const scoped = incrementalObservationHistoricalScope(row, {
           query: view.query,
           ids,
           originals: population.originals,
+          scopeGroups,
+          scopeMatches,
         })
         if (
           scoped &&
           (view.query.cohort === 'usage' ||
             scoped.detail.scopes?.length ||
+            scoped.detail.historicalRecordScopes?.length ||
             scoped.detail.cohortAt === null ||
             (scoped.detail.cohortAt >= view.query.from && scoped.detail.cohortAt < view.query.to))
         ) {
@@ -256,12 +290,19 @@ export function incrementalObservationQueries(input: {
       windowAtoms: QualifiedObservationContribution[] = [],
       windowCaptureCount = 0n
     const selection = parseObservationSelection(view.query.selection)
-    if ((view.query.cohort === 'usage' || selection !== null) && view.taskId === undefined) {
+    if (
+      (view.query.cohort === 'usage' ||
+        selection !== null ||
+        entries.some(
+          (row) => row.detail.scopes?.length || row.detail.historicalRecordScopes?.length,
+        )) &&
+      view.taskId === undefined
+    ) {
       let occurrences: QualifiedObservationContribution[] = []
       const standaloneComponents = new Set(
         entries.filter((row) => row.detail.section === 'cohort-fold').map((row) => row.component),
       )
-      if (input.source.windowCells) {
+      if (input.source.windowCells && view.query.cohort === 'usage') {
         for await (const row of input.source.windowCells({
           version: view.version,
           taskIds: [...ids],
@@ -287,7 +328,7 @@ export function incrementalObservationQueries(input: {
           standalone: true,
         }))
           if (
-            allowedStandalone(actor, row, visibilityIds) &&
+            allowedStandalone(actor, row, visibilityIds, groupVisibility) &&
             (view.query.cohort === 'usage' || standaloneComponents.has(row.component))
           )
             occurrences.push(row)
@@ -299,6 +340,8 @@ export function incrementalObservationQueries(input: {
           query: view.query,
           ids,
           originals: population.originals,
+          scopeGroups,
+          scopeMatches,
         })
         return scoped === null
           ? []
@@ -323,6 +366,9 @@ export function incrementalObservationQueries(input: {
             const call = row.detail.document as CompleteObservationInvocation
             captureCounts.set(call.invocationId, row.fold.inventory?.nativeCaptures ?? '0')
           },
+          scopeGroups,
+          scopeMatches,
+          groupVisibility,
         )) as CompleteObservationInvocation[],
         historical = (await records(
           actor,
@@ -333,6 +379,10 @@ export function incrementalObservationQueries(input: {
           visibilityIds,
           [...historicalComponents],
           population.originals,
+          undefined,
+          scopeGroups,
+          scopeMatches,
+          groupVisibility,
         )) as CompleteHistoricalObservationExecution[]
       if (selection !== null) {
         const qualified = incrementalObservationSelection({
@@ -340,6 +390,7 @@ export function incrementalObservationQueries(input: {
           calls: invocations,
           atoms: occurrences,
           historical,
+          historicalScopeQualified: true,
         })
         occurrences = qualified.atoms
         invocations = qualified.calls
@@ -361,11 +412,16 @@ export function incrementalObservationQueries(input: {
                 (row.detail.cohortAt >= view.query.from && row.detail.cohortAt < view.query.to),
             )
           : occurrences
+      windowAtoms = windowAtoms.filter(
+        (row) => !row.detail.nativeRecord || row.fold.records !== '0',
+      )
       if (
         view.query.cohort === 'usage' &&
         selection === null &&
         !input.source.windowCells &&
-        !occurrences.some((row) => row.detail.scopes?.length)
+        !occurrences.some(
+          (row) => row.detail.scopes?.length || row.detail.historicalRecordScopes?.length,
+        )
       ) {
         const numeric = emptyCompleteObservationFold(),
           fullFrom = Math.ceil(view.query.from / 86400000) * 86400000,
@@ -580,18 +636,21 @@ export function incrementalObservationQueries(input: {
           })) {
             if (
               (row.detail.taskId !== null && ids.has(row.detail.taskId)) ||
-              !allowedStandalone(actor, row, visibilityIds)
+              !allowedStandalone(actor, row, visibilityIds, groupVisibility)
             )
               continue
             const scoped = incrementalObservationHistoricalScope(row, {
               query: view.query,
               ids,
               originals: population.originals,
+              scopeGroups,
+              scopeMatches,
             })
             if (
               scoped &&
               (view.query.cohort === 'usage' ||
                 scoped.detail.scopes?.length ||
+                scoped.detail.historicalRecordScopes?.length ||
                 scoped.detail.cohortAt === null ||
                 (scoped.detail.cohortAt >= view.query.from &&
                   scoped.detail.cohortAt < view.query.to))
@@ -723,6 +782,9 @@ export function incrementalObservationQueries(input: {
       fold,
       window,
       originals: population.originals,
+      scopeGroups,
+      scopeMatches,
+      groupVisibility,
       historicalComponents: [...historicalComponents],
       standaloneComponents: [
         ...new Set(
@@ -741,6 +803,13 @@ export function incrementalObservationQueries(input: {
     components: readonly string[] = [],
     originals: ReadonlyMap<string, QualifiedObservationContribution> = new Map(),
     observe?: (row: QualifiedObservationContribution) => void,
+    scopeGroups: NonNullable<
+      Parameters<typeof incrementalObservationHistoricalScope>[1]['scopeGroups']
+    > = new Map(),
+    scopeMatches: NonNullable<
+      Parameters<typeof incrementalObservationHistoricalScope>[1]['scopeMatches']
+    > = new Map(),
+    groupVisibility: ReadonlyMap<string, boolean> = new Map(),
   ) {
     if (parent?.startsWith('["task-tree",')) parent = null
     const rows = await memo(
@@ -750,6 +819,13 @@ export function incrementalObservationQueries(input: {
       ),
       async () => {
         const rows: QualifiedObservationContribution[] = []
+        if (originalHistoricalDiagnostic(section, parent))
+          for await (const row of input.source.details({ version: view.version, section, parent }))
+            if (
+              (row.detail.taskId !== null && ids.has(row.detail.taskId)) ||
+              allowedStandalone(actor, row, visibilityIds, groupVisibility)
+            )
+              rows.push(row)
         for (let at = 0, all = [...ids]; at < all.length; at += 200)
           for await (const row of input.source.details({
             version: view.version,
@@ -766,7 +842,7 @@ export function incrementalObservationQueries(input: {
             standalone: true,
             ...(view.query.cohort === 'usage' ? {} : { from: view.query.from, to: view.query.to }),
           }))
-            if (allowedStandalone(actor, row, visibilityIds)) rows.push(row)
+            if (allowedStandalone(actor, row, visibilityIds, groupVisibility)) rows.push(row)
         for (let at = 0; at < components.length; at += 200)
           for await (const row of input.source.details({
             version: view.version,
@@ -777,7 +853,7 @@ export function incrementalObservationQueries(input: {
             if (
               row.detail.taskId !== null &&
               !ids.has(row.detail.taskId) &&
-              allowedStandalone(actor, row, visibilityIds)
+              allowedStandalone(actor, row, visibilityIds, groupVisibility)
             )
               rows.push(row)
         const scoped = rows.flatMap((row) => {
@@ -785,6 +861,8 @@ export function incrementalObservationQueries(input: {
             query: view.query,
             ids,
             originals,
+            scopeGroups,
+            scopeMatches,
             ...(view.taskId ? { taskId: view.taskId } : {}),
           })
           return value ? [value] : []
@@ -839,7 +917,7 @@ export function incrementalObservationQueries(input: {
             }
             if (
               (row.detail.taskId === null || !build.ids.has(row.detail.taskId)) &&
-              !allowedStandalone(actor, row, build.visibilityIds)
+              !allowedStandalone(actor, row, build.visibilityIds, build.groupVisibility)
             )
               continue
             if (
@@ -847,6 +925,8 @@ export function incrementalObservationQueries(input: {
                 query: view.query,
                 ids: build.ids,
                 originals: build.originals,
+                scopeGroups: build.scopeGroups,
+                scopeMatches: build.scopeMatches,
                 ...(view.taskId ? { taskId: view.taskId } : {}),
               })
             )
@@ -872,6 +952,7 @@ export function incrementalObservationQueries(input: {
               actor,
               { ...row, aggregates: [], fold: emptyCompleteObservationFold() },
               build.visibilityIds,
+              build.groupVisibility,
             )
           )
             return
@@ -882,6 +963,8 @@ export function incrementalObservationQueries(input: {
                 query: view.query,
                 ids: build.ids,
                 originals: build.originals,
+                scopeGroups: build.scopeGroups,
+                scopeMatches: build.scopeMatches,
                 ...(view.taskId ? { taskId: view.taskId } : {}),
               },
             )
@@ -1028,13 +1111,15 @@ export function incrementalObservationQueries(input: {
         const convert = (row: QualifiedObservationContribution): unknown[] => {
           if (
             (row.detail.taskId === null || !build.ids.has(row.detail.taskId)) &&
-            !allowedStandalone(actor, row, build.visibilityIds)
+            !allowedStandalone(actor, row, build.visibilityIds, build.groupVisibility)
           )
             return []
           const scoped = incrementalObservationHistoricalScope(row, {
             query: view.query,
             ids: build.ids,
             originals: build.originals,
+            scopeGroups: build.scopeGroups,
+            scopeMatches: build.scopeMatches,
             ...(view.taskId ? { taskId: view.taskId } : {}),
           })
           if (!scoped) return []
@@ -1075,8 +1160,14 @@ export function incrementalObservationQueries(input: {
           cursor = packet.next
         }
         let total = 0n
-        if (!window) {
-          for await (const group of input.source.countGroups(build.scopeKey, view.version)) {
+        if (!window || originalHistoricalDiagnostic(sourceSection, sourceParent)) {
+          for await (const group of input.source.countGroups(
+            build.scopeKey,
+            view.version,
+            originalHistoricalDiagnostic(sourceSection, sourceParent)
+              ? { section: sourceSection, parent: sourceParent }
+              : undefined,
+          )) {
             if (group.detail.section !== sourceSection || group.detail.parent !== sourceParent)
               continue
             const row = {
@@ -1126,6 +1217,10 @@ export function incrementalObservationQueries(input: {
           build.visibilityIds,
           build.historicalComponents,
           build.originals,
+          undefined,
+          build.scopeGroups,
+          build.scopeMatches,
+          build.groupVisibility,
         ))
       const rows =
         prepared || !build.window

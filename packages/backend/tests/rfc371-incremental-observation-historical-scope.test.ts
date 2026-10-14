@@ -3,6 +3,7 @@
 import { expect, test } from 'bun:test'
 import type {
   CompleteObservationTask,
+  CompleteHistoricalObservationExecution,
   HistoricalObservationExecution,
 } from '@agent-workflow/shared'
 import { incrementalObservationHistoricalScope } from '@/modules/run-observability/application/incrementalObservationHistoricalScope'
@@ -10,8 +11,12 @@ import {
   emptyCompleteObservationFold,
   addCompleteObservationAllocation,
   completeObservationMetrics,
+  mergeCompleteObservationFold,
 } from '@/modules/run-observability/domain/completeObservationMetrics'
 import type { QualifiedObservationContribution } from '@/modules/run-observability/ports/incrementalObservationQualified'
+import { incrementalObservationSelection } from '@/modules/run-observability/application/incrementalObservationSelection'
+import type { HistoricalRecordScopeGroup } from '@/modules/run-observability/ports/incrementalObservationQualified'
+import { incrementalObservationWindow } from '@/modules/run-observability/application/incrementalObservationWindow'
 
 const at = Date.parse('2026-10-12T00:00:00Z')
 const owner = (
@@ -39,6 +44,255 @@ const owner = (
   rootSessionId: 'root',
   recordedUsage: null,
   ...patch,
+})
+
+test('each original record reference retains its own match while compact physical evidence is shared and memoized', () => {
+  const a = owner('a', { parentTaskId: null, agentId: 'a', agentRevision: 1 }),
+    b = owner('b', { parentTaskId: null, agentId: 'b', agentRevision: 1 }),
+    f = fixture([a, b]),
+    query = { ...f.query, selection: JSON.stringify({ agent: { id: 'a', revision: 1 } }) },
+    scopeGroups = new Map<string, HistoricalRecordScopeGroup>([
+      [
+        'shared',
+        { scopes: [a, b], model: null, observed: true, numeric: emptyCompleteObservationFold() },
+      ],
+    ]),
+    scopeMatches: NonNullable<
+      Parameters<typeof incrementalObservationHistoricalScope>[1]['scopeMatches']
+    > = new Map(),
+    { scopes: _scopes, ...compact } = f.row.detail
+  for (const [execution, match] of [
+    [a, 'matched'],
+    [b, 'excluded'],
+  ] as const) {
+    const document = {
+        referenceId: execution.referenceId,
+        execution,
+        scopeMatch: 'matched',
+        timeBasis: 'execution-start',
+        cohortAt: at,
+      },
+      row = {
+        ...f.row,
+        fold: emptyCompleteObservationFold(),
+        detail: {
+          ...compact,
+          section: 'historical-record-references' as const,
+          parent: 'original-record',
+          historicalRecordScopes: ['shared'],
+          document,
+        },
+      },
+      actual = incrementalObservationHistoricalScope(row, {
+        ...f,
+        query,
+        ids: new Set(),
+        scopeGroups,
+        scopeMatches,
+      })!
+    expect(actual.detail.document).toEqual({ ...document, scopeMatch: match })
+    expect(actual.detail.scopes).toBeUndefined()
+  }
+  const native = { ...f.row, detail: { ...compact, historicalRecordScopes: ['shared'] } }
+  for (let n = 0; n < 23; n++) {
+    const actual = incrementalObservationHistoricalScope(native, {
+      ...f,
+      query,
+      ids: new Set(),
+      scopeGroups,
+      scopeMatches,
+    })!
+    expect(actual.fold.records).toBe('0')
+    expect(actual.fold.gaps).toContain('historical-scope-unresolved')
+  }
+  expect(scopeMatches.size).toBe(1)
+  expect(scopeMatches.get('shared')?.members.map((member) => member.scopeMatch)).toEqual([
+    'matched',
+    'excluded',
+  ])
+})
+
+test('Agent selection keeps both mixed physical references and does not replace the canonical attribution gap', () => {
+  const a = owner('agent-a', { parentTaskId: null, agentId: 'a', agentRevision: 1 }),
+    b = owner('agent-b', { parentTaskId: null, agentId: 'b', agentRevision: 1 }),
+    f = fixture([a, b]),
+    selection = { agent: { id: 'a', revision: 1 } },
+    query = { ...f.query, cohort: 'usage' as const, selection: JSON.stringify(selection) },
+    scopeGroups = new Map<string, HistoricalRecordScopeGroup>([
+      [
+        'shared',
+        { scopes: [a, b], observed: true, model: null, numeric: emptyCompleteObservationFold() },
+      ],
+    ]),
+    fold = {
+      ...emptyCompleteObservationFold(),
+      historicalReferences: '1',
+      observedHistoricalReferences: '1',
+      gaps: ['historical-invocation-unobserved', 'historical-attribution-unresolved'],
+    },
+    historical = [a, b].map((execution) => {
+      const document: CompleteHistoricalObservationExecution = {
+        execution,
+        referenceRole: 'execution',
+        parentTaskName: null,
+        scopeMatch: 'matched',
+        timeBasis: 'execution-start',
+        cohortAt: at,
+        coveredByAcceptedRecords: false,
+        metrics: completeObservationMetrics(fold),
+        issues: fold.gaps,
+      }
+      return incrementalObservationHistoricalScope(
+        {
+          ...f.row,
+          fold,
+          detail: {
+            ...f.row.detail,
+            nativeRecord: false,
+            section: 'historical-executions',
+            document,
+            scopes: [execution],
+            historicalRecordScopes: ['shared'],
+          },
+        },
+        { ...f, query, ids: new Set(), scopeGroups },
+      )!.detail.document as CompleteHistoricalObservationExecution
+    }),
+    qualified = incrementalObservationSelection({
+      selection,
+      calls: [],
+      atoms: [],
+      historical,
+      historicalScopeQualified: true,
+    })
+  expect(qualified.historical).toHaveLength(2)
+  expect(qualified.historical.map((row) => row.scopeMatch)).toEqual(['unresolved', 'unresolved'])
+  for (const row of qualified.historical) {
+    expect(row.metrics).toEqual(
+      completeObservationMetrics({
+        ...fold,
+        observedHistoricalReferences: '0',
+        gaps: [...fold.gaps, 'historical-scope-unresolved'],
+      }),
+    )
+    expect(row.issues).not.toContain('dimension-unresolved')
+  }
+})
+
+test('model selection reconstructs unique-owner received buckets and CNY only from selected physical groups', () => {
+  const execution = owner('unique', { parentTaskId: null }),
+    f = fixture([execution]),
+    a = emptyCompleteObservationFold(),
+    b = emptyCompleteObservationFold()
+  addCompleteObservationAllocation(
+    a,
+    { input: '9007199254740997', cacheRead: '19', cacheWrite: '23', output: '29' },
+    { amount: '1.234567890123', complete: true, hidden: false },
+  )
+  addCompleteObservationAllocation(
+    b,
+    { input: '101', cacheRead: '103', cacheWrite: '107', output: '109' },
+    { amount: '9.876543210987', complete: true, hidden: false },
+  )
+  const full = emptyCompleteObservationFold()
+  mergeCompleteObservationFold(full, a)
+  mergeCompleteObservationFold(full, b)
+  Object.assign(full, {
+    historicalReferences: '1',
+    observedHistoricalReferences: '1',
+    gaps: ['historical-invocation-unobserved'],
+  })
+  const source: QualifiedObservationContribution = {
+      ...f.row,
+      fold: {
+        ...emptyCompleteObservationFold(),
+        historicalReferences: '1',
+        observedHistoricalReferences: '1',
+      },
+      detail: {
+        ...f.row.detail,
+        section: 'historical-executions',
+        nativeRecord: false,
+        historicalRecordScopes: ['a', 'b'],
+        document: {
+          execution,
+          referenceRole: 'execution',
+          parentTaskName: null,
+          scopeMatch: 'matched',
+          timeBasis: 'execution-start',
+          cohortAt: at,
+          coveredByAcceptedRecords: false,
+          metrics: completeObservationMetrics(full),
+          issues: full.gaps,
+        },
+      },
+    },
+    model = {
+      authority: 'local' as const,
+      sourceId: null,
+      provider: 'actual-provider',
+      model: 'a',
+    },
+    query = { ...f.query, selection: JSON.stringify({ model }) },
+    scopeGroups = new Map<string, HistoricalRecordScopeGroup>([
+      [
+        'a',
+        {
+          scopes: [execution],
+          observed: true,
+          model: { provider: 'actual-provider', id: 'a' },
+          numeric: a,
+        },
+      ],
+      [
+        'b',
+        {
+          scopes: [execution],
+          observed: true,
+          model: { provider: 'actual-provider', id: 'b' },
+          numeric: b,
+        },
+      ],
+    ])
+  const selected = incrementalObservationHistoricalScope(source, {
+      ...f,
+      query,
+      ids: new Set(),
+      scopeGroups,
+    })!,
+    document = selected.detail.document as CompleteHistoricalObservationExecution
+  expect(document.metrics).toEqual(
+    completeObservationMetrics({
+      ...a,
+      historicalReferences: '1',
+      observedHistoricalReferences: '1',
+      gaps: full.gaps,
+    }),
+  )
+  expect(selected.fold.tokens).toEqual({ input: '0', cacheRead: '0', cacheWrite: '0', output: '0' })
+  expect(document.scopeMatch).toBe('matched')
+  const unknown = new Map(scopeGroups)
+  unknown.set('b', { ...scopeGroups.get('b')!, model: null })
+  const partial = incrementalObservationHistoricalScope(source, {
+    ...f,
+    query,
+    ids: new Set(),
+    scopeGroups: unknown,
+  })!.detail.document as CompleteHistoricalObservationExecution
+  expect(partial.metrics).toEqual(
+    completeObservationMetrics({
+      ...a,
+      historicalReferences: '1',
+      observedHistoricalReferences: '1',
+      gaps: [...full.gaps, 'historical-scope-unresolved'],
+    }),
+  )
+  expect(
+    incrementalObservationHistoricalScope(
+      { ...source, detail: { ...source.detail, historicalRecordScopes: ['b'] } },
+      { ...f, query, ids: new Set(), scopeGroups },
+    ),
+  ).toBeNull()
 })
 function fixture(scopes: readonly HistoricalObservationExecution[]) {
   const fold = emptyCompleteObservationFold()
@@ -195,4 +449,170 @@ test('matched native time partitions preserve their independently sealed referen
     expect(metrics.tokenCoverage?.observedHistoricalReferences).toBe('1')
     expect(metrics.recordedUsage?.tokens).toMatchObject(tokens)
   }
+})
+
+test('a shared physical candidate keeps both references unresolved even when one own execution is excluded', () => {
+  const included = owner('included', { parentTaskId: null, status: 'done' }),
+    excluded = owner('excluded', { parentTaskId: 'outside', status: 'failed' }),
+    f = fixture([included, excluded]),
+    query = { ...f.query, cohort: 'usage' as const, status: 'done' as const },
+    scopeGroups = new Map([
+      [
+        'shared',
+        {
+          scopes: [included, excluded],
+          observed: true,
+          model: null,
+          numeric: emptyCompleteObservationFold(),
+        },
+      ],
+    ]),
+    oldFold = {
+      ...emptyCompleteObservationFold(),
+      historicalReferences: '1',
+      observedHistoricalReferences: '1',
+      gaps: [
+        'historical-invocation-unobserved',
+        'historical-attribution-unresolved',
+        'native-model-unavailable',
+      ],
+    }
+  const historical: CompleteHistoricalObservationExecution[] = []
+  for (const execution of [included, excluded]) {
+    const document: CompleteHistoricalObservationExecution = {
+      execution,
+      referenceRole: 'execution',
+      parentTaskName: null,
+      scopeMatch: 'matched',
+      timeBasis: 'execution-start',
+      cohortAt: at,
+      coveredByAcceptedRecords: false,
+      metrics: completeObservationMetrics(oldFold),
+      issues: oldFold.gaps,
+    }
+    const scoped = incrementalObservationHistoricalScope(
+      {
+        ...f.row,
+        fold: oldFold,
+        detail: {
+          ...f.row.detail,
+          section: 'historical-executions',
+          document,
+          nativeRecord: false,
+          scopes: [execution],
+          historicalRecordScopes: ['shared'],
+        },
+      },
+      { ...f, query, ids: new Set(), scopeGroups },
+    )!
+    expect(scoped).not.toBeNull()
+    const actual = scoped.detail.document as CompleteHistoricalObservationExecution
+    expect(actual.scopeMatch).toBe('unresolved')
+    expect(actual.execution).toEqual(execution)
+    expect(actual.metrics).toEqual(
+      completeObservationMetrics({
+        ...oldFold,
+        observedHistoricalReferences: '0',
+        gaps: [...oldFold.gaps, 'historical-scope-unresolved'],
+      }),
+    )
+    historical.push(actual)
+  }
+  const unresolved = incrementalObservationHistoricalScope(f.row, { ...f, query, ids: new Set() })!,
+    time = {
+      ...unresolved,
+      detail: {
+        ...unresolved.detail,
+        section: 'time-partitions' as const,
+        document: {
+          identity: 'shared-original',
+          kind: 'historical',
+          sourceId: 'original',
+          recordId: 'record',
+          task: null,
+          invocation: null,
+          partition: 'in-window',
+          occurrence: { occurredAt: at, basis: 'native-step' },
+          referenceIds: ['included', 'excluded'],
+          candidateCount: '2',
+          model: null,
+          metrics: completeObservationMetrics(unresolved.fold),
+        },
+      },
+    },
+    window = incrementalObservationWindow({
+      query,
+      tasks: [],
+      invocations: [],
+      historical,
+      occurrences: [time],
+    })
+  expect(window.fold.historicalReferences).toBe('2')
+  expect(window.fold.observedHistoricalReferences).toBe('0')
+  expect(window.fold.records).toBe('0')
+  expect(window.fold.tokens).toEqual({ input: '0', cacheRead: '0', cacheWrite: '0', output: '0' })
+  expect(window.timeRows).toEqual([])
+  expect(window.tasks).toEqual([])
+  expect(window.historical.map((row) => row.execution.referenceId)).toEqual([
+    'included',
+    'excluded',
+  ])
+})
+
+test('distinct physical candidate sets preserve a uniquely observed record and do not count a covered record as observed', () => {
+  const included = owner('included', { parentTaskId: null, status: 'done' }),
+    excluded = owner('excluded', { parentTaskId: null, status: 'failed' }),
+    f = fixture([included]),
+    query = { ...f.query, cohort: 'usage' as const, status: 'done' as const },
+    scopeGroups = new Map([
+      ['unique', { scopes: [included], observed: true, model: null, numeric: f.row.fold }],
+      [
+        'shared',
+        {
+          scopes: [included, excluded],
+          observed: true,
+          model: null,
+          numeric: emptyCompleteObservationFold(),
+        },
+      ],
+    ]),
+    source = {
+      ...f.row,
+      fold: { ...f.row.fold, historicalReferences: '1', observedHistoricalReferences: '1' },
+      detail: {
+        ...f.row.detail,
+        nativeRecord: false,
+        historicalRecordScopes: ['unique', 'shared'],
+      },
+    }
+  const actual = incrementalObservationHistoricalScope(source, {
+    ...f,
+    query,
+    ids: new Set(),
+    scopeGroups,
+  })!
+  expect(actual.fold.tokens).toEqual(source.fold.tokens)
+  expect(actual.fold.records).toBe(source.fold.records)
+  expect(actual.fold.observedHistoricalReferences).toBe('1')
+  expect(actual.fold.gaps).toContain('historical-scope-unresolved')
+  const coveredGroups = new Map(scopeGroups)
+  coveredGroups.set('covered', {
+    scopes: [included],
+    observed: false,
+    model: null,
+    numeric: emptyCompleteObservationFold(),
+  })
+  const covered = incrementalObservationHistoricalScope(
+    { ...source, detail: { ...source.detail, historicalRecordScopes: ['covered', 'shared'] } },
+    { ...f, query, ids: new Set(), scopeGroups: coveredGroups },
+  )!
+  expect(covered.fold.observedHistoricalReferences).toBe('0')
+  expect(
+    incrementalObservationHistoricalScope(source, {
+      ...f,
+      query: { ...query, q: 'neither-original-owner' },
+      ids: new Set(),
+      scopeGroups,
+    }),
+  ).toBeNull()
 })

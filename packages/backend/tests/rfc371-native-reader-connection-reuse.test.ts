@@ -260,12 +260,14 @@ test('one idle handle does not limit 1201 original roots or lose any scalar/EOF'
 test('parallel pending ACKs stay independent and a reused connection sees later WAL writes', async () => {
   const f = fixture(),
     { reader, connections } = factory(f.path)
-  for (const id of ['root', 'other']) {
-    f.writer.session(id)
-    f.writer.message('message-' + id, id)
-    f.writer.part(id + '-a', id, 'message-' + id)
-  }
-  f.writer.part('root-b', 'root', 'message-root')
+  f.writer.db.transaction(() => {
+    for (const id of ['root', 'other']) {
+      f.writer.session(id)
+      f.writer.message('message-' + id, id)
+      f.writer.part(id + '-a', id, 'message-' + id)
+    }
+    f.writer.part('root-b', 'root', 'message-root')
+  })()
   const generation = (await opencodeNativeStoreGeneration(f.path))!,
     before = oracle(f.writer.db, 'root'),
     first = reader.open(identity('root', generation)),
@@ -275,15 +277,17 @@ test('parallel pending ACKs stay independent and a reused connection sees later 
   expect(() => first.next(page.nextCursor!)).toThrow('awaits original owner ACK')
   expect(() => first.acknowledge('999', page.payloadDigest)).toThrow('ACK changed')
   expect(consume(second).eof).toEqual(oracle(f.writer.db, 'other'))
-  f.writer.db.query('UPDATE message SET data=? WHERE id=?').run(
-    JSON.stringify({
-      role: 'assistant',
-      providerID: 'original-provider',
-      modelID: 'later-model',
-    }),
-    'message-root',
-  )
-  f.writer.part('root-c', 'root', 'message-root', '99')
+  f.writer.db.transaction(() => {
+    f.writer.db.query('UPDATE message SET data=? WHERE id=?').run(
+      JSON.stringify({
+        role: 'assistant',
+        providerID: 'original-provider',
+        modelID: 'later-model',
+      }),
+      'message-root',
+    )
+    f.writer.part('root-c', 'root', 'message-root', '99')
+  })()
   expect(await opencodeNativeStoreGeneration(f.path)).toBe(generation)
   expect(first.next(first.initialCursor)).toEqual(page)
   first.acknowledge(page.ordinal, page.payloadDigest)

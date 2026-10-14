@@ -59,6 +59,7 @@ export interface IncrementalObservationQuerySource {
   countGroups?(
     scope: string,
     version: IncrementalObservationVersion,
+    diagnostic?: { readonly section: string; readonly parent: string | null },
   ): AsyncIterable<{
     detail: QualifiedObservationContribution['detail']
     component: string

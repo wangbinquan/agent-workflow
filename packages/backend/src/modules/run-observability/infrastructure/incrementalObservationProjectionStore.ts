@@ -3,7 +3,7 @@ import {
   observeProjectionTaskAnomalies,
   observeProjectionOwnerAnomalies,
 } from './observationAnomalies'
-import { and, asc, eq, gt, isNull, ne } from 'drizzle-orm'
+import { and, asc, eq, gt, isNull, ne, notInArray } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   databaseSessionFor,
@@ -34,7 +34,7 @@ import { pendingIncrementalObservationWork } from './incrementalObservationWork'
 import { retainIncrementalObservationVersion } from './incrementalObservationVersions'
 
 import {
-  legacyQualifiedObservationIndexChannel,
+  legacyQualifiedObservationIndexChannels,
   qualifiedObservationIndexChannel,
   qualifiedObservationIndexVersion,
 } from '../domain/qualifiedObservationIndexes'
@@ -67,7 +67,9 @@ export function createIncrementalObservationProjectionStore(
             .where(
               and(
                 eq(observationProjectionBootstrap.generation, generation),
-                ne(observationProjectionBootstrap.channel, legacyQualifiedObservationIndexChannel),
+                notInArray(observationProjectionBootstrap.channel, [
+                  ...legacyQualifiedObservationIndexChannels,
+                ]),
               ),
             )
             .all()

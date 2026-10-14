@@ -32,8 +32,18 @@ export interface QualifiedObservationDetail {
   }[]
   readonly timingAttempts?: readonly ObservationAttemptFacts[]
   readonly scopes?: readonly HistoricalObservationExecution[]
+  /** Distinct physical candidate/model groups; an empty list proves no records. */
+  readonly historicalRecordScopes?: readonly string[]
   readonly humanWaitingSince?: number | null
   readonly nativeRecord?: boolean
+}
+/** Stored once per physical candidate/model group, never once per reference. */
+export interface HistoricalRecordScopeGroup {
+  readonly scopes: readonly HistoricalObservationExecution[]
+  readonly observed: boolean
+  readonly model: { readonly provider: string; readonly id: string } | null
+  /** Only unique-owner record values. Shared records cannot copy into owners. */
+  readonly numeric: CompleteObservationFold
 }
 export interface QualifiedObservationHistoricalContribution {
   readonly key: string
@@ -47,6 +57,7 @@ export interface QualifiedObservationHistoricalContribution {
     readonly ownerUserId: string | null
   }[]
   readonly scopes?: readonly HistoricalObservationExecution[]
+  readonly historicalRecordScopes?: QualifiedObservationDetail['historicalRecordScopes']
 }
 export interface QualifiedObservationDimensionContribution {
   readonly identity: string

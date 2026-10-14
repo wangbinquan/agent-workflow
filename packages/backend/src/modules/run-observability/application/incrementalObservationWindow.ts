@@ -89,6 +89,7 @@ export function incrementalObservationWindow(input: {
     }
   >()
   const standalone = emptyCompleteObservationFold()
+  const candidateTaskIds = new Set(input.tasks.map((row) => row.task.id))
   function task(id: string) {
     let fold = taskFolds.get(id)
     if (!fold) {
@@ -98,6 +99,9 @@ export function incrementalObservationWindow(input: {
     return fold
   }
   for (const contribution of input.occurrences) {
+    // The original usage window admits only historical records included in
+    // totals. An unresolved/covered record is not a received numeric record.
+    if (contribution.detail.nativeRecord && contribution.fold.records === '0') continue
     const original = contribution.detail.document as ProjectionOccurrence,
       at = original.occurrence.occurredAt
     const partition: Partition =
@@ -211,7 +215,7 @@ export function incrementalObservationWindow(input: {
     }
     if (row.metrics.state === 'not-ready')
       for (const gap of row.metrics.gaps) completeObservationGap(next, gap)
-    if (e.parentTaskId !== null) {
+    if (e.parentTaskId !== null && candidateTaskIds.has(e.parentTaskId)) {
       mergeCompleteObservationFold(task(e.parentTaskId), next)
       selectedTaskIds.add(e.parentTaskId)
     } else mergeCompleteObservationFold(standalone, next)

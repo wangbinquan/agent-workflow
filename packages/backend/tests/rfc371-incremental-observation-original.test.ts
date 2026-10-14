@@ -89,6 +89,8 @@ import type { QualifiedObservationContribution } from '@/modules/run-observabili
 import type { ProjectionOccurrence } from '@/modules/run-observability/application/incrementalObservationWindow'
 import {
   observationProjectionCurrent,
+  observationProjectionHistory,
+  observationProjectionMemberships,
   observationProjectionDescriptors,
   observationProjectionIndexedVersions,
   observationProjectionWork,
@@ -396,6 +398,489 @@ describeEachProvider(
           .get(),
       ).toMatchObject({ cursor: 'original-v1-cursor', done: false })
     })
+    test('an obsolete v2 checkpoint keeps its original cursor while the current candidate-set protocol reaches its real EOF', async () => {
+      await h.db
+        .insert(observationProjectionBootstrap)
+        .values({
+          generation,
+          channel: 'indexed-details-v2',
+          cursor: 'retained-original-v2-cursor',
+          done: false,
+        })
+        .run()
+      const boot = incrementalObservationBootstrap(h.db, generation, [
+        {
+          id: qualifiedObservationIndexChannel,
+          refresh: true,
+          page: async () => ({ items: [], nextCursor: null }),
+        },
+      ])
+      expect(qualifiedObservationIndexChannel).toBe('indexed-details-v3')
+      expect(await boot(new AbortController().signal)).toBe(1)
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, 'indexed-details-v2'))
+          .get(),
+      ).toMatchObject({ cursor: 'retained-original-v2-cursor', done: false })
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, qualifiedObservationIndexChannel))
+          .get(),
+      ).toMatchObject({ cursor: null, done: true })
+    })
+    test('a nonempty legacy v2 projection requalifies original candidate sets after unavailable EOF and restart without losing facts', async () => {
+      await seedCompleteTask(h, 2, 0)
+      const first = (await h.db
+        .select()
+        .from(originalTasks)
+        .where(eq(originalTasks.id, 'complete-original-task'))
+        .get())!
+      await h.db
+        .update(originalTasks)
+        .set({ status: 'done' })
+        .where(eq(originalTasks.id, first.id))
+        .run()
+      await h.db
+        .insert(originalTasks)
+        .values({
+          ...first,
+          id: 'excluded-original-task',
+          rootTaskId: 'excluded-original-task',
+          name: 'Excluded original task',
+          status: 'failed',
+        })
+        .run()
+      await h.db.delete(observationUsageCaptures).run()
+      await h.db.delete(observationInvocations).run()
+      await h.db.update(nodeRuns).set({ runtime: 'opencode', opencodeSessionId: 'root' }).run()
+      await h.db
+        .update(nodeRuns)
+        .set({ taskId: 'excluded-original-task' })
+        .where(eq(nodeRuns.id, completeFixtureId('run', 1)))
+        .run()
+      const native = persistentNativeFixture({ steps: 3, depth: 1 })
+      cleanups.push(() => native.close())
+      let available = true
+      const reader = {
+          ...native,
+          query: {
+            ...native.query,
+            open: async (selection: Parameters<typeof native.query.open>[0]) =>
+              available ? native.query.open(selection) : null,
+          },
+        },
+        f = setup(h, reader, true)
+      await f.apply('nonempty-v2-original-base', [
+        completeFixtureId('invocation', 0),
+        completeFixtureId('invocation', 1),
+      ])
+      const previous = (await f.store.snapshot())!,
+        expectedAll = await f.oracle(all),
+        sourceBefore = normalized(await h.db.select().from(observationUsageCurrent).all()),
+        pricesBefore = normalized(
+          await h.db.select().from(observationInvocationPriceRecords).all(),
+        ),
+        nativeBefore = native.writer
+          .query('SELECT id,session_id,message_id,time_created,data FROM part ORDER BY id')
+          .all(),
+        rows = await h.db
+          .select()
+          .from(observationProjectionCurrent)
+          .where(eq(observationProjectionCurrent.kind, 'contribution'))
+          .all()
+      expect(rows.length).toBeGreaterThan(0)
+      // Simulate exactly the older persisted projection, leaving every original
+      // producer/native fact, numerical atom, old EOF and watermark intact.
+      await h.session.transaction(async (tx) => {
+        for (const value of rows) {
+          const original = JSON.parse(value.document) as QualifiedObservationContribution
+          if (original.detail.parent === 'native-scope-groups') {
+            await retainIncrementalObservationVersion(tx, {
+              kind: 'contribution',
+              key: original.key,
+              component: original.component,
+              version: previous,
+              document: null,
+            })
+            await tx
+              .delete(observationProjectionHistory)
+              .where(
+                and(
+                  eq(observationProjectionHistory.kind, 'contribution'),
+                  eq(observationProjectionHistory.key, original.key),
+                  eq(observationProjectionHistory.fromRevision, previous.revision),
+                ),
+              )
+              .run()
+            await tx
+              .delete(observationProjectionMemberships)
+              .where(
+                and(
+                  eq(observationProjectionMemberships.key, original.key),
+                  eq(observationProjectionMemberships.fromRevision, previous.revision),
+                ),
+              )
+              .run()
+          } else if (original.detail.historicalRecordScopes !== undefined) {
+            const { historicalRecordScopes: _proof, ...detail } = original.detail
+            await retainIncrementalObservationVersion(tx, {
+              kind: 'contribution',
+              key: original.key,
+              component: original.component,
+              version: previous,
+              document: { ...original, detail },
+            })
+          }
+        }
+        await tx
+          .delete(observationProjectionIndexedVersions)
+          .where(
+            eq(
+              observationProjectionIndexedVersions.revision,
+              qualifiedObservationIndexVersion(previous.revision),
+            ),
+          )
+          .run()
+        await tx
+          .insert(observationProjectionIndexedVersions)
+          .values({ revision: 'indexed-details-v2/' + previous.revision })
+          .run()
+        await tx
+          .delete(observationProjectionBootstrap)
+          .where(
+            and(
+              eq(observationProjectionBootstrap.generation, generation),
+              eq(observationProjectionBootstrap.channel, qualifiedObservationIndexChannel),
+            ),
+          )
+          .run()
+        await tx
+          .insert(observationProjectionBootstrap)
+          .values({
+            generation,
+            channel: 'indexed-details-v2',
+            cursor: 'nonempty-original-v2-cursor',
+            done: false,
+          })
+          .run()
+        await enqueueIncrementalObservationWork(tx, {
+          id: 'nonempty-v2-real-upgrade',
+          source: 'original-bootstrap-upgrade',
+          revision: generation,
+          components: [JSON.stringify(['root', 'root'])],
+        })
+      })
+      expect(await f.store.indexedDetails(previous)).toBe(false)
+      const held = content(await f.queries.request(actor, all, 'legacy-known-data'))
+      expect(held.summary.metrics).toEqual(expectedAll.summary.metrics)
+      available = false
+      await expect(f.drain()).rejects.toThrow(
+        'Original candidate-set index upgrade is waiting for native EOF',
+      )
+      expect(await f.store.snapshot()).toEqual(previous)
+      expect(await f.store.indexedDetails(previous)).toBe(false)
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionWork)
+          .where(eq(observationProjectionWork.id, 'nonempty-v2-real-upgrade'))
+          .get(),
+      ).toMatchObject({ completedRevision: null, appliedRevision: null })
+      expect(normalized(await h.db.select().from(observationUsageCurrent).all())).toEqual(
+        sourceBefore,
+      )
+      expect(normalized(await h.db.select().from(observationInvocationPriceRecords).all())).toEqual(
+        pricesBefore,
+      )
+      expect(
+        native.writer
+          .query('SELECT id,session_id,message_id,time_created,data FROM part ORDER BY id')
+          .all(),
+      ).toEqual(nativeBefore)
+      available = true
+      // Reconstruct both original qualification and projection adapters, not a
+      // prebuilt successful receipt, before consuming the original pending work.
+      const restarted = setup(h, reader, true)
+      await restarted.drain()
+      expect(restarted.nativeOpens).toBeGreaterThan(0)
+      const boot = composeOriginalProjectionBootstrap({
+          db: h.db,
+          generation,
+          tasks: createProjectionTaskObservationFacts(h.db),
+          owners: [],
+        }),
+        signal = new AbortController().signal
+      for (;;) {
+        const advanced = await boot(signal)
+        await restarted.drain()
+        if (!advanced) break
+      }
+      const current = (await restarted.store.snapshot())!
+      expect(await restarted.store.indexedDetails(current)).toBe(true)
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, 'indexed-details-v2'))
+          .get(),
+      ).toMatchObject({ cursor: 'nonempty-original-v2-cursor', done: false })
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, qualifiedObservationIndexChannel))
+          .get(),
+      ).toMatchObject({ cursor: null, done: true })
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionWork)
+          .where(eq(observationProjectionWork.id, 'nonempty-v2-real-upgrade'))
+          .get(),
+      ).toMatchObject({
+        completedRevision: expect.any(String),
+        appliedRevision: expect.any(String),
+      })
+      for (const query of [
+        all,
+        { ...all, cohort: 'usage' as const, status: 'done' as const },
+        { ...all, cohort: 'started' as const, status: 'failed' as const },
+      ]) {
+        const expected = await restarted.oracle(query),
+          actual = content(await restarted.queries.request(actor, query, crypto.randomUUID()))
+        expect(actual.summary.metrics).toEqual(expected.summary.metrics)
+        expect(actual.summary.inventory).toEqual(expected.summary.inventory)
+        for (const [section, parent] of [
+          ['historical-executions', null],
+          ['historical-executions', 'original-source'],
+          ['historical-records', null],
+          ['time-partitions', null],
+          ['time-unassigned', null],
+        ] as const) {
+          const original = expected.rows
+              .filter((row) => row.section === section && row.parent === parent)
+              .map((row) => row.document),
+            items: unknown[] = []
+          let after: string | undefined
+          do {
+            const page = await restarted.queries.page(actor, actual.header.reportId, {
+              section,
+              ...(parent ? { parent } : {}),
+              limit: 2,
+              ...(after ? { after } : {}),
+            })
+            expect(page.total).toBe(String(original.length))
+            items.push(...page.items)
+            if (page.nextCursor !== null) expect(page.nextCursor).not.toBe(after)
+            after = page.nextCursor ?? undefined
+          } while (after)
+          expect(normalized(items)).toEqual(normalized(original))
+        }
+      }
+      expect(normalized(await h.db.select().from(observationUsageCurrent).all())).toEqual(
+        sourceBefore,
+      )
+      expect(normalized(await h.db.select().from(observationInvocationPriceRecords).all())).toEqual(
+        pricesBefore,
+      )
+      expect(
+        native.writer
+          .query('SELECT id,session_id,message_id,time_created,data FROM part ORDER BY id')
+          .all(),
+      ).toEqual(nativeBefore)
+    }, 60_000)
+
+    test('physical candidate model and Agent predicates keep canonical received values and complete original-source EOF', async () => {
+      await seedCompleteTask(h, 2, 0)
+      await h.db.delete(observationUsageCaptures).run()
+      await h.db.delete(observationInvocations).run()
+      await h.db.update(nodeRuns).set({ runtime: 'opencode', opencodeSessionId: 'root' }).run()
+      const native = persistentNativeFixture({ steps: 3, depth: 1 })
+      cleanups.push(() => native.close())
+      const f = setup(h, native, true)
+      await f.apply('selected-physical-base', [
+        completeFixtureId('invocation', 0),
+        completeFixtureId('invocation', 1),
+      ])
+      const opens = f.nativeOpens
+      for (const selection of [
+        {
+          model: {
+            authority: 'local',
+            sourceId: null,
+            provider: 'actual-provider',
+            model: 'actual-model',
+          },
+        },
+        { model: { authority: 'local', sourceId: null, provider: null, model: null } },
+        { agent: { id: null, revision: null } },
+        { purpose: 'task' },
+        { source: { authority: 'crewstation', sourceId: 'other-authority' } },
+      ]) {
+        const query = { ...all, cohort: 'usage' as const, selection: JSON.stringify(selection) },
+          expected = await f.oracle(query),
+          actual = content(await f.queries.request(actor, query, crypto.randomUUID()))
+        expect(actual.summary.metrics).toEqual(expected.summary.metrics)
+        expect(actual.summary.inventory).toEqual(expected.summary.inventory)
+        for (const [section, parent] of [
+          ['historical-executions', null],
+          ['historical-executions', 'original-source'],
+          ['historical-records', null],
+          ['time-partitions', null],
+          ['time-unassigned', null],
+        ] as const) {
+          const original = expected.rows
+              .filter((row) => row.section === section && row.parent === parent)
+              .map((row) => row.document),
+            items: unknown[] = []
+          let after: string | undefined
+          do {
+            const page = await f.queries.page(actor, actual.header.reportId, {
+              section,
+              ...(parent ? { parent } : {}),
+              limit: 2,
+              ...(after ? { after } : {}),
+            })
+            expect(page.total).toBe(String(original.length))
+            items.push(...page.items)
+            if (page.nextCursor !== null) expect(page.nextCursor).not.toBe(after)
+            after = page.nextCursor ?? undefined
+          } while (after)
+          expect(normalized(items)).toEqual(normalized(original))
+        }
+      }
+      expect(f.nativeOpens).toBe(opens)
+    }, 60_000)
+
+    test('complete excluded source and per-reference predicates survive indexed and fallback EOF with compact physical owner evidence', async () => {
+      const population = 23
+      await seedCompleteTask(h, population, 0)
+      await h.db.update(originalTasks).set({ status: 'done' }).run()
+      await h.db.delete(observationUsageCaptures).run()
+      await h.db.delete(observationInvocations).run()
+      await h.db
+        .update(nodeRuns)
+        .set({
+          runtime: 'opencode',
+          opencodeSessionId: 'root',
+          agentOverrideId: 'candidate-b',
+          agentOverrideName: 'Candidate B',
+        })
+        .run()
+      await h.db
+        .update(nodeRuns)
+        .set({ agentOverrideId: 'candidate-a', agentOverrideName: 'Candidate A' })
+        .where(eq(nodeRuns.id, completeFixtureId('run', 0)))
+        .run()
+      const native = persistentNativeFixture({ steps: 3, depth: 1 })
+      cleanups.push(() => native.close())
+      const first = setup(h, native, true)
+      await first.apply(
+        'compact-reference-base',
+        Array.from({ length: population }, (_, n) => completeFixtureId('invocation', n)),
+      )
+      const current = (await first.store.snapshot())!,
+        contributions = (
+          await h.db
+            .select({ document: observationProjectionCurrent.document })
+            .from(observationProjectionCurrent)
+            .where(eq(observationProjectionCurrent.kind, 'contribution'))
+            .all()
+        ).map((row) => JSON.parse(row.document) as QualifiedObservationContribution),
+        groups = contributions.filter((row) => row.detail.parent === 'native-scope-groups'),
+        references = contributions.filter(
+          (row) => row.detail.section === 'historical-record-references',
+        ),
+        groupIds = new Set(groups.map((row) => row.detail.key))
+      expect(groups).toHaveLength(3)
+      for (const row of groups)
+        expect((row.detail.document as { scopes: readonly unknown[] }).scopes).toHaveLength(
+          population,
+        )
+      // Five physical records, each with every original candidate reference.
+      expect(references).toHaveLength(population * 5)
+      for (const row of contributions)
+        if (
+          row.detail.historicalRecordScopes?.length &&
+          (row.detail.nativeRecord || row.detail.section === 'historical-record-references')
+        ) {
+          expect(row.detail.scopes).toBeUndefined()
+          expect(row.detail.visibility).toBeUndefined()
+          for (const key of row.detail.historicalRecordScopes) expect(groupIds.has(key)).toBe(true)
+          if (row.detail.section === 'time-partitions') {
+            expect(row.detail.document).not.toHaveProperty('scopes')
+            expect(row.detail.document).not.toHaveProperty('visibility')
+          }
+        }
+      for (const indexed of [true, false]) {
+        if (!indexed)
+          await h.db
+            .delete(observationProjectionIndexedVersions)
+            .where(
+              eq(
+                observationProjectionIndexedVersions.revision,
+                qualifiedObservationIndexVersion(current.revision),
+              ),
+            )
+            .run()
+        const f = setup(h, native, true)
+        expect(await f.store.indexedDetails(current)).toBe(indexed)
+        for (const query of [
+          { ...all, cohort: 'usage' as const, status: 'failed' as const },
+          {
+            ...all,
+            cohort: 'usage' as const,
+            selection: JSON.stringify({ agent: { id: 'candidate-a', revision: null } }),
+          },
+        ]) {
+          const expected = await f.oracle(query),
+            actual = content(await f.queries.request(actor, query, crypto.randomUUID())),
+            requested = new Map<
+              string,
+              { section: CompleteObservationSection; parent: string | null }
+            >()
+          expect(actual.summary.metrics).toEqual(expected.summary.metrics)
+          expect(actual.summary.inventory).toEqual(expected.summary.inventory)
+          for (const row of expected.rows)
+            if (
+              (row.parent === 'original-source' &&
+                ['historical-executions', 'historical-records'].includes(row.section)) ||
+              row.section === 'historical-record-references'
+            )
+              requested.set(JSON.stringify([row.section, row.parent]), {
+                section: row.section,
+                parent: row.parent,
+              })
+          for (const { section, parent } of requested.values()) {
+            const original = expected.rows
+                .filter((row) => row.section === section && row.parent === parent)
+                .map((row) => row.document),
+              items: unknown[] = []
+            let after: string | undefined
+            do {
+              const page = await f.queries.page(actor, actual.header.reportId, {
+                section,
+                ...(parent ? { parent } : {}),
+                limit: 2,
+                ...(after ? { after } : {}),
+              })
+              expect(page.total).toBe(String(original.length))
+              items.push(...page.items)
+              if (page.nextCursor !== null) expect(page.nextCursor).not.toBe(after)
+              after = page.nextCursor ?? undefined
+            } while (after)
+            expect(normalized(items)).toEqual(normalized(original))
+          }
+          if ('status' in query) expect(actual.summary.inventory.tasks).toBe('0')
+        }
+        expect(f.nativeOpens).toBe(0)
+      }
+    }, 60_000)
+
     test('physical native parent/child roots across two Tasks retain the canonical candidate set in either change order', async () => {
       await seedCompleteTask(h, 2, 0)
       const original = (await h.db
@@ -526,6 +1011,37 @@ describeEachProvider(
         completeFixtureId('invocation', 0),
         completeFixtureId('invocation', 1),
       ])
+      const projected = (
+          await h.db
+            .select({ document: observationProjectionCurrent.document })
+            .from(observationProjectionCurrent)
+            .where(eq(observationProjectionCurrent.kind, 'contribution'))
+            .all()
+        ).map((row) => JSON.parse(row.document) as QualifiedObservationContribution),
+        physicalGroups = projected.filter(
+          (row) =>
+            row.detail.section === 'cohort-fold' && row.detail.parent === 'native-scope-groups',
+        ),
+        references = projected.filter(
+          (row) => row.detail.section === 'cohort-fold' && row.detail.key.startsWith('reference/'),
+        ),
+        groupIds = new Set(physicalGroups.map((row) => row.detail.key)),
+        originalScopes = references.flatMap((row) => row.detail.scopes ?? [])
+      expect(physicalGroups).toHaveLength(3)
+      expect(references).toHaveLength(2)
+      expect(groupIds.size).toBe(physicalGroups.length)
+      for (const row of physicalGroups) {
+        const group = row.detail.document as { scopes: readonly unknown[]; observed: boolean }
+        expect(normalized(group.scopes)).toEqual(normalized(originalScopes))
+        expect(group.observed).toBe(true)
+      }
+      for (const row of references) {
+        expect(row.detail.historicalRecordScopes).toHaveLength(3)
+        for (const key of row.detail.historicalRecordScopes ?? []) {
+          expect(typeof key).toBe('string')
+          expect(groupIds.has(key)).toBe(true)
+        }
+      }
       for (const cohort of ['usage', 'started'] as const)
         for (const status of [undefined, 'done', 'failed'] as const)
           for (const [from, to] of [

@@ -27,7 +27,10 @@ import { buildCompleteObservationUsageWindow } from '../application/completeObse
 import { completeWorkingTraversal } from '../application/completeWorkingTraversal'
 import { projectionTaskMetadata } from '../application/incrementalObservationTaskMetadata'
 import { completeMetricsFold } from '../domain/completeMetricsFold'
-import { emptyCompleteObservationFold } from '../domain/completeObservationMetrics'
+import {
+  emptyCompleteObservationFold,
+  mergeCompleteObservationFold,
+} from '../domain/completeObservationMetrics'
 import { completeObservationAgentNames } from '../infrastructure/completeObservationAgentNames'
 import { completeObservationValuation } from '../infrastructure/completeObservationValuation'
 import { createCompleteObservationSources } from '../infrastructure/completeObservationSources'
@@ -49,6 +52,7 @@ import type {
   QualifiedObservationDetail,
   QualifiedObservationHistoricalContribution,
   QualifiedObservationDimensionContribution,
+  HistoricalRecordScopeGroup,
 } from '../ports/incrementalObservationQualified'
 
 export interface ProjectionOriginalScope {
@@ -129,12 +133,15 @@ export function incrementalObservationQualification(input: {
                 )
                 .all()
             ).length
-          // Index upgrades replay retained original atoms only; no native read,
-          // model allocation or producer enumeration is needed.
+          // Replay only already qualified physical candidate/model evidence.
+          // Older protocols have no such proof and must reuse original sources.
           if (
             work.source === 'original-bootstrap-upgrade' ||
             qualified === work.components.length
           ) {
+            const retainedNamespace = 'projection/' + work.id + '/retained-index-atoms',
+              requiredGroups = new Set<string>()
+            let proved = true
             for (let at = 0; at < work.components.length; at += 200) {
               let after: string | undefined
               for (;;) {
@@ -158,25 +165,83 @@ export function incrementalObservationQualification(input: {
                   .limit(200)
                   .all()
                 if (!rows.length) break
-                await spool.append(
-                  work,
-                  rows.map((row) => JSON.parse(row.document) as QualifiedObservationContribution),
-                )
+                const retained = rows.map((row) => ({
+                  key: row.key,
+                  document: JSON.parse(row.document) as QualifiedObservationContribution,
+                }))
+                for (const { document: row } of retained) {
+                  if (
+                    (row.detail.scopes?.length ||
+                      row.detail.historicalRecordScopes !== undefined) &&
+                    (row.detail.nativeRecord ||
+                      row.detail.key.startsWith('reference/') ||
+                      row.detail.section === 'historical-executions' ||
+                      row.detail.section === 'historical-record-references')
+                  ) {
+                    if (
+                      (row.detail.nativeRecord ||
+                        row.detail.section === 'historical-record-references') &&
+                      (row.detail.scopes !== undefined || row.detail.visibility !== undefined)
+                    )
+                      proved = false
+                    if (row.detail.historicalRecordScopes === undefined) proved = false
+                    else
+                      for (const key of row.detail.historicalRecordScopes) requiredGroups.add(key)
+                  }
+                }
+                await snapshot.workspace.insert(retainedNamespace, retained)
                 after = rows.at(-1)!.key
               }
             }
-            return spool.seal(
-              work,
-              {
-                generation: snapshot.generationId,
-                snapshotId: snapshot.snapshotId,
-                asOf: snapshot.asOf,
-                baseRevision,
-              },
-              work.components,
-            )
+            const foundGroups = new Set<string>()
+            for (let at = 0, keys = [...requiredGroups]; at < keys.length; at += 200) {
+              const rows = await snapshot.executor
+                .select({ document: observationProjectionCurrent.document })
+                .from(observationProjectionCurrent)
+                .where(
+                  and(
+                    eq(observationProjectionCurrent.kind, 'contribution'),
+                    eq(observationProjectionCurrent.section, 'cohort-fold'),
+                    eq(observationProjectionCurrent.parent, 'native-scope-groups'),
+                    inArray(observationProjectionCurrent.originalKey, keys.slice(at, at + 200)),
+                  ),
+                )
+                .all()
+              for (const row of rows) {
+                const value = JSON.parse(row.document) as QualifiedObservationContribution,
+                  group = value.detail.document as Partial<HistoricalRecordScopeGroup> | null
+                if (
+                  group?.scopes?.length &&
+                  typeof group.observed === 'boolean' &&
+                  'model' in group &&
+                  group.numeric &&
+                  typeof group.numeric.records === 'string'
+                )
+                  foundGroups.add(value.detail.key)
+              }
+            }
+            proved &&= foundGroups.size === requiredGroups.size
+            if (proved) {
+              for await (const row of completeWorkingTraversal<QualifiedObservationContribution>(
+                snapshot.workspace,
+                retainedNamespace,
+                signal,
+              ))
+                await spool.append(work, [row.document])
+              return spool.seal(
+                work,
+                {
+                  generation: snapshot.generationId,
+                  snapshotId: snapshot.snapshotId,
+                  asOf: snapshot.asOf,
+                  baseRevision,
+                },
+                work.components,
+              )
+            }
           }
         }
+
         const namespace = 'projection/' + work.id,
           bootstrap = work.source === 'original-bootstrap'
         const metadataIds = new Set<string>(),
@@ -332,6 +397,27 @@ export function incrementalObservationQualification(input: {
           fold: QualifiedObservationContribution['fold'] = emptyCompleteObservationFold(),
           aggregates: readonly string[] = [],
         ) {
+          // Native candidate payload and visibility are shared physical group
+          // evidence. A public reference keeps only its own original execution.
+          if (
+            detail.historicalRecordScopes?.length &&
+            (detail.nativeRecord || detail.section === 'historical-record-references')
+          ) {
+            const { scopes: _scopes, visibility: _visibility, ...compact } = detail
+            detail = compact
+            if (
+              detail.section === 'time-partitions' &&
+              detail.document &&
+              typeof detail.document === 'object'
+            ) {
+              const {
+                scopes: _documentScopes,
+                visibility: _documentVisibility,
+                ...document
+              } = detail.document as Record<string, unknown>
+              detail = { ...detail, document }
+            }
+          }
           components.add(owner)
           retained++
           const key = sha256Hex(JSON.stringify([owner, detail.section, detail.parent, detail.key]))
@@ -391,23 +477,6 @@ export function incrementalObservationQualification(input: {
             },
             async retainHistoricalContribution(item) {
               historicalMetadata.set(item.key, item)
-              const taskId = item.assigned ? item.task!.id : null
-              await retain(
-                item.ownerComponent,
-                {
-                  section: 'cohort-fold',
-                  parent: null,
-                  key: item.key,
-                  taskId,
-                  cohortAt: item.cohortAt,
-                  document: null,
-                  visibility: item.visibility,
-                  nativeRecord: item.key.startsWith('record/'),
-                  ...(item.scopes ? { scopes: item.scopes } : {}),
-                },
-                item.fold,
-                ['cohort', ...(taskId ? ['task/' + taskId] : [])],
-              )
             },
           }
           const build = await buildCompleteObservationCohort(cohortInput)
@@ -469,6 +538,91 @@ export function incrementalObservationQualification(input: {
                 allocation,
               )
             }
+          }
+          // Candidate evidence is stored once per physical source/group; references
+          // retain only group identities. A root shared by N references never copies
+          // an N-owner execution payload N times. The complete relation has no cap.
+          const referenceScopes = new Map<string, Set<string>>(),
+            recordScopes = new Map<string, string>(),
+            physicalGroups = new Map<string, { owner: string; group: HistoricalRecordScopeGroup }>()
+          for (const [key, record] of records) {
+            const scopes = historicalMetadata.get('record/' + sha256Hex(key))?.scopes
+            if (!scopes?.length) continue
+            const owner = component('root', record.sessionId),
+              identity = sha256Hex(
+                JSON.stringify([
+                  owner,
+                  scopes.map((scope) => scope.referenceId),
+                  record.includedInTotals,
+                  record.model,
+                ]),
+              ),
+              value = physicalGroups.get(identity) ?? {
+                owner,
+                group: {
+                  scopes,
+                  observed: record.includedInTotals,
+                  model: record.model,
+                  numeric: emptyCompleteObservationFold(),
+                },
+              }
+            // The original allocator puts a physical number on an execution only
+            // when the candidate set contains exactly one owner.
+            if (scopes.length === 1)
+              mergeCompleteObservationFold(value.group.numeric, {
+                ...completeMetricsFold(record.metrics),
+                invocations: '0',
+                observedInvocations: '0',
+                historicalReferences: '0',
+                observedHistoricalReferences: '0',
+              })
+            physicalGroups.set(identity, value)
+            recordScopes.set('record/' + sha256Hex(key), identity)
+            for (const reference of recordReferences.get(key) ?? []) {
+              const groups = referenceScopes.get(reference) ?? new Set<string>()
+              groups.add(identity)
+              referenceScopes.set(reference, groups)
+            }
+          }
+          for (const [identity, { owner, group }] of physicalGroups)
+            await retain(owner, {
+              section: 'cohort-fold',
+              parent: 'native-scope-groups',
+              key: identity,
+              taskId: null,
+              cohortAt: null,
+              document: group,
+            })
+          for (const [key, original] of historicalMetadata) {
+            const groups =
+              key.startsWith('reference/') && original.scopes?.length === 1
+                ? [...(referenceScopes.get(original.scopes[0]!.referenceId) ?? [])]
+                : recordScopes.has(key)
+                  ? [recordScopes.get(key)!]
+                  : undefined
+            const item =
+              groups === undefined ? original : { ...original, historicalRecordScopes: groups }
+            historicalMetadata.set(key, item)
+            const taskId = item.assigned ? item.task!.id : null
+            await retain(
+              item.ownerComponent,
+              {
+                section: 'cohort-fold',
+                parent: null,
+                key: item.key,
+                taskId,
+                cohortAt: item.cohortAt,
+                document: null,
+                visibility: item.visibility,
+                nativeRecord: item.key.startsWith('record/'),
+                ...(item.scopes ? { scopes: item.scopes } : {}),
+                ...(item.historicalRecordScopes
+                  ? { historicalRecordScopes: item.historicalRecordScopes }
+                  : {}),
+              },
+              item.fold,
+              ['cohort', ...(taskId ? ['task/' + taskId] : [])],
+            )
           }
           // Metadata has its own component and includes all original attempts.
           // Accepted identity lookups never read usage, valuations or native files.
@@ -592,6 +746,12 @@ export function incrementalObservationQualification(input: {
                 visibility,
                 nativeRecord: entry.identity.startsWith('record/'),
                 ...(scopes ? { scopes } : {}),
+                ...(historicalMetadata.get(entry.identity)?.historicalRecordScopes
+                  ? {
+                      historicalRecordScopes: historicalMetadata.get(entry.identity)!
+                        .historicalRecordScopes,
+                    }
+                  : {}),
               },
               entry.fold,
               ['dimension/' + entry.dimension.key],
@@ -745,6 +905,9 @@ export function incrementalObservationQualification(input: {
                       nativeRecord: historical.key.startsWith('record/'),
                       visibility: historical.visibility,
                       ...(historical.scopes ? { scopes: historical.scopes } : {}),
+                      ...(historical.historicalRecordScopes
+                        ? { historicalRecordScopes: historical.historicalRecordScopes }
+                        : {}),
                     }
                   : {}),
                 ...(bindings.length ? { bindings } : {}),
@@ -788,10 +951,17 @@ export function incrementalObservationQualification(input: {
                     JSON.stringify([time.sourceId, time.recordId, time.invocation.invocationId]),
                   )
             const references = recordReferences.get(recordKey) ?? []
-            const originalScopes = historicalMetadata.get('record/' + sha256Hex(recordKey))?.scopes
+            const originalMetadata = historicalMetadata.get('record/' + sha256Hex(recordKey)),
+              originalScopes = originalMetadata?.scopes
             const scopeEvidence =
               time.invocation === null
-                ? { nativeRecord: true, ...(originalScopes ? { scopes: originalScopes } : {}) }
+                ? {
+                    nativeRecord: true,
+                    ...(originalScopes ? { scopes: originalScopes } : {}),
+                    ...(originalMetadata?.historicalRecordScopes
+                      ? { historicalRecordScopes: originalMetadata.historicalRecordScopes }
+                      : {}),
+                  }
                 : {}
             const visibility =
               historicalMetadata.get('record/' + sha256Hex(recordKey))?.visibility ??
@@ -876,6 +1046,8 @@ export function incrementalObservationQualification(input: {
           const retryNative = [...historicalMetadata.values()].some((entry) =>
             entry.fold.gaps.some((gap) => gap === 'historical-native-unavailable'),
           )
+          if (retryNative && work.source === 'original-bootstrap-upgrade')
+            throw new Error('Original candidate-set index upgrade is waiting for native EOF')
           if (retryNative) {
             // An unreadable original root has no deletion EOF. Hold the entire
             // connected numeric bundle until the allocator can resolve overlap

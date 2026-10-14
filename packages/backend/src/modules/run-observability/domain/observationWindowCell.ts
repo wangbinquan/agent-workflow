@@ -25,6 +25,7 @@ export interface ObservationWindowCell {
     readonly candidateCount?: string
     readonly visibility?: readonly { taskId: string | null; ownerUserId: string | null }[]
     readonly scopes?: readonly HistoricalObservationExecution[]
+    readonly historicalRecordScopes?: readonly string[]
     readonly nativeRecord?: boolean
     readonly dimensions?: readonly Omit<QualifiedObservationDimensionContribution, 'fold'>[]
   }
@@ -37,12 +38,16 @@ export function observationWindowCellKey(
     readonly candidateCount?: string
     readonly visibility?: readonly { taskId: string | null; ownerUserId: string | null }[]
     readonly scopes?: readonly HistoricalObservationExecution[]
+    readonly historicalRecordScopes?: readonly string[]
     readonly nativeRecord?: boolean
     readonly dimensions?: readonly QualifiedObservationDimensionContribution[]
     readonly unknownDimensions?: readonly QualifiedObservationDimensionContribution[]
   },
 ): string | null {
   if (row.occurrence.occurredAt === null) return null
+  const source = row.historicalRecordScopes?.length
+    ? (({ scopes: _scopes, visibility: _visibility, ...original }) => original)(row)
+    : row
   const {
     identity: _id,
     recordId: _record,
@@ -52,7 +57,7 @@ export function observationWindowCellKey(
     dimensions,
     unknownDimensions: _unknown,
     ...original
-  } = row
+  } = source
   const from = Math.floor(row.occurrence.occurredAt / 3600000) * 3600000
   return (
     'occurrence-cell/' +

@@ -1,3 +1,4 @@
+import { originalHistoricalDiagnostic } from '../domain/originalHistoricalDiagnostic'
 import { originalObservationTimePartition } from '../domain/observationWindowCell'
 import type { ProjectionOccurrence } from './incrementalObservationWindow'
 import type { CompleteHistoricalObservationRecord } from '@agent-workflow/shared'
@@ -48,6 +49,7 @@ export function incrementalObservationWindowRows(
       if (window.mode === 'cohort') return []
       const row = raw as ProjectionOccurrence,
         at = row.occurrence.occurredAt
+      if (row.kind === 'historical' && completeMetricsFold(row.metrics).records === '0') return []
       if (section === 'time-unassigned' && at !== null) return []
       const partition =
         at === null ? 'unassigned-time' : inWindow(at) ? 'in-window' : 'outside-window'
@@ -96,6 +98,7 @@ export function incrementalObservationWindowRows(
       ]
     })
   }
+  if (originalHistoricalDiagnostic(section, parent)) return [...rows]
   if (section === 'historical-executions' && parent !== 'original-source')
     return rows.flatMap((raw) => {
       const row = refs.get((raw as CompleteHistoricalObservationExecution).execution.referenceId)

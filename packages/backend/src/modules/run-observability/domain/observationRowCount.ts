@@ -11,6 +11,7 @@ export interface ObservationRowCountScope {
   cohortAt: number | null
   visibility?: readonly { taskId: string | null; ownerUserId: string | null }[]
   scopes?: readonly HistoricalObservationExecution[]
+  historicalRecordScopes?: readonly string[]
   nativeRecord?: boolean
   document?: { invocationId?: string }
 }

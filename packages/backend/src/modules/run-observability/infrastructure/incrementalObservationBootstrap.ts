@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, ne } from 'drizzle-orm'
+import { and, asc, eq, isNull, notInArray } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   observationProjectionIndexedVersions,
@@ -12,7 +12,7 @@ import {
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import {
-  legacyQualifiedObservationIndexChannel,
+  legacyQualifiedObservationIndexChannels,
   qualifiedObservationIndexVersion,
 } from '../domain/qualifiedObservationIndexes'
 import { enqueueIncrementalObservationWork } from './incrementalObservationWork'
@@ -55,7 +55,9 @@ export function incrementalObservationBootstrap(
           eq(observationProjectionBootstrap.done, false),
           // Only this explicitly superseded index protocol is retired. Unknown
           // required channels continue to fail rather than being silently lost.
-          ne(observationProjectionBootstrap.channel, legacyQualifiedObservationIndexChannel),
+          notInArray(observationProjectionBootstrap.channel, [
+            ...legacyQualifiedObservationIndexChannels,
+          ]),
         ),
       )
       .orderBy(asc(observationProjectionBootstrap.channel))
