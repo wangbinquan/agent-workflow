@@ -1,5 +1,13 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 新根语料守卫登记修正
+
+完整源码 `dba70f0fceaf12b7a4e07a724aae47ef1ff49495`／架构 `73d1e14c516ff489621a56c1fd91e52600ad388b` 已发布并验证远端同步。主 run `38487257387` 的质量作业 `115603782464` 成功。Windows run `38487257249` 终态 failure，平台套件 1662 pass／2 fail，分别是原累计使用量成员归属与原生 reader 复用 5s 超时；相关 reader／generation／readonly SQLite 三份依赖及测试从前置 `651f956df` 到本轮源码保持原 blob。此结果不代签总绿。
+
+主 CI Ubuntu 3 job `115603782598` 暴露本轮新回归的治理遗漏：rfc370-host-root-boundaries 是 corpus scanner，却没有 floor／manifest entry。此次在原 backendUnits 语料上新增 >=2000，再原样选择四个实际 roots；新增 guard row 使用原 isCorpusScanner／corpusFloor／assertsAbsence／negativeFixtureAssertions 分类，保持原扫描、普通 business caller 负向控制和所有既有登记。主 CI Mac7 的两次 startCommand 失败仍对应原 `6849c1073`，不混为本轮问题。
+
+共享 main 已前进到并发源码 `02f64fe78`；其已生成的 13 份 JSON／status 输出完整保留，包含实际中立 contract 的一条 28688→28689 原一次性增长声明。共同提交时保留该声明、所有既有 baseline／why 与原生成正文，只补本人的 guard row 及实际提交 provenance。原语料下限、负 fixture 与根边界三文件 43 pass。直接读取提交对象 02f64fe78，八份 canonical 输出及 status 投影完整相等、原 canonical validation 零错误；live-tree 对账读到新并发 WIP 的两次不一致保留为无效候选证据，不重跑全门。限定 lint／格式通过；精确发布和远端确切 SHA 验收另验；A-G 未签，B/M0 未开始，没有跨 session 消息。
+
 ## 2026-10-14 已批准旧账本发布及其后本人 CI 修复
 
 两条原 holder 的有限接手已完整发布为 `d78792ca58f5d44dc0511c4c2954e99afd20b9a7`／`3e809ce90b76d3c8e0123cff82b7f89b4b3d045e`，生成物只改 4 个实际有差异的治理文件，13 份完整生成输出保持一致；生产 sourceDigest 仍为 `sha256:ac91c17ad90bee0bec7136c186cc77d268c79289820474e44881ec7542f1480d`。原账本 7→9、严格扫描 3 pass，原五条 growth 已消费退役，本次新增仅对应两条原槽的实际增长。main CI `38486154259` 已触发，未据此宣称总绿。

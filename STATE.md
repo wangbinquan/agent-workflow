@@ -1,3 +1,9 @@
+## 2026-10-14 RFC-370：已发布候选的确切 CI 与新根守卫配套
+
+源码 `dba70f0fc`／13 份配套 `73d1e14c5` 已完整推送，推后 main/origin 0/0。主 CI `38487257387` 的 lint/typecheck/format/shared/system-mock 作业 `115603782464` 成功；默认 Windows `38487257249` 终态 failure，平台套件 1662 pass／2 fail，原 native 进程、十一 caller 对账和新 webhook owner 的已选组均通过。两处 Windows 失败保留为原 RFC-371 成员归属与连接复用超时；主 CI 尚未终态，不签 A-G。
+
+Ubuntu 3 的原语料治理守卫确认本人新根测试漏登记及漏下限。此次补 backend corpus >=2000 和完整 guard row，原扫描／匹配／负 fixture 断言保持，配套字段由原 census 分类器读取真实测试生成。并发 `02f64fe78` 已提交的 JSON／中立路由／Bun／原 Migrator 计数修复及其 13 份共享生成输出完整保留；本批只增加本人的守卫行和准确 provenance，原 corpus／negative fixture／根边界三文件 43 pass；固定 Git 对象的八份 canonical 及 status 投影完整一致，限定 lint／格式通过。明确路径发布及新确切 CI 另验。旧 CLI 两次调用／dev 边及其它范围外失败保持责任划分，无跨 session 信息；B/M0 未开始，AW 尚未部署 CS。以下历史及并发全文保持。
+
 ## 2026-10-14 RFC-370：两处旧账本已上库，继续修复本阶段 CI 遗漏
 
 刚获批的两条原 holder 账本已发布：源码 `d78792ca5`／配套 `3e809ce90`，原装配账本 7→9，旧五条一次性增长回执退役；推后 main/origin 已同步，原业务／扫描／断言保持。新主 CI `38486154259` 已启动，非终态成功不能签 A-G。
