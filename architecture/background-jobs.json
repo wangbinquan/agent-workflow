@@ -1400,9 +1400,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/clarify.ts",
-      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:149",
+      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:150",
       "kind": "register-call",
-      "line": 149,
+      "line": 150,
       "ownerEntryId": "owner:packages/backend/src/routes/clarify.ts#mountClarifyRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountClarifyRoutes",
@@ -1411,9 +1411,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/clarify.ts",
-      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:166",
+      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:167",
       "kind": "register-call",
-      "line": 166,
+      "line": 167,
       "ownerEntryId": "owner:packages/backend/src/routes/clarify.ts#mountClarifyRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountClarifyRoutes",
@@ -1422,9 +1422,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/clarify.ts",
-      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:202",
+      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:203",
       "kind": "register-call",
-      "line": 202,
+      "line": 203,
       "ownerEntryId": "owner:packages/backend/src/routes/clarify.ts#mountClarifyRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountClarifyRoutes",
@@ -1433,9 +1433,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/clarify.ts",
-      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:223",
+      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:224",
       "kind": "register-call",
-      "line": 223,
+      "line": 224,
       "ownerEntryId": "owner:packages/backend/src/routes/clarify.ts#mountClarifyRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountClarifyRoutes",
@@ -1444,9 +1444,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/clarify.ts",
-      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:244",
+      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:245",
       "kind": "register-call",
-      "line": 244,
+      "line": 245,
       "ownerEntryId": "owner:packages/backend/src/routes/clarify.ts#mountClarifyRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountClarifyRoutes",
@@ -1455,9 +1455,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/clarify.ts",
-      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:392",
+      "id": "ambient:packages/backend/src/routes/clarify.ts#registerRoute:393",
       "kind": "register-call",
-      "line": 392,
+      "line": 393,
       "ownerEntryId": "owner:packages/backend/src/routes/clarify.ts#mountClarifyRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountClarifyRoutes",
@@ -14258,5 +14258,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:daf91ae62f104ecc45da27ab62f94e054462e190b9a91bdcd1bc5cf7f239f2db"
+  "sourceDigest": "sha256:bca5ebffb9ff29ce34e1e5d5df90947f44b70f51e31b669632cb6d08aa3af711"
 }

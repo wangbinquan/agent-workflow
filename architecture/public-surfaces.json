@@ -3,9 +3,9 @@
     "consumers": 1333,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1719,
+    "methods": 1721,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 27123,
+    "recursiveFields": 27130,
     "symbols": 1246
   },
   "entries": [
@@ -6088,10 +6088,10 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 27,
+        "maxMethods": 29,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 430,
-        "maxUnionVariants": 169
+        "maxTransitiveLeafFields": 437,
+        "maxUnionVariants": 171
       },
       "consumerEdgeIds": [
         "import:1efefeb38a1ff04ad0f1",
@@ -7443,7 +7443,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4e89e56c89ca82b81a38"
+          ],
           "fieldPath": "clarify.$method:submitDecision.$return.receipt.replayed",
           "type": "boolean"
         },
@@ -7527,6 +7529,41 @@
           "consumerEdgeIds": [],
           "fieldPath": "clarify.followup.$method:cancel.$return",
           "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "clarify.followup.$method:start.$parameter:editor",
+          "type": "SaveClarifyDraftInput['editor']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "clarify.followup.$method:start.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "clarify.followup.$method:start.$parameter:request",
+          "type": "z.infer<typeof ClarifyFollowupSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "clarify.followup.$method:start.$return",
+          "type": "z.infer<typeof ClarifyFollowupStartSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "clarify.followup.$method:status.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "clarify.followup.$method:status.$return.$variant:0",
+          "type": "z.infer<typeof ClarifyFollowupStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "clarify.followup.$method:status.$return.$variant:1",
+          "type": "undefined"
         },
         {
           "consumerEdgeIds": [
@@ -7797,7 +7834,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4e89e56c89ca82b81a38"
+          ],
           "fieldPath": "questions.$method:dispatch.$return.receipt.replayed",
           "type": "boolean"
         },
@@ -8558,7 +8597,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:4e89e56c89ca82b81a38"
+          ],
           "fieldPath": "reviews.$method:submitDecision.$return.receipt.replayed",
           "type": "boolean"
         },
@@ -8685,9 +8726,7 @@
           "signatureDigest": "sha256:91aba57277933581674d6237b91ed0e208feb4fdd416ca301d83f9ab8c302b91"
         },
         {
-          "consumerEdgeIds": [
-            "import:4e89e56c89ca82b81a38"
-          ],
+          "consumerEdgeIds": [],
           "name": "append",
           "signatureDigest": "sha256:1104d130b044b30b21007e076280362d419a969237d3d609012b04474f1bb865"
         },
@@ -8842,6 +8881,21 @@
           ],
           "name": "stage",
           "signatureDigest": "sha256:c8cca61ea8250f720f3f57eee7d120b389f83d76419b72013a0730202eac3087"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e89e56c89ca82b81a38"
+          ],
+          "name": "start",
+          "signatureDigest": "sha256:eaa9e3aba40f13443cfa7e8e23830f15a675492bec3cbcbf1dd0d40f63edd262"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e89e56c89ca82b81a38",
+            "import:9d670cab2a33f553d2bc"
+          ],
+          "name": "status",
+          "signatureDigest": "sha256:762d7bd71e3b4868e85024694ad5371d079af4a70e2386c014663a3b5bace2f5"
         },
         {
           "consumerEdgeIds": [
@@ -214772,7 +214826,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:daf91ae62f104ecc45da27ab62f94e054462e190b9a91bdcd1bc5cf7f239f2db",
+  "sourceDigest": "sha256:bca5ebffb9ff29ce34e1e5d5df90947f44b70f51e31b669632cb6d08aa3af711",
   "targetContexts": [
     "collaboration",
     "development-automation",

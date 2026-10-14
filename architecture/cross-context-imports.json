@@ -64669,6 +64669,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowup.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/application/clarifyFollowup.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:aa70bbafa3ac08b86244",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
+      "toPath": "packages/backend/src/util/log.ts",
+      "toSymbol": "createLogger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/workflows.ts#$file",
@@ -66112,6 +66129,23 @@
       "toPath": "packages/backend/src/modules/task-execution/public/queries.ts",
       "toSymbol": "TaskWorkspaceQueries",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowup.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/application/clarifyFollowup.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:aebc03d46a6af14eb568",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "DomainError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -98891,9 +98925,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5817,
+    "architectureExceptions": 5819,
     "implementationSccs": 0,
-    "observedEdges": 6620,
+    "observedEdges": 6622,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -168614,6 +168648,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#QueryContext"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/application/clarifyFollowup.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowup.ts#$file",
+      "id": "import:aa70bbafa3ac08b86244",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/log",
+      "syntax": "static-import",
+      "targetSymbol": "createLogger",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/log.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
@@ -170132,6 +170182,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#TaskWorkspaceQueries"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/application/clarifyFollowup.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/clarifyFollowup.ts#$file",
+      "id": "import:aebc03d46a6af14eb568",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "DomainError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
     },
     {
       "edgeKind": "value",
@@ -205713,7 +205779,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:daf91ae62f104ecc45da27ab62f94e054462e190b9a91bdcd1bc5cf7f239f2db",
+  "sourceDigest": "sha256:bca5ebffb9ff29ce34e1e5d5df90947f44b70f51e31b669632cb6d08aa3af711",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

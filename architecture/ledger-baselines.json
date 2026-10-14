@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:daf91ae62f104ecc45da27ab62f94e054462e190b9a91bdcd1bc5cf7f239f2db",
+    "sourceDigest": "sha256:bca5ebffb9ff29ce34e1e5d5df90947f44b70f51e31b669632cb6d08aa3af711",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -870,8 +870,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6620,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6622,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-372 review follow-up O8 async follow-ups (ff43d3c80): collaboration/application/clarifyFollowup.ts now reports background generation failures the way the HTTP layer answers them (DomainError code/message, createLogger for unexpected errors); original census measured 6620 -> 6622. One-use current-candidate registration; all original owners and guards remain."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -891,8 +894,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5817,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5819,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-372 review follow-up O8 async follow-ups (ff43d3c80): the same two legacy edges of collaboration/application/clarifyFollowup.ts (util/errors DomainError, util/log createLogger); the task-channel frame reuses the existing clarify publisher's ws/broadcaster edges; original census measured 5817 -> 5819. One-use current-candidate registration; all original owners and guards remain."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -926,8 +932,11 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27153,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 27162,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-372 review follow-up O8 async follow-ups (ff43d3c80): failure TTL and logger in the follow-up application, the ClarifyFollowupEvents port and its clarifyFollowupEvents publisher, frontend mindmapTargetNodeId, and the shared ClarifyFollowupStart/Status schemas and types; original census measured 27153 -> 27162. One-use current-candidate registration."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。 RFC-370 历史记录：981ae0f4dd28f6711adac2bec65c96fb231fd77d 相对父提交5a0e315c51ffa51ec56fc5c626049296d944dc67增加生命周期双 purpose 切面：mutation-entrypoints 1988→1989、cross-context observed imports 6902→6905、architecture exceptions 6044→6047、public surfaces 1259→1260、module symbol owners 27775→27782；遗漏当次allowGrowth声明，主CI的RFC-317 T17正式失败。已有批准覆盖一个新公开selector、三个bootstrap消费边、七个owner及一个观测写入口；原规则和其他125个baseline保持。此处记录遗漏，不补造后继未增长提交的许可，不改旧历史，不把后继CI追记为981ae0f准入通过；详见design/RFC-370-crewstation-hosted-deployment/ci-task-runtime-lifecycle.md。 RFC-371 CI 配套（source 1603b9c7）：按原 T17 一次性规则消费上一份匹配 RFC-370 投影的七条未增长 permit，原历史与 why 全部保留；本次实际只增长 physical SQLite fixture 347→348 和 platform owner 28664→28674，按原计数逐条登记，下一次无增长时正常退役。没有修改清点规则、人口、required SPI、债务条款或完工信用。 RFC-370 CI diagnostic successor after d13835eb: retire the four original T17 one-use permits on this non-growing candidate; preserve every baseline and the original permit reasons here. rfc294-mutation-entrypoints: RFC-372 review follow-ups O1-O7 (8936a2a8e): the follow-up generation adapter moved into task-execution infrastructure; original census measured 2038 -> 2039. One-use current-candidate registration; all original owners and guards remain. rfc294-cross-context-observed-imports: RFC-372 review follow-ups O1-O7 (8936a2a8e): the task-execution follow-up adapter now owns its runtime/shared imports and task background reads; original census measured 7350 -> 7353. One-use current-candidate registration; all original owners and guards remain. rfc294-architecture-exceptions: RFC-372 review follow-ups O1-O7 (8936a2a8e): the moved follow-up adapter keeps its existing legacy schema edge in task-execution infrastructure; original census measured 6440 -> 6441. One-use current-candidate registration; all original owners and guards remain. rfc294-module-symbol-owners: RFC-372 review follow-ups O1-O7 (8936a2a8e): canonical clarify keys, the injected in-flight registry and task-background port/adapter symbols; original census measured 28704 -> 28710. One-use current-candidate registration; all original owners and guards remain. RFC-371 v2 CI follow-up after 651110f3d: retire the one-use T17 permit on this non-growing candidate; the baseline stays 408 and the original permit reason is kept here. rfc329-mcp-surface-exemptions: RFC-371 v2 run observation (design/RFC-371-run-observability/redesign-v2-20261014.md §5): original census measured 406 -> 408. The v1 read surface (overview, tasks, task detail, task spans) and its three runtime-level price routes are replaced by six exact v2 read routes (overview, tasks, task detail, agents, models, system) and three runtime × model price routes; each leaf stays an explicit not-in-scope / system-point exemption. One-use current-candidate registration. CI closeout successor after 1ba0fa2cf: retire the three one-use T17 permits on this non-growing candidate; baselines stay 84 / 1960 / 27146 and the original permit reasons are kept here. rfc319-e2e-endpoint-coverage: RFC-370 stage A operator recovery endpoints (POST /api/execution/recover, intent turn, MCP runtime-test session and memory-distill job recover) are reachable only for an interrupted original execution, which the browser leg cannot produce; they are covered by backend HTTP tests and frontend recovery-entry unit tests. Original reconciliation 38617429856 measured 80 -> 84. One-use current-candidate registration. rfc294-mutation-entrypoints: RFC-349 PostgreSQL evidence fix (1d58c36a8): the checked runtime migration history is cached once per process (module-level runtimeHistory in platform/persistence/postgresqlMigrationHistory.ts) instead of being replayed for ~2 s on the event loop by every default caller; original census measured 1959 -> 1960. One-use current-candidate registration. rfc294-module-symbol-owners: RFC-349 PostgreSQL evidence fix (1d58c36a8): the history replay becomes a per-version generator with a blocking and an event-loop-yielding driver (replayVersions, nextTurn, replayPostgresqlMigrationHistoryYielding) and the runtime history is checked once (runtimeHistory, readCheckedPostgresqlMigrationHistory); original census measured 27141 -> 27146. One-use current-candidate registration. CI closeout successor after c6ea3574d: retire the two one-use T17 permits on this non-growing candidate (451225527); baselines stay 1961 / 27153 and the original permit reasons are kept here. rfc294-mutation-entrypoints: RFC-349 replay fragment cache (b4dd4fbd4): platform/persistence/schemaContract.ts keeps the active canonical fragment cache in one module-level slot, set only inside each synchronous history replay step, so a daemon boot no longer serializes ~30 full contracts; original census measured 1960 -> 1961. One-use current-candidate registration. rfc294-module-symbol-owners: RFC-349 replay fragment cache (b4dd4fbd4): CanonicalFragmentCache, its active slot, create/with helpers, the key-order and fragment writers in platform/persistence/schemaContract.ts; original census measured 27146 -> 27153. One-use current-candidate registration.",
@@ -935,8 +944,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "45122552798d1304fec06472507bb96fac934aa5",
-    "contentDigest": "sha256:4f88f33d9864be5d426fa47bc4b2b3dcc08f9db60ea27d0be4e50a9c6355b83f",
+    "currentSnapshotSha": "ff43d3c80cb6c8c42087459f032b4ff6acccc149",
+    "contentDigest": "sha256:58982d0c013b638874efcc05f5d76857f3ab2a1941fe83a7f859a59200fdf85e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
