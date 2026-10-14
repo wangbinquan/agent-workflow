@@ -1,5 +1,9 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 一次性增长声明退役
+
+确切 `829e67d54` 的主 CI `38491705813`、Mac2 job `115618173413` 确认 `rfc294-module-symbol-owners` 的一次性增长声明已过期：`2262b1360` 完成真实 28688→28689 投影后，本会话的后继提交没有增长，仍保留了该声明。这是本会话发布配套遗漏。删除已消费的 `allowGrowth`，所有 130 条 baseline、why、顺序与历史 note 保持；原 T17 比较规则、全部生产和并发在制代码保持。只重算该治理文件的真实 provenance，不新增 census 或重写其他架构产物。原 T17 定向 5 pass／0 fail，三文件 Prettier 和 diff 检查通过；逐字段对账确认语义差异只有移除这一条 permit。精确发布和总 CI／A-G 继续按确切 SHA 验收。
+
 ## 2026-10-14 原具名根分母与正向覆盖清单
 
 73d1e14c5 后续 Mac1/Mac2 的确切日志又确认两项本人配套：resource limit 的 PG 重复函数收敛为同一中立别名后，原命名根分母 14→13；新 selected 四根是正向必覆盖人口，按原 NOT_A_LEDGER 规则具名说明并纳入原精确键集，同时新增 selected 恰有四项断言。原 scanner、空 PROVIDER_RUNTIME_UNEXERCISED、普通 business 负 fixture 和高水位严格判据保持；三个既有 guard rows 由原分类器更新真实字段，不新增债务。此前 floor/manifest 修复已发布源码 bfd79020e／配套 2262b1360；该轮主 CI 38490755588 与 Windows 38490755437 已启动，终态另验。

@@ -1,3 +1,7 @@
+## 2026-10-14 RFC-370：退役已消费增长声明
+
+确切 `829e67d54` 主 CI `38491705813` 的 Mac2 job `115618173413` 暴露本会话配套遗漏：已完成 28688→28689 投影的原 module-symbol-owners 一次性声明被后继提交继续保留。仅删除该过期 `allowGrowth` 并按原函数更新单文件 provenance；130 条 baseline、why、顺序、历史 note、原 T17 和生产／并发输出保持。原定向检查及精确发布继续，不重跑无关全门、不新增 census；其他失败按原提交／依赖归因。A-G／总绿未签，B/M0 未启动，AW 未部署 CS。以下全文保持。
+
 ## 2026-10-14 RFC-370：派生根分母与正向覆盖清单配套
 
 73d1e14c5 后续 Mac1/Mac2 的确切日志又确认两项本人配套：resource limit 的 PG 重复函数收敛为同一中立别名后，原命名根分母 14→13；新 selected 四根是正向必覆盖人口，按原 NOT_A_LEDGER 规则具名说明并纳入原精确键集，同时新增 selected 恰有四项断言。原 scanner、空 PROVIDER_RUNTIME_UNEXERCISED、普通 business 负 fixture 和高水位严格判据保持；三个既有 guard rows 由原分类器更新真实字段，不新增债务。此前 floor/manifest 修复已发布源码 bfd79020e／配套 2262b1360；该轮主 CI 38490755588 与 Windows 38490755437 已启动，终态另验。
