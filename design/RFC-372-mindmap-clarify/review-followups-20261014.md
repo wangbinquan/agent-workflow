@@ -175,4 +175,4 @@ task-execution 适配器的取数规则：
 - [x] O1～O7 全部实现，§5 用例全部编写并通过集中验证（shared 13、backend SQLite 79、frontend 全量 7441；三包 tsc、depcheck、lint/prettier）
 - [x] O8：已实现（2026-10-14 补做），§5 用例全部编写并通过集中验证：backend SQLite 5 个文件 42 项与受 schema 影响的 2 个文件 91 项、shared 2 个文件 14 项、frontend 追问与工作区 8 个文件 42 项及渲染详情页的 15 个文件 138 项；RFC-372 四个 e2e 文件 6 项在 chromium 与 webkit 各跑一遍全部通过；三包 tsc、改动文件 eslint（含 promises 规则）/ prettier 通过
 - [x] 实现门：用户豁免
-- [ ] 源码与架构配套按路径提交并推送，确切 SHA 的 CI 结果如实记录
+- [x] 源码与架构配套按路径提交并推送，确切 SHA 的 CI 结果如实记录：O1～O7（`8936a2a8e`、`d13835eb0`）的主 CI `38573440190` 以 cancelled 结束，唯一失败是非本批引入的 RFC-359 AC-1 启动对等偶发，已在 CI 收口中按根因修复（`6ca1bd2e2`）；O8（源码 `ff43d3c80`、配套 `886792596`、许可退役 `232521a09`）在 `232521a09` 上主 CI `38644104276` 72/72 success，视觉回归 `38644104265`、postgresql-evidence `38644172929`、e2e-full-nightly `38644177254`、e2e-webkit-nightly `38644181931` 均 success

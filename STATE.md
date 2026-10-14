@@ -2,7 +2,9 @@
 
 按用户「RFC-371、RFC-372 整体重构完成」的要求补做 [审视后优化](design/RFC-372-mindmap-clarify/review-followups-20261014.md) 中原建议暂缓的 O8（§4.7）：`POST /api/clarify/:nodeRunId/followup` 在前置校验通过后即返回 202 `{state:'running'}`（已受理过的请求 200 `{state:'done'}`），模型在后台生成；校验失败仍是原 409/422。轮次详情增加可选 `followup`（生成中，或最近一次失败，保留 10 分钟、下次受理清除；错误码与文案同 HTTP 层），受理与结束时发任务频道合成帧 `clarify.followup.updated`。前端按轮次状态显示「生成中 / 查看生成中的分支 / 取消」，刷新后与其他成员同样可见，生成中每 1.5 秒重取轮次兜底；后台失败显示在对应分支（取消不算失败）。三份 RFC-372 e2e 改为等待轮次状态，journey 增加「生成中刷新→恢复→在分支上取消」。
 
-本地集中验证：backend（SQLite）追问与澄清路由 5 个文件 42 项、受 schema 影响的 2 个文件 91 项、架构守卫 71 个文件（除待 census 重生成的两项规范账本外全过；`void` 承诺守卫要求的 `.catch` 已补）；shared 2 个文件 14 项；frontend 23 个文件 180 项；RFC-372 四个 e2e 文件 6 项在 chromium 与 webkit 各一遍全过；三包 tsc、改动文件 eslint（含 promises 规则）/ prettier 通过。PostgreSQL 与全量 e2e 以确切 SHA 的 CI 为准。
+本地集中验证：backend（SQLite）追问与澄清路由 5 个文件 42 项、受 schema 影响的 2 个文件 91 项、架构守卫 71 个文件（除待 census 重生成的两项规范账本外全过；`void` 承诺守卫要求的 `.catch` 已补）；shared 2 个文件 14 项；frontend 23 个文件 180 项；RFC-372 四个 e2e 文件 6 项在 chromium 与 webkit 各一遍全过；三包 tsc、改动文件 eslint（含 promises 规则）/ prettier 通过。提交：源码 `ff43d3c80`；架构配套 `886792596`（跨上下文边 6620→6622、架构例外 5817→5819、符号归属 27153→27162 按 T17 一次性登记，任务频道帧并入既有澄清发布器、取消错误构造挪进工厂内，各少一条增长）；`232521a09` 退役三条许可。
+
+**CI 结论（`232521a09`）**：主 CI `38644104276` 72/72 success；视觉回归 `38644104265` success；postgresql-evidence `38644172929` 五个作业全部 success（三平台编译版迁移与运行 PASS、崩溃矩阵 PASS；P95 作业小规模只以 comparable 判定，`acceptancePassed:false` 与此前各次相同，full 规模才作门禁）；e2e-full-nightly `38644177254` success；e2e-webkit-nightly `38644181931` 四个分片 success。上一 SHA `49496c34f` 上手动触发的 postgresql-evidence `38638904694`、e2e-full `38638909887`、e2e-webkit `38638915231` 也均 success。RFC-371 v2 与 RFC-372 O1～O8 至此全部完成。
 
 ## 2026-10-14 CI 全量收口（用户授权：所有 CI 由本会话负责修）
 
