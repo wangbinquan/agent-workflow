@@ -1,5 +1,17 @@
 # RFC-370 阶段 A 集中验收与 CI 修复
 
+## 2026-10-14 剩余超时的失败现场诊断
+
+`d13835eb032c52f320dad4f39ce046d733a3cfd1` 的默认完整 Windows `38574852365` 与视觉回归 `38573440273` 已实际 success，主 CI `38573440190` 仍待终态。`366165c67` 的 Ubuntu 24 job `115868862267` 为 690 pass／1 skip／0 fail，两个原 canonical 严格对账用例均通过，确认本人 sourceDigest 漏项修复已获 hosted 功能证明；不能因此签总流水线或 A-G。
+
+`95be043d4` Markdown job `115880029332` 实际 Lychee 步骤为 900188ms 后 cancelled。主机表为 `api.github.com` 370 requests／55.4% success rate／32ms median／39.2% cache hit；最终链接摘要仍为 1775 total／1768 successful／0 errors。原版本的主机成功率把 2xx 和缓存命中计为成功，独立于最终接受码；这组数据本身不能证明某个响应状态或退避等待。前一轮 `--verbose` 只有 info 级日志，没有具体等待点；原 action 的 `debug` 只启用 shell trace，也不能提供所缺证据。按实际 0.24.2 的 logging／host 实现，仅补 `RUST_LOG=warn,lychee_lib::ratelimit::host=debug`，记录主机退避及其时长，保留原所有检查参数和预算。
+
+同一 SHA Windows E2E 1 job `115886570073` 最终 127 passed／1 failed／4 skipped／2 did not run，唯一最终失败仍为受控发布用例，两个尝试的任务都停在 running。现有错误只带 Task 行，缺少当时 NodeRun 和 daemon 尾部，尚不足以区分节点执行、原收据、工作区收尾或数据库耗时。仅在原等待已失败之后，以 2 秒有界的只读请求采集 NodeRun 状态／时钟和既有 `daemon.diagnostics()`；原成功轮询体、任务等待预算、测试预算、失败条件及其余全部断言保持，不再检查或接受等待窗口以外的成功。
+
+这是必要 CI 归因日志，不是接手未知责任的生产／测试修复；原两项定时启动有限接手仍等待明确答复，未应用预览。并发统计重设计的在制内容保持，未发跨独立 session 信息；A-G 未签、B/M0 未开始。
+
+本次非增长后继须按原 T17 退役 d138 中四项已使用的一次性 growth 许可；130 项 baseline 与原 why 均保持，四项许可原文完整收录于原 note，不能让后继保留过期许可。原 census 读取 d138 的已提交 Git 对象生成配套，未读取并发在制源码；八 canonical 和原 status 全文字节不变，四份治理文件只发生必要的许可／provenance 元数据变化。限定格式、lint、diff 以及原轮询体／预算／全部断言字节保持证明通过；没有运行本地功能测试，也不以此代签 GitHub 结论。
+
 ## 2026-10-14 native 状态刷新回归与完整 CI 边界
 
 原 13 份配套已发布为 `366165c6720f28587c7a486d2d7f3eba0e11897b`，原生产／测试候选保持，远端精确同步；主 CI `38568979583` 的质量作业已成功，其余继续等待实际结论。为补足 Markdown 超时归因所缺的等待点，只给原 Lychee 步骤增加 `--verbose` 与 `--host-stats`。这两项由实际安装的 0.24.2 原 CLI 支持，仅输出逐链接和按主机统计；原 design 全集、15 分钟预算、并发 4、重试 5、单请求 30 秒、接受码和完整 run-ID remap 均保持，没有接手尚未确认责任的修复，也未作检查降级。CI 日志选项微调不增加生产或测试逻辑，随后以新确切 SHA 的原作业确认参数执行和归因数据。

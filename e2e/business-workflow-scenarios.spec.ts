@@ -47,6 +47,8 @@ interface NodeRunRow {
   status: string
   errorMessage: string | null
   promptText: string | null
+  startedAt?: number | null
+  finishedAt?: number | null
 }
 
 interface NodeRunsResponse {
@@ -319,7 +321,38 @@ async function waitForTask(
     }
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
-  throw new Error(`task ${taskId} did not reach expected state; last=${JSON.stringify(last)}`)
+  // Collect only after the original wait has failed; never extend its success window.
+  let timeoutNodeRuns: unknown
+  try {
+    const response = await apiFetch(`/api/tasks/${taskId}/node-runs`, {
+      signal: AbortSignal.timeout(2_000),
+    })
+    if (response.ok) {
+      const detail = (await response.json()) as NodeRunsResponse
+      timeoutNodeRuns = {
+        status: response.status,
+        runs: detail.runs.map((run) => ({
+          id: run.id,
+          nodeId: run.nodeId,
+          parentNodeRunId: run.parentNodeRunId,
+          iteration: run.iteration,
+          retryIndex: run.retryIndex,
+          status: run.status,
+          errorMessage: run.errorMessage,
+          startedAt: run.startedAt,
+          finishedAt: run.finishedAt,
+        })),
+      }
+    } else {
+      timeoutNodeRuns = { status: response.status }
+    }
+  } catch (error) {
+    timeoutNodeRuns = { error: error instanceof Error ? error.message : String(error) }
+  }
+  throw new Error(
+    `task ${taskId} did not reach expected state; last=${JSON.stringify(last)}; ` +
+      `nodeRuns=${JSON.stringify(timeoutNodeRuns)}; daemon=${JSON.stringify(daemon.diagnostics())}`,
+  )
 }
 
 async function waitForTerminal(taskId: string): Promise<TaskRow> {

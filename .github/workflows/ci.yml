@@ -662,6 +662,8 @@ jobs:
           # (60/hr) — otherwise GitHub links will randomly red on busy
           # PRs even when valid.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only host backoff diagnostics; preserve the original checking policy.
+          RUST_LOG: warn,lychee_lib::ratelimit::host=debug
 
   build-binary:
     name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})
