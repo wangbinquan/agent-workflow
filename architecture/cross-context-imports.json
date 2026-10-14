@@ -30006,6 +30006,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4471533f45d894c7fa41",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#restoreActorSnapshot",
+      "toPath": "packages/backend/src/auth/actor.ts",
+      "toSymbol": "restoreActorSnapshot",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/observationReportWorker.ts#$file",
@@ -109431,9 +109448,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6437,
+    "architectureExceptions": 6438,
     "implementationSccs": 0,
-    "observedEdges": 7347,
+    "observedEdges": 7348,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -141408,6 +141425,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityBinding"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/observationMaintenance.ts#$file",
+      "id": "import:4471533f45d894c7fa41",
+      "owner": "run-observability",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/actor",
+      "syntax": "static-import",
+      "targetSymbol": "restoreActorSnapshot",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/actor.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#restoreActorSnapshot"
     },
     {
       "edgeKind": "type",
@@ -227885,7 +227918,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6e4a487b138d5b3c005a8d97fb4a024fff376de3ad87cd1ed8ab50a240f37c32",
+  "sourceDigest": "sha256:0230c970a6ef988e2918786e0d13bd3c7b5212753fa97a989761f97a1b6a6ec7",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

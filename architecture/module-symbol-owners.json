@@ -6,7 +6,7 @@
     "moduleFiles": 1942,
     "productionFiles": 3432,
     "sharedFiles": 177,
-    "symbolsIncludingFileRoots": 28694
+    "symbolsIncludingFileRoots": 28695
   },
   "entries": [
     {
@@ -93,6 +93,18 @@
       "symbol": "buildActor",
       "targetContext": "identity-access",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/actor.ts",
+      "id": "owner:packages/backend/src/auth/actor.ts#restoreActorSnapshot",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "restoreActorSnapshot",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
     },
     {
       "currentContext": "legacy",
@@ -345071,5 +345083,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6e4a487b138d5b3c005a8d97fb4a024fff376de3ad87cd1ed8ab50a240f37c32"
+  "sourceDigest": "sha256:0230c970a6ef988e2918786e0d13bd3c7b5212753fa97a989761f97a1b6a6ec7"
 }
