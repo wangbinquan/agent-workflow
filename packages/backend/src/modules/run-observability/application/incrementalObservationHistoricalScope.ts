@@ -223,10 +223,27 @@ export function incrementalObservationHistoricalScope(
     typeof document === 'object' &&
     'metrics' in document
   ) {
-    const next = referenceFold(
-      completeMetricsFold(document.metrics as Parameters<typeof completeMetricsFold>[0]),
-      row.detail.section === 'historical-executions',
+    const original = completeMetricsFold(
+      document.metrics as Parameters<typeof completeMetricsFold>[0],
     )
+    // Metrics canonicalize gaps as a set; execution issues retain the original
+    // source order, including the order of native diagnostics.
+    if ('issues' in document && Array.isArray(document.issues))
+      original.gaps = document.issues.filter((issue): issue is string => typeof issue === 'string')
+    const next = referenceFold(original, true)
+    // The original allocator adds an unresolved execution scope immediately
+    // after the invocation gap. A matched execution's unresolved record issue
+    // instead stays after its original native issues.
+    const invocationGap = next.gaps.indexOf('historical-invocation-unobserved'),
+      scopeGap = next.gaps.indexOf('historical-scope-unresolved')
+    if (!matched && !excluded && invocationGap >= 0 && scopeGap >= 0) {
+      next.gaps.splice(scopeGap, 1)
+      next.gaps.splice(
+        next.gaps.indexOf('historical-invocation-unobserved') + 1,
+        0,
+        'historical-scope-unresolved',
+      )
+    }
     document = { ...document, metrics: completeObservationMetrics(next), issues: next.gaps }
   }
   if (excluded && document && typeof document === 'object' && 'metrics' in document)

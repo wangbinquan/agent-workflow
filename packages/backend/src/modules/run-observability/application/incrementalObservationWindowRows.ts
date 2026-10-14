@@ -109,7 +109,7 @@ export function incrementalObservationWindowRows(
       const row = raw as CompleteHistoricalObservationRecord
       // Unknown-time originals remain in time-unassigned and original-source;
       // the admitted usage detail follows the same half-open window as its header.
-      return inWindow(row.occurredAt)
+      return (window.mode === 'cohort' || row.includedInTotals) && inWindow(row.occurredAt)
     })
   if (section === 'historical-record-references')
     return rows.filter((row) => refs.has((row as { referenceId: string }).referenceId))

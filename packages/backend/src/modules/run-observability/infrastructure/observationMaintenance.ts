@@ -4,7 +4,7 @@ import type {
 } from '@agent-workflow/shared'
 import { and, asc, eq, gt, lte, or, sql } from 'drizzle-orm'
 import { randomUUID } from 'node:crypto'
-import type { Actor } from '@/auth/actor'
+import { restoreActorSnapshot, type Actor } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   observationMaintenanceOperations as operations,
@@ -537,10 +537,10 @@ export function observationMaintenance(input: {
     if (!claimed) return true
     try {
       if (picked.state === 'preparing') {
-        const stored = JSON.parse(picked.actorDocument) as Omit<Actor, 'permissions'> & {
-            permissions: readonly string[]
-          },
-          actor = { ...stored, permissions: new Set(stored.permissions) } as Actor
+        const stored = JSON.parse(picked.actorDocument) as Parameters<
+            typeof restoreActorSnapshot
+          >[0],
+          actor = restoreActorSnapshot(stored)
         const timer = setInterval(() => {
           void Promise.resolve()
             .then(() =>

@@ -80,6 +80,18 @@ export function buildActor(opts: {
   })
 }
 
+/** Restore the exact context already retained by a durable operation. Do not
+ * recalculate its permission set or fill absent optional fields on restart. */
+export function restoreActorSnapshot(
+  snapshot: Omit<Actor, 'permissions'> & { readonly permissions: readonly Permission[] },
+): Actor {
+  return Object.freeze({
+    ...snapshot,
+    user: Object.freeze({ ...snapshot.user }),
+    permissions: new Set(snapshot.permissions),
+  })
+}
+
 export function actorOf(c: Context): Actor {
   const actor = c.get('actor') as Actor | undefined
   if (!actor) throw new UnauthorizedError('no actor on context')

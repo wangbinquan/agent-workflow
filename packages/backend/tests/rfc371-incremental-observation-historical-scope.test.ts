@@ -17,6 +17,7 @@ import type { QualifiedObservationContribution } from '@/modules/run-observabili
 import { incrementalObservationSelection } from '@/modules/run-observability/application/incrementalObservationSelection'
 import type { HistoricalRecordScopeGroup } from '@/modules/run-observability/ports/incrementalObservationQualified'
 import { incrementalObservationWindow } from '@/modules/run-observability/application/incrementalObservationWindow'
+import { incrementalObservationWindowRows } from '@/modules/run-observability/application/incrementalObservationWindowRows'
 
 const at = Date.parse('2026-10-12T00:00:00Z')
 const owner = (
@@ -287,6 +288,30 @@ test('model selection reconstructs unique-owner received buckets and CNY only fr
       gaps: [...full.gaps, 'historical-scope-unresolved'],
     }),
   )
+  expect(partial.scopeMatch).toBe('matched')
+  expect(partial.issues).toEqual([...full.gaps, 'historical-scope-unresolved'])
+  const nativeIssues = [
+      ...full.gaps,
+      'native-model-unavailable',
+      'native-time-unavailable',
+      'native-step-unfinished',
+    ],
+    withNativeIssues = incrementalObservationHistoricalScope(
+      {
+        ...source,
+        detail: {
+          ...source.detail,
+          document: {
+            ...(source.detail.document as CompleteHistoricalObservationExecution),
+            metrics: completeObservationMetrics({ ...full, gaps: nativeIssues }),
+            issues: nativeIssues,
+          },
+        },
+      },
+      { ...f, query, ids: new Set(), scopeGroups: unknown },
+    )!.detail.document as CompleteHistoricalObservationExecution
+  expect(withNativeIssues.scopeMatch).toBe('matched')
+  expect(withNativeIssues.issues).toEqual([...nativeIssues, 'historical-scope-unresolved'])
   expect(
     incrementalObservationHistoricalScope(
       { ...source, detail: { ...source.detail, historicalRecordScopes: ['b'] } },
@@ -516,6 +541,13 @@ test('a shared physical candidate keeps both references unresolved even when one
         gaps: [...oldFold.gaps, 'historical-scope-unresolved'],
       }),
     )
+    // The original allocator diagnoses an unresolved execution scope before
+    // attribution, while retaining the original native issue sequence.
+    expect(actual.issues).toEqual([
+      'historical-invocation-unobserved',
+      'historical-scope-unresolved',
+      ...oldFold.gaps.slice(1),
+    ])
     historical.push(actual)
   }
   const unresolved = incrementalObservationHistoricalScope(f.row, { ...f, query, ids: new Set() })!,
@@ -557,6 +589,38 @@ test('a shared physical candidate keeps both references unresolved even when one
     'included',
     'excluded',
   ])
+  // The admitted usage page must agree with the zero numerical inventory;
+  // the same physical fact is still present in the original-source diagnostic.
+  const originalRecord = {
+    nativeSource: 'original',
+    recordId: 'shared-record',
+    occurredAt: at,
+    includedInTotals: false,
+    metrics: completeObservationMetrics(unresolved.fold),
+  }
+  expect(
+    incrementalObservationWindowRows([originalRecord], 'historical-records', null, window, [], at),
+  ).toEqual([])
+  expect(
+    incrementalObservationWindowRows(
+      [originalRecord],
+      'historical-records',
+      'original-source',
+      window,
+      [],
+      at,
+    ),
+  ).toEqual([originalRecord])
+  expect(
+    incrementalObservationWindowRows(
+      [originalRecord],
+      'historical-records',
+      null,
+      { ...window, mode: 'cohort' },
+      [],
+      at,
+    ),
+  ).toEqual([originalRecord])
 })
 
 test('distinct physical candidate sets preserve a uniquely observed record and do not count a covered record as observed', () => {

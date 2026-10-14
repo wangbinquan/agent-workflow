@@ -171,12 +171,10 @@ export function incrementalObservationQualification(input: {
                 }))
                 for (const { document: row } of retained) {
                   if (
-                    (row.detail.scopes?.length ||
-                      row.detail.historicalRecordScopes !== undefined) &&
-                    (row.detail.nativeRecord ||
-                      row.detail.key.startsWith('reference/') ||
-                      row.detail.section === 'historical-executions' ||
-                      row.detail.section === 'historical-record-references')
+                    row.detail.nativeRecord ||
+                    row.detail.key.startsWith('reference/') ||
+                    row.detail.section === 'historical-executions' ||
+                    row.detail.section === 'historical-record-references'
                   ) {
                     if (
                       (row.detail.nativeRecord ||
