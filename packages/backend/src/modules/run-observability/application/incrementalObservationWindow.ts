@@ -159,7 +159,7 @@ export function incrementalObservationWindow(input: {
       else mergeCompleteObservationFold(standalone, next)
     }
     if (row.task) selectedTaskIds.add(row.task.id)
-    const trendAt = input.mode === 'cohort' ? (row.task?.startedAt ?? at) : at
+    const trendAt = input.mode === 'cohort' ? (row.task?.startedAt ?? null) : at
     if (trendAt === null) continue
     const key = date.format(trendAt),
       day = trends.get(key) ?? {
@@ -186,8 +186,22 @@ export function incrementalObservationWindow(input: {
         inWindow: 0n,
         unknown: 0n,
       }
+    if (
+      input.mode === 'cohort' &&
+      !input.query.selection &&
+      call.inWindow === 0n &&
+      call.unknown === 0n &&
+      original.records === '0' &&
+      BigInt(original.knownZeroInvocations ?? '0') > 0n
+    )
+      mergeCompleteObservationFold(call.fold, clearMemberships(original))
     for (const gap of original.gaps) completeObservationGap(call.fold, gap)
-    if (call.inWindow === 0n && call.unknown === 0n && call.fold.gaps.length === 0) continue
+    if (call.inWindow === 0n && call.unknown === 0n && call.fold.gaps.length === 0) {
+      if (input.mode !== 'cohort' || input.query.selection) continue
+      // A proven zero-use invocation still belongs to the Task cohort. Keep
+      // its original pricing/visibility evidence without inventing a record.
+      if (original.records !== '0') completeObservationGap(call.fold, 'usage-incomplete')
+    }
     call.fold.invocations = '1'
     call.fold.observedInvocations = original.observedInvocations
     mergeCompleteObservationFold(task(invocation.taskId), call.fold)
@@ -226,6 +240,51 @@ export function incrementalObservationWindow(input: {
   const tasks: CompleteObservationTask[] = []
   for (const original of input.tasks) {
     const fold = task(original.task.id)
+    if (input.mode === 'cohort' && !input.query.selection) {
+      // A Task cohort contains every selected Task, including failed attempts,
+      // missing usage and proven executions without a model. Numeric atoms
+      // supply Token/cost values; their presence never defines Task membership.
+      selectedTaskIds.add(original.task.id)
+      const at = original.task.startedAt,
+        key = date.format(at),
+        day = trends.get(key) ?? {
+          from: at,
+          to: at + 1,
+          tasks: new Set<string>(),
+          calls: new Set<string>(),
+          references: new Set<string>(),
+          fold: emptyCompleteObservationFold(),
+        }
+      day.from = Math.min(day.from, at)
+      day.to = Math.max(day.to, at + 1)
+      day.tasks.add(original.task.id)
+      const source = completeMetricsFold(original.metrics)
+      day.fold.invocations = String(BigInt(day.fold.invocations) + BigInt(source.invocations))
+      day.fold.observedInvocations = String(
+        BigInt(day.fold.observedInvocations) + BigInt(source.observedInvocations),
+      )
+      day.fold.knownZeroInvocations = String(
+        BigInt(day.fold.knownZeroInvocations ?? '0') + BigInt(source.knownZeroInvocations ?? '0'),
+      )
+      day.fold.knownZeroCostInvocations = String(
+        BigInt(day.fold.knownZeroCostInvocations ?? '0') +
+          BigInt(source.knownZeroCostInvocations ?? '0'),
+      )
+      if (source.records === '0' && BigInt(source.knownZeroInvocations ?? '0') > 0n) {
+        day.fold.priced = day.fold.priced && source.priced
+        day.fold.visible = day.fold.visible && source.visible
+      }
+      day.fold.historicalReferences = String(
+        BigInt(day.fold.historicalReferences ?? '0') + BigInt(source.historicalReferences ?? '0'),
+      )
+      day.fold.observedHistoricalReferences = String(
+        BigInt(day.fold.observedHistoricalReferences ?? '0') +
+          BigInt(source.observedHistoricalReferences ?? '0'),
+      )
+      if (original.metrics.state === 'not-ready')
+        for (const gap of original.metrics.gaps) completeObservationGap(day.fold, gap)
+      trends.set(key, day)
+    }
     // Original source-population gaps remain visible even when no accepted
     // numeric record has a usable clock in this selected window.
     if (
@@ -260,10 +319,12 @@ export function incrementalObservationWindow(input: {
   const trendRows: CompleteObservationTrend[] = [...trends]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, day]) => {
-      day.fold.invocations = String(day.calls.size)
-      day.fold.observedInvocations = String(day.calls.size)
-      day.fold.historicalReferences = String(day.references.size)
-      day.fold.observedHistoricalReferences = String(day.references.size)
+      if (input.mode !== 'cohort' || input.query.selection) {
+        day.fold.invocations = String(day.calls.size)
+        day.fold.observedInvocations = String(day.calls.size)
+        day.fold.historicalReferences = String(day.references.size)
+        day.fold.observedHistoricalReferences = String(day.references.size)
+      }
       return {
         key,
         from: day.from,

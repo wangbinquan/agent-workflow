@@ -15,6 +15,7 @@ import {
   emptyCompleteObservationFold,
   completeObservationMetrics,
   addCompleteObservationAllocation,
+  completeObservationGap,
 } from '@/modules/run-observability/domain/completeObservationMetrics'
 import {
   emptyIncrementalObservationFold,
@@ -22,7 +23,12 @@ import {
   completeIncrementalObservationFold,
 } from '@/modules/run-observability/domain/incrementalObservationFold'
 import { incrementalObservationWindow } from '@/modules/run-observability/application/incrementalObservationWindow'
-import type { CompleteObservationTimePartition, ObservationTaskFacts } from '@agent-workflow/shared'
+import type {
+  CompleteObservationTimePartition,
+  CompleteObservationTask,
+  CompleteObservationInvocation,
+  ObservationTaskFacts,
+} from '@agent-workflow/shared'
 const at = Date.parse('2026-10-13T00:10:00Z'),
   task: ObservationTaskFacts = {
     id: 'original',
@@ -159,6 +165,148 @@ test('page-count weights are independent from numerical quantities and move reve
   expect(second.counters.numericRecords).toBe('2')
   expect(completeIncrementalObservationFold(second).tokens.input).toBe('0')
 })
+
+test('a cohort counts all 211 original Tasks and missing-usage days without manufacturing Token or CNY values', () => {
+  const numeric = row('one-original-record', '9007199254740993'),
+    fold = emptyCompleteObservationFold(),
+    missing = emptyCompleteObservationFold()
+  addCompleteObservationAllocation(
+    fold,
+    { input: '9007199254740993', cacheRead: '3', cacheWrite: '0', output: '7' },
+    { amount: '0.000000000001', complete: true, hidden: false },
+  )
+  completeObservationGap(missing, 'original-invocation-unobserved')
+  const timing: CompleteObservationTask['timing'] = {
+      wallMs: '100',
+      runningMs: '100',
+      range: null,
+      intervals: { state: 'complete', unknown: '0', cumulativeMs: '0', activeUnionMs: '0' },
+    },
+    tasks: CompleteObservationTask[] = [
+      { task, metrics: numeric.metrics, attemptCount: '0', timing },
+      ...Array.from({ length: 210 }, (_, index) => ({
+        task: {
+          ...task,
+          id: 'no-numeric-record-' + index,
+          status: 'failed' as const,
+          startedAt: at + (index < 110 ? 0 : 86400000),
+        },
+        metrics: completeObservationMetrics(
+          index === 209 ? missing : emptyCompleteObservationFold(),
+        ),
+        attemptCount: '0',
+        timing,
+      })),
+    ],
+    input = {
+      query: { from: at - 1, to: at + 2 * 86400000, timezone: 'UTC' },
+      tasks,
+      occurrences: [
+        {
+          key: 'original-occurrence',
+          component: 'original-owner',
+          aggregates: [],
+          fold,
+          detail: {
+            section: 'time-partitions' as const,
+            parent: null,
+            key: 'original-occurrence',
+            taskId: task.id,
+            cohortAt: at,
+            document: numeric,
+          },
+        },
+      ],
+      invocations: [],
+      historical: [],
+    },
+    cohort = incrementalObservationWindow({ ...input, mode: 'cohort' })
+  expect(cohort.tasks).toHaveLength(211)
+  expect(cohort.trends.map((day) => day.tasks)).toEqual(['111', '100'])
+  expect(cohort.trends[1]!.metrics.state).toBe('not-ready')
+  expect(cohort.fold.tokens).toEqual(fold.tokens)
+  expect(cohort.fold.records).toBe('1')
+  expect(cohort.fold.picos).toBe('1')
+  const usage = incrementalObservationWindow({
+      ...input,
+      query: { ...input.query, cohort: 'usage' },
+      mode: 'usage',
+    }),
+    selected = incrementalObservationWindow({
+      ...input,
+      query: { ...input.query, selection: 'original-selected-dimension' },
+      mode: 'cohort',
+    })
+  expect(usage.trends.map((day) => day.tasks)).toEqual(['1'])
+  expect(selected.trends.map((day) => day.tasks)).toEqual(['1'])
+  expect(selected.tasks).toHaveLength(1)
+  expect(usage.fold.tokens).toEqual(fold.tokens)
+  expect(selected.fold.tokens).toEqual(fold.tokens)
+})
+
+for (const partial of [false, true])
+  test(`a ${partial ? 'gapped' : 'ready'} proven zero-use call belongs to the full Task cohort without manufacturing a usage record`, () => {
+    const fold = emptyCompleteObservationFold()
+    fold.invocations = '1'
+    fold.observedInvocations = '1'
+    fold.knownZeroInvocations = '1'
+    fold.knownZeroCostInvocations = '1'
+    if (partial) completeObservationGap(fold, 'original-invocation-unobserved')
+    const metrics = completeObservationMetrics(fold),
+      invocation: CompleteObservationInvocation = {
+        invocationId: 'original-proven-zero-call',
+        taskId: task.id,
+        taskName: task.name,
+        agentName: 'Original Agent',
+        nodeRunId: 'original-zero-run',
+        agentId: 'original-agent',
+        agentRevision: 1,
+        purpose: 'task',
+        nativeCaptureContract: 'opencode-child-steps-v1',
+        nativeCaptureSource: 'original-zero-proof',
+        authority: {
+          kind: 'local',
+          runtime: {
+            registrationId: 'original-runtime',
+            acceptedName: 'Original',
+            configurationRevision: 0,
+            protocol: 'opencode',
+          },
+        },
+        acceptedAt: at,
+        priceBookRevision: 1,
+        metrics,
+      },
+      result = incrementalObservationWindow({
+        query: { from: at - 1, to: at + 1000, timezone: 'UTC' },
+        mode: 'cohort',
+        tasks: [
+          {
+            task,
+            metrics,
+            attemptCount: '1',
+            timing: {
+              wallMs: '100',
+              runningMs: '100',
+              range: null,
+              intervals: { state: 'complete', unknown: '0', cumulativeMs: '0', activeUnionMs: '0' },
+            },
+          },
+        ],
+        occurrences: [],
+        invocations: [invocation],
+        historical: [],
+      })
+    expect(result.invocations).toHaveLength(1)
+    expect(result.tasks).toHaveLength(1)
+    expect(result.tasks[0]!.metrics).toEqual(metrics)
+    expect(result.trends[0]!.metrics).toEqual(metrics)
+    expect(result.fold.records).toBe('0')
+    expect(result.fold.invocations).toBe('1')
+    expect(result.fold.knownZeroInvocations).toBe('1')
+    expect(result.fold.knownZeroCostInvocations).toBe('1')
+    expect(result.fold.tokens).toEqual({ input: '0', cacheRead: '0', cacheWrite: '0', output: '0' })
+  })
 
 test('compact descriptor replay is idempotent and scope metadata is kept outside index keys', () => {
   const document = row('a', '17'),

@@ -298,6 +298,15 @@ export function incrementalObservationQueries(input: {
         )) &&
       view.taskId === undefined
     ) {
+      if (
+        view.query.cohort !== 'usage' &&
+        selection === null &&
+        view.queryShape !== 'complete-cohort-v2'
+      )
+        throw new CompleteObservationError(
+          'not-found',
+          'Original cohort projection shape changed; request the original filters again',
+        )
       let occurrences: QualifiedObservationContribution[] = []
       const standaloneComponents = new Set(
         entries.filter((row) => row.detail.section === 'cohort-fold').map((row) => row.component),
@@ -1048,6 +1057,7 @@ export function incrementalObservationQueries(input: {
       const view = await input.source.retainView({
         actorScope: input.scopeOf(actor),
         generation: input.generation,
+        queryShape: 'complete-cohort-v2',
         version: version ?? { revision: '0', asOf: 0 },
         query: filters,
         ...(taskId ? { taskId } : {}),

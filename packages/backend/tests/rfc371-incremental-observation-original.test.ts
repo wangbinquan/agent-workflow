@@ -177,7 +177,12 @@ function setup(
       visibleTaskIds: (a, ids) => createCompleteTaskObservationFacts(h.db).visibleIds(a, ids),
     },
   })
-  async function apply(id: string, ids: readonly string[], source = 'original-row-changes') {
+  async function apply(
+    id: string,
+    ids: readonly string[],
+    source = 'original-row-changes',
+    metadataIds: readonly string[] = [],
+  ) {
     const work = {
       id,
       source,
@@ -185,10 +190,13 @@ function setup(
       components:
         source === 'original-bootstrap-finish'
           ? [JSON.stringify(['coverage', generation])]
-          : ids.flatMap((id) => [
-              JSON.stringify(['invocation', id]),
-              JSON.stringify(['task', id.replace('invocation-', 'run-')]),
-            ]),
+          : [
+              ...ids.flatMap((id) => [
+                JSON.stringify(['invocation', id]),
+                JSON.stringify(['task', id.replace('invocation-', 'run-')]),
+              ]),
+              ...metadataIds.map((id) => JSON.stringify(['task-metadata', id])),
+            ],
     }
     await h.session.transaction((tx) => enqueueIncrementalObservationWork(tx, work))
     await h.db.delete(observationProjectionChanges).run()
@@ -1303,6 +1311,106 @@ describeEachProvider(
             )
           }
         }, 60_000)
+    test('211 persisted Tasks including zero-call and failed Tasks survive a scoped cohort; old incompatible views renew without changing original facts', async () => {
+      await seedCompleteTask(h, 1, 0)
+      await h.db.delete(observationUsageCaptures).run()
+      await h.db.delete(observationInvocations).run()
+      await h.db.update(nodeRuns).set({ runtime: 'opencode', opencodeSessionId: 'root' }).run()
+      const native = persistentNativeFixture({ steps: 3, depth: 1 })
+      cleanups.push(() => native.close())
+      const original = (await h.db.select().from(originalTasks).all())[0]!
+      const added = Array.from({ length: 210 }, (_, index) => {
+        const id = completeFixtureId('no-call-task', index),
+          startedAt = COMPLETE_NOW - (index < 100 ? 86400000 : 0) + index + 100
+        return {
+          ...original,
+          id,
+          name: 'Original Task without a call ' + index,
+          rootTaskId: id,
+          workflowSnapshot: JSON.stringify({
+            nodes: index === 0 ? [{ id: 'shared-original-node', kind: 'agent-single' }] : [],
+          }),
+          status: index % 2 === 0 ? ('failed' as const) : ('done' as const),
+          startedAt,
+          branchStartedAt: startedAt,
+          finishedAt: startedAt + 1,
+          runningMs: 1,
+        }
+      })
+      await h.db.insert(originalTasks).values(added).run()
+      await h.db
+        .insert(nodeRuns)
+        .values({
+          id: 'shared-original-run',
+          taskId: added[0]!.id,
+          nodeId: 'shared-original-node',
+          status: 'done',
+          runtime: 'opencode',
+          opencodeSessionId: 'root',
+          startedAt: COMPLETE_NOW,
+          finishedAt: COMPLETE_NOW + 10,
+        })
+        .run()
+      const before = normalized(await h.db.select().from(originalTasks).all()),
+        f = setup(h, native, true)
+      await f.apply(
+        'all-original-tasks',
+        [completeFixtureId('invocation', 0)],
+        'original-row-changes',
+        added.map((row) => row.id),
+      )
+      const expected = await f.oracle(all),
+        views = incrementalObservationViews(h.db),
+        old = await views.retain({
+          actorScope: completeObservationActorScope(actor),
+          generation,
+          version: (await f.store.snapshot())!,
+          query: all,
+        })
+      await expect(f.queries.status(actor, old.id)).rejects.toMatchObject({ code: 'not-found' })
+      const report = content(await f.queries.request(actor, all, 'original-scope-renewal'))
+      expect(report.header.reportId).not.toBe(old.id)
+      expect(report.summary.inventory.tasks).toBe('211')
+      expect(report.summary.inventory).toEqual(expected.summary.inventory)
+      expect(report.summary.metrics).toEqual(expected.summary.metrics)
+      const trends: CompleteObservationReportPage<{ tasks: string }> = await f.queries.page(
+        actor,
+        report.header.reportId,
+        { section: 'trends', limit: 100 },
+      )
+      expect(trends.nextCursor).toBeNull()
+      expect(trends.items.reduce((sum, day) => sum + BigInt(day.tasks), 0n)).toBe(211n)
+      expect(normalized(trends.items)).toEqual(
+        normalized(
+          expected.rows
+            .filter((row) => row.section === 'trends' && row.parent === null)
+            .map((row) => row.document),
+        ),
+      )
+      async function taskPages(queries: typeof f.queries) {
+        const rows: unknown[] = []
+        let cursor: string | null = null
+        do {
+          const page: CompleteObservationReportPage<unknown> = await queries.page(
+            actor,
+            report.header.reportId,
+            { section: 'tasks', limit: 37, ...(cursor ? { after: cursor } : {}) },
+          )
+          expect(page.total).toBe('211')
+          rows.push(...page.items)
+          cursor = page.nextCursor
+        } while (cursor !== null)
+        return rows
+      }
+      const tasks = await taskPages(f.queries)
+      expect(tasks).toHaveLength(211)
+      expect(normalized(await h.db.select().from(originalTasks).all())).toEqual(before)
+      expect((await views.get(old.id, completeObservationActorScope(actor))).query).toEqual(all)
+      const resumed = setup(h, native, true),
+        retained = content(await resumed.queries.status(actor, report.header.reportId))
+      expect(retained.summary).toEqual(report.summary)
+      expect(await taskPages(resumed.queries)).toEqual(tasks)
+    }, 60_000)
     test('periods share original increments and complete days; UTC half-open boundaries preserve every bucket, category and page', async () => {
       await seedCompleteTask(h, 2, 7, discreteRequest)
       const f = setup(h)

@@ -21,6 +21,7 @@ export interface IncrementalObservationView {
   readonly id: string
   readonly actorScope: string
   readonly generation: string
+  readonly queryShape?: 'complete-cohort-v2'
   readonly version: IncrementalObservationVersion
   readonly query: ObservationOverviewQuery
   readonly taskId?: string
