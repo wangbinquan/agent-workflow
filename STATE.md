@@ -1,3 +1,7 @@
+## 2026-10-14 RFC-370：固定快照报表计数遗漏修复
+
+获批三组源码已提交655181228，并发1ccc07525完整保留。首轮配套未发布：原 committed-source 报表的模块文件数仍读live目录，将未提交新文件计入快照。现在由同一选定backend corpus汇总；原moduleShapes形状规则与并发文件保持。真实Git输入／不存在目录回归2 pass，限定lint／格式通过，同一功能门必要续审PASS／0 findings。前25／27项有效结果沿用；实际提交后重新生成自有未发布配套，不改130条ledger及预算。新SHA总CI／A-G仍待验收，B/M0未启动，AW未部署CS。以下全文保持。
+
 ## 2026-10-14 RFC-370：获批的三组必要 CI 修复
 
 集中诊断：SQLite 五文件 25 pass，原 T19c／五根边界 27 pass，backend Typecheck exit 0、限定 lint／格式通过。一次独立只读功能审阅核对原 15 文件完整 hash，PASS／0 findings。PG 本地未配置，不代签真实 PG；源码精确提交、原生成配套和新 SHA 全 CI 继续验收。

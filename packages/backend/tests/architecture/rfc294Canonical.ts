@@ -17,7 +17,6 @@ import {
   layerOf,
   ledgerEntryCount,
   moduleLocation,
-  moduleShapes,
   outboundBoundaryEdges,
   packageSrcUnits,
   portable,
@@ -4105,6 +4104,17 @@ export function buildCanonicalArtifacts(
     ? source.units.filter((unit) => unit.path.startsWith('packages/frontend/src/'))
     : packageSrcUnits(repoRoot, 'frontend')
   const allUnits = [...backend, ...shared, ...frontend]
+  // Report counts must use the same selected corpus as the manifests, including
+  // an explicit Git snapshot. A directory read here would include unrelated WIP.
+  const moduleFilesByContext = new Map<string, number>()
+  for (const unit of backend) {
+    const location = moduleLocation(unit.path)
+    if (location !== null)
+      moduleFilesByContext.set(
+        location.context,
+        (moduleFilesByContext.get(location.context) ?? 0) + 1,
+      )
+  }
   const owners = buildOwnerEntries(allUnits)
   const observedEdges = observedContextEdges(backend, allUnits, owners)
   const publicSurfaces = buildPublicSurfaces(backend, allUnits, observedEdges)
@@ -4314,12 +4324,9 @@ export function buildCanonicalArtifacts(
       backendProductionFiles: backend.length,
       serviceFiles: facades.length,
       moduleFiles: backend.filter((unit) => unit.path.startsWith(MODULE_PREFIX)).length,
-      moduleContexts: moduleShapes(repoRoot)
-        .filter((shape) => shape.fileCount > 0)
-        .map((shape) => ({
-          context: shape.context,
-          files: shape.fileCount,
-        })),
+      moduleContexts: [...moduleFilesByContext.keys()]
+        .sort()
+        .map((context) => ({ context, files: moduleFilesByContext.get(context)! })),
       backendValueSccs: backendSccs,
       repoValueSccs: repoSccs,
       knownViolations,

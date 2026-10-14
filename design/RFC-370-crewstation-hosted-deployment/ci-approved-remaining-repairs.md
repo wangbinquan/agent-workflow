@@ -21,3 +21,9 @@
 五份原功能测试在显式 SQLite harness 下合计 25 pass／0 fail，含两个真实 CLI hot reload 用例；原 T19c 和五根边界两文件 27 pass／0 fail。backend Typecheck（8 GiB Node 堆）exit 0，限定 ESLint exit 0，格式／diff 检查通过。没有本地 PostgreSQL URL，因此这些结果不替代 PG 实测或完整 E2E。
 
 用户批准的当前任务只读功能子代理审阅完整 15 路径，15/15 SHA-256 与候选一致，PASS／0 findings。审阅确认普通／hot 调用参数、原 reload lifetime、两个 JSON 方法的所有参数位置、当前 descriptor 夹具及历史 Case 区分。没有运行测试／服务或联系其他 session；后续文档只增本结果记录。必要生成配套及新确切 SHA 的主 CI／完整 Windows 仍分别验收。
+
+## 必要配套中的已选快照计数修复
+
+源码 `655181228` 已提交并完整保留三份并发夹具，随后并发 `1ccc07525` 保留在 main。首轮原生成没有发布：其 report.moduleContexts 仍走 live moduleShapes，把原 source-ref 外的新文件计为 185，而该已选 Git 人口是 184。这个 committed-source 输入遗漏属于本会话原生成能力；首轮产物留为无效证据，不代签一致。
+
+报表现在从同一选定 backend corpus 汇总 context 文件数；普通模式仍读取完整 live backendUnits，显式 source-ref 则只计原 Git 输入。原 moduleShapes 的形状规则、其余采数和并发文件保持。新增回归用真实完整 Git 输入和从不创建的不存在目录构建，逐 context 与总人口对账，明确不依赖文件系统副本。原 Git 读取与新增报告回归 2 pass／0 fail，限定 lint／格式通过；同一获批功能门对这两文件必要续审 PASS／0 findings。先前 25／27 项有效结果沿用。修复实际提交后重新生成本会话尚未发布的配套，全部 130 条 ledger、原预算和共享输出继续保留。
