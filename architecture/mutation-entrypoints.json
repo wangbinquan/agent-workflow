@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1959,
+    "entries": 1960,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -38169,6 +38169,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts#runtimeHistory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts#runtimeHistory",
+      "symbol": "runtimeHistory",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -46878,7 +46903,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:421ef0e13b0127e88aedc17a40be524aa3cd8745c535fb2425c1788ca0221eef",
+  "sourceDigest": "sha256:92e7a7eafea9d110b26249097b4e6e1b76032e5bac1edd71e272faa01ded96e8",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

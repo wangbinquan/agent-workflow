@@ -6,7 +6,7 @@
     "moduleFiles": 1697,
     "productionFiles": 3103,
     "sharedFiles": 161,
-    "symbolsIncludingFileRoots": 27141
+    "symbolsIncludingFileRoots": 27146
   },
   "entries": [
     {
@@ -176028,6 +176028,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts#readCheckedPostgresqlMigrationHistory",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "readCheckedPostgresqlMigrationHistory",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts",
       "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts#readPostgresqlMigrationHistoryPrefix",
@@ -176046,6 +176058,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RootSchema",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts#runtimeHistory",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "runtimeHistory",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -176486,6 +176510,18 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#nextTurn",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "nextTurn",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
       "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#planPayload",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -176742,6 +176778,30 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "replayPostgresqlMigrationHistory",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#replayPostgresqlMigrationHistoryYielding",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "replayPostgresqlMigrationHistoryYielding",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#replayVersions",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "replayVersions",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -326425,5 +326485,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:421ef0e13b0127e88aedc17a40be524aa3cd8745c535fb2425c1788ca0221eef"
+  "sourceDigest": "sha256:92e7a7eafea9d110b26249097b4e6e1b76032e5bac1edd71e272faa01ded96e8"
 }
