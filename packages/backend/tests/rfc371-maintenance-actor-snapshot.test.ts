@@ -46,7 +46,7 @@ test('restoration keeps absent optional fields absent and does not expand the sa
       permissions: ['tasks:read:all'] as const,
     },
     restored = restoreActorSnapshot(retained)
-  expect([...restored.permissions]).toEqual(retained.permissions)
+  expect([...restored.permissions]).toEqual([...retained.permissions])
   expect(restored).not.toHaveProperty('authorityRevision')
   expect(restored).not.toHaveProperty('purpose')
   expect(restored).not.toHaveProperty('patId')

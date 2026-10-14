@@ -172,6 +172,13 @@ describeEachProvider('RFC-371 real source revision projections', (harness) => {
       const name = names.get(table.id)
       if (name) Reflect.set(table, 'providerTables', { sqlite: name, postgresql: name })
     }
+    // This original isolated I/U/D fixture continues exercising the immutable
+    // V1 trigger protocol. V2's actual committed clock is covered separately.
+    Reflect.set(
+      contract.tables.find((table) => table.id === 'observation_source_revisions')!,
+      'sourceRevisionProjection',
+      OBSERVATION_SOURCE_REVISION,
+    )
     if (!sqlite) await harness.executeFixtureDdl(`CREATE SCHEMA "${prefix}"`)
     const qualify = (name: string) => (sqlite ? `"${name}"` : `"${prefix}"."${name}"`)
     const target = qualify(names.get('observation_source_revisions')!)

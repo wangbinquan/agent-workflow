@@ -21,6 +21,8 @@ import {
   createPostgresqlRetirementUpgrade,
   createPostgresqlCheckUpgrade,
   createPostgresqlIndexUpgrade,
+  createPostgresqlSourceRevisionUpgrade,
+  logicalSourceRevisionReplacement,
   createPostgresqlMigrationRoot,
   logicalCheckReplacements,
   postgresqlMigrationDigest,
@@ -131,17 +133,23 @@ export async function generatePostgresqlMigrationHistory(
   // one non-expand-only edge the sequence admits, and it has to be detected here
   // because the other two creators reject it outright — an `index-only upgrade
   // changed a row` with no hint that a third kind exists.
-  const replacesChecks = logicalCheckReplacements(upgrade.from.contract, target.contract).length > 0
+  const replacesSourceRevision =
+    logicalSourceRevisionReplacement(upgrade.from.contract, target.contract) !== undefined
+  const replacesChecks = replacesSourceRevision
+    ? false
+    : logicalCheckReplacements(upgrade.from.contract, target.contract).length > 0
   const retiresTables = upgrade.from.contract.tables.some(
     (t) => !target.contract.tables.some((next) => next.id === t.id),
   )
-  const step = retiresTables
-    ? createPostgresqlRetirementUpgrade({ ...upgrade })
-    : replacesChecks
-      ? createPostgresqlCheckUpgrade({ ...upgrade })
-      : addsTables
-        ? createPostgresqlAdditiveUpgrade({ ...upgrade })
-        : createPostgresqlIndexUpgrade({ ...upgrade })
+  const step = replacesSourceRevision
+    ? createPostgresqlSourceRevisionUpgrade({ ...upgrade })
+    : retiresTables
+      ? createPostgresqlRetirementUpgrade({ ...upgrade })
+      : replacesChecks
+        ? createPostgresqlCheckUpgrade({ ...upgrade })
+        : addsTables
+          ? createPostgresqlAdditiveUpgrade({ ...upgrade })
+          : createPostgresqlIndexUpgrade({ ...upgrade })
   const sqlFile = resolve(folder, step.sqlFile)
   const journalFile = resolve(folder, 'meta', `${step.id}.upgrade.json`)
   if (await writeImmutable(sqlFile, renderPostgresqlUpgradeSql(step))) created.push(sqlFile)

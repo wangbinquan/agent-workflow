@@ -628,8 +628,10 @@ async function resetToSnapshot(
   // Source triggers recreate revision rows while business seeds are restored.
   // Restore the complete original revision snapshot last, preserving its values.
   const revisionTable = getTableName(schema.observationSourceRevisions)
+  const changeTable = getTableName(schema.observationProjectionChanges)
   const seeds = [
-    ...snapshot.seeds.filter((seed) => seed.table !== revisionTable),
+    ...snapshot.seeds.filter((seed) => seed.table !== revisionTable && seed.table !== changeTable),
+    ...snapshot.seeds.filter((seed) => seed.table === changeTable),
     ...snapshot.seeds.filter((seed) => seed.table === revisionTable),
   ]
   for (const seed of seeds) {
@@ -638,7 +640,10 @@ async function resetToSnapshot(
     if (seed.rowsJson.includes('$aw_seed$')) {
       throw new Error(`seed rows for ${seed.table} contain the dollar-quote tag`)
     }
-    if (seed.table === revisionTable) await raw(`delete from "agent_workflow"."${revisionTable}"`)
+    // Restoring original business rows also recreates their journal entries.
+    // Restore the exact original journal and clock together at the end.
+    if (seed.table === revisionTable || seed.table === changeTable)
+      await raw(`delete from "agent_workflow"."${seed.table}"`)
     await raw(
       `insert into "agent_workflow"."${seed.table}" ` +
         `select * from json_populate_recordset(null::"agent_workflow"."${seed.table}", ` +

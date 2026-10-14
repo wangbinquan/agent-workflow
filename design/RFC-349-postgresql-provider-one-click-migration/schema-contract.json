@@ -2,7 +2,7 @@
   "activeTableCount": 269,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:3cc614cfbea2a089604a914d4a6f19f54c47ed160ba369ad823e78f1994dd58b",
+  "digest": "sha256:2cb9da99ba7e74d9863bc0c3733a7075ee228ff78d6205ae83e00785d3bbd5c9",
   "sourceProjection": "sqlite",
   "sourceTableCount": 275,
   "tables": [
@@ -43638,6 +43638,16 @@
           "name": "observation_projection_changes_ready",
           "unique": false,
           "where": null
+        },
+        {
+          "columns": [
+            "completed",
+            "source",
+            "id"
+          ],
+          "name": "observation_projection_changes_source_pending",
+          "unique": false,
+          "where": null
         }
       ],
       "migrationKey": [
@@ -47288,6 +47298,7 @@
       },
       "schemaSymbol": "observationSourceRevisions",
       "sourceRevisionProjection": {
+        "changeJournal": "observation_projection_changes",
         "kind": "observation-source-revision",
         "revisionColumn": "revision",
         "sourceColumn": "source_id",

@@ -5,6 +5,11 @@
 import type { ExpectedMigration } from '@/db/schemaAdmission'
 import { sha256Hex } from '@/util/hash'
 import {
+  OBSERVATION_SOURCE_REVISION,
+  OBSERVATION_SOURCE_REVISION_JOURNAL,
+  type ObservationSourceRevisionContract,
+} from './observationSourceRevisionSchema'
+import {
   buildPostgresqlSchemaPlan,
   renderPostgresqlBaselineSql,
   POSTGRESQL_APPLICATION_SCHEMA,
@@ -105,7 +110,10 @@ export interface PostgresqlCheckReplacement {
 export interface PostgresqlIndexUpgrade {
   /** V4 explicitly retires obsolete whole tables; existing migration artifacts stay immutable. */
   readonly retiredTables?: readonly string[]
-  readonly version: 1 | 2 | 3 | 4
+  readonly version: 1 | 2 | 3 | 4 | 5
+  /** V5 only: the exact legacy -> committed-row-journal clock transition. */
+  readonly logicalSourceRevision?: LogicalSourceRevisionReplacement
+  readonly sourceRevisionReplacements?: readonly PostgresqlSourceRevisionReplacement[]
   /** V2 adds whole new active tables; V1 artifacts remain byte-for-byte unchanged. */
   readonly logicalTables?: readonly LogicalTableAddition[]
   /** V3 replaces named CHECK expressions; V1/V2 artifacts never carry this key. */
@@ -136,6 +144,111 @@ export interface PostgresqlIndexUpgrade {
   readonly executableStatements: readonly PostgresqlSchemaStatement[]
   readonly sqlFile: string
   readonly sqlDigest: string
+}
+
+export interface LogicalSourceRevisionReplacement {
+  readonly tableId: 'observation_source_revisions'
+  readonly before: ObservationSourceRevisionContract
+  readonly after: ObservationSourceRevisionContract
+}
+export interface PostgresqlSourceRevisionReplacement {
+  readonly logicalId: string
+  readonly before: PostgresqlSchemaStatement
+  readonly after: PostgresqlSchemaStatement
+}
+
+export function logicalSourceRevisionReplacement(
+  from: LogicalSchemaContract,
+  to: LogicalSchemaContract,
+): LogicalSourceRevisionReplacement | undefined {
+  const before = from.tables.find(
+    (table) => table.id === 'observation_source_revisions',
+  )?.sourceRevisionProjection
+  const after = to.tables.find(
+    (table) => table.id === 'observation_source_revisions',
+  )?.sourceRevisionProjection
+  // Birth/retirement of a whole relation belongs to the original additive or
+  // retirement edge; V5 is only a transition of an already present clock.
+  if (before === undefined || after === undefined) return undefined
+  if (canonicalSchemaJson(before ?? null) === canonicalSchemaJson(after ?? null)) return undefined
+  exact(before, OBSERVATION_SOURCE_REVISION, 'source revision upgrade requires its original clock')
+  exact(
+    after,
+    OBSERVATION_SOURCE_REVISION_JOURNAL,
+    'source revision upgrade requires the complete journal clock',
+  )
+  return { tableId: 'observation_source_revisions', before: before!, after: after! }
+}
+
+function applyLogicalSourceRevision(
+  contract: LogicalSchemaContract,
+  replacement: LogicalSourceRevisionReplacement | undefined,
+): LogicalSchemaContract {
+  if (!replacement) return contract
+  requireSequence(
+    replacement.tableId === 'observation_source_revisions',
+    'source clock table changed',
+  )
+  exact(replacement.before, OBSERVATION_SOURCE_REVISION, 'source clock previous descriptor differs')
+  exact(
+    replacement.after,
+    OBSERVATION_SOURCE_REVISION_JOURNAL,
+    'source clock journal descriptor differs',
+  )
+  const original = contract.tables.find((table) => table.id === replacement.tableId)
+  requireSequence(original !== undefined, 'source clock original relation missing')
+  exact(
+    original.sourceRevisionProjection,
+    replacement.before,
+    'source clock original projection differs',
+  )
+  const payload = {
+    ...contractPayload(contract),
+    tables: contract.tables.map((table) =>
+      table.id === replacement.tableId
+        ? { ...table, sourceRevisionProjection: replacement.after }
+        : table,
+    ),
+  }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
+function sourceRevisionFunctionReplacements(
+  from: PostgresqlSchemaPlan,
+  to: PostgresqlSchemaPlan,
+  replacement: LogicalSourceRevisionReplacement | undefined,
+): readonly PostgresqlSourceRevisionReplacement[] {
+  if (!replacement) return []
+  const result: PostgresqlSourceRevisionReplacement[] = []
+  for (const source of OBSERVATION_SOURCE_REVISION.sources)
+    for (const event of ['insert', 'update', 'delete'] as const) {
+      const logicalId = 'observation_source_revisions:' + source + ':' + event,
+        before = from.statements.find(
+          (statement) => statement.kind === 'function' && statement.logicalId === logicalId,
+        ),
+        after = to.statements.find(
+          (statement) => statement.kind === 'function' && statement.logicalId === logicalId,
+        )
+      requireSequence(
+        before !== undefined && after !== undefined && before.sql !== after.sql,
+        'source clock function pair missing or unchanged',
+      )
+      result.push({ logicalId, before, after })
+    }
+  return result
+}
+
+function sourceRevisionExecutable(
+  replacement: PostgresqlSourceRevisionReplacement,
+): PostgresqlSchemaStatement {
+  requireSequence(
+    replacement.after.sql.startsWith('CREATE FUNCTION '),
+    'source clock function projection differs',
+  )
+  return {
+    ...replacement.after,
+    sql: replacement.after.sql.replace(/^CREATE FUNCTION /, 'CREATE OR REPLACE FUNCTION '),
+  }
 }
 
 export interface PostgresqlMigrationHistory {
@@ -725,6 +838,13 @@ export function createPostgresqlIndexUpgrade(
   return createPostgresqlUpgrade(input, false, false)
 }
 
+/** Only the named clock protocol changes; every historical version is retained. */
+export function createPostgresqlSourceRevisionUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  return createPostgresqlUpgrade(input, false, false, [], true)
+}
+
 /** RFC-363 expand-only migration: new tables plus ordinary indexes on existing tables. */
 export function createPostgresqlAdditiveUpgrade(
   input: PostgresqlUpgradeInput,
@@ -758,6 +878,7 @@ function createPostgresqlUpgrade(
   allowNewTables: boolean,
   allowCheckReplacement: boolean,
   retiredTables: readonly string[] = [],
+  allowSourceRevisionReplacement = false,
 ): PostgresqlIndexUpgrade {
   const { from, to } = input
   validateVersion(from)
@@ -770,7 +891,17 @@ function createPostgresqlUpgrade(
     : []
   const retained = retireLogicalTables(from.contract, retiredTables)
   const oldStatements = retainedStatements(from, retiredTables)
-  const withTables = appendLogicalTables(retained, logicalTables)
+  const logicalSourceRevision = allowSourceRevisionReplacement
+    ? logicalSourceRevisionReplacement(retained, to.contract)
+    : undefined
+  requireSequence(
+    !allowSourceRevisionReplacement || logicalSourceRevision !== undefined,
+    'source revision upgrade has no protocol transition',
+  )
+  const withTables = applyLogicalSourceRevision(
+    appendLogicalTables(retained, logicalTables),
+    logicalSourceRevision,
+  )
   const logicalChecks = allowCheckReplacement
     ? logicalCheckReplacements(withTables, to.contract)
     : []
@@ -783,7 +914,12 @@ function createPostgresqlUpgrade(
   )
   const logicalIndexes = logicalIndexAdditions(expanded, to.contract)
   requireSequence(
-    logicalTables.length + logicalIndexes.length + logicalChecks.length + retiredTables.length > 0,
+    logicalTables.length +
+      logicalIndexes.length +
+      logicalChecks.length +
+      retiredTables.length +
+      (logicalSourceRevision ? 1 : 0) >
+      0,
     'schema upgrade has no new indexes or tables',
   )
   requireSequence(
@@ -803,9 +939,15 @@ function createPostgresqlUpgrade(
   const old = new Map(oldStatements.map((statement) => [statementKey(statement), statement]))
   const next = new Map(to.plan.statements.map((statement) => [statementKey(statement), statement]))
   const checkReplacements = checkReplacementStatements(from.plan, to.plan, logicalChecks)
-  const replacedKeys = new Set<string>(
-    checkReplacements.map((item) => `constraint:${item.logicalId}`),
+  const sourceRevisionReplacements = sourceRevisionFunctionReplacements(
+    from.plan,
+    to.plan,
+    logicalSourceRevision,
   )
+  const replacedKeys = new Set<string>([
+    ...checkReplacements.map((item) => `constraint:${item.logicalId}`),
+    ...sourceRevisionReplacements.map((item) => `function:${item.logicalId}`),
+  ])
   for (const statement of oldStatements) {
     requireSequence(
       next.has(statementKey(statement)),
@@ -833,21 +975,25 @@ function createPostgresqlUpgrade(
   const executableStatements = [
     ...retirementStatements(from.contract, retiredTables),
     ...checkReplacements.flatMap((item) => [item.drop, item.after]),
+    ...sourceRevisionReplacements.map(sourceRevisionExecutable),
     ...indexAdditions.map((addition) => addition.statement),
     contractUpdate(from.plan, to.plan),
   ]
   const payload = {
     ...(retiredTables.length ? { retiredTables } : {}),
-    version: retiredTables.length
-      ? (4 as const)
-      : logicalChecks.length > 0
-        ? (3 as const)
-        : logicalTables.length === 0
-          ? (1 as const)
-          : (2 as const),
+    version: logicalSourceRevision
+      ? (5 as const)
+      : retiredTables.length
+        ? (4 as const)
+        : logicalChecks.length > 0
+          ? (3 as const)
+          : logicalTables.length === 0
+            ? (1 as const)
+            : (2 as const),
     ...(logicalTables.length === 0 ? {} : { logicalTables }),
     ...(logicalChecks.length === 0 ? {} : { logicalChecks, checkReplacements }),
     ...(logicalEnums.length === 0 ? {} : { logicalEnums }),
+    ...(logicalSourceRevision ? { logicalSourceRevision, sourceRevisionReplacements } : {}),
     id: input.id,
     sequence: input.sequence,
     previousEntryDigest: input.previousEntryDigest,
@@ -882,7 +1028,11 @@ function applyPostgresqlIndexUpgrade(
 ): PostgresqlMigrationVersion {
   const { digest, ...payload } = step
   requireSequence(
-    (step.version === 1 || step.version === 2 || step.version === 3 || step.version === 4) &&
+    (step.version === 1 ||
+      step.version === 2 ||
+      step.version === 3 ||
+      step.version === 4 ||
+      step.version === 5) &&
       digest === postgresqlMigrationDigest(payload),
     'upgrade entry digest differs',
   )
@@ -909,6 +1059,15 @@ function applyPostgresqlIndexUpgrade(
   const logicalChecks = step.logicalChecks ?? []
   const checkReplacements = step.checkReplacements ?? []
   const logicalEnums = step.logicalEnums ?? []
+  const logicalSourceRevision = step.logicalSourceRevision,
+    sourceRevisionReplacements = step.sourceRevisionReplacements ?? []
+  requireSequence(
+    step.version === 5
+      ? logicalSourceRevision !== undefined &&
+          sourceRevisionReplacements.length === OBSERVATION_SOURCE_REVISION.sources.length * 3
+      : logicalSourceRevision === undefined && step.sourceRevisionReplacements === undefined,
+    'source clock replacement does not match upgrade version',
+  )
   // V1/V2 artifacts never carry the V3 keys, so their canonical JSON — and with
   // it their digest — is byte-identical to what it was before RFC-366.
   requireSequence(
@@ -918,7 +1077,9 @@ function applyPostgresqlIndexUpgrade(
         ? logicalTables.length > 0 && step.logicalChecks === undefined
         : step.version === 4
           ? logicalChecks.length === 0
-          : logicalChecks.length > 0,
+          : step.version === 5
+            ? logicalChecks.length === 0 && logicalTables.length === 0
+            : logicalChecks.length > 0,
     'upgrade table additions do not match its version',
   )
   requireSequence(
@@ -937,13 +1098,14 @@ function applyPostgresqlIndexUpgrade(
     step.logicalIndexes.length +
       logicalTables.length +
       logicalChecks.length +
-      retiredTables.length >
+      retiredTables.length +
+      (logicalSourceRevision ? 1 : 0) >
       0,
     'schema upgrade has no new indexes or tables',
   )
-  const withTables = appendLogicalTables(
-    retireLogicalTables(previous.contract, retiredTables),
-    logicalTables,
+  const withTables = applyLogicalSourceRevision(
+    appendLogicalTables(retireLogicalTables(previous.contract, retiredTables), logicalTables),
+    logicalSourceRevision,
   )
   const expanded = applyLogicalColumnEnums(
     applyLogicalCheckReplacements(withTables, logicalChecks),
@@ -969,9 +1131,17 @@ function applyPostgresqlIndexUpgrade(
   const replacedByKey = new Map<string, PostgresqlCheckReplacement>(
     checkReplacements.map((item) => [`constraint:${item.logicalId}`, item]),
   )
+  const sourceReplacedByKey = new Map(
+    sourceRevisionReplacements.map((item) => [`function:${item.logicalId}`, item]),
+  )
   const original = retainedStatements(previous, retiredTables).map((statement) => {
     const key = statementKey(statement)
     if (key === 'metadata:contract-row') return step.contractRow.after
+    const sourceReplacement = sourceReplacedByKey.get(key)
+    if (sourceReplacement) {
+      exact(sourceReplacement.before, statement, 'source clock previous function differs')
+      return sourceReplacement.after
+    }
     const replacement = replacedByKey.get(key)
     if (replacement === undefined) return statement
     exact(replacement.before, statement, 'check replacement old statement differs')
@@ -1014,9 +1184,19 @@ function applyPostgresqlIndexUpgrade(
   for (const statement of projected.statements) {
     const key = statementKey(statement)
     const prior = oldStatements.get(key)
-    if (prior !== undefined && key !== 'metadata:contract-row' && !replacedByKey.has(key))
+    if (
+      prior !== undefined &&
+      key !== 'metadata:contract-row' &&
+      !replacedByKey.has(key) &&
+      !sourceReplacedByKey.has(key)
+    )
       exact(statement, prior, 'schema upgrade changed an existing statement')
   }
+  exact(
+    sourceRevisionReplacements,
+    sourceRevisionFunctionReplacements(previous.plan, projected, logicalSourceRevision),
+    'source clock function replacements differ from their exact projection',
+  )
   for (const [key, replacement] of replacedByKey) {
     exact(
       projected.statements.find((statement) => statementKey(statement) === key),
@@ -1043,6 +1223,7 @@ function applyPostgresqlIndexUpgrade(
     [
       ...retirementStatements(previous.contract, retiredTables),
       ...checkReplacements.flatMap((item) => [item.drop, item.after]),
+      ...sourceRevisionReplacements.map(sourceRevisionExecutable),
       ...step.indexAdditions.map((addition) => addition.statement),
       contractUpdate(previous.plan, plan),
     ],
@@ -1191,19 +1372,27 @@ function resolvePostgresqlRowBridge(
             .slice(from, to)
             .reduce(
               (contract, step) =>
-                applyLogicalColumnEnums(
-                  applyLogicalCheckReplacements(
-                    appendLogicalTables(
-                      retireLogicalTables(contract, step.retiredTables ?? []),
-                      step.logicalTables ?? [],
+                applyLogicalSourceRevision(
+                  applyLogicalColumnEnums(
+                    applyLogicalCheckReplacements(
+                      appendLogicalTables(
+                        retireLogicalTables(contract, step.retiredTables ?? []),
+                        step.logicalTables ?? [],
+                      ),
+                      step.logicalChecks ?? [],
                     ),
-                    step.logicalChecks ?? [],
+                    step.logicalEnums ?? [],
                   ),
-                  step.logicalEnums ?? [],
+                  step.logicalSourceRevision,
                 ),
               source,
             )
-        : source,
+        : history.steps
+            .slice(from, to)
+            .reduce(
+              (contract, step) => applyLogicalSourceRevision(contract, step.logicalSourceRevision),
+              source,
+            ),
     ),
     rowContract(target),
     'historical row, codec, key or disposition changed',

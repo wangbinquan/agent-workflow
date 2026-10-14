@@ -2,17 +2,18 @@
 // business rows invokes their triggers. Preserve every original revision after
 // full fixture restoration instead of failing duplicate keys or changing it.
 import { expect, test } from 'bun:test'
-import { asc } from 'drizzle-orm'
-import { agents, observationSourceRevisions } from '@/db/schema'
+import { agents } from '@/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
+import { completeCalculationSourceProof } from '@/modules/run-observability/infrastructure/completeCalculationSourceProof'
 
 describeEachProvider('RFC-371 complete source revision fixture restoration', (harness) => {
-  const revisions = () =>
-    harness.db
-      .select()
-      .from(observationSourceRevisions)
-      .orderBy(asc(observationSourceRevisions.sourceId))
-      .all()
+  // V2's committed journal is part of the actual same-snapshot source clock.
+  // The original 55-source/change/restore assertions remain unchanged.
+  const revisions = async () => {
+    const proof = await completeCalculationSourceProof(harness.db, 'original-revision-fixture')
+    expect(proof).not.toBeNull()
+    return proof!.relations
+  }
 
   test('all 55 migrated sources exist and a real business write changes only its source', async () => {
     const original = await revisions()

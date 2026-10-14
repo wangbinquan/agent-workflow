@@ -67,11 +67,18 @@ export const OBSERVATION_SOURCE_REVISION = {
     'users',
   ],
 } as const
+/** V2 uses the committed row journal for cache invalidation. Producers append
+ * independent rows; only the background acknowledgement moves the base clock. */
+export const OBSERVATION_SOURCE_REVISION_JOURNAL = {
+  ...OBSERVATION_SOURCE_REVISION,
+  changeJournal: 'observation_projection_changes',
+} as const
 export type ObservationSourceRevisionContract = Omit<
   typeof OBSERVATION_SOURCE_REVISION,
   'sources'
 > & {
   readonly sources: readonly string[]
+  readonly changeJournal?: 'observation_projection_changes'
 }
 const TABLE = 'observation_source_revisions'
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`
@@ -89,9 +96,25 @@ export function observationSourceRevisionStatements(contract: LogicalSchemaContr
   if (
     revisions.length !== 1 ||
     revisions[0]!.id !== TABLE ||
-    !isDeepStrictEqual(revisions[0]!.sourceRevisionProjection, OBSERVATION_SOURCE_REVISION)
+    (!isDeepStrictEqual(revisions[0]!.sourceRevisionProjection, OBSERVATION_SOURCE_REVISION) &&
+      !isDeepStrictEqual(
+        revisions[0]!.sourceRevisionProjection,
+        OBSERVATION_SOURCE_REVISION_JOURNAL,
+      ))
   )
     throw new Error('Unsupported observation-source-revision schema projection')
+  const journal = revisions[0]!.sourceRevisionProjection!.changeJournal !== undefined
+  if (
+    journal &&
+    !contract.tables.some(
+      (table) =>
+        table.id === 'observation_projection_changes' &&
+        table.disposition === 'KEEP' &&
+        table.providerTables.sqlite &&
+        table.providerTables.postgresql,
+    )
+  )
+    throw new Error('Journal source revision requires its complete original change relation')
   const physical = (id: string, provider: DatabaseProvider) => {
     const table = contract.tables.find((table) => table.id === id)
     const name = table?.providerTables[provider]
@@ -126,7 +149,15 @@ END`)
         {
           kind: 'function',
           logicalId: TABLE + ':' + source + ':' + event,
-          sql: `CREATE FUNCTION "agent_workflow".${quote(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $aw_source$
+          sql: journal
+            ? `CREATE FUNCTION "agent_workflow".${quote(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $aw_source$
+BEGIN
+  -- Original changes are appended by the independent row journal in this transaction.
+  -- Updating a shared source clock here would serialize otherwise independent producers.
+  RETURN NULL;
+END;
+$aw_source$`
+            : `CREATE FUNCTION "agent_workflow".${quote(functionName)}() RETURNS trigger LANGUAGE plpgsql AS $aw_source$
 BEGIN
   IF EXISTS (SELECT 1 FROM ${transition}) THEN
     INSERT INTO ${postgresTarget} ("source_id","revision") VALUES ('${source}',gen_random_uuid()::text) ON CONFLICT ("source_id") DO UPDATE SET "revision"=EXCLUDED."revision";

@@ -1779,6 +1779,13 @@
       "when": 1791897639001,
       "tag": "0254_rfc370_memory_execution_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 254,
+      "version": "6",
+      "when": 1791953593843,
+      "tag": "0255_rfc371_committed_source_clocks",
+      "breakpoints": true
     }
   ]
 }

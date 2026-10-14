@@ -139,6 +139,7 @@ export const observationProjectionChanges = table(
   (t) => [
     index('observation_projection_changes_pending').on(t.completed, t.createdAt, t.id),
     index('observation_projection_changes_ready').on(t.completed, t.retryAt, t.createdAt, t.id),
+    index('observation_projection_changes_source_pending').on(t.completed, t.source, t.id),
   ],
 )
 /** Reverse scope index makes a changed/deleted fact select its previously

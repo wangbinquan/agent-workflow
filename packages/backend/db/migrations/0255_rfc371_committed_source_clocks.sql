@@ -1,0 +1,1 @@
+CREATE INDEX `observation_projection_changes_source_pending` ON `observation_projection_changes` (`completed`,`source`,`id`);

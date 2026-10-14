@@ -6,6 +6,7 @@ import {
 } from '@/db/observationProjection'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
+import { observationSourceRevisions } from '@/db/schema'
 import type {
   OriginalObservationChange,
   OriginalObservationChangeRouter,
@@ -176,11 +177,24 @@ export function incrementalObservationChangeQueue(
             components: [...group.components].sort(),
           })
         }
-        for (const item of resolved)
+        const acknowledged = new Map<string, string[]>()
+        for (const item of resolved) {
           await tx
             .update(observationProjectionChanges)
             .set({ completed: true })
             .where(eq(observationProjectionChanges.id, item.change.id))
+            .run()
+          const ids = acknowledged.get(item.change.source) ?? []
+          ids.push(item.change.id)
+          acknowledged.set(item.change.source, ids)
+        }
+        // Clock and pending membership move together in this background-owned
+        // transaction. A later pending count cannot reuse a retired epoch.
+        for (const [source, ids] of acknowledged)
+          await tx
+            .update(observationSourceRevisions)
+            .set({ revision: sha256Hex(JSON.stringify(['original-change-ack', ids.sort()])) })
+            .where(eq(observationSourceRevisions.sourceId, source))
             .run()
         return resolved.length
       }),

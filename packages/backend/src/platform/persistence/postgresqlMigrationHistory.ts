@@ -112,6 +112,7 @@ const ContractObjectSchema = z
               kind: z.literal('observation-source-revision'),
               sourceColumn: z.literal('source_id'),
               revisionColumn: z.literal('revision'),
+              changeJournal: z.literal('observation_projection_changes').optional(),
               sources: z
                 .array(z.string())
                 .refine(
@@ -258,7 +259,26 @@ const RootSchema: z.ZodType<PostgresqlMigrationRoot> = z
   .strict()
 const UpgradeSchema: z.ZodType<PostgresqlIndexUpgrade> = z
   .object({
-    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+    logicalSourceRevision: z
+      .object({
+        tableId: z.literal('observation_source_revisions'),
+        before: ContractObjectSchema.shape.tables.element.shape.sourceRevisionProjection.unwrap(),
+        after: ContractObjectSchema.shape.tables.element.shape.sourceRevisionProjection.unwrap(),
+      })
+      .strict()
+      .optional(),
+    sourceRevisionReplacements: z
+      .array(
+        z
+          .object({
+            logicalId: z.string(),
+            before: StatementSchema,
+            after: StatementSchema,
+          })
+          .strict(),
+      )
+      .optional(),
     retiredTables: z.array(z.string()).optional(),
     logicalTables: z
       .array(
