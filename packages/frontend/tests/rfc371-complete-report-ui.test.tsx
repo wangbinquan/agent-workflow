@@ -152,6 +152,7 @@ function fixture(
     releaseHostStatus: null as (() => void) | null,
     holdHostStatus: options.holdHostStatus ?? false,
     building: options.building ?? false,
+    replacementNotReady: false,
     projection: null as { revision: string; asOf: number } | null,
     releaseReport: null as (() => void) | null,
     holdReport: false,
@@ -211,9 +212,11 @@ function fixture(
           else signal?.addEventListener('abort', abort, { once: true })
         })
       return Response.json(
-        state.building
-          ? { state: 'building', reportId: value.header.reportId, phase: 'collecting' }
-          : value,
+        state.replacementNotReady
+          ? { state: 'not-ready', reportId: value.header.reportId, gaps: ['projection-pending'] }
+          : state.building
+            ? { state: 'building', reportId: value.header.reportId, phase: 'collecting' }
+            : value,
       )
     }
     const match = /^\/api\/observability\/reports\/([^/]+)(\/pages)?$/.exec(url.pathname)
@@ -1014,4 +1017,107 @@ test('same immutable dimension page revalidation preserves its row and exact met
   await refresh
   expect(screen.getByRole('button', { name: '实现 Agent' })).toBe(trigger)
   expect(document.activeElement).toBe(trigger)
+})
+
+// RFC-371: background publication must retain an accepted snapshot through both
+// an unready replacement and React Query's ready-but-still-fetching transition.
+test('an unready new projection keeps accepted totals and permits an explicit retry without another projection', async () => {
+  const f = fixture({ ...initial, period: 'week', tab: 'overview' })
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
+  const originalId = [...f.reports.keys()][0]!
+  f.state.replacementNotReady = true
+  f.state.projection = { revision: 'unready-new-version', asOf: NOW + 3600000 }
+  await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+  await waitFor(() => expect(f.reports.size).toBeGreaterThan(1))
+  const refresh = screen.getByRole('button', { name: i18n.t('runObservability.refresh') })
+  await waitFor(() => expect(refresh.hasAttribute('disabled')).toBe(false))
+  const summary = screen.getByRole('heading', { name: '完整 Token 消耗' }).closest('.card')!
+  for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const)
+    expect(summary.querySelector('[data-token-bucket="' + bucket + '"] dd')?.textContent).toBe(
+      BigInt(metrics.tokens[bucket]).toLocaleString('zh'),
+    )
+  expect(
+    screen.getByRole('heading', { name: '人民币估值' }).closest('.card')?.textContent,
+  ).toContain('¥2500.75005')
+  expect(
+    screen.getByText(
+      i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
+    ),
+  ).toBeTruthy()
+  expect(screen.queryByText(i18n.t('runObservability.noIncompleteTotals'))).toBeNull()
+  f.state.replacementNotReady = false
+  fireEvent.click(refresh)
+  await screen.findByText(
+    i18n.t('runObservability.completeAsOf', { time: new Date(NOW + 3600000).toLocaleString('zh') }),
+  )
+  expect(f.reports.get(originalId)?.header.asOf).toBe(NOW)
+})
+
+test('a new ready response still fetching cannot replace accepted totals with a full-page loading state', async () => {
+  const f = fixture({ ...initial, period: 'week', tab: 'overview' })
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
+  f.state.holdReport = true
+  f.state.projection = { revision: 'ready-during-fetch', asOf: NOW + 3600000 }
+  await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+  await waitFor(() => expect(f.state.releaseReport).not.toBeNull())
+  const fetching = f.client
+    .getQueryCache()
+    .findAll({ queryKey: ['run-observability-complete'] })
+    .find((q) => q.state.fetchStatus === 'fetching')!
+  const replacement = [...f.reports.values()].find(
+    (r) => r.header.sourceRevision === 'ready-during-fetch',
+  )!
+  expect(fetching).toBeTruthy()
+  f.client.setQueryData(fetching.queryKey, replacement)
+  await waitFor(() => expect(screen.getByRole('heading', { name: '完整 Token 消耗' })).toBeTruthy())
+  expect(
+    screen.getByRole('heading', { name: '人民币估值' }).closest('.card')?.textContent,
+  ).toContain('¥2500.75005')
+  expect(
+    screen.getByText(
+      i18n.t('runObservability.completeAsOf', { time: new Date(NOW).toLocaleString('zh') }),
+    ),
+  ).toBeTruthy()
+  f.state.holdReport = false
+  f.state.releaseReport!()
+  await screen.findByText(
+    i18n.t('runObservability.completeAsOf', { time: new Date(NOW + 3600000).toLocaleString('zh') }),
+  )
+})
+
+test('an old snapshot invalidated while its ready replacement is still fetching is withdrawn immediately', async () => {
+  const f = fixture({ ...initial, period: 'week', tab: 'overview' })
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
+  const original = [...f.reports.values()][0]!
+  f.state.holdReport = true
+  f.state.projection = { revision: 'ready-while-old-invalidates', asOf: NOW + 3600000 }
+  await f.client.invalidateQueries({ queryKey: ['run-observability-projection-version'] })
+  await waitFor(() => expect(f.state.releaseReport).not.toBeNull())
+  const fetching = f.client
+    .getQueryCache()
+    .findAll({ queryKey: ['run-observability-complete'] })
+    .find((q) => q.state.fetchStatus === 'fetching')!
+  const replacement = [...f.reports.values()].find(
+    (r) => r.header.sourceRevision === 'ready-while-old-invalidates',
+  )!
+  expect(fetching).toBeTruthy()
+  f.client.setQueryData(fetching.queryKey, replacement)
+  const oldAsOf = i18n.t('runObservability.completeAsOf', {
+    time: new Date(NOW).toLocaleString('zh'),
+  })
+  await waitFor(() => expect(screen.getByText(oldAsOf)).toBeTruthy())
+  // The fact-page reader publishes this exact flag on a failed original page.
+  // The existing real page-failure case retains the producer-side coverage.
+  f.client.setQueryData(
+    ['run-observability-complete-display-valid', original.header.reportId],
+    false,
+  )
+  await waitFor(() => expect(screen.queryByText(oldAsOf)).toBeNull())
+  expect(screen.queryByRole('heading', { name: '完整 Token 消耗' })).toBeNull()
+  f.state.holdReport = false
+  f.state.releaseReport!()
+  await screen.findByText(
+    i18n.t('runObservability.completeAsOf', { time: new Date(NOW + 3600000).toLocaleString('zh') }),
+  )
+  expect(screen.getByRole('heading', { name: '完整 Token 消耗' })).toBeTruthy()
 })

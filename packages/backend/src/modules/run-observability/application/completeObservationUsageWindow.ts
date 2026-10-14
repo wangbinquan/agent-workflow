@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
+import { originalHistoricalDiagnostic } from '../domain/originalHistoricalDiagnostic'
 import type {
   CompleteObservationAllocation,
   CompleteObservationTask,
@@ -690,7 +691,12 @@ export async function buildCompleteObservationUsageWindow(
     input.signal,
   )) {
     const row = item.document
-    if (row.section === 'attempts' && row.parent === null) {
+    // Relationship/source diagnostics are the original population, including
+    // references outside the admitted time/selection. Numerical rows still
+    // use the selected window below; no original diagnostic disappears.
+    if (originalHistoricalDiagnostic(row.section, row.parent)) {
+      await output.append(row.section, row.parent, row.key, row.document)
+    } else if (row.section === 'attempts' && row.parent === null) {
       const attempt = row.document as CompleteObservationAttempt & { taskId: string }
       if (!(await input.rows.get(space('selected-tasks'), attempt.taskId))) continue
       const next = await input.rows.get<CompleteObservationFold>(

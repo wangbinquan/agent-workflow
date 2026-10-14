@@ -228,7 +228,10 @@ export function incrementalObservationWindow(input: {
     const fold = task(original.task.id)
     // Original source-population gaps remain visible even when no accepted
     // numeric record has a usable clock in this selected window.
-    if (original.metrics.state === 'not-ready')
+    if (
+      original.metrics.state === 'not-ready' &&
+      (!input.query.selection || selectedTaskIds.has(original.task.id))
+    )
       for (const gap of original.metrics.gaps) {
         completeObservationGap(fold, gap)
         selectedTaskIds.add(original.task.id)

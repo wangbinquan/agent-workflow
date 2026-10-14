@@ -489,7 +489,7 @@ export function CompleteRunObservability({
             <p className="muted">{t('runObservability.reportBuilding')}</p>
           </>
         )}
-      {!current.error && current.data?.state === 'not-ready' && !current.data.facts && (
+      {!current.error && !report && current.data?.state === 'not-ready' && !current.data.facts && (
         <NoticeBanner tone="warning" title={t('runObservability.reportNotReady')}>
           <p>{t('runObservability.noIncompleteTotals')}</p>
           <ul>

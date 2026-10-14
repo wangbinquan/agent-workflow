@@ -201,6 +201,9 @@ export function incrementalObservationHistoricalScope(
     }
     if (groups!.some((group) => group.match === 'unresolved'))
       completeObservationGap(next, 'historical-scope-unresolved')
+    // Receipt inventory counts the original selected records, including an
+    // unresolved physical candidate. It is independent of admitted numbers.
+    if (value.inventory) next.inventory = value.inventory
     return next
   }
   let fold = row.fold

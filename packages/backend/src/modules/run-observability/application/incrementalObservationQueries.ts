@@ -737,7 +737,7 @@ export function incrementalObservationQueries(input: {
         tasks: String(tasks.length),
         attempts: String(attempts),
         invocations: fold.invocations,
-        numericRecords: window ? fold.records : String(numericRecords),
+        numericRecords: window?.mode === 'usage' ? fold.records : String(numericRecords),
         nativeCaptures: String(captures),
         ...(BigInt(fold.historicalReferences ?? '0')
           ? { historicalReferences: fold.historicalReferences }

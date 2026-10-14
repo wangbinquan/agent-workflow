@@ -268,13 +268,55 @@ export function incrementalObservationQualification(input: {
             Object.entries(ownerIds).map(([kind, ids]) => [kind, [...ids]]),
           ),
         })
-        const seenOwners = new Set<string>()
+        const seenOwners = new Set<string>(),
+          retainedRoots = new Set<string>()
         for (;;) {
           const size =
             roots.size +
             attemptIds.size +
             invocationIds.size +
             Object.values(ownerIds).reduce((n, ids) => n + ids.size, 0)
+          // A historical root may belong to an earlier event even when its
+          // owner's current session now points to a child or another root.
+          // Retain that reverse relation while replacing the root's groups;
+          // both the old owner and its current original facts belong to this
+          // one atomic qualification, including owners that have disappeared.
+          for (const root of roots) {
+            if (retainedRoots.has(root)) continue
+            retainedRoots.add(root)
+            let after: string | undefined
+            for (;;) {
+              const rows = await snapshot.executor
+                .select({
+                  key: observationProjectionCurrent.key,
+                  document: observationProjectionCurrent.document,
+                })
+                .from(observationProjectionCurrent)
+                .where(
+                  and(
+                    eq(observationProjectionCurrent.kind, 'contribution'),
+                    eq(observationProjectionCurrent.component, component('root', root)),
+                    eq(observationProjectionCurrent.section, 'cohort-fold'),
+                    eq(observationProjectionCurrent.parent, 'native-scope-groups'),
+                    after === undefined ? undefined : gt(observationProjectionCurrent.key, after),
+                  ),
+                )
+                .orderBy(asc(observationProjectionCurrent.key))
+                .limit(200)
+                .all()
+              if (!rows.length) break
+              for (const row of rows) {
+                const original = JSON.parse(row.document) as QualifiedObservationContribution,
+                  group = original.detail.document as HistoricalRecordScopeGroup
+                for (const execution of group.scopes) {
+                  ;(ownerIds[execution.sourceKind] ??= new Set()).add(execution.ownerId)
+                  if (execution.sourceKind === 'task') attemptIds.add(execution.ownerId)
+                  if (execution.parentTaskId) metadataIds.add(execution.parentTaskId)
+                }
+              }
+              after = rows.at(-1)!.key
+            }
+          }
           for (const source of input.owners(snapshot.executor, bootstrap ? undefined : scope())) {
             let after: string | undefined
             for (;;) {

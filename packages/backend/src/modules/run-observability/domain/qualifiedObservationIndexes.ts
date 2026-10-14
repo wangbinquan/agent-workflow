@@ -43,8 +43,9 @@ export const legacyQualifiedObservationIndexChannel = 'indexed-details-v1'
 export const legacyQualifiedObservationIndexChannels = [
   legacyQualifiedObservationIndexChannel,
   'indexed-details-v2',
+  'indexed-details-v3',
 ] as const
-export const qualifiedObservationIndexChannel = 'indexed-details-v3'
+export const qualifiedObservationIndexChannel = 'indexed-details-v4'
 export const qualifiedObservationIndexVersion = (revision: string) =>
   qualifiedObservationIndexChannel + '/' + revision
 type ProjectionOccurrence = CompleteObservationTimePartition & {

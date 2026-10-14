@@ -190,7 +190,9 @@ export function useCompleteObservationReport(
         }
         if (report.state === 'failed' || (report.state === 'not-ready' && !report.facts)) {
           if (restoredId) discardObservationReportBookmark(restoredId)
-          if (previous?.scope === displayScope)
+          // A replacement may be unready while the accepted immutable report
+          // remains valid. Retire only the report actually rejected by this response.
+          if (previous?.scope === displayScope && previous.content.header.reportId === reportId)
             discardObservationReportBookmark(previous.content.header.reportId)
           discardObservationReportBookmark(reportId)
         }
@@ -219,14 +221,19 @@ export function useCompleteObservationReport(
   })
   const content = query.data ? completeObservationReportContent(query.data) : null
   const retained = previous?.scope === displayScope ? previous.content : null
-  const validity = useCompleteObservationDisplayValidity(
-    content?.header.reportId ?? retained?.header.reportId ?? null,
-  )
+  const checkedContent = query.isFetching
+    ? content?.header.reportId === retained?.header.reportId
+      ? retained
+      : null
+    : content
+  const candidate = checkedContent ?? retained
+  const validity = useCompleteObservationDisplayValidity(candidate?.header.reportId ?? null)
   useEffect(() => {
     if (
       query.error ||
-      query.data?.state === 'failed' ||
-      (query.data?.state === 'not-ready' && !query.data.facts)
+      ((query.data?.state === 'failed' ||
+        (query.data?.state === 'not-ready' && !query.data.facts)) &&
+        query.data.reportId === previous?.content.header.reportId)
     ) {
       if (previous?.scope === displayScope)
         discardObservationReportBookmark(previous.content.header.reportId)
@@ -254,15 +261,12 @@ export function useCompleteObservationReport(
   ])
   const busy =
     query.isPending || query.isFetching || (!query.error && query.data?.state === 'building')
-  const checkedContent = query.isFetching
-    ? content?.header.reportId === retained?.header.reportId
-      ? retained
-      : null
-    : content
+  const rejectedRetained =
+    !!retained &&
+    (query.data?.state === 'failed' || (query.data?.state === 'not-ready' && !query.data.facts)) &&
+    query.data.reportId === retained.header.reportId
   const displayContent =
-    !query.error && validity.data !== false
-      ? (checkedContent ?? (!query.data || query.data.state === 'building' ? retained : null))
-      : null
+    !query.error && !rejectedRetained && validity.data !== false ? candidate : null
   return {
     ...query,
     busy,

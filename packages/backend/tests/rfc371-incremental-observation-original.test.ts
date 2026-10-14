@@ -299,6 +299,139 @@ const normalized = (items: readonly unknown[]) =>
 describeEachProvider(
   'RFC-371 original numerical oracle against incremental materialization',
   (h) => {
+    test('a root replacement requalifies its retained owner after that owner moves to a different session', async () => {
+      await seedCompleteTask(h, 1, 0)
+      await h.db.delete(observationUsageCaptures).run()
+      await h.db.delete(observationInvocations).run()
+      await h.db.update(nodeRuns).set({ runtime: 'opencode', opencodeSessionId: 'root' }).run()
+      const native = persistentNativeFixture({ steps: 3, depth: 1 })
+      cleanups.push(() => native.close())
+      // Root connectivity is an optional native capability. The durable
+      // owner/group relation must work even when it cannot rediscover children.
+      const f = setup(h, { ...native, query: { ...native.query, connectedRoots: undefined } }, true)
+      await f.apply('retained-root-owner-base', [completeFixtureId('invocation', 0)])
+      const sourceBefore = normalized(await h.db.select().from(observationUsageCurrent).all())
+      await h.db.update(nodeRuns).set({ opencodeSessionId: 'child-0' }).run()
+      await h.session.transaction((tx) =>
+        enqueueIncrementalObservationWork(tx, {
+          id: 'old-root-replaced-after-owner-moved',
+          source: 'original-row-changes',
+          revision: 'root-change',
+          components: [JSON.stringify(['root', 'root'])],
+        }),
+      )
+      await f.drain()
+      const projected = (
+        await h.db
+          .select({ document: observationProjectionCurrent.document })
+          .from(observationProjectionCurrent)
+          .where(eq(observationProjectionCurrent.kind, 'contribution'))
+          .all()
+      ).map((row) => JSON.parse(row.document) as QualifiedObservationContribution)
+      const groups = new Set(
+        projected
+          .filter((row) => row.detail.parent === 'native-scope-groups')
+          .map((row) => row.detail.key),
+      )
+      const referenced = projected.flatMap((row) => row.detail.historicalRecordScopes ?? [])
+      expect(referenced.length).toBeGreaterThan(0)
+      for (const key of referenced) expect(groups.has(key)).toBe(true)
+      for (const query of [all, { ...all, cohort: 'usage' as const }]) {
+        const expected = await f.oracle(query),
+          actual = content(await f.queries.request(actor, query, crypto.randomUUID()))
+        expect(actual.summary.metrics).toEqual(expected.summary.metrics)
+        expect(actual.summary.inventory).toEqual(expected.summary.inventory)
+      }
+      expect(normalized(await h.db.select().from(observationUsageCurrent).all())).toEqual(
+        sourceBefore,
+      )
+    }, 60_000)
+
+    test('a retained v3 checkpoint stays intact while the reverse-owner protocol independently reaches EOF', async () => {
+      await h.db
+        .insert(observationProjectionBootstrap)
+        .values({
+          generation,
+          channel: 'indexed-details-v3',
+          cursor: 'original-v3-cursor',
+          done: false,
+        })
+        .run()
+      const boot = incrementalObservationBootstrap(h.db, generation, [
+        {
+          id: qualifiedObservationIndexChannel,
+          refresh: true,
+          page: async () => ({ items: [], nextCursor: null }),
+        },
+      ])
+      expect(qualifiedObservationIndexChannel).toBe('indexed-details-v4')
+      expect(await boot(new AbortController().signal)).toBe(1)
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, 'indexed-details-v3'))
+          .get(),
+      ).toMatchObject({ cursor: 'original-v3-cursor', done: false })
+      expect(
+        await h.db
+          .select()
+          .from(observationProjectionBootstrap)
+          .where(eq(observationProjectionBootstrap.channel, qualifiedObservationIndexChannel))
+          .get(),
+      ).toMatchObject({ cursor: null, done: true })
+    })
+
+    test('usage selection preserves every original execution relationship diagnostic while excluding its numerical values', async () => {
+      await seedCompleteTask(h, 2, 0)
+      await h.db.delete(observationUsageCaptures).run()
+      await h.db.delete(observationInvocations).run()
+      await h.db.update(nodeRuns).set({ runtime: 'opencode', opencodeSessionId: 'root' }).run()
+      const native = persistentNativeFixture({ steps: 3, depth: 1 })
+      cleanups.push(() => native.close())
+      const f = setup(h, native, true)
+      await f.apply('diagnostic-executions-original', [
+        completeFixtureId('invocation', 0),
+        completeFixtureId('invocation', 1),
+      ])
+      const query = {
+          ...all,
+          cohort: 'usage' as const,
+          selection: JSON.stringify({
+            source: { authority: 'crewstation', sourceId: 'other-authority' },
+          }),
+        },
+        expected = await f.oracle(query),
+        actual = content(await f.queries.request(actor, query, crypto.randomUUID()))
+      const originals = expected.rows
+        .filter(
+          (row) => row.section === 'historical-executions' && row.parent === 'original-source',
+        )
+        .map((row) => row.document)
+      expect(originals).toHaveLength(2)
+      expect(
+        expected.rows.filter(
+          (row) => row.section === 'historical-executions' && row.parent === null,
+        ),
+      ).toHaveLength(0)
+      expect(actual.summary.metrics).toEqual(expected.summary.metrics)
+      const items: unknown[] = []
+      let after: string | undefined
+      do {
+        const page = await f.queries.page(actor, actual.header.reportId, {
+          section: 'historical-executions',
+          parent: 'original-source',
+          limit: 1,
+          ...(after ? { after } : {}),
+        })
+        expect(page.total).toBe('2')
+        items.push(...page.items)
+        if (page.nextCursor !== null) expect(page.nextCursor).not.toBe(after)
+        after = page.nextCursor ?? undefined
+      } while (after)
+      expect(normalized(items)).toEqual(normalized(originals))
+    }, 60_000)
+
     test('original max=1 snapshot releases before empty and nonempty persistent staging', async () => {
       const actual = h.applicationBinding
       const single =
@@ -415,7 +548,7 @@ describeEachProvider(
           page: async () => ({ items: [], nextCursor: null }),
         },
       ])
-      expect(qualifiedObservationIndexChannel).toBe('indexed-details-v3')
+      expect(qualifiedObservationIndexChannel).toBe('indexed-details-v4')
       expect(await boot(new AbortController().signal)).toBe(1)
       expect(
         await h.db
@@ -673,7 +806,9 @@ describeEachProvider(
               limit: 2,
               ...(after ? { after } : {}),
             })
-            expect(page.total).toBe(String(original.length))
+            expect(page.total, JSON.stringify({ query, section, parent })).toBe(
+              String(original.length),
+            )
             items.push(...page.items)
             if (page.nextCursor !== null) expect(page.nextCursor).not.toBe(after)
             after = page.nextCursor ?? undefined
@@ -745,7 +880,9 @@ describeEachProvider(
               limit: 2,
               ...(after ? { after } : {}),
             })
-            expect(page.total).toBe(String(original.length))
+            expect(page.total, JSON.stringify({ query, section, parent })).toBe(
+              String(original.length),
+            )
             items.push(...page.items)
             if (page.nextCursor !== null) expect(page.nextCursor).not.toBe(after)
             after = page.nextCursor ?? undefined
