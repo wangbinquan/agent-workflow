@@ -60,6 +60,7 @@ export const mindmapZh = {
   fit: '适应全图',
   minimap: '全图导航',
   canvasHelp: '拖动画布平移 · Ctrl/⌘ + 滚轮缩放 · 点击选择 · 方向键平移 · 0 适应全图',
+  canvasHelpTouch: '单指拖动平移 · 双指缩放 · 点按选择 · 点“适应全图”查看全貌',
   backToMap: '返回脑图',
   hideOutline: '收起目录',
   showOutline: '展开目录',
@@ -157,6 +158,8 @@ export const mindmapEn: typeof mindmapZh = {
   minimap: 'Map navigation',
   canvasHelp:
     'Drag to pan · Ctrl/⌘ + wheel to zoom · Click to select · Arrow keys to pan · 0 to fit all',
+  canvasHelpTouch:
+    'Drag with one finger to pan · Pinch to zoom · Tap to select · Use “Fit all” to see everything',
   backToMap: 'Back to mindmap',
   hideOutline: 'Hide outline',
   showOutline: 'Show outline',

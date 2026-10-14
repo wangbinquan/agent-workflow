@@ -13,15 +13,26 @@ export const CLARIFY_MINDMAP_QUESTION_GUIDANCE = [
 
 // A deterministic content identity, not a security credential. Four independent
 // 32-bit lanes keep it synchronous in the canvas and identical across runtimes.
+// Hashed over canonical JSON, so a re-parsed or re-spread object keeps its key.
 export function clarifyContentKey(value: unknown): string {
-  const text = JSON.stringify(value)
+  const text = canonicalClarifyJson(value)
   const lanes = [2166136261, 2246822519, 3266489917, 668265263]
   for (let i = 0; i < text.length; i++) {
     for (let lane = 0; lane < lanes.length; lane++) {
       lanes[lane] = Math.imul(lanes[lane]! ^ text.charCodeAt(i), 16777619 + lane * 2) >>> 0
     }
   }
-  return 'v1:' + lanes.map((v) => v.toString(16).padStart(8, '0')).join('')
+  return 'v2:' + lanes.map((v) => v.toString(16).padStart(8, '0')).join('')
+}
+/** JSON with object keys sorted at every depth; arrays keep their order. */
+export function canonicalClarifyJson(value: unknown): string {
+  return JSON.stringify(value, (_key, current: unknown) => {
+    if (current === null || typeof current !== 'object' || Array.isArray(current)) return current
+    const sorted: Record<string, unknown> = {}
+    for (const key of Object.keys(current).sort())
+      sorted[key] = (current as Record<string, unknown>)[key]
+    return sorted
+  })
 }
 export function clarifyQuestionSetKey(questions: readonly ClarifyQuestion[]): string {
   return clarifyContentKey(questions)

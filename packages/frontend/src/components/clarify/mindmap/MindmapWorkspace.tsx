@@ -151,6 +151,12 @@ export function MindmapWorkspace(props: Props) {
       if (id) setErrors((previous) => ({ ...previous, [id]: error }))
     })
   }
+  // Same condition as the pane's direction form: a closed branch is only read.
+  const dialogTitle = selectedQuestion
+    ? `${t('mindmap.detail')} · Q${props.questions.indexOf(selectedQuestion) + 1}`
+    : props.disabled || locked
+      ? selectedNode.title
+      : t('mindmap.categoryGuidance')
   const progressKey =
     props.roundStatus === 'answered'
       ? 'mindmap.submitted'
@@ -371,11 +377,7 @@ export function MindmapWorkspace(props: Props) {
       <Dialog
         open={view === 'panorama' && panelOpen}
         onClose={() => setPanelOpen(false)}
-        title={
-          selectedQuestion
-            ? `${t('mindmap.detail')} · Q${props.questions.indexOf(selectedQuestion) + 1}`
-            : t('mindmap.categoryGuidance')
-        }
+        title={dialogTitle}
         size="lg"
         panelClassName="mindmap-question-dialog"
         overlayClassName="mindmap-question-dialog-overlay"

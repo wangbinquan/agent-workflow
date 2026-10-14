@@ -101,10 +101,10 @@ async function stopRound(page: Page, nodeRunId: string) {
   const submitted = await response
   expect(submitted.ok()).toBe(true)
   const payload = submitted.request().postDataJSON()
-  expect(payload.questionSetKey).toMatch(/^v1:/)
+  expect(payload.questionSetKey).toMatch(/^v2:/)
   expect(
     payload.answers.every((value: { confirmedBasis?: string }) =>
-      value.confirmedBasis?.startsWith('v1:'),
+      value.confirmedBasis?.startsWith('v2:'),
     ),
   ).toBe(true)
 }

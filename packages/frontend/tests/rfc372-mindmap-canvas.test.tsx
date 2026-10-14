@@ -1,4 +1,6 @@
 // RFC-372: exercise actual canvas handlers; a double click never zooms and pinch can continue as pan.
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { useState } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -110,6 +112,27 @@ async function canvas() {
   return surface
 }
 describe('RFC-372 canvas event behavior', () => {
+  // RFC-372 review follow-up O7: touch devices see touch instructions and a narrow
+  // canvas keeps its nodes visible instead of covering them with the minimap.
+  it('renders pointer and touch help variants; CSS shows one per input type and hides the narrow minimap', async () => {
+    await canvas()
+    const help = document.getElementById('mindmap-canvas-help')!
+    const pointer = help.querySelector('.mindmap-canvas__help-pointer')
+    const touch = help.querySelector('.mindmap-canvas__help-touch')
+    expect(pointer?.textContent).toMatch(/Ctrl\/⌘/)
+    expect(touch?.textContent).toMatch(/Pinch|双指/)
+    const css = readFileSync(
+      resolve(import.meta.dirname, '..', 'src/components/clarify/mindmap/mindmap.css'),
+      'utf8',
+    ).replace(/\s+/g, ' ')
+    expect(css).toContain('.mindmap-canvas__help-touch { display: none; }')
+    expect(css).toMatch(
+      /@media \(pointer: coarse\) \{ \.mindmap-canvas__help-pointer \{ display: none; \} \.mindmap-canvas__help-touch \{ display: inline; \} \}/,
+    )
+    expect(css).toMatch(
+      /@container mindmap-stage \(max-width: 480px\) \{ \.mindmap-canvas__minimap \{ display: none; \} \}/,
+    )
+  })
   it('selects on a click without changing the camera; double click has no zoom behavior', async () => {
     const surface = await canvas()
     fireEvent.pointerDown(surface, { pointerId: 1, button: 0, clientX: 60, clientY: 60 })

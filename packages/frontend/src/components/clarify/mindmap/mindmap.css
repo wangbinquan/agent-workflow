@@ -516,6 +516,24 @@
     bottom: 74px;
   }
 }
+/* Touch devices get touch instructions; the hidden variant is not announced. */
+.mindmap-canvas__help-touch {
+  display: none;
+}
+@media (pointer: coarse) {
+  .mindmap-canvas__help-pointer {
+    display: none;
+  }
+  .mindmap-canvas__help-touch {
+    display: inline;
+  }
+}
+/* A narrow canvas keeps its nodes visible; fit/zoom and touch pan still navigate. */
+@container mindmap-stage (max-width: 480px) {
+  .mindmap-canvas__minimap {
+    display: none;
+  }
+}
 @container mindmap (max-width: 650px) {
   .mindmap-workspace__toolbar > .segmented,
   .mindmap-workspace .mindmap-workspace__toolbar .mindmap-workspace__outline-control,

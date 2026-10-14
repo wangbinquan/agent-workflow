@@ -1,4 +1,3 @@
-import { beginClarifyFollowup } from './clarifyFollowupActivity'
 import type { SaveClarifyDraftInput } from './ports/collaborationRouteOperations'
 import {
   CLARIFY_MINDMAP_QUESTION_GUIDANCE,
@@ -9,26 +8,19 @@ import {
 } from '@agent-workflow/shared'
 import { ConflictError, ValidationError } from '@/util/errors'
 import type {
+  ClarifyFollowupActivity,
   ClarifyFollowupGenerator,
   ClarifyFollowupOperations,
   ClarifyFollowupStore,
+  ClarifyFollowupTaskContext,
 } from './ports/clarifyFollowup'
 
 /** Generation has no Task drive authority; only the existing round is extended. */
 export function createClarifyFollowupOperations(
   store: ClarifyFollowupStore,
   generator: ClarifyFollowupGenerator,
+  activity: ClarifyFollowupActivity,
 ): ClarifyFollowupOperations {
-  const active = new Map<
-    string,
-    {
-      id: string
-      abort: AbortController
-      result: Promise<{ questionIds: string[] }>
-      key: string
-      release: () => void
-    }
-  >()
   const canceled = new Set<string>()
   const cancelKey = (nodeRunId: string, requestId: string) => `${nodeRunId}:${requestId}`
   const append = async (
@@ -37,9 +29,9 @@ export function createClarifyFollowupOperations(
     editor: SaveClarifyDraftInput['editor'],
   ) => {
     const requestKey = clarifyContentKey(request)
-    const pending = active.get(nodeRunId)
+    const pending = activity.current(nodeRunId)
     if (pending) {
-      if (pending.id !== request.requestId || pending.key !== requestKey)
+      if (pending.requestId !== request.requestId || pending.requestKey !== requestKey)
         throw new ConflictError(
           'clarify-followup-busy',
           'A follow-up is already being generated for this round.',
@@ -47,107 +39,129 @@ export function createClarifyFollowupOperations(
       return pending.result
     }
     const abort = new AbortController()
-    const release = beginClarifyFollowup(nodeRunId, request.requestId)
-    // Defer the body one microtask so identical concurrent requests see the same promise.
-    const result = Promise.resolve().then(async () => {
-      try {
-        const target = request.parentQuestionId ?? request.categoryPath!
-        const snapshot = await store.read(nodeRunId, target)
-        const accepted = snapshot.questions.filter(
-          (q) => q.mindmap?.requestId === request.requestId,
-        )
-        if (accepted.length) {
-          if (accepted.some((q) => q.mindmap?.requestBasis !== requestKey))
-            throw new ConflictError(
-              'clarify-followup-request-conflict',
-              'This request ID already belongs to another follow-up.',
-            )
-          return { questionIds: accepted.map((q) => q.id) }
-        }
-        if (canceled.has(cancelKey(nodeRunId, request.requestId)))
-          throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
-        if (!snapshot.canAppend)
-          throw new ConflictError(
-            'clarify-followup-closed',
-            'This question no longer accepts follow-ups.',
-          )
-        const context = clarifyFollowupContext(snapshot.questions, snapshot.drafts, target)
-        if (clarifyContentKey(context) !== request.basis)
-          throw new ConflictError(
-            'clarify-followup-stale',
-            'The branch changed. Save and retry with its current answers.',
-          )
-        const prompt = [
-          'Ask 1–4 consequential follow-up questions about the selected branch, in the same language as the user. Do not repeat resolved questions. Do not execute the task or produce deliverables.',
-          'Return exactly one <workflow-clarify> envelope containing {"questions":[{"id":"q1","title":"...","kind":"single","options":["...","..."],"mindmap":{"categoryPath":["..."]}}]}. Every question needs 2–4 options; do not include a free-text option. The framework assigns attachment to the selected question or category. No text outside the envelope.',
-          typeof target === 'string'
-            ? 'Deepen the selected question, respecting its ancestor answers.'
-            : target.length
-              ? 'Add missing questions directly under the selected categoryPath. These are peer questions, not follow-ups to any one existing question. Address userRequest explicitly and consider the existing branch answers without repeating them.'
-              : 'Add missing questions across the mindmap. Assign each question a meaningful categoryPath, reusing existing categories where appropriate. Address userRequest explicitly without repeating resolved questions.',
-          CLARIFY_MINDMAP_QUESTION_GUIDANCE,
-          JSON.stringify({
-            branch: context,
-            configuredCategoryPaths: snapshot.categoryPaths ?? [],
-            ...(typeof target === 'string' ? {} : { categoryPath: target }),
-            guidance: snapshot.instruction,
-            userRequest: request.instruction,
-          }),
-        ].join('\n\n')
-        if (prompt.length > 128000)
-          throw new ValidationError(
-            'clarify-followup-context-too-large',
-            'This branch exceeds the follow-up context limit.',
-          )
-        const text = await generator
-          .generate({
-            askingNodeRunId: snapshot.askingNodeRunId,
-            taskId: snapshot.taskId,
-            requestId: request.requestId,
-            prompt,
-            signal: abort.signal,
-          })
-          .catch((error: unknown) => {
-            // A real native CLI rejects when canceled. Preserve the same
-            // recoverable cancellation result as a late resolved response.
-            if (abort.signal.aborted)
-              throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
-            throw error
-          })
-        if (abort.signal.aborted)
-          throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
-        const match = /^\s*<workflow-clarify>\s*([\s\S]*?)\s*<\/workflow-clarify>\s*$/.exec(text)
-        const parsed = match
-          ? parseClarifyEnvelopeBody(match[1]!, { maxQuestions: 4, mindmap: true })
-          : null
-        if (!parsed?.body || parsed.warnings.length)
-          throw new ValidationError(
-            'clarify-followup-invalid',
-            parsed?.errors[0]?.detail ?? 'Expected 1–4 valid classified questions.',
-          )
-        const parent = snapshot.questions.find((q) => q.id === request.parentQuestionId)
-        const questions = parsed.body.questions.map((q, i) => ({
-          ...q,
-          id: `fq-${request.requestId}-${i}`,
-          mindmap: {
-            categoryPath: parent
-              ? parent.mindmap!.categoryPath
-              : request.categoryPath!.length
-                ? request.categoryPath!
-                : q.mindmap!.categoryPath,
-            ...(parent ? { parentQuestionId: parent.id } : {}),
-            requestId: request.requestId,
-            requestBasis: requestKey,
-          },
-        }))
-        await store.append(nodeRunId, request, questions, abort.signal, editor)
-        return { questionIds: questions.map((q) => q.id) }
-      } finally {
-        release()
-        active.delete(nodeRunId)
-      }
+    // Register before any work starts, so identical concurrent requests share
+    // this promise and the round seal sees the generation immediately.
+    let start!: (body: Promise<{ questionIds: string[] }>) => void
+    const result = new Promise<{ questionIds: string[] }>((resolve) => {
+      start = resolve
     })
-    active.set(nodeRunId, { id: request.requestId, key: requestKey, abort, result, release })
+    const release = activity.begin(nodeRunId, {
+      requestId: request.requestId,
+      requestKey,
+      abort,
+      result,
+    })
+    start(
+      (async () => {
+        try {
+          const target = request.parentQuestionId ?? request.categoryPath!
+          const snapshot = await store.read(nodeRunId, target)
+          const accepted = snapshot.questions.filter(
+            (q) => q.mindmap?.requestId === request.requestId,
+          )
+          if (accepted.length) {
+            if (accepted.some((q) => q.mindmap?.requestBasis !== requestKey))
+              throw new ConflictError(
+                'clarify-followup-request-conflict',
+                'This request ID already belongs to another follow-up.',
+              )
+            return { questionIds: accepted.map((q) => q.id) }
+          }
+          if (canceled.has(cancelKey(nodeRunId, request.requestId)))
+            throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
+          if (!snapshot.canAppend)
+            throw new ConflictError(
+              'clarify-followup-closed',
+              'This question no longer accepts follow-ups.',
+            )
+          const context = clarifyFollowupContext(snapshot.questions, snapshot.drafts, target)
+          if (clarifyContentKey(context) !== request.basis)
+            throw new ConflictError(
+              'clarify-followup-stale',
+              'The branch changed. Save and retry with its current answers.',
+            )
+          // Background only: an unavailable source never blocks a follow-up.
+          let taskContext: ClarifyFollowupTaskContext | null = null
+          if (generator.context)
+            taskContext = await generator
+              .context({ askingNodeRunId: snapshot.askingNodeRunId, taskId: snapshot.taskId })
+              .catch(() => null)
+          const prompt = [
+            'Ask 1–4 consequential follow-up questions about the selected branch, in the same language as the user. Do not repeat resolved questions. Do not execute the task or produce deliverables.',
+            'Return exactly one <workflow-clarify> envelope containing {"questions":[{"id":"q1","title":"...","kind":"single","options":["...","..."],"mindmap":{"categoryPath":["..."]}}]}. Every question needs 2–4 options; do not include a free-text option. The framework assigns attachment to the selected question or category. No text outside the envelope.',
+            typeof target === 'string'
+              ? 'Deepen the selected question, respecting its ancestor answers.'
+              : target.length
+                ? 'Add missing questions directly under the selected categoryPath. These are peer questions, not follow-ups to any one existing question. Address userRequest explicitly and consider the existing branch answers without repeating them.'
+                : 'Add missing questions across the mindmap. Assign each question a meaningful categoryPath, reusing existing categories where appropriate. Address userRequest explicitly without repeating resolved questions.',
+            ...(taskContext
+              ? [
+                  "taskContext is the original task input and the asking agent's instruction. Use it only as background; do not ask about anything it already settles.",
+                ]
+              : []),
+            CLARIFY_MINDMAP_QUESTION_GUIDANCE,
+            JSON.stringify({
+              ...(taskContext ? { taskContext } : {}),
+              branch: context,
+              configuredCategoryPaths: snapshot.categoryPaths ?? [],
+              ...(typeof target === 'string' ? {} : { categoryPath: target }),
+              guidance: snapshot.instruction,
+              userRequest: request.instruction,
+            }),
+          ].join('\n\n')
+          if (prompt.length > 128000)
+            throw new ValidationError(
+              'clarify-followup-context-too-large',
+              'This branch exceeds the follow-up context limit.',
+            )
+          const text = await generator
+            .generate({
+              askingNodeRunId: snapshot.askingNodeRunId,
+              taskId: snapshot.taskId,
+              requestId: request.requestId,
+              prompt,
+              signal: abort.signal,
+            })
+            .catch((error: unknown) => {
+              // A real native CLI rejects when canceled. Preserve the same
+              // recoverable cancellation result as a late resolved response.
+              if (abort.signal.aborted)
+                throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
+              throw error
+            })
+          if (abort.signal.aborted)
+            throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
+          const match = /^\s*<workflow-clarify>\s*([\s\S]*?)\s*<\/workflow-clarify>\s*$/.exec(text)
+          const parsed = match
+            ? parseClarifyEnvelopeBody(match[1]!, { maxQuestions: 4, mindmap: true })
+            : null
+          if (!parsed?.body || parsed.warnings.length)
+            throw new ValidationError(
+              'clarify-followup-invalid',
+              parsed?.errors[0]?.detail ?? 'Expected 1–4 valid classified questions.',
+            )
+          const parent = snapshot.questions.find((q) => q.id === request.parentQuestionId)
+          const questions = parsed.body.questions.map((q, i) => ({
+            ...q,
+            id: `fq-${request.requestId}-${i}`,
+            mindmap: {
+              categoryPath: parent
+                ? parent.mindmap!.categoryPath
+                : request.categoryPath!.length
+                  ? request.categoryPath!
+                  : q.mindmap!.categoryPath,
+              ...(parent ? { parentQuestionId: parent.id } : {}),
+              requestId: request.requestId,
+              requestBasis: requestKey,
+            },
+          }))
+          await store.append(nodeRunId, request, questions, abort.signal, editor)
+          return { questionIds: questions.map((q) => q.id) }
+        } finally {
+          release()
+        }
+      })(),
+    )
     return result
   }
   return {
@@ -155,11 +169,8 @@ export function createClarifyFollowupOperations(
     async cancel(nodeRunId, requestId) {
       canceled.add(cancelKey(nodeRunId, requestId))
       if (canceled.size > 1024) canceled.delete(canceled.values().next().value!)
-      const pending = active.get(nodeRunId)
-      if (pending?.id === requestId) {
-        pending.abort.abort()
-        pending.release()
-      }
+      const pending = activity.current(nodeRunId)
+      if (pending?.requestId === requestId) pending.abort.abort()
     },
   }
 }

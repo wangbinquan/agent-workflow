@@ -434,3 +434,23 @@ test('sealed category and submitted history do not expose category generation', 
   fireEvent.click(screen.getByRole('treeitem', { name: /^Data consistency/ }))
   expect(screen.queryByRole('button', { name: 'Add questions in this direction' })).toBeNull()
 })
+
+// RFC-372 review follow-up O6: "Guide questions in this branch" names a dialog that
+// can still guide; a sealed branch or submitted round is only read under its own name.
+test('category dialogs are named by the guidance they offer, or by the branch when read-only', () => {
+  const { unmount } = render(<Harness />)
+  fireEvent.click(screen.getByRole('treeitem', { name: /^Data consistency/ }))
+  expect(screen.getByRole('dialog', { name: 'Guide questions in this branch' })).toBeTruthy()
+  unmount()
+
+  for (const props of [{ sealed: true }, { status: 'answered' }]) {
+    const { unmount: close } = render(<Harness {...props} />)
+    fireEvent.click(screen.getByRole('treeitem', { name: /^Data consistency/ }))
+    expect(screen.getByRole('dialog', { name: 'Data consistency' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Guide questions in this branch' })).toBeNull()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Question outline' }))
+    expect(screen.getByRole('dialog', { name: 'Room booking' })).toBeTruthy()
+    close()
+  }
+})

@@ -24,7 +24,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { runHttpHostExecutionRequest } from '@/platform/http/hostExecutionAvailability'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { DomainError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 
 function requireClarifyOperations(
   operations: CollaborationRouteOperations | undefined,
@@ -130,10 +130,12 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
       if (!parsed.success)
         throw new ValidationError('clarify-followup-invalid', 'Invalid follow-up request.')
       const followup = operations.clarify.followup
+      // Not a request error: this daemon composition has no follow-up generator.
       if (!followup)
-        throw new ValidationError(
+        throw new DomainError(
           'clarify-followup-unavailable',
           'Follow-up generation is not configured.',
+          503,
         )
       return c.json(
         await followup.append(nodeRunId, parsed.data, {

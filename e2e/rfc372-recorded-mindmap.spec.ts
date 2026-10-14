@@ -99,7 +99,7 @@ async function stop(page: Page, id: string) {
   expect(result.ok()).toBe(true)
   const payload = result.request().postDataJSON()
   expect(
-    payload.answers.every((a: { confirmedBasis?: string }) => a.confirmedBasis?.startsWith('v1:')),
+    payload.answers.every((a: { confirmedBasis?: string }) => a.confirmedBasis?.startsWith('v2:')),
   ).toBe(true)
 }
 async function readingFits(page: Page) {

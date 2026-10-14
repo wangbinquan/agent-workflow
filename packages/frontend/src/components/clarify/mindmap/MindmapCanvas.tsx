@@ -531,8 +531,10 @@ export function MindmapCanvas(props: Props) {
       >
         <canvas ref={minimap} aria-hidden="true" />
       </button>
+      {/* One variant is shown per input type; a hidden variant is not announced. */}
       <p id="mindmap-canvas-help" className="mindmap-canvas__help">
-        {t('mindmap.canvasHelp')}
+        <span className="mindmap-canvas__help-pointer">{t('mindmap.canvasHelp')}</span>
+        <span className="mindmap-canvas__help-touch">{t('mindmap.canvasHelpTouch')}</span>
       </p>
     </div>
   )

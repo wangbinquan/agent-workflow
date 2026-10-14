@@ -1,4 +1,5 @@
 import { createClarifyFollowupOperations } from '../application/clarifyFollowup'
+import { clarifyFollowupActivity } from '../infrastructure/clarifyFollowupActivity'
 import { createClarifyFollowupStore } from '../infrastructure/clarifyFollowupStore'
 import type { ClarifyFollowupGenerator } from '../application/ports/clarifyFollowup'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -75,6 +76,7 @@ export function composeCollaborationRouteOperations(input: {
             followup: createClarifyFollowupOperations(
               createClarifyFollowupStore(input.db, events),
               input.followupGenerator,
+              clarifyFollowupActivity,
             ),
           }
         : {}),

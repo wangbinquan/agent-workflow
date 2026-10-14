@@ -256,7 +256,7 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
   )
   await page.getByTestId('clarify-submit-stop').click()
   await page.getByTestId('clarify-stop-confirm').click()
-  expect((await submitted).postDataJSON().questionSetKey).toMatch(/^v1:/)
+  expect((await submitted).postDataJSON().questionSetKey).toMatch(/^v2:/)
   await expect
     .poll(async () => (await api<{ status: string }>(`/api/tasks/${taskId}`)).status, {
       timeout: 180_000,

@@ -1,4 +1,4 @@
-import { assertClarifyFollowupIdle } from '../../application/clarifyFollowupActivity'
+import { assertClarifyFollowupIdle } from '../clarifyFollowupActivity'
 // RFC-128 / RFC-349 — SQLite per-question answer seal primitive.
 //
 // This is the storage-layer vehicle the per-question answer endpoints (P2) and the

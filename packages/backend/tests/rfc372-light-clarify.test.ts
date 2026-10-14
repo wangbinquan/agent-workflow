@@ -25,9 +25,17 @@ import { sealRoundQuestions } from '@/services/clarifySeal'
 import { saveClarifyDraft } from '@/modules/collaboration/infrastructure/clarifyRounds'
 import { createClarifyFollowupStore } from '@/modules/collaboration/infrastructure/clarifyFollowupStore'
 import { createClarifyFollowupOperations } from '@/modules/collaboration/application/clarifyFollowup'
+import { clarifyFollowupActivity } from '@/modules/collaboration/infrastructure/clarifyFollowupActivity'
+import type {
+  ClarifyFollowupGenerator,
+  ClarifyFollowupStore,
+} from '@/modules/collaboration/application/ports/clarifyFollowup'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const editor = { userId: 'fixture', displayName: 'Reviewer', role: 'owner' as const }
+// The production composition shares one in-flight registry with the round seal.
+const followups = (store: ClarifyFollowupStore, generator: ClarifyFollowupGenerator) =>
+  createClarifyFollowupOperations(store, generator, clarifyFollowupActivity)
 const events = { publish: async () => {} }
 const q = (id: string, parentQuestionId?: string) =>
   ClarifyQuestionSchema.parse({
@@ -89,7 +97,8 @@ test('a route composition without a follow-up generator returns a structured una
     body: JSON.stringify({ requestId: randomUUID(), parentQuestionId: 'q1', basis: 'v1:basis' }),
   })
   expect(accessReads).toBe(1)
-  expect(response.status).toBe(422)
+  // RFC-372 review follow-up O5: an unconfigured generator is unavailable, not a bad request.
+  expect(response.status).toBe(503)
   expect(await response.json()).toMatchObject({ code: 'clarify-followup-unavailable' })
 })
 
@@ -185,7 +194,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       const snapshot = await store.read(fixture.nodeRunId, [])
       expect(snapshot.categoryPaths).toEqual([['Scope'], ['Performance', 'Database', 'SQL']])
       expect(snapshot.instruction).toBe('')
-      const operations = createClarifyFollowupOperations(store, {
+      const operations = followups(store, {
         generate: async ({ prompt }) => {
           expect(prompt).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
           expect(prompt).toContain(
@@ -239,7 +248,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       expect(snap.categoryPaths).toEqual([['Scope']])
       expect(snap.drafts.b?.confirmedBasis).toBe(answer(fixture.questions[1]!).confirmedBasis)
       let calls = 0
-      const operations = createClarifyFollowupOperations(store, {
+      const operations = followups(store, {
         generate: async (input) => {
           calls++
           expect(input.prompt).toContain(CLARIFY_MINDMAP_QUESTION_GUIDANCE)
@@ -263,7 +272,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       expect(await operations.append(fixture.nodeRunId, request, editor)).toEqual(appended)
       // Retry after process restart recovers from the same original questions JSON.
       expect(
-        await createClarifyFollowupOperations(store, {
+        await followups(store, {
           generate: async () => {
             throw new Error('must not regenerate')
           },
@@ -335,7 +344,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       const gate = new Promise<void>((resolve) => {
         release = resolve
       })
-      const ops = createClarifyFollowupOperations(store, {
+      const ops = followups(store, {
         generate: async ({ signal }) => {
           started()
           await gate
@@ -399,7 +408,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
     const other = await seed(h)
     const snap = await store.read(other.nodeRunId, 'b')
     let attempts = 0
-    const ops = createClarifyFollowupOperations(store, {
+    const ops = followups(store, {
       generate: async () => {
         if (++attempts === 1) throw new Error('unavailable')
         return generated
@@ -433,7 +442,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
     expect(snapshot.drafts.a?.selectedOptionIndices).toEqual([1])
     const client = effectiveClarifyAnswers({ a: answer(fixture.questions[0]!) }, [final])
     const context = clarifyFollowupContext(fixture.questions, client, 'b')
-    const operations = createClarifyFollowupOperations(store, {
+    const operations = followups(store, {
       generate: async ({ prompt }) => {
         expect(prompt).toContain(JSON.stringify(context))
         return generated
@@ -517,7 +526,7 @@ describeEachProvider(
           const snapshot = await store.read(fixture.nodeRunId, categoryPath)
           const context = clarifyFollowupContext(snapshot.questions, snapshot.drafts, categoryPath)
           let calls = 0
-          const operations = createClarifyFollowupOperations(store, {
+          const operations = followups(store, {
             generate: async ({ prompt }) => {
               calls++
               expect(prompt).toContain(JSON.stringify(context))
@@ -544,7 +553,7 @@ describeEachProvider(
           const result = await operations.append(fixture.nodeRunId, request, editor)
           expect(await operations.append(fixture.nodeRunId, request, editor)).toEqual(result)
           expect(
-            await createClarifyFollowupOperations(store, {
+            await followups(store, {
               generate: async () => {
                 throw new Error('must replay')
               },
@@ -595,7 +604,7 @@ describeEachProvider(
         const gate = new Promise<void>((resolve) => {
           finish = resolve
         })
-        const ops = createClarifyFollowupOperations(store, {
+        const ops = followups(store, {
           generate: async ({ prompt }) => {
             expect(prompt).toContain('selectedOptionIndices')
             start()
@@ -641,7 +650,7 @@ describeEachProvider(
         expect((await store.read(fixture.nodeRunId, target)).canAppend).toBe(false)
       await expect(store.read(fixture.nodeRunId, ['Scope extra'])).rejects.toThrow('not found')
       await expect(
-        createClarifyFollowupOperations(store, { generate: async () => generated }).append(
+        followups(store, { generate: async () => generated }).append(
           fixture.nodeRunId,
           { requestId: randomUUID(), categoryPath: ['Scope'], instruction: '', basis: 'stale' },
           editor,
