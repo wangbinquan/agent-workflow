@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gitDiffSnapshot, isGitWorkTree, runGit } from '../src/util/git'
+import { diffFailureMessage, gitDiffSnapshot, isGitWorkTree, runGit } from '../src/util/git'
 
 interface Fixture {
   /** A real git work tree with one commit on `main`. */
@@ -125,8 +125,28 @@ describe('gitDiffSnapshot on a non-git directory', () => {
     }
     const msg = (caught as Error).message
     expect(msg).toContain('is not a git repository')
-    // Raw git stderr here is `fatal: not a git repository: <...>/worktrees/<id>`;
-    // the concise message must not leak that prefix / internal gitdir path.
+    // Raw git stderr here is `fatal: not a git repository: <...>/worktrees/<id>`,
+    // or with newer git (2.55, hosted macOS CI 38625882647) `fatal: gitfile does
+    // not point to a valid repository: <path>/.git`; the concise message must not
+    // leak that prefix / internal gitdir path.
     expect(msg).not.toContain('fatal:')
   })
+})
+
+// Both git wordings of a dangling worktree (older `not a git repository`, 2.55's
+// `gitfile does not point to a valid repository`) collapse to the concise message;
+// any other failure keeps git's own stderr.
+test('every git wording of a missing repository collapses, other failures keep stderr', () => {
+  for (const stderr of [
+    'fatal: not a git repository: /tmp/src/.git/worktrees/abc',
+    'fatal: gitfile does not point to a valid repository: /tmp/wt/.git',
+    'warning: Not a git repository. Use --no-index to compare two paths outside a working tree',
+  ]) {
+    const message = diffFailureMessage('/tmp/wt', stderr)
+    expect(message).toContain("'/tmp/wt' is not a git repository")
+    expect(message).not.toContain('fatal:')
+  }
+  expect(diffFailureMessage('/tmp/wt', "fatal: bad revision 'nope'\n")).toBe(
+    "git diff failed: fatal: bad revision 'nope'",
+  )
 })

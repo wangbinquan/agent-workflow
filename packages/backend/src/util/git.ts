@@ -395,14 +395,16 @@ export function resolveGitCommonDirSync(worktreePath: string): string | null {
  * dir exists but isn't a git repo (source repo moved/deleted, `.git` removed),
  * git falls back to its `--no-index` path and writes a hundreds-of-lines usage
  * block to stderr (led by `warning: Not a git repository...`), or prints
- * `fatal: not a git repository: <gitdir>`. Surfacing that whole blob as the
+ * `fatal: not a git repository: <gitdir>` — newer git (2.55 on the hosted macOS
+ * runners) words a dangling worktree as `fatal: gitfile does not point to a
+ * valid repository: <path>/.git`. Surfacing that whole blob as the
  * error message is useless noise — and it's exactly what reached the task
  * detail "工作目录 diff" tab. Replace it with a concise sentence; any other
  * failure (bad revision, etc.) keeps its real stderr for debugging.
  */
-function diffFailureMessage(worktreePath: string, stderr: string): string {
+export function diffFailureMessage(worktreePath: string, stderr: string): string {
   const trimmed = stderr.trim()
-  if (/not a git repository/i.test(trimmed)) {
+  if (/not a git repository|gitfile does not point to a valid repository/i.test(trimmed)) {
     return `git diff failed: '${worktreePath}' is not a git repository (worktree removed or its source repo is gone)`
   }
   return `git diff failed: ${trimmed}`
