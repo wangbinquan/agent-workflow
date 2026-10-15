@@ -20,9 +20,15 @@ import { createExecutionExitRequests, startOnExecutionActive } from '@/cli/execu
 import type { DaemonProviderRuntimeHandleFactory } from '@/cli/daemonProviderRuntimeSession'
 import { getEmbeddedFrontendResponse, withDeploymentMarker } from '@/embed'
 import {
+  createPluginOperationDescriptors,
+  createResourcePackageOperationDescriptors,
+} from '@/modules/resource-catalog/composition/catalogOperationDescriptors'
+import {
   createHostedPluginInstaller,
   createHostedResourcePackageArtifacts,
+  HostedCapabilityUnavailableError,
 } from '@/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities'
+import { invokeOperation } from '@/platform/operations/invoke'
 import { runDaemonHostApplication } from '@/modules/system-operations/application/daemonHostApplication'
 import type { ExecutionFence } from '@/modules/system-operations/application/ports/executionAuthority'
 import {
@@ -296,6 +302,30 @@ test('plugin installation and resource packages are refused with the reason', as
     'Applying resource packages is not available',
   )
   await packages.skills.compensate({} as never, {} as never)
+})
+
+// Regression (found by the local hosted smoke): the operation layer rethrows only
+// declared public error categories, so an undeclared 503 surfaced as a 500
+// operation contract violation instead of the hosted reason.
+test('hosted refusals reach the caller as 503 through the operation contracts', async () => {
+  const refusal = new HostedCapabilityUnavailableError('plugin-install')
+  const plugins = createPluginOperationDescriptors(
+    {
+      create: async () => {
+        throw refusal
+      },
+    } as never,
+    {} as never,
+    {} as never,
+  )
+  await expect(
+    invokeOperation(plugins.create, {} as never, { name: 'hosted-plugin', spec: 'plugin@1.0.0' }),
+  ).rejects.toBe(refusal)
+  for (const operation of [plugins.create, plugins.update, plugins.checkUpdate]) {
+    expect(operation.publicErrors).toContain('unavailable')
+  }
+  const packages = createResourcePackageOperationDescriptors({} as never, {} as never)
+  expect(packages.apply.publicErrors).toContain('unavailable')
 })
 
 test('a hosted page states its deployment; standalone pages are unchanged', async () => {

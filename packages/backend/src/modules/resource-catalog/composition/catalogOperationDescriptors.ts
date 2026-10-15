@@ -877,6 +877,8 @@ const PLUGIN_PUBLIC_ERRORS = Object.freeze([
   'validation-failed',
   'conflict',
   'resource-operation-stale',
+  // RFC-370 M0: a CrewStation-hosted deployment refuses installs (503) until M2.
+  'unavailable',
   'internal-error',
 ] as const)
 
@@ -1237,6 +1239,8 @@ const RESOURCE_PACKAGE_PUBLIC_ERRORS = Object.freeze([
   'validation-failed',
   'conflict',
   'resource-operation-stale',
+  // RFC-370 M0: a CrewStation-hosted deployment refuses package apply (503) until M2.
+  'unavailable',
   'internal-error',
 ] as const)
 const resourcePackageSubmissionSchema = z

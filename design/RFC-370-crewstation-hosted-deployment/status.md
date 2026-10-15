@@ -44,7 +44,9 @@ CI（`a5ae4b5b7`）：主 CI `38670196680`、windows-platform `38670196656`、po
 
 本地集中验证：三包 tsc、eslint（新增两个发布脚本纳入 `lint:repo-ui` / `format:check:repo-ui`）、`lint:promises`、prettier、depcheck 通过；新增用例 backend 4 个文件、frontend 1 个文件。frontend 全量 855 个文件 7191 项中 2 条源码文本断言随改动修正（设置页隐藏判据收进 `isSettingsTab`，RFC-198 锁的原句不变），相关 6 个文件复跑全过。backend（SQLite）全量 8 分片：本机 Bun 的 22 项 affected-rows 之外，负载超时的 7 个文件单独复跑 44 项全过；守卫逐项修正（PG 执行面裸 `like` 改为精确前缀过滤、树摘要并入 `digestSortedTree`、`AW_*` 变量登记、bootstrap 消费身份 composition 登记、树内路径包含判断、中立事务原语写法、退出请求排空失败的拒绝处理、`/live` `/ready` 契约与 MCP 面豁免）；规范清单对拍、owner 登记表与账本条目数 4 条待提交后由 census 投影转绿。
 
-提交 SHA、CI 结论与本机 CS 部署验收在完成后补记。
+提交：源码 `8683b5a81`、配套 `ce9edaad9`。本机托管冒烟（真 PostgreSQL 17 + 本地 JWKS 签发器 + 编译版二进制，`AW_DEPLOYMENT_MODE=crewstation`）发现并修复三处，均补回归用例：①托管库没有登记活动世代，PG 世代写入围栏拒绝初始行复制（`515209c95`，配套 `324f3f204`，另把 RFC-349 死锁故障注入改为确定性时序）；②插件与资源包操作合同未声明 `unavailable`，托管拒绝变成 500 合同违规（见下一笔）；③托管 `migrate` 的连接读 `process.env` 而非传入的 env（同 ①）。修复后冒烟全部通过：迁移 Job 首跑安装并复制初始行、重跑幂等；服务的 `/live` `/ready`、页面部署标记、网关身份（管理员 / 最低权限 / 缺失 / 伪造 / 他服务令牌）、执行待命状态与发起任务 503、设置页数据库只读与保存、Agent / 工作流 / 技能（含文件树）/ MCP 的创建、插件安装 503、WebSocket 带 / 不带身份；以全新空 home 重启后数据与身份映射全部仍在。
+
+本机 CS 部署验收在完成后补记。
 
 ## 环境
 
