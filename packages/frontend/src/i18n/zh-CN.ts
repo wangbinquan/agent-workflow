@@ -1269,6 +1269,7 @@ export interface Resources {
       oidc: string
       awaitingOidc: string
       local: string
+      platform: string
     }
     systemTitle: string
     systemDescription: string
@@ -7882,6 +7883,7 @@ export const zhCN: Resources = {
       oidc: 'OIDC 托管',
       awaitingOidc: '等待 OIDC',
       local: '本地账户',
+      platform: 'CrewStation 平台账户',
     },
     systemTitle: '系统主体',
     systemDescription: 'daemon 内部主体 · 不可登录或编辑',

@@ -13,6 +13,7 @@ import { USER_ICON } from '@/components/icons/resourceIcons'
 import {
   USER_ROLE_PRESENTATION,
   USER_STATUS_PRESENTATION,
+  accountCredentialManager,
   accountInitials,
 } from '@/lib/account-user-presentation'
 import type {
@@ -21,6 +22,7 @@ import type {
   UserRoleFilter,
   UserStatusFilter,
 } from '@/lib/user-directory'
+import { isGatewayIdentity } from '@/stores/deployment'
 
 export interface UserDirectoryProps {
   model: UserDirectoryModel
@@ -163,11 +165,19 @@ function UserDirectoryRow({
   const presence = usePresenceOf(user.id)
   const role = USER_ROLE_PRESENTATION[user.role]
   const status = USER_STATUS_PRESENTATION[user.status]
-  const ownership = user.hasOidcIdentity
-    ? t('users.ownership.oidc')
-    : user.status === 'invited'
-      ? t('users.ownership.awaitingOidc')
-      : t('users.ownership.local')
+  // RFC-370 M0: behind the CrewStation gateway every member is a platform account.
+  const credentials = accountCredentialManager({
+    gatewayIdentity: isGatewayIdentity(),
+    hasOidcIdentity: user.hasOidcIdentity,
+  })
+  const ownership =
+    credentials === 'platform'
+      ? t('users.ownership.platform')
+      : credentials === 'oidc'
+        ? t('users.ownership.oidc')
+        : user.status === 'invited'
+          ? t('users.ownership.awaitingOidc')
+          : t('users.ownership.local')
 
   return (
     <li className="user-directory__item" data-user-id={user.id}>

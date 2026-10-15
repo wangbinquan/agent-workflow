@@ -2301,6 +2301,7 @@ export const enUS: Resources = {
       oidc: 'OIDC managed',
       awaitingOidc: 'Awaiting OIDC',
       local: 'Local account',
+      platform: 'CrewStation platform account',
     },
     systemTitle: 'System principal',
     systemDescription: 'daemon internal principal · cannot sign in or be edited',

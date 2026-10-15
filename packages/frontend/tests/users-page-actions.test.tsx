@@ -11,6 +11,7 @@ import { enUS } from '../src/i18n/en-US'
 import { meQueryOptions, type MeResponse } from '../src/hooks/useActor'
 import { UsersPage } from '../src/routes/users'
 import { setBaseUrl, setToken } from '../src/stores/auth'
+import { DEPLOYMENT_META_NAME, resetDeploymentModeForTest } from '../src/stores/deployment'
 
 interface FetchCall {
   url: string
@@ -590,5 +591,40 @@ describe('/users responsive directory actions', () => {
     expect(empty.textContent).toContain(enUS.users.emptyDescription)
     expect(screen.getAllByRole('button', { name: 'New user' })).toHaveLength(1)
     expect(calls.some((call) => call.method === 'GET' && /\/api\/users/.test(call.url))).toBe(true)
+  })
+})
+
+// RFC-370 M0 CrewStation acceptance (2026-10-15): behind the gateway members
+// join on their first platform access, so the page offered local accounts,
+// password resets and a "Local account" chip on every platform member.
+describe('/users behind the CrewStation gateway', () => {
+  afterEach(() => {
+    document.head.querySelector(`meta[name="${DEPLOYMENT_META_NAME}"]`)?.remove()
+    resetDeploymentModeForTest()
+  })
+
+  test('members are platform accounts: no local creation or password reset', async () => {
+    const meta = document.createElement('meta')
+    meta.setAttribute('name', DEPLOYMENT_META_NAME)
+    meta.setAttribute('content', 'crewstation')
+    document.head.appendChild(meta)
+    resetDeploymentModeForTest()
+    const calls = installFetch(route)
+    renderPage()
+
+    await screen.findByTestId('user-manage-u-alice')
+    expect(screen.getByTestId('users-platform-members').textContent).toContain(
+      enUS.users.platformMembersNotice,
+    )
+    expect(screen.queryAllByRole('button', { name: 'New user' })).toHaveLength(0)
+    const alice = document.querySelector('[data-user-id="u-alice"]')!
+    expect(alice.textContent).toContain(enUS.users.ownership.platform)
+    expect(document.body.textContent).not.toContain(enUS.users.ownership.local)
+
+    fireEvent.click(screen.getByTestId('user-manage-u-alice'))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toContain(enUS.users.credentialsPlatformDescription)
+    expect(within(dialog).queryByRole('button', { name: 'Reset password' })).toBeNull()
+    expect(calls.some((call) => call.method === 'POST')).toBe(false)
   })
 })
