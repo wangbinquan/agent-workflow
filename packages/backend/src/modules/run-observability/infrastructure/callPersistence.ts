@@ -35,9 +35,6 @@ const DAY_MS = 86_400_000
 const total = (column: SQL | AnyColumn) => sql<number>`coalesce(sum(${column}), 0)`.mapWith(Number)
 const tally = (condition: SQL) =>
   sql<number>`coalesce(sum(case when ${condition} then 1 else 0 end), 0)`.mapWith(Number)
-/** Price-line key; calls recorded before built-in keys existed fall back to theirs. */
-const runtimeKey = () =>
-  sql<string>`coalesce(${calls.runtimeId}, 'builtin:' || ${calls.protocol})`.mapWith(String)
 
 // Built per query: schema columns are provider projections and must not be captured at load time.
 function usageFields() {
@@ -134,6 +131,10 @@ function modelRow(row: typeof models.$inferSelect): CallModelRow {
 }
 
 export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
+  /** Price-line key; calls recorded before built-in keys existed fall back to theirs. */
+  const runtimeKey = () =>
+    sql<string>`coalesce(${calls.runtimeId}, 'builtin:' || ${calls.protocol})`.mapWith(String)
+
   async function modelsOf(ids: readonly string[]): Promise<CallModelRow[]> {
     const rows: CallModelRow[] = []
     for (let i = 0; i < ids.length; i += 500) {
