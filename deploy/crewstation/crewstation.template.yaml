@@ -11,7 +11,7 @@ spec:
     servicePlanId: '{{SERVICE_PLAN_ID}}'
     replicas: 1
     probes:
-      startup: { path: /ready, periodSeconds: 2, timeoutSeconds: 3, failureThreshold: 150 }
+      startup: { path: /ready, periodSeconds: 3, timeoutSeconds: 3, failureThreshold: 100 }
       readiness: { path: /ready, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 }
       liveness: { path: /live, periodSeconds: 10, timeoutSeconds: 3, failureThreshold: 3 }
   env:

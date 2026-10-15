@@ -266,6 +266,8 @@ describe('RFC-347 exact production source locks', () => {
     expect(importPaths('identity-access/composition')).toEqual([
       // RFC-370: standalone compatibility facade binds through the module composition.
       'src/auth/session.ts',
+      // RFC-370 M0: the deployment selection point composes the CrewStation credential adapters.
+      'src/cli/deployment.ts',
       'src/cli/postgresqlDaemonApplication.ts',
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的第三个
       // 组合根，列表行的 owner 身份投影在这里装配后注入任务路由——与另外两个根同形
@@ -292,7 +294,10 @@ describe('RFC-347 exact production source locks', () => {
     ])
     expect(callPaths('buildCurrentActor(')).toEqual([])
     expect(callPaths('buildInheritedActor(')).toEqual([])
+    // Credential admission adapters are the only Actor mints: the local one, and
+    // RFC-370 M0's CrewStation gateway identity (an authenticated session).
     expect(callPaths('.fromSession(')).toEqual([
+      'src/modules/identity-access/infrastructure/crewstation/crewStationAuthentication.ts',
       'src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts',
     ])
     expect(callPaths('.fromPat(')).toEqual([

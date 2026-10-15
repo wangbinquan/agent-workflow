@@ -431,7 +431,14 @@ test('the shipped Manifest template and image start the hosted control plane', (
     apiVersion: string
     kind: string
     spec: {
-      service: { command: string[]; port: number; probes: Record<string, { path: string }> }
+      service: {
+        command: string[]
+        port: number
+        probes: Record<
+          string,
+          { path: string; periodSeconds: number; timeoutSeconds: number; failureThreshold: number }
+        >
+      }
       env: { name: string; from: string }[]
       release: { migrationCommand: string[] }
     }
@@ -441,6 +448,17 @@ test('the shipped Manifest template and image start the hosted control plane', (
   expect(manifest.spec.service.port).toBe(3000)
   expect(manifest.spec.service.probes.liveness!.path).toBe('/live')
   expect(manifest.spec.service.probes.readiness!.path).toBe('/ready')
+  // CrewStation's probe contract (packages/contracts/manifest/serviceProbes.ts in the
+  // CrewStation repository) bounds every probe; the first local publish was refused
+  // for a startup failureThreshold of 150.
+  for (const probe of Object.values(manifest.spec.service.probes)) {
+    expect(probe.failureThreshold).toBeLessThanOrEqual(120)
+    expect(probe.periodSeconds).toBeLessThanOrEqual(300)
+    expect(probe.timeoutSeconds).toBeLessThanOrEqual(60)
+  }
+  // The startup budget still covers a cold boot on a small service plan.
+  const startup = manifest.spec.service.probes.startup!
+  expect(startup.periodSeconds * startup.failureThreshold).toBeGreaterThanOrEqual(300)
   expect(manifest.spec.release.migrationCommand).toEqual(['agent-workflow', 'migrate'])
   expect(manifest.spec.env).toEqual(
     expect.arrayContaining([
