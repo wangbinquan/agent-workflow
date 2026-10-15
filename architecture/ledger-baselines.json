@@ -928,7 +928,7 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5386c8842252ff70d325e1c0fafe1d413fcb16be",
+    "currentSnapshotSha": "27822dff57d91d2e20d25e96d0e3589692dffb88",
     "contentDigest": "sha256:cd7b5a4f131cc5be051732f32c797862dc186708d98a84ffd003e36a9e9c162b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
