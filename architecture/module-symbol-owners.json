@@ -6,7 +6,7 @@
     "moduleFiles": 1640,
     "productionFiles": 3042,
     "sharedFiles": 161,
-    "symbolsIncludingFileRoots": 26833
+    "symbolsIncludingFileRoots": 26836
   },
   "entries": [
     {
@@ -169031,6 +169031,18 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/persistence/hostedInstallationSeed.ts",
+      "id": "owner:packages/backend/src/platform/persistence/hostedInstallationSeed.ts#tablesOmittedOn",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "tablesOmittedOn",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/persistence/identityPackets.ts",
       "id": "owner:packages/backend/src/platform/persistence/identityPackets.ts#$file",
       "removeAfterWave": "W9",
@@ -172906,6 +172918,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrator.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrator.ts#activateHostedPostgresqlGeneration",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "activateHostedPostgresqlGeneration",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/postgresqlMigrator.ts",
       "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrator.ts#advanceActiveGenerations",
@@ -172936,6 +172960,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "historyState",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrator.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlMigrator.ts#HOSTED_INSTALLATION_SOURCE",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "HOSTED_INSTALLATION_SOURCE",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -322727,5 +322763,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0382fdd061d34f0d7cf6770c38cd016d1bb3ef7c86729418076d9d0b7da84768"
+  "sourceDigest": "sha256:0239ecb26e97b37b38dc98689acd6cc469f915da08c5fb70d9b1689aec27a6c2"
 }
