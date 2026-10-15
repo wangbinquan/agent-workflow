@@ -15,6 +15,7 @@ export function composeTaskAutoResumeCommand(input: {
       return await autoResumeInterruptedTasks({
         operations: input.recovery,
         breaker: command.breaker,
+        ...(command.taskIds === undefined ? {} : { taskIds: command.taskIds }),
         resume: (taskId) => input.resume.resume(taskId),
         retryRepoPrep: (taskId) => input.repositoryPreparation.retry(taskId),
       })

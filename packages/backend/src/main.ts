@@ -279,6 +279,11 @@ async function main(): Promise<void> {
     (localDatabaseMigrationOperations ??= composeLocalDatabaseMigrationOperations())
 
   switch (sub) {
+    case 'workspace': {
+      const { runWorkspaceTaskImageCommand } = await import('./bootstrap/workspaceTaskImage')
+      process.exit(await runWorkspaceTaskImageCommand(Bun.argv.slice(3)))
+      break
+    }
     case MANAGED_PROCESS_LAUNCHER_SUBCOMMAND: {
       // RFC-328: hidden pre-activation process gate. It intentionally bypasses
       // every daemon/bootstrap concern and exits with the target's code.

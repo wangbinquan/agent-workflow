@@ -267,13 +267,10 @@ describe('RFC-370 selected invocation preparation', () => {
     nativePlan.cmd = ['after-bind']
     nativePlan.env = { SELECTED: 'after-bind' }
     invocation.evidence.prepareUsageMeter!({ resumed: false, configuredModel: null })
-    const execution = invocation.bindExecution()
-    await execution.effect.submit({
-      executionRef: execution.executionRef,
-      materialRef: execution.materialRef,
-      workspaceRef: execution.workspaceRef,
-      onStarted: (receipt) => execution.acknowledgeOwner!(receipt),
-    })
+    await invocation.execute(
+      { acknowledgeStart: true },
+      { record: async () => {}, diagnostic: async () => {}, checkpoint: async () => {} },
+    )
     expect(nativeRequest?.cmd).toBe(command)
     expect(nativeRequest?.env).toBe(environment)
     expect(nativeRequest?.stdin).toBe(nativePlan.stdin)

@@ -31,6 +31,7 @@ import { createLogger } from '@/util/log'
 const log = createLogger('auto-resume')
 
 export interface AutoResumeOptions {
+  readonly taskIds?: readonly string[]
   operations: TaskRecoveryOperations
   breaker: BreakerConfig
   /** Resume one task. Throws on an unsafe/failed resume (counted by the breaker). */
@@ -94,6 +95,7 @@ export async function autoResumeInterruptedTasks(
   const resumed: string[] = []
   const skipped: string[] = []
   for (const t of candidates) {
+    if (opts.taskIds !== undefined && !opts.taskIds.includes(t.id)) continue
     // RFC-287 G7 / AC-10 —— **准备阶段的任务不走 resume**。
     //
     // G7 之后出现了「任务行已落、工作树还没建出来」这一段。resume 对它必然失败

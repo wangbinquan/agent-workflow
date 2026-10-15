@@ -4,11 +4,11 @@ import { describe, expect, test } from 'bun:test'
 import { runPreparedRuntimeSmoke } from '../src/modules/task-execution/composition/runtimeSmoke'
 import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
-import type { AgentExecutionBinding } from '../src/modules/task-execution/application/ports/agentExecutionBinding'
 import type {
-  ExecutionEffectRequest,
-  ExecutionEffectResult,
-} from '../src/modules/task-execution/application/ports/executionEffect'
+  AgentExecutionOutcome,
+  AgentExecutionRequest,
+} from '../src/modules/task-execution/application/ports/agentExecution'
+import type { ExecutionEffectResult } from '../src/modules/task-execution/application/ports/executionEffect'
 import type {
   AgentMaterialCompiler,
   AgentMaterialIntent,
@@ -31,7 +31,7 @@ function selectedSmoke(protocol: 'opencode' | 'claude-code' = 'opencode') {
     bindError: undefined as Error | undefined,
     discardError: undefined as Error | undefined,
     intent: undefined as AgentMaterialIntent | undefined,
-    submitted: undefined as ExecutionEffectRequest | undefined,
+    submitted: undefined as AgentExecutionRequest | undefined,
     stderr: '',
     eventFactory: (intent: AgentMaterialIntent): string[] => [
       JSON.stringify({
@@ -101,33 +101,31 @@ function selectedSmoke(protocol: 'opencode' | 'claude-code' = 'opencode') {
         calls.push('cleanup')
       },
     },
-    bindExecution(participants) {
+    async execute(request, sink): Promise<AgentExecutionOutcome> {
       expect(this).toBe(binding)
-      expect(participants).toBeUndefined()
-      calls.push('bind-execution')
-      const execution: AgentExecutionBinding = {
-        executionRef: 'selected:execution',
-        materialRef: material.materialRef,
-        workspaceRef: workspace.workspace.reference,
-        effect: {
-          async submit(request) {
-            state.submitted = request
-            calls.push('submit')
-            await request.beforeStart?.()
-            for (const line of state.eventFactory(state.intent!))
-              await request.capture?.onStdoutLine?.(line)
-            if (state.stderr) await request.capture?.onStderrLine?.(state.stderr)
-            if (state.result.outcome !== 'unreaped' && !state.result.cleanupFailed)
-              await request.cleanup?.()
-            return state.result
-          },
-        },
-        acknowledgeOwner: unused,
-        recordTaskReceipt: unused,
-        reportUnreaped: unused,
+      expect(request.task).toBeUndefined()
+      calls.push('execute')
+      state.submitted = request
+      await request.beforeStart?.()
+      for (const line of state.eventFactory(state.intent!))
+        await sink.record({ raw: line, event: binding.protocol.parseEvent(line) })
+      if (state.stderr) await sink.diagnostic(state.stderr)
+      if (state.result.outcome !== 'unreaped' && !state.result.cleanupFailed)
+        await request.cleanup?.()
+      const result = state.result
+      return {
+        result: result.outcome,
+        exitCode: result.exitCode,
+        stderrTail: result.stderrTail,
+        durationMs: result.durationMs,
+        ...(result.spawnError === undefined ? {} : { spawnError: result.spawnError }),
+        ...(result.pumpError === undefined ? {} : { pumpError: result.pumpError }),
+        ...(result.drainTimedOut === undefined ? {} : { drainTimedOut: result.drainTimedOut }),
+        ...(result.cleanupFailed === undefined ? {} : { cleanupFailed: result.cleanupFailed }),
         unreapedMessage: unused,
+        reportUnreaped: unused,
+        settle: async () => {},
       }
-      return execution
     },
   }
   const compiler: AgentMaterialCompiler = {
@@ -210,20 +208,15 @@ describe('RFC-370 selected runtime smoke', () => {
       expect(selected.state.intent?.extraArgs).toBe(extraArgs)
       expect(selected.state.intent).not.toHaveProperty('configDir')
       expect(selected.state.intent).not.toHaveProperty('runtimeBinary')
-      expect(selected.state.submitted).toMatchObject({
-        executionRef: 'selected:execution',
-        materialRef: 'selected:material',
-        workspaceRef: 'selected:working',
-        timeoutMs: 42,
-        termGraceMs: 2000,
-      })
-      expect(selected.state.submitted).not.toHaveProperty('onStarted')
+      expect(selected.state.submitted).toMatchObject({ timeoutMs: 42, termGraceMs: 2000 })
+      // Smoke never acknowledges the start nor records a task effect.
+      expect(selected.state.submitted).not.toHaveProperty('acknowledgeStart')
+      expect(selected.state.submitted).not.toHaveProperty('task')
       expect(selected.calls).toEqual([
         'prepare',
         'compile',
         'bind',
-        'bind-execution',
-        'submit',
+        'execute',
         'before-start',
         'parse',
         'cleanup',
@@ -390,8 +383,7 @@ describe('RFC-370 selected smoke model diagnostic', () => {
         'prepare',
         'compile',
         'bind',
-        'bind-execution',
-        'submit',
+        'execute',
         'before-start',
         'cleanup',
         'discard',

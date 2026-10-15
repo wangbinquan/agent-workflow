@@ -225,7 +225,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       invocation = compiled.bind()
       expect(legacy).not.toHaveBeenCalled()
       expect(invocation.workspace.workspace.reference).toBe(workspace.workspace.reference)
-      expect(typeof invocation.bindExecution).toBe('function')
+      expect(typeof invocation.execute).toBe('function')
       expect(purpose.outputWorkspaceRef).toBe(workspace.workspace.reference)
     } finally {
       await invocation?.lifecycle.cleanup?.()

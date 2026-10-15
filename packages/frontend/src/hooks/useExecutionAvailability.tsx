@@ -30,10 +30,11 @@ export function ExecutionStatusProvider({ children }: { children: ReactNode }) {
 export function useExecutionAvailability(group: ExecutionGroup) {
   const status = useContext(ExecutionStatusContext),
     { t } = useTranslation()
-  const available = status === undefined || isExecutionAvailable(status)
+  const available = status === undefined || isExecutionAvailable(status, group)
   const unavailableReason = available
     ? undefined
-    : t('execution.unavailable', { group: t(`execution.group.${group}`) })
+    : (status?.unavailableGroups?.[group] ??
+      t('execution.unavailable', { group: t(`execution.group.${group}`) }))
   const current = useRef({ available, unavailableReason })
   current.current = { available, unavailableReason }
   const assertAvailable = useCallback(() => {

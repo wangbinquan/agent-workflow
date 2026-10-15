@@ -28,5 +28,8 @@ export interface TaskAutoResumeResult {
 
 /** Closed boot recovery command; repository preparation retry is required. */
 export interface TaskAutoResumeCommand {
-  run(input: { readonly breaker: TaskRecoveryBreakerConfig }): Promise<TaskAutoResumeResult>
+  run(input: {
+    readonly breaker: TaskRecoveryBreakerConfig
+    readonly taskIds?: readonly string[]
+  }): Promise<TaskAutoResumeResult>
 }

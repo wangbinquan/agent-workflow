@@ -6,10 +6,16 @@ import type { AgentInvocationProtocol } from '../src/modules/runtime-management/
 import type { AgentMaterialWorkspace } from '../src/modules/runtime-management/application/ports/agentMaterialWorkspace'
 import type { NativeAgentMaterialEvidenceHooks } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
 import type { AgentExecutionParticipants } from '../src/modules/task-execution/application/ports/agentExecutionBinding'
-import type { ExecutionEffectRequest } from '../src/modules/task-execution/application/ports/executionEffect'
+import type {
+  AgentExecutionRecord,
+  AgentExecutionSink,
+} from '../src/modules/task-execution/application/ports/agentExecution'
 import type { TaskExecutionEffectPersistence } from '../src/modules/task-execution/application/ports/taskExecutionEffectStore'
 import type { NodeExecutionPersistence } from '../src/modules/task-execution/application/ports/nodeExecutionPersistence'
-import { bindLocalAgentExecutionParticipants } from '../src/modules/task-execution/infrastructure/local/agentExecutionEffect'
+import {
+  bindLocalAgentExecutionEffect,
+  bindLocalAgentExecutionParticipants,
+} from '../src/modules/task-execution/infrastructure/local/agentExecutionEffect'
 import { requestHash } from '../src/modules/task-execution/domain/executionEffect'
 import { sha256Hex } from '../src/modules/task-execution/domain/digest'
 import type { AgentProcessRequest } from '../src/platform/execution/local/agentProcess'
@@ -54,16 +60,8 @@ function makeBinding(
     ...options,
   })
 }
-function request(
-  binding: ReturnType<ReturnType<typeof makeBinding>['bindExecution']>,
-  rest: Omit<ExecutionEffectRequest, 'executionRef' | 'materialRef' | 'workspaceRef'> = {},
-): ExecutionEffectRequest {
-  return {
-    executionRef: binding.executionRef,
-    materialRef: binding.materialRef,
-    workspaceRef: binding.workspaceRef,
-    ...rest,
-  }
+function quietSink(): AgentExecutionSink {
+  return { record: async () => {}, diagnostic: async () => {}, checkpoint: async () => {} }
 }
 
 describe('RFC-370 complete native invocation binding', () => {
@@ -174,29 +172,18 @@ describe('RFC-370 complete native invocation binding', () => {
         return false
       },
     })
-    const execution = binding.bindExecution(participants)
-    expect(reads).toEqual(['cwd', 'policy', 'cwd'])
-    expect(execution.projection?.describe()).toEqual({
-      requestHash: requestHash({
-        v: 1,
-        processKind: 'agent',
-        argv: command,
-        cwd: '/selected-working',
-      }),
-      resourceKeys: [`workspace:${sha256Hex('/selected-working')}`],
-      recoveryClass: 'managed-process-preactivation',
-      classifierVersion: 'rfc328-managed-process-v1',
-      transportPolicyVersion: 'rfc328-preactivation-v1',
-    })
-    await execution.effect.submit(
-      request(execution, {
-        onStarted: (receipt) => execution.recordTaskReceipt(receipt, 'node-run'),
-      }),
+    const outcome = await binding.execute(
+      { task: { participants, taskId: 'task', nodeRunId: 'node-run' } },
+      quietSink(),
     )
+    // The effect fingerprint reads cwd / policy / cwd, then the child spawns there.
+    expect(reads).toEqual(['cwd', 'policy', 'cwd', 'cwd'])
+    expect(outcome.result).toBe('ok')
     expect(nativeRequest?.cmd).toBe(command)
     expect(nativeRequest?.env).toBe(environment)
     expect(nativeRequest?.stdin).toBe(material.stdin)
     expect(nativeRequest?.requireSpawnReceipt).toBe(true)
+    // Without a durable task execution context the receipt patches the node run.
     expect(patches).toEqual([
       {
         nodeRunId: 'node-run',
@@ -207,8 +194,91 @@ describe('RFC-370 complete native invocation binding', () => {
         },
       },
     ])
-    expect(execution.materialRef).toBe(binding.materialRef)
-    expect(() => binding.bindExecution()).toThrow('agent-invocation-execution-already-bound')
+    await expect(binding.execute({}, quietSink())).rejects.toThrow(
+      'agent-invocation-execution-already-bound',
+    )
+  })
+
+  test('the local effect keeps the original fingerprint and writer resources (read-only stays empty)', () => {
+    const effect = (readOnly: boolean) =>
+      bindLocalAgentExecutionEffect({
+        materialRef: 'material',
+        command: () => ['selected-binary', 'original'],
+        workingDirectory: () => '/selected-working',
+        environment: () => ({}),
+        stdin: () => undefined,
+        taskEffect: {
+          persistence: {} as TaskExecutionEffectPersistence,
+          nodeExecution: unavailable,
+          argv: ['selected-binary', 'original'],
+          cwd: '/selected-working',
+          resourceKeys: readOnly ? [] : { writerWorkspace: '/selected-working' },
+        },
+      })
+    expect(effect(false).projection?.describe()).toEqual({
+      requestHash: requestHash({
+        v: 1,
+        processKind: 'agent',
+        argv: ['selected-binary', 'original'],
+        cwd: '/selected-working',
+      }),
+      resourceKeys: [`workspace:${sha256Hex('/selected-working')}`],
+      recoveryClass: 'managed-process-preactivation',
+      classifierVersion: 'rfc328-managed-process-v1',
+      transportPolicyVersion: 'rfc328-preactivation-v1',
+    })
+    expect(effect(true).projection?.describe().resourceKeys).toEqual([])
+  })
+
+  test('records are interpreted through the selected protocol and delivered in order with checkpoints', async () => {
+    const driver = getRuntimeDriver('claude-code')
+    const resultError = '{"type":"result","subtype":"error","is_error":true,"result":"denied"}'
+    const binding = makeBinding(plan(), {
+      protocol: bindNativeAgentProtocol(driver),
+      async runNative(input) {
+        await input.capture?.onStdoutLine?.('plain 中文')
+        await input.capture?.onStdoutLine?.(resultError)
+        await input.capture?.onStdoutChunkEnd?.()
+        await input.capture?.onStderrLine?.('warn')
+        await input.capture?.onStderrChunkEnd?.()
+        return { outcome: 'ok', exitCode: 0, pid: 1, rawStdout: '', stderrTail: '', durationMs: 1 }
+      },
+    })
+    const seen: Array<string | AgentExecutionRecord> = []
+    await binding.execute(
+      {},
+      {
+        record: async (record) => {
+          seen.push(record)
+        },
+        diagnostic: async (line) => {
+          seen.push(`diagnostic:${line}`)
+        },
+        checkpoint: async (stream) => {
+          seen.push(`checkpoint:${stream}`)
+        },
+      },
+    )
+    expect(seen).toEqual([
+      {
+        raw: 'plain 中文',
+        event: driver.parseEvent('plain 中文'),
+        ...(driver.observeSystemEvent === undefined
+          ? {}
+          : { observation: driver.observeSystemEvent('plain 中文') }),
+      },
+      {
+        raw: resultError,
+        event: driver.parseEvent(resultError),
+        ...(driver.observeSystemEvent === undefined
+          ? {}
+          : { observation: driver.observeSystemEvent(resultError) }),
+        terminalError: driver.parseTerminalResultError!(resultError)!,
+      },
+      'checkpoint:records',
+      'diagnostic:warn',
+      'checkpoint:diagnostics',
+    ])
   })
 
   test('System owner ACK preserves receiver and rejection; ownerless Smoke keeps both native flags absent', async () => {
@@ -228,10 +298,7 @@ describe('RFC-370 complete native invocation binding', () => {
         throw new Error('receipt rejection did not propagate')
       },
     })
-    const execution = binding.bindExecution()
-    await expect(
-      execution.effect.submit(request(execution, { onStarted: execution.acknowledgeOwner })),
-    ).rejects.toBe(failure)
+    await expect(binding.execute({ acknowledgeStart: true }, quietSink())).rejects.toBe(failure)
     const smoke = makeBinding(plan(), {
       cleanupReceiver: 'executor',
       async runNative(input) {
@@ -246,42 +313,31 @@ describe('RFC-370 complete native invocation binding', () => {
           durationMs: 1,
         }
       },
-    }).bindExecution()
-    expect((await smoke.effect.submit(request(smoke))).outcome).toBe('ok')
-    await expect(
-      smoke.recordTaskReceipt({ executionRef: smoke.executionRef, startedAt: 31 }, 'n'),
-    ).rejects.toThrow('execution-task-receipt-participant-unavailable')
+    })
+    expect((await smoke.execute({}, quietSink())).result).toBe('ok')
   })
 
-  test('incompatible owner participant is rejected before native creation; read-only original resources stay empty', () => {
+  test('an incompatible owner participant is rejected before native creation', async () => {
     const unselected = makeBinding(plan(), {
       workingDirectory: unavailable,
       runNative: unavailable,
     })
-    expect(() =>
-      unselected.bindExecution({
-        taskEffect: Object.freeze({}) as NonNullable<AgentExecutionParticipants['taskEffect']>,
-      }),
-    ).toThrow('agent-execution-task-participant-unavailable')
-    const reads: string[] = []
-    const selected = makeBinding(plan(), {
-      workingDirectory() {
-        reads.push('cwd')
-        return '/selected-read-only'
-      },
-    })
-    const execution = selected.bindExecution(
-      bindLocalAgentExecutionParticipants({
-        persistence: {} as TaskExecutionEffectPersistence,
-        nodeExecution: unavailable,
-        readOnlyWorkspace() {
-          reads.push('policy')
-          return true
+    await expect(
+      unselected.execute(
+        {
+          task: {
+            participants: {
+              taskEffect: Object.freeze({}) as NonNullable<
+                AgentExecutionParticipants['taskEffect']
+              >,
+            },
+            taskId: 'task',
+            nodeRunId: 'node-run',
+          },
         },
-      }),
-    )
-    expect(reads).toEqual(['cwd', 'policy'])
-    expect(execution.projection?.describe().resourceKeys).toEqual([])
+        quietSink(),
+      ),
+    ).rejects.toThrow('agent-execution-task-participant-unavailable')
   })
 
   test('material cleanup keeps the original plan receiver, Promise and throw; Smoke forwards the original function', async () => {

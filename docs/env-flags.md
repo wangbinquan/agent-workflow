@@ -19,19 +19,20 @@
 | `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts` | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值  |
 | `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`  | `backend/src/platform/background/maintenanceService.ts` | 事件循环停顿记 WARN 的门槛毫秒（默认 1000，夹在 [采样周期×2, 60000]）；调低用于归因  |
 
-## CrewStation 托管（RFC-370 M0，daemon 自身读取）
+## CrewStation 托管（RFC-370，daemon 自身读取）
 
 部署形态只由 `AW_DEPLOYMENT_MODE` 显式选择，读取点集中在 `backend/src/cli/deployment.ts`；
 托管必需项缺失时拒绝启动并逐项列出（`backend/src/modules/system-operations/composition/crewstationDeployment.ts`）。
 
-| 变量                 | 读取点                                                                       | 语义                                                                                                           |
-| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `AW_DEPLOYMENT_MODE` | `backend/src/cli/deployment.ts`                                              | `standalone`（缺省）或 `crewstation`；其他值拒绝启动。不从平台变量是否存在推断                                 |
-| `AW_SECRET_KEY`      | `backend/src/modules/system-operations/composition/crewstationDeployment.ts` | 托管主密钥：base64 编码的 32 字节（平台 Secret 注入），取代本机 `secret.key` 文件                              |
-| `AW_ADMIN_SUBJECTS`  | 同上                                                                         | 首次访问即建为管理员的 CrewStation 用户 subject 列表（`user:<uuid>` 或裸 id，逗号 / 空白分隔），其余为最低权限 |
+| 变量                 | 读取点                                                                       | 语义                                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AW_DEPLOYMENT_MODE` | `backend/src/cli/deployment.ts`                                              | `standalone`（缺省）或 `crewstation`；其他值拒绝启动。不从平台变量是否存在推断                                                               |
+| `AW_SECRET_KEY`      | `backend/src/modules/system-operations/composition/crewstationDeployment.ts` | 托管主密钥：base64 编码的 32 字节（平台 Secret 注入），取代本机 `secret.key` 文件                                                            |
+| `AW_ADMIN_SUBJECTS`  | 同上                                                                         | 首次访问即建为管理员的 CrewStation 用户 subject 列表（`user:<uuid>` 或裸 id，逗号 / 空白分隔），其余为最低权限                               |
+| `AW_AGENT_PROFILES`  | `backend/src/bootstrap/crewstation.ts`                                       | 托管执行映射 JSON 数组：`{protocol, model, agentProfileId}`；协议和模型必须精确匹配 Manifest 声明的 Agent 档案，缺失或重复映射拒绝启动／派发 |
 
 平台注入、同一读取点使用的非 `AW_*` 变量：`CS_PROJECT`、`CS_SERVICE`、`CS_DATABASE_URL`、`CS_JWKS_URL`、
-`PORT`（服务必需；迁移 Job 只需前三项），`CS_OBJECTS_URL`、`CS_OBJECT_SPACE_ID`（可选，M0 不用对象存储）。
+`PORT`、`CS_PLATFORM_API_URL`（服务必需；迁移 Job 只需前三项），`CS_OBJECTS_URL`（M1 服务必需）、`CS_OBJECT_SPACE_ID`（平台对象空间标识）。
 
 ## 框架 ↔ 子进程契约（daemon 写入、child 读取）
 

@@ -1,0 +1,234 @@
+import { and, eq, inArray, isNull } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  nodeRuns,
+  taskExecutionEffectAttempts,
+  taskExecutionEffects,
+  taskExecutionEffectFences,
+} from '@/db/schema'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
+import type { ExclusiveDaemonLockProof } from '../../domain/ownership'
+import type { BootExecutionRecoveryFactory } from '../../application/ports/bootExecutionRecovery'
+import {
+  prepareTaskExecutionRecovery,
+  finalizeTaskExecutionRecovery,
+} from '../../application/recoverTaskExecutions'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+import type { HostedExecution } from './execution'
+import type { HostedExecutionStore } from './executionStore'
+import type { BusinessResult } from '@/platform/crewstation/businessExecution'
+
+/** No host process probes or signals. The platform result proves that every
+ * retained remote writer has finished; only then can a successor release its
+ * effect holds and run the existing workflow continuation over the journal. */
+export function createHostedBootRecovery(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly fence: CrewStationMutationFence
+  readonly executions: HostedExecution
+  readonly store: HostedExecutionStore
+  readonly proof: () => ExclusiveDaemonLockProof
+}): {
+  readonly factory: BootExecutionRecoveryFactory
+  readonly recoveredTaskIds: () => readonly string[]
+} {
+  const recovered = new Set<string>()
+  return {
+    recoveredTaskIds: () => [...recovered],
+    factory: {
+      create(boot) {
+        const proof = input.proof()
+        const reapRef = Object.freeze({})
+        const finalizationRef = Object.freeze({})
+        let repaired = 0
+        const counts = { tasks: 0, runs: 0 }
+        const adoptableRuns = new Set<string>()
+        const completedEffects: string[] = []
+        return {
+          prepare: () =>
+            prepareTaskExecutionRecovery({
+              persistence: boot.persistence.recovery,
+              lockProof: proof,
+            }),
+          async reap() {
+            const bindings = await input.store.unsettled()
+            const results = new Map<string, BusinessResult>()
+            // Concurrent subtasks continue in their task containers while the
+            // HTTP service is ready. Acquiring the next workflow owner waits
+            // for their authoritative results, never for a local PID timeout.
+            await Promise.all(
+              bindings.map(async (binding) => {
+                const adopted = await input.executions.adopt(binding.executionId, {
+                  started: async () => undefined,
+                  event: async () => undefined,
+                  checkpoint: async () => undefined,
+                })
+                results.set(binding.executionId, adopted.result)
+                if (binding.nodeRunId !== undefined) adoptableRuns.add(binding.nodeRunId)
+                recovered.add(binding.taskId)
+              }),
+            )
+            const lease = input.fence.current()
+            await databaseSessionFor(input.db).transaction(async (tx) => {
+              await input.fence.assertHeld(tx, lease)
+              const attempts = await tx
+                .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })
+                .from(taskExecutionEffectAttempts)
+                .innerJoin(
+                  taskExecutionEffects,
+                  eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
+                )
+                .where(
+                  and(
+                    eq(taskExecutionEffectAttempts.recoveryClass, 'crewstation-v3-execution'),
+                    inArray(taskExecutionEffectAttempts.state, [
+                      'prepared',
+                      'acting',
+                      'recovery-required',
+                    ]),
+                  ),
+                )
+              for (const { attempt, effect } of attempts) {
+                const binding = bindings.find(
+                  (candidate) =>
+                    candidate.nodeRunId !== undefined &&
+                    attempt.candidateId ===
+                      `${candidate.request.kind === 'agent' ? 'agent' : 'script'}:${candidate.nodeRunId}`,
+                )
+                // The binding is committed before the first platform submit.
+                // With the previous instance fenced, its absence proves this
+                // prepared effect never reached the platform.
+                const result = binding === undefined ? undefined : results.get(binding.executionId)
+                if (binding !== undefined && result === undefined)
+                  throw new Error('hosted-recovery-result-missing')
+                const receiptJson = JSON.stringify({
+                  v: 1,
+                  phase:
+                    binding === undefined
+                      ? 'crewstation-not-submitted'
+                      : 'crewstation-recovered-result',
+                  executionId: binding?.executionId,
+                  result,
+                })
+                await tx
+                  .update(taskExecutionEffectAttempts)
+                  .set({
+                    state: binding === undefined ? 'failed-not-applied' : 'succeeded',
+                    applicationEvidence:
+                      binding === undefined ? 'definitely-not-applied' : 'applied',
+                    receiptJson,
+                    failureCode: null,
+                    settledAt: Date.now(),
+                    updatedAt: Date.now(),
+                  })
+                  .where(eq(taskExecutionEffectAttempts.id, attempt.id))
+                await tx
+                  .update(taskExecutionEffects)
+                  .set({
+                    state: binding === undefined ? 'failed' : 'succeeded',
+                    receiptJson,
+                    failureCode: null,
+                    settledAt: Date.now(),
+                    updatedAt: Date.now(),
+                  })
+                  .where(eq(taskExecutionEffects.id, effect.id))
+                await tx
+                  .update(taskExecutionEffectFences)
+                  .set({ releasedAt: Date.now() })
+                  .where(
+                    and(
+                      eq(taskExecutionEffectFences.effectAttemptId, attempt.id),
+                      isNull(taskExecutionEffectFences.releasedAt),
+                    ),
+                  )
+                completedEffects.push(effect.id)
+              }
+            })
+            const snapshot = await boot.persistence.recoveryAdministration.loadBootOrphanSnapshot()
+            for (const run of snapshot.heldLeaseRuns) {
+              if (run.pid !== null) throw new Error('hosted-recovery-unexpected-local-process')
+              const retained = bindings.filter((binding) => binding.nodeRunId === run.id)
+              if (retained.some((binding) => !results.has(binding.executionId)))
+                throw new Error('hosted-recovery-session-writer-unresolved')
+            }
+            for (const task of snapshot.tasks) {
+              if (
+                await boot.persistence.recoveryAdministration.interruptBootOrphanTask({
+                  taskId: task.id,
+                  from: task.status,
+                  now: Date.now(),
+                  failureCode: 'daemon-restart',
+                  errorMessage: 'remote execution retained; resuming from its durable result',
+                })
+              )
+                counts.tasks += 1
+            }
+            for (const run of snapshot.runs) {
+              if (run.pid !== null) throw new Error('hosted-recovery-unexpected-local-process')
+              await boot.persistence.recoveryAdministration.interruptNodeRun({
+                nodeRunId: run.id,
+                now: Date.now(),
+              })
+              counts.runs += 1
+            }
+            return { counts, reapRef }
+          },
+          async repair(reference) {
+            if (reference !== reapRef) throw new Error('hosted-recovery-reference-mismatch')
+            repaired = await repairRuntimeSessionLeasesAfterOrphanReap(
+              boot.runtimeSessionLeases,
+              true,
+            )
+            return { leases: repaired, finalizationRef }
+          },
+          async finalize(reference) {
+            if (reference !== finalizationRef) throw new Error('hosted-recovery-reference-mismatch')
+            const finalized = await finalizeTaskExecutionRecovery({
+              persistence: boot.persistence.recovery,
+              lockProof: proof,
+              processEvidence: {
+                orphanReaperCompleted: true,
+                transport: 'crewstation-v3-result',
+                ...counts,
+                repairedRuntimeLeases: repaired,
+              },
+              ...(boot.codeHostProbe === undefined ? {} : { codeHostProbe: boot.codeHostProbe }),
+            })
+            // Keep the original run identity so the scheduler adopts it and
+            // the selected execution replays the original result, not a new
+            // model call. Terminal runs are never reset.
+            const lease = input.fence.current()
+            await databaseSessionFor(input.db).transaction(async (tx) => {
+              await input.fence.assertHeld(tx, lease)
+              for (const nodeRunId of adoptableRuns) {
+                await tx
+                  .update(nodeRuns)
+                  .set({
+                    status: 'pending',
+                    finishedAt: null,
+                    pid: null,
+                    spawnBinaryPath: null,
+                    spawnLaunchNonce: null,
+                  })
+                  .where(
+                    and(
+                      eq(nodeRuns.id, nodeRunId),
+                      eq(nodeRuns.status, 'interrupted'),
+                      inArray(nodeRuns.taskId, [...finalized.releasedTaskIds]),
+                    ),
+                  )
+              }
+            })
+            return {
+              ...finalized,
+              recoveredProcessEffectIds: [
+                ...finalized.recoveredProcessEffectIds,
+                ...completedEffects,
+              ],
+            }
+          },
+        }
+      },
+    },
+  }
+}

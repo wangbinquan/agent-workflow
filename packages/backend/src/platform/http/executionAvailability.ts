@@ -29,7 +29,12 @@ export function readExecutionStatus(app: object): ExecutionStatus {
 export function assertExecutionAvailable(app: object, group: ExecutionGroup | undefined): void {
   if (group === undefined) return
   const status = readExecutionStatus(app)
-  if (isExecutionAvailable(status)) return
+  if (status.unavailableGroups?.[group] !== undefined) {
+    throw new DomainError('hosted-capability-unavailable', status.unavailableGroups[group], 503, {
+      group,
+    })
+  }
+  if (isExecutionAvailable(status, group)) return
   throw new DomainError('execution-standby', 'This instance is not executing work right now', 503, {
     group,
     mode: status.mode,

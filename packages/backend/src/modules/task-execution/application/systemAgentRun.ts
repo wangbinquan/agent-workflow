@@ -1,6 +1,5 @@
 import { maskDiagnosticsText, type DeclaredInjectionManifest } from '@agent-workflow/shared'
 import type { AgentInvocationBinding } from './ports/agentInvocation'
-import type { ExecutionStartReceipt } from './ports/executionEffect'
 import type {
   PreparedSystemAgentRunResult,
   SessionCaptureIncompleteReason,
@@ -210,7 +209,6 @@ export async function runSystemAgentCore(
 
       invocation = preparedMaterial!.bind()
       const materialEvidence = invocation.evidence
-      const protocol = invocation.protocol
       if (input.invocation.observe) {
         const observationRun: SystemAgentObservationRun = await input.invocation.observe(startedAt)
         usageCapture = createSystemAgentUsageCapture({
@@ -236,38 +234,25 @@ export async function runSystemAgentCore(
       // RFC-237 (P2-4): terminal application error reported on a clean-exit
       // stdout line (claude `result` is_error). Last one wins.
       let resultError: string | undefined
-      let receiptError: unknown
       let capturedStartupInventory: StartupInventory | null = null
 
-      const localExecution = invocation.bindExecution()
-      const run = await localExecution.effect.submit({
-        executionRef: localExecution.executionRef,
-        materialRef: localExecution.materialRef,
-        workspaceRef: localExecution.workspaceRef,
-        timeoutMs,
-        termGraceMs: CHILD_TERM_GRACE_MS,
-        ...(opts.abortSignal !== undefined ? { abortSignal: opts.abortSignal } : {}),
-        ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
-          ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
-          : {}),
-        ...(input.invocation.acknowledgeStart()
-          ? {
-              onStarted: async (receipt: ExecutionStartReceipt) => {
-                try {
-                  await localExecution.acknowledgeOwner(receipt)
-                } catch (err) {
-                  // Historical contract: a failed spawn receipt is a SPAWN
-                  // failure (mcp playground admission fence) — remember the
-                  // cause and let the executor abort the child.
-                  receiptError = err
-                  throw err
-                }
-              },
-            }
-          : {}),
-        capture: {
-          onStdoutLine: async (line) => {
-            const observation = protocol.observeSystemEvent?.(line)
+      // Historical contract: a failed start acknowledgement is a SPAWN failure
+      // (mcp playground admission fence); the execution aborts the child and
+      // reports the cause as `acknowledgeError`.
+      const run = await invocation.execute(
+        {
+          timeoutMs,
+          termGraceMs: CHILD_TERM_GRACE_MS,
+          ...(opts.abortSignal !== undefined ? { signal: opts.abortSignal } : {}),
+          ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
+            ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
+            : {}),
+          ...(input.invocation.acknowledgeStart() ? { acknowledgeStart: true } : {}),
+          log,
+        },
+        {
+          record: async (record) => {
+            const observation = record.observation
             if (observation !== undefined) {
               if (observation.runtimeEventType !== null) {
                 outputEvidence.lastRuntimeEventType = observation.runtimeEventType
@@ -281,9 +266,8 @@ export async function runSystemAgentCore(
                 outputEvidence.terminalResult = 'success'
               }
             }
-            const terminalError = protocol.parseTerminalResultError?.(line)
-            if (terminalError != null) resultError = terminalError
-            const ev = protocol.parseEvent(line)
+            if (record.terminalError !== undefined) resultError = record.terminalError
+            const ev = record.event
             // RFC-280 T6 / RFC-297 T14 —— 一次性启动报告。改为消费 driver 在
             // **同一次解析**里挂上的事件载荷，不再对同一行二次 JSON.parse。
             if (capturedStartupInventory === null && ev !== null) {
@@ -305,12 +289,12 @@ export async function runSystemAgentCore(
               }
             }
             if (ev === null) {
-              await usageCapture?.line(line)
+              await usageCapture?.line(record.raw)
               outputEvidence.unparsedStdoutSeen = true
               await appendSink({
                 ts: Date.now(),
                 kind: 'text',
-                payload: line,
+                payload: record.raw,
                 sessionId: sessionId ?? null,
                 parentSessionId: null,
                 source: 'stream',
@@ -363,7 +347,7 @@ export async function runSystemAgentCore(
                 throw new Error('runtime native session reset fence failed')
               }
             }
-            await usageCapture?.line(line)
+            await usageCapture?.line(record.raw)
             if (typeof ev.text === 'string' && ev.text.length > 0) {
               const bytes = Buffer.byteLength(ev.text, 'utf8')
               outputEvidence.assistantTextSeen = true
@@ -391,7 +375,7 @@ export async function runSystemAgentCore(
               source: 'stream',
             })
           },
-          onStderrLine: async (line) => {
+          diagnostic: async (line) => {
             const remaining = STDERR_TAIL_CAP - Buffer.byteLength(stderrText, 'utf8')
             if (remaining > 0) {
               stderrText += Buffer.from(`${line}\n`, 'utf8').subarray(0, remaining).toString('utf8')
@@ -405,22 +389,22 @@ export async function runSystemAgentCore(
               source: 'stream',
             })
           },
-          onStdoutChunkEnd: async () => {
-            await usageCapture?.flush()
+          checkpoint: async (stream) => {
+            if (stream === 'records') await usageCapture?.flush()
           },
           // A clipped frame stored as if whole would lie to the session view —
           // mark the capture incomplete exactly like the historical
           // frame-limit path did.
-          onLineTruncated: () =>
+          truncated: () =>
             failSink(
               'stream-frame-limit-exceeded',
               new Error('stream line exceeded the executor line cap'),
             ),
         },
-        log,
-      })
+      )
 
-      if (run.outcome === 'spawn-failed' || receiptError !== undefined) {
+      const receiptError = run.acknowledgeError
+      if (run.result === 'spawn-failed' || receiptError !== undefined) {
         const message =
           receiptError !== undefined
             ? receiptError instanceof Error
@@ -431,7 +415,7 @@ export async function runSystemAgentCore(
           stderrTail: maskDiagnosticsText(`binary failed to start: ${message}`),
         })
       }
-      if (run.outcome === 'unreaped') {
+      if (run.result === 'unreaped') {
         return fail('unreaped')
       }
       if (run.pumpError !== undefined) {
@@ -500,8 +484,8 @@ export async function runSystemAgentCore(
           : { startupInventory: capturedStartupInventory }),
         ...(declaredForResult === undefined ? {} : { declared: declaredForResult }),
       }
-      if (run.outcome === 'aborted') return { status: 'aborted', ...base }
-      if (run.outcome === 'timeout') return { status: 'timeout', ...base }
+      if (run.result === 'aborted') return { status: 'aborted', ...base }
+      if (run.result === 'timeout') return { status: 'timeout', ...base }
       if (exitCode !== 0) return { status: 'exit-nonzero', ...base }
       // RFC-237 (P2-4): clean exit but a terminal is_error result — fail the
       // run with the masked error text instead of letting the caller chase a

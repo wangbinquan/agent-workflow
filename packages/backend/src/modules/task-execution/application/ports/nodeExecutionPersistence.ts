@@ -105,6 +105,7 @@ export type NodeExecutionEventWrite = Omit<
   NodeExecutionEventSnapshot,
   'id' | 'nodeRunId' | 'sessionId' | 'parentSessionId'
 > & {
+  readonly sourceKey?: string
   readonly sessionId?: string | null
   readonly parentSessionId?: string | null
 }

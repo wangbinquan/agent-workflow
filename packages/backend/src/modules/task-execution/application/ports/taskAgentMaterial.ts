@@ -60,6 +60,8 @@ export type TaskAgentExecutionParticipants = AgentExecutionParticipants &
 /** One complete invocation purpose. Every capability is required; there is no
  * per-member native fallback. Construction performs no IO or compilation. */
 export interface TaskAgentRunPurpose {
+  /** Adoptable executions retain the original observation call identity. */
+  readonly invocationId?: string
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
   readonly workspace: AgentMaterialWorkspace

@@ -1,3 +1,4 @@
+import type { ExecutionGroup } from '@agent-workflow/shared'
 // RFC-370 v2 H7 — crash-only execution authority.
 //
 // One business path serves both deployments; only bootstrap picks the adapter.
@@ -17,6 +18,7 @@ export type ExecutionAuthorityState =
   | { readonly kind: 'frozen'; readonly reason: string | null }
 
 export interface ExecutionAuthorityPort {
+  readonly unavailableGroups?: Partial<Record<ExecutionGroup, string>>
   readonly mode: 'standalone' | 'crewstation'
   current(): ExecutionAuthorityState
   /** Resolves with the fence the first time this instance becomes active. */

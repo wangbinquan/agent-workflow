@@ -391,6 +391,9 @@ function physicalLayer(unit: SourceUnit): string {
 // 一条正则的副作用。symbol 不再参与归属判定（`targetRemoveAfterWaveFor` 里 `services/scheduler.ts`
 // 的按符号分波是唯一例外，那是 W2-B/W2-D/W3/W5 之间的**波**切分，不是 context 归属）。
 const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
+  'packages/backend/src/bootstrap/crewstation.ts': 'bootstrap',
+  'packages/backend/src/bootstrap/executionInitialization.ts': 'bootstrap',
+  'packages/backend/src/bootstrap/workspaceTaskImage.ts': 'bootstrap',
   'packages/backend/src/auth/actor.ts': 'identity-access',
   'packages/backend/src/auth/application/authPersistence.ts': 'identity-access',
   'packages/backend/src/auth/application/authRuntime.ts': 'identity-access',
@@ -2899,6 +2902,26 @@ function classifyTaskExecutionAuthority(input: {
   'authorityKind' | 'controlSubtype' | 'revisionPredicate' | 'requiredBrandedProof'
 > | null {
   const value = `${input.file}#${input.callable}`
+  if (input.file === `${MODULE_PREFIX}task-execution/infrastructure/crewstation/bootRecovery.ts`) {
+    return {
+      authorityKind: 'recovery-proof',
+      controlSubtype: null,
+      revisionPredicate: 'active-CS-epoch-lease-and-revoked-previous-owner-before-admission',
+      requiredBrandedProof:
+        'ExclusiveDaemonLockProof(CS-lease)+DurablePlatformResultOrNeverSubmittedProof',
+    }
+  }
+  if (
+    input.file ===
+    `${MODULE_PREFIX}task-execution/infrastructure/crewstation/processEffectProjection.ts`
+  ) {
+    return {
+      authorityKind: 'worker-epoch',
+      controlSubtype: null,
+      revisionPredicate: 'task-owner-epoch-and-active-CS-epoch-lease-in-same-transaction',
+      requiredBrandedProof: 'OwnershipToken+CrewStationMutationFence',
+    }
+  }
   if (
     /sqliteTerminalMaintenance|terminalMaintenanceClaim|terminalMaintenancePersistence|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
       value,
@@ -3605,6 +3628,9 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         }
         const isProcess = effectKind === 'process'
         const isCodeHost = effectKind === 'code-host-mutation'
+        const isHostedProcess =
+          isProcess &&
+          unit.path === `${MODULE_PREFIX}task-execution/composition/crewstationAgentInvocation.ts`
         entries.push({
           id: `task-effect:${unit.path}#${line}:${effectKind}`,
           file: unit.path,
@@ -3616,26 +3642,34 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
           journaledBy: callee,
           attemptPolicy: isCodeHost ? 'per-http-send' : isProcess ? 'per-spawn' : 'per-act',
           resourceKeySetResolver: 'explicit-multi-resource-set',
-          recoveryClass: isCodeHost
-            ? 'action-provider-candidate-matrix'
-            : isProcess
-              ? 'managed-process-preactivation'
-              : 'local-probe-or-actor',
-          responseClassifier: isCodeHost
-            ? 'http-status-plus-prior-ambiguity'
-            : isProcess
-              ? 'spawn-receipt-exit-reap'
-              : 'applied-or-ambiguous-throw',
-          transportRetryPolicy: isCodeHost
-            ? 'rfc269-current-method-policy'
-            : isProcess
-              ? 'no-hidden-respawn'
-              : 'caller-explicit-only',
-          recoveryProbeOrActorReplay: isCodeHost
-            ? 'binding-profile-or-actor-next-generation'
-            : isProcess
-              ? 'pid-nonce-binary-probe'
-              : 'local-probe-or-actor-next-generation',
+          recoveryClass: isHostedProcess
+            ? 'crewstation-v3-execution'
+            : isCodeHost
+              ? 'action-provider-candidate-matrix'
+              : isProcess
+                ? 'managed-process-preactivation'
+                : 'local-probe-or-actor',
+          responseClassifier: isHostedProcess
+            ? 'crewstation-v3-final-cursor-result'
+            : isCodeHost
+              ? 'http-status-plus-prior-ambiguity'
+              : isProcess
+                ? 'spawn-receipt-exit-reap'
+                : 'applied-or-ambiguous-throw',
+          transportRetryPolicy: isHostedProcess
+            ? 'crewstation-v3-stable-request-key'
+            : isCodeHost
+              ? 'rfc269-current-method-policy'
+              : isProcess
+                ? 'no-hidden-respawn'
+                : 'caller-explicit-only',
+          recoveryProbeOrActorReplay: isHostedProcess
+            ? 'durable-binding-event-journal-adopt'
+            : isCodeHost
+              ? 'binding-profile-or-actor-next-generation'
+              : isProcess
+                ? 'pid-nonce-binary-probe'
+                : 'local-probe-or-actor-next-generation',
           auditRetention: 'effect-attempt-watermark-and-decision',
           ownerEntryId: ownerEntryId(unit.path, symbol),
         })

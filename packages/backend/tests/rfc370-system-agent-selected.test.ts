@@ -5,11 +5,11 @@ import { describe, expect, test } from 'bun:test'
 import { runPreparedSystemAgent } from '../src/modules/task-execution/composition/systemAgentRun'
 import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
-import type { AgentExecutionBinding } from '../src/modules/task-execution/application/ports/agentExecutionBinding'
 import type {
-  ExecutionEffectRequest,
-  ExecutionEffectResult,
-} from '../src/modules/task-execution/application/ports/executionEffect'
+  AgentExecutionOutcome,
+  AgentExecutionRequest,
+} from '../src/modules/task-execution/application/ports/agentExecution'
+import type { ExecutionEffectResult } from '../src/modules/task-execution/application/ports/executionEffect'
 import type {
   AgentMaterialCompiler,
   AgentMaterialIntent,
@@ -42,7 +42,7 @@ function selectedRun() {
       durationMs: 1,
     } as ExecutionEffectResult,
     preparedSeeds: undefined as Parameters<AgentMaterialWorkspace['prepare']>[0],
-    submitted: undefined as ExecutionEffectRequest | undefined,
+    submitted: undefined as AgentExecutionRequest | undefined,
     warnings: [] as { message: string; fields: unknown }[],
   }
   const workspace: AgentMaterialWorkspace = {
@@ -129,44 +129,43 @@ function selectedRun() {
         if (state.cleanupError !== undefined) throw state.cleanupError
       },
     },
-    bindExecution() {
+    async execute(request, sink): Promise<AgentExecutionOutcome> {
       expect(this).toBe(binding)
-      calls.push('bind-execution')
-      const execution: AgentExecutionBinding = {
-        executionRef: 'selected:execution',
-        materialRef: material.materialRef,
-        workspaceRef: workspace.workspace.reference,
-        effect: {
-          async submit(request: ExecutionEffectRequest) {
-            calls.push('submit')
-            state.submitted = request
-            await request.beforeStart?.()
-            try {
-              await request.onStarted?.({
-                executionRef: execution.executionRef,
-                startedAt: 17,
-              })
-            } catch {
-              return { ...state.result, outcome: 'spawn-failed' as const }
-            }
-            try {
-              await request.capture?.onStdoutLine?.('original streamed event')
-            } catch (error) {
-              return { ...state.result, pumpError: (error as Error).message }
-            }
-            return state.result
-          },
-        },
-        acknowledgeOwner() {
-          expect(this).toBe(execution)
-          calls.push('acknowledge')
-          if (state.acknowledgeError !== undefined) throw state.acknowledgeError
-        },
-        recordTaskReceipt: unused,
-        reportUnreaped: unused,
+      calls.push('execute')
+      state.submitted = request
+      const outcome = (
+        result: ExecutionEffectResult,
+        extra: { readonly acknowledgeError?: unknown } = {},
+      ): AgentExecutionOutcome => ({
+        result: result.outcome,
+        exitCode: result.exitCode,
+        stderrTail: result.stderrTail,
+        durationMs: result.durationMs,
+        ...(result.pumpError === undefined ? {} : { pumpError: result.pumpError }),
+        ...extra,
         unreapedMessage: unused,
+        reportUnreaped: unused,
+        settle: async () => {},
+      })
+      await request.beforeStart?.()
+      if (request.acknowledgeStart === true) {
+        calls.push('acknowledge')
+        if (state.acknowledgeError !== undefined) {
+          return outcome(
+            { ...state.result, outcome: 'spawn-failed' },
+            { acknowledgeError: state.acknowledgeError },
+          )
+        }
       }
-      return execution
+      try {
+        await sink.record({
+          raw: 'original streamed event',
+          event: binding.protocol.parseEvent('original streamed event'),
+        })
+      } catch (error) {
+        return outcome({ ...state.result, pumpError: (error as Error).message })
+      }
+      return outcome(state.result)
     },
   }
   const compiler: AgentMaterialCompiler = {
@@ -234,11 +233,9 @@ describe('RFC-370 selected System common core', () => {
     expect(result.declared).toBe(run.material.declared)
     expect(result).not.toHaveProperty('scratchDir')
     expect(run.state.submitted).toMatchObject({
-      executionRef: 'selected:execution',
-      materialRef: 'selected:material',
-      workspaceRef: 'selected:working',
       timeoutMs: 319,
       termGraceMs: 2000,
+      acknowledgeStart: true,
     })
     expect(run.state.submitted).not.toHaveProperty('cmd')
     expect(run.state.submitted).not.toHaveProperty('cwd')
@@ -246,8 +243,7 @@ describe('RFC-370 selected System common core', () => {
       'prepare',
       'compile',
       'bind',
-      'bind-execution',
-      'submit',
+      'execute',
       'before-start',
       'acknowledge',
       'parse',
@@ -311,8 +307,7 @@ describe('RFC-370 selected System common core', () => {
       'prepare',
       'compile',
       'bind',
-      'bind-execution',
-      'submit',
+      'execute',
       'before-start',
       'acknowledge',
       'terminal:complete:',

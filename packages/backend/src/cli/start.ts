@@ -1,3 +1,7 @@
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
+import type { ScratchWorkspaceEffects } from '@/modules/source-control/application/ports/scratchWorkspaceEffects'
+import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/application/ports/workspaceMaintenance'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
@@ -502,6 +506,13 @@ export interface StartOptions {
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
   taskRunSelection?: TaskRunRootSelection
+  readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
+  readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
+  readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
+  readonly workspacePresence?: WorkspacePresenceQueries
+  readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
+  readonly recoveredExecutionTaskIds?: () => readonly string[]
+  readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
   readonly developmentPurposes?: DevelopmentPurposeSelection
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
@@ -709,6 +720,13 @@ async function composePostgresqlProviderSession(
     nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
     portArtifactContentEffects: input.portArtifactContentEffects,
     taskRunSelection: input.taskRunSelection,
+    repositoryPreparationEffects: input.repositoryPreparationEffects,
+    scratchWorkspaceEffects: input.scratchWorkspaceEffects,
+    workspaceMaintenanceFilesystem: input.workspaceMaintenanceFilesystem,
+    workspacePresence: input.workspacePresence,
+    initializeExecution: input.initializeExecution,
+    recoveredExecutionTaskIds: input.recoveredExecutionTaskIds,
+    systemAgentRunFamily: input.systemAgentRunFamily,
     developmentPurposes: input.developmentPurposes,
     workspaceExcludeProfiles: input.workspaceExcludeProfiles,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
@@ -1300,6 +1318,13 @@ interface DaemonProviderSessionComposeInput {
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
   readonly taskRunSelection?: TaskRunRootSelection
+  readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
+  readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
+  readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
+  readonly workspacePresence?: WorkspacePresenceQueries
+  readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
+  readonly recoveredExecutionTaskIds?: () => readonly string[]
+  readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
   readonly developmentPurposes?: DevelopmentPurposeSelection
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
@@ -1781,6 +1806,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
       portArtifactContentEffects: opts.portArtifactContentEffects,
       taskRunSelection: opts.taskRunSelection,
+      repositoryPreparationEffects: opts.repositoryPreparationEffects,
+      scratchWorkspaceEffects: opts.scratchWorkspaceEffects,
+      workspaceMaintenanceFilesystem: opts.workspaceMaintenanceFilesystem,
+      workspacePresence: opts.workspacePresence,
+      initializeExecution: opts.initializeExecution,
+      recoveredExecutionTaskIds: opts.recoveredExecutionTaskIds,
+      systemAgentRunFamily: opts.systemAgentRunFamily,
       developmentPurposes: opts.developmentPurposes,
       workspaceExcludeProfiles: opts.workspaceExcludeProfiles,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
@@ -2098,10 +2130,12 @@ async function composeSqliteProviderSession(
   const memoryInjectionQueries = composeSqliteMemoryInjectionQueries(db)
   const runtimeSessionLeases = createRuntimeSessionLeaseOperations(db)
   const runtimeRegistry = providerCore.runtimeRegistry
-  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({
-    appHome: systemAgentAppHome,
-    observations: () => systemAgentObservations,
-  })
+  const memorySystemAgentBinding = (input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily)(
+    {
+      appHome: systemAgentAppHome,
+      observations: () => systemAgentObservations,
+    },
+  )
   const memoryOperations = composeSqliteMemoryOperations({
     systemAgentBinding: memorySystemAgentBinding,
     db,
@@ -2246,6 +2280,8 @@ async function composeSqliteProviderSession(
           appHome: Paths.root,
           secretBox,
           repositoryPreparation: composeRepositoryPreparation({
+            preparationEffects: input.repositoryPreparationEffects,
+            scratchEffects: input.scratchWorkspaceEffects,
             ...(taskLaunchConfiguration.preparationConfiguration === undefined
               ? {}
               : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
@@ -2354,6 +2390,8 @@ async function composeSqliteProviderSession(
               ? {}
               : await taskLaunchConfiguration.start()),
             repositoryPreparation: composeRepositoryPreparation({
+              preparationEffects: input.repositoryPreparationEffects,
+              scratchEffects: input.scratchWorkspaceEffects,
               ...(taskLaunchConfiguration.preparationConfiguration === undefined
                 ? {}
                 : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
@@ -2420,6 +2458,8 @@ async function composeSqliteProviderSession(
         ? {}
         : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
       repositoryPreparation: composeRepositoryPreparation({
+        preparationEffects: input.repositoryPreparationEffects,
+        scratchEffects: input.scratchWorkspaceEffects,
         ...(taskLaunchConfiguration.preparationConfiguration === undefined
           ? {}
           : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
@@ -2609,6 +2649,7 @@ async function composeSqliteProviderSession(
     // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal
     // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。
     const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({
+      filesystem: input.workspaceMaintenanceFilesystem,
       db,
       appHome: Paths.root,
       terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
@@ -3016,6 +3057,8 @@ async function composeSqliteProviderSession(
     const hostTaskLaunch = composeHostTaskLaunchKernel({
       sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
+        preparationEffects: input.repositoryPreparationEffects,
+        scratchEffects: input.scratchWorkspaceEffects,
         ...(taskLaunchConfiguration.preparationConfiguration === undefined
           ? {}
           : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),

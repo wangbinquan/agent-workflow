@@ -29,10 +29,14 @@ export const ExecutionStatusSchema = z
     mode: z.enum(['standalone', 'crewstation']),
     state: z.enum(['active', 'standby', 'frozen']),
     reason: z.string().nullable(),
+    unavailableGroups: z.record(ExecutionGroupSchema, z.string()).optional(),
   })
   .strict()
 export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>
 
-export function isExecutionAvailable(status: ExecutionStatus): boolean {
-  return status.state === 'active'
+export function isExecutionAvailable(status: ExecutionStatus, group?: ExecutionGroup): boolean {
+  return (
+    status.state === 'active' &&
+    (group === undefined || status.unavailableGroups?.[group] === undefined)
+  )
 }

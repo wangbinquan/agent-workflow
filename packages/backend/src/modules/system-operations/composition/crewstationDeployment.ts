@@ -1,3 +1,4 @@
+import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 // RFC-370 M0 — system-operations selections of a CrewStation-hosted instance.
 // The platform injects every input through environment variables; a missing
 // input refuses to start and names all of them at once. Bootstrap passes the
@@ -15,10 +16,23 @@ import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresq
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'
-import type { ExecutionAuthorityPort } from '../application/ports/executionAuthority'
 import { createDatabaseApplicationConfiguration } from '../infrastructure/databaseApplicationConfiguration'
 import { createHostedDatabaseInstallation } from '../infrastructure/crewstation/hostedDatabaseInstallation'
-import { createStandbyExecutionAuthority } from '../infrastructure/crewstation/standbyExecutionAuthority'
+import {
+  createCrewStationExecutionAuthority,
+  type CrewStationExecutionAuthority,
+} from '../infrastructure/crewstation/crewStationExecutionAuthority'
+import {
+  createDatabaseHostedExecutionControl,
+  hostedLeaseOf,
+  type HostedExecutionWriteBarrier,
+} from '../infrastructure/hostedExecutionControl'
+import {
+  CREWSTATION_PLATFORM_API_URL_ENV,
+  createCrewStationPlatformApi,
+  type CrewStationPlatformApi,
+} from '@/platform/crewstation/platformApi'
+import { createLogger } from '@/util/log'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -26,11 +40,17 @@ import {
 
 export const CREWSTATION_DATABASE_URL_ENV = 'CS_DATABASE_URL'
 
+/** aw's task execution contract (Manifest `tasks.acceptedTaskContractVersions`).
+ * Bump when a release can no longer take over another release's running tasks. */
+export const AW_TASK_CONTRACT_VERSION = 'aw-task-v1'
+
 export interface CrewStationDeploymentEnvironment {
   readonly project: string
   readonly service: string
   readonly port: number
   readonly jwksUrl: string
+  /** The service-domain platform API (`CS_PLATFORM_API_URL`). */
+  readonly platformApiUrl: string
   /** Present once the Manifest declares `spec.data.objects` (not needed by M0). */
   readonly objectsUrl: string | null
   readonly objectSpaceId: string | null
@@ -91,6 +111,7 @@ export function readCrewStationEnvironment(
   const service = required('CS_SERVICE')
   required(CREWSTATION_DATABASE_URL_ENV)
   const jwksUrl = required('CS_JWKS_URL')
+  const platformApiUrl = required(CREWSTATION_PLATFORM_API_URL_ENV)
   const objectsUrl = env.CS_OBJECTS_URL?.trim() ?? ''
   const portText = required('PORT')
   const port = Number(portText)
@@ -99,6 +120,7 @@ export function readCrewStationEnvironment(
   }
   for (const [name, value] of [
     ['CS_JWKS_URL', jwksUrl],
+    [CREWSTATION_PLATFORM_API_URL_ENV, platformApiUrl],
     ['CS_OBJECTS_URL', objectsUrl],
   ] as const) {
     if (value.length > 0 && !URL.canParse(value)) problems.push(`${name} must be an absolute URL`)
@@ -117,6 +139,7 @@ export function readCrewStationEnvironment(
     service,
     port,
     jwksUrl,
+    platformApiUrl,
     objectsUrl: objectsUrl.length > 0 ? objectsUrl : null,
     objectSpaceId: objectSpaceId.length > 0 ? objectSpaceId : null,
     secretKey,
@@ -198,7 +221,11 @@ export function composeCrewStationMigrationInstallation(
 export interface CrewStationSystemSelections {
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly databaseInstallation: DatabaseInstallationPort<PreparedPostgresqlProviderSchema>
-  readonly executionAuthority: ExecutionAuthorityPort
+  readonly executionAuthority: CrewStationExecutionAuthority
+  /** The application side of the execution fence, checked by hosted effect writes. */
+  readonly mutationFence: CrewStationMutationFence
+  readonly executionWriteBarrier: HostedExecutionWriteBarrier
+  readonly platform: CrewStationPlatformApi
   readonly secretBox: SecretBox
 }
 
@@ -212,7 +239,15 @@ export function composeCrewStationSystemSelections(input: {
   readonly prepared: PreparedPostgresqlProviderSchema
 }): CrewStationSystemSelections {
   const db: ProviderNeutralDatabase = input.prepared.openBootstrapClient()
-  return Object.freeze({
+  const platform = createCrewStationPlatformApi({ baseUrl: input.environment.platformApiUrl })
+  const control = createDatabaseHostedExecutionControl({ db })
+  const executionAuthority = createCrewStationExecutionAuthority({
+    platform,
+    control,
+    acceptedTaskContractVersions: [AW_TASK_CONTRACT_VERSION],
+    log: createLogger('crewstation-execution-authority'),
+  })
+  return Object.freeze<CrewStationSystemSelections>({
     applicationConfiguration: composeApplicationConfigurationBinding({
       kind: 'selected',
       persistence: createDatabaseApplicationConfiguration({
@@ -226,9 +261,17 @@ export function composeCrewStationSystemSelections(input: {
       service: input.environment.service,
       prepare: async () => input.prepared,
     }),
-    executionAuthority: createStandbyExecutionAuthority({
-      reason: 'remote-execution-not-available',
-    }),
+    executionAuthority,
+    mutationFence: {
+      current() {
+        const state = executionAuthority.current()
+        if (state.kind !== 'active') throw new Error(`hosted-execution-not-active: ${state.kind}`)
+        return hostedLeaseOf(state.fence)
+      },
+      assertHeld: (tx, lease) => control.assertHeld(tx, lease),
+    },
+    executionWriteBarrier: control,
+    platform,
     secretBox: createSecretBoxFromKey(input.environment.secretKey),
   })
 }

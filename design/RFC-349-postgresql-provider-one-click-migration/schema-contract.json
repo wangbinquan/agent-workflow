@@ -1,10 +1,10 @@
 {
-  "activeTableCount": 192,
+  "activeTableCount": 198,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:9a9f65081c639b1d354a58e543207a8bf87c68d33797a321a338c23720228493",
+  "digest": "sha256:2e545a671736461b3e01ce77c0563fa5c2ea991a342212a3acf063990bf2c54b",
   "sourceProjection": "sqlite",
-  "sourceTableCount": 198,
+  "sourceTableCount": 204,
   "tables": [
     {
       "checks": [],
@@ -30495,6 +30495,1143 @@
       "unique": []
     },
     {
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"hosted_execution_bindings\".\"kind\" IN ('agent', 'command')",
+          "name": "hosted_execution_bindings_kind_known"
+        },
+        {
+          "columns": [],
+          "expression": "\"hosted_execution_bindings\".\"state\" IN ('submitting', 'running', 'settled')",
+          "name": "hosted_execution_bindings_state_known"
+        }
+      ],
+      "columns": [
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "execution_id",
+          "nullable": false,
+          "primary": true,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "task_id",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "node_run_id",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [
+            "agent",
+            "command"
+          ],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "kind",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "business_task_id",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "request_key",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "json-text",
+          "name": "request_json",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "subtask_id",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "integer",
+          "name": "attempt",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "material_digest",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "last_cursor",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "json-text",
+          "name": "result_json",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "literal",
+          "defaultValue": "false",
+          "enumValues": [],
+          "hasDefault": true,
+          "identity": false,
+          "logicalCodec": "boolean",
+          "name": "cancel_requested",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": "FALSE",
+            "sqlite": "0"
+          },
+          "providerType": {
+            "postgresql": "boolean",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [
+            "user",
+            "timeout"
+          ],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "cancel_reason",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [
+            "submitting",
+            "running",
+            "settled"
+          ],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "state",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "integer",
+          "name": "epoch",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "epoch-milliseconds",
+          "name": "created_at",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "epoch-milliseconds",
+          "name": "updated_at",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        }
+      ],
+      "consumers": {
+        "backgroundRecoveryDiagnostic": "owner-reviewed",
+        "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+        "productionReader": "owner-required",
+        "productionWriter": "owner-required-or-immutable"
+      },
+      "disposition": "KEEP",
+      "foreignKeys": [],
+      "id": "hosted_execution_bindings",
+      "indexes": [
+        {
+          "columns": [
+            "state"
+          ],
+          "name": "idx_hosted_execution_bindings_state",
+          "unique": false,
+          "where": null
+        },
+        {
+          "columns": [
+            "task_id"
+          ],
+          "name": "idx_hosted_execution_bindings_task",
+          "unique": false,
+          "where": null
+        }
+      ],
+      "migrationKey": [
+        "execution_id"
+      ],
+      "ownerContext": "task-execution",
+      "primaryKey": [
+        "execution_id"
+      ],
+      "providerTables": {
+        "postgresql": "hosted_execution_bindings",
+        "sqlite": "hosted_execution_bindings"
+      },
+      "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+      "retention": {
+        "class": "owner-managed-business",
+        "owner": "task-execution",
+        "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+      },
+      "schemaSymbol": "hostedExecutionBindings",
+      "sourceTable": "hosted_execution_bindings",
+      "unique": []
+    },
+    {
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"hosted_execution_control\".\"id\" = 'global'",
+          "name": "hosted_execution_control_id_fixed"
+        },
+        {
+          "columns": [],
+          "expression": "\"hosted_execution_control\".\"phase\" IN ('frozen', 'preparing', 'active')",
+          "name": "hosted_execution_control_phase_known"
+        }
+      ],
+      "columns": [
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "id",
+          "nullable": false,
+          "primary": true,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "integer",
+          "name": "epoch",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "owner",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [
+            "frozen",
+            "preparing",
+            "active"
+          ],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "phase",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "lease_id",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "epoch-milliseconds",
+          "name": "expires_at",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "epoch-milliseconds",
+          "name": "updated_at",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        }
+      ],
+      "consumers": {
+        "backgroundRecoveryDiagnostic": "owner-reviewed",
+        "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+        "productionReader": "owner-required",
+        "productionWriter": "owner-required-or-immutable"
+      },
+      "disposition": "KEEP",
+      "foreignKeys": [],
+      "id": "hosted_execution_control",
+      "indexes": [],
+      "migrationKey": [
+        "id"
+      ],
+      "ownerContext": "system-operations",
+      "primaryKey": [
+        "id"
+      ],
+      "providerTables": {
+        "postgresql": "hosted_execution_control",
+        "sqlite": "hosted_execution_control"
+      },
+      "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+      "retention": {
+        "class": "owner-managed-business",
+        "owner": "system-operations",
+        "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+      },
+      "schemaSymbol": "hostedExecutionControl",
+      "sourceTable": "hosted_execution_control",
+      "unique": []
+    },
+    {
+      "checks": [],
+      "columns": [
+        {
+          "defaultKind": "identity",
+          "defaultValue": "identity",
+          "enumValues": [],
+          "hasDefault": true,
+          "identity": true,
+          "logicalCodec": "integer",
+          "name": "id",
+          "nullable": false,
+          "primary": true,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "execution_id",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "cursor",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "json-text",
+          "name": "event_json",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        }
+      ],
+      "consumers": {
+        "backgroundRecoveryDiagnostic": "owner-reviewed",
+        "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+        "productionReader": "owner-required",
+        "productionWriter": "owner-required-or-immutable"
+      },
+      "disposition": "KEEP",
+      "foreignKeys": [
+        {
+          "columns": [
+            "execution_id"
+          ],
+          "foreignColumns": [
+            "execution_id"
+          ],
+          "foreignTable": "hosted_execution_bindings",
+          "name": "hosted_execution_events_execution_id_hosted_execution_bindings_execution_id_fk",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      ],
+      "id": "hosted_execution_events",
+      "indexes": [
+        {
+          "columns": [
+            "execution_id",
+            "cursor"
+          ],
+          "name": "idx_hosted_execution_event_cursor",
+          "unique": true,
+          "where": null
+        },
+        {
+          "columns": [
+            "execution_id",
+            "id"
+          ],
+          "name": "idx_hosted_execution_event_replay",
+          "unique": false,
+          "where": null
+        }
+      ],
+      "migrationKey": [
+        "id"
+      ],
+      "ownerContext": "task-execution",
+      "primaryKey": [
+        "id"
+      ],
+      "providerTables": {
+        "postgresql": "hosted_execution_events",
+        "sqlite": "hosted_execution_events"
+      },
+      "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+      "retention": {
+        "class": "owner-managed-operational",
+        "owner": "task-execution",
+        "rule": "The owning bounded context defines retention and archive jobs through its application port."
+      },
+      "schemaSymbol": "hostedExecutionEvents",
+      "sourceTable": "hosted_execution_events",
+      "unique": [
+        {
+          "columns": [
+            "execution_id",
+            "cursor"
+          ],
+          "expression": null,
+          "name": "idx_hosted_execution_event_cursor"
+        }
+      ]
+    },
+    {
+      "checks": [],
+      "columns": [
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "reference",
+          "nullable": false,
+          "primary": true,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "task_id",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "object_id",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "integer",
+          "name": "revision",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "digest",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "integer",
+          "name": "size",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "epoch-milliseconds",
+          "name": "created_at",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        }
+      ],
+      "consumers": {
+        "backgroundRecoveryDiagnostic": "owner-reviewed",
+        "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+        "productionReader": "owner-required",
+        "productionWriter": "owner-required-or-immutable"
+      },
+      "disposition": "KEEP",
+      "foreignKeys": [],
+      "id": "hosted_task_artifacts",
+      "indexes": [],
+      "migrationKey": [
+        "reference"
+      ],
+      "ownerContext": "task-execution",
+      "primaryKey": [
+        "reference"
+      ],
+      "providerTables": {
+        "postgresql": "hosted_task_artifacts",
+        "sqlite": "hosted_task_artifacts"
+      },
+      "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+      "retention": {
+        "class": "owner-managed-business",
+        "owner": "task-execution",
+        "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+      },
+      "schemaSymbol": "hostedTaskArtifacts",
+      "sourceTable": "hosted_task_artifacts",
+      "unique": []
+    },
+    {
+      "checks": [
+        {
+          "columns": [],
+          "expression": "\"hosted_task_workspaces\".\"state\" IN ('creating', 'ready', 'closing', 'closed')",
+          "name": "hosted_task_workspaces_state_known"
+        }
+      ],
+      "columns": [
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "task_id",
+          "nullable": false,
+          "primary": true,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "request_key",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "business_task_id",
+          "nullable": true,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [
+            "creating",
+            "ready",
+            "closing",
+            "closed"
+          ],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "state",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "epoch-milliseconds",
+          "name": "created_at",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "epoch-milliseconds",
+          "name": "updated_at",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "bigint",
+            "sqlite": "integer"
+          },
+          "uniqueName": null
+        }
+      ],
+      "consumers": {
+        "backgroundRecoveryDiagnostic": "owner-reviewed",
+        "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+        "productionReader": "owner-required",
+        "productionWriter": "owner-required-or-immutable"
+      },
+      "disposition": "KEEP",
+      "foreignKeys": [],
+      "id": "hosted_task_workspaces",
+      "indexes": [
+        {
+          "columns": [
+            "business_task_id"
+          ],
+          "name": "hosted_task_workspaces_business_task_unique",
+          "unique": true,
+          "where": null
+        }
+      ],
+      "migrationKey": [
+        "task_id"
+      ],
+      "ownerContext": "source-control",
+      "primaryKey": [
+        "task_id"
+      ],
+      "providerTables": {
+        "postgresql": "hosted_task_workspaces",
+        "sqlite": "hosted_task_workspaces"
+      },
+      "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+      "retention": {
+        "class": "owner-managed-business",
+        "owner": "source-control",
+        "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+      },
+      "schemaSymbol": "hostedTaskWorkspaces",
+      "sourceTable": "hosted_task_workspaces",
+      "unique": [
+        {
+          "columns": [
+            "business_task_id"
+          ],
+          "expression": null,
+          "name": "hosted_task_workspaces_business_task_unique"
+        }
+      ]
+    },
+    {
       "checks": [],
       "columns": [
         {
@@ -39108,6 +40245,94 @@
           "name": "mission_input_uploads_idem_unique"
         }
       ]
+    },
+    {
+      "checks": [],
+      "columns": [
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "source_key",
+          "nullable": false,
+          "primary": true,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "node_run_id",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        }
+      ],
+      "consumers": {
+        "backgroundRecoveryDiagnostic": "owner-reviewed",
+        "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+        "productionReader": "owner-required",
+        "productionWriter": "owner-required-or-immutable"
+      },
+      "disposition": "KEEP",
+      "foreignKeys": [
+        {
+          "columns": [
+            "node_run_id"
+          ],
+          "foreignColumns": [
+            "id"
+          ],
+          "foreignTable": "node_runs",
+          "name": "node_execution_event_sources_node_run_id_node_runs_id_fk",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      ],
+      "id": "node_execution_event_sources",
+      "indexes": [],
+      "migrationKey": [
+        "source_key"
+      ],
+      "ownerContext": "task-execution",
+      "primaryKey": [
+        "source_key"
+      ],
+      "providerTables": {
+        "postgresql": "node_execution_event_sources",
+        "sqlite": "node_execution_event_sources"
+      },
+      "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+      "retention": {
+        "class": "owner-managed-operational",
+        "owner": "task-execution",
+        "rule": "The owning bounded context defines retention and archive jobs through its application port."
+      },
+      "schemaSymbol": "nodeExecutionEventSources",
+      "sourceTable": "node_execution_event_sources",
+      "unique": []
     },
     {
       "checks": [],

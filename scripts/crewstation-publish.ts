@@ -1,12 +1,12 @@
 // RFC-370 M0 — publish the committed agent-workflow sources to a CrewStation project.
 //
-//   CS_TOKEN=<platform session> [CS_API_URL=<platform api>] \
+//   CS_TOKEN=<platform session> CS_GITLAB_TOKEN=<repository token> [CS_API_URL=<platform api>] \
 //     bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release]
 //
-// 1. `git archive HEAD` (committed sources only — never the working tree);
+// 1. Read committed blobs from the primary checkout (never the working tree);
 // 2. add `deploy/crewstation/Dockerfile` and the rendered `crewstation.yaml` at
 //    the root, as the platform builds the repository root;
-// 3. commit that snapshot on the project's branch and push it;
+// 3. publish a checked delta through GitLab's Commits API, without another checkout;
 // 4. release exactly that commit through the platform release API
 //    (`POST /v1/services/:serviceId/releases` with `expectedCommitSha`): the
 //    platform tags, builds, runs `agent-workflow migrate` and deploys the
@@ -16,17 +16,15 @@
 //
 // The session value (`CS_TOKEN`, the same one the `crewstation` CLI reads) is
 // sent as the platform session cookie and never printed.
-import {
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-  copyFileSync,
-  readdirSync,
-} from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { parseDeploymentProfile, renderCrewStationManifest } from './lib/crewstation-manifest'
+import {
+  createGitLabPublication,
+  planSourcePublication,
+  sourceFile,
+  type SourceFile,
+} from './lib/crewstation-source-publication'
 
 const repoRoot = resolve(import.meta.dirname, '..')
 
@@ -108,53 +106,96 @@ if (profilePath === undefined) {
 }
 const profile = parseDeploymentProfile(JSON.parse(readFileSync(profilePath, 'utf8')))
 const head = run(['git', 'rev-parse', 'HEAD'], repoRoot).trim()
+if (run(['git', 'branch', '--show-current'], repoRoot).trim() !== 'main')
+  throw new Error('publication-requires-primary-main')
+const gitlabToken = process.env.CS_GITLAB_TOKEN
+if (!gitlabToken) throw new Error('CS_GITLAB_TOKEN is required for source publication')
+const repository = new URL(profile.repository)
+const publisher = createGitLabPublication({
+  apiUrl: process.env.CS_GITLAB_URL ?? repository.origin,
+  project: repository.pathname.replace(/^\//, '').replace(/\.git$/, ''),
+  token: gitlabToken,
+})
+const remoteHead = await publisher.head(profile.branch)
+const previousSha = /^agent-workflow ([a-f0-9]{40})(?:\n|$)/.exec(remoteHead.message)?.[1]
+if (previousSha === undefined) throw new Error('publication-target-source-provenance-missing')
+function committedFiles(sha: string): Map<string, SourceFile> {
+  const files = new Map<string, SourceFile>()
+  for (const entry of run(['git', 'ls-tree', '-r', '-z', sha], repoRoot)
+    .split('\0')
+    .filter(Boolean)) {
+    const match = /^(100644|100755) blob ([a-f0-9]{40})\t([\s\S]+)$/.exec(entry)
+    if (match === null) throw new Error('publication-unsupported-git-entry')
+    const [, mode, blob, path] = match as [string, '100644' | '100755', string, string]
+    files.set(path, {
+      mode,
+      blob,
+      bytes() {
+        const process = Bun.spawnSync(['git', 'cat-file', 'blob', blob], {
+          cwd: repoRoot,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        })
+        if (process.exitCode !== 0) throw new Error('publication-source-blob-unavailable')
+        return process.stdout
+      },
+    })
+  }
+  const dockerfile = files.get('deploy/crewstation/Dockerfile')
+  if (dockerfile === undefined) throw new Error('publication-dockerfile-missing')
+  files.set('Dockerfile', dockerfile)
+  return files
+}
+const previous = committedFiles(previousSha)
+const next = committedFiles(head)
+const manifestSource = next.get('deploy/crewstation/crewstation.template.yaml')
+if (manifestSource === undefined) throw new Error('publication-manifest-template-missing')
 const manifest = renderCrewStationManifest(
-  readFileSync(join(repoRoot, 'deploy', 'crewstation', 'crewstation.template.yaml'), 'utf8'),
+  new TextDecoder().decode(manifestSource.bytes()),
   profile,
 )
-
-const workspace = mkdtempSync(join(tmpdir(), 'aw-crewstation-publish-'))
-try {
-  const checkout = join(workspace, 'project')
-  run(
-    ['git', 'clone', '--quiet', '--branch', profile.branch, profile.repository, checkout],
-    workspace,
+// The deployed manifest is operator-owned configuration. Its exact remote
+// revision is captured here and protected with last_commit_id in the batch.
+const oldManifest = await publisher.file('crewstation.yaml', remoteHead.id)
+if (oldManifest !== null)
+  previous.set('crewstation.yaml', sourceFile(Buffer.from(oldManifest.content, 'base64')))
+next.set('crewstation.yaml', sourceFile(Buffer.from(manifest)))
+const remoteTree = await publisher.tree(remoteHead.id)
+const actions = await planSourcePublication({
+  previous,
+  next,
+  async remoteFile(path) {
+    const remote = remoteTree.get(path)
+    if (remote === undefined) return null
+    const planned = next.get(path)
+    if (planned?.blob === remote.id && planned.mode === remote.mode) {
+      return { blob_id: remote.id, execute_filemode: remote.mode === '100755', last_commit_id: '' }
+    }
+    return publisher.file(path, remoteHead.id)
+  },
+})
+const commitSha = await publisher.commit({
+  branch: profile.branch,
+  expectedHead: remoteHead.id,
+  actions,
+  message: `agent-workflow ${head}\n\nCo-Authored-By: Codex <noreply@openai.com>`,
+  authorName: run(['git', 'config', 'user.name'], repoRoot).trim(),
+  authorEmail: run(['git', 'config', 'user.email'], repoRoot).trim(),
+})
+process.stdout.write(
+  `published agent-workflow ${head} to ${profile.project}/${profile.branch}@${commitSha} (${actions.length} file actions)\n`,
+)
+if (!Bun.argv.includes('--no-release')) {
+  const release = await releaseCommit({
+    apiUrl: process.env.CS_API_URL ?? DEFAULT_API_URL,
+    token: process.env.CS_TOKEN ?? '',
+    project: profile.project,
+    branch: profile.branch,
+    commitSha,
+    version: flag('--version') ?? 'patch',
+    message: `agent-workflow ${head}`,
+  })
+  process.stdout.write(
+    `release ${release.tag} (${release.id}) of ${profile.project}@${commitSha.slice(0, 12)}: ${release.status}\n`,
   )
-  // Replace the tracked tree wholesale; the project history keeps one commit per publish.
-  for (const entry of readdirSync(checkout)) {
-    if (entry !== '.git') rmSync(join(checkout, entry), { recursive: true, force: true })
-  }
-  const archive = Bun.spawnSync(['git', 'archive', '--format=tar', head], { cwd: repoRoot })
-  if (archive.exitCode !== 0) throw new Error(`git archive failed:\n${archive.stderr.toString()}`)
-  run(['tar', '-x', '-f', '-'], checkout, archive.stdout)
-  copyFileSync(join(repoRoot, 'deploy', 'crewstation', 'Dockerfile'), join(checkout, 'Dockerfile'))
-  writeFileSync(join(checkout, 'crewstation.yaml'), manifest)
-  run(['git', 'add', '-A'], checkout)
-  const changed = run(['git', 'status', '--porcelain'], checkout).trim().length > 0
-  if (changed) {
-    run(['git', 'commit', '--quiet', '-m', `agent-workflow ${head}`], checkout)
-    run(['git', 'push', '--quiet', 'origin', `HEAD:${profile.branch}`], checkout)
-    process.stdout.write(`pushed agent-workflow ${head} to ${profile.project}/${profile.branch}\n`)
-  } else {
-    process.stdout.write(
-      `${profile.project}/${profile.branch} already carries agent-workflow ${head}\n`,
-    )
-  }
-  if (!Bun.argv.includes('--no-release')) {
-    const commitSha = run(['git', 'rev-parse', 'HEAD'], checkout).trim()
-    const release = await releaseCommit({
-      apiUrl: process.env.CS_API_URL ?? DEFAULT_API_URL,
-      token: process.env.CS_TOKEN ?? '',
-      project: profile.project,
-      branch: profile.branch,
-      commitSha,
-      version: flag('--version') ?? 'patch',
-      message: `agent-workflow ${head}`,
-    })
-    process.stdout.write(
-      `release ${release.tag} (${release.id}) of ${profile.project}@${commitSha.slice(0, 12)}: ${release.status}\n`,
-    )
-  }
-} finally {
-  rmSync(workspace, { recursive: true, force: true })
 }

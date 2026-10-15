@@ -3979,6 +3979,135 @@ export const applicationConfiguration = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// RFC-370 v2 §3.2 / §5.2 — the CrewStation execution lease mirrored in the
+// application database (system-operations owns it; standalone never writes).
+// One row whose epoch never decreases. Every transaction that records a
+// hosted execution effect locks it and checks this instance still holds an
+// unexpired active lease — the application side of the platform's fence.
+// -----------------------------------------------------------------------------
+export const hostedExecutionControl = sqliteTable(
+  'hosted_execution_control',
+  {
+    id: text('id').primaryKey(),
+    epoch: integer('epoch').notNull(),
+    owner: text('owner'),
+    phase: text('phase', { enum: ['frozen', 'preparing', 'active'] }).notNull(),
+    leaseId: text('lease_id'),
+    expiresAt: integer('expires_at'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    idFixed: check('hosted_execution_control_id_fixed', sql`${t.id} = 'global'`),
+    phaseKnown: check(
+      'hosted_execution_control_phase_known',
+      sql`${t.phase} IN ('frozen', 'preparing', 'active')`,
+    ),
+  }),
+)
+
+// RFC-370 v2 §3.4 — one CrewStation business task (its persistent `/work`
+// volume) per aw task; source-control owns it, standalone never writes.
+export const hostedTaskWorkspaces = sqliteTable(
+  'hosted_task_workspaces',
+  {
+    taskId: text('task_id').primaryKey(),
+    requestKey: text('request_key').notNull(),
+    businessTaskId: text('business_task_id'),
+    state: text('state', { enum: ['creating', 'ready', 'closing', 'closed'] }).notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    businessTaskUnique: uniqueIndex('hosted_task_workspaces_business_task_unique').on(
+      t.businessTaskId,
+    ),
+    stateKnown: check(
+      'hosted_task_workspaces_state_known',
+      sql`${t.state} IN ('creating', 'ready', 'closing', 'closed')`,
+    ),
+  }),
+)
+
+// RFC-370 v2 §3.3 — one hosted execution (an agent or command subtask) bound to
+// the aw execution id; task-execution owns it, standalone never writes. The
+// intent row is written under the execution fence before the submit, the
+// subtask handle once accepted, and the cursor as events are processed, so a
+// new lease holder can resume (`adopt`) instead of executing twice.
+export const hostedExecutionBindings = sqliteTable(
+  'hosted_execution_bindings',
+  {
+    executionId: text('execution_id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    nodeRunId: text('node_run_id'),
+    kind: text('kind', { enum: ['agent', 'command'] }).notNull(),
+    businessTaskId: text('business_task_id').notNull(),
+    requestKey: text('request_key').notNull(),
+    // Frozen before submit so a successor can repeat an ambiguous acceptance
+    // with the original request key and material, rather than execute twice.
+    requestJson: text('request_json').notNull(),
+    subtaskId: text('subtask_id'),
+    attempt: integer('attempt'),
+    materialDigest: text('material_digest'),
+    lastCursor: text('last_cursor'),
+    resultJson: text('result_json'),
+    cancelRequested: integer('cancel_requested', { mode: 'boolean' }).notNull().default(false),
+    cancelReason: text('cancel_reason', { enum: ['user', 'timeout'] }),
+    state: text('state', { enum: ['submitting', 'running', 'settled'] }).notNull(),
+    epoch: integer('epoch').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    stateIdx: index('idx_hosted_execution_bindings_state').on(t.state),
+    taskIdx: index('idx_hosted_execution_bindings_task').on(t.taskId),
+    kindKnown: check(
+      'hosted_execution_bindings_kind_known',
+      sql`${t.kind} IN ('agent', 'command')`,
+    ),
+    stateKnown: check(
+      'hosted_execution_bindings_state_known',
+      sql`${t.state} IN ('submitting', 'running', 'settled')`,
+    ),
+  }),
+)
+
+/** Durable transport journal, retained with the execution for restart replay. */
+export const hostedExecutionEvents = sqliteTable(
+  'hosted_execution_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    executionId: text('execution_id')
+      .notNull()
+      .references(() => hostedExecutionBindings.executionId, { onDelete: 'cascade' }),
+    cursor: text('cursor').notNull(),
+    eventJson: text('event_json').notNull(),
+  },
+  (t) => ({
+    cursorUnique: uniqueIndex('idx_hosted_execution_event_cursor').on(t.executionId, t.cursor),
+    replayIndex: index('idx_hosted_execution_event_replay').on(t.executionId, t.id),
+  }),
+)
+
+/** The source key and its node event commit in the same transaction. */
+export const nodeExecutionEventSources = sqliteTable('node_execution_event_sources', {
+  sourceKey: text('source_key').primaryKey(),
+  nodeRunId: text('node_run_id')
+    .notNull()
+    .references(() => nodeRuns.id, { onDelete: 'cascade' }),
+})
+
+// RFC-370: Task-owned immutable object pointers; bytes live in CS object storage.
+export const hostedTaskArtifacts = sqliteTable('hosted_task_artifacts', {
+  reference: text('reference').primaryKey(),
+  taskId: text('task_id').notNull(),
+  objectId: text('object_id').notNull(),
+  revision: integer('revision').notNull(),
+  digest: text('digest').notNull(),
+  size: integer('size').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+// -----------------------------------------------------------------------------
 // RFC-036 task_collaborators — owner + collaborators ("任务用户"). RFC-099
 // (D6) collapsed the reviewer/clarify_target role tags (migration 0046) and
 // dropped the node_assignments table that backed the never-shipped node-level

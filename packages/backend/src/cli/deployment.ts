@@ -4,15 +4,11 @@
 // whichever platform variables happen to be present); standalone is the
 // default. A CrewStation-hosted instance runs the same start and migrate
 // sequences with the hosted adapters selected here.
-import { composeCrewStationCredentialAdapters } from '@/modules/identity-access/composition/authentication'
-import { composeCrewStationResourceContent } from '@/modules/resource-catalog/composition/skillContentBinding'
+import { composeCrewStationStartOptions } from '@/bootstrap/crewstation'
 import {
   composeCrewStationMigrationInstallation,
-  composeCrewStationSystemSelections,
   crewStationDatabaseConfig,
-  prepareCrewStationDatabase,
   readCrewStationDatabaseEnvironment,
-  readCrewStationEnvironment,
 } from '@/modules/system-operations/composition/crewstationDeployment'
 import { prepareManualDatabaseMigration } from '@/modules/system-operations/composition/manualDatabaseMigration'
 import type { StartOptions } from './start'
@@ -44,30 +40,7 @@ export async function composeDeploymentStartOptions(
   env: Readonly<Record<string, string | undefined>>,
 ): Promise<StartOptions> {
   if (readDeploymentMode(env) === 'standalone') return {}
-  const environment = readCrewStationEnvironment(env)
-  const prepared = await prepareCrewStationDatabase({ environment, schema: 'verify', env })
-  const system = composeCrewStationSystemSelections({ environment, prepared })
-  const resources = composeCrewStationResourceContent({ db: prepared.openBootstrapClient() })
-  return {
-    host: '0.0.0.0',
-    port: environment.port,
-    applicationConfiguration: system.applicationConfiguration,
-    databaseInstallation: system.databaseInstallation,
-    executionAuthority: system.executionAuthority,
-    secretBox: system.secretBox,
-    credentials: composeCrewStationCredentialAdapters({
-      jwksUrl: environment.jwksUrl,
-      project: environment.project,
-      service: environment.service,
-      administratorSubjects: environment.adminSubjects,
-    }),
-    executionHost: 'remote',
-    skillContent: resources.skillContent,
-    resourcePackageSkillContent: resources.resourcePackageSkillContent,
-    pluginInstaller: resources.pluginInstaller,
-    resourcePackageSkillArtifacts: resources.resourcePackageSkillArtifacts,
-    resourcePackagePluginArtifacts: resources.resourcePackagePluginArtifacts,
-  }
+  return composeCrewStationStartOptions(env)
 }
 
 /** `agent-workflow migrate`: the hosted release migration Job, or the local recovery path. */

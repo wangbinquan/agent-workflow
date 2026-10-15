@@ -397,6 +397,54 @@ export function parseSessionTree(input: ParseSessionInput): SessionTree {
       }
       rawDiagnostic = null
       rawDiagnosticKind = null
+      // Remote executions persist their normalized transport records. Keep
+      // that dialect distinct from either CLI's native transcript payload.
+      if (parsed.format === 'aw-normalized-execution-v1' && isRecord(parsed.event)) {
+        const event = parsed.event
+        const data = isRecord(event.data) ? event.data : {}
+        if (event.type === 'text' && typeof data.text === 'string') {
+          const previous = messages.at(-1)
+          if (previous?.kind === 'assistant-text' && previous.messageId === 'normalized-stream') {
+            previous.text += data.text
+          } else {
+            messages.push({
+              kind: 'assistant-text',
+              text: data.text,
+              ts: evt.ts,
+              messageId: 'normalized-stream',
+            })
+          }
+        } else if (
+          (event.type === 'tool-start' || event.type === 'tool-end') &&
+          typeof data.callId === 'string'
+        ) {
+          let tool = tools.get(data.callId)
+          if (tool === undefined) {
+            tool = {
+              kind: 'tool-call',
+              callId: data.callId,
+              toolName: typeof data.name === 'string' ? data.name : 'unknown',
+              input: data.input ?? null,
+              output: null,
+              status: 'running',
+              ts: evt.ts,
+              messageId: null,
+            }
+            tools.set(data.callId, tool)
+            messages.push(tool)
+          }
+          if (event.type === 'tool-end') {
+            tool.status = data.isError === true ? 'error' : 'completed'
+            tool.output =
+              typeof data.output === 'string'
+                ? data.output
+                : data.output === undefined
+                  ? null
+                  : JSON.stringify(data.output)
+          }
+        }
+        continue
+      }
       const part = parsed.part
       if (!isRecord(part)) {
         handleClaudeRow(evt, parsed)

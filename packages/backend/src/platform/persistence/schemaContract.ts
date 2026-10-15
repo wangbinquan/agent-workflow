@@ -120,6 +120,11 @@ export const RFC349_SOURCE_TABLES = [
   'event_type_catalog',
   'external_identities',
   'fusions',
+  'hosted_execution_bindings',
+  'hosted_execution_control',
+  'hosted_execution_events',
+  'hosted_task_artifacts',
+  'hosted_task_workspaces',
   'intent_apply_journal',
   'intent_draft_resolutions',
   'intent_drafts',
@@ -145,6 +150,7 @@ export const RFC349_SOURCE_TABLES = [
   'memory_distill_jobs',
   'memory_scope_move_events',
   'mission_input_uploads',
+  'node_execution_event_sources',
   'node_run_events',
   'node_run_outputs',
   'node_runs',
@@ -426,7 +432,8 @@ function ownerFor(table: string): OwnerContext {
     table === 'cached_repos' ||
     table.startsWith('sc_') ||
     table.startsWith('repo_') ||
-    table.startsWith('repository_transport_')
+    table.startsWith('repository_transport_') ||
+    table === 'hosted_task_workspaces'
   ) {
     return 'source-control'
   }
@@ -434,7 +441,8 @@ function ownerFor(table: string): OwnerContext {
     table.startsWith('maintenance_') ||
     table.startsWith('lifecycle_') ||
     table === 'recovery_events' ||
-    table === 'application_configuration'
+    table === 'application_configuration' ||
+    table === 'hosted_execution_control'
   ) {
     return 'system-operations'
   }
@@ -452,9 +460,13 @@ function ownerFor(table: string): OwnerContext {
     table === 'tasks' ||
     table.startsWith('task_') ||
     table.startsWith('node_run') ||
+    table === 'node_execution_event_sources' ||
     table.startsWith('workgroup_') ||
     table === 'workgroups' ||
-    table === 'runtime_session_leases'
+    table === 'runtime_session_leases' ||
+    table === 'hosted_execution_bindings' ||
+    table === 'hosted_execution_events' ||
+    table === 'hosted_task_artifacts'
   ) {
     return 'task-execution'
   }

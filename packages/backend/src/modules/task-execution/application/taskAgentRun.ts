@@ -57,14 +57,10 @@ import { ulid } from 'ulid'
 import { callStatusOfNodeRun, createCallUsageWriter } from './callUsageWriter'
 import type { RuntimeUsageSnapshot } from '@/modules/runtime-management/public/participants'
 
-import {
-  createProcessEffectAttemptObserver,
-  type ProcessEffectAttemptObserver,
-} from '@/modules/task-execution/application/processEffectObserver'
 import type {
-  ExecutionEffectResult,
-  ExecutionStartReceipt,
-} from '@/modules/task-execution/application/ports/executionEffect'
+  AgentExecutionOutcome,
+  AgentExecutionRecord,
+} from '@/modules/task-execution/application/ports/agentExecution'
 
 import { createLogger } from '@/util/log'
 import {
@@ -183,7 +179,7 @@ export async function runNode(
   const portArtifacts = purpose.portArtifacts
   const log = opts.log ?? createLogger('runner')
   // A resumed/follow-up process is a new invocation even when nodeRunId is reused.
-  const invocationId = ulid()
+  const invocationId = purpose.invocationId ?? ulid()
   const materialWorkspace = purpose.workspace
   const gitControlObservation: AgentWorkspaceGitControlObservation = purpose.gitControlObservation
   // RFC-200: this persisted value is the single source for BOTH prompt emit
@@ -838,10 +834,9 @@ export async function runNode(
   // parsing, live subagent capture, and final status resolution.
   let preserveLiveRuntimeState = false
   let postSpawnFailed = false
-  let processEffect:
-    | ProcessEffectAttemptObserver<ExecutionStartReceipt, ExecutionEffectResult>
-    | undefined
-  let processSettlement: ExecutionEffectResult | null = null
+  // The started execution; its durable task effect settles only after the
+  // node/output/session projection below has committed (outcome.settle).
+  let execution: AgentExecutionOutcome | null = null
   // Survives the outer catch so even a second DB failure while stamping the
   // terminal row cannot erase the durable breadcrumb boot repair uses to
   // discard (rather than neutralize) a contradicted native resume id.
@@ -1098,22 +1093,22 @@ export async function runNode(
       }
     }
 
-    const onStdoutLine = async (line: string): Promise<void> => {
+    const onRecord = async (record: AgentExecutionRecord): Promise<void> => {
       // RFC-314 D3：任一行的解析/租约写入抛错时，先把本 chunk 已缓冲的取证事件落库
       // 再抛——它们恰恰在失败时最重要（去掉这层，「第 k 行抛错时前 k-1 行已落库」
       // 那条用例立刻转红）。
       try {
-        await onStdoutLineInner(line)
+        await onRecordInner(record)
       } catch (error) {
         await flushEventsBeforeThrow()
         throw error
       }
     }
-    const onStdoutLineInner = async (line: string): Promise<void> => {
-      // RFC-111 PR-A/B: normalize one stdout line through the frozen runtime's
-      // driver. `parseEvent` returns null for non-JSON / falsy-JSON lines, which
-      // routes them through the raw-text fallback exactly as the old inline
-      // opencode `if (evt) {...} else {...}` selection did.
+    const onRecordInner = async (record: AgentExecutionRecord): Promise<void> => {
+      // RFC-370 v2 §3.3: the selected execution interpreted the record through
+      // its own protocol (a native stdout line locally, a normalized platform
+      // record when hosted). A null event routes the record through the raw-text
+      // fallback exactly as the old inline `if (evt) {...} else {...}` did.
       // 2026-08-04 audit: claude's TERMINAL result carries `is_error: true` on a
       // clean exit 0 — auth failure, subscription/usage limit, a gateway error
       // from a fork. The driver has parsed that since RFC-242, but only
@@ -1122,11 +1117,10 @@ export async function runNode(
       // envelope") AFTER burning the node's whole retry budget. Same disease as
       // the 2026-08-04 incident's "swallowed into a bare nonce missing", which
       // was fixed on the smoke path only.
-      const resultError = protocol.parseTerminalResultError?.(line)
-      if (resultError !== undefined && resultError !== null && terminalResultError === undefined) {
-        terminalResultError = resultError
+      if (record.terminalError !== undefined && terminalResultError === undefined) {
+        terminalResultError = record.terminalError
       }
-      const ev = protocol.parseEvent(line)
+      const ev = record.event
       if (ev) {
         await consumeInventoryPayload(ev)
         try {
@@ -1260,6 +1254,7 @@ export async function runNode(
         const persistedKind: PersistedEventKind = ev.kind === 'startup_inventory' ? 'text' : ev.kind
         if (callAccepted) usageWriter.observeLine(ev.rawLine)
         stdoutEvents.push({
+          ...(record.sourceKey === undefined ? {} : { sourceKey: record.sourceKey }),
           nodeRunId: opts.nodeRunId,
           ts,
           kind: persistedKind,
@@ -1272,12 +1267,13 @@ export async function runNode(
         // Non-JSON stdout lines shouldn't happen with --format json, but record
         // them as kind=text for debugging.
         stdoutEvents.push({
+          ...(record.sourceKey === undefined ? {} : { sourceKey: record.sourceKey }),
           nodeRunId: opts.nodeRunId,
           ts: Date.now(),
           kind: 'text',
-          payload: line,
+          payload: record.raw,
         })
-        appendAgentText(line)
+        appendAgentText(record.raw)
         broadcastParentRunning()
       }
     }
@@ -1367,77 +1363,53 @@ export async function runNode(
     //    past the REAP deadline comes back `unreaped` (→ childUnkillable below).
     const gitControlBefore =
       opts.gitMutationPolicy === 'read-only' ? await gitControlObservation.capture() : undefined
-    const taskEffects = opts.persistence.effects
-    const localExecution = invocation.bindExecution(
-      purpose.bindExecutionParticipants({
-        persistence: taskEffects,
-        nodeExecution: () => opts.persistence.nodeExecution,
-        readOnlyWorkspace: () => opts.gitMutationPolicy === 'read-only',
-      }),
-    )
-    processEffect = createProcessEffectAttemptObserver({
-      persistence: taskEffects,
-      taskId: opts.taskId,
-      nodeRunId: opts.nodeRunId,
-      processKind: 'agent',
-      projection: localExecution.projection!,
-      resourceKeys: (description) => description.resourceKeys,
-    })
-    const activeProcessEffect = processEffect
-    const runResult = await localExecution.effect.submit({
-      executionRef: localExecution.executionRef,
-      materialRef: localExecution.materialRef,
-      workspaceRef: localExecution.workspaceRef,
-      ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
-      termGraceMs: graceMs,
-      ...(opts.signal !== undefined ? { abortSignal: opts.signal } : {}),
-      beforeStart: async () => {
-        await activeProcessEffect?.beforeSpawn()
-        await opts.observationInvocations.accept({
-          id: invocationId,
-          purpose: opts.observationSystemKind ? 'system' : 'task',
+    const runResult = await invocation.execute(
+      {
+        ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
+        termGraceMs: graceMs,
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+        beforeStart: async () => {
+          await opts.observationInvocations.accept({
+            id: invocationId,
+            purpose: opts.observationSystemKind ? 'system' : 'task',
+            taskId: opts.taskId,
+            nodeRunId: opts.nodeRunId,
+            systemKind: opts.observationSystemKind ?? null,
+            agentId: opts.agent.id,
+            agentName: opts.agent.name,
+            runtimeId: opts.runtimeObservationIdentity?.registrationId ?? null,
+            runtimeName: opts.runtimeObservationIdentity?.acceptedName ?? null,
+            protocol: runtime,
+            startedAt: Date.now(),
+          })
+          callAccepted = true
+        },
+        task: {
+          participants: purpose.bindExecutionParticipants({
+            persistence: opts.persistence.effects,
+            nodeExecution: () => opts.persistence.nodeExecution,
+            readOnlyWorkspace: () => opts.gitMutationPolicy === 'read-only',
+          }),
           taskId: opts.taskId,
           nodeRunId: opts.nodeRunId,
-          systemKind: opts.observationSystemKind ?? null,
-          agentId: opts.agent.id,
-          agentName: opts.agent.name,
-          runtimeId: opts.runtimeObservationIdentity?.registrationId ?? null,
-          runtimeName: opts.runtimeObservationIdentity?.acceptedName ?? null,
-          protocol: runtime,
-          startedAt: Date.now(),
-        })
-        callAccepted = true
-      },
-      onStarted: async (receipt: ExecutionStartReceipt) => {
-        // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside
-        // pid so the stale-process reaper can match a live pid against THIS
-        // specific binary, not a fuzzy regex.
-        //
-        if (activeProcessEffect === undefined) {
-          await localExecution.recordTaskReceipt(receipt, opts.nodeRunId)
-        } else {
-          await activeProcessEffect.recordSpawnReceipt(receipt)
-        }
-      },
-      capture: {
-        onStdoutLine: async (line: string) => {
-          await onStdoutLine(line)
         },
+        log,
+      },
+      {
+        record: onRecord,
+        diagnostic: persistStderrLine,
         // RFC-314 D3：一个 chunk 的行投递完 ⇒ 合并成一条多行 INSERT 落库。
-        onStdoutChunkEnd: async () => {
+        checkpoint: async (stream) => {
+          if (stream === 'diagnostics') {
+            await stderrEvents.flush()
+            return
+          }
           await stdoutEvents.flush()
           await usageWriter.flush()
         },
-        onStderrChunkEnd: () => stderrEvents.flush(),
-        // impl-gate P2-B: the OLD runner applied settlePump to BOTH streams —
-        // a stderr-persist failure was also a stream failure. persistStderrLine
-        // can throw (the synthetic plugin-load-failed row insert); the executor
-        // records it as `pumpError` (consulted below), restoring symmetry.
-        onStderrLine: persistStderrLine,
       },
-      log,
-    })
-    processSettlement = runResult
+    )
+    execution = runResult
     // RFC-314 D3：取消 / kill 时 pump 走的是 `cancel()` 而不是 EOF，最后一批缓冲拿不到
     // chunk-end。这里兜底冲刷，且必须在任何读事件的下游逻辑（信封解析 / 计数 / 广播）
     // 之前。
@@ -1445,9 +1417,9 @@ export async function runNode(
     await stderrEvents.flush()
     const processEndedAt = Date.now()
     // The native summary (delegated sub-agents) is read once the process drained.
-    if (callAccepted && runResult.outcome !== 'unreaped') finalUsage = usageWriter.final()
+    if (callAccepted && runResult.result !== 'unreaped') finalUsage = usageWriter.final()
     let gitMutationViolation: string | undefined
-    if (gitControlBefore !== undefined && runResult.outcome !== 'unreaped') {
+    if (gitControlBefore !== undefined && runResult.result !== 'unreaped') {
       const gitControlAfter = await gitControlObservation.capture()
       const changedFields = changedGitControlFields(gitControlBefore, gitControlAfter)
       if (changedFields.length > 0) {
@@ -1459,10 +1431,10 @@ export async function runNode(
         })
       }
     }
-    const childUnkillable = runResult.outcome === 'unreaped'
-    const spawnFailed = runResult.outcome === 'spawn-failed'
-    aborted = runResult.outcome === 'aborted'
-    timedOut = runResult.outcome === 'timeout'
+    const childUnkillable = runResult.result === 'unreaped'
+    const spawnFailed = runResult.result === 'spawn-failed'
+    aborted = runResult.result === 'aborted'
+    timedOut = runResult.result === 'timeout'
     const exitCode = runResult.exitCode
     // RFC-284 T14（D9）：有界 post-exit drain 超时 = 完成 run 上的证据丢失
     // （exitCode 本身可信）。结构化告警 + 随 startup_verification_json 附加
@@ -1526,7 +1498,7 @@ export async function runNode(
       }
     }
     if (childUnkillable) {
-      localExecution.reportUnreaped(runResult, {
+      runResult.reportUnreaped({
         nodeRunId: opts.nodeRunId,
         deadlineMs: graceMs + FINAL_REAP_MARGIN_MS,
         log,
@@ -1589,7 +1561,7 @@ export async function runNode(
       if (nativeSessionProtocolFailure !== undefined) {
         failureCode = 'runtime-session-identity-invalid'
       }
-      errorMessage = localExecution.unreapedMessage(runResult, graceMs + FINAL_REAP_MARGIN_MS)
+      errorMessage = runResult.unreapedMessage(graceMs + FINAL_REAP_MARGIN_MS)
     } else if (gitMutationViolation !== undefined) {
       status = 'failed'
       errorMessage = `agent-git-mutation-forbidden: ${gitMutationViolation}`
@@ -2271,8 +2243,8 @@ export async function runNode(
     // projection above has committed. A crash before this line leaves an
     // unresolved attempt for proof-backed recovery instead of a duplicate
     // automatic runtime launch.
-    if (!postSpawnFailed && processSettlement !== null) {
-      await processEffect?.settle(processSettlement)
+    if (!postSpawnFailed && execution !== null) {
+      await execution.settle()
     }
   }
 
@@ -2308,7 +2280,7 @@ export async function runNode(
       nodeRunId: opts.nodeRunId,
     })
   }
-  if (processSettlement !== null) await processEffect?.settle(processSettlement)
+  if (execution !== null) await execution.settle()
   return {
     status: 'failed',
     exitCode: null,

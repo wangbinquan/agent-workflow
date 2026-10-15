@@ -16,7 +16,7 @@ import type { TaskAgentRunPolicy } from '../src/modules/task-execution/applicati
 import type { TaskAgentRunPurpose } from '../src/modules/task-execution/application/ports/taskAgentMaterial'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
 import type { AgentExecutionParticipants } from '../src/modules/task-execution/application/ports/agentExecutionBinding'
-import type { ExecutionEffectRequest } from '../src/modules/task-execution/application/ports/executionEffect'
+import type { AgentExecutionRequest } from '../src/modules/task-execution/application/ports/agentExecution'
 import type {
   AgentMaterialIntent,
   AgentMaterialWorkspace,
@@ -225,7 +225,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
           sessionSinkCapture: false,
         },
       }
-      let submitted: ExecutionEffectRequest | undefined
+      let submitted: AgentExecutionRequest | undefined
       const binding: AgentInvocationBinding = {
         materialRef: prepared.materialRef,
         declared: prepared.declared,
@@ -244,66 +244,28 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
             calls.push('material-cleanup')
           },
         },
-        bindExecution(participants) {
-          expect(participants).toBe(selectedParticipants)
-          calls.push('bind-execution')
+        async execute(request, sink) {
+          expect(request.task?.participants).toBe(selectedParticipants)
+          expect(request.task?.taskId).toBe(taskId)
+          expect(request.task?.nodeRunId).toBe(nodeRunId)
+          calls.push('execute')
+          submitted = request
+          await request.beforeStart?.()
+          calls.push('activated')
+          const envelope =
+            '<workflow-output>\n<port name="summary">report.md</port>\n<port name="closed" active="false">skip reason</port>\n</workflow-output>'
+          await sink.record({ raw: envelope, event: binding.protocol.parseEvent(envelope) })
+          await sink.checkpoint('records')
+          await request.cleanup?.()
           return {
-            executionRef: 'execution:selected-e4',
-            materialRef: prepared.materialRef,
-            workspaceRef: workspace.workspace.reference,
-            projection: {
-              describe() {
-                return {
-                  requestHash: 'selected-request',
-                  resourceKeys: ['workspace:selected-g17'],
-                  recoveryClass: 'selected-recovery',
-                  classifierVersion: 'selected-v1',
-                  transportPolicyVersion: 'selected-v1',
-                }
-              },
-              async recordSpawnReceipt() {
-                calls.push('effect-receipt')
-              },
-              settlementReceipt() {
-                return 'selected-settled'
-              },
-            },
-            async acknowledgeOwner() {
-              calls.push('owner-ack')
-            },
-            async recordTaskReceipt(receipt, runId) {
-              expect(receipt.executionRef).toBe('execution:selected-e4')
-              expect(runId).toBe(nodeRunId)
-              calls.push('task-receipt')
-            },
-            reportUnreaped: noRead,
+            result: 'ok',
+            exitCode: 0,
+            stderrTail: '',
+            durationMs: 1,
             unreapedMessage: noRead,
-            effect: {
-              async submit(request) {
-                submitted = request
-                expect(request.materialRef).toBe(prepared.materialRef)
-                expect(request.workspaceRef).toBe(workspace.workspace.reference)
-                await request.beforeStart?.()
-                calls.push('before-start-ack')
-                await request.onStarted?.({
-                  executionRef: request.executionRef,
-                  startedAt: Date.now(),
-                })
-                calls.push('activated')
-                await request.capture?.onStdoutLine?.(
-                  '<workflow-output>\n<port name="summary">report.md</port>\n<port name="closed" active="false">skip reason</port>\n</workflow-output>',
-                )
-                await request.capture?.onStdoutChunkEnd?.()
-                await request.cleanup?.()
-                return {
-                  executionRef: request.executionRef,
-                  outcome: 'ok',
-                  exitCode: 0,
-                  rawStdout: '',
-                  stderrTail: '',
-                  durationMs: 1,
-                }
-              },
+            reportUnreaped: noRead,
+            settle: async () => {
+              calls.push('effect-settled')
             },
           }
         },
@@ -464,9 +426,11 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
       expect(intents[0]?.resolvedProfiles.map(([name]) => name)).toEqual(['selected-task-agent'])
       expect(intents[0]?.prompt).toBe(result.prompt)
       expect(calls.filter((call) => call === 'bind-material')).toHaveLength(1)
-      expect(calls.indexOf('task-receipt')).toBeLessThan(calls.indexOf('activated'))
-      expect(calls.indexOf('owner-ack')).toBeLessThan(calls.indexOf('activated'))
+      // The runner forwards its task participant; the selected execution owns
+      // the start receipt and settles its effect after the projection committed.
+      expect(calls.indexOf('task-participant')).toBeLessThan(calls.indexOf('execute'))
       expect(calls.indexOf('parse')).toBeGreaterThan(calls.indexOf('activated'))
+      expect(calls.indexOf('effect-settled')).toBeGreaterThan(calls.indexOf('archive'))
       expect(calls.indexOf('validate')).toBeLessThan(calls.indexOf('archive'))
       expect(calls.filter((call) => call === 'validate')).toHaveLength(1)
       expect(submitted).not.toHaveProperty('cmd')

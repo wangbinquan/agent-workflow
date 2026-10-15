@@ -1807,6 +1807,13 @@
       "when": 1792039191120,
       "tag": "0258_rfc370_m0_hosted_control_plane",
       "breakpoints": true
+    },
+    {
+      "idx": 258,
+      "version": "6",
+      "when": 1792058546057,
+      "tag": "0259_rfc370_m1_hosted_execution",
+      "breakpoints": true
     }
   ]
 }

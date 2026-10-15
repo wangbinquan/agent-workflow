@@ -8,5 +8,8 @@ export function executionStatusOf(authority: ExecutionAuthorityPort): ExecutionS
     mode: authority.mode,
     state: state.kind,
     reason: state.kind === 'active' ? null : state.reason,
+    ...(authority.unavailableGroups === undefined
+      ? {}
+      : { unavailableGroups: authority.unavailableGroups }),
   }
 }

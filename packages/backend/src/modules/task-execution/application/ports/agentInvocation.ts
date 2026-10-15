@@ -4,7 +4,11 @@ import type {
   AgentMaterialEvidence,
   AgentMaterialWorkspace,
 } from '@/modules/runtime-management/public/participants'
-import type { AgentExecutionBinding, AgentExecutionParticipants } from './agentExecutionBinding'
+import type {
+  AgentExecutionOutcome,
+  AgentExecutionRequest,
+  AgentExecutionSink,
+} from './agentExecution'
 
 /** The execution demand owns the joint invocation; runtime-management offers
  * only protocol, material, workspace and evidence. Composition pairs their
@@ -20,5 +24,7 @@ export interface AgentInvocationBinding {
     readonly beforeStart?: () => void | Promise<void>
     readonly cleanup?: () => void | Promise<void>
   }
-  bindExecution(participants?: AgentExecutionParticipants): AgentExecutionBinding
+  /** RFC-370 v2 §3.3: run this invocation once, delivering interpreted
+   * records to the sink. The selected implementation owns its transport. */
+  execute(request: AgentExecutionRequest, sink: AgentExecutionSink): Promise<AgentExecutionOutcome>
 }

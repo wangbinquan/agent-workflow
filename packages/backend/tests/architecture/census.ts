@@ -76,6 +76,9 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/main.ts',
   // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.
   'packages/backend/src/cli/deployment.ts',
+  'packages/backend/src/bootstrap/crewstation.ts',
+  'packages/backend/src/bootstrap/executionInitialization.ts',
+  'packages/backend/src/bootstrap/workspaceTaskImage.ts',
   // Development reload assembles the same daemon host and retains its lifetime.
   'packages/backend/src/cli/dev.ts',
   'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',

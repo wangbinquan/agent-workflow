@@ -1,3 +1,6 @@
+import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
+import type { ScratchWorkspaceEffects } from '@/modules/source-control/application/ports/scratchWorkspaceEffects'
+import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/application/ports/workspaceMaintenance'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
@@ -496,6 +499,12 @@ export interface PostgresqlDaemonApplicationInput {
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly portArtifactContentEffects?: PortArtifactContentEffects
   readonly taskRunSelection?: TaskRunRootSelection
+  readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
+  readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
+  readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
+  readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
+  readonly recoveredExecutionTaskIds?: () => readonly string[]
+  readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
   readonly developmentPurposes?: DevelopmentPurposeSelection
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly evidenceRead?: EvidenceReadBinding
@@ -791,10 +800,12 @@ export async function composePostgresqlApplication(
     db: input.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
-  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({
-    appHome: systemAgentAppHome,
-    observations: () => systemAgentObservations,
-  })
+  const memorySystemAgentBinding = (input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily)(
+    {
+      appHome: systemAgentAppHome,
+      observations: () => systemAgentObservations,
+    },
+  )
   const memoryOperations = composePostgresqlMemoryOperations({
     systemAgentBinding: memorySystemAgentBinding,
     db: input.db,
@@ -1132,6 +1143,7 @@ export async function composePostgresqlApplication(
   // 此前这里是一个从未被 bind 的 holder，每个 tick 抛 deferred-question-dispatcher-not-bound。
   const taskDagCollaboration = createTaskDagCollaborationOperations(input.db)
   const workspaceMaintenance = composeWorkspaceMaintenanceCommand({
+    filesystem: input.workspaceMaintenanceFilesystem,
     db: input.db,
     appHome: input.appHome,
     terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
@@ -1250,6 +1262,8 @@ export async function composePostgresqlApplication(
     routeWorkspace: {
       sourceContexts: identityAccess.taskPreparationContext,
       repositoryPreparation: composeRepositoryPreparation({
+        preparationEffects: input.repositoryPreparationEffects,
+        scratchEffects: input.scratchWorkspaceEffects,
         ...(taskLaunchConfiguration.preparationConfiguration === undefined
           ? {}
           : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
@@ -1338,6 +1352,8 @@ export async function composePostgresqlApplication(
         ? {}
         : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
       repositoryPreparation: composeRepositoryPreparation({
+        preparationEffects: input.repositoryPreparationEffects,
+        scratchEffects: input.scratchWorkspaceEffects,
         ...(taskLaunchConfiguration.preparationConfiguration === undefined
           ? {}
           : { preparationConfiguration: taskLaunchConfiguration.preparationConfiguration }),
@@ -1399,7 +1415,9 @@ export async function composePostgresqlApplication(
   })
 
   const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
-  const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({
+  const narrativeSystemAgentBinding = (
+    input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily
+  )({
     observations: () => systemAgentObservations,
     appHome: systemAgentAppHome,
   })
@@ -2178,10 +2196,12 @@ export async function composePostgresqlApplication(
     platformInventory: intentPlatformInventory,
   })
   const intentSessionEvents = createIntentSessionWsPublisher()
-  const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
-    observations: () => systemAgentObservations,
-    appHome: () => intentDispatchDeps.appHome,
-  })
+  const intentSystemAgentBinding = (input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily)(
+    {
+      observations: () => systemAgentObservations,
+      appHome: () => intentDispatchDeps.appHome,
+    },
+  )
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
     events: intentSessionEvents,
@@ -2205,7 +2225,9 @@ export async function composePostgresqlApplication(
     db: input.db,
     activity: intentApplyOperations,
   })
-  const intentHttpSystemAgentBinding = composeLocalSystemAgentRunFamily({
+  const intentHttpSystemAgentBinding = (
+    input.systemAgentRunFamily ?? composeLocalSystemAgentRunFamily
+  )({
     observations: () => systemAgentObservations,
     appHome: () => intentRouteInputs.appHome,
   })
@@ -2559,7 +2581,7 @@ export async function composePostgresqlApplication(
   // RFC-359 W3-T4（P0-3 / P0-4）：boot 恢复四步与 SQLite 同一段序列（composition/bootRecovery.ts）——
   // 撤销旧 daemon 的 owner → 收割孤儿 run → 修 runtime session lease → 清算 effect 并释放 / 闭合 owner。
   // 必须在 HTTP 与任何自动续跑之前；此前 PG daemon 从未跑过，重启一次就把上一代任务永久卡在 running。
-  if (phase.kind === 'daemon') {
+  const initializeExecution = async () => {
     await runTaskExecutionBootRecovery({
       recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
       persistence: taskExecutionPersistence,
@@ -2713,6 +2735,20 @@ export async function composePostgresqlApplication(
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    const recoveredTaskIds = input.recoveredExecutionTaskIds?.() ?? []
+    if (recoveredTaskIds.length > 0) {
+      await taskExecutionProvider.autoResume.run({
+        taskIds: recoveredTaskIds,
+        breaker: {
+          maxPerWindow: input.config.maxAutoRecoveriesPerWindow,
+          windowMs: input.config.autoRecoveryWindowMs,
+        },
+      })
+    }
+  }
+  if (phase.kind === 'daemon') {
+    if (input.initializeExecution === undefined) await initializeExecution()
+    else await input.initializeExecution(initializeExecution)
   }
   const app = createComposedApp(composePostgresqlAppDeps(composition))
   // RFC-170 T4a / RFC-359 T7d：后台回填遗留 v1 快照并逐技能 reverify，放行可用性闸。
@@ -2732,7 +2768,11 @@ export async function composePostgresqlApplication(
         })
       }
     }
-    void reverifyResourceContent()
+    void (input.executionAuthority?.whenActive() ?? Promise.resolve())
+      .then(reverifyResourceContent)
+      .catch((error: unknown) => {
+        log.warn('resource verification activation failed', { error: String(error) })
+      })
   }
   const webSocket = buildWebSocketAdapter({
     realtime: core.realtime,

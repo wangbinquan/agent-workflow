@@ -32,6 +32,9 @@ export type {
   TaskAgentResourceMaterial,
 } from '../application/ports/taskAgentMaterialReferences'
 
+// Immutable skill trees consumed by the selected hosted Agent material compiler.
+export type { SkillPackageContentReader } from '../application/skills/packageContentReader'
+
 // Content owners participate in Intent apply; their contracts are capabilities.
 export type {
   IntentPluginArtifactOwner,

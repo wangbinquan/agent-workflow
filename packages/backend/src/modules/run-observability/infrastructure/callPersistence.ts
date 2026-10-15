@@ -152,14 +152,37 @@ export function createCallPersistence(db: ProviderNeutralDatabase): CallStore {
 
   return {
     async insert(call, at) {
-      await db.insert(calls).values({
-        ...call,
-        status: 'running',
-        endedAt: null,
-        usageState: 'pending',
-        costState: 'none',
-        updatedAt: at,
-      })
+      const accepted = await db
+        .insert(calls)
+        .values({
+          ...call,
+          status: 'running',
+          endedAt: null,
+          usageState: 'pending',
+          costState: 'none',
+          updatedAt: at,
+        })
+        .onConflictDoUpdate({
+          target: calls.id,
+          set: { status: 'running', endedAt: null, updatedAt: at },
+          where: and(
+            eq(calls.purpose, call.purpose),
+            call.taskId === null ? isNull(calls.taskId) : eq(calls.taskId, call.taskId),
+            call.nodeRunId === null ? isNull(calls.nodeRunId) : eq(calls.nodeRunId, call.nodeRunId),
+            eq(calls.protocol, call.protocol),
+            eq(calls.agentName, call.agentName),
+            call.ownerUserId === null
+              ? isNull(calls.ownerUserId)
+              : eq(calls.ownerUserId, call.ownerUserId),
+            call.agentId === null ? isNull(calls.agentId) : eq(calls.agentId, call.agentId),
+            call.runtimeId === null ? isNull(calls.runtimeId) : eq(calls.runtimeId, call.runtimeId),
+            call.systemKind === null
+              ? isNull(calls.systemKind)
+              : eq(calls.systemKind, call.systemKind),
+          ),
+        })
+        .returning({ id: calls.id })
+      if (accepted.length !== 1) throw new Error('observation-call-identity-mismatch')
     },
 
     async pricingContext(callId) {

@@ -49,6 +49,7 @@ const HOSTED_ENV = {
   CS_SERVICE: 'agent-workflow',
   CS_DATABASE_URL: 'postgres://u:p@db:5432/aw',
   CS_JWKS_URL: 'http://api.svc.cs.internal/.well-known/jwks.json',
+  CS_PLATFORM_API_URL: 'http://api.svc.cs.internal',
   PORT: '3000',
   AW_SECRET_KEY: KEY,
 }
@@ -95,6 +96,7 @@ test('hosted inputs are validated at once and parsed', () => {
     'CS_PROJECT is required',
     'CS_SERVICE is required',
     'CS_DATABASE_URL is required',
+    'CS_PLATFORM_API_URL is required',
     'PORT must be a TCP port number, got "99999"',
     'CS_JWKS_URL must be an absolute URL',
     'AW_SECRET_KEY must be 32 random bytes encoded as base64 (for example `openssl rand -base64 32`)',
@@ -394,6 +396,17 @@ test('the Manifest is rendered from a validated deployment profile', () => {
     servicePlanId: '01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10',
     secretKeyDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000001',
     adminSubjectsDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000002',
+    agentProfilesDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000003',
+    taskProfileId: '01a0bf5d-8f4b-7100-8000-000000000004',
+    taskRuntimeImageVersionId: '01a0bf5d-8f4b-7100-8000-000000000005',
+    objectStoragePlanId: '01a0bf5d-8f4b-7100-8000-000000000006',
+    agentProfiles: [
+      {
+        id: '01a0bf5d-8f4b-7100-8000-000000000007',
+        name: 'OpenCode',
+        compute: { kind: 'profile', profileId: '01a0bf5d-8f4b-7100-8000-000000000008' },
+      },
+    ],
   })
   expect(
     renderCrewStationManifest(
@@ -426,6 +439,17 @@ test('the shipped Manifest template and image start the hosted control plane', (
         servicePlanId: '01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10',
         secretKeyDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000001',
         adminSubjectsDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000002',
+        agentProfilesDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000003',
+        taskProfileId: '01a0bf5d-8f4b-7100-8000-000000000004',
+        taskRuntimeImageVersionId: '01a0bf5d-8f4b-7100-8000-000000000005',
+        objectStoragePlanId: '01a0bf5d-8f4b-7100-8000-000000000006',
+        agentProfiles: [
+          {
+            id: '01a0bf5d-8f4b-7100-8000-000000000007',
+            name: 'OpenCode',
+            compute: { kind: 'profile', profileId: '01a0bf5d-8f4b-7100-8000-000000000008' },
+          },
+        ],
       }),
     ),
   ) as {
@@ -472,4 +496,11 @@ test('the shipped Manifest template and image start the hosted control plane', (
   expect(dockerfile).toContain('CMD ["agent-workflow", "start"]')
   expect(dockerfile).toMatch(/^USER agent-workflow$/m)
   expect(dockerfile).toContain('bun run build:binary')
+  // A plain Bun image builds successfully but cannot join the CS session:
+  // task images must keep the platform's digest-pinned Runner and entrypoint.
+  const taskDockerfile = readFileSync(new URL('task.Dockerfile', root), 'utf8')
+  expect(taskDockerfile).toMatch(/^ARG CS_BASE_IMAGE$/m)
+  expect(taskDockerfile.match(/^FROM .+$/gm)?.at(-1)).toBe('FROM ${CS_BASE_IMAGE}')
+  expect(taskDockerfile).not.toMatch(/^(ENTRYPOINT|CMD)\s/m)
+  expect(taskDockerfile).toContain('/usr/local/bin/agent-workflow')
 })

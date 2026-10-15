@@ -3,7 +3,7 @@
 
 import { and, asc, count, eq, inArray, isNotNull, isNull, not, notLike, sql } from 'drizzle-orm'
 
-import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
+import { nodeExecutionEventSources, nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
@@ -249,10 +249,25 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
       if (taskId === null) return
       // RFC-359 W6-T25 —— 事件按批落库。切批在同一笔事务里，原子性不变；行数上限由能力矩阵
       // 给（`batchInsertMax(列数)`），调用方不再自带一份「多少行一批」的推导。
+      const fresh = []
+      for (const event of input.events) {
+        if (event.sourceKey !== undefined) {
+          const inserted = await tx
+            .insert(nodeExecutionEventSources)
+            .values({
+              sourceKey: event.sourceKey,
+              nodeRunId: input.nodeRunId,
+            })
+            .onConflictDoNothing()
+            .returning({ sourceKey: nodeExecutionEventSources.sourceKey })
+          if (inserted.length === 0) continue
+        }
+        fresh.push(event)
+      }
       await insertInBatches(
         tx,
         nodeRunEvents,
-        input.events.map((event) => ({
+        fresh.map((event) => ({
           nodeRunId: input.nodeRunId,
           ts: event.ts,
           kind: event.kind,

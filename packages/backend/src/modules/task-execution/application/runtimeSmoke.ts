@@ -117,21 +117,21 @@ export async function runRuntimeSmokeCore(
   const usageCapture = observationRun
     ? createSystemAgentUsageCapture({ run: observationRun, invocation, log })
     : undefined
-  const localExecution = invocation.bindExecution()
-  const run = await localExecution.effect.submit({
-    executionRef: localExecution.executionRef,
-    materialRef: localExecution.materialRef,
-    workspaceRef: localExecution.workspaceRef,
-    timeoutMs,
-    termGraceMs: CHILD_TERM_GRACE_MS,
-    ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
-      ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
-      : {}),
-    ...(invocation.lifecycle.cleanup !== undefined
-      ? { cleanup: invocation.lifecycle.cleanup }
-      : {}),
-    capture: {
-      onStdoutLine: async (line) => {
+  const run = await invocation.execute(
+    {
+      timeoutMs,
+      termGraceMs: CHILD_TERM_GRACE_MS,
+      ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
+        ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
+        : {}),
+      ...(invocation.lifecycle.cleanup !== undefined
+        ? { cleanup: invocation.lifecycle.cleanup }
+        : {}),
+      log,
+    },
+    {
+      record: async (record) => {
+        const line = record.raw
         // Usage metering continues after the diagnostic text-retention cap.
         await usageCapture?.line(line)
         if (outBytes >= MAX_OUTPUT_BYTES) return
@@ -142,7 +142,7 @@ export async function runRuntimeSmokeCore(
         if (line.includes('"type":"result"') || line.includes('"is_error":true')) {
           lastResultLine = line
         }
-        const ev = invocation.protocol.parseEvent(line)
+        const ev = record.event
         if (ev !== null) {
           sawEvent = true
           if (ev.sessionId !== undefined) {
@@ -175,21 +175,20 @@ export async function runRuntimeSmokeCore(
           }
         }
       },
-      onStderrLine: (line) => {
+      diagnostic: async (line) => {
         if (stderrText.length < 8_192) stderrText += line + '\n'
       },
-      onStdoutChunkEnd: async () => {
-        await usageCapture?.flush()
+      checkpoint: async (stream) => {
+        if (stream === 'records') await usageCapture?.flush()
       },
     },
-    log,
-  })
+  )
   const settleSmoke = async (result: SmokeResult): Promise<SmokeResult> => {
     await usageCapture?.finish(result.outcome === 'conforms' ? 'done' : 'failed')
     return result
   }
 
-  if (run.outcome === 'spawn-failed') {
+  if (run.result === 'spawn-failed') {
     await invocation.workspace.discard()
     return settleSmoke({
       outcome: 'spawn-failed',
@@ -200,7 +199,7 @@ export async function runRuntimeSmokeCore(
       exitCode: null,
     })
   }
-  if (run.outcome === 'unreaped') {
+  if (run.result === 'unreaped') {
     // Child may still own the attempt dir — retain it (reap-then-cleanup barrier).
     return settleSmoke({
       outcome: 'spawn-failed',
@@ -222,7 +221,7 @@ export async function runRuntimeSmokeCore(
     })
   }
 
-  const timedOut = run.outcome === 'timeout'
+  const timedOut = run.result === 'timeout'
   const exitCode = run.exitCode
 
   // Scan BOTH streams: claude's auth/API errors land on stdout, opencode's on

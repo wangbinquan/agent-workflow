@@ -4,11 +4,11 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { createRuntimeSmokeMaterialIntent } from '../src/modules/task-execution/composition/runtimeSmoke'
 import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
-import type { AgentExecutionBinding } from '../src/modules/task-execution/application/ports/agentExecutionBinding'
 import type {
-  ExecutionEffectRequest,
-  ExecutionEffectResult,
-} from '../src/modules/task-execution/application/ports/executionEffect'
+  AgentExecutionOutcome,
+  AgentExecutionRequest,
+} from '../src/modules/task-execution/application/ports/agentExecution'
+import type { ExecutionEffectResult } from '../src/modules/task-execution/application/ports/executionEffect'
 import type {
   AgentMaterialCompiler,
   AgentMaterialIntent,
@@ -42,7 +42,7 @@ function selectedInvocation(protocol: 'opencode' | 'claude-code' = 'opencode') {
     bindError: undefined as Error | undefined,
     discardError: undefined as Error | undefined,
     intent: undefined as AgentMaterialIntent | undefined,
-    submitted: undefined as ExecutionEffectRequest | undefined,
+    submitted: undefined as AgentExecutionRequest | undefined,
     stderr: '',
     eventFactory: (intent: AgentMaterialIntent): string[] => [
       JSON.stringify({
@@ -112,33 +112,31 @@ function selectedInvocation(protocol: 'opencode' | 'claude-code' = 'opencode') {
         calls.push('cleanup')
       },
     },
-    bindExecution(participants) {
+    async execute(request, sink): Promise<AgentExecutionOutcome> {
       expect(this).toBe(binding)
-      expect(participants).toBeUndefined()
-      calls.push('bind-execution')
-      const execution: AgentExecutionBinding = {
-        executionRef: 'selected:execution',
-        materialRef: material.materialRef,
-        workspaceRef: workspace.workspace.reference,
-        effect: {
-          async submit(request) {
-            state.submitted = request
-            calls.push('submit')
-            await request.beforeStart?.()
-            for (const line of state.eventFactory(state.intent!))
-              await request.capture?.onStdoutLine?.(line)
-            if (state.stderr) await request.capture?.onStderrLine?.(state.stderr)
-            if (state.result.outcome !== 'unreaped' && !state.result.cleanupFailed)
-              await request.cleanup?.()
-            return state.result
-          },
-        },
-        acknowledgeOwner: unused,
-        recordTaskReceipt: unused,
-        reportUnreaped: unused,
+      expect(request.task).toBeUndefined()
+      calls.push('execute')
+      state.submitted = request
+      await request.beforeStart?.()
+      for (const line of state.eventFactory(state.intent!))
+        await sink.record({ raw: line, event: binding.protocol.parseEvent(line) })
+      if (state.stderr) await sink.diagnostic(state.stderr)
+      if (state.result.outcome !== 'unreaped' && !state.result.cleanupFailed)
+        await request.cleanup?.()
+      const result = state.result
+      return {
+        result: result.outcome,
+        exitCode: result.exitCode,
+        stderrTail: result.stderrTail,
+        durationMs: result.durationMs,
+        ...(result.spawnError === undefined ? {} : { spawnError: result.spawnError }),
+        ...(result.pumpError === undefined ? {} : { pumpError: result.pumpError }),
+        ...(result.drainTimedOut === undefined ? {} : { drainTimedOut: result.drainTimedOut }),
+        ...(result.cleanupFailed === undefined ? {} : { cleanupFailed: result.cleanupFailed }),
         unreapedMessage: unused,
+        reportUnreaped: unused,
+        settle: async () => {},
       }
-      return execution
     },
   }
   const compiler: AgentMaterialCompiler = {
@@ -289,8 +287,7 @@ describe('RFC-370 complete Runtime smoke family', () => {
         'prepare',
         'compile',
         'bind',
-        'bind-execution',
-        'submit',
+        'execute',
         'before-start',
         'parse',
         'cleanup',

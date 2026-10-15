@@ -1,3 +1,7 @@
+## 2026-10-15 RFC-370 v2 M1：远程执行候选（In Progress）
+
+完整 M1 候选及测试已编写，集中静态检查与架构写点登记中；尚未取得本候选精确 SHA CI 和 CS 实机执行证据。涵盖执行边界、CS 租约／写屏障、持久执行绑定与事件重放、取消／重启接管、单仓 Git 包装器与脚本任务容器、对象产物；SQLite 0259 / PG 0035。正式 M0 服务继续运行。M2 的 CS 配套 RFC-040 为 Draft，等待用户批准；详见 [RFC-370 status](design/RFC-370-crewstation-hosted-deployment/status.md)。本次继续保留原有未提交 RFC-370 执行端口准备与所有并发产出。
+
 ## 2026-10-15 RFC-370 v2 M0：托管控制面（Done，本机 CS 部署验收通过）
 
 按 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md) §5.1 实现 M0（免 Codex 门）：`AW_DEPLOYMENT_MODE=crewstation` 时同一条启动 / 迁移序列换用托管适配器——数据库由迁移 Job 按 PG 历史迁移、全新库一次复制初始行，服务只校验 schema；配置与技能文件树进数据库（SQLite `0258` / PG `0034` 三张新表）；主密钥取 `AW_SECRET_KEY`；身份走 CrewStation 网关令牌（`external_identities` 映射、首访建最低权限账号、`AW_ADMIN_SUBJECTS` 建管理员）；探针 `/live` `/ready`；执行权恒为 standby（远程执行随 M1），失权排空后以 1 退出；插件安装与资源包应用明确 503（随 M2）；前端网关会话并隐藏本地登录与平台接管的设置页；`deploy/crewstation/` 与 `scripts/crewstation-publish.ts` 负责镜像与发布。单机行为不变。详情与本地验证见 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)「M0」。
