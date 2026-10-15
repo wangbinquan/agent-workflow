@@ -33,6 +33,7 @@ import {
   usePermission,
 } from '@/hooks/useActor'
 import { getAuthSessionRevision } from '@/stores/auth'
+import { isGatewayIdentity } from '@/stores/deployment'
 import {
   deriveUserDirectory,
   filtersFromUsersSearch,
@@ -103,6 +104,10 @@ export function UsersPage(
   const { t, i18n } = useTranslation()
   const allowed = usePermission('users:read')
   const canWrite = usePermission('users:write')
+  // RFC-370 M0: behind the CrewStation gateway members join on their first
+  // platform access; a locally created account could never sign in.
+  const platformMembers = isGatewayIdentity()
+  const canCreate = canWrite && !platformMembers
   const actor = useActor()
   const authRevision = useAuthSessionRevision()
   const qc = useQueryClient()
@@ -299,7 +304,7 @@ export function UsersPage(
               })
             : undefined
         }
-        actions={hasHumanData && canWrite ? createAction : undefined}
+        actions={hasHumanData && canCreate ? createAction : undefined}
       />
 
       {actor.status !== 'success' || actor.fetchStatus !== 'idle' || actor.data === undefined ? (
@@ -318,6 +323,11 @@ export function UsersPage(
       ) : (
         <>
           <FeedbackStack variant="section">
+            {platformMembers && (
+              <NoticeBanner tone="info" size="compact" testid="users-platform-members">
+                {t('users.platformMembersNotice')}
+              </NoticeBanner>
+            )}
             {notice !== null && (
               <NoticeBanner
                 tone="success"
@@ -342,6 +352,7 @@ export function UsersPage(
                   filters={filters}
                   currentUserId={actor.data?.user.id}
                   canManage={canWrite}
+                  canCreate={canCreate}
                   onQueryChange={(q) => updateFilters({ ...filters, q }, true)}
                   onStatusChange={(status) => updateFilters({ ...filters, status }, false)}
                   onRoleChange={(role) => updateFilters({ ...filters, role }, false)}
@@ -355,7 +366,7 @@ export function UsersPage(
         </>
       )}
 
-      {canWrite && dialog?.kind === 'create' && (
+      {canCreate && dialog?.kind === 'create' && (
         <CreateUserDialog
           triggerRef={dialog.triggerRef}
           restoreFocusFallbackRef={headerCreateRef}
@@ -405,24 +416,28 @@ export function UsersPage(
           }}
         />
       )}
-      {canWrite && dialog?.kind === 'reset' && target !== null && !target.hasOidcIdentity && (
-        <ResetUserPasswordDialog
-          user={target}
-          triggerRef={dialog.triggerRef}
-          restoreFocusFallbackRef={headerCreateRef}
-          passwordLoginEnabled={loginPolicy.data?.passwordLoginEnabled}
-          busy={reset.isPending}
-          error={reset.error}
-          onClose={closeDialog}
-          onSubmit={(body) =>
-            reset.mutate({
-              session: writeSession,
-              authRevision,
-              input: { id: target.id, body },
-            })
-          }
-        />
-      )}
+      {canWrite &&
+        !platformMembers &&
+        dialog?.kind === 'reset' &&
+        target !== null &&
+        !target.hasOidcIdentity && (
+          <ResetUserPasswordDialog
+            user={target}
+            triggerRef={dialog.triggerRef}
+            restoreFocusFallbackRef={headerCreateRef}
+            passwordLoginEnabled={loginPolicy.data?.passwordLoginEnabled}
+            busy={reset.isPending}
+            error={reset.error}
+            onClose={closeDialog}
+            onSubmit={(body) =>
+              reset.mutate({
+                session: writeSession,
+                authRevision,
+                input: { id: target.id, body },
+              })
+            }
+          />
+        )}
       <ConfirmDialog
         open={canWrite && dialog?.kind === 'disable' && target !== null}
         title={t('users.disableTitle', { name: target?.displayName ?? '' })}

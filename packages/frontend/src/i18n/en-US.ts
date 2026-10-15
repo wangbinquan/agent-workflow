@@ -2219,14 +2219,19 @@ export const enUS: Resources = {
     },
     oidcManaged: 'OIDC managed',
     localAccount: 'Local account',
+    platformManaged: 'CrewStation platform account',
     sources: {
       session: 'Web session',
       pat: 'Personal access token',
       daemon: 'Setup token',
     },
+    platformSource: 'CrewStation platform',
     localIdentityTitle: 'This is a local account',
     localIdentityDescription:
       'No OIDC identity is linked. Agent Workflow manages this account password.',
+    platformIdentityTitle: 'CrewStation manages sign-in',
+    platformIdentityDescription:
+      'This account is your CrewStation platform identity: opening the app from the platform signs you in, and Agent Workflow keeps no password or personal token.',
     linkedAt: 'Linked',
     technicalIdentity: 'View technical identifier',
     oidcPasswordTitle: 'Your identity provider manages the password',
@@ -2346,6 +2351,8 @@ export const enUS: Resources = {
     credentialsTitle: 'Credentials',
     credentialsOidcDescription: 'This account is linked to an identity provider.',
     credentialsLocalDescription: 'This account can use a locally managed password.',
+    credentialsPlatformDescription:
+      'This account signs in with its CrewStation platform identity; no password is managed here.',
     oidcResetUnavailable:
       'Password changes are controlled by the linked identity provider. No local reset is available.',
     resetPassword: 'Reset password',
@@ -2356,6 +2363,8 @@ export const enUS: Resources = {
       'Enabling restores the existing sign-in method; it does not set a password or send email.',
     passwordLoginDisabledNotice:
       'Username and password sign-in is currently disabled globally. This password will work only after an administrator re-enables that method.',
+    platformMembersNotice:
+      'Members join automatically the first time they open this app from CrewStation; adjust their access preset or disable accounts here.',
     reset: {
       title: 'Reset password for {{name}}',
       activateTitle: 'Set a password for {{name}}',
@@ -7926,6 +7935,15 @@ export const enUS: Resources = {
   errors: {
     // --- wire / transport（Tier-2） ---
     'network-unreachable': 'Cannot reach the service.',
+    // --- RFC-370 CrewStation hosting ---
+    'hosted-capability-unavailable':
+      'This CrewStation-hosted deployment does not support this operation yet.',
+    'hosted-capability-unavailable__hint':
+      'Installing plugins and applying resource packages arrive with the CrewStation native configuration overlay; browsing, editing and saving existing resources keep working.',
+    'execution-standby':
+      'This instance is not executing work right now; tasks and automatic runs are unavailable.',
+    'setting-managed-by-deployment':
+      'This setting is provided by the deployment and cannot be changed here.',
     'network-unreachable__hint':
       'Make sure the daemon is running and the network is reachable, then retry.',
     'request-timeout': 'The request timed out and we stopped waiting.',

@@ -31,6 +31,9 @@ export interface UserDirectoryProps {
   onRoleChange: (role: UserRoleFilter) => void
   onClearFilters: () => void
   canManage: boolean
+  /** Whether accounts can be created here; defaults to `canManage`. RFC-370 M0:
+   *  behind the CrewStation gateway members join on their first platform access. */
+  canCreate?: boolean
   onCreate: (trigger: HTMLButtonElement) => void
   onManage: (user: AdminUserView, trigger: HTMLButtonElement) => void
 }
@@ -52,7 +55,7 @@ export function UserDirectory(props: UserDirectoryProps): ReactElement {
           description={t('users.emptyDescription')}
           icon={USER_ICON}
           action={
-            props.canManage ? (
+            (props.canCreate ?? props.canManage) ? (
               <button
                 type="button"
                 className="btn btn--primary"

@@ -1195,13 +1195,17 @@ export interface Resources {
     }
     oidcManaged: string
     localAccount: string
+    platformManaged: string
     sources: {
       session: string
       pat: string
       daemon: string
     }
+    platformSource: string
     localIdentityTitle: string
     localIdentityDescription: string
+    platformIdentityTitle: string
+    platformIdentityDescription: string
     linkedAt: string
     technicalIdentity: string
     oidcPasswordTitle: string
@@ -1310,6 +1314,7 @@ export interface Resources {
     credentialsTitle: string
     credentialsOidcDescription: string
     credentialsLocalDescription: string
+    credentialsPlatformDescription: string
     oidcResetUnavailable: string
     resetPassword: string
     setPasswordAndActivate: string
@@ -1317,6 +1322,7 @@ export interface Resources {
     disableDescription: string
     enableDescription: string
     passwordLoginDisabledNotice: string
+    platformMembersNotice: string
     reset: {
       title: string
       activateTitle: string
@@ -7807,13 +7813,18 @@ export const zhCN: Resources = {
     },
     oidcManaged: 'OIDC 托管',
     localAccount: '本地账户',
+    platformManaged: 'CrewStation 平台账户',
     sources: {
       session: 'Web 会话',
       pat: '个人访问令牌',
       daemon: '初始化 Token',
     },
+    platformSource: 'CrewStation 平台',
     localIdentityTitle: '这是一个本地账户',
     localIdentityDescription: '当前未关联任何 OIDC 身份，密码由 Agent Workflow 管理。',
+    platformIdentityTitle: '登录由 CrewStation 平台管理',
+    platformIdentityDescription:
+      '本账户就是你的 CrewStation 平台身份：从平台入口打开即已登录，Agent Workflow 不保存密码或个人令牌。',
     linkedAt: '关联于',
     technicalIdentity: '查看技术标识',
     oidcPasswordTitle: '密码由身份提供方管理',
@@ -7917,6 +7928,7 @@ export const zhCN: Resources = {
     credentialsTitle: '登录凭据',
     credentialsOidcDescription: '此账户已经绑定身份提供方。',
     credentialsLocalDescription: '此账户使用由本系统管理的本地密码。',
+    credentialsPlatformDescription: '此账户通过 CrewStation 平台身份登录，本系统不管理它的密码。',
     oidcResetUnavailable: '密码由已绑定的身份提供方管理，不能在本系统内重置。',
     resetPassword: '重置密码',
     setPasswordAndActivate: '设置密码并激活',
@@ -7925,6 +7937,8 @@ export const zhCN: Resources = {
     enableDescription: '启用只恢复现有登录方式；不会设置密码，也不会发送邮件。',
     passwordLoginDisabledNotice:
       '当前全局已关闭用户名密码登录。该密码只有在管理员重新开启此登录方式后才可使用。',
+    platformMembersNotice:
+      '成员首次从 CrewStation 打开本应用时自动加入；在这里调整他们的访问预设，或停用账户。',
     reset: {
       title: '重置 {{name}} 的密码',
       activateTitle: '为 {{name}} 设置密码',
@@ -14151,6 +14165,12 @@ export const zhCN: Resources = {
   errors: {
     // --- wire / transport（Tier-2） ---
     'network-unreachable': '无法连接到服务。',
+    // --- RFC-370 CrewStation 托管 ---
+    'hosted-capability-unavailable': '本 CrewStation 托管部署暂不支持这项操作。',
+    'hosted-capability-unavailable__hint':
+      '安装插件和应用资源包将随 CrewStation 原生配置叠加提供；浏览、编辑和保存现有资源不受影响。',
+    'execution-standby': '本实例当前没有执行权，任务与自动运行暂不可用。',
+    'setting-managed-by-deployment': '这项设置由部署环境提供，不能在这里修改。',
     'network-unreachable__hint': '请确认 daemon 正在运行、网络可达后重试。',
     'request-timeout': '请求超时，已停止等待。',
     'request-timeout__hint': '服务端可能仍在处理这次请求。刷新页面确认结果后再决定是否重试。',

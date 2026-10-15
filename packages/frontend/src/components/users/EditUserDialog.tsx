@@ -9,9 +9,16 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { StatusChip } from '@/components/StatusChip'
 import { UserPermissionCatalog } from '@/components/users/UserPermissionCatalog'
 import { ApiError } from '@/api/client'
-import { USER_STATUS_PRESENTATION } from '@/lib/account-user-presentation'
+import { USER_STATUS_PRESENTATION, accountCredentialManager } from '@/lib/account-user-presentation'
 import { diffUserPatch, editDraftForUser, type EditUserDraft } from '@/lib/user-directory'
 import { rebaseUserAdditionalPermissions, summarizeAccessChange } from '@/lib/user-permissions'
+import { isGatewayIdentity } from '@/stores/deployment'
+
+const CREDENTIAL_DESCRIPTION_KEYS = {
+  platform: 'users.credentialsPlatformDescription',
+  oidc: 'users.credentialsOidcDescription',
+  local: 'users.credentialsLocalDescription',
+} as const
 
 export function EditUserDialog(props: {
   user: AdminUserView
@@ -28,6 +35,12 @@ export function EditUserDialog(props: {
   onReloadLatest: () => void
 }): ReactElement {
   const { t } = useTranslation()
+  // RFC-370 M0: behind the CrewStation gateway accounts sign in with their
+  // platform identity, so no local password exists to reset.
+  const credentials = accountCredentialManager({
+    gatewayIdentity: isGatewayIdentity(),
+    hasOidcIdentity: props.user.hasOidcIdentity,
+  })
   const displayNameRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState<EditUserDraft>(() => editDraftForUser(props.user))
   const patch = useMemo(() => diffUserPatch(props.user, draft), [draft, props.user])
@@ -191,13 +204,9 @@ export function EditUserDialog(props: {
           <div className="users-dialog-section__header">
             <div>
               <h3 id="users-credentials-heading">{t('users.credentialsTitle')}</h3>
-              <p>
-                {props.user.hasOidcIdentity
-                  ? t('users.credentialsOidcDescription')
-                  : t('users.credentialsLocalDescription')}
-              </p>
+              <p>{t(CREDENTIAL_DESCRIPTION_KEYS[credentials])}</p>
             </div>
-            {!props.user.hasOidcIdentity && (
+            {credentials === 'local' && (
               <button
                 type="button"
                 className="btn btn--ghost"
@@ -210,7 +219,7 @@ export function EditUserDialog(props: {
               </button>
             )}
           </div>
-          {props.user.hasOidcIdentity && (
+          {credentials === 'oidc' && (
             <NoticeBanner tone="info" size="compact">
               {t('users.oidcResetUnavailable')}
             </NoticeBanner>

@@ -5,14 +5,24 @@ import { StatusChip } from '@/components/StatusChip'
 import {
   USER_ROLE_PRESENTATION,
   USER_STATUS_PRESENTATION,
+  accountCredentialManager,
   accountInitials,
-  isOidcManaged,
 } from '@/lib/account-user-presentation'
+import { isGatewayIdentity } from '@/stores/deployment'
 import { useTranslation } from 'react-i18next'
+
+const CREDENTIAL_CHIP_KEYS = {
+  platform: 'account.platformManaged',
+  oidc: 'account.oidcManaged',
+  local: 'account.localAccount',
+} as const
 
 export function AccountOverviewPanel({ me }: { me: MeResponse }) {
   const { t } = useTranslation()
-  const managed = isOidcManaged(me.linkedIdentities)
+  const manager = accountCredentialManager({
+    gatewayIdentity: isGatewayIdentity(),
+    hasOidcIdentity: me.linkedIdentities.length > 0,
+  })
   const role = USER_ROLE_PRESENTATION[me.user.role]
   const status = USER_STATUS_PRESENTATION[me.user.status]
   return (
@@ -35,14 +45,16 @@ export function AccountOverviewPanel({ me }: { me: MeResponse }) {
           <StatusChip kind={status.kind} withDot>
             {t(status.labelKey)}
           </StatusChip>
-          <span className="account-meta-chip">
-            {managed ? t('account.oidcManaged') : t('account.localAccount')}
-          </span>
+          <span className="account-meta-chip">{t(CREDENTIAL_CHIP_KEYS[manager])}</span>
         </div>
         <dl className="account-profile-summary__meta">
           <div>
             <dt>{t('account.source')}</dt>
-            <dd>{t(`account.sources.${me.source}`)}</dd>
+            <dd>
+              {manager === 'platform'
+                ? t('account.platformSource')
+                : t(`account.sources.${me.source}`)}
+            </dd>
           </div>
           <div>
             <dt>{t('account.role')}</dt>
@@ -56,7 +68,12 @@ export function AccountOverviewPanel({ me }: { me: MeResponse }) {
       </Card>
 
       <Card as="section" title={t('account.linkedIdentities')} className="account-identities-card">
-        {me.linkedIdentities.length === 0 ? (
+        {manager === 'platform' ? (
+          <div className="account-inline-empty" data-testid="account-platform-identity">
+            <strong>{t('account.platformIdentityTitle')}</strong>
+            <p>{t('account.platformIdentityDescription')}</p>
+          </div>
+        ) : me.linkedIdentities.length === 0 ? (
           <div className="account-inline-empty">
             <strong>{t('account.localIdentityTitle')}</strong>
             <p>{t('account.localIdentityDescription')}</p>

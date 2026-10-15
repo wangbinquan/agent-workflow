@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api } from '@/api/client'
 import { useActor, usePermission } from '@/hooks/useActor'
+import { accountMenuLabel } from '@/lib/account-user-presentation'
 import { clearAllClarifyDrafts } from '@/lib/clarify/draftStore'
 import { clearAllReviewDrafts } from '@/lib/review/draftStore'
 import { clearAllPatReconciliationMarkers } from '@/lib/pat-reconciliation'
@@ -110,13 +111,20 @@ export function UserMenu() {
   // For daemon-token actors we surface the friendly displayName ("System")
   // and a "daemon access" sub-label instead of the internal __system__
   // slug. For real session/PAT users the username is the canonical identity
-  // and we keep it visible.
-  const triggerLabel = isDaemon ? data.user.displayName : data.user.username
-  const triggerSub = isDaemon
-    ? t('userMenu.daemonAccess', { defaultValue: 'daemon access' })
-    : data.user.displayName !== data.user.username
-      ? data.user.displayName
-      : null
+  // and we keep it visible — except behind the CrewStation gateway, where the
+  // platform's display name is the identity (accountMenuLabel).
+  const menuLabel = accountMenuLabel({
+    source: data.source,
+    user: data.user,
+    gatewayIdentity: isGatewayIdentity(),
+  })
+  const triggerLabel = menuLabel.label
+  const triggerSub =
+    menuLabel.secondary === null
+      ? null
+      : menuLabel.secondary.kind === 'daemon-access'
+        ? t('userMenu.daemonAccess', { defaultValue: 'daemon access' })
+        : menuLabel.secondary.text
 
   return (
     <div className="user-menu" ref={ref}>
