@@ -144,6 +144,10 @@ test.beforeAll(async () => {
       // 文件不存在时这段逻辑整个不生效，所以只有 TASK-24 那一刻会 hold。
       STUB_OPENCODE_HOLD_FILE: holdFile,
     },
+    // Every live task here fails, so its node would otherwise run the default eight
+    // attempts ((1+defaultNodeRetries)×(1+sessionRestartBudget), RFC-313); the
+    // per-node `retries` field this file used to set was removed by RFC-115.
+    configOverrides: { defaultNodeRetries: 0, sessionRestartBudget: 0 },
   })
 
   adminUserId = (await jsonOf<{ user: { id: string } }>(await req('/api/auth/me'), 'GET /auth/me'))
@@ -587,7 +591,6 @@ async function ensureLiveWorkflow(): Promise<string> {
               agentId: agent.id,
               agentName: 'rfc319-taskline-live-agent',
               promptTemplate: '{{topic}}',
-              retries: 0,
               position: { x: 320, y: 0 },
             },
             {

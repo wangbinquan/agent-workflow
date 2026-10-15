@@ -4178,6 +4178,13 @@ CI 红一格才知道。已把它补进 quality 车道（约 18s），车道断�
   而不是真实结果），同一条用例各跑 3 次：落地前 3/3 绿、落地后 3/3 红，归属就没有争议了。
 - 推之前对这类改动**本地实跑一次相关 e2e**：`bun run build:binary:e2e` 后
   `bunx playwright test <spec> --project=chromium -g "<用例名>"`，两分钟的事，比让 CI 替你发现快得多。
+- **节点级 `retries` 是死字段，写了不报错也不生效**（2026-10-15 实撞，macOS e2e 偶发红）。
+  RFC-115 删除了节点级覆盖，预算只认全局 `defaultNodeRetries` × `sessionRestartBudget`；
+  `task-lifecycle-states` 的「failed (stub exit 1, retries=0)」一直在节点上写 `retries: 0`，
+  实际跑满 8 次，普通机器上 8 次也只要几秒，负载高的 macOS 机器上每次约 7 s、总计
+  54 s，压线超过 60 s 等待（CI 38697276940）。要钉住次数只能走 `startDaemon` 的
+  `configOverrides: { defaultNodeRetries: 0, sessionRestartBudget: 0 }`；上面的 grep
+  候选集也要把 workflow 定义里的节点级 `retries:` 列进来，它们全是「以为钉住了」的用例。
 
 `e2e/` **不在任何 package 的 `tsconfig.json` `include` 里**（backend 是
 `src|tests|db`，frontend 是 `src|tests|vite/vitest.config`），而 `gate:local`
