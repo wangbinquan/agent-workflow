@@ -1,15 +1,18 @@
 // RFC-370 M0 — the database installation of a CrewStation-hosted instance
 // (design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md §5.1).
 // Locks: the generation identity is derived from the platform service and
-// carries no SQLite migration manifest; the installation port exposes no
-// SQLite→PostgreSQL migration capabilities; a serving instance only verifies
-// the schema; a fresh database receives exactly the rows a freshly migrated
-// SQLite source would hold, once; and Settings live in the database with the
-// deployment-owned database connection refused in patches.
+// names the installation copy as its operation, like every PostgreSQL
+// generation; the installation port exposes no SQLite→PostgreSQL migration
+// capabilities; a fresh database receives exactly the rows a freshly migrated
+// SQLite source would hold, once (on PostgreSQL without the archive-only
+// tables); and Settings live in the database with the deployment-owned
+// database connection refused in patches. The migration Job → serving instance
+// cycle on a real PostgreSQL is rfc370-m0-hosted-postgresql.integration.test.ts.
 import { expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type DatabaseConfig } from '@agent-workflow/shared'
 import { getTableName, isTable } from 'drizzle-orm'
 import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { concreteDatabaseTable } from '@/db/providerSchema'
 import * as schema from '@/db/schema'
 import { applicationConfiguration, authLoginPolicy } from '@/db/schema'
 import {
@@ -17,20 +20,21 @@ import {
   HostedDatabaseInstallationError,
 } from '@/modules/system-operations/infrastructure/crewstation/hostedDatabaseInstallation'
 import { createDatabaseApplicationConfiguration } from '@/modules/system-operations/infrastructure/databaseApplicationConfiguration'
-import { prepareHostedPostgresqlProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
+import {
+  DatabaseGenerationPayloadSchema,
+  hostedDatabaseGeneration,
+} from '@/platform/persistence/generationValidation'
 import {
   orderSeedTables,
   seedHostedInstallation,
 } from '@/platform/persistence/hostedInstallationSeed'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { describeEachProvider } from './helpers/eachProvider'
 import { MIGRATIONS } from './migration-freeze'
 
 const contract = buildLogicalSchemaContract()
 
-test('the hosted generation is derived from the platform service, without a migration manifest', () => {
+test('the hosted generation is derived from the platform service and names its installation copy', () => {
   const first = hostedDatabaseGeneration({
     project: 'agent-workflow',
     service: 'agent-workflow',
@@ -48,14 +52,15 @@ test('the hosted generation is derived from the platform service, without a migr
   })
   expect(first).toEqual(again)
   expect(first.source).toBe('hosted-installation')
-  expect(first.payload).toMatchObject({
-    provider: 'postgresql',
-    operationId: null,
-    manifestDigest: null,
-    schemaDigest: contract.digest,
-  })
+  expect(first.payload).toMatchObject({ provider: 'postgresql', schemaDigest: contract.digest })
   expect(first.payload.generationId).toMatch(/^dbg_cs_[0-9a-f]{32}$/)
+  // The same identity names the release migration Job's installation copy.
+  expect(first.payload.operationId).toBe(first.payload.generationId.replace('dbg_cs_', 'dbm_cs_'))
+  expect(first.payload.manifestDigest).toMatch(/^sha256:[0-9a-f]{64}$/)
+  // A PostgreSQL generation must reference its operation (DatabaseGenerationPayloadSchema).
+  expect(DatabaseGenerationPayloadSchema.parse(first.payload)).toEqual(first.payload)
   expect(other.payload.generationId).not.toBe(first.payload.generationId)
+  expect(other.payload.operationId).not.toBe(first.payload.operationId)
 })
 
 test('the hosted installation port has no SQLite migration capabilities', async () => {
@@ -74,9 +79,11 @@ test('the hosted installation port has no SQLite migration capabilities', async 
     kind: 'current',
     generation: { source: 'hosted-installation' },
   })
+  // No local migration record exists: the generation's operation is the Job's
+  // installation copy, recorded in PostgreSQL itself.
   expect(await installation.listMigrations()).toEqual([])
+  expect(await installation.readMigration('dbm_x')).toBeNull()
   for (const call of [
-    () => installation.readMigration('dbm_x'),
     () => installation.writeGeneration({} as never),
     () => installation.resolveRecoverySource({ fromContractDigest: 'a', toContractDigest: 'b' }),
     () => installation.resumeMigration({} as never),
@@ -122,7 +129,16 @@ test('seed tables are ordered parents first and a cycle is refused', () => {
   ).toThrow('foreign-key cycle')
 })
 
-function allTables(): { name: string; table: SQLiteTable; references: string[] }[] {
+/** Tables that exist on PostgreSQL: archive-only tables are never created there. */
+const POSTGRESQL_TABLES = new Set(
+  contract.tables.flatMap((table) =>
+    table.providerTables.postgresql === undefined ? [] : [table.sourceTable],
+  ),
+)
+
+function allTables(
+  provider: 'sqlite' | 'postgresql',
+): { name: string; table: SQLiteTable; references: string[] }[] {
   return Object.values(schema)
     .filter((candidate) => isTable(candidate))
     .map((candidate) => {
@@ -130,17 +146,20 @@ function allTables(): { name: string; table: SQLiteTable; references: string[] }
       return {
         name: getTableName(table),
         table,
-        references: getTableConfig(table).foreignKeys.map((fk) =>
+        // The schema exports resolve to the selected provider; foreign keys are
+        // declared once on the SQLite projection.
+        references: getTableConfig(concreteDatabaseTable(table, 'sqlite')).foreignKeys.map((fk) =>
           getTableName(fk.reference().foreignTable),
         ),
       }
     })
+    .filter((entry) => provider === 'sqlite' || POSTGRESQL_TABLES.has(entry.name))
 }
 
 describeEachProvider('RFC-370 M0 hosted installation rows and Settings document', (harness) => {
   async function countRows(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {}
-    for (const entry of allTables()) {
+    for (const entry of allTables(harness.applicationBinding.provider)) {
       const rows = await harness.db.select().from(entry.table)
       if (rows.length > 0) counts[entry.name] = rows.length
     }
@@ -150,7 +169,7 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
   test('a fresh database receives the migrated SQLite seed rows once', async () => {
     const reference = await countRows()
     expect(reference.auth_login_policy).toBe(1)
-    for (const entry of orderSeedTables(allTables()).reverse()) {
+    for (const entry of orderSeedTables(allTables(harness.applicationBinding.provider)).reverse()) {
       await harness.db.delete(entry.table)
     }
     expect(await countRows()).toEqual({})
@@ -196,29 +215,4 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
     }
     expect((await settings.load()).language).toBe('zh-CN')
   })
-
-  test('a serving instance verifies the current schema and names the hosted generation', async () => {
-    if (harness.applicationBinding.provider !== 'postgresql') return
-    const generation = hostedDatabaseGeneration({
-      project: 'agent-workflow',
-      service: 'agent-workflow',
-      schemaDigest: contract.digest,
-    })
-    const prepared = await prepareHostedPostgresqlProviderRuntime({
-      config: harness.applicationBinding.databaseConfig,
-      contract,
-      generation,
-      history: await loadPostgresqlMigrationHistory(),
-      schema: 'verify',
-    })
-    try {
-      expect(prepared.receipt.applied).toBe(false)
-      expect(prepared.runtime.generation).toEqual(generation)
-      expect(prepared.describeSchemaOutcome()).toContain(
-        `PostgreSQL schema verified (generation: ${generation.payload.generationId}`,
-      )
-    } finally {
-      await prepared.runtime.close()
-    }
-  }, 60_000)
 })

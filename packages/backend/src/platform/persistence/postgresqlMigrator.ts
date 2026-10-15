@@ -26,7 +26,8 @@ export class PostgresqlMigrationError extends Error {
       | 'postgresql-schema-partial'
       | 'postgresql-schema-drift'
       | 'postgresql-schema-prepare-failed'
-      | 'postgresql-schema-not-current',
+      | 'postgresql-schema-not-current'
+      | 'postgresql-generation-conflict',
     message: string,
   ) {
     super(message)
@@ -488,11 +489,14 @@ export async function migratePostgresqlSchema(input: {
 export async function verifyPostgresqlSchema(input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly history: PostgresqlMigrationHistory
+  /** The generation this service writes as; it must be the database's active one. */
+  readonly activeGeneration?: Pick<PostgresqlActiveGeneration, 'generationId' | 'operationId'>
 }): Promise<PostgresqlMigrationReceipt> {
   const plan = input.history.head.plan
   const connection = await input.runtime.providerPool().reserve()
   try {
-    const state = historyState(await targetSnapshot(connection, true), input.history, undefined)
+    const snapshot = await targetSnapshot(connection, true)
+    const state = historyState(snapshot, input.history, undefined)
     if (state === 'empty') {
       throw new PostgresqlMigrationError(
         'postgresql-schema-not-current',
@@ -505,7 +509,93 @@ export async function verifyPostgresqlSchema(input: {
         `the PostgreSQL schema is ${state.length} migration(s) behind this binary; run the migration job first`,
       )
     }
+    const expected = input.activeGeneration
+    if (
+      expected !== undefined &&
+      !snapshot.activeGenerations.some(
+        (generation) =>
+          generation.generationId === expected.generationId &&
+          generation.operationId === expected.operationId,
+      )
+    ) {
+      throw new PostgresqlMigrationError(
+        'postgresql-schema-not-current',
+        `the PostgreSQL database does not serve generation ${expected.generationId}; run the migration job first`,
+      )
+    }
     return receipt(plan, false)
+  } finally {
+    connection.release()
+  }
+}
+
+/** The logical source of a hosted installation's copy: a freshly migrated SQLite, not a database. */
+const HOSTED_INSTALLATION_SOURCE = 'hosted-installation'
+
+/**
+ * RFC-370 M0 — a hosted installation has no SQLite database to cut over from:
+ * the release migration Job copies the initial rows itself. Register that copy
+ * as the database's logical-copy operation and its generation as the active
+ * one, so the generation fence admits the copy and every later business write.
+ * Idempotent across Job retries; a database that serves another active
+ * generation (another service, or a standalone migration) is refused.
+ */
+export async function activateHostedPostgresqlGeneration(input: {
+  readonly runtime: PostgresqlDatabaseRuntime
+  readonly generation: Pick<PostgresqlActiveGeneration, 'generationId' | 'operationId'>
+  readonly contractDigest: string
+  readonly planDigest: string
+  readonly now: number
+}): Promise<void> {
+  const connection = await input.runtime.providerPool().reserve()
+  let transaction = false
+  try {
+    await connection.unsafe('BEGIN')
+    transaction = true
+    await connection.unsafe(
+      `INSERT INTO "${POSTGRESQL_METADATA_SCHEMA}"."logical_copy_operations" (operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) VALUES ($1, $2, $3, $4, 'activated', $5, $5) ON CONFLICT (operation_id) DO NOTHING`,
+      [
+        input.generation.operationId,
+        HOSTED_INSTALLATION_SOURCE,
+        input.contractDigest,
+        input.planDigest,
+        input.now,
+      ],
+    )
+    await connection.unsafe(
+      `INSERT INTO "${POSTGRESQL_METADATA_SCHEMA}"."database_generations" (generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) VALUES ($1, $2, $3, $4, 'active', $5, NULL) ON CONFLICT (generation_id) DO NOTHING`,
+      [
+        input.generation.generationId,
+        input.generation.operationId,
+        HOSTED_INSTALLATION_SOURCE,
+        input.contractDigest,
+        input.now,
+      ],
+    )
+    const active = await connection.unsafe(
+      `SELECT generation_id, operation_id FROM "${POSTGRESQL_METADATA_SCHEMA}"."database_generations" WHERE state = 'active'`,
+    )
+    if (
+      active.length !== 1 ||
+      active[0]?.generation_id !== input.generation.generationId ||
+      active[0]?.operation_id !== input.generation.operationId
+    ) {
+      throw new PostgresqlMigrationError(
+        'postgresql-generation-conflict',
+        `the PostgreSQL database serves another generation than ${input.generation.generationId}`,
+      )
+    }
+    await connection.unsafe('COMMIT')
+    transaction = false
+  } catch (error) {
+    if (transaction) {
+      try {
+        await connection.unsafe('ROLLBACK')
+      } catch {
+        // The original failure wins.
+      }
+    }
+    throw error
   } finally {
     connection.release()
   }

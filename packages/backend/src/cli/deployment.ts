@@ -87,7 +87,7 @@ export async function migrateForDeployment(
         throw new Error('the CrewStation database connection is provided by the platform')
       },
     },
-    installation: composeCrewStationMigrationInstallation(environment),
+    installation: composeCrewStationMigrationInstallation(environment, env),
   })
   try {
     return { output: prepared.describeSchemaOutcome() }

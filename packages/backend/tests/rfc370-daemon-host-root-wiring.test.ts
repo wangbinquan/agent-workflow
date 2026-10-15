@@ -102,7 +102,9 @@ test('the single listener composes one host application with the original select
     ['publishReady', 1],
     ['withdrawReady', 2],
     ['announceReady', 1],
-    ['terminate', 1],
+    // The drained exit, plus RFC-370 M0's exit request whose drain failed: the
+    // platform restarts a hosted instance only once it has exited.
+    ['terminate', 2],
   ] as const) {
     expect(calls(run, application, `input.host.${method}`)).toHaveLength(count)
     expect(calls(root, start, `input.daemonHost.${method}`)).toHaveLength(0)

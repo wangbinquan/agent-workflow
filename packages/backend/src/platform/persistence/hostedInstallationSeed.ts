@@ -11,12 +11,13 @@
 import { getTableName, isTable } from 'drizzle-orm'
 import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { createInMemoryDb } from '@/db/client'
-import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { concreteDatabaseTable } from '@/db/providerSchema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import * as schema from '@/db/schema'
 import { authLoginPolicy } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
-import { databaseSessionFor } from './databaseTransaction'
+import { databaseSessionFor, engineOf } from './databaseTransaction'
+import { buildLogicalSchemaContract } from './schemaContract'
 
 const SEED_MARKER_POLICY_ID = 'global'
 const INSERT_CHUNK = 200
@@ -28,21 +29,29 @@ interface SeedTable {
   readonly references: readonly string[]
 }
 
-function readSeedTables(migrationsFolder: string): SeedTable[] {
-  const restore = selectDatabaseSchemaProvider('sqlite')
+/**
+ * The rows of a freshly migrated SQLite installation. The schema exports
+ * resolve to whichever provider the process selected, so the source is always
+ * read through the SQLite projection; tables the target never creates
+ * (PostgreSQL omits the archive-only ones) are left out.
+ */
+function readSeedTables(migrationsFolder: string, omitted: ReadonlySet<string>): SeedTable[] {
   const source = createInMemoryDb(migrationsFolder, { bootstrap: 'required' })
   try {
     const tables: SeedTable[] = []
     for (const candidate of Object.values(schema)) {
       if (!isTable(candidate)) continue
       const table = candidate as SQLiteTable
-      const rows = source.select().from(table).all() as Record<string, unknown>[]
+      const sqliteTable = concreteDatabaseTable(table, 'sqlite')
+      const name = getTableName(sqliteTable)
+      if (omitted.has(name)) continue
+      const rows = source.select().from(sqliteTable).all() as Record<string, unknown>[]
       if (rows.length === 0) continue
       tables.push({
-        name: getTableName(table),
+        name,
         table,
         rows,
-        references: getTableConfig(table).foreignKeys.map((fk) =>
+        references: getTableConfig(sqliteTable).foreignKeys.map((fk) =>
           getTableName(fk.reference().foreignTable),
         ),
       })
@@ -50,8 +59,17 @@ function readSeedTables(migrationsFolder: string): SeedTable[] {
     return tables
   } finally {
     source.$client.close()
-    restore()
   }
+}
+
+/** Source tables the target provider does not hold. */
+function tablesOmittedOn(target: ProviderNeutralDatabase): ReadonlySet<string> {
+  if (engineOf(target).provider !== 'postgresql') return new Set()
+  return new Set(
+    buildLogicalSchemaContract().tables.flatMap((table) =>
+      table.providerTables.postgresql === undefined ? [table.sourceTable] : [],
+    ),
+  )
 }
 
 /** Parents before children; a reference outside the seed set is already satisfied. */
@@ -108,13 +126,17 @@ export async function seedHostedInstallation(input: {
         .limit(1)
     ).length > 0
   if (await seededAlready(input.target)) return { seeded: false, tables: 0, rows: 0 }
-  const tables = orderSeedTables(readSeedTables(input.migrationsFolder))
+  const provider = engineOf(input.target).provider
+  const tables = orderSeedTables(
+    readSeedTables(input.migrationsFolder, tablesOmittedOn(input.target)),
+  )
   return await databaseSessionFor(input.target).transaction(async (tx) => {
     if (await seededAlready(tx)) return { seeded: false, tables: 0, rows: 0 }
     let rows = 0
     for (const table of tables) {
+      const target = concreteDatabaseTable(table.table, provider)
       for (let offset = 0; offset < table.rows.length; offset += INSERT_CHUNK) {
-        await tx.insert(table.table).values(table.rows.slice(offset, offset + INSERT_CHUNK))
+        await tx.insert(target).values(table.rows.slice(offset, offset + INSERT_CHUNK))
       }
       rows += table.rows.length
     }

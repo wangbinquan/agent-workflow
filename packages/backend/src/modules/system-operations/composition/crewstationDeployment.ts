@@ -161,12 +161,17 @@ export async function prepareCrewStationDatabase(input: {
  */
 export function composeCrewStationMigrationInstallation(
   environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>,
+  env?: Readonly<Record<string, string | undefined>>,
 ): DatabaseInstallationPort<PreparedPostgresqlProviderSchema> {
   return createHostedDatabaseInstallation({
     project: environment.project,
     service: environment.service,
     async prepare() {
-      const prepared = await prepareCrewStationDatabase({ environment, schema: 'apply' })
+      const prepared = await prepareCrewStationDatabase({
+        environment,
+        schema: 'apply',
+        ...(env === undefined ? {} : { env }),
+      })
       try {
         const seed = await seedHostedInstallation({
           target: prepared.openBootstrapClient(),

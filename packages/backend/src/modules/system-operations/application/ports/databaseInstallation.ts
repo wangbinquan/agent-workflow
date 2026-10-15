@@ -22,7 +22,14 @@ export interface DatabaseInstallationPort<TPrepared> {
   listMigrations():
     | readonly DatabaseMigrationStatusView[]
     | Promise<readonly DatabaseMigrationStatusView[]>
-  readMigration(operationId: string): DatabaseMigrationManifest | Promise<DatabaseMigrationManifest>
+  /**
+   * The local record of a SQLite→PostgreSQL migration operation. `null` when the
+   * installation keeps none for it: a CrewStation-hosted generation's operation is
+   * the release Job's installation copy, recorded in PostgreSQL itself (RFC-370 M0).
+   */
+  readMigration(
+    operationId: string,
+  ): DatabaseMigrationManifest | null | Promise<DatabaseMigrationManifest | null>
   writeGeneration(payload: DatabaseGenerationPayload): void | Promise<void>
   /** Idempotent within one preparation. Reuse a caller-owned lock when present. */
   requireUpgradeLock(): void | Promise<void>

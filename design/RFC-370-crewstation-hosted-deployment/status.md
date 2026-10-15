@@ -32,7 +32,7 @@ CI（`a5ae4b5b7`）：主 CI `38670196680`、windows-platform `38670196656`、po
 范围与取舍按 v2 §5.1。实现：
 
 - 部署选择点 `cli/deployment.ts`：`AW_DEPLOYMENT_MODE` 显式选择（缺省单机，其他值拒绝启动）；托管必需环境变量缺失时逐项列出并拒绝启动（`docs/env-flags.md` 登记）。`start` 与 `migrate` 两条命令共用既有序列，只换适配器；托管不做 git 与运行时二进制探测，监听 `0.0.0.0:$PORT`。
-- 数据库：迁移 Job 按 PG 历史迁移，全新库从刚迁移的内存 SQLite 一次复制初始行（单事务、按外键顺序、以登录策略单例行判定，复制后策略记为已完成）；服务只校验 schema 为当前版本（`verifyPostgresqlSchema`，不一致拒绝启动），世代 `dbg_cs_<sha256(project/service)>`、来源 `hosted-installation`。SQLite `0258` / PostgreSQL `0034` 新增 `external_identities`、`application_configuration`、`skill_content_entries` 三表（表数 198 / 活动 192）。
+- 数据库：迁移 Job 按 PG 历史迁移，全新库从刚迁移的内存 SQLite 一次复制初始行（单事务、按外键顺序、以登录策略单例行判定，复制后策略记为已完成）；服务只校验 schema 为当前版本且本服务世代为活动世代（`verifyPostgresqlSchema`，不一致拒绝启动），世代 `dbg_cs_<sha256(project/service)>`、来源 `hosted-installation`，指向迁移 Job 的安装复制操作 `dbm_cs_<同一哈希>`——Job 在 PG 元数据里幂等登记该操作与活动世代后再复制初始行（否则 PG 世代写入围栏拒绝一切写入；首轮托管 `migrate` 实测撞到，见 `rfc370-m0-hosted-postgresql.integration.test.ts`）。SQLite `0258` / PostgreSQL `0034` 新增 `external_identities`、`application_configuration`、`skill_content_entries` 三表（表数 198 / 活动 192）。
 - 配置存 `application_configuration` 单行（数据库连接只读、来自环境变量，补丁改它返回 409 `setting-managed-by-deployment`）；主密钥取 `AW_SECRET_KEY`。
 - 身份：校验 `x-cs-identity-token`（JWKS、iss、aud `service:<project>/<service>`、`cs_kind=user`、sub `user:<uuid>`），`external_identities` 映射到 aw 用户，首次访问建最低权限账号（`AW_ADMIN_SUBJECTS` 建为管理员），不按 email 合并；HTTP 与 WebSocket 同判据，停用账号 403。
 - 技能文件树存 `skill_content_entries`（在用 / 版本 / 暂存 / 回收站），树摘要与文件版 `hashDir` 共用 `digestSortedTree`；插件安装与资源包应用在托管下返回 503 `hosted-capability-unavailable`（M2 随 CS 原生配置叠加提供）。

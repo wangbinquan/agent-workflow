@@ -225,21 +225,28 @@ async function openTarget(input: {
   throw lastError
 }
 
-async function waitForTargetLockWait(runtime: PostgresqlDatabaseRuntime): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const rows = await runtime.providerPool().unsafe(`
+async function waitForLockWait(
+  runtime: PostgresqlDatabaseRuntime,
+  queryPrefix: string,
+  what: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const rows = await runtime.providerPool().unsafe(
+      `
       SELECT pid
       FROM pg_stat_activity
       WHERE datname = current_database()
         AND pid <> pg_backend_pid()
         AND state = 'active'
         AND wait_event_type = 'Lock'
-        AND query LIKE 'INSERT INTO "agent_workflow"."agents"%'
-    `)
+        AND query LIKE $1
+    `,
+      [`${queryPrefix}%`],
+    )
     if (rows.length > 0) return
     await Bun.sleep(10)
   }
-  throw new Error('target copy never reached the real PostgreSQL deadlock wait')
+  throw new Error(`${what} never reached its real PostgreSQL lock wait`)
 }
 
 async function release(connection: PostgresqlReservedConnection): Promise<void> {
@@ -345,16 +352,34 @@ describe('RFC-349 real PostgreSQL target fault/resume matrix', () => {
           id: 'agt_fault_deadlock',
           name: 'deadlock-fault',
         })
+        // PostgreSQL checks a lock wait for a deadlock once, deadlock_timeout after
+        // the wait begins. The copy used to wait on row 2 before the competing
+        // session queued on row 1, so on a slow runner that single check ran before
+        // the cycle existed and the copy hit its 1 s lock_timeout instead (55P03,
+        // postgresql-evidence run 38692873108). A gate held by the test makes the
+        // order deterministic: the copy takes row 1, waits at the gate (with no
+        // lock_timeout), the competing session queues on row 1, then the gate opens
+        // and the copy's wait on row 2 closes a cycle that already exists.
         await installTrigger(adminRuntime, {
           functionName: 'rfc349_fault_deadlock',
           body: `
             IF NEW.id = 'agt_fault_deadlock' THEN
               PERFORM set_config('deadlock_timeout', '100ms', true);
               UPDATE agent_workflow_meta.rfc349_fault_locks SET value = value + 1 WHERE id = 1;
+              DECLARE
+                previous text := current_setting('lock_timeout');
+              BEGIN
+                PERFORM set_config('lock_timeout', '0', true);
+                PERFORM pg_advisory_xact_lock(349349);
+                PERFORM set_config('lock_timeout', previous, true);
+              END;
               UPDATE agent_workflow_meta.rfc349_fault_locks SET value = value + 1 WHERE id = 2;
             END IF;
           `,
         })
+        const gate = await adminRuntime.providerPool().reserve()
+        await gate.unsafe('BEGIN')
+        await gate.unsafe('SELECT pg_advisory_xact_lock(349349)')
         const blocker = await adminRuntime.providerPool().reserve()
         await blocker.unsafe("SET deadlock_timeout = '10s'")
         await blocker.unsafe('BEGIN')
@@ -364,14 +389,25 @@ describe('RFC-349 real PostgreSQL target fault/resume matrix', () => {
         let deadlockError: unknown
         try {
           const deadlockCopy = target.copyChunk(table, deadlock, Date.now())
-          await waitForTargetLockWait(adminRuntime)
+          await waitForLockWait(
+            adminRuntime,
+            'INSERT INTO "agent_workflow"."agents"',
+            'target copy',
+          )
           const competingUpdate = (async () =>
             await blocker.unsafe(
               'UPDATE agent_workflow_meta.rfc349_fault_locks SET value = value + 1 WHERE id = 1',
             ))()
+          await waitForLockWait(
+            adminRuntime,
+            'UPDATE agent_workflow_meta.rfc349_fault_locks',
+            'competing update',
+          )
+          await gate.unsafe('COMMIT')
           deadlockError = await captureFailure(deadlockCopy)
           await competingUpdate
         } finally {
+          await release(gate)
           await release(blocker)
         }
         expect(errorCodes(deadlockError)).toContain('40P01')

@@ -31,6 +31,7 @@ import {
 import type { LogicalSchemaContract } from './schemaContract'
 import type { PostgresqlMigrationHistory } from './postgresqlMigrationSequence'
 import {
+  activateHostedPostgresqlGeneration,
   migratePostgresqlSchema,
   verifyPostgresqlSchema,
   type PostgresqlMigrationReceipt,
@@ -500,17 +501,38 @@ export async function prepareHostedPostgresqlProviderRuntime(input: {
       'a hosted installation only runs on PostgreSQL',
     )
   }
+  const operationId = input.generation.payload.operationId
+  if (operationId === null) {
+    throw new DatabaseProviderRuntimeError(
+      'database-provider-config-generation-mismatch',
+      'a hosted generation must name its installation operation',
+    )
+  }
+  const generation = { generationId: input.generation.payload.generationId, operationId }
   const runtime = createPostgresqlDatabaseRuntime({
     config: input.config,
-    generationId: input.generation.payload.generationId,
+    generationId: generation.generationId,
     env: input.env,
     poolFactory: input.postgresqlPoolFactory,
   })
   try {
-    const receipt =
-      input.schema === 'apply'
-        ? await migratePostgresqlSchema({ runtime, history: input.history })
-        : await verifyPostgresqlSchema({ runtime, history: input.history })
+    let receipt: PostgresqlMigrationReceipt
+    if (input.schema === 'apply') {
+      receipt = await migratePostgresqlSchema({ runtime, history: input.history })
+      await activateHostedPostgresqlGeneration({
+        runtime,
+        generation,
+        contractDigest: input.contract.digest,
+        planDigest: input.history.head.plan.digest,
+        now: Date.now(),
+      })
+    } else {
+      receipt = await verifyPostgresqlSchema({
+        runtime,
+        history: input.history,
+        activeGeneration: generation,
+      })
+    }
     const adopted = composePostgresqlProviderRuntime(input, input.generation, runtime)
     return {
       provider: 'postgresql',

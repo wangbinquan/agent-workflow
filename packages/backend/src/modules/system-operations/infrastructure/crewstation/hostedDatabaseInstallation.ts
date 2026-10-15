@@ -1,8 +1,10 @@
 // RFC-370 M0 — the database installation of a CrewStation-hosted instance.
 // The platform provisions PostgreSQL and the release migration Job installs or
 // upgrades its schema; a serving process only verifies it. There is no local
-// generation pointer, SQLite source or migration manifest, so the
-// SQLite→PostgreSQL migration capabilities of the port do not exist here.
+// generation pointer, SQLite source or migration manifest: reads report that no
+// local migration record exists (the generation's operation is the Job's
+// installation copy, recorded in PostgreSQL), and the SQLite→PostgreSQL
+// migration and recovery capabilities of the port do not exist here.
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import type { PreparedPostgresqlProviderSchema } from '@/platform/persistence/databaseProviderRuntime'
 import {
@@ -46,7 +48,7 @@ export function createHostedDatabaseInstallation(input: {
     }),
     resolveRecoverySource: () => unsupported('migration recovery source'),
     listMigrations: () => [],
-    readMigration: () => unsupported('SQLite migration manifest'),
+    readMigration: () => null,
     writeGeneration: () => unsupported('generation pointer'),
     // The PostgreSQL schema advisory lock inside the migrator is the only
     // upgrade lock a hosted installation needs.

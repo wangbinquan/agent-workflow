@@ -276,22 +276,35 @@ export function readDatabaseGenerationFromArtifacts(
  * RFC-370 M0 — the hosted generation identity is derived from the platform's
  * stable project/service names, so every replica and every restart of the same
  * service names the same database generation without local state.
+ *
+ * Like every PostgreSQL generation it names the operation that produced its
+ * rows: the release migration Job's installation copy, registered once in the
+ * database's logical-copy metadata (`activateHostedPostgresqlGeneration`).
  */
 export function hostedDatabaseGeneration(input: {
   readonly project: string
   readonly service: string
   readonly schemaDigest: string
 }): ResolvedDatabaseGeneration {
-  const identity = sha256Hex(`crewstation\u0000${input.project}\u0000${input.service}`)
+  const identity = sha256Hex(`crewstation\u0000${input.project}\u0000${input.service}`).slice(0, 32)
+  const generationId = `dbg_cs_${identity}`
+  const operationId = `dbm_cs_${identity}`
+  const manifest = canonicalSchemaJson({
+    kind: 'crewstation-hosted-installation',
+    project: input.project,
+    service: input.service,
+    generationId,
+    operationId,
+  })
   return {
     source: 'hosted-installation',
     payload: {
       version: 1,
-      generationId: `dbg_cs_${identity.slice(0, 32)}`,
+      generationId,
       provider: 'postgresql',
-      operationId: null,
+      operationId,
       schemaDigest: input.schemaDigest,
-      manifestDigest: null,
+      manifestDigest: `sha256:${sha256Hex(manifest)}`,
       activatedAt: 0,
     },
   }
