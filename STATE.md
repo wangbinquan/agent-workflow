@@ -10,6 +10,18 @@ e2e-full 夜跑 `a5ae4b5b7` 的 `centralized-answer-pane` 两次都只等到 1 �
 
 按 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md) §3.2、§5 完成 P1（免 Codex 门）：单机与托管走同一条业务路径，只在 bootstrap 选择适配器。system-operations 新增执行权端口 `ExecutionAuthorityPort`（standby / active(fence) / frozen）与单机实现（启动即 active、epoch 1、永不丢失）；`GET /api/execution/status` 返回 `{ mode, state, reason }`，声明了 `executionGroup` 的路由在实例非 active 时返回 503 `execution-standby`（HTTP 与 MCP 同一道门）；前端只在 CrewStation 实例且已知非 active 时禁用执行入口。删除 v1 的 host 执行平行路径与“原执行恢复”机制（连同四个 recover 端点与前端恢复按钮），SQLite `0257` / PG `0033` 删除只被它们读写的两张表；一次整体删除（约 7.3 万行），拆开的中间态无法编译。提交：源码 `099ce7a85`、配套 `c6c1d0118`、首轮 CI 修复 `bd8432e20`（格式；新版 Git for Windows 的 `ucrt64` bash 推导）、`a5ae4b5b7` 投影并退役许可。**CI（`a5ae4b5b7`）**：主 CI `38670196680`、windows-platform `38670196656`、postgresql-evidence `38681079138`、backend-macos-nightly `38681088676`、e2e-webkit-nightly `38681085745` 均 success；e2e-full `38681082449` 的唯一失败是上一条记录的既有竞态，修复后 `e4b5adcc5` 上 e2e-full 全绿。详见 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)「P1」。
 
+## 2026-10-14 RFC-294：长期架构重构定位与整体调研落档
+
+按用户要求，将 RFC-294 明确为长期架构重构总纲，整体迁移保持 In Progress。新增
+[仓库架构与落地调研](design/RFC-294-backend-layered-target-architecture/review-2026-10-14.md)，基线为
+`e4b5adcc5dd4c03f2f884d8f3befa0d9b555a0fb`：执行、事务和恢复主链已实质落地，context 边界、composition 收缩、
+AtomicApply/NodeRun identity 与全局后台生命周期仍有开放项。记录六类源码发现、逐 Wave 判定、前端/shared 关联问题和后续顺序；
+同步 proposal/plan/总索引，修正 RFC-363/364/365 仍写 Draft、Reaction 未抵扣 RFC-368 的旧状态，保留各 successor 原完成范围。
+
+本次只有文档变更，未启动后继重构、未修改生产/测试/canonical 或并发 RFC-370 在制品；未运行本地测试、构建或业务验收。
+调研基线的主 CI `38688049980`、full E2E `38688106226` 在落档时均已终态 success；本次文档发布的确切 SHA CI 另行核对，
+不以基线通过代签。原历史与并发正文完整保留。
+
 ## 2026-10-14 RFC-371 v2 断代后的真实任务验证与五处修正
 
 用户问「重构后旧数据界面都不显示，是丢失还是断代」：是 v2 设计内的断代——`0256` 退役 v1 的 81 张观测表、不迁移（v2 §7、§9），业务事实不受影响，迁移前全库在 `backupOnMigration` 备份里；本机库约 23 GB 空闲页可经「数据库维护」回收。用 dist 二进制在本机正式数据目录新跑 9 个任务（单节点子 Agent、并行、串行、独立 Agent、取消、`kill -9` 后恢复）：27 次调用逐条与 OpenCode 原生库对拍全等，验收价（仅配在验收运行时）计价精确，四个统计接口与库内求和一致。发现并修正五处（`a3ce7991e`，`14ef0b09c` 收拢查询表达式，配套 `202adfb71`）：未注册运行时的调用（旧 `*Model` 设置的系统 Agent）以 `builtin:<protocol>` 作价格线键并可定价；总览按任务汇总含系统调用；外部取消/中断的 complete 快照记为下界 partial；任务详情状态改走公共 PageHeader；`UserAccessError` 不再落成 500。详见 [断代验证](design/RFC-371-run-observability/cutover-verification-20261014.md)。本机 PG 侧受并发 RFC-370 在制 schema 影响无法自测，以确切 SHA 的 CI 为准。census 用 HEAD 版脚本 `--source-ref` 只读已提交对象生成，未读入、未改动 RFC-370 在制文件；本笔退役 `202adfb71` 的一次性许可（27172 保持）。

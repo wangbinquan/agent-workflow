@@ -1,22 +1,28 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
+- RFC 定位：**长期架构重构 RFC**（用户于 2026-10-14 明确）。持续维护目标架构、迁移波次、跨 RFC 依赖与完成证据；
+  具体生产迁移由范围明确、独立批准的 successor RFC 承接。长期维护不降低原退出标准，也不把未完成项无限展期。
 - 目标架构状态：Approved（2026-08-30 review 记账：D1～D9 已由 RFC-328/331/332/333/334/339/341/342/343/344/345/346 的逐 RFC 用户批准实质确认，见 `review-2026-08-30.md` §A1；本总纲不因 Approved 而自动授权任何未立项 wave）
-- 迁移状态：In Progress（2026-09-20 对账）。P0 全部收束；W2、W3 与 W4-A/C/E0/E2/E3/E4a/E4b/E7 已由独立 successor 关闭。
+- 迁移状态：**In Progress（长期推进，2026-10-14 对账）**。P0 全部收束；W2、W3 与 W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已由独立 successor 关闭。
   W4 其余部分、W5/W6/W7/W9 继续开放，W8 为可选后续能力线。
+- 最新整体审视：[2026-10-14 仓库架构与 RFC-294 落地调研](./review-2026-10-14.md)。结论为执行、事务与恢复机制已有实质落地，
+  context 边界、composition 收缩和统一生命周期仍处迁移中；报告列出逐 Wave 判定、源码依据、治理口径问题和建议顺序。
 - [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已 Done：数据库事务、daemon 启动、task launch/routes、
   nodeRun mint 均已有共用实现；这消除了 provider 分叉前置，但不等于 context 边界、唯一 AtomicApply lifecycle、NodeRun v2 identity
   或 DaemonContainer 已完成。具体抵扣与余项见 [plan §1.2](./plan.md#12-rfc-359-完成后的对账2026-09-20)。
-- 当前实现取证基线为 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`；Main CI 35492271521 为 46/46 success。
-  架构 source digest 为 `sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812`，数值以 canonical 和 [generated status](./status.md) 为准。
+- 本轮调研基线为 `e4b5adcc5dd4c03f2f884d8f3befa0d9b555a0fb`；基线、源码快照与 CI 的证据边界见调研记录。
+  当前数值以 canonical 和 [generated status](./status.md) 为准，不在三件套复制维护指标。历史实现基线
+  `123ce2dbc94b10d2c88bf978437bfa0db1b898ba` 的 Main CI 35492271521（46/46 success）仅作历史证据。
 - [RFC-360 Runtime Management](../RFC-360-runtime-management-context-cutover/proposal.md)、
   [RFC-361 Execution Contract provider](../RFC-361-execution-contract-provider-cutover/proposal.md)、
   [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md) 均 Done。
   只抵扣 E4b 全纵切、E9 的 EC provider 与 E1/SC 合同准备；剩余 wave 不扩大认领。
-- 后继设计已落档：[RFC-363 Task/SC 生产切换](../RFC-363-task-source-control-launch-cutover/proposal.md)、
+- 后继已按各自批准范围完成：[RFC-363 Task/SC 生产切换](../RFC-363-task-source-control-launch-cutover/proposal.md)、
   [RFC-364 MCP diagnostics](../RFC-364-mcp-runtime-diagnostics-cutover/proposal.md)、
-  [RFC-365 Event target providers](../RFC-365-event-automation-target-providers/proposal.md) 均为 Draft，尚未实施。
-  优先 363；364 可独立推进；365 先完成现输入能力与目标 V1 的兼容定稿，不增加完成信用。
-- 性质：目标架构总纲 + 迁移治理合同；未完成 wave 不因局部模块、单一 provider 实现或账本存在而倒签 Done。
+  [RFC-365 Event target providers](../RFC-365-event-automation-target-providers/proposal.md)、
+  [RFC-368 Reaction 执行切换](../RFC-368-reaction-execution-cutover/proposal.md)。分别抵扣 E1/W5 的启动与工作区纵切、E6、
+  E9 的 Event target 与 Reaction 切片；完整 E1/W5/E9 仍须按其余退出项核对。RFC-368 的用户裁决与偏离项继续以其设计为准。
+- 性质：长期目标架构总纲 + 迁移治理合同；未完成 wave 不因局部模块、单一 provider 实现或账本存在而倒签 Done。
   旧 measurement seed、历次 SHA 与 hosted 证据保留在 plan 历史章节；不得把历史数字当作当前新增债务额度。
 - 架构重采触发器：后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量/行为证据，不追着重算总体架构，也不给
   W0-R～W9 credit；只有 production context owner、public/required contract、schema/single-writer、composition root、cross-context
@@ -25,6 +31,16 @@
   - `design/system-commons-unification-audit-2026-08-12.md`
   - `design/task-execution-architecture-audit-2026-08-03.md`
   - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292、RFC-295、RFC-297～RFC-337 的已发布部分
+
+## 0. 长期维护方式
+
+1. `proposal.md` 维护长期定位、目标与总体迁移状态；`design.md` 维护目标合同；`plan.md` 维护 wave 归属、依赖与退出门。
+2. `status.md` 与 `architecture/*.json` 保持生成事实源；带日期的 `review-YYYY-MM-DD.md` 保存一次调研的源码基线、判断及证据边界，
+   不替代生成指标，也不被后续快照覆盖成另一轮结论。
+3. successor 完成时，同步其实际抵扣范围和剩余责任；新合同批准、源码接线、功能验收、exact-SHA CI 和整波退出分别记账。
+   后继 RFC 中已批准的功能取舍优先于总纲旧文字，不能以长期重构为由恢复已被用户否决的要求。
+4. 架构显著变化时按既有触发器重采；用户要求整体审视时新增调研快照。此次定位与文档更新不授权新的生产代码、schema 或产品行为变更。
+5. 必选迁移波次达到原退出门后，才能将整体迁移状态改为 Done；可选 W8 独立决策。完成后的目标架构仍可作为后续 RFC 的设计依据。
 
 ## 1. 摘要裁决
 

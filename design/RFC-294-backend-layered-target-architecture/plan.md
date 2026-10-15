@@ -1,7 +1,8 @@
 # RFC-294 实施路径：从散点 services 到分层 bounded contexts
 
-> **当前入口（2026-09-20）**：RFC-359 已完成；以新增 §1.2 的 current-source 对账与 §3.2 后继队列为准。
-> §1 的旧 measurement seed / 2026-08-30 数字保留作历史证据，不是当前债务额度。当前机器数据见 `status.md`。
+> **当前入口（2026-10-14）**：本 RFC 按用户要求作为长期架构重构总纲维护，整体迁移仍为 In Progress。
+> 最新判断见 [本次整体调研](./review-2026-10-14.md) 与下方 §0.1；各波原退出门保持。
+> §1 的旧 measurement seed、带日期的对账和历史数值均保留作历史证据，不是当前债务额度。当前机器数据见 `status.md`。
 
 - 目标架构状态：Approved（2026-08-30 review 记账：D1～D9 已由各 successor RFC 的逐项用户批准实质确认，见 `review-2026-08-30.md` §A1；本文刷新不授权任何未立项 wave）
 - 迁移进度状态：Out-of-order in progress（RFC-287、RFC-297～343 已按各自范围形成
@@ -38,6 +39,22 @@ RFC-294 本身仍只授权设计，不授权后续生产迁移；但仓库已经
 P0 correctness 不等待 W0-R 全量门落地；但任何 P0 新增/修改的 public/cross-context contract 在合并前必须附 exact 临时
 surface ledger + API snapshot + field/method consumer + authority/tx/data-class，并运行与 W0-R 等价的 type-taint/capability-forge/
 god-port 变异。N1/W0-R 已落，这些记录必须直接进入 canonical manifests，不能以“安全修复优先”为由先造无账接口。
+
+### 0.1 长期推进与本轮对账（2026-10-14）
+
+本总纲持续承接跨 RFC 的架构目标与迁移债务；每个 successor 按完整获批范围完成开发和测试用例，再集中验证。
+新增迁移仍须独立批准，本次只发布定位、调研和状态对账，不启动生产重构。
+
+- **既有完成事实**：保留 P0、W2、W3 和已关闭 W4 子波的原完成结论。RFC-363 关闭 E1/W5 的启动与工作区纵切；
+  RFC-364 关闭 E6；RFC-365、RFC-368 分别关闭 E9 的 Event target、Reaction 切片。完整 E1/W5/E9 不随之关闭。
+- **开放主线**：W4-B/D 余项与 E1/E5/E8/E9/E10、W5、W6、W7、W9；W8 仍为可选能力线。
+  RFC-370 的在制实现独立取证，不以工作区存在候选代替本总纲的完成证据。
+- **治理优先项**：校正层依赖守卫的漏检与 canonical 分类误差，分别识别合法平台依赖、实例注册、业务 setter、真实 ambient wiring。
+  不用总计数、空 debt 数组或文件移动代替实际生产调用链与退出条件。
+- **建议顺序**：治理口径校准 → 按 context 完成 W4 consumer 与对应 B/D → 继续 W5/SC 和 W6 → W7；
+  W9-A/B 可在复用已落 provider lifecycle 的基础上并行设计，W9-E/D 仍遵守各自前置。具体顺序、证据和边界见调研 §6。
+- **记录规则**：当前指标只在生成物维护；调研记录保存日期与源码基线，后继关闭及时同步入口和 wave 归属。
+  必选波次达到原退出门后才关闭整体迁移，不因改称长期 RFC 降低退出标准。
 
 ## 1. 当前基线与量化口径
 
@@ -111,6 +128,9 @@ unresolved first-party=0。required-port/target-edge 分栏继续由对应 canon
 
 ### 1.1 已落事实与 RFC-294 wave 判定
 
+本表保留原完成证据并同步后继抵扣；其中带日期的数值与 SHA 均为历史快照，不替代当前 `status.md`。
+2026-10-14 的逐波判断、生产链与剩余问题见 [调研记录 §3](./review-2026-10-14.md#3-rfc-294-逐-wave-对账)。
+
 | 区域 | 当前判定                                    | 已落事实 / 仍缺退出门                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ---- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P0-A | Done（RFC-342）                             | content-only PATCH、candidate-only Move、trusted RequestAuthority、双 scope transaction、version CAS、durable receipt、commit 后 WS 与 UI cutover 已落；`67a97480` hosted closeout 全绿                                                                                                                                                                                                                                                                                                                             |
@@ -122,12 +142,12 @@ unresolved first-party=0。required-port/target-edge 分栏继续由对应 canon
 | W1   | behavior landed / architecture residual     | RFC-287 的 assembly 与 G4～G7 产品行为作为既有基线；target module、ownership、admission/event/SC 边界仍待后续波次                                                                                                                                                                                                                                                                                                                                                                                                   |
 | W2   | Done（W2-A/B/C/D）                          | RFC-328 durable authority、RFC-331 topology、RFC-332 coordinator/DAG、RFC-333 P0-C、RFC-334 NodeExecutorRegistry 与 RFC-339 WrapperRuntime 均已满足并完成 hosted closeout；其余 wave 未完成                                                                                                                                                                                                                                                                                                                         |
 | W3   | Done（RFC-341）                             | task lifecycle 与 review/clarify/questions 已切 closed committed events/per-consumer delivery，continuous continuation owner、Event Center retry 与 legacy extinction 已闭合；`67a97480` 全绿                                                                                                                                                                                                                                                                                                                       |
-| W4   | A/C/E0/E2/E3/E4a/E4b/E6/E7 Done；其余未关闭        | RFC-344 关 W4-A、RFC-345 关 W4-C、RFC-346 关 W4-E7、RFC-347 关 W4-E0（W4-C 于 2026-09-02 完成 T9/T10，取证见其 `plan.md §7.6`）。**route→DB 与 AppDeps consumer 在该快照均为 0**（2026-09-02 `current-report.json`；由 RFC-349 的 application-owned DB ports 顺带打掉，不等于 W4-B/W4-D 的正式退出，其 facade 22/exception 280 仍在）；**RFC-352 关 W4-E2（2026-09-03）、RFC-353 关 W4-E3（2026-09-04，见 N17）、RFC-355 关 W4-E4a（2026-09-04，见 N18）**；RFC-360 已关 E4b 与本域 B/D；RFC-361 仅关 EC provider，RFC-362 仅关 Task/SC 合同准备。RFC-364 关闭 E6 与 MCP diagnostics 的 B/D；RFC-363 只关闭启动/工作区纵切。RFC-365 已关闭 Event target 子切片（`4796407fa`，CI run `35610192882` 46/46）；W4-B、W4-D 余项与 E1/E5/E8、Reaction/完整 E9、E10 仍开放 |
+| W4   | A/C/E0/E2/E3/E4a/E4b/E6/E7 Done；其余未关闭        | RFC-344 关 W4-A、RFC-345 关 W4-C、RFC-346 关 W4-E7、RFC-347 关 W4-E0（W4-C 于 2026-09-02 完成 T9/T10，取证见其 `plan.md §7.6`）。**route→DB 与 AppDeps consumer 在该快照均为 0**（2026-09-02 `current-report.json`；由 RFC-349 的 application-owned DB ports 顺带打掉，不等于 W4-B/W4-D 的正式退出，其 facade 22/exception 280 仍在）；**RFC-352 关 W4-E2（2026-09-03）、RFC-353 关 W4-E3（2026-09-04，见 N17）、RFC-355 关 W4-E4a（2026-09-04，见 N18）**；RFC-360 已关 E4b 与本域 B/D；RFC-361 仅关 EC provider，RFC-362 仅关 Task/SC 合同准备。RFC-364 关闭 E6 与 MCP diagnostics 的 B/D；RFC-363 只关闭启动/工作区纵切。RFC-365 已关闭 Event target 子切片（`4796407fa`，CI run `35610192882` 46/46）；RFC-368 已关闭 Reaction 切片（2026-09-23）；W4-B、W4-D 余项与 E1/E5/E8、完整 E9、E10 仍开放 |
 | W5   | partial vertical slices                     | RFC-308/310/321 已落 source-control candidate/commit/publication transport/credential seam；git SCC、repo/cache/workspace owner、SC endpoint/transport required SPI 与 opaque WorkspaceRef 未收口                                                                                                                                                                                                                                                                                                                   |
 | W6   | scenario 双库合一 / lifecycle 未统一        | RFC-310 development effect journal 属领域恢复，不是共享 AtomicApply；RFC-359 已统一各场景 provider 实现，但 Bundle/Intent lifecycle 仍为 2                                                                                                                                                                                                                                                                                                                                                                          |
 | W7   | frame 与 single mint 已落 / identity 未完成 | RFC-306 consumed/skipped、RFC-354 frame/scope、RFC-359 唯一 nodeRun mint 与既有 provenance 已落；NodeRun v2 seq/identity/backfill/readers 尚未落                                                                                                                                                                                                                                                                                                                                                                    |
 | W8   | deferred / optional                         | RFC-289 旧设计已关闭；只有 W7 后新号 fanout RFC 获独立批准才进入，不阻塞核心 W9                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| W9   | partial vertical slice / no exit            | RFC-322 收编 14 个 hourly phase；2026-09-20 background=332/ambient=494（见 `status.md`）；RFC-359 已统一 boot/shutdown；DA/DE/Event Center 等 worker 仍散落，ManagedBackgroundRegistry/readiness/stop receipt 未落                                                                                                                                                                                                                                                                                                  |
+| W9   | partial vertical slice / no exit            | RFC-322 的 hourly phase 与 RFC-359 的 boot/shutdown 已落；provider runtime session、managed/polling handle 和实际 root 的 stop/drain 已有生产接线。全局 ManagedBackgroundRegistry、目标阶段/依赖/readiness、stop receipt 与 facade 退出未完成；当前库存只见生成 status，详见 2026-10-14 调研                                                                                                                                                                                                                                                                                                  |
 
 ### 1.2 前置偏差账
 
@@ -272,10 +292,9 @@ developmentMissions、util/process、postgresqlDaemonApplication）/ 已关闭�
 **此后各波退出门的分母以本批重采后的 exact ids 为准**；治理前引用 W4-E1 `826`、W4-C `347`、
 W4-E0 `226` 等数字的表述一律作废。
 
-RFC-360（E4b 全纵切）、RFC-361（EC provider）与 RFC-362（E1/SC 合同准备）已完成各自范围。
-下一步先立 Task/SC 生产 cutover 后继，明确 durable source/revision/group/replay；E6 的 E4b 前置已满足，可另案推进。
-Event target/Reaction 仍按 RFC-361 plan 的后继顺序立项；E10 等完整 E9 与 task query；
-E8 等 task/SC/integration exact seams。W5/6/7/9 的正式退出条件保持，W8 仍可选。
+本节记录的是 2026-09-22 治理批。后继队列已前进：RFC-363 的 Task/SC 启动与工作区、RFC-364 的 E6、RFC-365 的 Event target、
+RFC-368 的 Reaction 均已按各自批准范围完成，不能继续作为“尚待立项”处理。
+E10、E8 及完整 E1/E9/W5 的剩余合同与依赖见 §0.1 和本轮调研；W5/6/7/9 的正式退出条件保持，W8 仍可选。
 
 ## 2. 每波统一切换协议
 
@@ -513,11 +532,12 @@ P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队
 | N17  | RFC-353 / W4-E3（Done）                 | `modules/knowledge-evolution` 从零建成 domain/application/infrastructure/inbound/public/composition 六层：fusion 编排与双 provider 持久化整体归位；融合适配器对 `memories` / `skills` / `skill_versions` 的**写入归零**（各经 owner 的 tx-bound participant，判据收成一份）；技能回滚的成员关系判据自 RC 迁入 KE；`routes/fusions.ts` 收成 decode-call-map 并迁入 KE inbound；两个 legacy facade（`services/fusion.ts` / `services/skillVersion.ts`）删除。新增只读面 `GET /api/skills/:id/provenance` 与前端版本行展开。W4-E3 exact 边 `30 → 27`，facade `346 → 345`，public-surface pilot 债 `10 → 6`                                                                                                                                                                                                                                                                                                                                                      | 链 `9911b3a05` → `dd3d51345` → `652f4d31c` → `624a14647` → `7fdada126` → `51c900140` → `02958a8aa` → `082a88b1c` → `94767e66a`；**AC-13 取证 `fb608f89c` / run `33800356235` / 35-35 success**（并发 push 取消时按含本提交的后继 sha 判）。**代价如实记账**：跨 context 的 provider 装配收到 bootstrap 之后，exception 账本净增 17 条（11 条 bootstrap→module composition/public 的 `legacy-inbound`、6 条新 provider adapter→`db/*` 的 `legacy-outbound`，全部自动分桶入账），详见 RFC-353 `proposal.md §9`                                                                   |
 | N18  | RFC-355 / W4-E4a（Done）                | `services/intent/` **5136 行整目录删除**，18 个文件归位到 `modules/intent/{domain,application}`（1 个迁进 resource-catalog 的 composition，2 个兼容门面删除）；`routes/intentSessions.ts` 1088 行迁进 `modules/intent/inbound/` 并收成 decode-call-map（836 行），详情 handler 的 ~180 行编排收进 application、草稿生命周期与挂载建议两条判据进 domain；技能工件补偿改经 intent 声明的窄端口 + RC 提供的两个 provider 适配（深取 30 → 2 条纯类型边）；apply 大事务内的**全部计算**收成一份（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest / handle 水位 / 重放三档），两个 provider 的 apply 文件 842/684 → 653/520 行——**事务机制按设计裁决留在 provider**（同步 `dbTxSync` 与 async `db.transaction` 形状不同）；public 面按「无 consumer 不公开」26 → 5 个符号；会话事件收成 `ports/intentSessionEvents.ts`，intent 的 application / inbound 不再 import `@/ws/broadcaster`。W4-E4a exact 边 **176 → 41**，facade **18 → 0** | 链 `68ea535e1` → `a6bf2193a` → `2f54a8be8` → `9ef861059` → `7caf1e91f` → `c31844a30` → `db8dbf424` → `b21d102c2` → `83be39dc0`；**AC-9 取证 `bec6c29f0` / run `33834461744` / run 级 success**（T4b 的后继取证见 RFC-355 `proposal.md §9.5`）。**代价如实记账**：剩余 41 条里 34 条是 bootstrap→module 的装配边（那正是目标形态，仍记成 `legacy-inbound` 只因 bootstrap 文件还住在 `src/cli` / `src/server.ts`）、5 条 intent↔RC、2 条专职 WS 投影文件；**全局 exception 净减 116**（5313 → 5197），与 RFC-353 的净增 17 方向相反，差别在于本刀同时消灭了整目录与 18 个 facade |
 | N19 | RFC-360 / W4-E4b（Done） | RM 管理/注册表/首次选择冻结归位；旧入口退役；本域 B/D 完成；60 条原桶债逐条交后继 | `123ce2dbc` / Main `35492271521` 46/46 success |
-| N20 | RFC-361 / W4-E9 EC provider（Done） | RC resource / TE Script fixture provider 强制注入，EC 保留 validation/receipt | 同上；Reaction/Event/完整 E9 仍开放 |
+| N20 | RFC-361 / W4-E9 EC provider（Done） | RC resource / TE Script fixture provider 强制注入，EC 保留 validation/receipt | 同上；该 RFC 不关闭 Reaction/Event；后两者现已由 N24/N25 承接，完整 E9 仍开放 |
 | N21 | RFC-362 / W4-E1 合同前置（Done） | SC offered / Task required 声明、真实行为验证、逐入口后继清单 | 同上；仅合同准备，不切生产，不关闭 E1/W5 |
 | N22 | [RFC-363 Task/SC 生产切换](../RFC-363-task-source-control-launch-cutover/proposal.md)（Done） | durable source/group/revision、两 launch lane、reader 与该纵切 B/D | 最终证据及 E1/W5 转交见 RFC363 acceptance.md；不关闭完整 E1/W5 |
 | N23 | [RFC-364 MCP diagnostics](../RFC-364-mcp-runtime-diagnostics-cutover/proposal.md)（Done） | E6 编排/effects/public/roots，复用现持久化与 lease | 七操作及三个根已切 RC；E6 和本域 B/D 关闭，W9 timer 单独转交 |
-| N24 | [RFC-365 Event target providers](../RFC-365-event-automation-target-providers/proposal.md)（Done） | 两 target SPI、origin/claim/receipt 与旧链去重 | T1 合同对拍 + T2～T6 实现完成并置 Done（hosted 取证 `4796407fa` / CI run `35610192882` 46/46）；保留现能力；只关闭 Event target slice，不关闭 Reaction/完整 E9 |
+| N24 | [RFC-365 Event target providers](../RFC-365-event-automation-target-providers/proposal.md)（Done） | 两 target SPI、origin/claim/receipt 与旧链去重 | T1 合同对拍 + T2～T6 实现完成并置 Done（hosted 取证 `4796407fa` / CI run `35610192882` 46/46）；保留现能力；只关闭 Event target slice，Reaction 由 N25 承接，完整 E9 仍开放 |
+| N25 | [RFC-368 Reaction 执行切换](../RFC-368-reaction-execution-cutover/plan.md)（Done） | DE-owned typed ports、同事务 claim/admission、派发/检查/取消与三根切换，旧合同及双向边退役 | 2026-09-23 按其批准范围完成；用户裁决与偏离见 RFC-368 design §2，不关闭完整 E9/W9 |
 
 | OPT  | W7 后新号 fanout capability RFC         | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
@@ -979,7 +999,7 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
       legacy consumer=0 后迁入 DA ActionTemplate 或退役；当前 mission admission preview、统一分页消费与 `(created_at,id)`
       复合索引已作为 clean-baseline 行为 oracle，继续用绑定参数 EXPLAIN、大 tie-group 与前端 cursor contract 防回归。route 最终只调
       public query，不再 deep import application/infrastructure 或自行 compose module。
-- [ ] **E9 digital-employee / event-center / execution-contract**（RFC-361 Done 关闭 Execution Contract provider slice；RFC-365 已关闭 Event target 实现切片（`4796407fa`）；Reaction 与完整 E9 仍开放）：以 RFC-310 OS 已落的 Case/Context/Attention/Reaction/Channel、
+- [ ] **E9 digital-employee / event-center / execution-contract**（RFC-361 Done 关闭 Execution Contract provider slice；RFC-365 已关闭 Event target 实现切片（`4796407fa`）；RFC-368 Done 关闭 Reaction 切片；完整 E9 仍开放）：以 RFC-310 OS 已落的 Case/Context/Attention/Reaction/Channel、
       catalog/subscription/observer/delivery，以及 executor-neutral guide/compatibility/fixture/exact-output receipt 作为行为 oracle；
       保留 `os-architecture-manifest.json` 对三个 context 的唯一 owner、
       root/public entrypoint 和全量 external import exact 对拍，任何模块内穿透、bootstrap 类型分支或 >5 方法 public port 都阻断；
@@ -999,10 +1019,12 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
       claim 不能结算 provider receipt。RFC-315 在 E9 只收 Event Center-owned source-neutral `EventResponseRule`；它与 Integration-owned
       WebhookTrigger 仅共享 `event-automation-rules:*` 授权词汇。WebhookTrigger 的 route/table/service cutover 明确归上方 W4-B
       integration slice；两边分别重验 owner/override、PAT policy 与 target launch permission，绝不合并 aggregate/table/ingress。
-      RFC-365 已关闭该 Event target provider adapter cutover（`4796407fa`）；这仍不等于 Reaction 或完整 E9 已完成。
+      RFC-365 已关闭该 Event target provider adapter cutover（`4796407fa`）；RFC-368 已关闭 Reaction 切片（2026-09-23）。
+      两者均只抵扣各自批准范围，完整 E9 仍开放；以下为原目标合同，涉及 RFC-368 的用户裁决与明确偏离项以其 design §2.1 为准，
+      不将旧总纲要求重新施加为已关闭 RFC 的阻塞条件。
       DE 启动/恢复 Reaction 只消费本域 `ReactionExecutionPortV1` 与 tx-bound
-      `ReactionExecutionAdmissionParticipantInTxV1`，TE exact adapters 分别实现 execution 与 claim-fence/admission required SPI；当前
-      DE→TE public participant 与 TE→DE `WorkspaceFailureClass` 的双向 import 必须作为两条 exact debt 同刀删除。合同逐字采用
+      `ReactionExecutionAdmissionParticipantInTxV1`（实际类型名按 RFC-368 design §2.2 D11 调整），TE exact adapters 分别实现 execution 与 claim-fence/admission required SPI；
+      原 DE→TE public participant 与 TE→DE `WorkspaceFailureClass` 的双向 import 已随 RFC-368 删除。原目标合同采用
       design §3.5：factory-built、deep-frozen `PreparedReactionExecutionV1.request` 闭合携带
       operation/Case/Reaction、current authority subject+revision、0-based typed attempt（initial=0；retry 以 tagged
       sanitized/content-addressed feedback artifact ref 取代 raw `previousError`）、closed implementation、ExecutionContract、frozen
