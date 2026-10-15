@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { createRoute, Link } from '@tanstack/react-router'
 import { Fragment, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 import { api } from '@/api/client'
 import type { LocalizedText } from '@/components/digital-employees/types'
@@ -398,7 +398,7 @@ function sourceStateKind(state: CustomSourceSummary['state']): 'neutral' | 'warn
 }
 
 function EventsPage(): ReactElement {
-  const execution = useHostExecutionAvailability('event-dispatch')
+  const execution = useExecutionAvailability('event-dispatch')
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const zh = language.startsWith('zh')
@@ -1864,7 +1864,7 @@ function EventSourceEditor(props: {
   onClose: () => void
   onSaved: () => Promise<void>
 }): ReactElement {
-  const execution = useHostExecutionAvailability('event-dispatch')
+  const execution = useExecutionAvailability('event-dispatch')
   const zh = props.language.startsWith('zh')
   const [form, setForm] = useState(initialDraft)
   const [workingId, setWorkingId] = useState(props.sourceId)

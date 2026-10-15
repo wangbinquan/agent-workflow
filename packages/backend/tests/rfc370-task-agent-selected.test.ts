@@ -279,7 +279,6 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
             reportUnreaped: noRead,
             unreapedMessage: noRead,
             effect: {
-              recoverOriginal: async ({ executionRef }) => ({ executionRef, state: 'unknown' }),
               async submit(request) {
                 submitted = request
                 expect(request.materialRef).toBe(prepared.materialRef)

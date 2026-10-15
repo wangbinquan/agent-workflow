@@ -17,11 +17,9 @@ export {
 } from '../application/drive/repositoryPreparationStep'
 export { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
 export type { ResolvedTaskDriveConfig } from '../application/drive/taskDriveTypes'
-export { captureTaskDriveBinding, type TaskDriveBinding } from './taskDriveBinding'
 export {
   activeTaskDriverController,
   awaitTaskDriverIdle,
-  awaitTaskDriverReleasedSettled,
   clearTaskDriverLifecycleForTesting,
   createDatabaseTaskDriverLifecyclePort,
   isTaskDriverActive,

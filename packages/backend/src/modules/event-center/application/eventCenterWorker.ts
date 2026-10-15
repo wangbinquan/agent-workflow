@@ -1,7 +1,4 @@
-import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
-
 export interface EventCenterWorkerDependencies {
-  readonly waitForWake?: (intervalMs: number, signal: AbortSignal) => Promise<void>
   runOnePublication?(): Promise<'completed' | 'retried' | 'dead-letter' | 'idle'>
   runOneDueObserver(): Promise<'completed' | 'failed' | 'obsolete' | 'idle'>
   runOneNotification(): Promise<'completed' | 'retried' | 'dead-letter' | 'idle'>
@@ -19,9 +16,7 @@ export interface EventCenterCycleResult {
 export async function runEventCenterCycle(
   deps: EventCenterWorkerDependencies,
   maxSteps = 32,
-  execution?: BackgroundExecutionLifetime,
 ): Promise<EventCenterCycleResult> {
-  const current = execution?.current.bind(execution)
   if (!Number.isSafeInteger(maxSteps) || maxSteps <= 0) {
     throw new Error('event center worker maxSteps must be a positive integer')
   }
@@ -30,20 +25,17 @@ export async function runEventCenterCycle(
   let notificationDeliveries = 0
   let steps = 0
   for (; steps < maxSteps; steps += 1) {
-    if (current?.() === false) break
     let progressed = false
     const publication = (await deps.runOnePublication?.()) ?? 'idle'
     if (publication !== 'idle') {
       publicationRuns += 1
       progressed = true
     }
-    if (current?.() === false) break
     const observer = await deps.runOneDueObserver()
     if (observer !== 'idle') {
       observerRuns += 1
       progressed = true
     }
-    if (current?.() === false) break
     const notification = await deps.runOneNotification()
     if (notification !== 'idle') {
       notificationDeliveries += 1

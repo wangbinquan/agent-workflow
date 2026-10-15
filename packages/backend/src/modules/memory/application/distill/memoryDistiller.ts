@@ -26,12 +26,8 @@
 //
 // Tests inject `runFn` to skip the real subprocess.
 
-import { randomBytes, createHash } from 'node:crypto'
-import { ulid, factory } from 'ulid'
-import { originalProtocolRounds } from './originalProtocolRounds'
-import type { MemoryDistillExecutionSession } from './executionSession'
-import { MemoryDistillSettlementPendingError } from './settlement'
-import type { MemoryDistillExecutionRecord } from '../ports/distillExecutionJournal'
+import { randomBytes } from 'node:crypto'
+import { ulid } from 'ulid'
 import type {
   DistillSourceKind,
   Memory,
@@ -97,7 +93,7 @@ const log = createLogger('memory-distiller')
 // 超时按失败计，整批退避重试，已经烧掉的 token 白花。默认改为 1 小时（用户
 // 2026-09-21 指定），并可由 `config.memoryDistillTimeoutMs` 覆盖（设置页
 // 「系统代理 · 记忆蒸馏」，边界见 SETTINGS_NUMERIC_BOUNDS.memoryDistillTimeoutMs）。
-export const DEFAULT_TIMEOUT_MS = 3_600_000
+const DEFAULT_TIMEOUT_MS = 3_600_000
 
 // -----------------------------------------------------------------------------
 // Public types
@@ -110,8 +106,6 @@ export interface DistillResult {
 }
 
 export interface RunDistillOptions {
-  readonly executionSession?: MemoryDistillExecutionSession
-  readonly restore?: readonly MemoryDistillExecutionRecord[]
   store: MemoryDistillWorkStore
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
   nodeRunPrompts: NodeRunPromptReader
@@ -158,55 +152,9 @@ export interface RunDistillOptions {
 }
 
 export class IndeterminateRuntimeProcessError extends Error {
-  private recovery: Promise<boolean> | undefined
-  private physicalAcknowledged = false
-  private settlement: (() => Promise<void>) | undefined
-  private acknowledged = false
-  private jobs: readonly string[] = []
-
-  constructor(
-    message = 'runtime spawn state is indeterminate',
-    private readonly originalRecovery?: () => Promise<boolean>,
-  ) {
+  constructor(message = 'runtime spawn state is indeterminate') {
     super(message)
     this.name = 'IndeterminateRuntimeProcessError'
-  }
-
-  get originalJobIds(): readonly string[] {
-    return this.jobs
-  }
-
-  retainOriginalSettlement(ids: readonly string[], settlement: () => Promise<void>): void {
-    if (this.settlement !== undefined) throw new Error('memory-distill-recovery-already-owned')
-    this.jobs = Object.freeze([...ids])
-    this.settlement = settlement
-  }
-
-  /** Explicit recovery only: never reissue the model or infer a business result. */
-  recoverOriginal(): Promise<boolean> {
-    if (this.acknowledged) return Promise.resolve(true)
-    if (this.recovery) return this.recovery
-    const pending = Promise.resolve()
-      .then(async () => {
-        if (!this.physicalAcknowledged) {
-          if (!(await this.originalRecovery?.())) return false
-          this.physicalAcknowledged = true
-        }
-        if (this.settlement === undefined) return false
-        await this.settlement()
-        this.acknowledged = true
-        return true
-      })
-      .finally(() => {
-        if (this.recovery === pending) this.recovery = undefined
-      })
-    this.recovery = pending
-    return pending
-  }
-
-  /** Drain observes an explicit recovery's real ACK; it never signals a process. */
-  originalRecoveryAcknowledged(): boolean {
-    return this.acknowledged
   }
 }
 
@@ -1069,7 +1017,6 @@ export async function validateAndPersistCandidate(
    * zero-candidate one). Optional so existing callers are unaffected.
    */
   onReject?: (reason: string) => void,
-  origin?: { readonly executionRef: string; readonly preparedAt: number; readonly index: number },
 ): Promise<PersistedCandidate | null> {
   // Coalesce tag lists to one array; distiller's newTags surface for admin
   // attention but live alongside knownTags in `tags`.
@@ -1079,17 +1026,7 @@ export async function validateAndPersistCandidate(
     ),
   ).slice(0, 16)
 
-  const entropy =
-    origin === undefined
-      ? undefined
-      : createHash('sha256')
-          .update(origin.executionRef + '\n' + String(origin.index))
-          .digest()
-  let cursor = 0
-  const id =
-    origin === undefined
-      ? ulid()
-      : factory(() => entropy![cursor++ % entropy!.length]! / 256)(origin.preparedAt)
+  const id = ulid()
   let memory: Memory
   try {
     memory = MemorySchema.parse({
@@ -1120,26 +1057,22 @@ export async function validateAndPersistCandidate(
     return null
   }
 
-  const inserted = await store.insertCandidate({
-    memory,
-    ...(origin === undefined ? {} : { idempotent: true }),
+  await store.insertCandidate({ memory })
+  memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
+    type: 'memory.candidate.created',
+    memory: {
+      id: memory.id,
+      scopeType: memory.scopeType,
+      scopeId: memory.scopeId,
+      title: memory.title,
+      status: 'candidate',
+      tags: memory.tags,
+      approvedAt: null,
+      version: 1,
+      distillAction: memory.distillAction,
+      fusedIntoSkillId: null,
+    },
   })
-  if (inserted !== false)
-    memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
-      type: 'memory.candidate.created',
-      memory: {
-        id: memory.id,
-        scopeType: memory.scopeType,
-        scopeId: memory.scopeId,
-        title: memory.title,
-        status: 'candidate',
-        tags: memory.tags,
-        approvedAt: null,
-        version: 1,
-        distillAction: memory.distillAction,
-        fusedIntoSkillId: null,
-      },
-    })
   return { memory, raw }
 }
 
@@ -1157,39 +1090,30 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
 
   const scope = options.job.scopeResolved
   const sourceContextBudget = options.sourceContextBudget ?? DEFAULT_SOURCE_CONTEXT_BUDGET
-  const restored = options.restore?.[0]
-  const restoredRounds =
-    options.restore === undefined ? undefined : originalProtocolRounds(options.restore)
-  if (restoredRounds === null) throw new Error('memory-distill-original-protocol-rounds-mismatch')
-  const contextInputs =
-    restored === undefined
-      ? await Promise.all([
-          loadSourceEvents(
-            options.store,
-            options.reviewedArtifacts,
-            options.siblings,
-            options.nodeRunPrompts,
-            sourceContextBudget,
-          ),
-          loadScopeContexts(options.store, scope),
-        ])
-      : undefined
+  const [events, scopeContexts] = await Promise.all([
+    loadSourceEvents(
+      options.store,
+      options.reviewedArtifacts,
+      options.siblings,
+      options.nodeRunPrompts,
+      sourceContextBudget,
+    ),
+    loadScopeContexts(options.store, scope),
+  ])
   // RFC-050: read the language from the job row (snapshotted at enqueue
   // by the scheduler). We deliberately do NOT read `config.memoryDistillLang`
   // here — retries and merged-sibling reruns must all use the language the
   // batch started with, even if the admin flipped the setting mid-batch.
   const outputLang: DistillerOutputLang = options.job.outputLang ?? 'en-US'
-  const envelopeNonce = restored?.envelopeNonce ?? options.envelopeNonce ?? generateEnvelopeNonce()
-  const userPrompt =
-    restored?.prompt ??
-    buildDistillerUserPrompt({
-      events: contextInputs![0],
-      scopeContexts: contextInputs![1],
-      taskId: options.job.taskId,
-      sourceContextBudget,
-      outputLang,
-      envelopeNonce,
-    })
+  const envelopeNonce = options.envelopeNonce ?? generateEnvelopeNonce()
+  const userPrompt = buildDistillerUserPrompt({
+    events,
+    scopeContexts,
+    taskId: options.job.taskId,
+    sourceContextBudget,
+    outputLang,
+    envelopeNonce,
+  })
 
   // RFC-043: persist the user prompt + dedup snapshot on the first
   // attempt so the admin detail page can show "what the distiller saw"
@@ -1197,9 +1121,9 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // retries re-derive prompt-side context from events captured per
   // attempt; we do NOT overwrite the prompt on retry to preserve the
   // first-attempt audit trail.
-  if (options.job.attempts === 0 && contextInputs !== undefined) {
+  if (options.job.attempts === 0) {
     const dedupSnapshotJson = JSON.stringify({
-      snapshot: buildDedupSnapshotForPersist(contextInputs[1]),
+      snapshot: buildDedupSnapshotForPersist(scopeContexts),
     })
     try {
       await options.store.savePrompt(options.job.id, userPrompt, dedupSnapshotJson)
@@ -1216,13 +1140,9 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // （`runScratchOrphanGc` 24h 兜底）。RFC-367：**整条补问链共用这一个** ——
   // claude 的 transcript 按 cwd-slug 归档，换 cwd 就等于换项目目录，`--resume`
   // 会落空（RFC-111 design §225/283/298 实测）。
-  let workspaceScope: ReturnType<SystemAgentRunFamily['workspaces']['capture']>
-  if (restored !== undefined) workspaceScope = systemAgents.workspaces.capture(restored.scope)
-  else {
-    const scratchParent = systemAgents.workspaces.capture({ namespace: 'shared' })
-    const scratchName = `distiller-${randomBytes(8).toString('hex')}`
-    workspaceScope = systemAgents.workspaces.withName(scratchParent, scratchName)
-  }
+  const scratchParent = systemAgents.workspaces.capture({ namespace: 'shared' })
+  const scratchName = `distiller-${randomBytes(8).toString('hex')}`
+  const workspaceScope = systemAgents.workspaces.withName(scratchParent, scratchName)
   // RFC-367: one sink for the whole attempt (all follow-up rounds share the
   // session, so they share the record). The store owns the DB, so it owns the
   // writer; `runDistill` only hands it to the runtime.
@@ -1233,13 +1153,10 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
 
   // RFC-367 §3.2：`timeoutMs` 是**整次蒸馏（含全部补问轮）**的总额度，不是单轮额度。
   // 否则一个 tick 最多 5 个 head 串行 × 每个 4 轮 × 1h = 20h 把蒸馏队列钉死。
-  const deadline =
-    restored?.deadlineAt ??
-    (restored === undefined ? Date.now() + timeoutMs : restored.preparedAt + timeoutMs)
+  const deadline = Date.now() + timeoutMs
 
   let sessionId: string | undefined
   let lastResult: SystemAgentRunResult | undefined
-  let originalUnknown = false
   const forgetRetainedContents: (() => void)[] = []
   let lastFailure: { code: DistillProtocolFailureCode; detail?: string } | undefined
 
@@ -1260,14 +1177,8 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
     const retainedContents = systemAgents.retainedContents
     const forget = retainedContents.forget
     for (let round = 0; round <= DEFAULT_PROTOCOL_RETRY_BUDGET; round += 1) {
-      const replay = restoredRounds?.find((row) => row.roundIndex === round)
-      if (replay !== undefined && replay.terminal === null)
-        throw new IndeterminateRuntimeProcessError(
-          'original distillation round has no durable terminal result',
-        )
       const remainingMs = deadline - Date.now()
-      if (replay === undefined && remainingMs <= 0)
-        throw new Error(`distiller timeout after ${timeoutMs}ms`)
+      if (remainingMs <= 0) throw new Error(`distiller timeout after ${timeoutMs}ms`)
 
       const prompt =
         round === 0 || lastFailure === undefined
@@ -1278,66 +1189,37 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
               envelopeNonce,
             })
 
-      const result: SystemAgentRunResult =
-        replay !== undefined && replay.terminal !== null
-          ? replay.terminal
-          : await systemAgents.run({
-              feature: 'memory-distiller',
-              observationDemand: {
-                kind: 'memory-distill',
-                originalId: options.job.id,
-                originalAttempt: `${options.job.attempts}:${round}`,
-                name: `记忆提取 · ${options.job.sourceKind}`,
-                parentTaskId: options.job.taskId,
-                purpose: 'memory',
-              },
-              ...(options.runtimeObservationIdentity
-                ? { runtimeObservationIdentity: options.runtimeObservationIdentity }
-                : {}),
-              agentName: DISTILLER_AGENT_NAME,
-              systemPrompt: restored?.systemPrompt ?? DISTILLER_SYSTEM_PROMPT,
-              prompt,
-              protocol,
-              runtimeBinding: options.runtimeBinding ?? null,
-              model: options.model ?? null,
-              isSandbox: options.isSandbox === true,
-              workspaceScope,
-              ...(round > 0 && lastResult !== undefined
-                ? { resumeRetainedRef: lastResult.retainedRef }
-                : {}),
-              ...(options.executionSession === undefined
-                ? {}
-                : {
-                    admitExecution: options.executionSession.canIssue,
-                    executionReceipts: options.executionSession.round({
-                      scope: workspaceScope,
-                      protocol,
-                      roundIndex: round,
-                      envelopeNonce,
-                      prompt,
-                      runtimeBinding: options.runtimeBinding ?? null,
-                      ...(options.runtimeObservationIdentity
-                        ? { runtimeObservationIdentity: options.runtimeObservationIdentity }
-                        : {}),
-                      model: options.model ?? null,
-                      isSandbox: options.isSandbox === true,
-                      timeoutMs,
-                      systemPrompt: restored?.systemPrompt ?? DISTILLER_SYSTEM_PROMPT,
-                      deadlineAt: deadline,
-                    }),
-                  }),
-              timeoutMs: remainingMs,
-              // 链未结束前不许删 scratch（claude 的 --resume 依赖同一 cwd-slug）。
-              retainScratchOnSuccess: true,
-              ...(eventSink === undefined ? {} : { eventSink }),
-              ...(round > 0 && sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
-            })
+      const result = await systemAgents.run({
+        feature: 'memory-distiller',
+        observationDemand: {
+          kind: 'memory-distill',
+          originalId: options.job.id,
+          originalAttempt: `${options.job.attempts}:${round}`,
+          name: `记忆提取 · ${options.job.sourceKind}`,
+          parentTaskId: options.job.taskId,
+          purpose: 'memory',
+        },
+        ...(options.runtimeObservationIdentity
+          ? { runtimeObservationIdentity: options.runtimeObservationIdentity }
+          : {}),
+        agentName: DISTILLER_AGENT_NAME,
+        systemPrompt: DISTILLER_SYSTEM_PROMPT,
+        prompt,
+        protocol,
+        runtimeBinding: options.runtimeBinding ?? null,
+        model: options.model ?? null,
+        isSandbox: options.isSandbox === true,
+        workspaceScope,
+        timeoutMs: remainingMs,
+        // 链未结束前不许删 scratch（claude 的 --resume 依赖同一 cwd-slug）。
+        retainScratchOnSuccess: true,
+        ...(eventSink === undefined ? {} : { eventSink }),
+        ...(round > 0 && sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
+      })
       lastResult = result
-      originalUnknown = options.executionSession !== undefined && result.status === 'unreaped'
       const retainedRef = result.retainedRef
       forgetRetainedContents.push(() => forget.call(retainedContents, { retainedRef }))
       sessionId ??= result.capturedSessionId
-      await options.executionSession?.observeTerminal(result)
 
       // RFC-043: stamp the post-spawn artefacts onto the job row. Failures here
       // are non-fatal (logged); the original success/failure semantics of
@@ -1350,72 +1232,23 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
           stderrExcerpt: clipAndRedactStderr(result.stderrTail, 2048),
         })
       } catch (err) {
-        try {
-          log.warn('rfc043/persist-spawn-result-failed', {
-            jobId: options.job.id,
-            err: err instanceof Error ? err.message : String(err),
-          })
-        } catch {
-          // Diagnostics cannot discard an original unreaped result or its reference.
-        }
+        log.warn('rfc043/persist-spawn-result-failed', {
+          jobId: options.job.id,
+          err: err instanceof Error ? err.message : String(err),
+        })
       }
 
       // 进程级失败不补问：模型没得到说话机会，再问一遍也是同样的失败。
-      if (result.status === 'unreaped') {
-        originalUnknown = options.executionSession !== undefined
-        const retainedContents = systemAgents.retainedContents
-        const release = retainedContents.release.bind(retainedContents)
-        const recover = result.executionRecovery?.recoverOriginal.bind(result.executionRecovery)
-        const originalRef = result.retainedRef
-        let released = false
-        let forgotten = 0
-        throw new IndeterminateRuntimeProcessError(
-          'distiller runtime process could not be reaped',
-          async () => {
-            if (!(await recover?.())) return false
-            if (result.executionReceipt !== undefined)
-              await options.executionSession?.confirmReaped(result.executionReceipt)
-            if (!released) {
-              const receipt = await release({ retainedRef: originalRef, scope: workspaceScope })
-              if (!receipt.removed)
-                throw new Error('memory-distill-original-material-release-unproven')
-              released = true
-            }
-            while (forgotten < forgetRetainedContents.length) {
-              forgetRetainedContents[forgotten]!()
-              forgotten += 1
-            }
-            return true
-          },
-        )
-      }
       if (result.status !== 'ok') throw mapSystemAgentFailure(result, timeoutMs)
 
       const parsed = parseDistillerCandidates(result.eventText, envelopeNonce)
       if (parsed.ok) {
         const rejections: string[] = []
         const persisted: string[] = []
-        for (const [index, raw] of parsed.candidates.entries()) {
-          const persist = () =>
-            validateAndPersistCandidate(
-              options.store,
-              raw,
-              options.job,
-              (reason) => rejections.push(reason),
-              options.executionSession === undefined || result.executionReceipt === undefined
-                ? undefined
-                : {
-                    executionRef: result.executionReceipt.executionRef,
-                    preparedAt: options.executionSession.originalPreparedAt(
-                      result.executionReceipt.executionRef,
-                    ),
-                    index,
-                  },
-            )
-          const ok =
-            options.executionSession === undefined
-              ? await persist()
-              : await options.executionSession.persistCandidate(persist)
+        for (const raw of parsed.candidates) {
+          const ok = await validateAndPersistCandidate(options.store, raw, options.job, (reason) =>
+            rejections.push(reason),
+          )
           if (ok !== null) persisted.push(ok.memory.id)
         }
         // RFC-367 AC-14: 解析出 N>0 条却一条都没落库 —— 这和「没什么可蒸馏」在 UI 上完全
@@ -1453,16 +1286,13 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       DEFAULT_PROTOCOL_RETRY_BUDGET + 1,
       describeProtocolFailure(lastFailure, lastResult?.outputEvidence),
     )
-  } catch (error) {
-    if (error instanceof MemoryDistillSettlementPendingError) originalUnknown = true
-    throw error
   } finally {
     // RFC-367: nothing to capture after the fact any more — the sink recorded
     // every round live, from the same normalized stream the parser read.
     try {
-      if (!originalUnknown) await releaseChainScratch(lastResult)
+      await releaseChainScratch(lastResult)
     } finally {
-      for (const forget of originalUnknown ? [] : forgetRetainedContents) {
+      for (const forget of forgetRetainedContents) {
         try {
           forget()
         } catch (error) {
@@ -1481,7 +1311,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
 }
 
 /** `SystemAgentRunStatus` → 蒸馏器历史上的错误契约（调度器只读 message）。 */
-export function mapSystemAgentFailure(result: SystemAgentRunResult, timeoutMs: number): Error {
+function mapSystemAgentFailure(result: SystemAgentRunResult, timeoutMs: number): Error {
   switch (result.status) {
     case 'unreaped':
       return new IndeterminateRuntimeProcessError('distiller runtime process could not be reaped')
@@ -1510,7 +1340,7 @@ export function mapSystemAgentFailure(result: SystemAgentRunResult, timeoutMs: n
  * `assistant-stopped-without-envelope` —— 又一句假话。截断这一条独立判断，因为它是唯一
  * 「不是模型的错」的可能原因。
  */
-export function describeProtocolFailure(
+function describeProtocolFailure(
   failure: { code: DistillProtocolFailureCode; detail?: string } | undefined,
   evidence: SystemAgentOutputEvidence | undefined,
   extra?: string,

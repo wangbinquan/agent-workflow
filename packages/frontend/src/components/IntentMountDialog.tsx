@@ -7,7 +7,7 @@ import {
 } from '@agent-workflow/shared'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { ulid } from 'ulid'
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -55,7 +55,7 @@ export interface IntentMountDialogProps {
 
 export function IntentMountDialog(props: IntentMountDialogProps) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('intent')
+  const execution = useExecutionAvailability('intent')
   const [type, setType] = useState<IntentMountType>('agent')
   const [picks, setPicks] = useState<Picks>(EMPTY_PICKS)
   const [removals, setRemovals] = useState<string[]>([])

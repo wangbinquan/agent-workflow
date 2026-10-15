@@ -45,7 +45,6 @@ import {
   type RecoveredCodeHostMutation,
 } from './effectQuiescence'
 import { DrizzleTaskOwnershipPersistence } from './taskOwnershipPersistence'
-import type { TaskResourceRecoveryWrite } from './taskResourceRecoveryWrite'
 
 type OwnerRow = typeof taskExecutionOwners.$inferSelect
 
@@ -74,11 +73,8 @@ interface ProbedCodeHostMutation {
 export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRecoveryPersistence {
   private readonly ownership: DrizzleTaskOwnershipPersistence
 
-  constructor(
-    private readonly db: ProviderNeutralDatabase,
-    private readonly resourceRecovery?: TaskResourceRecoveryWrite,
-  ) {
-    this.ownership = new DrizzleTaskOwnershipPersistence(db, undefined, resourceRecovery)
+  constructor(private readonly db: ProviderNeutralDatabase) {
+    this.ownership = new DrizzleTaskOwnershipPersistence(db)
   }
 
   /**
@@ -150,19 +146,14 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
           preResolutionEffectIds,
         }),
       )
-      const processResolution = await resolveQuiescedManagedProcesses(
-        this.db,
-        {
-          authority: 'successor-daemon',
-          owner: oldOwner,
-          expectedRevision: owner.revision,
-          lockProof: input.lockProof,
-          quiescenceEvidenceDigest: processEvidenceDigest,
-          now,
-        },
-        undefined,
-        this.resourceRecovery,
-      )
+      const processResolution = await resolveQuiescedManagedProcesses(this.db, {
+        authority: 'successor-daemon',
+        owner: oldOwner,
+        expectedRevision: owner.revision,
+        lockProof: input.lockProof,
+        quiescenceEvidenceDigest: processEvidenceDigest,
+        now,
+      })
       recoveredProcessEffectIds.push(...processResolution.resolvedEffectIds)
 
       const probed = await this.probeCodeHostCandidates(owner, input.codeHostProbe)
@@ -174,18 +165,14 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
           probeResults: probed.map((result) => result.evidence),
         }),
       )
-      const codeHostResolution = await resolveQuiescedCodeHostMutations(
-        this.db,
-        {
-          owner: oldOwner,
-          expectedRevision: owner.revision,
-          lockProof: input.lockProof,
-          quiescenceEvidenceDigest: codeHostEvidenceDigest,
-          resolutions: probed.map((result) => result.resolution),
-          now,
-        },
-        this.resourceRecovery,
-      )
+      const codeHostResolution = await resolveQuiescedCodeHostMutations(this.db, {
+        owner: oldOwner,
+        expectedRevision: owner.revision,
+        lockProof: input.lockProof,
+        quiescenceEvidenceDigest: codeHostEvidenceDigest,
+        resolutions: probed.map((result) => result.resolution),
+        now,
+      })
       recoveredCodeHostEffectIds.push(...codeHostResolution.appliedEffectIds)
       retryAuthorizedCodeHostEffectIds.push(...codeHostResolution.retryAuthorizedEffectIds)
 
@@ -206,24 +193,20 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
         }),
       )
       if (unresolvedEffectIds.length > 0) {
-        await closeRecoveredOutcomeUnknownAndRelease(
-          this.db,
-          {
-            owner: oldOwner,
-            expectedRevision: owner.revision,
-            lockProof: input.lockProof,
-            proof: createVerifiedOutcomeUnknownClosure({
-              taskId: owner.taskId,
-              ownerRevision: owner.revision,
-              epoch: owner.epoch,
-              quiescenceDigest: evidenceDigest,
-              unresolvedEffectIds,
-              verifiedAt: now,
-            }),
-            now,
-          },
-          this.resourceRecovery,
-        )
+        await closeRecoveredOutcomeUnknownAndRelease(this.db, {
+          owner: oldOwner,
+          expectedRevision: owner.revision,
+          lockProof: input.lockProof,
+          proof: createVerifiedOutcomeUnknownClosure({
+            taskId: owner.taskId,
+            ownerRevision: owner.revision,
+            epoch: owner.epoch,
+            quiescenceDigest: evidenceDigest,
+            unresolvedEffectIds,
+            verifiedAt: now,
+          }),
+          now,
+        })
         outcomeUnknownTaskIds.push(owner.taskId)
         continue
       }

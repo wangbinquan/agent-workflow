@@ -42,9 +42,6 @@ describe('RFC-370 complete System family binding', () => {
       },
     }
     const retainedContents: SystemAgentRetainedContents = {
-      inspect() {
-        throw new Error('not reached')
-      },
       forget() {},
       release() {
         throw new Error('not reached')
@@ -80,16 +77,7 @@ describe('RFC-370 complete System family binding', () => {
         throw original
       },
     }
-    const family = composeSystemAgentRunFamily({
-      invocations,
-      workspaces,
-      retainedContents,
-      recovery: {
-        recoverReference: async () => {
-          throw new Error('unselected recovery')
-        },
-      },
-    })
+    const family = composeSystemAgentRunFamily({ invocations, workspaces, retainedContents })
     expect(family.workspaces).toBe(workspaces)
     expect(family.retainedContents).toBe(retainedContents)
     await expect(family.run(request)).rejects.toBe(original)
@@ -198,13 +186,12 @@ describe('RFC-370 complete System family binding', () => {
     expect('scratchDir' in completed).toBe(false)
   })
 
-  test('an explicit native fixture decodes the durable original runtime reference after reconstruction', async () => {
+  test('an explicit fixture cannot interpret another root runtime reference', async () => {
     const first = composeLocalSystemAgentRunFamily({ appHome: () => '/first' })
     const second = composeLocalSystemAgentRunFamily({ appHome: () => '/second' })
     let calls = 0
-    const selected = second.withFixture(async (opts) => {
+    const selected = second.withFixture(async () => {
       calls++
-      expect(opts.runtimeBinary).toBe('/first/runtime')
       return result('/second/scratch/named')
     })
     await expect(
@@ -217,8 +204,8 @@ describe('RFC-370 complete System family binding', () => {
         runtimeBinding: first.bindRuntime({ binaryPath: '/first/runtime' }).runtimeBinding,
         workspaceScope: selected.family.workspaces.capture({ namespace: 'shared', name: 'named' }),
       }),
-    ).resolves.toMatchObject({ status: 'ok' })
-    expect(calls).toBe(1)
+    ).rejects.toThrow('system-runtime-binding-unavailable')
+    expect(calls).toBe(0)
   })
 
   for (const protocol of ['opencode', 'claude-code'] as const) {

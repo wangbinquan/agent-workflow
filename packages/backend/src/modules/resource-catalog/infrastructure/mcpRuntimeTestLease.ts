@@ -98,66 +98,6 @@ async function claimNew(
   })
 }
 
-async function claimPending(
-  db: ProviderNeutralDatabase,
-  input: McpRuntimeTestLeaseInput,
-): Promise<McpRuntimeTestLeaseToken> {
-  const leasedAt = validate(input)
-  return runResourceCatalogTransaction(db, async (transaction) => {
-    await assertLiveTurn(transaction, input.testSessionId, input.turnId, input.protocol)
-    const turn = await transaction
-      .select()
-      .from(mcpRuntimeTestTurns)
-      .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-      .get()
-    if (
-      turn?.seq !== 1 ||
-      turn.pid !== null ||
-      turn.spawnedAt !== null ||
-      turn.spawnBinaryPath !== null
-    ) {
-      fail('pending-turn-already-spawned')
-    }
-    await transaction
-      .insert(mcpRuntimeTestSessionLeases)
-      .values({
-        protocol: input.protocol,
-        runtimeSessionId: input.runtimeSessionId,
-        testSessionId: input.testSessionId,
-        createdTurnId: input.turnId,
-        currentTurnId: input.turnId,
-        leaseTurnId: null,
-        leaseAcquiredAt: null,
-        leaseNonceDigest: null,
-      })
-      .onConflictDoNothing()
-      .run()
-    const claimed = await transaction
-      .update(mcpRuntimeTestSessionLeases)
-      .set({
-        leaseTurnId: input.turnId,
-        leaseAcquiredAt: leasedAt,
-        leaseNonceDigest: input.leaseNonceDigest,
-      })
-      .where(
-        and(
-          eq(mcpRuntimeTestSessionLeases.protocol, input.protocol),
-          eq(mcpRuntimeTestSessionLeases.runtimeSessionId, input.runtimeSessionId),
-          eq(mcpRuntimeTestSessionLeases.testSessionId, input.testSessionId),
-          eq(mcpRuntimeTestSessionLeases.createdTurnId, input.turnId),
-          eq(mcpRuntimeTestSessionLeases.currentTurnId, input.turnId),
-          isNull(mcpRuntimeTestSessionLeases.leaseTurnId),
-          isNull(mcpRuntimeTestSessionLeases.leaseAcquiredAt),
-          isNull(mcpRuntimeTestSessionLeases.leaseNonceDigest),
-        ),
-      )
-      .returning({ id: mcpRuntimeTestSessionLeases.runtimeSessionId })
-      .all()
-    if (claimed.length !== 1) fail('pending-lease-held-or-mismatched')
-    return input
-  })
-}
-
 async function preclaim(
   db: ProviderNeutralDatabase,
   input: McpRuntimeTestLeaseInput,
@@ -268,7 +208,6 @@ async function rotate(
 async function release(
   db: ProviderNeutralDatabase,
   token: McpRuntimeTestLeaseToken,
-  confirmAcknowledgement = false,
 ): Promise<boolean> {
   return runResourceCatalogTransaction(db, async (transaction) => {
     const released = await transaction
@@ -285,28 +224,7 @@ async function release(
       )
       .returning({ id: mcpRuntimeTestSessionLeases.runtimeSessionId })
       .all()
-    if (released.length === 1) return true
-    if (!confirmAcknowledgement) return false
-    // An ACK may be lost after this exact release committed. Absence is only
-    // proven on the same protocol/native session/test owner; another active
-    // turn or owner must never be cleared or treated as our acknowledgement.
-    const current = await transaction
-      .select()
-      .from(mcpRuntimeTestSessionLeases)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessionLeases.protocol, token.protocol),
-          eq(mcpRuntimeTestSessionLeases.runtimeSessionId, token.runtimeSessionId),
-          eq(mcpRuntimeTestSessionLeases.testSessionId, token.testSessionId),
-        ),
-      )
-      .get()
-    return (
-      current !== undefined &&
-      current.leaseTurnId === null &&
-      current.leaseAcquiredAt === null &&
-      current.leaseNonceDigest === null
-    )
+    return released.length === 1
   })
 }
 
@@ -342,12 +260,10 @@ export function createMcpRuntimeTestLeaseOperations(
 ): McpRuntimeTestLeaseOperations {
   return Object.freeze({
     claimNew: (input: McpRuntimeTestLeaseInput) => claimNew(db, input),
-    claimPending: (input: McpRuntimeTestLeaseInput) => claimPending(db, input),
     preclaim: (input: McpRuntimeTestLeaseInput) => preclaim(db, input),
     rotate: (token: McpRuntimeTestLeaseToken, nextRuntimeSessionId: string) =>
       rotate(db, token, nextRuntimeSessionId),
     release: (token: McpRuntimeTestLeaseToken) => release(db, token),
-    releaseAcknowledged: (token: McpRuntimeTestLeaseToken) => release(db, token, true),
     repairAfterReap: (testSessionId: string, turnId: string, childReaped: true) =>
       repairAfterReap(db, testSessionId, turnId, childReaped),
   })

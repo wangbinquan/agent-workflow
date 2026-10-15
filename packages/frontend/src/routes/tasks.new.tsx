@@ -19,7 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import type {
   Agent,
   CachedRepo,
@@ -332,7 +332,7 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     onSourceChange: context.onSourceChange,
   }
   const { t, i18n } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const search = TaskWizardRoute.useSearch() as OrchestrationTaskWizardSearch
   const routeKind =
     search.kind === 'workflow' || search.kind === 'agent' || search.kind === 'workgroup'

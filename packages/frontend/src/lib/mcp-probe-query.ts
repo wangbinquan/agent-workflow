@@ -9,7 +9,7 @@
 // fresh result).
 
 import { useRef, useState } from 'react'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   McpOperationResource,
@@ -60,7 +60,7 @@ export function useMcpProbe(id: string) {
 }
 
 export function useProbeMcpMutation(id: string) {
-  const execution = useHostExecutionAvailability('diagnostics')
+  const execution = useExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const current = useRef<{ requestId: string; expectedHash: string } | null>(null)
   const [resultStale, setResultStale] = useState(false)

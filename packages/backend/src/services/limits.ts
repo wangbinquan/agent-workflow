@@ -18,7 +18,6 @@ import {
 } from '@/modules/system-operations/public/operations'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import { createLogger, type Logger } from '@/util/log'
-import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
 
 const log: Logger = createLogger('limits')
 
@@ -52,10 +51,7 @@ function operationsFor(source: ResourceLimitSource): ResourceLimitOperations {
 export async function enforceLimits(
   source: ResourceLimitSource,
   now: number = Date.now(),
-  execution?: BackgroundExecutionLifetime,
 ): Promise<EnforceLimitsResult> {
-  const current = execution?.current.bind(execution)
-  if (current?.() === false) return { scanned: 0, canceled: [] }
   const operations = operationsFor(source)
   // RFC-311 (audit L1-9): this runs at 1Hz — checkOne consumes exactly five
   // scalar columns, but the former select() decoded every running task's
@@ -67,10 +63,8 @@ export async function enforceLimits(
   const canceled: string[] = []
 
   for (const t of running) {
-    if (current?.() === false) break
     const reason = await checkOne(operations.persistence, t, now)
     if (reason === null) continue
-    if (current?.() === false) break
 
     try {
       await operations.cancelTask(t.id, reason)

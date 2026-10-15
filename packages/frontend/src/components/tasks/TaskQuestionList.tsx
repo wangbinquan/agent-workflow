@@ -18,7 +18,7 @@ import type { DispatchTaskQuestionsResponse } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { api, ApiError } from '@/api/client'
 import { Card } from '@/components/Card'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -124,7 +124,7 @@ export function TaskQuestionList({
   focusTargetNode = null,
 }: TaskQuestionListProps) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const qc = useQueryClient()
   const key = TASK_QUERY_KEYS.questions(taskId)
   const query = useQuery<TaskQuestionEntry[], ApiError>({

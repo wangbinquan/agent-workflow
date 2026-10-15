@@ -16,8 +16,8 @@ import {
 } from '@tanstack/react-router'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
-import type { HostExecutionStatus } from '@agent-workflow/shared'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import type { ExecutionStatus } from '@agent-workflow/shared'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 
 vi.mock('../src/hooks/useScheduledTaskWs', () => ({ useScheduledTaskWs: () => undefined }))
 
@@ -78,7 +78,9 @@ function installFetch(
   return calls
 }
 
-async function renderDetail(view: HostExecutionStatus = { mode: 'native', status: null }) {
+async function renderDetail(
+  view: ExecutionStatus = { mode: 'standalone', state: 'active', reason: null },
+) {
   const mod = await import('../src/routes/scheduled.$id')
   const rootRoute = createRootRoute({ component: () => <Outlet /> })
   const detail = createRoute({
@@ -99,9 +101,9 @@ async function renderDetail(view: HostExecutionStatus = { mode: 'native', status
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={qc}>
-      <HostExecutionReadinessContext.Provider value={view}>
+      <ExecutionStatusContext.Provider value={view}>
         <RouterProvider router={router} />
-      </HostExecutionReadinessContext.Provider>
+      </ExecutionStatusContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -109,15 +111,7 @@ async function renderDetail(view: HostExecutionStatus = { mode: 'native', status
 describe('RFC-159 T7 — Run now button', () => {
   test('RFC-370 resource-only mode keeps the schedule visible without submitting an immediate run', async () => {
     const calls = installFetch()
-    await renderDetail({
-      mode: 'resource-only',
-      status: {
-        phase: 'standby',
-        generation: 'schedule-resource-mode',
-        readyGroups: [],
-        reason: 'resource-only',
-      },
-    })
+    await renderDetail({ mode: 'crewstation', state: 'standby', reason: null })
     const button = (await screen.findByTestId('scheduled-run-now')) as HTMLButtonElement
     expect(button.disabled).toBe(true)
     fireEvent.click(button)

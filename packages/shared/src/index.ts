@@ -184,4 +184,4 @@ export * from './developmentConfigCreate'
 // RFC-371 original durable native owner contracts.
 export * from './workflowOutputEvidence'
 
-export * from './schemas/hostExecutionStatus'
+export * from './schemas/executionStatus'

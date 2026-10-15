@@ -85,7 +85,7 @@ export function composeWebhookIngressTransport(input: {
             audit: input.webhookIngressPersistence.deliveries,
             events: {
               observe: async (observation) => await eventCenter.commands.observe(observation),
-              notify: (deliveryId) => eventCenter.worker.notify(deliveryId),
+              notify: (deliveryId) => eventCenter.worker.runOneNotification(deliveryId),
               nudge: () =>
                 eventCenter.observerControl.nudgeSource({ id: 'code-host.activity', revision: 1 }),
             },

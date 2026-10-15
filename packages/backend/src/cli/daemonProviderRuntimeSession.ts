@@ -4,12 +4,6 @@
 // clients stay captured by the factories and close callbacks supplied by the
 // composition root; they never cross this boundary in the runtime payload.
 
-import type { DaemonExecutionRuntimeControl } from '@/modules/system-operations/composition/daemonExecutionRuntime'
-import type {
-  HostExecutionGrantContext,
-  HostExecutionGroup,
-  HostExecutionRuntimeFamily,
-} from '@/modules/system-operations/public/participants'
 import type {
   DaemonProviderKind,
   DaemonProviderSessionLifecycleInput,
@@ -48,9 +42,6 @@ export interface DaemonProviderRuntimeAdmission {
  * factory again and receives a new handle.
  */
 export interface DaemonProviderRuntimeHandle {
-  /** A cold owner can retain an unresolved original recovery without becoming
-   * ready. The session records its handle before asking for the start ACK. */
-  readonly acknowledgeStart?: () => MaybePromise<void>
   readonly stop: () => MaybePromise<void>
   readonly drain: () => MaybePromise<void>
 }
@@ -61,28 +52,6 @@ export interface DaemonProviderRuntimeHandleFactory {
   readonly start: (
     input: DaemonProviderSessionLifecycleInput,
   ) => MaybePromise<DaemonProviderRuntimeHandle>
-}
-
-/** The root pairs every actual handle with its owner and loss-specific ACKs. */
-export interface DaemonProviderHostExecutionHandleBinding {
-  readonly id: string
-  readonly group: HostExecutionGroup
-  readonly start: (input: {
-    readonly scope: DaemonProviderSessionLifecycleInput
-    readonly context: HostExecutionGrantContext
-  }) => MaybePromise<DaemonProviderRuntimeHandle>
-  readonly quiesceAuthorityLoss: (input: {
-    readonly handle: DaemonProviderRuntimeHandle
-    readonly context: HostExecutionGrantContext
-  }) => MaybePromise<void>
-  readonly drainAuthorityLoss: (input: {
-    readonly handle: DaemonProviderRuntimeHandle
-    readonly context: HostExecutionGrantContext
-  }) => MaybePromise<void>
-}
-
-export interface DaemonProviderHostExecutionRuntimeSelection {
-  readonly handles: readonly DaemonProviderHostExecutionHandleBinding[]
 }
 
 export interface DaemonProviderCloseParticipant {
@@ -107,10 +76,6 @@ export interface DaemonProviderRuntimeSession<
 > extends ManagedDaemonProviderSession {
   /** No provider client is present on this deliberately closed payload. */
   readonly runtime: DaemonProviderRuntimePayload<UpgradeServer, WebSocketHandlers>
-  /** Pause execution handles independently of the resource HTTP/WS delegates. */
-  readonly execution: DaemonExecutionRuntimeControl
-  /** Present only for the complete selection supplied by the actual root. */
-  readonly hostExecutionRuntime?: HostExecutionRuntimeFamily
   readonly state: () => DaemonProviderRuntimeSessionState
 }
 
@@ -126,12 +91,9 @@ export interface CreateDaemonProviderRuntimeSessionInput<
   readonly runtimeFactories?: readonly DaemonProviderRuntimeHandleFactory[]
   /** Started after runtime services and therefore stopped first. */
   readonly backgroundWriterFactories?: readonly DaemonProviderRuntimeHandleFactory[]
-  readonly hostExecutionRuntime?: DaemonProviderHostExecutionRuntimeSelection
   /** Executed in declaration order after every handle has drained. */
   readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
   readonly shutdownIdentity: () => MaybePromise<void>
-  /** Host authority retires its durable write receipt before this database closes. */
-  readonly beforeCloseProvider?: () => MaybePromise<void>
   readonly closeProvider: () => MaybePromise<void>
 }
 
@@ -139,8 +101,7 @@ export class DaemonProviderRuntimeSessionError extends Error {
   constructor(
     public readonly code:
       | 'daemon-provider-runtime-session-mismatch'
-      | 'daemon-provider-runtime-session-closing'
-      | 'daemon-provider-execution-unavailable',
+      | 'daemon-provider-runtime-session-closing',
     message: string,
   ) {
     super(message)
@@ -153,14 +114,6 @@ interface ActiveHandle {
   readonly handle: DaemonProviderRuntimeHandle
   stopped: boolean
   drained: boolean
-  readonly authority?: {
-    readonly binding: DaemonProviderHostExecutionHandleBinding
-    readonly context: HostExecutionGrantContext
-  }
-  stopMode?: 'normal' | 'authority-loss'
-  stopAcknowledgedMode?: 'normal' | 'authority-loss'
-  drainAcknowledgedMode?: 'normal' | 'authority-loss'
-  stopAttempt?: { readonly mode: ActiveHandle['stopMode']; readonly result: Promise<void> }
 }
 
 interface CloseParticipantProgress {
@@ -173,18 +126,6 @@ function lifecycleFailure(message: string, failures: readonly unknown[]): unknow
   return new AggregateError(failures, message)
 }
 
-function stoppedForCurrentMode(active: ActiveHandle): boolean {
-  return active.authority === undefined
-    ? active.stopped
-    : active.stopMode !== undefined && active.stopAcknowledgedMode === active.stopMode
-}
-
-function drainedForCurrentMode(active: ActiveHandle): boolean {
-  return active.authority === undefined
-    ? active.drained
-    : active.stopMode !== undefined && active.drainAcknowledgedMode === active.stopMode
-}
-
 /**
  * Create one fully composed but frozen provider session. The initial admission
  * close is awaited before the session can enter the controller.
@@ -192,40 +133,10 @@ function drainedForCurrentMode(active: ActiveHandle): boolean {
 export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocketHandlers>(
   input: CreateDaemonProviderRuntimeSessionInput<UpgradeServer, WebSocketHandlers>,
 ): Promise<DaemonProviderRuntimeSession<UpgradeServer, WebSocketHandlers>> {
-  const nativeFactories = [
+  const handleFactories = [
     ...(input.runtimeFactories ?? []),
     ...(input.backgroundWriterFactories ?? []),
   ]
-  // Embedded HTTP has no native daemon scheduler factories. Its explicit
-  // selection is the real ordered owner inventory, with no dummy native start.
-  const handleFactories: readonly {
-    id: string
-    start?: DaemonProviderRuntimeHandleFactory['start']
-  }[] =
-    input.hostExecutionRuntime !== undefined &&
-    input.runtimeFactories === undefined &&
-    input.backgroundWriterFactories === undefined
-      ? input.hostExecutionRuntime.handles.map((binding) => ({ id: binding.id }))
-      : nativeFactories
-  const authorityBindings = new Map<string, DaemonProviderHostExecutionHandleBinding>()
-  if (input.hostExecutionRuntime !== undefined) {
-    const ids = new Set(handleFactories.map((factory) => factory.id))
-    if (ids.size !== handleFactories.length)
-      throw new Error('host-execution-runtime-handle-id-duplicated')
-    for (const binding of input.hostExecutionRuntime.handles) {
-      if (!ids.has(binding.id) || authorityBindings.has(binding.id))
-        throw new Error('host-execution-runtime-handle-selection-mismatch')
-      if (typeof binding.group !== 'string' || binding.group.length === 0)
-        throw new Error('host-execution-runtime-handle-group-missing')
-      for (const method of ['start', 'quiesceAuthorityLoss', 'drainAuthorityLoss'] as const) {
-        if (typeof binding[method] !== 'function')
-          throw new Error(`host-execution-runtime-handle-missing-${method}`)
-      }
-      authorityBindings.set(binding.id, binding)
-    }
-    if (authorityBindings.size !== ids.size)
-      throw new Error('host-execution-runtime-handle-selection-incomplete')
-  }
   const closeProgress: CloseParticipantProgress[] = (input.providerCloseParticipants ?? []).map(
     (participant) => ({ participant, closed: false }),
   )
@@ -238,28 +149,10 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
 
   let phase: DaemonProviderRuntimeSessionPhase = 'frozen'
   let activeHandles: ActiveHandle[] = []
-  let executionEnabled = input.hostExecutionRuntime === undefined
-  let executionRunning = false
-  let authorityVersion = 0
-  let authorityClosing = false
-  let requestedAuthorityContext: HostExecutionGrantContext | undefined
-  const retiredAuthorityContexts = new WeakSet<HostExecutionGrantContext>()
-  const authorityRetirementModes = new WeakMap<
-    HostExecutionGrantContext,
-    'normal' | 'authority-loss'
-  >()
-  let authorityGrant:
-    | {
-        readonly context: HostExecutionGrantContext
-        readonly groups: readonly HostExecutionGroup[]
-        readonly version: number
-      }
-    | undefined
   let writerAdmissionMayBeOpen = true
   let webSocketAdmissionMayBeOpen = true
   let identityShutdown = false
   let providerClosed = false
-  let providerControlClosed = false
   let lifecycleTail: Promise<void> = Promise.resolve()
 
   const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
@@ -304,161 +197,30 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
     return failures
   }
 
-  const stopHandles = async (context?: HostExecutionGrantContext): Promise<unknown[]> => {
-    executionRunning = false
-    const failures: unknown[] = []
-    const unavailableStops = new Set<ActiveHandle>()
-    const prepareMode = (active: ActiveHandle): boolean => {
-      if (active.authority !== undefined && active.stopMode === undefined) {
-        const explicitMode = authorityRetirementModes.get(active.authority.context)
-        if (explicitMode === undefined && !active.authority.context.current()) {
-          failures.push(new Error('host-execution-runtime-stop-reason-pending'))
-          return false
-        }
-        active.stopMode = explicitMode ?? 'normal'
-      }
-      return true
-    }
-    const beginStop = (active: ActiveHandle) => {
-      if (active.stopAttempt) return active.stopAttempt
-      const mode = active.stopMode
-      let result: Promise<void>
-      try {
-        result = Promise.resolve(
-          active.authority !== undefined && mode === 'authority-loss'
-            ? active.authority.binding.quiesceAuthorityLoss({
-                handle: active.handle,
-                context: active.authority.context,
-              })
-            : active.handle.stop(),
-        )
-      } catch (error) {
-        result = Promise.reject(error)
-      }
-      void result.catch(() => {})
-      return (active.stopAttempt = { mode, result })
-    }
-    // Start each selected owner's real scheduling fence in reverse declaration
-    // order before awaiting any one owner's potentially long business drain.
-    // Native sessions retain their original sequential stop behavior below.
-    if (input.hostExecutionRuntime !== undefined) {
-      for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
-        const active = activeHandles[index]!
-        if (context !== undefined && active.authority?.context !== context) continue
-        if (!stoppedForCurrentMode(active)) {
-          if (prepareMode(active)) beginStop(active)
-          else unavailableStops.add(active)
-        }
-      }
-    }
-    for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
-      const active = activeHandles[index]!
-      if (context !== undefined && active.authority?.context !== context) continue
-      if (unavailableStops.has(active)) continue
-      try {
-        if (!prepareMode(active)) continue
-        while (!stoppedForCurrentMode(active)) {
-          // The requested mode can change during an awaited normal stop. Its
-          // ACK proves only that exact operation; loss still needs its owner ACK.
-          const attempt = beginStop(active),
-            acknowledgedMode = attempt.mode
-          try {
-            await attempt.result
-          } finally {
-            if (active.stopAttempt === attempt) active.stopAttempt = undefined
-          }
-          active.stopped = true
-          if (active.authority !== undefined) active.stopAcknowledgedMode = acknowledgedMode
-        }
-      } catch (error) {
-        failures.push(error)
-      }
-    }
-    return failures
-  }
-
-  const drainHandles = async (context?: HostExecutionGrantContext): Promise<unknown[]> => {
-    const failures: unknown[] = []
-    for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
-      const active = activeHandles[index]!
-      if (context !== undefined && active.authority?.context !== context) continue
-      if (!stoppedForCurrentMode(active) || drainedForCurrentMode(active)) continue
-      try {
-        const acknowledgedMode = active.stopMode
-        if (active.authority !== undefined && acknowledgedMode === 'authority-loss') {
-          await active.authority.binding.drainAuthorityLoss({
-            handle: active.handle,
-            context: active.authority.context,
-          })
-        } else {
-          await active.handle.drain()
-        }
-        active.drained = true
-        if (active.authority !== undefined) active.drainAcknowledgedMode = acknowledgedMode
-      } catch (error) {
-        failures.push(error)
-      }
-    }
-    activeHandles = activeHandles.filter(
-      (active) => !stoppedForCurrentMode(active) || !drainedForCurrentMode(active),
-    )
-    return failures
-  }
-
   const stopAndDrainHandles = async (): Promise<unknown[]> => {
-    const failures = await stopHandles()
-    failures.push(...(await drainHandles()))
+    const failures: unknown[] = []
+    for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
+      const active = activeHandles[index]!
+      if (active.stopped) continue
+      try {
+        await active.handle.stop()
+        active.stopped = true
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    for (let index = activeHandles.length - 1; index >= 0; index -= 1) {
+      const active = activeHandles[index]!
+      if (!active.stopped || active.drained) continue
+      try {
+        await active.handle.drain()
+        active.drained = true
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    activeHandles = activeHandles.filter((active) => !active.stopped || !active.drained)
     return failures
-  }
-
-  const rollbackStartedHandles = async (): Promise<unknown[]> => {
-    // SO can invalidate a pending start before its queued retire delivers the
-    // reason. Keep that exact handle for quiesce(reason); false current alone
-    // does not distinguish ordinary shutdown from authority loss.
-    if (
-      authorityGrant !== undefined &&
-      !authorityGrant.context.current() &&
-      !authorityRetirementModes.has(authorityGrant.context)
-    ) {
-      return []
-    }
-    return await stopAndDrainHandles()
-  }
-
-  const startHandles = async (
-    lifecycleInput: DaemonProviderSessionLifecycleInput,
-  ): Promise<void> => {
-    const grant = authorityGrant
-    if (input.hostExecutionRuntime !== undefined && grant === undefined) return
-    for (const factory of handleFactories) {
-      const binding = grant === undefined ? undefined : authorityBindings.get(factory.id)!
-      if (grant !== undefined && !grant.groups.includes(binding!.group)) continue
-      const current = () =>
-        grant === undefined ||
-        (!authorityClosing && grant.version === authorityVersion && grant.context.current())
-      if (!current()) throw new Error('host-execution-runtime-grant-lost')
-      if (grant === undefined && factory.start === undefined)
-        throw new Error('host-execution-runtime-prepared-grant-required')
-      const handle =
-        grant === undefined
-          ? await factory.start!(lifecycleInput)
-          : await binding!.start({ scope: lifecycleInput, context: grant.context })
-      activeHandles.push({
-        id: factory.id,
-        handle,
-        stopped: false,
-        drained: false,
-        ...(grant === undefined
-          ? {}
-          : {
-              authority: { binding: binding!, context: grant.context },
-              stopMode: authorityRetirementModes.get(grant.context),
-            }),
-      })
-      await handle.acknowledgeStart?.()
-      if (!current()) throw new Error('host-execution-runtime-grant-lost')
-    }
-    executionRunning = true
   }
 
   const freezeRuntime = async (): Promise<unknown[]> => {
@@ -482,10 +244,6 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
       identityShutdown = true
     }
     if (!providerClosed) {
-      if (!providerControlClosed) {
-        await input.beforeCloseProvider?.()
-        providerControlClosed = true
-      }
       await input.closeProvider()
       providerClosed = true
     }
@@ -521,10 +279,6 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
     }
     if (!providerClosed) {
       try {
-        if (!providerControlClosed) {
-          await input.beforeCloseProvider?.()
-          providerControlClosed = true
-        }
         await input.closeProvider()
         providerClosed = true
       } catch (error) {
@@ -543,170 +297,10 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
     )
   }
 
-  const hostExecutionRuntime = Object.freeze<HostExecutionRuntimeFamily>({
-    start({ context, groups }) {
-      if (context.generation !== input.generationId)
-        return Promise.reject(new Error('host-execution-runtime-generation-mismatch'))
-      if (groups.length === 0 || retiredAuthorityContexts.has(context))
-        return Promise.reject(new Error('host-execution-runtime-unavailable'))
-      requestedAuthorityContext = context
-      const requestedVersion = authorityVersion
-      return serialize(async () => {
-        if (
-          authorityClosing ||
-          phase !== 'running' ||
-          !context.current() ||
-          requestedVersion !== authorityVersion
-        ) {
-          throw new Error('host-execution-runtime-unavailable')
-        }
-        if (authorityGrant?.context === context && executionEnabled && executionRunning) return
-        if (activeHandles.length !== 0)
-          throw new Error('host-execution-runtime-prior-handles-not-drained')
-        authorityGrant = {
-          context,
-          groups: Object.freeze([...new Set(groups)]),
-          version: authorityVersion,
-        }
-        executionEnabled = true
-        try {
-          await startHandles({
-            operationId: 'host-execution-activation',
-            provider: input.provider,
-            generationId: input.generationId,
-          })
-        } catch (error) {
-          executionEnabled = false
-          const rollback = await rollbackStartedHandles()
-          if (rollback.length === 0) throw error
-          throw new AggregateError(
-            [error, ...rollback],
-            'failed to start host execution handles and settle rollback',
-          )
-        }
-      })
-    },
-    quiesce({ context, reason }) {
-      if (context.generation !== input.generationId)
-        return Promise.reject(new Error('host-execution-runtime-generation-mismatch'))
-      if (authorityGrant?.context !== context && requestedAuthorityContext !== context)
-        return Promise.resolve()
-      retiredAuthorityContexts.add(context)
-      const stopMode =
-        reason === 'authority-loss' || authorityRetirementModes.get(context) === 'authority-loss'
-          ? 'authority-loss'
-          : 'normal'
-      authorityRetirementModes.set(context, stopMode)
-      authorityVersion += 1
-      executionEnabled = false
-      executionRunning = false
-      for (const active of activeHandles) {
-        if (
-          active.authority?.context === context &&
-          (active.stopMode === undefined || stopMode === 'authority-loss')
-        )
-          active.stopMode = stopMode
-      }
-      return serialize(async () => {
-        const failures = await stopHandles(context)
-        if (failures.length > 0)
-          throw lifecycleFailure('failed to quiesce host execution handles', failures)
-      })
-    },
-    drain(context) {
-      if (context.generation !== input.generationId)
-        return Promise.reject(new Error('host-execution-runtime-generation-mismatch'))
-      return serialize(async () => {
-        const owned = activeHandles.filter((active) => active.authority?.context === context)
-        if (owned.some((active) => !stoppedForCurrentMode(active)))
-          throw new Error('host-execution-runtime-drain-before-quiesce')
-        const failures = await drainHandles(context)
-        if (failures.length > 0)
-          throw lifecycleFailure('failed to drain host execution handles', failures)
-      })
-    },
-  })
-
   const session: DaemonProviderRuntimeSession<UpgradeServer, WebSocketHandlers> = {
     provider: input.provider,
     generationId: input.generationId,
     runtime,
-    ...(input.hostExecutionRuntime === undefined ? {} : { hostExecutionRuntime }),
-    execution: Object.freeze<DaemonExecutionRuntimeControl>({
-      state: () =>
-        Object.freeze({
-          enabled: executionEnabled,
-          running: phase === 'running' && executionEnabled && executionRunning,
-          activeHandleIds: Object.freeze(activeHandles.map(({ id }) => id)),
-        }),
-
-      pause(lifecycleInput) {
-        return serialize(async () => {
-          assertLifecycleMatches(lifecycleInput)
-          if (phase === 'closing' || phase === 'closed') {
-            throw new DaemonProviderRuntimeSessionError(
-              'daemon-provider-runtime-session-closing',
-              `cannot pause daemon execution runtime while ${phase}`,
-            )
-          }
-          executionEnabled = false
-          const failures = await stopAndDrainHandles()
-          if (failures.length > 0) {
-            throw lifecycleFailure('failed to pause daemon execution runtime', failures)
-          }
-        })
-      },
-
-      resume(lifecycleInput) {
-        const requestedVersion = authorityVersion
-        return serialize(async () => {
-          assertLifecycleMatches(lifecycleInput)
-          if (phase === 'closing' || phase === 'closed') {
-            throw new DaemonProviderRuntimeSessionError(
-              'daemon-provider-runtime-session-closing',
-              `cannot resume daemon execution runtime while ${phase}`,
-            )
-          }
-          if (executionEnabled && executionRunning) return
-          if (input.hostExecutionRuntime !== undefined) {
-            if (requestedVersion !== authorityVersion) return
-            if (
-              authorityClosing ||
-              !authorityGrant?.context.current() ||
-              authorityGrant.version !== authorityVersion
-            ) {
-              throw new DaemonProviderRuntimeSessionError(
-                'daemon-provider-execution-unavailable',
-                'host execution has no current prepared grant',
-              )
-            }
-          }
-          executionEnabled = true
-          if (phase === 'frozen') return
-
-          const staleFailures = await stopAndDrainHandles()
-          if (staleFailures.length > 0) {
-            executionEnabled = false
-            throw lifecycleFailure(
-              'failed to settle daemon execution runtime before resume',
-              staleFailures,
-            )
-          }
-
-          try {
-            await startHandles(lifecycleInput)
-          } catch (error) {
-            executionEnabled = false
-            const rollbackFailures = await rollbackStartedHandles()
-            if (rollbackFailures.length === 0) throw error
-            throw new AggregateError(
-              [error, ...rollbackFailures],
-              'failed to resume daemon execution runtime and roll back started handles',
-            )
-          }
-        })
-      },
-    }),
     state: () =>
       Object.freeze({
         phase,
@@ -752,7 +346,10 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
         }
 
         try {
-          if (executionEnabled) await startHandles(lifecycleInput)
+          for (const factory of handleFactories) {
+            const handle = await factory.start(lifecycleInput)
+            activeHandles.push({ id: factory.id, handle, stopped: false, drained: false })
+          }
           webSocketAdmissionMayBeOpen = true
           await input.admission.openWebSocketAdmission()
           writerAdmissionMayBeOpen = true
@@ -771,11 +368,6 @@ export async function createDaemonProviderRuntimeSession<UpgradeServer, WebSocke
     },
 
     close({ reason }) {
-      if (input.hostExecutionRuntime !== undefined) {
-        authorityClosing = true
-        authorityVersion += 1
-        executionEnabled = false
-      }
       return serialize(async () => {
         if (phase === 'closed') return
         phase = 'closing'

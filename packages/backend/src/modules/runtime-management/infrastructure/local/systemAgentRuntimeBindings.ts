@@ -1,12 +1,5 @@
 import { ulid } from 'ulid'
 import type { AgentMaterialContentReference } from '../../application/ports/agentMaterial'
-import { hostname } from 'node:os'
-import { z } from 'zod'
-
-const prefix = 'aw-system-runtime-v1:'
-const snapshot = z
-  .object({ id: z.string().min(1), binary: z.string(), hostname: z.string(), platform: z.string() })
-  .strict()
 
 /** Only the native selection boundary accepts the existing physical profile column. */
 interface NativeSystemRuntimeProfile {
@@ -30,30 +23,8 @@ export function createLocalSystemAgentRuntimeBindings() {
   ] as const
   function runtimeBinary(reference: AgentMaterialContentReference): string {
     const binary = binaries.get(reference)
-    if (binary !== undefined) return binary
-    if (
-      reference.owner !== 'runtime-management' ||
-      reference.version !== null ||
-      !reference.reference.startsWith(prefix)
-    )
-      throw new Error('system-runtime-binding-unavailable')
-    let value: unknown
-    try {
-      value = JSON.parse(
-        Buffer.from(reference.reference.slice(prefix.length), 'base64url').toString('utf8'),
-      )
-    } catch {
-      throw new Error('system-runtime-binding-unavailable')
-    }
-    const parsed = snapshot.safeParse(value)
-    if (
-      !parsed.success ||
-      parsed.data.hostname !== hostname() ||
-      parsed.data.platform !== process.platform
-    )
-      throw new Error('system-runtime-binding-unavailable')
-    binaries.set(reference, parsed.data.binary)
-    return parsed.data.binary
+    if (binary === undefined) throw new Error('system-runtime-binding-unavailable')
+    return binary
   }
   function bindRuntime<T extends NativeSystemRuntimeProfile>(
     profile: T,
@@ -74,16 +45,7 @@ export function createLocalSystemAgentRuntimeBindings() {
         if (binary == null) return binary
         const reference = Object.freeze({
           owner: 'runtime-management' as const,
-          reference:
-            prefix +
-            Buffer.from(
-              JSON.stringify({
-                id: ulid(),
-                binary,
-                hostname: hostname(),
-                platform: process.platform,
-              }),
-            ).toString('base64url'),
+          reference: `aw-system-runtime:${ulid()}`,
           version: null,
         })
         binaries.set(reference, binary)

@@ -227,8 +227,6 @@ type TaskDriveFailureReporter = taskDriveComposition.TaskDriveFailureReporter
 const {
   activeTaskDriverController,
   awaitTaskDriverIdle,
-  awaitTaskDriverReleasedSettled,
-  captureTaskDriveBinding,
   clearTaskDriverLifecycleForTesting,
   createDatabaseTaskDriverLifecyclePort,
   DefaultTaskDriveCoordinator,
@@ -326,14 +324,8 @@ async function submitContinuationIntentInTx(input: {
 /** RFC-097 (audit S-8/S-23): is an in-process scheduler loop attached to this
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's
  *  scheduler-liveness preflight. */
-export function isTaskActive(
-  taskId: string,
-  module?: taskDriveComposition.TaskDriveBinding['executionModule'],
-): boolean {
-  return (
-    isTaskDriverActive(taskId, module) ||
-    (module === undefined && testActiveControllers.has(taskId))
-  )
+export function isTaskActive(taskId: string): boolean {
+  return isTaskDriverActive(taskId) || testActiveControllers.has(taskId)
 }
 
 /** RFC-338: point-in-time advisory input for the off-thread maintenance
@@ -441,8 +433,6 @@ export async function finalizeCanceledTaskWithoutDriver(
 }
 
 export interface StartTaskDeps {
-  /** Complete instance binding, captured before launch/continuation effects. */
-  driveBinding?: taskDriveComposition.TaskDriveBinding
   /** The selected live configuration follows short-lived drive and continuation paths. */
   launchConfiguration?: TaskLaunchConfigurationQueries
   /** Explicit launch command knobs retain precedence over live defaults. */
@@ -1231,7 +1221,6 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
     | 'workspacePresence'
     | 'launchConfiguration'
     | 'launchConfigurationOverrides'
-    | 'driveBinding'
   > & {
     /**
      * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `StartTaskDeps` Pick 来的
@@ -1245,7 +1234,6 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
 
 export function createTaskDriveCoordinator(input: {
   readonly deps: TaskDriveCoordinatorDependencies
-  readonly driveBinding?: taskDriveComposition.TaskDriveBinding
   readonly persistence?: Parameters<
     typeof taskDriveComposition.createDatabaseTaskDriverLifecyclePort
   >[0]['persistence']
@@ -1275,18 +1263,6 @@ export function createTaskDriveCoordinator(input: {
   /** A selected source wins over the legacy file refresher on every submit. */
   readonly launchConfiguration?: TaskLaunchConfigurationQueries
 }): taskDriveComposition.DefaultTaskDriveCoordinator {
-  const driveBinding = captureTaskDriveBinding(
-    input.driveBinding ?? input.deps.driveBinding,
-    input.persistence,
-  )
-  if (
-    input.driveBinding !== undefined &&
-    input.deps.driveBinding !== undefined &&
-    (input.driveBinding.executionModule !== input.deps.driveBinding.executionModule ||
-      input.driveBinding.persistence !== input.deps.driveBinding.persistence ||
-      input.driveBinding.driverLifecycle !== input.deps.driveBinding.driverLifecycle)
-  )
-    throw new Error('task-drive-binding-mismatch')
   const resolveRuntime = (
     fresh?: Partial<TaskDriveCoordinatorDependencies>,
     selectedLaunchConfiguration = false,
@@ -1336,17 +1312,15 @@ export function createTaskDriveCoordinator(input: {
     get runtime() {
       return frozen ?? currentRuntime()
     },
-    lifecycle:
-      driveBinding?.driverLifecycle ??
-      createDatabaseTaskDriverLifecyclePort({
-        db: input.deps.db,
-        persistence: input.persistence,
-        workspacePresence: input.deps.workspacePresence,
-        log,
-        finalizeWorkspace: async (taskId) => {
-          await finishClaimedWebhookWorkspacePrune(input.deps.db, taskId)
-        },
-      }),
+    lifecycle: createDatabaseTaskDriverLifecyclePort({
+      db: input.deps.db,
+      persistence: input.persistence,
+      workspacePresence: input.deps.workspacePresence,
+      log,
+      finalizeWorkspace: async (taskId) => {
+        await finishClaimedWebhookWorkspacePrune(input.deps.db, taskId)
+      },
+    }),
     ...(input.admittedContinuation === undefined
       ? {}
       : { admittedContinuation: input.admittedContinuation }),
@@ -1354,7 +1328,6 @@ export function createTaskDriveCoordinator(input: {
       input.gateContinuationPreDrive ??
       composeGateContinuationPreDrive({
         db: input.deps.db,
-        ...(driveBinding === undefined ? {} : { persistence: driveBinding.persistence }),
         memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
       }),
     repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
@@ -1766,13 +1739,7 @@ function cleanupFromPreCreated(pre: PreCreatedWorktree): MaterializedSpaceCleanu
  * essential for multipart and fusion callers: those callers materialize first,
  * so even an initial exact-version mismatch must release their workspace.
  */
-function captureStartTaskDriveBinding(deps: StartTaskDeps): StartTaskDeps {
-  const driveBinding = captureTaskDriveBinding(deps.driveBinding)
-  return driveBinding === undefined ? deps : { ...deps, driveBinding }
-}
-
 export async function startTask(input: StartTask, deps: StartTaskDeps): Promise<Task> {
-  deps = captureStartTaskDriveBinding(deps)
   const ownership: StartTaskOwnership = {
     cleanup:
       deps.materializedSpace?.cleanup ??
@@ -3145,21 +3112,6 @@ async function reapHeldRuntimeSessionOwnersForTask(
 // `CANCELABLE_TASK_STATUSES`。
 
 const pendingHumanGateContinuationHandoffs = new Map<string, Promise<void>>()
-const selectedHumanGateContinuationHandoffs = new WeakMap<
-  taskDriveComposition.TaskDriveBinding['executionModule'],
-  Map<string, Promise<void>>
->()
-
-function humanGateContinuationHandoffsFor(
-  module: taskDriveComposition.TaskDriveBinding['executionModule'] | undefined,
-): Map<string, Promise<void>> {
-  if (module === undefined) return pendingHumanGateContinuationHandoffs
-  const existing = selectedHumanGateContinuationHandoffs.get(module)
-  if (existing !== undefined) return existing
-  const handoffs = new Map<string, Promise<void>>()
-  selectedHumanGateContinuationHandoffs.set(module, handoffs)
-  return handoffs
-}
 
 /**
  * RFC-333: wake an intent that was already admitted atomically by a human-gate
@@ -3171,9 +3123,6 @@ export async function wakeHumanGateContinuation(
   continuationRef: string,
   deps: StartTaskDeps,
 ): Promise<void> {
-  deps = captureStartTaskDriveBinding(deps)
-  const executionModule = deps.driveBinding?.executionModule
-  const handoffs = humanGateContinuationHandoffsFor(executionModule)
   const coordinator = createTaskDriveCoordinator({
     deps,
     appHome: deps.appHome ?? Paths.root,
@@ -3194,12 +3143,12 @@ export async function wakeHumanGateContinuation(
   const submitExact = () =>
     coordinator.submit({ taskId, intentId: continuationRef, completionMode })
   const submitAfterCurrentOwner = async (): Promise<void> => {
-    await awaitTaskDriverIdle(taskId, executionModule)
+    await awaitTaskDriverIdle(taskId)
     await submitExact()
   }
   const deferBehindCurrentOwner = (): void => {
     const handoffKey = `${taskId}\u0000${continuationRef}`
-    if (handoffs.has(handoffKey)) return
+    if (pendingHumanGateContinuationHandoffs.has(handoffKey)) return
     const handoff = submitAfterCurrentOwner()
       .catch((error) => {
         log.warn('human-gate continuation handoff wake failed', {
@@ -3209,26 +3158,26 @@ export async function wakeHumanGateContinuation(
         })
       })
       .finally(() => {
-        if (handoffs.get(handoffKey) === handoff) {
-          handoffs.delete(handoffKey)
+        if (pendingHumanGateContinuationHandoffs.get(handoffKey) === handoff) {
+          pendingHumanGateContinuationHandoffs.delete(handoffKey)
         }
       })
-    handoffs.set(handoffKey, handoff)
+    pendingHumanGateContinuationHandoffs.set(handoffKey, handoff)
   }
 
-  if (isTaskDriverActive(taskId, executionModule)) {
+  if (isTaskDriverActive(taskId)) {
     if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
     else deferBehindCurrentOwner()
     return
   }
   try {
     const outcome = await submitExact()
-    if (outcome.kind === 'not-attached' && isTaskDriverActive(taskId, executionModule)) {
+    if (outcome.kind === 'not-attached' && isTaskDriverActive(taskId)) {
       if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
       else deferBehindCurrentOwner()
     }
   } catch (error) {
-    if (!isTaskDriverActive(taskId, executionModule)) throw error
+    if (!isTaskDriverActive(taskId)) throw error
     if (deps.awaitScheduler === true) await submitAfterCurrentOwner()
     else deferBehindCurrentOwner()
   }
@@ -3250,7 +3199,6 @@ export async function wakeHumanGateContinuation(
  * 注入的是空操作，由 daemon 的 `human-gate-continuation` worker 轮询认领。
  */
 export function composeWorkgroupTaskRoomContinuationDriver(input: {
-  readonly driveBinding?: taskDriveComposition.TaskDriveBinding
   readonly db: LegacyProviderNeutralDatabase
   readonly configPath: string
   readonly schedulerDriver: StartTaskDeps['schedulerDriver']
@@ -3261,10 +3209,8 @@ export function composeWorkgroupTaskRoomContinuationDriver(input: {
   assertResumable: (taskId: string, verb: string) => Promise<void>
   driveAfterCommit: (continuation: Readonly<{ taskId: string; intentId: string }>) => Promise<void>
 }> {
-  const driveBinding = captureTaskDriveBinding(input.driveBinding)
   const workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
   const resumeDeps = (): StartTaskDeps => ({
-    ...(driveBinding === undefined ? {} : { driveBinding }),
     db: input.db,
     schedulerDriver: input.schedulerDriver,
     taskRecoveryOperations: input.taskRecoveryOperations,
@@ -3290,7 +3236,6 @@ export function composeWorkgroupTaskRoomContinuationDriver(input: {
         input.launchConfiguration === undefined
           ? resumeDeps()
           : {
-              ...(driveBinding === undefined ? {} : { driveBinding }),
               db: input.db,
               schedulerDriver: input.schedulerDriver,
               taskRecoveryOperations: input.taskRecoveryOperations,
@@ -3311,7 +3256,6 @@ export function composeWorkgroupTaskRoomContinuationDriver(input: {
 export function composeHumanGateContinuationDriver(
   deps: StartTaskDeps,
 ): (continuation: Readonly<{ taskId: string; continuationRef: string }>) => Promise<void> {
-  deps = captureStartTaskDriveBinding(deps)
   return async (continuation) => {
     await wakeHumanGateContinuation(continuation.taskId, continuation.continuationRef, deps)
   }
@@ -3423,8 +3367,6 @@ async function resumeKick(
     ) => void | Promise<void>
   },
 ): Promise<Task> {
-  deps = captureStartTaskDriveBinding(deps)
-  const executionModule = deps.driveBinding?.executionModule
   const task = await getTask(db, id)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${id}' not found`)
@@ -3432,10 +3374,10 @@ async function resumeKick(
   const allowedFrom = allowedFromForTaskEvent(opts.event)
   // RFC-359 两阶段停机：上一任 driver 的运行时已停但库里 owner 行 / intent 还在转移时，先等它 settle——
   // 否则准入放行后 continuation intent 会撞上仍是 claimed 的旧 intent（task-continuation-conflict）。
-  await awaitTaskDriverReleasedSettled(id, executionModule)
+  await taskDriverRegistry.awaitReleasedSettled(id)
   // RFC-097 (audit S-8): an in-process scheduler loop already owns this task —
   // a second driver would double-write the worktree.
-  if (isTaskActive(id, executionModule)) {
+  if (isTaskActive(id)) {
     throw new ConflictError(
       opts.conflictCode,
       `task '${id}' is actively running (scheduler attached); cannot ${opts.verb}`,
@@ -3609,7 +3551,7 @@ async function resumeKick(
       const next = (await getTask(db, id)) as Task
       admittedTask = next
 
-      const controller = activeTaskDriverController(id, executionModule)
+      const controller = activeTaskDriverController(id)
       if (controller === undefined || controller.signal !== context.signal) {
         log.error(`${opts.reason}: exact controller was replaced before task drive`, {
           taskId: id,
@@ -3627,9 +3569,7 @@ async function resumeKick(
     engineFailureMessage: `runTask threw on ${opts.verb}`,
     failureReporter: {
       report({ error }) {
-        activeTaskDriverController(id, executionModule)?.abort(
-          'task-continuation-preparation-failed',
-        )
+        activeTaskDriverController(id)?.abort('task-continuation-preparation-failed')
         log.error(`${opts.reason}: continuation preparation threw`, {
           taskId: id,
           error: error instanceof Error ? error.message : String(error),
@@ -4041,7 +3981,6 @@ async function retryRepoPreparation(
   task: Task,
   deps: StartTaskDeps,
 ): Promise<Task> {
-  deps = captureStartTaskDriveBinding(deps)
   const hasGroup = typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0
   const hasCached = typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0
   if (!hasGroup && !hasCached) {
@@ -4143,7 +4082,6 @@ export async function retryRepositoryPreparation(
   taskId: string,
   deps: StartTaskDeps,
 ): Promise<Task> {
-  deps = captureStartTaskDriveBinding(deps)
   const latest = db
     .select({ id: nodeRuns.id })
     .from(nodeRuns)

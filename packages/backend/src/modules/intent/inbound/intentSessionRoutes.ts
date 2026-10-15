@@ -37,7 +37,6 @@ import {
 import { z } from 'zod'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { tryRunHttpHostExecutionRequest } from '@/platform/http/hostExecutionAvailability'
 import type { Config } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import type { IntentSessionEventPublisher } from '@/modules/intent/ports/intentSessionEvents'
@@ -120,7 +119,7 @@ export interface IntentSessionRouteDependencies {
   readonly intentPersistence: IntentPersistence
   readonly intentTurnRuntime: Pick<
     IntentDispatchDeps,
-    'runtimeResolver' | 'dumpAuxiliary' | 'graphValidation' | 'systemAgents' | 'execution'
+    'runtimeResolver' | 'dumpAuxiliary' | 'graphValidation' | 'systemAgents'
   >
   readonly resourceCatalogFor: (actor: Actor) => IntentResourceCatalogBinding
   /** RFC-355 T4b：会话动静的播报面由 bootstrap 注入，inbound 不认识传输层。 */
@@ -134,49 +133,11 @@ function selectedIntentTurnRuntime(
 ): IntentSessionRouteDependencies['intentTurnRuntime'] {
   const snapshot = { ...runtime }
   if (!Object.hasOwn(snapshot, 'systemAgents')) snapshot.systemAgents = runtime.systemAgents
-  if (!Object.hasOwn(snapshot, 'execution')) {
-    const execution = runtime.execution
-    if (execution) snapshot.execution = execution
-  }
   return snapshot
 }
 
 export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDependencies): void {
   const appHome = deps.appHome
-
-  const execution = deps.intentTurnRuntime.execution
-  const recoverOriginal = execution?.recoverOriginal.bind(execution)
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/intent-sessions/:id/turns/:turnId/recover',
-      permissions: ['intent:write'],
-      tokenAccess: 'allow',
-      summary: 'Recover and settle the original intent turn',
-    },
-    async (c) => {
-      const actor = actorOf(c)
-      const session = await getIntentSessionForActor(
-        deps.intentPersistence,
-        actor,
-        c.req.param('id'),
-      )
-      if (session.ownerUserId !== actor.user.id)
-        throw new NotFoundError('intent-session-not-found', 'session not found')
-      if (!recoverOriginal)
-        throw new ValidationError(
-          'intent-original-recovery-unavailable',
-          'Original recovery is not selected',
-        )
-      const turnId = c.req.param('turnId')
-      const checkpoint = await deps.intentPersistence.readExecutionCheckpoint(turnId)
-      if (!checkpoint || checkpoint.sessionId !== session.id)
-        throw new NotFoundError('intent-turn-not-found', 'original turn not found')
-      const acknowledged = await recoverOriginal(turnId)
-      return c.json({ ok: true, acknowledged, turnId })
-    },
-  )
 
   function fireTurn(
     sessionId: string,
@@ -213,7 +174,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Create an intent session',
@@ -343,7 +303,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions/:id/messages',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Send an intent message',
@@ -378,7 +337,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions/:id/answers',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Answer intent questions',
@@ -413,7 +371,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions/:id/iterations',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Refine, continue, or regenerate an Intent candidate',
@@ -450,7 +407,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions/:id/current-action',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Answer questions and decide resource suggestions in one action',
@@ -573,7 +529,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions/:id/working-set',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Stage and refresh the Intent working context',
@@ -652,7 +607,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions/:id/working-set/:changeId/retry',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Retry a failed Intent working-context update',
@@ -699,7 +653,6 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     {
       method: 'POST',
       path: '/api/intent-sessions/:id/retry',
-      executionGroup: 'intent',
       permissions: ['intent:write'],
       tokenAccess: 'allow',
       summary: 'Retry an intent turn',
@@ -762,19 +715,17 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       }
       const aborted = await cancelIntentTurn(deps.intentPersistence, actor, session.id)
       if (aborted) {
-        await tryRunHttpHostExecutionRequest(app, 'intent', async () => {
-          const config = await loadIntentTurnConfigSnapshot()
-          const next = await activateIntentWorkingSetChange(
-            deps.intentPersistence,
-            intentResourceVisibility(deps.resourceCatalogFor(actor)),
-            actor,
-            session.id,
-            config.intentBuilderMaxGenerateRounds ?? 50,
-          )
-          if (next.reservation !== null) {
-            void fireTurn(session.id, actor, config, next.reservation)
-          }
-        })
+        const config = await loadIntentTurnConfigSnapshot()
+        const next = await activateIntentWorkingSetChange(
+          deps.intentPersistence,
+          intentResourceVisibility(deps.resourceCatalogFor(actor)),
+          actor,
+          session.id,
+          config.intentBuilderMaxGenerateRounds ?? 50,
+        )
+        if (next.reservation !== null) {
+          void fireTurn(session.id, actor, config, next.reservation)
+        }
         emitSessionUpdated(session.id, actor.user.id)
       }
       return c.json({ aborted })

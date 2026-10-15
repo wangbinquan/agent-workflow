@@ -22,7 +22,7 @@ import { McpProbeStatusChip, type McpProbeUiStatus } from '@/components/McpProbe
 import { NoticeBanner } from '@/components/NoticeBanner'
 import type { SplitBusyRelease } from '@/components/split/splitDirty'
 import { useMcpProbe, useProbeMcpMutation } from '@/lib/mcp-probe-query'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { probeFreshness } from '@/lib/probe-freshness'
 import { usePermission } from '@/hooks/useActor'
 import { McpRuntimeTestDialog } from './McpRuntimeTestDialog'
@@ -42,7 +42,7 @@ export interface McpInventoryPanelProps {
 }
 
 export function McpInventoryPanel(props: McpInventoryPanelProps) {
-  const execution = useHostExecutionAvailability('diagnostics')
+  const execution = useExecutionAvailability('diagnostics')
   const { t } = useTranslation()
   const canExecuteMcp = usePermission('mcps:execute')
   const probeQ = useMcpProbe(props.mcpId)

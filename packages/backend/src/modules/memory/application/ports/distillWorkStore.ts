@@ -1,5 +1,4 @@
 import type { Memory, MemoryDistillJob, ResolvedDistillScope } from '@agent-workflow/shared'
-import type { MemoryDistillExecutionJournal } from './distillExecutionJournal'
 import type { DistillTaskFacts } from '@/modules/memory/domain/distillAdmission'
 import type {
   RuntimeKind,
@@ -138,7 +137,6 @@ export interface MemoryDistillApprovedMemoryRecord {
 
 export interface MemoryDistillCandidateInsert {
   readonly memory: Memory
-  readonly idempotent?: boolean
 }
 
 export interface MemoryDistillFailureUpdate {
@@ -147,8 +145,6 @@ export interface MemoryDistillFailureUpdate {
   readonly error: string
   readonly now: number
   readonly retryAt: number | null
-  /** Original issued claim. Settlement may only change this exact attempt. */
-  readonly original?: readonly MemoryDistillJobRecord[]
 }
 
 export interface MemoryDistillSessionSinkInput {
@@ -162,7 +158,6 @@ export interface MemoryDistillSessionSinkInput {
  * application workflow runs unchanged against SQLite and PostgreSQL.
  */
 export interface MemoryDistillWorkStore {
-  readonly executionJournal: MemoryDistillExecutionJournal
   findTaskScope(taskId: string): Promise<MemoryDistillTaskScopeRecord | null>
   enqueue(input: {
     readonly id: string
@@ -178,24 +173,10 @@ export interface MemoryDistillWorkStore {
 
   listDue(now: number, limit: number): Promise<readonly MemoryDistillJobRecord[]>
   listPendingSiblings(debounceKey: string): Promise<readonly MemoryDistillJobRecord[]>
-  /** Exact original receipt subjects; no queue claim or full-table scan. */
-  loadJobs(ids: readonly string[]): Promise<readonly MemoryDistillJobRecord[]>
   markRunning(ids: readonly string[], startedAt: number): Promise<void>
-  /** Only an original bundle whose external execution has never been issued. */
-  deferUnissued(input: {
-    readonly original: readonly MemoryDistillJobRecord[]
-    readonly startedAt: number
-    /** A recovered prepared receipt proves no runtime was activated. Preserve
-     * the prompt/snapshot written by that same original preparation. */
-    readonly allowPreparedPrompt?: true
-  }): Promise<boolean>
-  markDone(
-    ids: readonly string[],
-    finishedAt: number,
-    original?: readonly MemoryDistillJobRecord[],
-  ): Promise<void>
+  markDone(ids: readonly string[], finishedAt: number): Promise<void>
   markFailed(input: MemoryDistillFailureUpdate): Promise<void>
-  recoverRunning(preserveIds?: readonly string[]): Promise<number>
+  recoverRunning(): Promise<number>
   retryFailed(jobId: string, now: number): Promise<MemoryDistillJobRecord | null>
   cancelPending(jobId: string, now: number): Promise<boolean>
   listJobs(status?: string): Promise<readonly MemoryDistillJobRecord[]>
@@ -239,7 +220,7 @@ export interface MemoryDistillWorkStore {
    * letting persistence here decide the agent's business result.
    */
   eventSinkFor(input: MemoryDistillSessionSinkInput): SystemAgentEventSinkV1
-  insertCandidate(input: MemoryDistillCandidateInsert): Promise<boolean>
+  insertCandidate(input: MemoryDistillCandidateInsert): Promise<void>
 }
 
 export interface MemoryDistillReviewedArtifactReader {

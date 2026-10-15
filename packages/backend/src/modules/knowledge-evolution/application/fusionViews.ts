@@ -12,7 +12,6 @@ import {
   getFusion,
   listFusionSummaries,
   type FusionDeps,
-  type FusionReadMode,
 } from './fusionOrchestration'
 import type { FusionStatus } from '@agent-workflow/shared'
 
@@ -22,17 +21,15 @@ export async function listVisibleFusionSummaries(
   deps: FusionDeps,
   viewer: FusionViewer,
   filter: { skillId?: string; status?: FusionStatus } = {},
-  mode: FusionReadMode = 'reconcile',
 ): Promise<Fusion[]> {
-  return visibleFusions(viewer, await listFusionSummaries(deps, filter, mode))
+  return visibleFusions(viewer, await listFusionSummaries(deps, filter))
 }
 
 export async function countVisibleAwaitingApprovalFusions(
   deps: FusionDeps,
   viewer: FusionViewer,
-  mode: FusionReadMode = 'reconcile',
 ): Promise<number> {
-  return visibleFusions(viewer, await awaitingApprovalFusionOwners(deps, mode)).length
+  return visibleFusions(viewer, await awaitingApprovalFusionOwners(deps)).length
 }
 
 /**
@@ -43,9 +40,8 @@ export async function getVisibleFusion(
   deps: FusionDeps,
   viewer: FusionViewer,
   id: string,
-  mode: FusionReadMode = 'reconcile',
 ): Promise<Fusion | null> {
-  const fusion = await getFusion(deps, id, mode)
+  const fusion = await getFusion(deps, id)
   if (fusion === null || !canViewFusion(viewer, fusion.ownerUserId)) return null
   return fusion
 }

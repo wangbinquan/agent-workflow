@@ -43,7 +43,7 @@ import { UserPicker } from '@/components/UserPicker'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { INTENT_QUERY_KEYS, useIntentSessionsWs } from '@/hooks/useIntentSessionsWs'
 import { intentFailureDiagnostic } from '@/lib/intent-failure-diagnostic'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { Route as RootRoute } from './__root'
 
 export const Route = createRoute({
@@ -69,7 +69,7 @@ const REVIEW_FIRST_REASONS = new Set<IntentSessionDetail['session']['journey']['
 
 function IntentSessionDetailPage() {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('intent')
+  const execution = useExecutionAvailability('intent')
   const { sessionId } = Route.useParams()
   const qc = useQueryClient()
   useIntentSessionsWs()
@@ -184,22 +184,6 @@ function IntentSessionDetailPage() {
     mutationFn: () => api.post(`/api/intent-sessions/${sessionId}/cancel-turn`),
     onSuccess: invalidate,
   })
-  const originalTurn = detail?.turns.find((turn) => {
-    const original = turn.runMeta?.originalExecution as { phase?: string } | undefined
-    return original !== undefined && original.phase !== 'closed' && original.phase !== 'reserved'
-  })
-  const recoverTurn = useMutation<{ acknowledged: boolean }, ApiError, void>({
-    mutationFn: () => {
-      execution.assertRecoveryAvailable()
-      if (!originalTurn) throw new Error('Original Intent turn is unavailable')
-      return api.post<{ acknowledged: boolean }>(
-        `/api/intent-sessions/${sessionId}/turns/${originalTurn.id}/recover`,
-      )
-    },
-    onSuccess: async () => {
-      await invalidate()
-    },
-  })
   const updateStatus = useMutation<unknown, ApiError, 'archive' | 'reopen'>({
     mutationFn: (action) => api.post(`/api/intent-sessions/${sessionId}/${action}`),
     onSuccess: async () => {
@@ -313,7 +297,6 @@ function IntentSessionDetailPage() {
   const actionError =
     updateStatus.error ??
     cancelTurn.error ??
-    recoverTurn.error ??
     retryTurn.error ??
     regenerate.error ??
     retryWorkingSet.error ??
@@ -367,32 +350,6 @@ function IntentSessionDetailPage() {
       />
 
       {actionError !== null ? <ErrorBanner error={actionError} /> : null}
-      {canManageLifecycle && originalTurn && execution.canRecoverOriginal ? (
-        <NoticeBanner tone="warning">
-          <p>{t('hostExecution.intentRecoveryDescription')}</p>
-          <button
-            type="button"
-            className="btn btn--sm"
-            disabled={recoverTurn.isPending}
-            onClick={() => recoverTurn.mutate()}
-          >
-            {t(
-              recoverTurn.isPending
-                ? 'hostExecution.recoveringIntent'
-                : 'hostExecution.recoverIntent',
-            )}
-          </button>
-        </NoticeBanner>
-      ) : null}
-      {recoverTurn.data ? (
-        <NoticeBanner tone={recoverTurn.data.acknowledged ? 'info' : 'warning'}>
-          {t(
-            recoverTurn.data.acknowledged
-              ? 'hostExecution.intentRecoveryAcknowledged'
-              : 'hostExecution.intentRecoveryPending',
-          )}
-        </NoticeBanner>
-      ) : null}
 
       <IntentJourneyProgress detail={detail} />
 
@@ -1098,7 +1055,7 @@ function IntentCurrentAction(props: {
   onApplied: () => Promise<unknown>
 }) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('intent')
+  const execution = useExecutionAvailability('intent')
   const [answers, setAnswers] = useState<QuestionDraft>({})
   const [decisions, setDecisions] = useState<Record<string, MountSuggestionDecisionDraft>>({})
   const initializedSourceRef = useRef<string | null>(null)
@@ -1343,7 +1300,7 @@ function IntentTurnError(props: {
   onRetry: () => void
 }) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('intent')
+  const execution = useExecutionAvailability('intent')
   const diagnostic = intentFailureDiagnostic(props.turn, t)
   return (
     <div className="intent-turn-error" data-testid="intent-turn-error-diagnostic">

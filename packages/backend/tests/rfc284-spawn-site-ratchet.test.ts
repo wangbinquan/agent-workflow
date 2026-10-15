@@ -68,11 +68,6 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       '故照实登记而非改名绕开棘轮。三处 = 接口方法声明 + 模式 A 的首次调用 + ' +
       'T5b 模式 B 重试循环里的再次调用（跨 attempt 窗口内由 retryPolicy 驱动）。',
   },
-  'modules/task-execution/infrastructure/local/agentExecutionRecoveryReference.ts': {
-    governance: 'short-lived',
-    count: 2,
-    why: 'RFC-370: readonly synchronous ps/PowerShell start-identity probes for the exact original native process; no business runtime or detached child is launched here.',
-  },
   'platform/execution/local/managedProcess.ts': {
     governance: 'kernel',
     count: 1,
@@ -87,11 +82,11 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
   },
   'platform/background/maintenanceWorkerSupervisor.ts': {
     governance: 'kernel',
-    count: 6,
+    count: 5,
     why:
-      'RFC-338 / RFC-370 的 maintenance Worker supervisor：一处本地 spawn 包装与五处' +
-      '启动/重启调用（含 cold 显式 start）共同拥有 watchdog、terminate、drain 与有界重启，' +
-      '后台重任务不再散落到 HTTP 主事件循环。',
+      'RFC-338 的唯一长驻 maintenance Worker supervisor：一处本地 spawn 包装与四处' +
+      '启动/重启调用共同拥有 watchdog、terminate、drain 与有界重启，后台重任务不再散落' +
+      '到 HTTP 主事件循环。',
   },
   'util/git.ts': {
     governance: 'process-group',

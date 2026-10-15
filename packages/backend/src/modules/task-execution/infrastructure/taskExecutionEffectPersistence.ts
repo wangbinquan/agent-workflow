@@ -54,14 +54,6 @@ import type {
   WorkspacePreparationSettlementProjection,
 } from '../application/ports/taskExecutionEffectStore'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import type { OwnershipToken } from '../domain/ownership'
-import { taskHostWorkForToken, taskHostWorkCapture } from '../application/taskHostAdmission'
-import {
-  withTaskHostNewWork,
-  withTaskHostIssuedAck,
-  type TaskHostWriteBinding,
-  type TaskHostWriteSelection,
-} from './hostExecutionWriteTransaction'
 import {
   aggregateEffectOutcome,
   assertAttemptTransition,
@@ -216,54 +208,8 @@ async function applyGateRollbackProjection(
   }
 }
 
-const hostBindings = new WeakMap<TaskExecutionEffectPersistence, TaskHostWriteBinding>()
-
-export function taskEffectHostBinding(
-  effects: TaskExecutionEffectPersistence,
-): TaskHostWriteBinding | undefined {
-  return hostBindings.get(effects)
-}
-
 export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffectPersistence {
-  constructor(
-    private readonly db: ProviderNeutralDatabase,
-    private readonly hostWrites?: TaskHostWriteBinding,
-  ) {
-    if (hostWrites !== undefined) {
-      if (hostWrites.port === undefined || typeof hostWrites.transactionFor !== 'function')
-        throw new Error('task-host-write-selection-incomplete')
-      hostBindings.set(this, hostWrites)
-    }
-  }
-
-  private effectWriteSelection(token: OwnershipToken): TaskHostWriteSelection {
-    const binding = this.hostWrites
-    const work = taskHostWorkForToken(token)
-    if (binding === undefined) {
-      if (work !== undefined) throw new Error('task-host-write-selection-incomplete')
-      return { kind: 'native' }
-    }
-    if (work === undefined) throw new Error('task-host-admitted-work-required')
-    return { kind: 'selected', capture: taskHostWorkCapture(work), binding }
-  }
-
-  private newEffectPreparation<T>(
-    token: OwnershipToken,
-    body: (tx: TaskExecutionTransaction) => Promise<T>,
-  ): Promise<T> {
-    const selection = this.effectWriteSelection(token)
-    if (selection.kind === 'native') return withTaskExecutionSerializable(this.db, body)
-    return withTaskHostNewWork({ db: this.db, isolation: 'serializable', selection, body })
-  }
-
-  private issuedEffectReceipt<T>(
-    token: OwnershipToken,
-    body: (tx: TaskExecutionTransaction) => Promise<T>,
-  ): Promise<T> {
-    const selection = this.effectWriteSelection(token)
-    if (selection.kind === 'native') return withTaskExecutionSerializable(this.db, body)
-    return withTaskHostIssuedAck({ db: this.db, isolation: 'serializable', selection, body })
-  }
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async readLineage(input: Parameters<TaskExecutionEffectPersistence['readLineage']>[0]) {
     const taskRows = await this.db
@@ -398,7 +344,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     const now = input.now ?? Date.now()
     const resources = canonicalResourceKeySet(input.resourceKeys)
     const recoveryDescriptorJson = bounded(input.recoveryDescriptorJson)
-    return await this.newEffectPreparation(input.token, async (tx) => {
+    return await withTaskExecutionSerializable(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
       const intents = await tx
         .select({
@@ -879,7 +825,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   }
 
   async settle(input: TaskEffectAttemptSettlement): Promise<void> {
-    await this.issuedEffectReceipt(input.token, async (tx) => await this.settleTx(tx, input))
+    await withTaskExecutionSerializable(this.db, async (tx) => await this.settleTx(tx, input))
   }
 
   /** 用例专属原子：effect 结算与评审回滚投影共用一笔事务，刻意不进通用 effect 端口。 */
@@ -903,7 +849,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
       return
     }
     const outcome = input.outcome
-    await this.issuedEffectReceipt(input.token, async (tx) => {
+    await withTaskExecutionSerializable(this.db, async (tx) => {
       await this.settleTx(tx, {
         token: input.token,
         effectId: input.effectId,
@@ -932,8 +878,8 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async settleCodeHostNode(
     input: Parameters<TaskExecutionEffectPersistence['settleCodeHostNode']>[0],
   ): Promise<void> {
-    await this.issuedEffectReceipt(
-      input.settlement.token,
+    await withTaskExecutionSerializable(
+      this.db,
       async (tx) => await this.settleTx(tx, input.settlement, input.projection),
     )
   }
@@ -941,7 +887,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async settleWorkspacePreparation(
     input: Parameters<TaskExecutionEffectPersistence['settleWorkspacePreparation']>[0],
   ): Promise<void> {
-    await this.issuedEffectReceipt(input.settlement.token, async (tx) => {
+    await withTaskExecutionSerializable(this.db, async (tx) => {
       await this.settleTx(tx, input.settlement)
       await applyWorkspacePreparationProjection(tx, input.projection)
     })
@@ -951,7 +897,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     input: Parameters<TaskExecutionEffectPersistence['recordProcessSpawn']>[0],
   ): Promise<void> {
     const now = input.now ?? Date.now()
-    await this.issuedEffectReceipt(input.token, async (tx) => {
+    await withTaskExecutionSerializable(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
       const attempts = await tx
         .select({
@@ -1036,12 +982,12 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async resolveQuiescedManagedProcesses(
     input: Parameters<TaskExecutionEffectPersistence['resolveQuiescedManagedProcesses']>[0],
   ) {
-    return await resolveQuiescedManagedProcesses(this.db, input, this.hostWrites)
+    return await resolveQuiescedManagedProcesses(this.db, input)
   }
 
   async closeOutcomeUnknownAndRelease(
     input: Parameters<TaskExecutionEffectPersistence['closeOutcomeUnknownAndRelease']>[0],
   ) {
-    return await closeOutcomeUnknownAndRelease(this.db, input, this.hostWrites)
+    return await closeOutcomeUnknownAndRelease(this.db, input)
   }
 }

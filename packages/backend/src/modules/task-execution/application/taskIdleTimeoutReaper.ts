@@ -19,7 +19,6 @@
 // 两道开关各管一段（决策 D1/D10）。
 
 import { createLogger } from '@/util/log'
-import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
 
 import {
   idleTimeoutReason,
@@ -64,7 +63,6 @@ const EMPTY_RESULT: IdleTimeoutSweepResult = Object.freeze({
 export interface IdleTimeoutSweepOptions {
   readonly now?: number
   readonly maxTrees?: number
-  readonly execution?: BackgroundExecutionLifetime
 }
 
 export async function runTaskIdleTimeoutSweep(
@@ -72,8 +70,6 @@ export async function runTaskIdleTimeoutSweep(
   config: TaskIdleTimeoutConfig,
   options: IdleTimeoutSweepOptions = {},
 ): Promise<IdleTimeoutSweepResult> {
-  const current = options.execution?.current.bind(options.execution)
-  if (current?.() === false) return EMPTY_RESULT
   const thresholdMs = idleTimeoutThresholdMs(config.idleHours)
   // 关着时一次 IO 都不发（AC-1）。阈值非正同理——配置层的 min:1 已经挡住，这里兜底。
   if (!config.enabled || thresholdMs <= 0) return EMPTY_RESULT
@@ -86,7 +82,6 @@ export async function runTaskIdleTimeoutSweep(
   let reapedTasks = 0
   let skipped = 0
   for (const rootTaskId of roots) {
-    if (current?.() === false) break
     try {
       const snapshot = await operations.persistence.loadTreeActivity(rootTaskId)
       // 并发删除 / 整棵树在扫描后落终态 ⇒ 本拍无事可做。
@@ -98,9 +93,6 @@ export async function runTaskIdleTimeoutSweep(
         thresholdMs,
       })
       if (!verdict.idle) continue
-      if (current?.() === false) break
-      // A tree admitted here completes its original kills, cascading cancel
-      // and audit; losing the host may not leave half of that tree settled.
       const reapedHere = await reapTree(operations, snapshot, verdict, thresholdMs, now)
       // 整棵树都在判定后的窗口里自己跑完时 reapedHere = 0：那不算「收了一棵树」。
       if (reapedHere === 0) continue

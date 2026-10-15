@@ -50,12 +50,9 @@ export interface AgentProcessRequest {
     spawnedAt: number
     spawnBinaryPath: string
     launchNonce?: string
-    jobOwnerPid?: number
   }) => void | Promise<void>
   /** Task-owned runtimes require the PID receipt before stdin/output activation. */
   requireSpawnReceipt?: boolean
-  /** Native owner may reserve the original gated identity before submitting. */
-  launchNonce?: string
   capture?: {
     onStdoutLine?: (line: string) => void | Promise<void>
     onStderrLine?: (line: string) => void | Promise<void>
@@ -88,9 +85,6 @@ export interface AgentProcessResult {
   /** Frozen from the original managed process; never inferred after cleanup. */
   lifecycle?: ManagedProcessResult['lifecycle']
   launchNonce?: string
-  jobOwnerPid?: number
-  /** Private native recovery; neutral callers receive only their opaque port. */
-  recoverOriginal?: () => Promise<boolean>
   /** capture.rawStdout 时为 byte-exact rolling tail，否则 ''。 */
   rawStdout: string
   stderrTail: string
@@ -148,7 +142,6 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
             spawnedAt: number
             spawnBinaryPath: string
             launchNonce?: string
-            jobOwnerPid?: number
           }) => {
             try {
               await req.onSpawned?.({
@@ -156,7 +149,6 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
                 spawnedAt: info.spawnedAt,
                 spawnBinaryPath: info.spawnBinaryPath,
                 ...(info.launchNonce !== undefined ? { launchNonce: info.launchNonce } : {}),
-                ...(info.jobOwnerPid !== undefined ? { jobOwnerPid: info.jobOwnerPid } : {}),
               })
             } catch (err) {
               // P1-2：收据落库失败 = run 不可继续。managedProcess 对 onSpawned
@@ -174,7 +166,6 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
         }
       : {}),
     ...(req.requireSpawnReceipt === true ? { requireSpawnReceipt: true } : {}),
-    ...(req.launchNonce === undefined ? {} : { launchNonce: req.launchNonce }),
     ...(req.capture?.onStdoutLine !== undefined ? { onStdoutLine: req.capture.onStdoutLine } : {}),
     ...(req.capture?.onStderrLine !== undefined ? { onStderrLine: req.capture.onStderrLine } : {}),
     ...(req.capture?.onStdoutChunkEnd !== undefined
@@ -223,8 +214,6 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
     pid: mp.pid,
     ...(mp.lifecycle === undefined ? {} : { lifecycle: mp.lifecycle }),
     ...(mp.launchNonce !== undefined ? { launchNonce: mp.launchNonce } : {}),
-    ...(mp.jobOwnerPid !== undefined ? { jobOwnerPid: mp.jobOwnerPid } : {}),
-    ...(mp.recoverOriginal === undefined ? {} : { recoverOriginal: mp.recoverOriginal }),
     rawStdout: mp.rawStdout,
     stderrTail: mp.stderrTail,
     durationMs: Date.now() - startedAt,

@@ -19,66 +19,10 @@ import {
   type ManualQuestionParkSettleResult,
 } from '../application/parkManualQuestions'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
-import {
-  assertTaskExecutionContext,
-  currentTaskExecutionContext,
-  runWithTaskExecutionContext,
-} from '../application/taskExecutionContext'
-import type { HumanGateTaskWritePurposes } from '../application/ports/humanGateTaskLifecycle'
-import {
-  requireHumanGateTaskHostBinding,
-  selectHumanGateTaskWrites,
-} from '../application/humanGateTaskWriteSelection'
-import { taskHostWorkForToken } from '../application/taskHostAdmission'
+import { assertTaskExecutionContext } from '../application/taskExecutionContext'
 import { DatabaseHumanGateTaskLifecyclePersistence } from '../infrastructure/humanGateTaskLifecyclePersistence'
-import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'
-import { taskOwnershipHostBinding } from '../infrastructure/taskOwnershipPersistence'
 import { createTaskRuntimeLifecyclePersistence } from './taskExecutionPersistence'
 import type { TaskExecutionPersistenceDependencies } from './taskExecutionPersistence'
-
-/** Resolve the original context and its ownership binding before a durable await.
- * Caller dependencies retain precedence over context-derived dependencies. */
-function resolveHumanGateTaskWrites(
-  input: {
-    readonly db: ProviderNeutralDatabase
-    readonly executionContext?: TaskExecutionContextRef
-    readonly writePurpose?: keyof HumanGateTaskWritePurposes
-  } & TaskExecutionPersistenceDependencies,
-  taskId: string,
-) {
-  const context =
-    input.executionContext !== undefined
-      ? runWithTaskExecutionContext(input.executionContext, () => currentTaskExecutionContext())
-      : currentTaskExecutionContext(taskId)
-  const selectedContext =
-    context !== undefined &&
-    (context.persistence.humanGateWriteMode !== undefined ||
-      context.persistence.humanGateWritePurposes !== undefined ||
-      taskHostWorkForToken(context.token) !== undefined)
-  const originalBinding =
-    input.hostWrites ??
-    (context === undefined ? undefined : taskOwnershipHostBinding(context.persistence.ownership))
-  const binding = requireHumanGateTaskHostBinding(originalBinding, selectedContext)
-  const native = new DatabaseHumanGateTaskLifecyclePersistence(
-    input.db,
-    createTaskRuntimeLifecyclePersistence(input.db, input),
-  )
-  if (binding === undefined) return { lifecycle: native, context, selected: false }
-  const purpose = input.writePurpose
-  if (purpose === undefined) throw new Error('human-gate-task-write-purpose-required')
-  if (
-    context !== undefined &&
-    (context.persistence.humanGateWriteMode !== undefined ||
-      context.persistence.humanGateWritePurposes !== undefined)
-  ) {
-    selectHumanGateTaskWrites(context.persistence, purpose)
-  }
-  const views = createSelectedHumanGateTaskWritePurposes({
-    humanGateLifecycle: native,
-    hostWrites: binding,
-  })
-  return { lifecycle: views[purpose], context, selected: true }
-}
 
 // RFC-359：同步的决定接受参与者（`bindTaskDecisionParticipantInTx` →
 // `LegacyHumanGateTaskLifecycle` → `transitionHumanGateTaskTx` → `writeTaskStatusTx`）整条链退役。
@@ -91,23 +35,23 @@ export async function parkPreparedHumanGate(
     readonly db: ProviderNeutralDatabase
     readonly prepared: PreparedHumanGateRef
     readonly executionContext?: TaskExecutionContextRef
-    readonly writePurpose?: keyof HumanGateTaskWritePurposes
     readonly now?: number
   } & TaskExecutionPersistenceDependencies,
 ): Promise<ParkTaskAtHumanGateResult> {
   if (input.executionContext !== undefined) {
     assertTaskExecutionContext(input.executionContext, input.prepared.taskId)
   }
-  const selection = resolveHumanGateTaskWrites(input, input.prepared.taskId)
-  const run = () =>
-    parkTaskAtHumanGate(selection.lifecycle, {
+  return await parkTaskAtHumanGate(
+    new DatabaseHumanGateTaskLifecyclePersistence(
+      input.db,
+      createTaskRuntimeLifecyclePersistence(input.db, input),
+    ),
+    {
       prepared: input.prepared,
       ...(input.executionContext === undefined ? {} : { token: input.executionContext.token }),
       ...(input.now === undefined ? {} : { now: input.now }),
-    })
-  return await (selection.selected && selection.context !== undefined
-    ? runWithTaskExecutionContext(selection.context, run)
-    : run())
+    },
+  )
 }
 
 export async function settleManualQuestionParkObligations(
@@ -115,23 +59,23 @@ export async function settleManualQuestionParkObligations(
     readonly db: ProviderNeutralDatabase
     readonly taskId: string
     readonly executionContext?: TaskExecutionContextRef
-    readonly writePurpose?: keyof HumanGateTaskWritePurposes
     readonly now?: number
   } & TaskExecutionPersistenceDependencies,
 ): Promise<ManualQuestionParkSettleResult> {
   if (input.executionContext !== undefined) {
     assertTaskExecutionContext(input.executionContext, input.taskId)
   }
-  const selection = resolveHumanGateTaskWrites(input, input.taskId)
-  const run = () =>
-    settleManualQuestionParkObligationsInternal(selection.lifecycle, {
+  return await settleManualQuestionParkObligationsInternal(
+    new DatabaseHumanGateTaskLifecyclePersistence(
+      input.db,
+      createTaskRuntimeLifecyclePersistence(input.db, input),
+    ),
+    {
       taskId: input.taskId,
       ...(input.executionContext === undefined ? {} : { token: input.executionContext.token }),
       ...(input.now === undefined ? {} : { now: input.now }),
-    })
-  return await (selection.selected && selection.context !== undefined
-    ? runWithTaskExecutionContext(selection.context, run)
-    : run())
+    },
+  )
 }
 
 export { ManualQuestionParkRequired }

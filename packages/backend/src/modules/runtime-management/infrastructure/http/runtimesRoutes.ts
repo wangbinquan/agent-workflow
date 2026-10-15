@@ -2,7 +2,6 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
 import { registerRoute } from '@/routes/registry'
-import { runHttpHostExecutionRequest } from '@/platform/http/hostExecutionAvailability'
 import { actorOf } from '@/auth/actor'
 import { ValidationError } from '@/util/errors'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
@@ -103,7 +102,6 @@ export function mountRuntimesRoutes(app: Hono, deps: RuntimesRouteDependencies):
     {
       method: 'GET',
       path: '/api/runtimes/status',
-      executionGroup: 'diagnostics',
       permissions: ['runtime:read'],
       tokenAccess: 'allow',
       summary: 'Runtime qualification status',
@@ -117,7 +115,6 @@ export function mountRuntimesRoutes(app: Hono, deps: RuntimesRouteDependencies):
     {
       method: 'POST',
       path: '/api/runtimes/probe',
-      executionGroup: 'diagnostics',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
       summary: 'Probe an arbitrary runtime binary',
@@ -138,16 +135,7 @@ export function mountRuntimesRoutes(app: Hono, deps: RuntimesRouteDependencies):
     },
     async (c) => {
       const body = parseBody(CreateBody, await c.req.json().catch(() => ({})))
-      // Registration without a smoke probe remains a resource operation.
-      // The original default pre-save probe is a real runtime execution.
-      return c.json(
-        await runHttpHostExecutionRequest(
-          app,
-          (body.probe ?? body.binaryPath !== undefined) ? 'diagnostics' : undefined,
-          () => deps.profiles.create({ ...body, createdBy: actorOf(c).user.id }),
-        ),
-        201,
-      )
+      return c.json(await deps.profiles.create({ ...body, createdBy: actorOf(c).user.id }), 201)
     },
   )
   registerRoute(
@@ -196,7 +184,6 @@ export function mountRuntimesRoutes(app: Hono, deps: RuntimesRouteDependencies):
     {
       method: 'POST',
       path: '/api/runtimes/:name/probe',
-      executionGroup: 'diagnostics',
       permissions: ['settings:write'],
       tokenAccess: 'allow',
       summary: 'Probe a registered runtime',

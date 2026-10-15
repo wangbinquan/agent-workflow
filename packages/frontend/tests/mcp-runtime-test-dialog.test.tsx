@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { HostExecutionStatus, McpRuntimeTestSessionDto } from '@agent-workflow/shared'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import type { ExecutionStatus, McpRuntimeTestSessionDto } from '@agent-workflow/shared'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 import { McpRuntimeTestDialog } from '../src/components/mcps/McpRuntimeTestDialog'
 import i18n from '../src/i18n'
 import { clearToken, setBaseUrl, setToken } from '../src/stores/auth'
@@ -103,7 +103,7 @@ function requestPath(request: RequestInfo | URL): string {
 
 function renderDialog(
   props: Partial<ComponentProps<typeof McpRuntimeTestDialog>> = {},
-  execution: HostExecutionStatus = { mode: 'native', status: null },
+  execution: ExecutionStatus = { mode: 'standalone', state: 'active', reason: null },
 ): void {
   const client = new QueryClient({
     defaultOptions: {
@@ -113,9 +113,9 @@ function renderDialog(
   })
   render(
     <QueryClientProvider client={client}>
-      <HostExecutionReadinessContext.Provider value={execution}>
+      <ExecutionStatusContext.Provider value={execution}>
         <McpRuntimeTestDialog mcpId="mcp-1" operationConfigHash={HASH} {...props} />
-      </HostExecutionReadinessContext.Provider>
+      </ExecutionStatusContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -139,81 +139,7 @@ afterEach(() => {
 })
 
 describe('McpRuntimeTestDialog', () => {
-  test('resource-only can recover the exact quarantined session without creating another test', async () => {
-    let current: McpRuntimeTestSessionDto = { ...session('ended'), cleanupState: 'quarantined' }
-    const posts: string[] = []
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (request, init) => {
-      const path = requestPath(request),
-        method = init?.method ?? 'GET'
-      if (method === 'POST') posts.push(path)
-      if (path === '/api/runtimes') return runtimes()
-      if (
-        path === '/api/mcps/mcp-1/runtime-test-session' ||
-        path === '/api/mcps/mcp-1/runtime-test-sessions/session-1'
-      )
-        return json(current)
-      if (path === '/api/mcps/mcp-1/runtime-test-sessions/session-1/recover' && method === 'POST') {
-        expect(JSON.parse(String(init?.body))).toEqual({})
-        current = {
-          ...current,
-          cleanupState: 'complete',
-          sessionVersion: current.sessionVersion + 1,
-        }
-        return json({ session: current })
-      }
-      return json({ ok: false, code: 'not-found', message: path }, 404)
-    })
-    renderDialog(
-      {},
-      {
-        mode: 'resource-only',
-        status: {
-          phase: 'standby',
-          generation: 'resource-only-recovery',
-          readyGroups: [],
-          reason: null,
-        },
-      },
-    )
-    await openDialog()
-    const recover = await screen.findByTestId('mcp-runtime-test-recover')
-    expect(screen.queryByTestId('mcp-runtime-test-start')).toBeNull()
-    fireEvent.click(recover)
-    await waitFor(() => expect(screen.queryByTestId('mcp-runtime-test-recover')).toBeNull())
-    expect(posts).toEqual(['/api/mcps/mcp-1/runtime-test-sessions/session-1/recover'])
-    expect((screen.getByTestId('mcp-runtime-test-start') as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByTestId('mock-session-conversation')).toBeTruthy()
-  })
-
-  test('an unproven recovery keeps the original quarantined result visible and prevents a new test', async () => {
-    const current: McpRuntimeTestSessionDto = { ...session('ended'), cleanupState: 'quarantined' }
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (request, init) => {
-      const path = requestPath(request)
-      if (path === '/api/runtimes') return runtimes()
-      if (path === '/api/mcps/mcp-1/runtime-test-session') return json(current)
-      if (path.endsWith('/recover') && init?.method === 'POST')
-        return json(
-          {
-            ok: false,
-            code: 'mcp-test-recovery-unproven',
-            message: 'Original execution is not confirmed reaped',
-          },
-          409,
-        )
-      return json({ ok: false, code: 'not-found', message: path }, 404)
-    })
-    renderDialog()
-    await openDialog()
-    fireEvent.click(await screen.findByTestId('mcp-runtime-test-recover'))
-    await waitFor(() =>
-      expect(screen.getByRole('alert').textContent).toContain('not confirmed reaped'),
-    )
-    expect(screen.getByTestId('mcp-runtime-test-recover')).toBeTruthy()
-    expect(screen.queryByTestId('mcp-runtime-test-start')).toBeNull()
-    expect(screen.getByTestId('mock-session-conversation')).toBeTruthy()
-  })
-
-  test('resource-only keeps saved session reads open but cannot create a native test turn', async () => {
+  test('a standby hosted instance keeps saved session reads open but cannot start a test turn', async () => {
     const posts: string[] = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (request, init) => {
       const path = requestPath(request)
@@ -223,18 +149,7 @@ describe('McpRuntimeTestDialog', () => {
         return new Response(null, { status: 204 })
       return json({ ok: false, code: 'not-found', message: path }, 404)
     })
-    renderDialog(
-      {},
-      {
-        mode: 'resource-only',
-        status: {
-          phase: 'standby',
-          generation: 'actual-resource-only',
-          readyGroups: [],
-          reason: 'host-execution-resource-only',
-        },
-      },
-    )
+    renderDialog({}, { mode: 'crewstation', state: 'standby', reason: null })
     await openDialog()
     await screen.findByRole('combobox', { name: i18n.t('mcps.runtimeTest.runtime') })
     fireEvent.change(await screen.findByTestId('mcp-runtime-test-composer'), {
@@ -249,7 +164,7 @@ describe('McpRuntimeTestDialog', () => {
     )
     expect(
       screen.getByText(
-        i18n.t('hostExecution.unavailable', { groups: i18n.t('hostExecution.group.diagnostics') }),
+        i18n.t('execution.unavailable', { group: i18n.t('execution.group.diagnostics') }),
       ),
     ).toBeTruthy()
   })

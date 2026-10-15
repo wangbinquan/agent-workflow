@@ -1,5 +1,4 @@
 import { ulid } from 'ulid'
-import { waitForExecutionActivation } from '@/platform/background/activation'
 import {
   McpRuntimeTestSessionDtoSchema,
   SessionViewResponseSchema,
@@ -37,15 +36,6 @@ import type {
 } from './runtimeDiagnosticsEffects'
 import { McpRuntimeTestEventSink } from './runtimeTestEventSink'
 import {
-  McpDiagnosticsExecutionController,
-  McpDiagnosticsExecutionUnavailable,
-  type McpDiagnosticsExecutionFrame,
-  type McpDiagnosticsExecutionLifecycle,
-  type McpDiagnosticsExecutionLifetime,
-} from './runtimeDiagnosticsExecution'
-import type { McpDiagnosticsCaller, McpDiagnosticsStoredQueries } from './runtimeDiagnosticsQueries'
-export type { McpDiagnosticsCaller } from './runtimeDiagnosticsQueries'
-import {
   AGENT_NAME,
   DEFAULT_CAPACITY,
   STDERR_TAIL_BYTES,
@@ -63,32 +53,23 @@ import {
   applyPlaygroundVerification,
   resultFailureCode,
 } from '../../domain/mcps/runtimeDiagnostics'
+/** Only the existing session ownership and audit facts are needed here. */
+export interface McpDiagnosticsCaller {
+  readonly user: { readonly id: string }
+  readonly permissions: { has(permission: 'mcp-runtime-tests:audit'): boolean }
+}
 export interface McpDiagnosticsDependencies {
   readonly persistence: McpRuntimeTestPersistence
   readonly leaseOperations: McpRuntimeTestLeaseOperations
   readonly loadMcp: (mcpId: string) => Promise<Mcp | null>
   readonly effects: McpDiagnosticsEffects
   readonly capacity?: number
-  readonly executionMode?: 'native' | 'host'
 }
 interface QueueItem {
   sessionId: string
   turnId: string
 }
 export class McpDiagnosticsApplication {
-  readonly storedQueries: McpDiagnosticsStoredQueries = Object.freeze({
-    latest: (actor: McpDiagnosticsCaller, mcpId: string) => this.readLatest(actor, mcpId),
-    get: (actor: McpDiagnosticsCaller, mcpId: string, sessionId: string) =>
-      this.readSession(actor, mcpId, sessionId),
-    sessionView: (actor: McpDiagnosticsCaller, mcpId: string, sessionId: string) =>
-      this.readSessionView(actor, mcpId, sessionId),
-  })
-  readonly executionLifecycle: McpDiagnosticsExecutionLifecycle | undefined
-  private readonly executionController: McpDiagnosticsExecutionController | undefined
-  private readonly executionPauses = new WeakMap<McpDiagnosticsExecutionFrame, Promise<void>>()
-  /** Only the original reaping participant can qualify these local receipts. */
-  private readonly provenReapedTurns = new Set<string>()
-  private readonly resourceOperations = new Set<Promise<unknown>>()
   private readonly now
   private readonly capacity
   private readonly reapTurn
@@ -99,7 +80,6 @@ export class McpDiagnosticsApplication {
   private readonly turnPromises = new Map<string, Promise<void>>()
   private readonly activeReceiptAttempts = new Set<string>()
   private activeWorkers = 0
-  private idleScheduleVersion = 0
   private idleTimer: DiagnosticTimer | null = null
   private reconcileTimer: DiagnosticTimer | null = null
   private startPromise: Promise<void> | null = null
@@ -111,35 +91,6 @@ export class McpDiagnosticsApplication {
   private shuttingDown = false
 
   constructor(private readonly deps: McpDiagnosticsDependencies) {
-    if (
-      deps.executionMode !== undefined &&
-      deps.executionMode !== 'native' &&
-      deps.executionMode !== 'host'
-    ) {
-      throw new Error('mcp-diagnostics-execution-mode-invalid')
-    }
-    this.executionController =
-      deps.executionMode === 'host' ? new McpDiagnosticsExecutionController() : undefined
-    if (
-      this.executionController !== undefined &&
-      typeof deps.leaseOperations.releaseAcknowledged !== 'function'
-    )
-      throw new Error('mcp-host-lease-acknowledgement-port-missing')
-    this.executionLifecycle =
-      this.executionController === undefined
-        ? undefined
-        : Object.freeze({
-            start: (lifetime: McpDiagnosticsExecutionLifetime) => this.startExecution(lifetime),
-            quiesce: (lifetime: McpDiagnosticsExecutionLifetime) => this.quiesceExecution(lifetime),
-            awaitDrained: (lifetime: McpDiagnosticsExecutionLifetime) =>
-              this.executionController!.awaitDrained(lifetime),
-            pause: (lifetime: McpDiagnosticsExecutionLifetime, budgetMs?: number) =>
-              this.pauseExecution(lifetime, budgetMs),
-          })
-    if (this.executionController !== undefined) {
-      this.accepting = false
-      this.paused = true
-    }
     const effects = deps.effects
     const now = effects.now
     this.now = () => now.call(effects)
@@ -153,14 +104,6 @@ export class McpDiagnosticsApplication {
       return Promise.reject(
         new ConflictError('mcp-test-service-disposed', 'the MCP runtime test service is disposed'),
       )
-    if (this.executionController !== undefined) {
-      try {
-        this.executionController.requireReady()
-        return Promise.resolve()
-      } catch (error) {
-        return Promise.reject(error)
-      }
-    }
     if (this.startPromise !== null) return this.startPromise
     this.hasStarted = true
     let resolveAttempt!: () => void
@@ -186,7 +129,6 @@ export class McpDiagnosticsApplication {
   /** Permanently close an application-owned instance without starting a cold one. */
   async dispose(budgetMs = 30_000): Promise<void> {
     if (this.disposePromise !== null) return this.disposePromise
-    if (this.executionController !== undefined) return this.disposeExecution(budgetMs)
     const starting = this.startPromise
     this.disposed = true
     this.shuttingDown = true
@@ -219,11 +161,6 @@ export class McpDiagnosticsApplication {
   }
 
   async shutdown(budgetMs = 30_000): Promise<void> {
-    if (this.executionController !== undefined) {
-      await this.pause(budgetMs)
-      this.shuttingDown = true
-      return
-    }
     await this.start()
     if (this.shuttingDown) return
     this.shuttingDown = true
@@ -236,17 +173,6 @@ export class McpDiagnosticsApplication {
   /** Reversible provider-session admission fence. Existing turns are drained,
    * while a failed provider switch may resume this same service instance. */
   async pause(budgetMs = 30_000): Promise<void> {
-    if (this.executionController !== undefined) {
-      const frame = this.executionController.selected
-      if (frame !== undefined) {
-        if (frame.current()) await this.pauseExecution(frame.lifetime, budgetMs)
-        else {
-          this.quiesceExecution(frame.lifetime)
-          await this.executionController.awaitDrained(frame.lifetime)
-        }
-      }
-      return
-    }
     await this.start()
     if (this.shuttingDown || this.paused) return
     this.paused = true
@@ -256,12 +182,6 @@ export class McpDiagnosticsApplication {
   }
 
   async resume(): Promise<void> {
-    // A hosted owner resumes only through start(lifetime), never through an
-    // implicit native start from a request or provider resource resume.
-    if (this.executionController !== undefined) {
-      this.executionController.requireReady()
-      return
-    }
     await this.start()
     if (this.shuttingDown || !this.paused) return
     await this.reconcileCore()
@@ -275,205 +195,26 @@ export class McpDiagnosticsApplication {
     await this.shutdown(budgetMs)
   }
 
-  private executionCurrent(frame?: McpDiagnosticsExecutionFrame): boolean {
-    return this.executionController === undefined || (frame !== undefined && frame.current())
-  }
-
-  private executionCanDispatch(frame?: McpDiagnosticsExecutionFrame): boolean {
-    return this.executionController === undefined || (frame !== undefined && frame.canDispatch())
-  }
-
-  private assertExecutionCurrent(frame?: McpDiagnosticsExecutionFrame): void {
-    if (!this.executionCurrent(frame)) throw new McpDiagnosticsExecutionUnavailable()
-  }
-
-  private withExecution<T>(work: (frame?: McpDiagnosticsExecutionFrame) => Promise<T>): Promise<T> {
-    if (this.executionController === undefined) return work()
-    try {
-      const frame = this.executionController.requireReady()
-      return this.executionController.track(frame, () => work(frame))
-    } catch (error) {
-      return Promise.reject(error)
-    }
-  }
-
-  private withResourceOperation<T>(
-    work: (frame?: McpDiagnosticsExecutionFrame) => Promise<T>,
-  ): Promise<T> {
-    if (this.executionController === undefined) return work()
-    if (this.disposed) return Promise.reject(new Error('mcp-test-service-disposed'))
-    const frame = this.executionController.selected
-    let resolve!: (value: T | PromiseLike<T>) => void
-    let reject!: (error: unknown) => void
-    const pending = new Promise<T>((yes, no) => {
-      resolve = yes
-      reject = no
-    })
-    this.resourceOperations.add(pending)
-    void pending.then(
-      () => this.resourceOperations.delete(pending),
-      () => this.resourceOperations.delete(pending),
-    )
-    try {
-      resolve(
-        frame !== undefined && !frame.drained
-          ? this.executionController.track(frame, () => work(frame))
-          : work(),
-      )
-    } catch (error) {
-      reject(error)
-    }
-    return pending
-  }
-
-  private async startExecution(lifetime: McpDiagnosticsExecutionLifetime): Promise<void> {
-    const controller = this.executionController
-    if (controller === undefined) throw new Error('mcp-test-execution-mode-not-selected')
-    if (this.disposed || this.shuttingDown) throw new Error('mcp-test-service-disposed')
-    try {
-      await controller.start(lifetime, async (frame) => {
-        this.hasStarted = true
-        this.accepting = false
-        this.paused = false
-        await this.bootRecover(frame)
-        if (frame.current()) await this.reconcileCore(frame)
-      })
-      const frame = controller.selected!
-      const activate = () => {
-        if (!frame.canDispatch()) return
-        this.accepting = true
-        this.installReconcileTimer(frame)
-        this.drain(frame)
-        this.scheduleIdleTimer(frame)
-      }
-      if (lifetime.whenActive === undefined) activate()
-      else
-        void controller
-          .track(
-            frame,
-            async () => {
-              if (await waitForExecutionActivation(lifetime.whenActive, frame.activation.signal))
-                activate()
-            },
-            true,
-          )
-          .catch(() => {})
-    } catch (error) {
-      // The root receives no handle from a failed start. Settle this exact
-      // frame here; never quiesce another owner rejected by controller.start.
-      if (controller.selected?.lifetime === lifetime) {
-        this.quiesceExecution(lifetime)
-        try {
-          await controller.awaitDrained(lifetime)
-        } catch (drainError) {
-          if (drainError !== error)
-            throw new AggregateError([error, drainError], 'MCP host start and settlement failed')
-        }
-      }
-      throw error
-    }
-  }
-
-  private quiesceExecution(lifetime: McpDiagnosticsExecutionLifetime): void {
-    this.executionController!.quiesce(lifetime)
-    this.accepting = false
-    this.paused = true
-    this.clearBackgroundTimers()
-    // Pending IDs and admitted turns are intentionally untouched. A new
-    // lifetime reads the durable queue after the old callbacks have settled.
-  }
-
-  private async pauseExecution(
-    lifetime: McpDiagnosticsExecutionLifetime,
-    budgetMs = 30_000,
-  ): Promise<void> {
-    const controller = this.executionController!
-    this.quiesceExecution(lifetime)
-    const frame = controller.selected!
-    if (frame.drained) return
-    const previous = this.executionPauses.get(frame)
-    if (previous !== undefined) return previous
-    const attempt = controller
-      .track(frame, () => this.drainRunningTurns(budgetMs, frame), true)
-      .then(() => controller.awaitDrained(lifetime))
-      .finally(() => {
-        if (this.executionPauses.get(frame) === attempt) this.executionPauses.delete(frame)
-      })
-    this.executionPauses.set(frame, attempt)
-    return attempt
-  }
-
-  private disposeExecution(budgetMs: number): Promise<void> {
-    const controller = this.executionController!
-    const frame = controller.selected
-    const normalStop = frame?.current() === true
-    this.disposed = true
-    this.accepting = false
-    this.paused = true
-    this.shuttingDown = true
-    this.clearBackgroundTimers()
-    const disposing = (async () => {
-      if (frame !== undefined) {
-        if (normalStop) await this.pauseExecution(frame.lifetime, budgetMs)
-        else {
-          this.quiesceExecution(frame.lifetime)
-          await controller.awaitDrained(frame.lifetime)
-        }
-      }
-      while (this.resourceOperations.size > 0)
-        await Promise.allSettled([...this.resourceOperations])
-      this.queue.splice(0)
-      this.queued.clear()
-    })().catch((error) => {
-      if (this.disposePromise === disposing) this.disposePromise = null
-      throw error
-    })
-    this.disposePromise = disposing
-    return disposing
-  }
-
-  private installReconcileTimer(frame?: McpDiagnosticsExecutionFrame): void {
-    if (
-      !this.executionCurrent(frame) ||
-      this.shuttingDown ||
-      this.paused ||
-      this.reconcileTimer !== null
-    )
-      return
+  private installReconcileTimer(): void {
+    if (this.shuttingDown || this.paused || this.reconcileTimer !== null) return
     this.reconcileTimer = this.deps.effects.setInterval(() => {
-      if (!this.executionCurrent(frame)) return
-      const reconcile =
-        frame === undefined
-          ? this.reconcile()
-          : this.executionController!.track(frame, async () => {
-              await this.reconcileCore(frame)
-              // The original healthy-owner recovery may prove a quarantined child
-              // reaped. A retained settlement must not prevent that reconciliation.
-              await this.executionController!.retrySettlements(frame)
-              if (frame.canDispatch()) this.drain(frame)
-            })
-      void reconcile.catch((error: unknown) => {
+      void this.reconcile().catch((error: unknown) => {
         this.log.warn('mcp-test-periodic-reconcile-failed', {
           error: error instanceof Error ? error.message : String(error),
         })
       })
     }, 60_000)
     this.reconcileTimer.unref?.()
-    if (!this.executionCurrent(frame)) this.clearBackgroundTimers()
   }
 
   private clearBackgroundTimers(): void {
-    this.idleScheduleVersion += 1
     if (this.idleTimer !== null) this.idleTimer.cancel()
     if (this.reconcileTimer !== null) this.reconcileTimer.cancel()
     this.idleTimer = null
     this.reconcileTimer = null
   }
 
-  private async drainRunningTurns(
-    budgetMs: number,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
+  private async drainRunningTurns(budgetMs: number): Promise<void> {
     const now = this.now()
     const affected = await this.deps.persistence.shutdown(now, now + MCP_RUNTIME_TEST_IDLE_MS)
 
@@ -502,11 +243,10 @@ export class McpDiagnosticsApplication {
     }
 
     const cleanup = await this.deps.persistence.listEndingWithoutInFlight()
-    for (const sessionId of cleanup) await this.finishEndingSession(sessionId, frame, true)
+    for (const sessionId of cleanup) await this.finishEndingSession(sessionId)
   }
 
-  private assertAccepting(frame?: McpDiagnosticsExecutionFrame): void {
-    this.assertExecutionCurrent(frame)
+  private assertAccepting(): void {
     if (!this.accepting) {
       throw new ConflictError(
         'mcp-test-service-stopping',
@@ -515,26 +255,17 @@ export class McpDiagnosticsApplication {
     }
   }
 
-  create(
+  async create(
     actor: McpDiagnosticsCaller,
     mcp: Mcp,
     input: McpRuntimeTestCreateRequest,
-  ): Promise<McpRuntimeTestCreateReceipt> {
-    return this.withExecution((frame) => this.createForLifetime(actor, mcp, input, frame))
-  }
-
-  private async createForLifetime(
-    actor: McpDiagnosticsCaller,
-    mcp: Mcp,
-    input: McpRuntimeTestCreateRequest,
-    frame?: McpDiagnosticsExecutionFrame,
   ): Promise<McpRuntimeTestCreateReceipt> {
     await this.start()
-    this.assertAccepting(frame)
+    this.assertAccepting()
     const attemptKey = `${mcp.id}\0${actor.user.id}\0${input.clientCreateId}`
     this.activeReceiptAttempts.add(attemptKey)
     try {
-      return await this.createReady(actor, mcp, input, frame)
+      return await this.createReady(actor, mcp, input)
     } finally {
       this.activeReceiptAttempts.delete(attemptKey)
     }
@@ -544,7 +275,6 @@ export class McpDiagnosticsApplication {
     actor: McpDiagnosticsCaller,
     mcp: Mcp,
     input: McpRuntimeTestCreateRequest,
-    frame?: McpDiagnosticsExecutionFrame,
   ): Promise<McpRuntimeTestCreateReceipt> {
     ensureMessage(input.message)
     const digest = requestDigest(input)
@@ -569,7 +299,6 @@ export class McpDiagnosticsApplication {
       )
     }
     const currentHash = await this.currentMcpHash(mcp)
-    this.assertExecutionCurrent(frame)
     if (currentHash !== input.expectedMcpConfigHash) {
       throw staleConflictError('mcp', 'the MCP changed; reload before testing', {
         expectedConfigHash: input.expectedMcpConfigHash,
@@ -577,7 +306,6 @@ export class McpDiagnosticsApplication {
       })
     }
     const runtime = await this.resolveRuntime(input.runtimeName)
-    this.assertExecutionCurrent(frame)
     const now = this.now()
 
     const sessionId = ulid()
@@ -585,7 +313,6 @@ export class McpDiagnosticsApplication {
     const scratchRoot = this.deps.effects.workspaceReference(sessionId)
     const runtimeSessionId = this.deps.effects.createNativeSessionId(runtime)
 
-    this.assertExecutionCurrent(frame)
     const receipt = await this.deps.persistence.create({
       mcpId: mcp.id,
       ownerUserId: actor.user.id,
@@ -608,30 +335,18 @@ export class McpDiagnosticsApplication {
       receiptExpiresAt: now + MCP_RUNTIME_TEST_RECEIPT_MS,
     })
     await this.broadcastSession(receipt.sessionId)
-    if (receipt.shouldQueue) this.enqueue({ sessionId, turnId }, frame)
+    if (receipt.shouldQueue) this.enqueue({ sessionId, turnId })
     return { sessionId: receipt.sessionId, acceptedTurnId: receipt.acceptedTurnId }
   }
 
-  message(
+  async message(
     actor: McpDiagnosticsCaller,
     mcp: Mcp,
     sessionId: string,
     input: McpRuntimeTestMessageRequest,
-  ): Promise<McpRuntimeTestMessageReceipt> {
-    return this.withExecution((frame) =>
-      this.messageForLifetime(actor, mcp, sessionId, input, frame),
-    )
-  }
-
-  private async messageForLifetime(
-    actor: McpDiagnosticsCaller,
-    mcp: Mcp,
-    sessionId: string,
-    input: McpRuntimeTestMessageRequest,
-    frame?: McpDiagnosticsExecutionFrame,
   ): Promise<McpRuntimeTestMessageReceipt> {
     await this.start()
-    this.assertAccepting(frame)
+    this.assertAccepting()
     ensureMessage(input.message)
     const session = await this.requireSession(sessionId, mcp.id)
     assertSessionActor(session, {
@@ -657,28 +372,25 @@ export class McpDiagnosticsApplication {
     }
 
     if (!mcp.enabled) {
-      await this.invalidateSession(session.id, 'mcp-disabled', frame)
+      await this.invalidateSession(session.id, 'mcp-disabled')
       throw new ConflictError('mcp-test-session-stale', 'the MCP is now disabled')
     }
     const currentHash = await this.currentMcpHash(mcp)
-    this.assertExecutionCurrent(frame)
     if (currentHash !== session.mcpConfigHash) {
-      await this.invalidateSession(session.id, 'mcp-config-changed', frame)
+      await this.invalidateSession(session.id, 'mcp-config-changed')
       throw new ConflictError('mcp-test-session-stale', 'the MCP changed; start a new test')
     }
     const runtime = await this.resolveRuntime(session.runtimeName)
-    this.assertExecutionCurrent(frame)
     if (
       runtime.row.id !== session.runtimeRowId ||
       runtime.snapshotJson !== session.runtimeSnapshotJson
     ) {
-      await this.invalidateSession(session.id, 'runtime-profile-changed', frame)
+      await this.invalidateSession(session.id, 'runtime-profile-changed')
       throw new ConflictError('mcp-test-session-stale', 'the runtime changed; start a new test')
     }
 
     const now = this.now()
     const turnId = ulid()
-    this.assertExecutionCurrent(frame)
     const accepted = await this.deps.persistence.acceptMessage({
       mcpId: mcp.id,
       sessionId,
@@ -692,11 +404,11 @@ export class McpDiagnosticsApplication {
       maxTurns: MCP_RUNTIME_TEST_MAX_TURNS,
     })
     if (accepted.turnId === null) {
-      await this.finishEndingSession(sessionId, frame)
+      await this.finishEndingSession(sessionId)
       throw new ConflictError('mcp-test-session-expired', 'the MCP test session expired')
     }
     await this.broadcastSession(sessionId)
-    if (accepted.shouldQueue) this.enqueue({ sessionId, turnId: accepted.turnId }, frame)
+    if (accepted.shouldQueue) this.enqueue({ sessionId, turnId: accepted.turnId })
     return {
       sessionId,
       acceptedTurnId: accepted.turnId,
@@ -704,25 +416,13 @@ export class McpDiagnosticsApplication {
     }
   }
 
-  cancel(
+  async cancel(
     actor: McpDiagnosticsCaller,
     mcpId: string,
     sessionId: string,
     input: McpRuntimeTestCancelRequest,
   ): Promise<McpRuntimeTestMutationReceipt> {
-    return this.withResourceOperation((frame) =>
-      this.cancelForLifetime(actor, mcpId, sessionId, input, frame),
-    )
-  }
-
-  private async cancelForLifetime(
-    actor: McpDiagnosticsCaller,
-    mcpId: string,
-    sessionId: string,
-    input: McpRuntimeTestCancelRequest,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<McpRuntimeTestMutationReceipt> {
-    if (this.executionController === undefined) await this.start()
+    await this.start()
     const initial = await this.requireSession(sessionId, mcpId)
     assertSessionActor(initial, {
       userId: actor.user.id,
@@ -736,83 +436,18 @@ export class McpDiagnosticsApplication {
       idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
     })
     if (result.abort) this.controllers.get(input.turnId)?.abort()
-    if (result.cleanup) await this.finishEndingSession(sessionId, frame)
-    this.scheduleIdleTimer(frame)
+    if (result.cleanup) await this.finishEndingSession(sessionId)
+    this.scheduleIdleTimer()
     await this.broadcastSession(sessionId)
-    return {
-      session: await (this.executionController === undefined
-        ? this.get(actor, mcpId, sessionId)
-        : this.readSession(actor, mcpId, sessionId)),
-    }
+    return { session: await this.get(actor, mcpId, sessionId) }
   }
 
-  end(
+  async end(
     actor: McpDiagnosticsCaller,
     mcpId: string,
     sessionId: string,
   ): Promise<McpRuntimeTestMutationReceipt> {
-    return this.withResourceOperation((frame) =>
-      this.endForLifetime(actor, mcpId, sessionId, frame),
-    )
-  }
-
-  /** Explicit recovery owns only this original quarantined turn. It never
-   * creates a replacement diagnostic execution or scans another MCP owner. */
-  recover(
-    actor: McpDiagnosticsCaller,
-    mcpId: string,
-    sessionId: string,
-  ): Promise<McpRuntimeTestMutationReceipt> {
-    return this.withResourceOperation(async (frame) => {
-      const initial = await this.requireSession(sessionId, mcpId)
-      assertSessionActor(initial, {
-        userId: actor.user.id,
-        canAudit: actor.permissions.has('mcp-runtime-tests:audit'),
-      })
-      if (initial.cleanupState === 'quarantined') {
-        const candidate = (await this.deps.persistence.listQuarantinedCandidates()).find(
-          (value) => value.session.id === initial.id && value.session.mcpId === mcpId,
-        )
-        if (!candidate?.turn || !this.deps.effects.hasExecution(candidate.turn))
-          throw new ConflictError(
-            'mcp-test-recovery-unproven',
-            'The original diagnostic execution has not been proven reaped',
-          )
-        const outcome = await this.reapTurn(candidate.turn, () => this.now())
-        if (outcome !== 'not-alive' && outcome !== 'killed')
-          throw new ConflictError(
-            'mcp-test-recovery-unproven',
-            'The original diagnostic execution has not been proven reaped',
-            { outcome },
-          )
-        const recovered = await this.deps.effects.recoverReapedTurn({
-          ...candidate,
-          turn: candidate.turn,
-          readNow: () => this.now(),
-        })
-        if (!recovered)
-          throw new ConflictError(
-            'mcp-test-recovery-unproven',
-            'The original diagnostic recovery has not been acknowledged',
-          )
-        if (this.executionController)
-          this.provenReapedTurns.add(`${initial.id}\0${candidate.turn.id}`)
-        await this.deps.leaseOperations.repairAfterReap(initial.id, candidate.turn.id, true)
-        await this.finishEndingSession(initial.id, frame, true)
-      }
-      if (frame !== undefined) await this.executionController!.retrySettlements(frame, initial.id)
-      await this.broadcastSession(initial.id)
-      return { session: await this.readSession(actor, mcpId, sessionId) }
-    })
-  }
-
-  private async endForLifetime(
-    actor: McpDiagnosticsCaller,
-    mcpId: string,
-    sessionId: string,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<McpRuntimeTestMutationReceipt> {
-    if (this.executionController === undefined) await this.start()
+    await this.start()
     const initial = await this.requireSession(sessionId, mcpId)
     assertSessionActor(initial, {
       userId: actor.user.id,
@@ -825,14 +460,10 @@ export class McpDiagnosticsApplication {
       await this.turnPromises.get(transitioned.turnId)
     }
     if (transitioned.cleanup || transitioned.turnId !== null) {
-      await this.finishEndingSession(sessionId, frame)
+      await this.finishEndingSession(sessionId)
     }
     await this.broadcastSession(sessionId)
-    return {
-      session: await (this.executionController === undefined
-        ? this.get(actor, mcpId, sessionId)
-        : this.readSession(actor, mcpId, sessionId)),
-    }
+    return { session: await this.get(actor, mcpId, sessionId) }
   }
 
   async latest(
@@ -841,13 +472,6 @@ export class McpDiagnosticsApplication {
   ): Promise<McpRuntimeTestSessionDto | null> {
     await this.start()
     await this.reconcile()
-    return this.readLatest(actor, mcpId)
-  }
-
-  private async readLatest(
-    actor: McpDiagnosticsCaller,
-    mcpId: string,
-  ): Promise<McpRuntimeTestSessionDto | null> {
     const row = await this.deps.persistence.findLatestSession(mcpId, actor.user.id)
     return row === null ? null : this.project(row)
   }
@@ -859,14 +483,6 @@ export class McpDiagnosticsApplication {
   ): Promise<McpRuntimeTestSessionDto> {
     await this.start()
     await this.reconcile()
-    return this.readSession(actor, mcpId, sessionId)
-  }
-
-  private async readSession(
-    actor: McpDiagnosticsCaller,
-    mcpId: string,
-    sessionId: string,
-  ): Promise<McpRuntimeTestSessionDto> {
     const row = await this.requireSession(sessionId, mcpId)
     assertSessionActor(
       row,
@@ -882,14 +498,6 @@ export class McpDiagnosticsApplication {
     sessionId: string,
   ): Promise<SessionViewResponse> {
     await this.start()
-    return this.readSessionView(actor, mcpId, sessionId)
-  }
-
-  private async readSessionView(
-    actor: McpDiagnosticsCaller,
-    mcpId: string,
-    sessionId: string,
-  ): Promise<SessionViewResponse> {
     const session = await this.requireSession(sessionId, mcpId)
     assertSessionActor(
       session,
@@ -924,18 +532,8 @@ export class McpDiagnosticsApplication {
     })
   }
 
-  invalidateMcp(mcpId: string, reason: McpRuntimeTestEndReason): Promise<void> {
-    return this.withResourceOperation((frame) =>
-      this.invalidateMcpForLifetime(mcpId, reason, frame),
-    )
-  }
-
-  private async invalidateMcpForLifetime(
-    mcpId: string,
-    reason: McpRuntimeTestEndReason,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (this.executionController === undefined) await this.start()
+  async invalidateMcp(mcpId: string, reason: McpRuntimeTestEndReason): Promise<void> {
+    await this.start()
     const now = this.now()
     const running = await this.deps.persistence.invalidateMcp({ mcpId, reason, now })
     for (const row of running) await this.broadcastSession(row.sessionId)
@@ -945,26 +543,16 @@ export class McpDiagnosticsApplication {
           this.controllers.get(turnId)?.abort()
           await this.turnPromises.get(turnId)
         }
-        await this.finishEndingSession(sessionId, frame)
+        await this.finishEndingSession(sessionId)
       }),
     )
   }
 
-  invalidateOwner(
+  async invalidateOwner(
     ownerUserId: string,
     reason: McpRuntimeTestEndReason = 'access-revoked',
   ): Promise<void> {
-    return this.withResourceOperation((frame) =>
-      this.invalidateOwnerForLifetime(ownerUserId, reason, frame),
-    )
-  }
-
-  private async invalidateOwnerForLifetime(
-    ownerUserId: string,
-    reason: McpRuntimeTestEndReason = 'access-revoked',
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (this.executionController === undefined) await this.start()
+    await this.start()
     const now = this.now()
     const running = await this.deps.persistence.invalidateOwner({ ownerUserId, reason, now })
     for (const row of running) await this.broadcastSession(row.sessionId)
@@ -974,7 +562,7 @@ export class McpDiagnosticsApplication {
           this.controllers.get(turnId)?.abort()
           await this.turnPromises.get(turnId)
         }
-        await this.finishEndingSession(sessionId, frame)
+        await this.finishEndingSession(sessionId)
       }),
     )
   }
@@ -984,53 +572,27 @@ export class McpDiagnosticsApplication {
    * already running. They do, however, make continuation impossible: idle
    * sessions end now; running sessions end as soon as that turn is reaped.
    */
-  markMcpConfigChanged(mcpId: string): Promise<void> {
-    return this.withResourceOperation((frame) => this.markMcpConfigChangedForLifetime(mcpId, frame))
-  }
-
-  private async markMcpConfigChangedForLifetime(
-    mcpId: string,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (this.executionController === undefined) await this.start()
+  async markMcpConfigChanged(mcpId: string): Promise<void> {
+    await this.start()
     const now = this.now()
     const changed = await this.deps.persistence.markMcpConfigChanged({ mcpId, now })
     for (const sessionId of changed.changedSessionIds) await this.broadcastSession(sessionId)
-    for (const sessionId of changed.idleSessionIds) await this.finishEndingSession(sessionId, frame)
+    for (const sessionId of changed.idleSessionIds) await this.finishEndingSession(sessionId)
   }
 
-  markRuntimeProfileChanged(runtimeName: string): Promise<void> {
-    return this.withResourceOperation((frame) =>
-      this.markRuntimeProfileChangedForLifetime(runtimeName, frame),
-    )
-  }
-
-  private async markRuntimeProfileChangedForLifetime(
-    runtimeName: string,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (this.executionController === undefined) await this.start()
+  async markRuntimeProfileChanged(runtimeName: string): Promise<void> {
+    await this.start()
     const now = this.now()
     const changed = await this.deps.persistence.markRuntimeProfileChanged({ runtimeName, now })
     for (const sessionId of changed.changedSessionIds) await this.broadcastSession(sessionId)
-    for (const sessionId of changed.idleSessionIds) await this.finishEndingSession(sessionId, frame)
+    for (const sessionId of changed.idleSessionIds) await this.finishEndingSession(sessionId)
   }
 
-  invalidateRuntime(
+  async invalidateRuntime(
     runtimeName: string,
     reason: 'runtime-disabled' | 'runtime-deleted',
   ): Promise<void> {
-    return this.withResourceOperation((frame) =>
-      this.invalidateRuntimeForLifetime(runtimeName, reason, frame),
-    )
-  }
-
-  private async invalidateRuntimeForLifetime(
-    runtimeName: string,
-    reason: 'runtime-disabled' | 'runtime-deleted',
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (this.executionController === undefined) await this.start()
+    await this.start()
     const now = this.now()
     const rows = await this.deps.persistence.invalidateRuntime({ runtimeName, reason, now })
     for (const row of rows) await this.broadcastSession(row.sessionId)
@@ -1039,7 +601,7 @@ export class McpDiagnosticsApplication {
         this.controllers.get(row.turnId)?.abort()
         await this.turnPromises.get(row.turnId)
       }
-      await this.finishEndingSession(row.sessionId, frame)
+      await this.finishEndingSession(row.sessionId)
     }
   }
 
@@ -1048,26 +610,15 @@ export class McpDiagnosticsApplication {
    * dependent DB rows remain until the canonical MCP delete transaction, so a
    * late reverse-reference conflict cannot erase transcripts on a failed delete.
    */
-  prepareMcpDelete(mcpId: string): Promise<void> {
-    return this.withResourceOperation((frame) => this.prepareMcpDeleteForLifetime(mcpId, frame))
-  }
-
-  private async prepareMcpDeleteForLifetime(
-    mcpId: string,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (this.executionController === undefined) await this.start()
-    if (this.executionCurrent(frame)) await this.invalidateMcp(mcpId, 'mcp-deleted')
+  async prepareMcpDelete(mcpId: string): Promise<void> {
+    await this.start()
+    await this.invalidateMcp(mcpId, 'mcp-deleted')
     await this.deps.persistence.assertMcpDeleteReady(mcpId)
   }
 
-  reconcile(): Promise<void> {
-    return this.withExecution((frame) => this.reconcileForLifetime(frame))
-  }
-
-  private async reconcileForLifetime(frame?: McpDiagnosticsExecutionFrame): Promise<void> {
+  async reconcile(): Promise<void> {
     await this.start()
-    await this.reconcileCore(frame)
+    await this.reconcileCore()
   }
 
   /**
@@ -1075,51 +626,36 @@ export class McpDiagnosticsApplication {
    * an MCP/ACL/runtime/user mutation. This post-commit phase may abort and reap
    * a child, clean its scratch directory, and publish the owner-scoped locator frame.
    */
-  reconcileDurableIntents(): Promise<void> {
-    return this.withResourceOperation((frame) => this.reconcileDurableIntentsForLifetime(frame))
+  async reconcileDurableIntents(): Promise<void> {
+    await this.start()
+    await this.reconcileDurableIntentsCore(true)
   }
 
-  private async reconcileDurableIntentsForLifetime(
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (this.executionController === undefined) await this.start()
-    await this.reconcileDurableIntentsCore(true, frame)
-  }
-
-  private async reconcileCore(frame?: McpDiagnosticsExecutionFrame): Promise<void> {
-    if (!this.executionCurrent(frame)) return
-    await this.reconcileDurableIntentsCore(false, frame)
-    await this.reconcileExpiredTurns(frame)
-    if (!this.executionCurrent(frame)) return
+  private async reconcileCore(): Promise<void> {
+    await this.reconcileDurableIntentsCore()
+    await this.reconcileExpiredTurns()
     const now = this.now()
     const expired = await this.deps.persistence.expireIdle(now)
     for (const sessionId of expired) {
-      if (!this.executionCurrent(frame)) return
       await this.broadcastSession(sessionId)
-      await this.finishEndingSession(sessionId, frame)
+      await this.finishEndingSession(sessionId)
     }
-    await this.reconcileQuarantinedSessions(frame)
+    await this.reconcileQuarantinedSessions()
     const cleanupCandidates = await this.deps.persistence.listCleanupCandidates()
-    for (const sessionId of cleanupCandidates) {
-      if (!this.executionCurrent(frame)) return
-      await this.finishEndingSession(sessionId, frame)
-    }
+    for (const sessionId of cleanupCandidates) await this.finishEndingSession(sessionId)
 
     const expiredReceipts = await this.deps.persistence.listExpiredReceipts(now)
     for (const receipt of expiredReceipts) {
-      if (!this.executionCurrent(frame)) return
       const key = `${receipt.mcpId}\0${receipt.ownerUserId}\0${receipt.clientCreateId}`
       if (this.activeReceiptAttempts.has(key)) continue
       await this.deps.persistence.deleteExpiredReceipt(receipt, now)
     }
-    this.scheduleIdleTimer(frame)
+    this.scheduleIdleTimer()
   }
 
-  private async reconcileQuarantinedSessions(frame?: McpDiagnosticsExecutionFrame): Promise<void> {
-    if (!this.executionCurrent(frame)) return
+  private async reconcileQuarantinedSessions(): Promise<void> {
     const candidates = await this.deps.persistence.listQuarantinedCandidates()
     for (const { session, turn } of candidates) {
-      if (!this.executionCurrent(frame)) return
       if (turn === null || !this.deps.effects.hasExecution(turn)) continue
       const outcome = await this.reapTurn(turn, () => this.now())
       if (!['not-alive', 'killed'].includes(outcome)) continue
@@ -1129,15 +665,13 @@ export class McpDiagnosticsApplication {
         readNow: () => this.now(),
       })
       if (!recovered) continue
-      if (this.executionController) this.provenReapedTurns.add(`${session.id}\0${turn.id}`)
       await this.deps.leaseOperations.repairAfterReap(session.id, turn.id, true)
       await this.broadcastSession(session.id)
-      await this.finishEndingSession(session.id, frame)
+      await this.finishEndingSession(session.id)
     }
   }
 
-  private async reconcileExpiredTurns(frame?: McpDiagnosticsExecutionFrame): Promise<void> {
-    if (!this.executionCurrent(frame)) return
+  private async reconcileExpiredTurns(): Promise<void> {
     const now = this.now()
     const expired = await this.deps.persistence.expireTurns(now, now + MCP_RUNTIME_TEST_IDLE_MS)
 
@@ -1146,33 +680,26 @@ export class McpDiagnosticsApplication {
       const index = this.queue.findIndex((item) => item.turnId === row.turnId)
       if (index >= 0) this.queue.splice(index, 1)
       await this.broadcastSession(row.sessionId)
-      if (row.end) await this.finishEndingSession(row.sessionId, frame)
+      if (row.end) await this.finishEndingSession(row.sessionId)
     }
     for (const row of expired.abort) {
-      if (!this.executionCurrent(frame)) return
       await this.broadcastSession(row.sessionId)
       this.controllers.get(row.turnId)?.abort()
     }
   }
 
-  private async reconcileDurableIntentsCore(
-    awaitRunning = false,
-    frame?: McpDiagnosticsExecutionFrame,
-  ): Promise<void> {
-    if (!this.executionCurrent(frame)) return
+  private async reconcileDurableIntentsCore(awaitRunning = false): Promise<void> {
     const candidates = await this.deps.persistence.listDurableIntentCandidates()
 
     for (const snapshot of candidates) {
-      if (!this.executionCurrent(frame)) return
       await this.broadcastSession(snapshot.id)
       if (snapshot.status !== 'ending') continue
       if (snapshot.inFlightTurnId === null) {
-        await this.finishEndingSession(snapshot.id, frame)
+        await this.finishEndingSession(snapshot.id)
         continue
       }
 
       const turn = await this.deps.persistence.loadTurn(snapshot.inFlightTurnId)
-      if (!this.executionCurrent(frame)) return
       if (turn === null) {
         this.log.error('mcp-test-durable-intent-missing-turn', {
           sessionId: snapshot.id,
@@ -1192,7 +719,7 @@ export class McpDiagnosticsApplication {
           now,
         })
         await this.broadcastSession(snapshot.id)
-        await this.finishEndingSession(snapshot.id, frame)
+        await this.finishEndingSession(snapshot.id)
         continue
       }
 
@@ -1203,7 +730,7 @@ export class McpDiagnosticsApplication {
         this.controllers.get(turn.id)?.abort()
         if (promise !== undefined && awaitRunning) {
           await promise
-          await this.finishEndingSession(snapshot.id, frame)
+          await this.finishEndingSession(snapshot.id)
         } else if (promise === undefined) {
           this.log.warn('mcp-test-durable-intent-awaits-boot-recovery', {
             sessionId: snapshot.id,
@@ -1220,30 +747,19 @@ export class McpDiagnosticsApplication {
         now,
       })
       await this.broadcastSession(snapshot.id)
-      await this.finishEndingSession(snapshot.id, frame)
+      await this.finishEndingSession(snapshot.id)
     }
   }
 
-  private async bootRecover(frame?: McpDiagnosticsExecutionFrame): Promise<void> {
-    if (!this.executionCurrent(frame)) return
+  private async bootRecover(): Promise<void> {
     const sessions = await this.deps.persistence.listBootSessions()
     for (const session of sessions) {
-      if (!this.executionCurrent(frame)) return
       const supportsSession = this.deps.effects.supportsSession(session.runtimeProtocol)
       if (session.inFlightTurnId === null) {
-        if (session.status === 'ending') await this.finishEndingSession(session.id, frame)
+        if (session.status === 'ending') await this.finishEndingSession(session.id)
         continue
       }
       const turn = await this.deps.persistence.loadTurn(session.inFlightTurnId)
-      if (!this.executionCurrent(frame)) return
-      if (
-        frame !== undefined &&
-        turn?.status === 'queued' &&
-        !this.deps.effects.hasExecution(turn)
-      ) {
-        this.enqueue({ sessionId: session.id, turnId: turn.id }, frame)
-        continue
-      }
       let reapOutcome: McpDiagnosticReapOutcome | 'missing-turn' = 'no-pid'
       if (turn === null) {
         reapOutcome = 'missing-turn'
@@ -1289,7 +805,7 @@ export class McpDiagnosticsApplication {
           outcome: reapOutcome,
         })
       }
-      if (!resumable) await this.finishEndingSession(session.id, frame)
+      if (!resumable) await this.finishEndingSession(session.id)
     }
   }
 
@@ -1352,50 +868,40 @@ export class McpDiagnosticsApplication {
     this.deps.effects.broadcast(sessionId, session)
   }
 
-  private enqueue(item: QueueItem, frame?: McpDiagnosticsExecutionFrame): void {
+  private enqueue(item: QueueItem): void {
     if (this.disposed) return
     if (this.queued.has(item.turnId) || this.turnPromises.has(item.turnId)) return
     this.queued.add(item.turnId)
     this.queue.push(item)
-    this.drain(frame)
-    this.scheduleIdleTimer(frame)
+    this.drain()
+    this.scheduleIdleTimer()
   }
 
-  private drain(frame?: McpDiagnosticsExecutionFrame): void {
-    if (!this.executionCanDispatch(frame) || (frame !== undefined && !frame.ready)) return
+  private drain(): void {
     while (this.activeWorkers < this.capacity && this.queue.length > 0) {
-      if (!this.executionCanDispatch(frame)) return
       const item = this.queue.shift()
       if (item === undefined) break
       this.queued.delete(item.turnId)
       this.activeWorkers += 1
-      const work = () =>
-        this.executeTurn(item, frame)
-          .catch((error: unknown) => {
-            this.log.error('mcp-test-turn-worker-failed', {
-              sessionId: item.sessionId,
-              turnId: item.turnId,
-              error: error instanceof Error ? error.message : String(error),
-            })
-            if (frame !== undefined) throw error
+      const promise = this.executeTurn(item)
+        .catch((error: unknown) => {
+          this.log.error('mcp-test-turn-worker-failed', {
+            sessionId: item.sessionId,
+            turnId: item.turnId,
+            error: error instanceof Error ? error.message : String(error),
           })
-          .finally(() => {
-            this.controllers.delete(item.turnId)
-            this.turnPromises.delete(item.turnId)
-            this.activeWorkers -= 1
-            this.drain(frame)
-          })
-      const promise =
-        frame === undefined ? work() : this.executionController!.track(frame, work, true)
-      // The selected frame retains the failure for drain; the worker still
-      // reports it through the original logger without an unhandled rejection.
-      if (frame !== undefined) void promise.catch(() => {})
+        })
+        .finally(() => {
+          this.controllers.delete(item.turnId)
+          this.turnPromises.delete(item.turnId)
+          this.activeWorkers -= 1
+          this.drain()
+        })
       this.turnPromises.set(item.turnId, promise)
     }
   }
 
-  private async executeTurn(item: QueueItem, frame?: McpDiagnosticsExecutionFrame): Promise<void> {
-    if (!this.executionCanDispatch(frame)) return
+  private async executeTurn(item: QueueItem): Promise<void> {
     const now = this.now()
     const admitted = await this.deps.persistence.admitTurn({
       sessionId: item.sessionId,
@@ -1405,15 +911,11 @@ export class McpDiagnosticsApplication {
     })
     if (admitted === null) {
       const current = await this.deps.persistence.loadSession(item.sessionId)
-      if (current?.status === 'ending') await this.finishEndingSession(item.sessionId, frame)
+      if (current?.status === 'ending') await this.finishEndingSession(item.sessionId)
       else if (current?.status === 'active' && current.inFlightTurnId === null) {
         await this.broadcastSession(item.sessionId)
-        this.scheduleIdleTimer(frame)
+        this.scheduleIdleTimer()
       }
-      return
-    }
-    if (!this.executionCanDispatch(frame)) {
-      await this.deferUnspawnedTurn(item, undefined, frame)
       return
     }
     await this.broadcastSession(item.sessionId)
@@ -1422,51 +924,26 @@ export class McpDiagnosticsApplication {
     this.controllers.set(item.turnId, controller)
     const { session, turn } = admitted
     const mcp = await this.loadMcpForRun(session.mcpId)
-    if (!this.executionCanDispatch(frame)) {
-      await this.deferUnspawnedTurn(item, undefined, frame)
-      return
-    }
     if (
       mcp === null ||
       !mcp.enabled ||
       (await this.currentMcpHash(mcp)) !== session.mcpConfigHash
     ) {
-      if (!this.executionCanDispatch(frame)) {
-        await this.deferUnspawnedTurn(item, undefined, frame)
-        return
-      }
-      await this.failBeforeRun(item, 'mcp-test-mcp-changed', 'mcp-config-changed', frame)
-      return
-    }
-    if (!this.executionCanDispatch(frame)) {
-      await this.deferUnspawnedTurn(item, undefined, frame)
+      await this.failBeforeRun(item, 'mcp-test-mcp-changed', 'mcp-config-changed')
       return
     }
     let runtime: ResolvedTestRuntime
     try {
       runtime = await this.resolveRuntime(session.runtimeName)
     } catch {
-      if (!this.executionCanDispatch(frame)) {
-        await this.deferUnspawnedTurn(item, undefined, frame)
-        return
-      }
-      await this.failBeforeRun(item, 'mcp-test-runtime-unavailable', 'runtime-disabled', frame)
-      return
-    }
-    if (!this.executionCanDispatch(frame)) {
-      await this.deferUnspawnedTurn(item, undefined, frame)
+      await this.failBeforeRun(item, 'mcp-test-runtime-unavailable', 'runtime-disabled')
       return
     }
     if (
       runtime.row.id !== session.runtimeRowId ||
       runtime.snapshotJson !== session.runtimeSnapshotJson
     ) {
-      await this.failBeforeRun(
-        item,
-        'mcp-test-runtime-profile-changed',
-        'runtime-profile-changed',
-        frame,
-      )
+      await this.failBeforeRun(item, 'mcp-test-runtime-profile-changed', 'runtime-profile-changed')
       return
     }
 
@@ -1504,13 +981,9 @@ export class McpDiagnosticsApplication {
     }
     try {
       if (session.runtimeSessionId !== null) {
-        const firstClaim =
-          frame === undefined
-            ? this.deps.leaseOperations.claimNew.bind(this.deps.leaseOperations)
-            : this.deps.leaseOperations.claimPending.bind(this.deps.leaseOperations)
         nativeLease =
           turn.seq === 1
-            ? await firstClaim({
+            ? await this.deps.leaseOperations.claimNew({
                 protocol: session.runtimeProtocol,
                 runtimeSessionId: session.runtimeSessionId,
                 testSessionId: session.id,
@@ -1525,32 +998,19 @@ export class McpDiagnosticsApplication {
                 leaseNonceDigest,
               })
       }
-    } catch (error) {
-      if (!this.executionCanDispatch(frame)) throw error
-      await this.failBeforeRun(item, 'mcp-test-session-conflict', 'session-unusable', frame)
+    } catch {
+      await this.failBeforeRun(item, 'mcp-test-session-conflict', 'session-unusable')
       return
     }
 
-    if (!this.executionCanDispatch(frame)) {
-      await this.deferUnspawnedTurn(item, nativeLease, frame)
-      return
-    }
-
-    const releaseIssuedLease =
-      frame === undefined
-        ? undefined
-        : this.deps.leaseOperations.releaseAcknowledged.bind(this.deps.leaseOperations)
     const sink = new McpRuntimeTestEventSink(
       this.deps.persistence,
       item,
-      frame === undefined
-        ? () => void this.broadcastSession(item.sessionId)
-        : () => this.notifyCapture(item.sessionId, frame),
+      () => void this.broadcastSession(item.sessionId),
       claimNativeSession,
     )
     const timeoutMs = Math.max(1, turn.hardDeadlineAt - this.now())
     let result: McpDiagnosticRunResult
-    let issued = false
     try {
       const assertSpawnAllowed = async (): Promise<void> => {
         const allowed = await this.deps.persistence.isSpawnAllowed({
@@ -1560,20 +1020,6 @@ export class McpDiagnosticsApplication {
         })
         if (!allowed) throw new Error('mcp-test-spawn-no-longer-admitted')
       }
-      const turnStart = this.deps.effects.captureTurnStart({
-        session,
-        turn,
-        readNow: () => this.now(),
-      })
-      if (!this.executionCanDispatch(frame)) {
-        await this.deferUnspawnedTurn(item, nativeLease, frame)
-        return
-      }
-      issued = true
-      // This is the external dispatch boundary. Once issued, the original
-      // run/capture/verification/lease receipt must settle even after loss.
-      // assertSpawnAllowed retains the business cancel/deadline fence; loss
-      // must not turn an already-issued request into a business cancellation.
       result = await this.deps.effects.runTurn({
         session,
         turn,
@@ -1583,69 +1029,14 @@ export class McpDiagnosticsApplication {
         sink,
         timeoutMs,
         assertSpawnAllowed,
-        turnStart,
+        turnStart: this.deps.effects.captureTurnStart({
+          session,
+          turn,
+          readNow: () => this.now(),
+        }),
       })
-    } catch (error) {
-      if (frame !== undefined && !issued) throw error
+    } catch {
       result = this.deps.effects.failedResult(session, controller.signal.aborted, this.now() - now)
-    }
-    if (frame !== undefined) {
-      const settledAt = this.now()
-      const unreaped = new Error('mcp-test-issued-execution-unreaped')
-      const verifyOriginalCapture = result.verifyAfterCapture.bind(result)
-      let captureComplete = false,
-        verified = false,
-        leaseReleased = nativeLease === undefined
-      let persisted = false,
-        verification: StartupVerificationResult | undefined
-      const settleIssued = async () => {
-        if (!captureComplete) {
-          await sink.markTerminal('complete')
-          captureComplete = true
-        }
-        if (!verified) {
-          verification = await verifyOriginalCapture()
-          verified = true
-        }
-        let releaseFailure: unknown
-        if (nativeLease !== undefined && result.status !== 'unreaped' && !leaseReleased) {
-          try {
-            leaseReleased = await releaseIssuedLease!(nativeLease)
-            if (!leaseReleased) releaseFailure = new Error('mcp-test-issued-lease-release-unproven')
-          } catch (error) {
-            releaseFailure = error
-          }
-        }
-        if (!persisted) {
-          await this.settleTurn(session, turn, result, verification, frame, settledAt)
-          persisted = true
-        }
-        if (result.status === 'unreaped') {
-          const recoveredSession = await this.deps.persistence.loadSession(session.id)
-          const recoveredTurn = await this.deps.persistence.loadTurn(turn.id)
-          // These are the original recovery participant's durable facts, not
-          // a timeout, a missing PID alone, or an inference from another run.
-          if (
-            !this.provenReapedTurns.has(`${session.id}\0${turn.id}`) ||
-            recoveredSession?.status !== 'ended' ||
-            recoveredSession.cleanupState !== 'complete' ||
-            recoveredTurn === null ||
-            recoveredTurn.sessionId !== session.id ||
-            recoveredTurn.seq !== turn.seq ||
-            recoveredTurn.pid !== null
-          )
-            throw unreaped
-          if (nativeLease !== undefined && !leaseReleased) {
-            leaseReleased = await releaseIssuedLease!(nativeLease)
-            if (!leaseReleased) throw new Error('mcp-test-issued-lease-release-unproven')
-          }
-        }
-        if (releaseFailure !== undefined) throw releaseFailure
-      }
-      // Retry this original capture/verification/release/write tail only.
-      // The external execution boundary above is never revisited by drain.
-      await this.executionController!.settle(frame, settleIssued, session.id)
-      return
     }
     await sink.markTerminal('complete')
     // RFC-280 T6 — strict playground semantics (design-gate P1-4): only a run
@@ -1664,64 +1055,7 @@ export class McpDiagnosticsApplication {
         })
       }
     }
-    await this.settleTurn(session, turn, result, verification, frame)
-  }
-
-  private async deferUnspawnedTurn(
-    item: QueueItem,
-    lease?: McpRuntimeTestLeaseToken,
-    frame?: McpDiagnosticsExecutionFrame,
-    releaseOriginal?: McpRuntimeTestLeaseOperations['release'],
-  ): Promise<void> {
-    if (frame !== undefined) {
-      const release = this.deps.leaseOperations.releaseAcknowledged.bind(this.deps.leaseOperations)
-      return this.executionController!.settle(
-        frame,
-        () => this.deferUnspawnedTurn(item, lease, undefined, release),
-        item.sessionId,
-      )
-    }
-    if (
-      lease !== undefined &&
-      !(await (
-        releaseOriginal ?? this.deps.leaseOperations.release.bind(this.deps.leaseOperations)
-      )(lease))
-    ) {
-      throw new Error('mcp-test-deferred-turn-lease-release-unproven')
-    }
-    if (!(await this.deps.persistence.deferUnspawnedTurn(item))) {
-      throw new Error('mcp-test-deferred-turn-state-unproven')
-    }
-    // A user cancel/end may have arrived while admission was awaiting I/O.
-    // Finish that recorded intent, rather than letting loss undo it or leaving
-    // a cancel-requested queued turn available to the next owner.
-    const session = await this.deps.persistence.loadSession(item.sessionId)
-    const turn = await this.deps.persistence.loadTurn(item.turnId)
-    if (turn?.status === 'queued') {
-      const now = this.now()
-      if (session?.status === 'ending') {
-        await this.deps.persistence.settleQueuedDurableIntent({ ...item, now })
-      } else if (turn.cancelRequestedAt !== null) {
-        await this.deps.persistence.cancel({
-          ...item,
-          now,
-          idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
-        })
-      }
-    }
-    await this.broadcastSession(item.sessionId)
-  }
-
-  private notifyCapture(sessionId: string, frame: McpDiagnosticsExecutionFrame): void {
-    void this.executionController!.settle(
-      frame,
-      () => this.broadcastSession(sessionId),
-      sessionId,
-    ).catch((error: unknown) =>
-      this.log.warn('mcp-test-capture-broadcast-failed', {
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    )
+    await this.settleTurn(session, turn, result, verification)
   }
 
   private async loadMcpForRun(mcpId: string): Promise<Mcp | null> {
@@ -1732,7 +1066,6 @@ export class McpDiagnosticsApplication {
     item: QueueItem,
     failureCode: string,
     endReason: McpRuntimeTestEndReason,
-    frame?: McpDiagnosticsExecutionFrame,
   ): Promise<void> {
     const now = this.now()
     await this.deps.persistence.failBeforeRun({
@@ -1742,7 +1075,7 @@ export class McpDiagnosticsApplication {
       endReason,
       now,
     })
-    await this.finishEndingSession(item.sessionId, frame)
+    await this.finishEndingSession(item.sessionId)
   }
 
   private async settleTurn(
@@ -1750,10 +1083,8 @@ export class McpDiagnosticsApplication {
     originalTurn: TurnRow,
     result: McpDiagnosticRunResult,
     verification?: StartupVerificationResult,
-    frame?: McpDiagnosticsExecutionFrame,
-    settledAt?: number,
   ): Promise<void> {
-    const now = settledAt ?? this.now()
+    const now = this.now()
     const currentSession = await this.deps.persistence.loadSession(originalSession.id)
     const currentTurn = await this.deps.persistence.loadTurn(originalTurn.id)
     const durableFailureCode = currentTurn?.failureCode ?? null
@@ -1786,30 +1117,23 @@ export class McpDiagnosticsApplication {
       idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
     })
     await this.broadcastSession(originalSession.id)
-    if (shouldCleanup) await this.finishEndingSession(originalSession.id, frame, true)
-    else this.scheduleIdleTimer(frame)
+    if (shouldCleanup) await this.finishEndingSession(originalSession.id)
+    else this.scheduleIdleTimer()
   }
 
   private async invalidateSession(
     sessionId: string,
     reason: McpRuntimeTestEndReason,
-    frame?: McpDiagnosticsExecutionFrame,
   ): Promise<void> {
-    this.assertExecutionCurrent(frame)
     const now = this.now()
     const turnId = await this.deps.persistence.invalidateSession({ sessionId, reason, now })
     if (turnId !== null) this.controllers.get(turnId)?.abort()
-    else await this.finishEndingSession(sessionId, frame)
+    else await this.finishEndingSession(sessionId)
   }
 
-  private async finishEndingSession(
-    sessionId: string,
-    frame?: McpDiagnosticsExecutionFrame,
-    issued = false,
-  ): Promise<void> {
-    if (!issued && !this.executionCurrent(frame)) return
+  private async finishEndingSession(sessionId: string): Promise<void> {
     const row = await this.deps.persistence.prepareCleanup(sessionId, this.now())
-    if (row === null || (!issued && !this.executionCurrent(frame))) return
+    if (row === null) return
     const { cleanupState, cleanupErrorCode } = this.deps.effects.cleanupWorkspace(row)
     const endedAt = this.now()
     await this.deps.persistence.finishCleanup({
@@ -1819,27 +1143,24 @@ export class McpDiagnosticsApplication {
       now: endedAt,
     })
     await this.broadcastSession(sessionId)
-    this.scheduleIdleTimer(frame)
+    this.scheduleIdleTimer()
   }
 
-  private scheduleIdleTimer(frame?: McpDiagnosticsExecutionFrame): void {
-    const version = ++this.idleScheduleVersion
+  private scheduleIdleTimer(): void {
     if (this.idleTimer !== null) this.idleTimer.cancel()
     this.idleTimer = null
-    if (!this.executionCurrent(frame) || this.shuttingDown || this.paused) return
+    if (this.shuttingDown || this.paused) return
     // RFC-359：`nextDeadline()` 在 PostgreSQL 上是**真异步**的一次查询，SQLite 上是同步读。
     // 这条 fire-and-forget 此前既不 catch 也无人接住：PG 上库在服务停掉 / 测试拆台之后关闭，
     // 这个还在飞的 promise 就以 `Connection closed` 变成一条**无人处理的 rejection**
     // （CI 上表现为「Unhandled error between tests」，全部用例 0 fail 但进程退 1）。
     // 排期失败不是致命的——下一次事件会重新排期——但必须落一条日志，不能静默也不能裸飞。
-    const schedule = () =>
-      this.deps.persistence.nextDeadline().then((earliest) => {
-        if (earliest === null || !this.executionCurrent(frame) || this.shuttingDown || this.paused)
-          return
-        if (frame !== undefined && version !== this.idleScheduleVersion) return
+    void this.deps.persistence
+      .nextDeadline()
+      .then((earliest) => {
+        if (earliest === null || this.shuttingDown || this.paused) return
         const delay = Math.max(0, Math.min(earliest - this.now(), 2_147_483_647))
         this.idleTimer = this.deps.effects.setTimeout(() => {
-          if (!this.executionCurrent(frame)) return
           this.idleTimer = null
           void this.reconcile().catch((error: unknown) => {
             this.log.warn('mcp-test-idle-reconcile-failed', {
@@ -1848,14 +1169,11 @@ export class McpDiagnosticsApplication {
           })
         }, delay)
         this.idleTimer.unref?.()
-        if (!this.executionCurrent(frame)) this.clearBackgroundTimers()
       })
-    const pending =
-      frame === undefined ? schedule() : this.executionController!.track(frame, schedule)
-    void pending.catch((error: unknown) => {
-      this.log.warn('mcp-test-idle-timer-schedule-failed', {
-        error: error instanceof Error ? error.message : String(error),
+      .catch((error: unknown) => {
+        this.log.warn('mcp-test-idle-timer-schedule-failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
       })
-    })
   }
 }

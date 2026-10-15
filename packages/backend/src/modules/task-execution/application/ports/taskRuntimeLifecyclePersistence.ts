@@ -23,9 +23,3 @@ export interface TaskRuntimeLifecyclePersistence {
     readonly reason: string
   }): Promise<boolean>
 }
-
-/** Each original caller chooses whether it prepares work or reports its result. */
-export interface TaskRuntimeLifecycleWritePurposes {
-  readonly preparation: TaskRuntimeLifecyclePersistence
-  readonly issuedResults: TaskRuntimeLifecyclePersistence
-}

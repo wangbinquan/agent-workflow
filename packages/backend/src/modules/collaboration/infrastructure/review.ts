@@ -1110,7 +1110,6 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       await humanGateComposition.parkPreparedHumanGate({
         db,
         prepared: prepared.prepared,
-        writePurpose: 'preparation',
         ...(executionContext === undefined ? {} : { executionContext }),
       })
     }

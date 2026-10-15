@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { ulid } from 'ulid'
 import {
   McpRuntimeTestSessionDtoSchema,
@@ -90,7 +90,7 @@ function statusKind(session: McpRuntimeTestSessionDto): StatusChipKind {
 
 export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactElement {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('diagnostics')
+  const execution = useExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [endConfirmOpen, setEndConfirmOpen] = useState(false)
@@ -155,7 +155,7 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
       message: string
     }): Promise<CreateResult> => {
       if (!execution.available)
-        throw new ApiError(503, 'host-execution-unavailable', execution.unavailableReason ?? '')
+        throw new ApiError(503, 'execution-standby', execution.unavailableReason ?? '')
       const key = JSON.stringify([input.hash, input.runtimeName, input.message])
       if (createIdsRef.current?.key !== key) {
         createIdsRef.current = {
@@ -217,7 +217,7 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
       message: string
     }): Promise<McpRuntimeTestSessionDto> => {
       if (!execution.available)
-        throw new ApiError(503, 'host-execution-unavailable', execution.unavailableReason ?? '')
+        throw new ApiError(503, 'execution-standby', execution.unavailableReason ?? '')
       const key = JSON.stringify([input.session.id, input.message])
       if (messageIdRef.current?.key !== key) {
         messageIdRef.current = { key, clientMessageId: ulid() }
@@ -264,24 +264,12 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
     onSuccess: installSession,
   })
 
-  const recoverMutation = useMutation({
-    mutationFn: async (sessionId: string): Promise<McpRuntimeTestSessionDto> => {
-      const receipt = await api.post<McpRuntimeTestMutationReceipt>(
-        `${exactPath(props.mcpId, sessionId)}/recover`,
-        {},
-      )
-      return parseSession(receipt.session)
-    },
-    onSuccess: installSession,
-  })
-
   const mutationError =
     operationError ??
     createMutation.error ??
     messageMutation.error ??
     cancelMutation.error ??
-    endMutation.error ??
-    recoverMutation.error
+    endMutation.error
   const mutationPending = createMutation.isPending || messageMutation.isPending
   const canCompose =
     execution.available &&
@@ -290,8 +278,7 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
     session.inFlightTurnId === null &&
     session.nativeSessionReady &&
     session.continuationBlockedReason === null
-  const canCreate =
-    session === null || (session.status === 'ended' && session.cleanupState !== 'quarantined')
+  const canCreate = session === null || session.status === 'ended'
   const countdown =
     session?.idleDeadlineAt === null || session?.idleDeadlineAt === undefined
       ? null
@@ -621,28 +608,7 @@ export function McpRuntimeTestDialog(props: McpRuntimeTestDialogProps): ReactEle
                   {t('mcps.runtimeTest.endingHint')}
                 </NoticeBanner>
               )}
-              {session?.cleanupState === 'quarantined' && (
-                <NoticeBanner
-                  tone="warning"
-                  size="compact"
-                  action={
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      disabled={recoverMutation.isPending}
-                      onClick={() => recoverMutation.mutate(session.id)}
-                      data-testid="mcp-runtime-test-recover"
-                    >
-                      {recoverMutation.isPending
-                        ? t('mcps.runtimeTest.recovering')
-                        : t('mcps.runtimeTest.recover')}
-                    </button>
-                  }
-                >
-                  {t('mcps.runtimeTest.quarantinedHint')}
-                </NoticeBanner>
-              )}
-              {session?.status === 'ended' && session.cleanupState !== 'quarantined' && (
+              {session?.status === 'ended' && (
                 <NoticeBanner tone="info" size="compact">
                   {t('mcps.runtimeTest.endedHint')}
                 </NoticeBanner>

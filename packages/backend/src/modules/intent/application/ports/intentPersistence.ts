@@ -15,7 +15,6 @@ import type {
 } from '@/modules/resource-catalog/public/participants'
 import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import type { IntentAuxiliaryPersistence } from './intentAuxiliaryQueries'
-import type { IntentExecutionCheckpoint, IntentExecutionPersistence } from './intentExecution'
 
 export type IntentSessionStatus = 'active' | 'archived'
 export type IntentTurnRole = 'user' | 'agent'
@@ -348,8 +347,6 @@ export interface IntentTurnLifecyclePersistence {
       readonly maxGenerateRounds: number
     }
     readonly now: number
-    /** Close the original primary execution facts atomically with its outcome. */
-    readonly executionCheckpoint?: IntentExecutionCheckpoint
   }): Promise<{
     readonly turnId: string
     readonly kind: 'questions' | 'changeset' | 'error'
@@ -496,5 +493,4 @@ export interface IntentPersistence
     IntentMaintenancePersistence,
     IntentTurnEventPersistence,
     IntentTurnLifecyclePersistence,
-    IntentAuxiliaryPersistence,
-    IntentExecutionPersistence {}
+    IntentAuxiliaryPersistence {}

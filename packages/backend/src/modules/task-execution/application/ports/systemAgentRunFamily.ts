@@ -7,7 +7,6 @@ import type {
 } from '@/modules/runtime-management/public/participants'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type { Logger } from '@/util/log'
-import type { ExecutionRecoveryReferencePort } from './executionEffect'
 import type {
   PreparedSystemAgentRunResult,
   SystemAgentCoreInvocation,
@@ -27,8 +26,6 @@ export interface SystemAgentRunRequest extends SystemAgentRunPolicy {
   readonly isSandbox?: boolean
   readonly seedFiles?: readonly AgentMaterialSeedFile[]
   readonly workspaceScope: SystemAgentWorkspaceScope
-  /** Continue the same retained material generation across protocol rounds. */
-  readonly resumeRetainedRef?: string
   readonly timeoutMs?: number
   readonly maxEventTextBytes?: number
   readonly log?: Logger
@@ -40,7 +37,6 @@ export interface SystemAgentRunFamily {
   readonly workspaces: SystemAgentWorkspaceScopes
   run(request: SystemAgentRunRequest): Promise<PreparedSystemAgentRunResult>
   readonly retainedContents: SystemAgentRetainedContents
-  readonly recovery: ExecutionRecoveryReferencePort
 }
 
 /** Preparation is opened after the original logger/default/clock read boundary. */

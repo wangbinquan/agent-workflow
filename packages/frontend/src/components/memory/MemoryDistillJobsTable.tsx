@@ -13,11 +13,10 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
-import { NoticeBanner } from '@/components/NoticeBanner'
 import { Select } from '@/components/Select'
 import { TableViewport } from '@/components/TableViewport'
 import { hasPermissionAtRequest, usePermission } from '@/hooks/useActor'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 interface ListResponse {
   items: MemoryDistillJob[]
@@ -25,12 +24,10 @@ interface ListResponse {
 
 export function MemoryDistillJobsTable() {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('memory')
+  const execution = useExecutionAvailability('memory')
   const qc = useQueryClient()
   const navigate = useNavigate()
   const canManage = usePermission('memory-distill-jobs:manage')
-  const canExecute = usePermission('tasks:execute'),
-    canWriteMemory = usePermission('memory:update')
   const permissionSessionRef = useRef(0)
   const previousCanManageRef = useRef(canManage)
   const list = useQuery<ListResponse>({
@@ -44,11 +41,10 @@ export function MemoryDistillJobsTable() {
   const action = useMutation<
     unknown,
     ApiError,
-    { id: string; verb: 'retry' | 'cancel' | 'recover'; session: number }
+    { id: string; verb: 'retry' | 'cancel'; session: number }
   >({
     mutationFn: ({ id, verb, session }) => {
       if (verb === 'retry') execution.assertAvailable()
-      if (verb === 'recover') execution.assertRecoveryAvailable()
       if (!requestIsCurrent(session)) throw new Error('Memory distill permission changed')
       return api.post(`/api/memory-distill-jobs/${encodeURIComponent(id)}/${verb}`)
     },
@@ -192,36 +188,12 @@ export function MemoryDistillJobsTable() {
                       {t('memory.distillJobs.action.cancel')}
                     </button>
                   )}
-                  {canManage &&
-                    canExecute &&
-                    canWriteMemory &&
-                    execution.canRecoverOriginal &&
-                    job.status === 'running' && (
-                      <button
-                        type="button"
-                        className="btn btn--xs"
-                        data-testid={`distill-job-row-${job.id}-recover`}
-                        disabled={action.isPending}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          action.mutate({ id: job.id, verb: 'recover', session: permissionSession })
-                        }}
-                      >
-                        {t('memory.distillJobs.action.recover')}
-                      </button>
-                    )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </TableViewport>
-      {action.isSuccess &&
-        action.variables?.verb === 'recover' &&
-        canManage &&
-        requestIsCurrent(action.variables.session) && (
-          <NoticeBanner tone="info">{t('memory.distillJobs.recoveredOriginal')}</NoticeBanner>
-        )}
       {action.error !== null && action.error !== undefined && <ErrorBanner error={action.error} />}
     </div>
   )

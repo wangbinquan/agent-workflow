@@ -1,6 +1,3 @@
-import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'
-import { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'
-import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
@@ -157,24 +154,18 @@ import {
   type SqliteAppComposition,
 } from '@/server'
 import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
-import {
-  composeLegacySqliteResourceLimitOperations,
-  composeResourceLimitOperations,
-} from '@/modules/system-operations/composition/resourceLimits'
+import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
   resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
 } from '@/modules/intent/application/dispatcher'
 import { createIntentSessionWsPublisher } from '@/modules/intent/composition/apply'
-import { composeIntentTurnExecution } from '@/modules/intent/composition/execution'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
   type BootExecutionRecoveryFactory,
-  type TaskExecutionBootRecoveryInput,
 } from '@/modules/task-execution/composition/bootRecovery'
-import type { HostExecutionGrantContext } from '@/modules/system-operations/public/participants'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
@@ -207,6 +198,7 @@ import {
   type DaemonStartupLeasePort,
   type DaemonDatabasePreOpenRecoveryPort,
   prepareDatabasePreOpenRecovery,
+  composeLocalExecutionAuthority,
 } from '@/modules/system-operations/composition'
 import {
   prepareDaemonDatabaseProviderForBoot,
@@ -252,10 +244,7 @@ import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import {
-  startMaintenanceService,
-  createColdMaintenanceService,
-} from '@/platform/background/maintenanceService'
+import { startMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
@@ -326,7 +315,6 @@ import {
 import {
   combineCommittedEventCodecRegistries,
   createCommittedEventDispatcher,
-  createAuthorityCommittedEventDispatcher,
 } from '@/platform/events/committed/dispatcherWorker'
 import {
   createCollaborationDurableConsumerDefinitions,
@@ -335,15 +323,11 @@ import {
   collaborationCommittedEventCodec,
   createHumanGateContinuationWorkerDefinition,
 } from '@/modules/collaboration/composition/committedEvents'
-import {
-  createAfterCommitEventPump,
-  createColdAfterCommitEventPump,
-} from '@/platform/events/committed/afterCommitEventPump'
+import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
 import {
   createCommittedEventDispatcherWorkerDefinition,
-  createAuthorityCommittedEventDispatcherWorkerDefinition,
   startManagedWorkerDefinition,
 } from '@/platform/events/committed/workerDefinitions'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
@@ -408,7 +392,6 @@ import {
 import {
   createDaemonProviderRuntimeSession,
   type DaemonProviderCloseParticipant,
-  type DaemonProviderHostExecutionRuntimeSelection,
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
 } from './daemonProviderRuntimeSession'
@@ -426,21 +409,8 @@ import {
   composePostgresqlDaemonApplication,
   type PostgresqlDaemonApplication,
 } from './postgresqlDaemonApplication'
-import {
-  composeDaemonHostExecutionBootstrap,
-  assertDaemonHostExecutionRootSelection,
-  installDaemonHostExecutionSession,
-  resumeDaemonResourcesForServing,
-  type DaemonHostExecutionBootstrap,
-  type DaemonHostExecutionSelection,
-} from './daemonHostExecutionBootstrap'
-import { composeDaemonLocalHostRecovery } from './daemonHostExecutionRecovery'
-import { bindDaemonHostOwners } from './daemonHostExecutionOwners'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
-import {
-  startMaintenanceWorkerSupervisor,
-  createColdMaintenanceWorkerSupervisor,
-} from '@/platform/background/maintenanceWorkerSupervisor'
+import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
 import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
 import type {
   EmployeeCaseWorkspaceEffectsFactory,
@@ -456,10 +426,7 @@ import {
   createPostgresqlHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import {
-  isDbSnapshotInProgress,
-  createBackup,
-} from '@/platform/persistence/sqlite/systemProviderBackup'
+import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqlite/maintenanceAdmissionStore'
 import { enforceLimits } from '@/services/limits'
 import {
@@ -531,7 +498,6 @@ export interface StartOptions {
   taskDeletionEffects?: TaskDeletionEffects
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
-  fusionWorkspaces?: FusionWorkspaceFactory
   taskRunSelection?: TaskRunRootSelection
   readonly developmentPurposes?: DevelopmentPurposeSelection
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
@@ -541,7 +507,6 @@ export interface StartOptions {
   attemptContext?: AttemptContextStorePort
   daemonHost?: DaemonHostLifecyclePort
   startupLease?: DaemonStartupLeasePort
-  readonly hostExecution?: DaemonHostExecutionSelection
 }
 
 interface DaemonProviderHttpAdmission {
@@ -606,10 +571,8 @@ interface DaemonProviderRuntimeComposition {
   readonly webSocket: ReturnType<typeof buildWebSocketAdapter>
   readonly runtimeFactories?: readonly DaemonProviderRuntimeHandleFactory[]
   readonly backgroundWriterFactories?: readonly DaemonProviderRuntimeHandleFactory[]
-  readonly hostExecutionRuntime?: DaemonProviderHostExecutionRuntimeSelection
   readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
   readonly shutdownIdentity: () => void | Promise<void>
-  readonly beforeCloseProvider?: () => void | Promise<void>
   readonly closeProvider: () => void | Promise<void>
 }
 
@@ -625,20 +588,6 @@ function _bindTaskExecutionProviderBackground(
     service: background,
     start: () => background.start(dependencies),
   })
-}
-
-function _bindPausableProviderService(
-  input: Parameters<typeof createPausableDaemonRuntimeServiceBindings>[0],
-  cold: boolean,
-) {
-  return cold
-    ? Promise.resolve(
-        createLazyPausableDaemonRuntimeServiceBindings({
-          ...input,
-          start: input.service.resume.bind(input.service),
-        }),
-      )
-    : createPausableDaemonRuntimeServiceBindings(input)
 }
 
 /** Join one provider's already-composed application and background lifetimes. */
@@ -664,20 +613,15 @@ async function _createComposedDaemonProviderRuntimeSession(
     ...(input.backgroundWriterFactories === undefined
       ? {}
       : { backgroundWriterFactories: input.backgroundWriterFactories }),
-    ...(input.hostExecutionRuntime === undefined
-      ? {}
-      : { hostExecutionRuntime: input.hostExecutionRuntime }),
     ...(input.providerCloseParticipants === undefined
       ? {}
       : { providerCloseParticipants: input.providerCloseParticipants }),
     shutdownIdentity: input.shutdownIdentity,
-    ...(input.beforeCloseProvider ? { beforeCloseProvider: input.beforeCloseProvider } : {}),
     closeProvider: input.closeProvider,
   })
 }
 
 interface ComposedPostgresqlProviderSession {
-  readonly hostExecution?: DaemonHostExecutionBootstrap
   readonly application: PostgresqlDaemonApplication
   readonly session: Awaited<ReturnType<typeof _createComposedDaemonProviderRuntimeSession>>
 }
@@ -690,7 +634,6 @@ interface ComposedPostgresqlProviderSession {
 async function composePostgresqlProviderSession(
   composeInput: DaemonProviderSessionComposeInput,
 ): Promise<ComposedPostgresqlProviderSession> {
-  if (composeInput.hostExecution) assertDaemonHostExecutionRootSelection(composeInput.hostExecution)
   const input = Object.freeze({
     ...composeInput,
     provider: requireDatabaseProviderRuntime(composeInput.provider, 'postgresql'),
@@ -702,20 +645,6 @@ async function composePostgresqlProviderSession(
     }),
   })
   const db = input.provider.openClient()
-  const hostExecution =
-    input.hostExecution === undefined
-      ? undefined
-      : await composeDaemonHostExecutionBootstrap({
-          db,
-          provider: 'postgresql',
-          generation: input.lifecycle.generationId,
-          selection: input.hostExecution,
-          onFailure(error) {
-            input.log.error('host execution lifecycle failed', {
-              error: error instanceof Error ? error.message : String(error),
-            })
-          },
-        })
   const databaseMigration = composeDatabaseMigrationModule({
     admission: input.migrationAdmission,
     sqlitePath: Paths.db,
@@ -732,14 +661,12 @@ async function composePostgresqlProviderSession(
   })
 
   const application = await composePostgresqlDaemonApplication({
-    ...(hostExecution ? { hostExecution } : {}),
     taskDeletionEffects: input.taskDeletionEffects,
     nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
     portArtifactContentEffects: input.portArtifactContentEffects,
     taskRunSelection: input.taskRunSelection,
     developmentPurposes: input.developmentPurposes,
     workspaceExcludeProfiles: input.workspaceExcludeProfiles,
-    fusionWorkspaces: input.fusionWorkspaces,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     actionWorkspaceEffects: input.actionWorkspaceEffects,
     conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
@@ -799,7 +726,6 @@ async function composePostgresqlProviderSession(
   const runtime = application.runtime
   const intentQueuedResumption = composeIntentQueuedResumption({
     configuration: input.configuration,
-    ...(runtime.intentTurnExecution ? { execution: runtime.intentTurnExecution } : {}),
     resume: (sessionIds, config) => runtime.resumeIntentSessions(sessionIds, config),
     onError(error) {
       input.log.warn('queued PostgreSQL intent working-set admission failed', {
@@ -809,7 +735,7 @@ async function composePostgresqlProviderSession(
   })
 
   const maintenanceConfiguration = await input.configuration.read()
-  const maintenanceOptions: Parameters<typeof startMaintenanceService>[0] = {
+  const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
     provider: 'postgresql',
     // 外部服务器的存储在服务端，没有「本地文件快照」这回事——恒为 false 与原行为逐字一致
     // （原来写的是 `options.provider !== 'postgresql' && isDbSnapshotInProgress()`，PG 侧从不跳过）。
@@ -832,12 +758,7 @@ async function composePostgresqlProviderSession(
     configPath: input.applicationConfiguration.notificationKey,
     loadConfig: () => maintenanceConfiguration,
     payloadSources: Object.freeze({
-      activeTaskIds: hostExecution
-        ? () =>
-            runtime.taskExecution.executionModule.runtimeRegistry
-              .activeTokens()
-              .map((token) => token.taskId)
-        : activeTaskIdsSnapshot,
+      activeTaskIds: activeTaskIdsSnapshot,
       activeIntentApplyJournalIds: runtime.intentMaintenance.activeApplyJournalIds,
       activeResourceBundleApplyIds: runtime.resourcePackageActivity.activeApplyIds,
       bootIntentTurnIds: runtime.intentMaintenance.bootTurnIds,
@@ -862,42 +783,18 @@ async function composePostgresqlProviderSession(
     onIntentQueued(sessionIds) {
       intentQueuedResumption.enqueue(sessionIds)
     },
-  }
-  const coldMaintenance = hostExecution
-    ? createColdMaintenanceService({
-        ...maintenanceOptions,
-        createSupervisor: (_config, handlers) =>
-          createColdMaintenanceWorkerSupervisor({
-            appHome: Paths.root,
-            dispatchPaused: true,
-            databaseInit: {
-              provider: 'postgresql',
-              generationId: input.provider.generation.payload.generationId,
-              database: input.config.database,
-            },
-            effectsBootstrap: input.maintenanceEffectsBootstrap,
-            ...handlers,
-          }),
-      })
-    : undefined
-  const maintenanceService = coldMaintenance ?? startMaintenanceService(maintenanceOptions)
+  })
 
-  const maintenanceBindings = await _bindPausableProviderService(
-    {
-      runtimeId: 'maintenance',
-      closeParticipantId: 'maintenance-final-close',
-      service: maintenanceService,
-    },
-    hostExecution !== undefined,
-  )
-  const mcpRuntimeBindings = await _bindPausableProviderService(
-    {
-      runtimeId: 'mcp-runtime-tests',
-      closeParticipantId: 'mcp-runtime-tests-final-close',
-      service: runtime.mcpRuntimeTests,
-    },
-    hostExecution !== undefined,
-  )
+  const maintenanceBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'maintenance',
+    closeParticipantId: 'maintenance-final-close',
+    service: maintenanceService,
+  })
+  const mcpRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'mcp-runtime-tests',
+    closeParticipantId: 'mcp-runtime-tests-final-close',
+    service: runtime.mcpRuntimeTests,
+  })
   const taskExecutionBindings = await _bindTaskExecutionProviderBackground(
     runtime.taskExecution.background,
     {
@@ -943,7 +840,7 @@ async function composePostgresqlProviderSession(
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
   const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
   const terminalSweep = createPostgresqlHumanGateTerminalSweepCommand(db)
-  const committedEventDispatcherInput: Parameters<typeof createCommittedEventDispatcher>[0] = {
+  const committedEventDispatcher = createCommittedEventDispatcher({
     persistence: committedEventPersistence,
     workerId: `committed-events-${DAEMON_GENERATION}`,
     codecs: committedEventCodecs,
@@ -960,12 +857,7 @@ async function composePostgresqlProviderSession(
           notifyTaskTerminal(taskId, status)
         },
         async nudgeWorkspacePrune(taskId) {
-          if (
-            hostExecution
-              ? runtime.taskExecution.runtime.schedulerDriver.isTaskActive(taskId)
-              : isTaskActive(taskId)
-          )
-            return
+          if (isTaskActive(taskId)) return
           await runtime.workspaceMaintenance.finalizeClaimedWorkspace(taskId)
         },
         async enqueueTaskRunDistill(taskId) {
@@ -994,22 +886,11 @@ async function composePostgresqlProviderSession(
       const current = await input.configuration.read()
       return 1 + current.defaultNodeRetries + current.sessionRestartBudget
     },
-  }
-  const hostCommittedEventWorker = hostExecution
-    ? createAuthorityCommittedEventDispatcherWorkerDefinition({
-        persistence: committedEventPersistence,
-        dispatcher: createAuthorityCommittedEventDispatcher({
-          ...committedEventDispatcherInput,
-          persistence: committedEventPersistence,
-        }),
-      })
-    : undefined
-  const committedEventWorker =
-    hostCommittedEventWorker ??
-    createCommittedEventDispatcherWorkerDefinition({
-      persistence: committedEventPersistence,
-      dispatcher: createCommittedEventDispatcher(committedEventDispatcherInput),
-    })
+  })
+  const committedEventWorker = createCommittedEventDispatcherWorkerDefinition({
+    persistence: committedEventPersistence,
+    dispatcher: committedEventDispatcher,
+  })
   const committedEventRuntimeFactory = createManagedWorkerRuntimeHandleFactory({
     id: 'committed-event-dispatcher',
     stopReason: 'provider-session-paused',
@@ -1017,24 +898,16 @@ async function composePostgresqlProviderSession(
       return startManagedWorkerDefinition(committedEventWorker.definition, DAEMON_GENERATION)
     },
   })
-  const committedEventPumpInput: Parameters<typeof createAfterCommitEventPump>[0] = {
+  const committedEventPump = createAfterCommitEventPump({
     persistence: committedEventPersistence,
     codecs: committedEventCodecs,
     projectors: committedEventProjectors,
     projectionLedger: committedEventProjectionLedger,
     nudgeDispatcher: committedEventWorker.nudge,
-  }
-  const coldCommittedEventPump = hostExecution
-    ? createColdAfterCommitEventPump(committedEventPumpInput)
-    : undefined
-  const nativeCommittedEventPump = coldCommittedEventPump
-    ? undefined
-    : createAfterCommitEventPump(committedEventPumpInput)
-  const committedEventPump = coldCommittedEventPump ?? nativeCommittedEventPump!
+  })
   const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'after-commit-event-pump',
     start() {
-      if (!nativeCommittedEventPump) throw new Error('after-commit-native-factory-unselected')
       registerAfterCommitEventPump(committedEventPump)
       let stopped = false
       return Object.freeze({
@@ -1045,7 +918,7 @@ async function composePostgresqlProviderSession(
         },
         async drain() {
           if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')
-          await nativeCommittedEventPump.awaitDrained()
+          await committedEventPump.awaitDrained()
         },
       })
     },
@@ -1257,17 +1130,12 @@ async function composePostgresqlProviderSession(
   const memoryDistillRecoverOnClose: DaemonProviderCloseParticipant = Object.freeze({
     id: 'memory-distill-recover-running',
     close: async () => {
-      if (!hostExecution || hostExecution.queries.snapshot().phase === 'active')
-        await runtime.memory.distillWorker.recoverRunning()
+      await runtime.memory.distillWorker.recoverRunning()
     },
   })
   const gracefulTaskShutdown: DaemonProviderCloseParticipant = Object.freeze({
     id: 'task-execution-graceful-shutdown',
     async close() {
-      if (hostExecution) {
-        await runtime.taskExecution.background.close('daemon-shutdown')
-        return
-      }
       const { gracefulShutdown } = await import('@/services/shutdown')
       await gracefulShutdown(
         {
@@ -1305,99 +1173,11 @@ async function composePostgresqlProviderSession(
     },
   })
 
-  const ownerFailure = (message: string) => (error: unknown) =>
-    input.log.warn(message, {
-      error: error instanceof Error ? error.message : String(error),
-    })
-  const hostOwners = hostExecution
-    ? bindDaemonHostOwners({
-        intent: intentQueuedResumption.runtimeFactory,
-        task: {
-          background: runtime.taskExecution.background,
-          dependencies: {
-            configuration: input.configuration,
-            scheduled: {
-              operations: runtime.scheduledTasks.operations,
-              identityAccess: runtime.scheduledTaskIdentityAccess,
-            },
-          },
-        },
-        maintenance: coldMaintenance!,
-        mcp: runtime.mcpRuntimeTests.execution!,
-        webhook: runtime.webhookTerminalControl.execution!,
-        afterCommit: coldCommittedEventPump!,
-        limits: {
-          operations: runtime.resourceLimits,
-          onError: ownerFailure('PostgreSQL resource limit enforcement failed'),
-        },
-        idle: {
-          operations: runtime.taskIdleTimeout,
-          configuration: input.configuration,
-          onError: ownerFailure('PostgreSQL task idle-timeout sweep failed'),
-        },
-        backup: {
-          configuration: input.configuration,
-          appHome: Paths.root,
-          createScheduledBackup: () =>
-            application.core.systemOperations.application.commands.requestBackup.execute(
-              application.core.systemOperations.localContext,
-              { includeWorktrees: true },
-            ),
-          onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
-        },
-        submodules: {
-          store: application.core.repositoryWorkspaceStore,
-          configuration: input.configuration,
-          notificationKey: input.applicationConfiguration.notificationKey,
-          appHome: Paths.root,
-          secretBox: input.secretBox,
-        },
-        importGc: input.configuration,
-        humanGate: humanGateWorker.definition,
-        committed: hostCommittedEventWorker!.definition,
-        memory: {
-          worker: runtime.memory.distillWorker,
-          configuration: input.configuration,
-          onError: ownerFailure('PostgreSQL memory distill tick failed'),
-        },
-        development: {
-          automation: runtime.developmentAutomation,
-          writer: runtime.employeeWriterCutover,
-          onError: ownerFailure('PostgreSQL development wake sweep failed'),
-        },
-        employee: {
-          dependencies: { runtime: employeeRuntime.worker },
-          prepare: runtime.digitalEmployee.maintenance.settleAutomaticUpgrades.bind(
-            runtime.digitalEmployee.maintenance,
-          ),
-          onCycle(result) {
-            if (result.steps >= 32)
-              input.log.warn('PostgreSQL digital employee OS reached its bounded step budget', {
-                ...result,
-              })
-          },
-          onError: ownerFailure('PostgreSQL digital employee OS cycle failed'),
-        },
-        events: {
-          worker: runtime.eventCenter.worker,
-          onCycle(result) {
-            if (result.steps >= 32)
-              input.log.warn('PostgreSQL event center reached its bounded step budget', {
-                ...result,
-              })
-          },
-          onError: ownerFailure('PostgreSQL event center cycle failed'),
-        },
-        fusion: { dependencies: { operations: runtime.fusion, appHome: Paths.root }, onError() {} },
-      })
-    : undefined
-
   const session = await _createComposedDaemonProviderRuntimeSession({
     provider: 'postgresql',
     generationId: input.provider.generation.payload.generationId,
     app: application.app,
     webSocket: application.webSocket,
-    ...(hostOwners ? { hostExecutionRuntime: { handles: hostOwners } } : {}),
     runtimeFactories: [
       intentQueuedResumption.runtimeFactory,
       taskExecutionBindings.runtimeFactory,
@@ -1429,31 +1209,14 @@ async function composePostgresqlProviderSession(
       webhookTerminalClose,
     ],
     shutdownIdentity: () => application.core.identityAccess.shutdown(),
-    ...(hostExecution ? { beforeCloseProvider: hostExecution.beforeCloseProvider } : {}),
     closeProvider: () => input.provider.close(),
   })
-  if (!hostExecution) return Object.freeze({ application, session })
-  if (!runtime.hostBootRecovery) throw new Error('postgresql-host-boot-recovery-missing')
-  const recoveryInput = {
-    generation: hostExecution.scope.generation,
-    boot: runtime.hostBootRecovery,
-    handles: hostOwners!,
-    prepareOwners: runtime.hostPreparations,
-  }
-  const recovery =
-    input.hostExecution!.recovery?.(recoveryInput) ?? composeDaemonLocalHostRecovery(recoveryInput)
-  const installed = installDaemonHostExecutionSession({
-    bootstrap: hostExecution,
-    recovery,
-    session,
-  })
-  return Object.freeze({ application, session: installed.session, hostExecution })
+  return Object.freeze({ application, session })
 }
 
 /** RFC-359 W3-T16：两个 provider 的会话装配器共用的输入——`startCommand` 只准备这一份。 */
 interface DaemonProviderSessionComposeInput {
   readonly provider: ResolvedDatabaseProviderRuntime
-  readonly hostExecution?: DaemonHostExecutionSelection
   readonly lifecycle: DaemonProviderSessionLifecycleInput
   readonly config: ReturnType<typeof loadConfig>
   readonly configuration: ApplicationConfigurationQueries
@@ -1487,7 +1250,6 @@ interface DaemonProviderSessionComposeInput {
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
-  fusionWorkspaces?: FusionWorkspaceFactory
   readonly taskRunSelection?: TaskRunRootSelection
   readonly developmentPurposes?: DevelopmentPurposeSelection
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
@@ -1508,7 +1270,6 @@ interface DaemonProviderSessionComposeInput {
 }
 
 interface ComposedDaemonProviderSession {
-  readonly hostExecution?: DaemonHostExecutionBootstrap
   readonly application: {
     readonly core: {
       readonly authRuntime: Pick<
@@ -1944,14 +1705,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       generationId: databaseProvider.generation.payload.generationId,
     })
     const sessionInput = Object.freeze({
-      hostExecution: opts.hostExecution,
       taskDeletionEffects: opts.taskDeletionEffects,
       nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
       portArtifactContentEffects: opts.portArtifactContentEffects,
       taskRunSelection: opts.taskRunSelection,
       developmentPurposes: opts.developmentPurposes,
       workspaceExcludeProfiles: opts.workspaceExcludeProfiles,
-      fusionWorkspaces: opts.fusionWorkspaces,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
       actionWorkspaceEffects: opts.actionWorkspaceEffects,
       conflictMergeWorkspaceEffects: opts.conflictMergeWorkspaceEffects,
@@ -2044,16 +1803,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       // composition 上，成功与失败两条路径都对。
       onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
     })
-    await resumeDaemonResourcesForServing({
-      session: initial.session,
-      scope: lifecycle,
-      host: initial.hostExecution,
-      onExecutionUnavailable(error) {
-        log.warn('host execution unavailable; resource API remains ready', {
-          error: describeDaemonProviderSessionFailure(error),
-        })
-      },
-    })
+    await initial.session.resume(lifecycle)
     await serveDaemon({
       bootstrap: daemonProviderBootstrap,
       authRuntime: initial.application.core.authRuntime,
@@ -2076,7 +1826,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 async function composeSqliteProviderSession(
   input: DaemonProviderSessionComposeInput,
 ): Promise<ComposedDaemonProviderSession> {
-  if (input.hostExecution) assertDaemonHostExecutionRootSelection(input.hostExecution)
   const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
     actionWorkspaceEffects: input.actionWorkspaceEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
@@ -2124,27 +1873,6 @@ async function composeSqliteProviderSession(
   const taskLaunchConfiguration = input.taskLaunchConfiguration
   // Boot preparation already applied and verified migrations on this exact client.
   const db = databaseProvider.openClient({ migrationsFolder })
-  const hostExecution =
-    input.hostExecution === undefined
-      ? undefined
-      : await composeDaemonHostExecutionBootstrap({
-          db,
-          provider: 'sqlite',
-          generation: lifecycle.generationId,
-          selection: input.hostExecution,
-          onFailure(error) {
-            log.error('host execution lifecycle failed', {
-              error: error instanceof Error ? error.message : String(error),
-            })
-          },
-        })
-  const hostPreparations: ((context: HostExecutionGrantContext) => Promise<void>)[] = []
-  const prepareOwner = async (
-    operation: (context?: HostExecutionGrantContext) => Promise<void>,
-  ) => {
-    if (hostExecution) hostPreparations.push((context) => operation(context))
-    else await operation()
-  }
 
   // RFC-300 composition: integration owns the direct-Webhook attribution
   // predicate; lifecycle owns the atomic terminal status+claim write; GC owns
@@ -2334,9 +2062,6 @@ async function composeSqliteProviderSession(
     isTaskActive: (taskId) => taskExecutionProvider.runtime.schedulerDriver.isTaskActive(taskId),
   })
   const taskStartDepsFor = (actorUserId: string) => ({
-    ...(taskExecutionProvider.driveBinding === undefined
-      ? {}
-      : { driveBinding: taskExecutionProvider.driveBinding }),
     ...(taskLaunchConfiguration.selectedQueries === undefined
       ? buildStartTaskDeps(
           db,
@@ -2385,7 +2110,6 @@ async function composeSqliteProviderSession(
   const systemAgentObservations = composeSystemAgentObservations({ calls: observationCalls })
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
-      ...(hostExecution ? { host: hostExecution.taskHost } : {}),
       archive: input.taskArchive,
       workspaceReads: input.workspaceReads,
       runtime: {
@@ -2571,7 +2295,6 @@ async function composeSqliteProviderSession(
       ? resolveLaunchRuntimeConfig(Paths.config)
       : {}
   const routeLaunchDriveCoordinator = createTaskDriveCoordinator({
-    driveBinding: taskExecutionProvider.driveBinding,
     ...(taskLaunchConfiguration.selectedQueries === undefined
       ? {}
       : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -2639,10 +2362,7 @@ async function composeSqliteProviderSession(
     failureReporter: {
       async report({ taskId, error, execution }) {
         const now = Date.now()
-        await selectTaskRuntimeLifecycleWrites(
-          taskExecutionProvider.persistence,
-          'issuedResults',
-        ).trySet({
+        await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
           taskId,
           to: 'failed',
           allowedFrom: ['pending', 'running'],
@@ -2684,7 +2404,6 @@ async function composeSqliteProviderSession(
     taskExecutionResources,
   })
   const fusionOperations = composeSqliteFusionOperations({
-    fusionWorkspaces: input.fusionWorkspaces ?? composeLocalFusionWorkspaces(),
     // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
     // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
@@ -2694,12 +2413,12 @@ async function composeSqliteProviderSession(
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
   })
-  await prepareOwner(async () => {
+  {
     const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
     if (removedCredentialLeases > 0) {
       log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
     }
-  })
+  }
 
   // 5a. RFC-223 PR-5: the ONE fail-closed skill identity barrier. It must be
   // the first skill DB/FS behavior after credential convergence: recover every
@@ -2748,12 +2467,9 @@ async function composeSqliteProviderSession(
   // 5b. RFC-359 W3-T4：boot 恢复四步（撤销旧 owner → 收割孤儿 run → 修 lease → 清算 effect 并释放 owner）
   // 是 provider 中立的一份序列（composition/bootRecovery.ts），PostgreSQL daemon 跑的是同一段。
   const taskExecutionLockProof = createDaemonRecoveryAuthorityProof(
-    await readDaemonStartupRecoveryAuthority(
-      lock,
-      hostExecution?.scope.generation ?? DAEMON_GENERATION,
-    ),
+    await readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION),
   )
-  const bootRecovery: TaskExecutionBootRecoveryInput = {
+  await runTaskExecutionBootRecovery({
     recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
     persistence: taskExecutionPersistence,
     runtimeSessionLeases,
@@ -2764,14 +2480,11 @@ async function composeSqliteProviderSession(
         resolveConnection: (provider) => repositoryMetadataConnections.resolve(provider),
       }),
     log,
-  }
-  if (!hostExecution) {
-    await runTaskExecutionBootRecovery(bootRecovery)
-    // RFC-371 v2: calls still running from before this boot can no longer report.
-    const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
-    if (interruptedCalls > 0) log.info('observation calls interrupted', { count: interruptedCalls })
-  }
-  await prepareOwner(async (context) => {
+  })
+  // RFC-371 v2: calls still running from before this boot can no longer report.
+  const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
+  if (interruptedCalls > 0) log.info('observation calls interrupted', { count: interruptedCalls })
+  {
     // RFC-328 terminal maintenance is durable and outlives task-row deletion.
     // Resume exact delete claims before any automatic continuation is opened.
     try {
@@ -2794,7 +2507,6 @@ async function composeSqliteProviderSession(
     }
     // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步
     // 走 provider 中立的命令面（归档命令 recover + 工作区维护 recover），PostgreSQL daemon 跑的是同一段。
-    if (context && !context.current()) return
     try {
       const archiveRecovery = await taskExecutionProvider.archive.recover({
         archiveDir: Paths.taskArchiveDir,
@@ -2812,7 +2524,6 @@ async function composeSqliteProviderSession(
 
     // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal
     // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。
-    if (context && !context.current()) return
     const bootWorkspaceMaintenance = composeWorkspaceMaintenanceCommand({
       db,
       appHome: Paths.root,
@@ -2847,7 +2558,6 @@ async function composeSqliteProviderSession(
     // them — it needs each task's frozen snapshot). Marker-gated: every later boot
     // is a single maintenance_state read. Must run BEFORE auto-resume (step 8+)
     // so a resumed nested wrapper sees its body rows in the right generation.
-    if (context && !context.current()) return
     try {
       const { runFrameBackfillOnBoot } =
         await import('@/modules/task-execution/composition/frameBackfill')
@@ -2872,7 +2582,6 @@ async function composeSqliteProviderSession(
     // an explanatory lastError). MUST run before the HTTP server serves the
     // scheduled read/edit routes AND before the scheduler ticker fires — 幂等 +
     // best-effort.
-    if (context && !context.current()) return
     try {
       const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
       const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
@@ -2889,7 +2598,6 @@ async function composeSqliteProviderSession(
     // by a crash mid-approve/mid-reject (multi-tx decisions). Roll forward an
     // 'applying' whose version already committed, roll back the rest, and fail a
     // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.
-    if (context && !context.current()) return
     try {
       const { recoverFusionDecisions } =
         await import('@/modules/knowledge-evolution/public/operations')
@@ -2902,7 +2610,7 @@ async function composeSqliteProviderSession(
         error: err instanceof Error ? err.message : String(err),
       })
     }
-  })
+  }
 
   // 5c. RFC-101: backfill a v1 snapshot for any managed skill predating skill
   // versioning, and re-sync a live files/ left stale by a crash between the
@@ -2971,7 +2679,6 @@ async function composeSqliteProviderSession(
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes receive this same explicit application-owned instance.
   const mcpRuntimeTests = composeLocalMcpDiagnostics({
-    ...(hostExecution ? { executionMode: 'host' as const } : {}),
     observe:
       ({ session, turn, runtime }) =>
       (startedAt) =>
@@ -3090,14 +2797,11 @@ async function composeSqliteProviderSession(
     developmentAdapterConfigOperations,
     developmentConfigAccess,
   )
-  const mcpRuntimeTestBindings = await _bindPausableProviderService(
-    {
-      runtimeId: 'mcp-runtime-tests',
-      closeParticipantId: 'mcp-runtime-tests-final-close',
-      service: mcpRuntimeTests,
-    },
-    hostExecution !== undefined,
-  )
+  const mcpRuntimeTestBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'mcp-runtime-tests',
+    closeParticipantId: 'mcp-runtime-tests-final-close',
+    service: mcpRuntimeTests,
+  })
 
   // RFC-257 — webhook 分流器 + 三段式重启恢复：上个进程遗留的 received/
   // processing 投递标 failed/interrupted（GitLab 对失败投递不自动重试，恢复
@@ -3109,27 +2813,23 @@ async function composeSqliteProviderSession(
   // （PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
   const webhookTerminalControl = composeMrTerminalControl({
     db,
-    ...(hostExecution ? { executionMode: 'host' as const } : {}),
     // RFC-359 AC-1（第 14 刀）：无 driver 时的工作区收尾由**装配方**交——这一支交的是它
     // 自己那份 GC 收尾（与本文件 durable 消费者 `nudgeWorkspacePrune` 用的同一个）。
     taskTermination: composeTaskSourceTermination({
       db,
-      ...(hostExecution
-        ? { runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry }
-        : {}),
       finalizeWithoutDriver: async (taskId) => {
         await finishClaimedWebhookWorkspacePrune(db, taskId)
       },
     }),
   })
-  if (!hostExecution) await webhookTerminalControl.reconcileOnBoot()
+  await webhookTerminalControl.reconcileOnBoot()
   const webhookDeliveryPersistence = composeWebhookDeliveryPersistenceFor(db)
-  await prepareOwner(async () => {
+  {
     const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)
     if (recoveredDeliveries > 0) {
       log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
     }
-  })
+  }
   // RFC-310 PR-10 T104：legacy code-capability 的四个启动恢复钩子（lease 回收/
   // publish section 清理/publish intent 对账/supersede 续跑）随 writer 一并
   // 移除——Mission 面的恢复由 development-automation 的 recover sweep 承担。
@@ -3171,13 +2871,8 @@ async function composeSqliteProviderSession(
   )
   const missionEventContinuation = createMissionCodeHostEventContinuation(db)
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
-  const employeeWriterState = hostExecution ? undefined : await employeeWriterCutover.activate()
-  if (employeeWriterState) log.info('digital employee writer activated', { ...employeeWriterState })
-  if (hostExecution)
-    hostPreparations.push(async () => {
-      const state = await employeeWriterCutover.activate()
-      log.info('digital employee writer activated', { ...state })
-    })
+  const employeeWriterState = await employeeWriterCutover.activate()
+  log.info('digital employee writer activated', { ...employeeWriterState })
 
   // RFC-310 PR-3/PR-4 + RFC-344 —— bootstrap owns exactly one
   // development-automation composition. HTTP and MCP receive this participant;
@@ -3253,7 +2948,6 @@ async function composeSqliteProviderSession(
       secretBox,
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       coordinator: createTaskDriveCoordinator({
-        driveBinding: taskExecutionProvider.driveBinding,
         ...(taskLaunchConfiguration.selectedQueries === undefined
           ? {}
           : { launchConfiguration: taskLaunchConfiguration.selectedQueries }),
@@ -3271,10 +2965,7 @@ async function composeSqliteProviderSession(
         failureReporter: {
           async report({ taskId, error, execution }) {
             const now = Date.now()
-            await selectTaskRuntimeLifecycleWrites(
-              taskExecutionProvider.persistence,
-              'issuedResults',
-            ).trySet({
+            await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
               taskId,
               to: 'failed',
               allowedFrom: ['pending', 'running'],
@@ -3311,8 +3002,7 @@ async function composeSqliteProviderSession(
         authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
         resources: taskExecutionResources,
       }),
-      cancelTask: (taskId: string) =>
-        composeTaskCancellation(db, taskExecutionProvider.driveBinding).cancel(taskId),
+      cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
       readModels: taskExecutionProvider.readModels,
     }
   })()
@@ -3384,7 +3074,6 @@ async function composeSqliteProviderSession(
     approvalGateway: developmentApprovalGateway,
   })
   const employeeHttpEventCenter = await composeEventCenter({
-    ...(hostExecution ? { executionMode: 'host' as const } : {}),
     db,
     customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
     typePackageDescriptorJsons: [
@@ -3470,7 +3159,7 @@ async function composeSqliteProviderSession(
   const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
   const humanGateTerminalSweep = createSqliteHumanGateTerminalSweepCommand(db)
 
-  const committedEventDispatcherInput: Parameters<typeof createCommittedEventDispatcher>[0] = {
+  const committedEventDispatcher = createCommittedEventDispatcher({
     persistence: committedEventPersistence,
     workerId: `committed-events-${DAEMON_GENERATION}`,
     codecs: committedEventCodecs,
@@ -3487,12 +3176,7 @@ async function composeSqliteProviderSession(
           notifyTaskTerminal(taskId, status)
         },
         async nudgeWorkspacePrune(taskId) {
-          if (
-            hostExecution
-              ? taskExecutionRuntime.schedulerDriver.isTaskActive(taskId)
-              : isTaskActive(taskId)
-          )
-            return
+          if (isTaskActive(taskId)) return
           await finishClaimedWebhookWorkspacePrune(db, taskId)
         },
         async enqueueTaskRunDistill(taskId) {
@@ -3521,36 +3205,18 @@ async function composeSqliteProviderSession(
       const current = await configuration.read()
       return 1 + current.defaultNodeRetries + current.sessionRestartBudget
     },
-  }
-  const hostCommittedEventWorker = hostExecution
-    ? createAuthorityCommittedEventDispatcherWorkerDefinition({
-        persistence: committedEventPersistence,
-        dispatcher: createAuthorityCommittedEventDispatcher({
-          ...committedEventDispatcherInput,
-          persistence: committedEventPersistence,
-        }),
-      })
-    : undefined
-  const committedEventWorkerDefinition =
-    hostCommittedEventWorker ??
-    createCommittedEventDispatcherWorkerDefinition({
-      persistence: committedEventPersistence,
-      dispatcher: createCommittedEventDispatcher(committedEventDispatcherInput),
-    })
-  const committedEventPumpInput: Parameters<typeof createAfterCommitEventPump>[0] = {
+  })
+  const committedEventWorkerDefinition = createCommittedEventDispatcherWorkerDefinition({
+    persistence: committedEventPersistence,
+    dispatcher: committedEventDispatcher,
+  })
+  const committedEventPump = createAfterCommitEventPump({
     persistence: committedEventPersistence,
     codecs: committedEventCodecs,
     projectors: committedEventProjectors,
     projectionLedger: committedEventProjectionLedger,
     nudgeDispatcher: committedEventWorkerDefinition.nudge,
-  }
-  const coldCommittedEventPump = hostExecution
-    ? createColdAfterCommitEventPump(committedEventPumpInput)
-    : undefined
-  const nativeCommittedEventPump = coldCommittedEventPump
-    ? undefined
-    : createAfterCommitEventPump(committedEventPumpInput)
-  const committedEventPump = coldCommittedEventPump ?? nativeCommittedEventPump!
+  })
   // RFC-349 —— 与 PostgreSQL daemon 同构：post-commit 投影泵必须归 provider session 管。
   // 裸注册的泵在迁移冻结窗口内依然挂着，任何一笔漏出的提交（含 `/api/database/*`
   // 这条被有意豁免的控制面）都会让它 `publishNow` 往**源库**写投影/账本行，拷贝阶段
@@ -3559,7 +3225,6 @@ async function composeSqliteProviderSession(
   const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'after-commit-event-pump',
     start() {
-      if (!nativeCommittedEventPump) throw new Error('after-commit-native-factory-unselected')
       registerAfterCommitEventPump(committedEventPump)
       let stopped = false
       return Object.freeze({
@@ -3570,7 +3235,7 @@ async function composeSqliteProviderSession(
         },
         async drain() {
           if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')
-          await nativeCommittedEventPump.awaitDrained()
+          await committedEventPump.awaitDrained()
         },
       })
     },
@@ -3625,7 +3290,7 @@ async function composeSqliteProviderSession(
   // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
   let resourcePackageApplyActivity: (() => readonly string[]) | null = null
   const maintenanceConfiguration = await configuration.read()
-  const maintenanceOptions: Parameters<typeof startMaintenanceService>[0] = {
+  const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
     // RFC-359 AC-10：装配方本来就知道自己在装哪个 provider，写出来。
     // 此前这里不写、由 `options.provider ?? 'sqlite'` 静默兜底——那是「落进 else」的另一种写法。
     provider: 'sqlite',
@@ -3662,12 +3327,7 @@ async function composeSqliteProviderSession(
     configPath: applicationConfiguration.notificationKey,
     loadConfig: () => maintenanceConfiguration,
     payloadSources: Object.freeze({
-      activeTaskIds: hostExecution
-        ? () =>
-            taskExecutionProvider.executionModule.runtimeRegistry
-              .activeTokens()
-              .map((token) => token.taskId)
-        : activeTaskIdsSnapshot,
+      activeTaskIds: activeTaskIdsSnapshot,
       activeIntentApplyJournalIds: intentMaintenanceSnapshots.activeApplyJournalIds,
       activeResourceBundleApplyIds: () => resourcePackageApplyActivity?.() ?? [],
       bootIntentTurnIds: intentMaintenanceSnapshots.bootTurnIds,
@@ -3681,38 +3341,12 @@ async function composeSqliteProviderSession(
       }
     },
     onIntentQueued: intentQueuedNotifications.enqueue,
-  }
-  const coldMaintenance = hostExecution
-    ? createColdMaintenanceService({
-        ...maintenanceOptions,
-        createSupervisor: (config, handlers) =>
-          createColdMaintenanceWorkerSupervisor({
-            appHome: Paths.root,
-            dispatchPaused: true,
-            databaseInit: {
-              dbPath: Paths.db,
-              migrationsFolder,
-              sqlite: {
-                synchronous: config.sqliteSynchronous,
-                pageCacheMib: config.sqlitePageCacheMib,
-                mmapMib: config.sqliteMmapMib,
-                busyTimeoutMs: 50,
-              },
-            },
-            effectsBootstrap: input.maintenanceEffectsBootstrap,
-            ...handlers,
-          }),
-      })
-    : undefined
-  const maintenanceService = coldMaintenance ?? startMaintenanceService(maintenanceOptions)
-  const maintenanceRuntimeBindings = await _bindPausableProviderService(
-    {
-      runtimeId: 'maintenance',
-      closeParticipantId: 'maintenance-final-close',
-      service: maintenanceService,
-    },
-    hostExecution !== undefined,
-  )
+  })
+  const maintenanceRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'maintenance',
+    closeParticipantId: 'maintenance-final-close',
+    service: maintenanceService,
+  })
   // RFC-349 T5 — compose this provider-neutral participant once at daemon
   // bootstrap. HTTP and the Digital Employee worker must not independently
   // choose or reopen a database provider.
@@ -3754,29 +3388,26 @@ async function composeSqliteProviderSession(
       developmentEmployeeTypePackage.descriptorJson,
     ],
   })
-  const intentTurnExecution = hostExecution ? composeIntentTurnExecution() : undefined
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
-    ...(intentTurnExecution ? { intentTurnExecution } : {}),
     nodeRunPrompts,
     portArtifacts,
     taskRunSelection: input.taskRunSelection,
     developmentPurposes: input.developmentPurposes,
     developmentPurposeRoot,
     workspaceExcludeProfiles: input.workspaceExcludeProfiles,
-    fusionWorkspaces: input.fusionWorkspaces,
     taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
     conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
     providerCore,
     token,
+    executionAuthority: composeLocalExecutionAuthority(),
     digitalEmployeePlatformTools,
     configPath: Paths.config,
     configuration,
     applicationConfiguration,
     daemonInfoPath: Paths.daemonInfo,
     daemonRuntime: input.daemonRuntime,
-    hostExecutionHttp: hostExecution?.http,
     // RFC-226: runtime readiness is not daemon health. Startup never executes
     // OpenCode; explicit runtime status/Test/use paths perform the version and
     // RFC-227 byte-frozen runtime admission instead.
@@ -3794,9 +3425,6 @@ async function composeSqliteProviderSession(
     workspacePresence,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     taskExecutionReadModels: taskExecutionRuntime.readModels,
-    ...(taskExecutionProvider.driveBinding === undefined
-      ? {}
-      : { taskDriveBinding: taskExecutionProvider.driveBinding }),
     taskRouteLaunch: taskExecutionProvider.routeLaunch,
     taskArchiveMaintenance: taskExecutionProvider.archive,
     skillContent: input.skillContent,
@@ -3867,8 +3495,7 @@ async function composeSqliteProviderSession(
       })
     }
   }
-  if (hostExecution) await reverifyResourceContent()
-  else void reverifyResourceContent()
+  void reverifyResourceContent()
 
   // 8. Background loops. RFC-338 owns every DB/FS-heavy maintenance cadence;
   // limits and the in-memory batch-import Map remain lightweight on main.
@@ -3897,7 +3524,7 @@ async function composeSqliteProviderSession(
   const idleTimeoutOperations = composeTaskIdleTimeoutOperations({
     persistence: createSqliteTaskIdleTimeoutPersistence(db),
     cancelTask: (taskId, reason) =>
-      composeTaskCancellation(db, taskExecutionProvider.driveBinding).cancel(taskId, {
+      composeTaskCancellation(db).cancel(taskId, {
         kind: 'resource-reaped',
         ...reason,
       }),
@@ -4212,10 +3839,7 @@ async function composeSqliteProviderSession(
       }),
     },
   })
-  if (hostExecution) {
-    await employeeOs.maintenance.ready()
-    hostPreparations.push(() => employeeOs.maintenance.settleAutomaticUpgrades())
-  } else await employeeOs.maintenance.settleAutomaticUpgrades()
+  await employeeOs.maintenance.settleAutomaticUpgrades()
   const intentAuthorityFor = (actor: Actor) =>
     directOperationAuthority(identityAccess.directAuthority, actor)
   const intentCatalogActors = new WeakMap<object, Actor>()
@@ -4286,7 +3910,6 @@ async function composeSqliteProviderSession(
   })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
-    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),
     events: createIntentSessionWsPublisher(),
     identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: Paths.root,
@@ -4306,7 +3929,6 @@ async function composeSqliteProviderSession(
   })
   const intentQueuedResumption = composeIntentQueuedResumption({
     configuration,
-    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),
     notifications: intentQueuedNotifications,
     async resume(sessionIds, config) {
       await resumeQueuedIntentWorkingSets(
@@ -4320,7 +3942,6 @@ async function composeSqliteProviderSession(
       })
     },
   })
-  if (intentTurnExecution) hostPreparations.push(() => intentTurnExecution.prepare())
   const employeeOsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'digital-employee-os',
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
@@ -4436,17 +4057,12 @@ async function composeSqliteProviderSession(
   const memoryDistillRecoverOnClose: DaemonProviderCloseParticipant = Object.freeze({
     id: 'memory-distill-recover-running',
     close: async () => {
-      if (!hostExecution || hostExecution.queries.snapshot().phase === 'active')
-        await memoryOperations.distillWorker.recoverRunning()
+      await memoryOperations.distillWorker.recoverRunning()
     },
   })
   const gracefulTaskShutdown: DaemonProviderCloseParticipant = Object.freeze({
     id: 'task-execution-graceful-shutdown',
     async close() {
-      if (hostExecution) {
-        await taskExecutionProvider.background.close('daemon-shutdown')
-        return
-      }
       const { gracefulShutdown } = await import('@/services/shutdown')
       await gracefulShutdown(
         {
@@ -4470,92 +4086,6 @@ async function composeSqliteProviderSession(
     gracefulTaskShutdown,
     webhookTerminalClose,
   ] satisfies readonly DaemonProviderCloseParticipant[])
-  const ownerFailure = (message: string) => (error: unknown) =>
-    log.warn(message, {
-      error: error instanceof Error ? error.message : String(error),
-    })
-  const hostOwners = hostExecution
-    ? bindDaemonHostOwners({
-        intent: intentQueuedResumption.runtimeFactory,
-        task: {
-          background: taskExecutionProvider.background,
-          dependencies: {
-            configuration,
-            scheduled: {
-              operations: scheduledTaskRuntime.operations,
-              identityAccess: integrationIdentityAccess,
-            },
-          },
-        },
-        maintenance: coldMaintenance!,
-        mcp: mcpRuntimeTests.execution!,
-        webhook: webhookTerminalControl.execution!,
-        afterCommit: coldCommittedEventPump!,
-        limits: {
-          operations: composeResourceLimitOperations({
-            db,
-            cancelTask: (taskId, reason) =>
-              composeTaskCancellation(db, taskExecutionProvider.driveBinding).cancel(taskId, {
-                kind: 'resource-reaped',
-                ...reason,
-              }),
-          }),
-          onError: ownerFailure('enforceLimits failed'),
-        },
-        idle: {
-          operations: idleTimeoutOperations,
-          configuration,
-          onError: ownerFailure('task idle-timeout sweep failed'),
-        },
-        backup: {
-          configuration,
-          appHome: Paths.root,
-          createScheduledBackup: () => createBackup({ db, kind: 'scheduled', appHome: Paths.root }),
-          onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
-        },
-        submodules: {
-          store: repositoryWorkspaceStore,
-          configuration,
-          notificationKey: applicationConfiguration.notificationKey,
-          appHome: Paths.root,
-          secretBox,
-        },
-        importGc: configuration,
-        humanGate: humanGateContinuationWorkerDefinition.definition,
-        committed: hostCommittedEventWorker!.definition,
-        memory: {
-          worker: memoryOperations.distillWorker,
-          configuration,
-          onError: ownerFailure('memory distill tick failed'),
-        },
-        development: {
-          automation: developmentAutomation,
-          writer: employeeWriterCutover,
-          onError: ownerFailure('legacy development mission boot recovery failed'),
-        },
-        employee: {
-          dependencies: { runtime: employeeOs.runtime.worker },
-          prepare: employeeOs.maintenance.settleAutomaticUpgrades.bind(employeeOs.maintenance),
-          onCycle(result) {
-            if (result.steps >= 32)
-              log.warn('digital employee OS cycle reached its bounded step budget', { ...result })
-          },
-          onError: ownerFailure('digital employee OS cycle failed'),
-        },
-        events: {
-          worker: employeeEventCenter.worker,
-          onCycle(result) {
-            if (result.steps >= 32)
-              log.warn('event center cycle reached its bounded step budget', { ...result })
-          },
-          onError: ownerFailure('event center cycle failed'),
-        },
-        fusion: {
-          dependencies: { operations: fusionOperations, appHome: Paths.root },
-          onError() {},
-        },
-      })
-    : undefined
   const initialProviderSession = await _createComposedDaemonProviderRuntimeSession({
     provider: 'sqlite',
     generationId: lifecycle.generationId,
@@ -4563,33 +4093,13 @@ async function composeSqliteProviderSession(
     webSocket: ws,
     runtimeFactories: providerRuntimeFactories,
     backgroundWriterFactories: providerBackgroundWriterFactories,
-    ...(hostOwners ? { hostExecutionRuntime: { handles: hostOwners } } : {}),
     providerCloseParticipants,
     shutdownIdentity: () => identityAccess.shutdown(),
-    ...(hostExecution ? { beforeCloseProvider: hostExecution.beforeCloseProvider } : {}),
     closeProvider: () => databaseProvider.close(),
   })
-  const recoveryInput = hostExecution
-    ? {
-        generation: hostExecution.scope.generation,
-        boot: bootRecovery,
-        handles: hostOwners!,
-        prepareOwners: hostPreparations,
-      }
-    : undefined
-  const selectedSession = hostExecution
-    ? installDaemonHostExecutionSession({
-        bootstrap: hostExecution,
-        session: initialProviderSession,
-        recovery:
-          input.hostExecution!.recovery?.(recoveryInput!) ??
-          composeDaemonLocalHostRecovery(recoveryInput!),
-      }).session
-    : initialProviderSession
   return Object.freeze({
     application: Object.freeze({ core: providerCore }),
-    session: selectedSession,
-    ...(hostExecution ? { hostExecution } : {}),
+    session: initialProviderSession,
   })
 }
 

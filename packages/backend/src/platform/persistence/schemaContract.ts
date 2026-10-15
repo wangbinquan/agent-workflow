@@ -140,7 +140,6 @@ export const RFC349_SOURCE_TABLES = [
   'mcps',
   'memories',
   'memory_distill_events',
-  'memory_distill_execution_receipts',
   'memory_distill_jobs',
   'memory_scope_move_events',
   'mission_input_uploads',
@@ -174,7 +173,6 @@ export const RFC349_SOURCE_TABLES = [
   'skill_operations',
   'skill_versions',
   'skills',
-  'system_host_execution_write_contexts',
   'task_archive_audit',
   'task_collaborators',
   'task_execution_effect_attempts',
@@ -431,7 +429,6 @@ function ownerFor(table: string): OwnerContext {
   if (
     table.startsWith('maintenance_') ||
     table.startsWith('lifecycle_') ||
-    table === 'system_host_execution_write_contexts' ||
     table === 'recovery_events'
   ) {
     return 'system-operations'

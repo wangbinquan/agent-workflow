@@ -20,8 +20,6 @@ import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inbound/directTaskInitiator'
 import { registerRoute } from '@/routes/registry'
-import { tryRunHttpHostExecutionRequest } from '@/platform/http/hostExecutionAvailability'
-import type { FusionReadMode } from '../application/fusionOrchestration'
 // RFC-353 T12：inbound 是本 context 自己的投递适配器，直接取 `application/`。
 // **不经自己的 `public/`**——那一层是给别的 context 用的，只被自家 inbound 消费的
 // 符号按 RFC-294 design §3.3「无 consumer 不公开」就不该出现在 public 面上。
@@ -55,7 +53,6 @@ import { directRequestAuthority } from '@/routes/operationAuthority'
 export interface FusionRouteDependencies {
   readonly operations: FusionOperations
   readonly configPath: string
-  readonly appHome?: string
   readonly launchConfiguration?: TaskLaunchConfigurationQueries
   readonly directAuthority: DirectAuthorityBinding
 }
@@ -77,7 +74,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
         : await resolveTaskLaunchRuntimeConfiguration(deps.launchConfiguration)
     return {
       operations: deps.operations,
-      appHome: deps.appHome ?? Paths.root,
+      appHome: Paths.root,
       configPath: deps.configPath,
       ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
       ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),
@@ -86,20 +83,11 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     }
   }
 
-  async function readFusion<T>(read: (mode: FusionReadMode) => Promise<T>): Promise<T> {
-    let result: { value: T } | undefined
-    await tryRunHttpHostExecutionRequest(app, 'knowledge', async () => {
-      result = { value: await read('reconcile') }
-    })
-    return result === undefined ? read('stored') : result.value
-  }
-
   registerRoute(
     app,
     {
       method: 'POST',
       path: '/api/fusions',
-      executionGroup: 'knowledge',
       permissions: ['tasks:execute', 'skills:update'],
       tokenAccess: 'allow',
       summary: 'Launch a memory→skill fusion (runs an agent)',
@@ -146,17 +134,10 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       // listFusionSummaries pushes status/skillId into SQL and never reads the
       // proposedDiff, so the inbox's 15s poll stays cheap. Full diff: /:id.
       return c.json(
-        await readFusion(async (mode) =>
-          listVisibleFusionSummaries(
-            await fusionDeps(),
-            viewerOf(c),
-            {
-              ...(skillId ? { skillId } : {}),
-              ...(status ? { status } : {}),
-            },
-            mode,
-          ),
-        ),
+        await listVisibleFusionSummaries(await fusionDeps(), viewerOf(c), {
+          ...(skillId ? { skillId } : {}),
+          ...(status ? { status } : {}),
+        }),
       )
     },
   )
@@ -176,9 +157,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     },
     async (c) => {
       return c.json({
-        count: await readFusion(async (mode) =>
-          countVisibleAwaitingApprovalFusions(await fusionDeps(), viewerOf(c), mode),
-        ),
+        count: await countVisibleAwaitingApprovalFusions(await fusionDeps(), viewerOf(c)),
       })
     },
   )
@@ -194,9 +173,7 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     },
     async (c) => {
       // RFC-099-style existence isolation：不可见与不存在同形，判据在 application。
-      const fusion = await readFusion(async (mode) =>
-        getVisibleFusion(await fusionDeps(), viewerOf(c), c.req.param('id'), mode),
-      )
+      const fusion = await getVisibleFusion(await fusionDeps(), viewerOf(c), c.req.param('id'))
       if (fusion === null) {
         throw new NotFoundError('fusion-not-found', `fusion '${c.req.param('id')}' not found`)
       }
@@ -209,7 +186,6 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     {
       method: 'POST',
       path: '/api/fusions/:id/approve',
-      executionGroup: 'knowledge',
       permissions: ['skills:update', 'memory:update'],
       tokenAccess: 'allow',
       summary: 'Approve a fusion (bumps the skill version and fuses memory)',
@@ -224,7 +200,6 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
     {
       method: 'POST',
       path: '/api/fusions/:id/reject',
-      executionGroup: 'knowledge',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Reject a fusion and re-run it',

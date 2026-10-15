@@ -403,7 +403,6 @@ export async function createClarifyRound(
     await humanGateComposition.parkPreparedHumanGate({
       db: args.db,
       prepared: prepared.prepared,
-      writePurpose: 'issuedResults',
       ...(executionContext === undefined ? {} : { executionContext }),
       now: createdAt,
     })

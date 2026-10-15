@@ -9,7 +9,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
@@ -164,7 +164,7 @@ export function buildMissionLaunchPayload(input: LaunchPayloadInput): Record<str
 
 function MissionLaunchPage(): ReactElement {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('development')
+  const execution = useExecutionAvailability('development')
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const [step, setStep] = useState(0)

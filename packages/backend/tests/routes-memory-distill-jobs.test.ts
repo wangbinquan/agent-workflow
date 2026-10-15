@@ -3,7 +3,6 @@
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { eq } from 'drizzle-orm'
 import { createSession } from './helpers/auth/sessionStore'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
@@ -84,28 +83,12 @@ describeEachProviderHttpApplication(
         '/api/memory-distill-jobs',
         `/api/memory-distill-jobs/${id}/retry`,
         `/api/memory-distill-jobs/${id}/cancel`,
-        `/api/memory-distill-jobs/${id}/recover`,
       ]) {
         const res = await h.app.fetch(
           authed(h.userToken, path, { method: path.endsWith('-jobs') ? 'GET' : 'POST' }),
         )
         expect(res.status).toBe(403)
       }
-    })
-
-    test('an unproven original recovery returns conflict and does not enqueue or manufacture a result', async () => {
-      const id = await seedJob(h.db, 'running')
-      const before = (
-        await h.db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id))
-      )[0]
-      const response = await h.app.fetch(
-        authed(h.daemonToken, `/api/memory-distill-jobs/${id}/recover`, { method: 'POST' }),
-      )
-      expect(response.status).toBe(409)
-      expect(await response.json()).toMatchObject({ code: 'distill-execution-recovery-unproven' })
-      expect(
-        (await h.db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)))[0],
-      ).toEqual(before)
     })
 
     test('admin list + status filter', async () => {

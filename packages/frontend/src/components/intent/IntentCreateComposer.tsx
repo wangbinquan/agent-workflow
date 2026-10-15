@@ -15,7 +15,7 @@ import {
   type IntentSessionSummary,
 } from '@agent-workflow/shared'
 import { useMutation } from '@tanstack/react-query'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { useTranslation } from 'react-i18next'
 import { api, type ApiError } from '@/api/client'
 import { AppPortal } from '@/components/AppPortal'
@@ -66,7 +66,7 @@ export function IntentCreateComposer(props: {
   footerTarget?: HTMLElement | null
 }) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('intent')
+  const execution = useExecutionAvailability('intent')
   const onPendingChange = props.onPendingChange
   const formId = useId()
   const [message, setMessage] = useState('')

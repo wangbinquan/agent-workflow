@@ -40,7 +40,6 @@ import { errorHandler } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createIntentSessionForTest,
-  createIntentSessionAndReserveTurnForTest,
   intentDumpAuxiliaryForTest,
   intentGraphValidationForTest,
   intentPersistenceForTest,
@@ -50,7 +49,6 @@ import {
   createSqliteMemoryDistillEnqueuer,
   createSqliteMemoryDistillTestContext,
 } from './helpers/memoryDistill'
-import { createIntentTurnExecutionLifecycle } from '@/modules/intent/application/executionLifecycle'
 
 const ownedHomes = new Set<string>()
 function home() {
@@ -90,11 +88,6 @@ function selectedFamily(
   const releases: Parameters<SystemAgentRunFamily['retainedContents']['release']>[0][] = []
   const scopes = new Set<SystemAgentWorkspaceScope>()
   const family = Object.freeze<SystemAgentRunFamily>({
-    recovery: {
-      recoverReference: async () => {
-        throw new Error('unselected physical recovery')
-      },
-    },
     workspaces: {
       capture(input) {
         const scope = Object.freeze({ namespace: input.namespace, name: input.name })
@@ -125,9 +118,6 @@ function selectedFamily(
       return await run(request)
     },
     retainedContents: {
-      inspect() {
-        throw new Error('unselected material inspection')
-      },
       forget() {},
       release(request) {
         expect(scopes.has(request.scope)).toBe(true)
@@ -230,123 +220,6 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
     expect(turn).toMatchObject({ kind: 'questions', captureState: 'complete' })
     expect(fresh).toMatchObject({ inFlightTurnId: null })
     expect(JSON.parse(fresh?.budgetJson ?? '{}').questionRounds).toBe(1)
-  })
-
-  test('HTTP original Intent recovery captures the selected owner once and waits for its original acknowledgement', async () => {
-    const root = home(),
-      user = await createUser(harness.db, {
-        username: 'original-http-' + ulid().toLowerCase(),
-        displayName: 'Original owner',
-        role: 'user',
-        password: 'longEnoughPassword',
-      })
-    const actor = buildActor({ user, source: 'session' }),
-      identityAccess = createIdentityAccessRuntime({ db: harness.db }),
-      persistence = intentPersistenceForTest(harness.db)
-    const { session, reservation } = await createIntentSessionAndReserveTurnForTest(
-      harness.db,
-      actor,
-      { message: 'original retained turn' },
-      root,
-    )
-    await persistence.writeExecutionCheckpoint({
-      expectedRevision: null,
-      checkpoint: {
-        version: 1,
-        revision: 0,
-        phase: 'reserved',
-        sessionId: session.id,
-        reservation,
-        configSnapshot: DEFAULT_CONFIG,
-      },
-    })
-    const original = createIntentTurnExecutionLifecycle()
-    let physical = false,
-      selected = original,
-      reads = 0,
-      report!: () => void
-    const blocked = new Promise<void>((resolve) => {
-      report = resolve
-    })
-    const handle = original.start({ current: () => true, reportFailure: report })
-    const work = original.dispatch(reservation.turnId, async (control) => {
-      await control.holdOriginal(async () => physical)
-    })
-    await blocked
-    handle.stop()
-    const family = selectedFamily(async () => {
-      throw new Error('Original recovery must not submit a model')
-    })
-    const runtime: IntentSessionRouteDependencies['intentTurnRuntime'] = {
-      get execution() {
-        reads++
-        return selected
-      },
-      systemAgents: family.family,
-      runtimeResolver: {
-        resolve: async () => {
-          throw new Error('Original recovery must not resolve a replacement runtime')
-        },
-      },
-      dumpAuxiliary: intentDumpAuxiliaryForTest(harness.db),
-      graphValidation: intentGraphValidationForTest(harness.db),
-    }
-    const http = new Hono()
-    const injectOriginalActor: MiddlewareHandler = async (context, next) => {
-      context.set('actor', actor)
-      await next()
-    }
-    http.use('*', injectOriginalActor)
-    http.onError(errorHandler)
-    mountIntentSessionRoutes(http, {
-      appHome: root,
-      configuration: { read: () => DEFAULT_CONFIG },
-      identityAccess,
-      directAuthority: identityAccess.directAuthority,
-      intentPersistence: persistence,
-      intentApply: {
-        apply: async () => {
-          throw new Error('Original recovery must not apply resources')
-        },
-      },
-      intentTurnRuntime: runtime,
-      resourceCatalogFor: (currentActor) =>
-        intentResourceCatalogBinding(harness.db, currentActor, root),
-      events: { publish() {} },
-    })
-    expect(reads).toBe(1)
-    selected = createIntentTurnExecutionLifecycle()
-    const endpoint = `/api/intent-sessions/${session.id}/turns/${reservation.turnId}/recover`
-    const pending = await http.request(endpoint, { method: 'POST' })
-    expect(pending.status).toBe(200)
-    expect(await pending.json()).toMatchObject({ acknowledged: false, turnId: reservation.turnId })
-    physical = true
-    const settled = await http.request(endpoint, { method: 'POST' })
-    expect(await settled.json()).toMatchObject({ acknowledged: true, turnId: reservation.turnId })
-    expect(reads).toBe(1)
-    await Promise.all([work, handle.drain()])
-    const nativeHttp = new Hono()
-    nativeHttp.use('*', injectOriginalActor)
-    nativeHttp.onError(errorHandler)
-    mountIntentSessionRoutes(nativeHttp, {
-      appHome: root,
-      configuration: { read: () => DEFAULT_CONFIG },
-      identityAccess,
-      directAuthority: identityAccess.directAuthority,
-      intentPersistence: persistence,
-      intentApply: {
-        apply: async () => {
-          throw new Error('Recovery must not apply resources')
-        },
-      },
-      intentTurnRuntime: { ...runtime, execution: undefined },
-      resourceCatalogFor: (currentActor) =>
-        intentResourceCatalogBinding(harness.db, currentActor, root),
-      events: { publish() {} },
-    })
-    const unavailable = await nativeHttp.request(endpoint, { method: 'POST' })
-    expect(unavailable.status).toBe(422)
-    expect(await unavailable.json()).toMatchObject({ code: 'intent-original-recovery-unavailable' })
   })
 
   test('HTTP Intent forwards a prototype family getter once and settles through the selected adapter', async () => {

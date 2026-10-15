@@ -1,4 +1,3 @@
-import { selectTaskNodeRunWrites } from '../application/taskNodeWriteSelection'
 import type { WrapperRunLedgerPort } from '../application/ports/wrapperRunLedger'
 import type { WrapperStatusPublisherPort } from '../application/ports/wrapperStatusPublisher'
 import {
@@ -56,7 +55,7 @@ async function settleTerminal(
   settlement: Exclude<WrapperSettlement, { rowStatus: 'interrupted' }>,
 ): Promise<void> {
   try {
-    await selectTaskNodeRunWrites(state.opts.persistence, 'issuedResults').set({
+    await state.opts.persistence.nodeRuns.set({
       nodeRunId: wrapperRunId,
       to: settlement.rowStatus as 'done' | 'failed' | 'canceled' | 'exhausted',
       allowedFrom: ['running', 'awaiting_review', 'awaiting_human'],
@@ -103,7 +102,7 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
       if (existing !== null) {
         const enteredRunning = existing.status !== 'running'
         if (enteredRunning) {
-          await selectTaskNodeRunWrites(state.opts.persistence, 'preparation').set({
+          await state.opts.persistence.nodeRuns.set({
             nodeRunId: existing.id,
             to: 'running',
             allowedFrom: [
@@ -158,7 +157,7 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
           sources,
         })
       }
-      const runId = await selectTaskNodeRunWrites(state.opts.persistence, 'preparation').mint({
+      const runId = await state.opts.persistence.nodeRuns.mint({
         taskId: state.taskId,
         nodeId: request.node.id,
         status: 'pending',
@@ -172,7 +171,7 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
           ? {}
           : { executionContext: state.opts.executionContext }),
       })
-      await selectTaskNodeRunWrites(state.opts.persistence, 'preparation').transition({
+      await state.opts.persistence.nodeRuns.transition({
         nodeRunId: runId,
         event: { kind: 'mark-running' },
         ...(state.opts.executionContext === undefined
@@ -187,7 +186,7 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
       settlement: WrapperSettlement,
     ): Promise<void> {
       if (settlement.rowStatus === 'interrupted') {
-        await selectTaskNodeRunWrites(state.opts.persistence, 'issuedResults').transition({
+        await state.opts.persistence.nodeRuns.transition({
           nodeRunId: generation.runId,
           event: { kind: 'mark-interrupted' },
           ...(state.opts.executionContext === undefined
@@ -197,7 +196,7 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
         return
       }
       if (settlement.rowStatus === 'awaiting_human' || settlement.rowStatus === 'awaiting_review') {
-        await selectTaskNodeRunWrites(state.opts.persistence, 'issuedResults').transition({
+        await state.opts.persistence.nodeRuns.transition({
           nodeRunId: generation.runId,
           event:
             settlement.rowStatus === 'awaiting_human'

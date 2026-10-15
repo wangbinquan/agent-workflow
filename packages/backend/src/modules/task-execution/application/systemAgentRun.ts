@@ -72,18 +72,6 @@ export async function runSystemAgentCore(
 ): Promise<PreparedSystemAgentRunResult> {
   const { log, timeoutMs, maxEventTextBytes, startedAt } = input
   const retainedRef = input.retainedRef
-  let executionReceipt: PreparedSystemAgentRunResult['executionReceipt']
-  const receipts = opts.executionReceipts
-  const preparedReceipt = receipts?.prepared
-  const startedReceipt = receipts?.started
-  if (
-    receipts !== undefined &&
-    (typeof preparedReceipt !== 'function' || typeof startedReceipt !== 'function')
-  )
-    throw new Error('system-agent-execution-receipt-contract-incomplete')
-  const recordPrepared = preparedReceipt?.bind(receipts)
-  const recordStarted = startedReceipt?.bind(receipts)
-  const admitExecution = opts.admitExecution?.bind(opts)
 
   const outputEvidence = emptySystemAgentOutputEvidence()
   const fail = (
@@ -98,7 +86,6 @@ export async function runSystemAgentCore(
     retainedRef,
     scratchRetained: false,
     outputEvidence: { ...outputEvidence },
-    ...(executionReceipt === undefined ? {} : { executionReceipt }),
     ...extra,
   })
 
@@ -122,24 +109,18 @@ export async function runSystemAgentCore(
   let declaredForResult: DeclaredInjectionManifest | undefined
   let result: PreparedSystemAgentRunResult | undefined
   let usageCapture: ReturnType<typeof createSystemAgentUsageCapture> | undefined
-  let observedSessionId: string | null = null
   let sinkTerminal = false
   let sinkFailed = false
   let sinkFailureReason: SessionCaptureIncompleteReason | undefined
   let sinkTerminalIntent:
     | { state: 'complete' | 'incomplete'; reason?: SessionCaptureIncompleteReason }
     | undefined
-  const originalSink = opts.eventSink
-  const originalMarkTerminal = originalSink?.markTerminal.bind(originalSink)
-  const finishOriginalUsage = async (status: Parameters<typeof systemCallStatus>[0]) => {
-    await usageCapture?.finish(systemCallStatus(status))
-  }
 
   const markSinkTerminal = async (
     state: 'complete' | 'incomplete',
     reason?: SessionCaptureIncompleteReason,
   ): Promise<void> => {
-    if (originalMarkTerminal === undefined || sinkTerminal) return
+    if (opts.eventSink === undefined || sinkTerminal) return
     if (
       sinkTerminalIntent === undefined ||
       (state === 'incomplete' && sinkTerminalIntent.state === 'complete')
@@ -151,17 +132,13 @@ export async function runSystemAgentCore(
     }
     const terminal = sinkTerminalIntent
     try {
-      await originalMarkTerminal(terminal.state, terminal.reason)
+      await opts.eventSink.markTerminal(terminal.state, terminal.reason)
       sinkTerminal = true
     } catch (error) {
-      try {
-        log.warn('system-agent-session-terminal-persist-failed', {
-          feature: opts.feature,
-          err: maskDiagnosticsText(error instanceof Error ? error.message : String(error)),
-        })
-      } catch {
-        // A diagnostic failure cannot erase an original unconfirmed execution.
-      }
+      log.warn('system-agent-session-terminal-persist-failed', {
+        feature: opts.feature,
+        err: maskDiagnosticsText(error instanceof Error ? error.message : String(error)),
+      })
     }
   }
   const failSink = async (
@@ -263,21 +240,6 @@ export async function runSystemAgentCore(
       let capturedStartupInventory: StartupInventory | null = null
 
       const localExecution = invocation.bindExecution()
-      const recoverOriginal = localExecution.effect.recoverOriginal.bind(localExecution.effect)
-      const cleanupOriginal = invocation.lifecycle.cleanup?.bind(invocation.lifecycle)
-      executionReceipt = Object.freeze({
-        executionRef: localExecution.executionRef,
-        retainedRef,
-        startedAt: null,
-        recoveryRef: localExecution.preparedRecoveryRef ?? null,
-      })
-      await recordPrepared?.(executionReceipt)
-      if (admitExecution?.() === false)
-        return fail('spawn-failed', {
-          stderrTail: 'system-agent-execution-admission-expired',
-          executionNotActivated: true,
-        })
-      const acknowledgeStart = input.invocation.acknowledgeStart()
       const run = await localExecution.effect.submit({
         executionRef: localExecution.executionRef,
         materialRef: localExecution.materialRef,
@@ -288,20 +250,11 @@ export async function runSystemAgentCore(
         ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
           ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
           : {}),
-        ...(acknowledgeStart || recordStarted !== undefined
+        ...(input.invocation.acknowledgeStart()
           ? {
               onStarted: async (receipt: ExecutionStartReceipt) => {
-                executionReceipt = Object.freeze({
-                  executionRef: receipt.executionRef,
-                  retainedRef,
-                  startedAt: receipt.startedAt,
-                  recoveryRef: receipt.recoveryRef ?? null,
-                })
                 try {
-                  await recordStarted?.(executionReceipt)
-                  if (admitExecution?.() === false)
-                    throw new Error('system-agent-execution-admission-expired')
-                  if (acknowledgeStart) await localExecution.acknowledgeOwner(receipt)
+                  await localExecution.acknowledgeOwner(receipt)
                 } catch (err) {
                   // Historical contract: a failed spawn receipt is a SPAWN
                   // failure (mcp playground admission fence) — remember the
@@ -374,7 +327,6 @@ export async function runSystemAgentCore(
                   nativeSessionIntegrityFailed = true
                   throw new Error('runtime native session claim failed')
                 }
-                observedSessionId = ev.sessionId
               } else if (sessionId !== ev.sessionId) {
                 if (
                   pendingConversationReset === undefined ||
@@ -392,7 +344,6 @@ export async function runSystemAgentCore(
                   nativeSessionIntegrityFailed = true
                   throw new Error('runtime native session rotation failed')
                 }
-                observedSessionId = sessionId
               }
             }
             if (ev.conversationReset !== undefined) {
@@ -469,43 +420,6 @@ export async function runSystemAgentCore(
         log,
       })
 
-      if (run.outcome === 'unreaped') {
-        let acknowledged = false
-        let physicalAcknowledged = false
-        let recovery: Promise<boolean> | undefined
-        const executionRef = localExecution.executionRef
-        return fail('unreaped', {
-          executionRecovery: Object.freeze({
-            executionRef,
-            recoverOriginal() {
-              if (acknowledged) return Promise.resolve(true)
-              if (recovery) return recovery
-              const pending = Promise.resolve()
-                .then(async () => {
-                  if (!physicalAcknowledged) {
-                    const receipt = await recoverOriginal({ executionRef })
-                    if (receipt.executionRef !== executionRef || receipt.state !== 'reaped')
-                      return false
-                    physicalAcknowledged = true
-                  }
-                  await finishOriginalUsage('unreaped')
-                  await markSinkTerminal('incomplete', 'post-exit-flush-timeout')
-                  if (originalMarkTerminal !== undefined && !sinkTerminal) return false
-                  await cleanupOriginal?.()
-                  acknowledged = true
-                  return true
-                })
-                .finally(() => {
-                  if (recovery === pending) recovery = undefined
-                })
-              recovery = pending
-              return pending
-            },
-          }),
-          stderrTail: maskDiagnosticsText(run.stderrTail).slice(0, STDERR_TAIL_CAP),
-          ...(observedSessionId === null ? {} : { capturedSessionId: observedSessionId }),
-        })
-      }
       if (run.outcome === 'spawn-failed' || receiptError !== undefined) {
         const message =
           receiptError !== undefined
@@ -515,11 +429,10 @@ export async function runSystemAgentCore(
             : (run.spawnError ?? 'unknown spawn failure')
         return fail('spawn-failed', {
           stderrTail: maskDiagnosticsText(`binary failed to start: ${message}`),
-          ...(receiptError instanceof Error &&
-          receiptError.message === 'system-agent-execution-admission-expired'
-            ? { executionNotActivated: true }
-            : {}),
         })
+      }
+      if (run.outcome === 'unreaped') {
+        return fail('unreaped')
       }
       if (run.pumpError !== undefined) {
         await failSink('stream-persist-failed', new Error(run.pumpError))
@@ -580,7 +493,6 @@ export async function runSystemAgentCore(
         durationMs: Date.now() - startedAt,
         ...(sessionId === undefined ? {} : { capturedSessionId: sessionId }),
         retainedRef,
-        ...(executionReceipt === undefined ? {} : { executionReceipt }),
         scratchRetained: false,
         outputEvidence: { ...outputEvidence },
         ...(capturedStartupInventory === null
@@ -608,8 +520,7 @@ export async function runSystemAgentCore(
       return { status: 'ok', ...base }
     })()
   } finally {
-    // Unknown (unreaped) work keeps its call open until recovery acknowledges it.
-    if (result?.status !== 'unreaped') await finishOriginalUsage(result?.status)
+    await usageCapture?.finish(systemCallStatus(result?.status))
     if (!sinkTerminal) {
       await markSinkTerminal(
         sinkFailed || result?.status === 'unreaped' ? 'incomplete' : 'complete',

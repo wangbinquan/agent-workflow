@@ -61,9 +61,9 @@ const REQUIRED_COLUMNS = ['executionLineageId', 'lineageSlotPathJson', 'launchOr
 const TASK_INSERT_SITES: readonly string[] = [
   // RFC-359 W11：行号从 579 挪到 580——同文件里祖先链的分支时间戳回填改调能力矩阵的
   // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
-  // RFC-370 L: the purpose selector adds one import; each insertion keeps all three columns.
-  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:562 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:122 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:561 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-370 v2 P1: the host write selection is gone; the site keeps all three columns.
+  'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts:121 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
   // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 788 → 813——延后仓库准备的判据与注释加在
   // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：行号 813 → 826——`resourceAuthorityFor` 从两条臂的
@@ -80,8 +80,8 @@ const TASK_INSERT_SITES: readonly string[] = [
   // 2026-09-19：3548 → 3570。`createTaskDriveCoordinator` 的运行期配置改成每次 drive 现读
   // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
   // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
-  // RFC-370 provider host assembly: 2504 → 2537; the original site and all three columns remain.
-  'services/task.ts:2537 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  // RFC-370 v2 P1: 2537 → 2504 with the Task host binding removed; the site and its three columns remain.
+  'services/task.ts:2504 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {

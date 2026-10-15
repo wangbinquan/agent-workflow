@@ -323,7 +323,6 @@ describe('RFC-370 selected native execution binding', () => {
       abortSignal: signal,
       stdin,
       beforeSpawn: beforeStart,
-      onSpawned: expect.any(Function),
       requireSpawnReceipt: true,
       capture,
       cleanup,
@@ -448,8 +447,7 @@ describe('RFC-370 selected native execution binding', () => {
         },
       }),
     )
-    expect(receipt).toMatchObject({ executionRef: selected.executionRef, startedAt: 53 })
-    expect(receipt?.recoveryRef).toBeString()
+    expect(receipt).toEqual({ executionRef: selected.executionRef, startedAt: 53 })
     await selected.recordLegacyTaskReceipt(receipt!, 'run')
     expect(patches).toEqual([
       {
@@ -534,8 +532,7 @@ describe('RFC-370 selected native execution binding', () => {
         },
       }),
     )
-    expect(receipt).toMatchObject({ executionRef: selected.executionRef, startedAt: 53 })
-    expect(receipt?.recoveryRef).toBeString()
+    expect(receipt).toEqual({ executionRef: selected.executionRef, startedAt: 53 })
     expect(seen).toEqual([{ pid: 731, spawnedAt: 53, spawnBinaryPath: '/native' }])
   })
 

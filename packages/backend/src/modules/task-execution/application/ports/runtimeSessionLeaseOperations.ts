@@ -60,3 +60,9 @@ export interface RuntimeSessionLeaseOperations {
   release(token: RuntimeSessionLeaseToken): Promise<boolean>
   repairAfterOrphanReap(nodeRunId?: string): Promise<number>
 }
+
+/** Lease repair after an orphan reap needs only this operation. */
+export type TaskRuntimeSessionLeaseRepairOperations = Pick<
+  RuntimeSessionLeaseOperations,
+  'repairAfterOrphanReap'
+>

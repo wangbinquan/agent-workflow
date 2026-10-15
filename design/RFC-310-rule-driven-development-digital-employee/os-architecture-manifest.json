@@ -13,7 +13,6 @@
       ],
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
-        "cli/daemonHostExecutionOwners.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> public/events",
         "cli/start.ts -> composition",
@@ -53,7 +52,6 @@
       ],
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
-        "cli/daemonHostExecutionOwners.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/start.ts -> composition",
         "modules/digital-employee/application/adapters/event-automation-adapter.ts -> composition/required-ports",

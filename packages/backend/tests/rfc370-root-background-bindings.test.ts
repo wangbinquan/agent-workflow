@@ -73,12 +73,8 @@ for (const [name, query, notificationKey] of [
       const create = calls(root, start, 'startMaintenanceService')
       expect(create).toHaveLength(1)
       expect(maintenance.pos).toBeLessThan(create[0]!.pos)
-      expect(compact(create[0]!.arguments[0]!, start)).toBe('maintenanceOptions')
-      const options = namedVariable(root, 'maintenanceOptions')
-      expect(compact(options.initializer!, start)).toContain(
-        'loadConfig:()=>maintenanceConfiguration,',
-      )
-      expect(compact(options.initializer!, start)).toContain(`configPath:${notificationKey},`)
+      expect(compact(create[0]!, start)).toContain('loadConfig:()=>maintenanceConfiguration,')
+      expect(compact(create[0]!, start)).toContain(`configPath:${notificationKey},`)
       const bindings = calls(root, start, '_bindTaskExecutionProviderBackground')
       expect(bindings).toHaveLength(1)
       const dependencies = compact(bindings[0]!.arguments[1]!, start)

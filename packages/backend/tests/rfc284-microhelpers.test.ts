@@ -77,8 +77,6 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
     expect(hits(/createHash\('sha256'\)/)).toEqual(
       [
         'util/hash.ts',
-        // RFC-370: deterministic original candidate identity hashes the journal key bytes.
-        'modules/memory/application/distill/memoryDistiller.ts',
         // 多步 builder（循环/链式多段 update）——不属单步 idiom：
         'modules/resource-catalog/infrastructure/legacy/skillHash.ts',
         'services/structuralDiff/digest.ts',

@@ -35,9 +35,7 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
   expect(boot).toContain("log.info('lock acquired', lock.diagnostics)")
   expect(boot).toContain('const daemonHost = selectDaemonHostLifecycle(')
   expect(boot).toContain('prepareDaemonDatabaseProviderForBoot(')
-  expect(boot).toContain('await resumeDaemonResourcesForServing({')
-  expect(boot).toContain('session: initial.session')
-  expect(boot).toContain('host: initial.hostExecution')
+  expect(boot).toContain('await initial.session.resume(lifecycle)')
   expect(boot).toContain('await serveDaemon({')
   const releases = calls(start, 'lock.release')
   expect(releases).toHaveLength(4)
@@ -64,7 +62,7 @@ test('provider recompose keeps the acquired lease and both boot roots wait for i
   expect(sqlite).toHaveLength(1)
   expect(sqlite[0]!.arguments.map((node) => node.getText(start))).toEqual([
     'lock',
-    'hostExecution?.scope.generation ?? DAEMON_GENERATION',
+    'DAEMON_GENERATION',
   ])
   expect(ts.isAwaitExpression(sqlite[0]!.parent)).toBe(true)
   const selected = calls(pg, 'readDaemonStartupRecoveryAuthority')

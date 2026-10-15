@@ -321,31 +321,6 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
     },
   )
 
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/mcps/:id/runtime-test-sessions/:sessionId/recover',
-      permissions: ['mcps:execute'],
-      tokenAccess: 'allow',
-      summary: 'Recover the original quarantined diagnostic execution',
-    },
-    async (c) => {
-      const parsed = McpRuntimeTestEndRequestSchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success)
-        throw new ValidationError('mcp-test-invalid', 'invalid diagnostic recovery payload', {
-          issues: parsed.error.issues,
-        })
-      const actor = actorOf(c)
-      return c.json(
-        await runtimeTests.commands.recover(module.runtimeTestCommandContextFor(actor), {
-          mcpId: c.req.param('id'),
-          sessionId: c.req.param('sessionId'),
-        }),
-      )
-    },
-  )
-
   registerOperationRoute(app, {
     descriptor: operations.create,
     method: 'POST',

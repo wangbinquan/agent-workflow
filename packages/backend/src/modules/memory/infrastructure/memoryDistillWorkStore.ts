@@ -1,9 +1,8 @@
 // RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
 
-import { and, asc, desc, eq, inArray, notInArray, lte } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   cachedRepos,
   clarifyRounds,
@@ -24,11 +23,8 @@ import type {
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 import { createMemoryDistillSessionEventSink } from './memoryDistillSessionEventSink'
 import { listMemoryDistillJobs } from './memoryDistillReadStore'
-import { DrizzleMemoryDistillExecutionJournal } from './memoryDistillExecutionJournal'
-import type { MemoryDistillJobRecord } from '../application/ports/distillReadStore'
 
 export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
-  readonly executionJournal: DrizzleMemoryDistillExecutionJournal
   private readonly sinkFactory: (input: MemoryDistillSessionSinkInput) => SystemAgentEventSinkV1
 
   constructor(
@@ -40,7 +36,6 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
      */
     sinkFactory?: (input: MemoryDistillSessionSinkInput) => SystemAgentEventSinkV1,
   ) {
-    this.executionJournal = new DrizzleMemoryDistillExecutionJournal(db)
     this.sinkFactory = sinkFactory ?? createMemoryDistillSessionEventSink(db)
   }
 
@@ -123,99 +118,11 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
       .where(and(inArray(memoryDistillJobs.id, [...ids]), eq(memoryDistillJobs.status, 'pending')))
   }
 
-  async markDone(
-    ids: readonly string[],
-    finishedAt: number,
-    original?: readonly MemoryDistillJobRecord[],
-  ): Promise<void> {
+  async markDone(ids: readonly string[], finishedAt: number): Promise<void> {
     if (ids.length === 0) return
-    if (original !== undefined) {
-      await this.settleOriginalClaim(
-        ids,
-        original,
-        { status: 'done', finishedAt },
-        (row, expected) =>
-          row.status === 'done' &&
-          row.finishedAt === finishedAt &&
-          row.attempts === expected.attempts,
-      )
-      return
-    }
     await this.db
       .update(memoryDistillJobs)
       .set({ status: 'done', finishedAt })
-      .where(inArray(memoryDistillJobs.id, [...ids]))
-  }
-
-  async deferUnissued(
-    input: Parameters<MemoryDistillWorkStore['deferUnissued']>[0],
-  ): Promise<boolean> {
-    const original = [...input.original].sort((a, b) => a.id.localeCompare(b.id))
-    if (original.length === 0) return true
-    if (new Set(original.map((row) => row.id)).size !== original.length) return false
-    return databaseSessionFor(this.db).transaction(async (tx) => {
-      for (const row of original)
-        await engineOf(tx).lockAggregateRoot(tx, memoryDistillJobs, memoryDistillJobs.id, row.id)
-      const rows = await tx
-        .select()
-        .from(memoryDistillJobs)
-        .where(
-          inArray(
-            memoryDistillJobs.id,
-            original.map((row) => row.id),
-          ),
-        )
-      if (rows.length !== original.length) return false
-      const rowsById = new Map(rows.map((row) => [row.id, row]))
-      for (const expected of original) {
-        const row = rowsById.get(expected.id)
-        if (
-          !row ||
-          row.sourceKind !== expected.sourceKind ||
-          row.sourceEventId !== expected.sourceEventId ||
-          row.debounceKey !== expected.debounceKey ||
-          row.taskId !== expected.taskId ||
-          row.createdAt !== expected.createdAt ||
-          row.attempts !== expected.attempts ||
-          row.scopeResolvedJson !== expected.scopeResolvedJson ||
-          row.opencodeSessionId !== expected.opencodeSessionId ||
-          (input.allowPreparedPrompt !== true && row.userPromptMd !== expected.userPromptMd) ||
-          row.exitCode !== expected.exitCode ||
-          row.stderrExcerpt !== expected.stderrExcerpt ||
-          (input.allowPreparedPrompt !== true &&
-            row.dedupSnapshotIdsJson !== expected.dedupSnapshotIdsJson) ||
-          row.outputLang !== expected.outputLang ||
-          !(
-            (row.status === 'running' && row.startedAt === input.startedAt) ||
-            ((row.status === 'pending' || row.status === 'canceled') && row.startedAt === null)
-          )
-        )
-          return false
-      }
-      // Validate the entire original bundle before changing any row. Preserve
-      // a recorded cancellation and every original budget/payload field.
-      await tx
-        .update(memoryDistillJobs)
-        .set({ status: 'pending', startedAt: null })
-        .where(
-          and(
-            inArray(
-              memoryDistillJobs.id,
-              original.map((row) => row.id),
-            ),
-            eq(memoryDistillJobs.status, 'running'),
-            eq(memoryDistillJobs.startedAt, input.startedAt),
-          ),
-        )
-      return true
-    })
-  }
-
-  async loadJobs(ids: readonly string[]) {
-    if (ids.length === 0) return []
-    return await this.db
-      .select()
-      .from(memoryDistillJobs)
       .where(inArray(memoryDistillJobs.id, [...ids]))
   }
 
@@ -236,90 +143,17 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
             nextRunAt: input.retryAt,
             startedAt: null,
           }
-    if (input.original !== undefined) {
-      await this.settleOriginalClaim(
-        input.ids,
-        input.original,
-        patch,
-        (row) =>
-          row.attempts === input.attempts &&
-          row.lastError === input.error &&
-          (input.retryAt === null
-            ? row.status === 'failed' && row.finishedAt === input.now
-            : (row.status === 'pending' || row.status === 'canceled') &&
-              row.nextRunAt === input.retryAt &&
-              row.startedAt === null),
-      )
-      return
-    }
     await this.db
       .update(memoryDistillJobs)
       .set(patch)
       .where(inArray(memoryDistillJobs.id, [...input.ids]))
   }
 
-  /** Commit the whole original bundle, or leave it intact. An ACK retry can
-   * observe its own outcome, including a subsequent pending cancellation. */
-  private async settleOriginalClaim(
-    ids: readonly string[],
-    original: readonly MemoryDistillJobRecord[],
-    patch: Partial<typeof memoryDistillJobs.$inferInsert>,
-    acknowledged: (row: MemoryDistillJobRecord, expected: MemoryDistillJobRecord) => boolean,
-  ): Promise<void> {
-    const expected = [...original].sort((a, b) => a.id.localeCompare(b.id))
-    const selected = new Set(ids)
-    if (
-      selected.size !== ids.length ||
-      new Set(expected.map((row) => row.id)).size !== expected.length ||
-      expected.length !== selected.size ||
-      expected.some((row) => !selected.has(row.id))
-    )
-      throw new Error('memory-distill-original-settlement-unproven')
-    await databaseSessionFor(this.db).transaction(async (tx) => {
-      for (const row of expected)
-        await engineOf(tx).lockAggregateRoot(tx, memoryDistillJobs, memoryDistillJobs.id, row.id)
-      const actual = await tx
-        .select()
-        .from(memoryDistillJobs)
-        .where(inArray(memoryDistillJobs.id, [...ids]))
-      const byId = new Map(actual.map((row) => [row.id, row]))
-      const writes: string[] = []
-      for (const snapshot of expected) {
-        const row = byId.get(snapshot.id)
-        if (
-          !row ||
-          row.sourceKind !== snapshot.sourceKind ||
-          row.sourceEventId !== snapshot.sourceEventId ||
-          row.taskId !== snapshot.taskId ||
-          row.createdAt !== snapshot.createdAt ||
-          row.debounceKey !== snapshot.debounceKey ||
-          row.scopeResolvedJson !== snapshot.scopeResolvedJson
-        )
-          throw new Error('memory-distill-original-settlement-unproven')
-        if (acknowledged(row, snapshot)) continue
-        if (
-          row.status !== 'running' ||
-          row.attempts !== snapshot.attempts ||
-          row.startedAt !== snapshot.startedAt
-        )
-          throw new Error('memory-distill-original-settlement-unproven')
-        writes.push(row.id)
-      }
-      if (writes.length > 0)
-        await tx.update(memoryDistillJobs).set(patch).where(inArray(memoryDistillJobs.id, writes))
-    })
-  }
-
-  async recoverRunning(preserveIds: readonly string[] = []): Promise<number> {
+  async recoverRunning(): Promise<number> {
     const rows = await this.db
       .update(memoryDistillJobs)
       .set({ status: 'pending', startedAt: null })
-      .where(
-        and(
-          eq(memoryDistillJobs.status, 'running'),
-          preserveIds.length === 0 ? undefined : notInArray(memoryDistillJobs.id, [...preserveIds]),
-        ),
-      )
+      .where(eq(memoryDistillJobs.status, 'running'))
       .returning({ id: memoryDistillJobs.id })
     return rows.length
   }
@@ -601,14 +435,14 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async insertCandidate(input: Parameters<MemoryDistillWorkStore['insertCandidate']>[0]) {
     const memory = input.memory
-    const values = {
+    await this.db.insert(memories).values({
       id: memory.id,
       scopeType: memory.scopeType,
       scopeId: memory.scopeId,
       title: memory.title,
       bodyMd: memory.bodyMd,
       tags: JSON.stringify(memory.tags),
-      status: 'candidate' as const,
+      status: 'candidate',
       sourceKind: memory.sourceKind,
       sourceEventId: memory.sourceEventId,
       sourceTaskId: memory.sourceTaskId,
@@ -620,37 +454,6 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
       approvedAt: null,
       createdAt: memory.createdAt,
       version: 1,
-    }
-    if (input.idempotent !== true) {
-      await this.db.insert(memories).values(values)
-      return true
-    }
-    const inserted = await this.db
-      .insert(memories)
-      .values(values)
-      .onConflictDoNothing()
-      .returning({ id: memories.id })
-    if (inserted.length > 0) return true
-    const existing = (
-      await this.db
-        .select({
-          sourceKind: memories.sourceKind,
-          sourceEventId: memories.sourceEventId,
-          sourceTaskId: memories.sourceTaskId,
-          distillJobId: memories.distillJobId,
-        })
-        .from(memories)
-        .where(eq(memories.id, memory.id))
-        .limit(1)
-    )[0]
-    if (
-      !existing ||
-      existing.sourceKind !== memory.sourceKind ||
-      existing.sourceEventId !== memory.sourceEventId ||
-      existing.sourceTaskId !== memory.sourceTaskId ||
-      existing.distillJobId !== memory.distillJobId
-    )
-      throw new Error('memory-distill-original-candidate-origin-mismatch')
-    return false
+    })
   }
 }

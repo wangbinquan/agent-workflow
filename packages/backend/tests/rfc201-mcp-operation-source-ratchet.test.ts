@@ -20,10 +20,10 @@ const rawProbe = readFileSync(resolve(SRC, 'services/mcpProbe.ts'), 'utf8')
 
 describe('RFC-201 MCP production callsite ratchet', () => {
   test('PUT/delete/rename/probe and generic ACL all use the stable-id coordinator', () => {
-    // RFC-364: eight diagnostic operations (including original recovery) moved to the real application owner;
+    // RFC-364: seven diagnostic operations moved to the real application owner;
     // the three remaining probe route locks and all aggregate locks remain.
     expect(route.match(/mcpOperationCoordinator\.runExclusive/g)?.length).toBe(3)
-    expect(diagnostics.match(/coordinator\.runExclusive/g)?.length).toBe(8)
+    expect(diagnostics.match(/coordinator\.runExclusive/g)?.length).toBe(7)
     expect(diagnostics.match(/const fresh = await visible\(request, resolved.id\)/g)?.length).toBe(
       2,
     )

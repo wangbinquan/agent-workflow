@@ -32,9 +32,7 @@ describe('RFC-202 source locks', () => {
     )
     // RFC-359 W3-T14：关机 / 会话暂停 / 会话关闭三种 daemon 层中断由同一个判据识别（isDaemonInterruptionAbortReason）。
     expect(helper).toContain('isDaemonInterruptionAbortReason(abortReason)')
-    expect(helper).toContain(
-      "selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({",
-    )
+    expect(helper).toContain('opts.persistence.runtimeLifecycle.trySet({')
     expect(helper).toContain("to: 'interrupted'")
     expect(helper).toContain('DAEMON_RESTART_ERROR_SUMMARY')
   })

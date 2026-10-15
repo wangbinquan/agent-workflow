@@ -24,12 +24,6 @@ import {
 import type { ReservedIntentTurn } from './session'
 import { activateIntentWorkingSetChange } from './workingSet'
 import { intentResourceVisibility, type IntentResourceCatalogBinding } from './resourceCatalog'
-import type {
-  IntentExecutionCheckpoint,
-  IntentExecutionControl,
-  IntentTurnExecutionLifecycle,
-} from './ports/intentExecution'
-import { IntentExecutionDeferredError } from './executionLifecycle'
 
 const log = createLogger('intentDispatcher')
 
@@ -49,7 +43,6 @@ export interface IntentDispatchDeps {
   readonly systemAgents: SystemAgentRunFamily
   /** RFC-355 T4b：会话动静的播报面由 bootstrap 注入，intent 不认识传输层。 */
   readonly events: IntentSessionEventPublisher
-  readonly execution?: IntentTurnExecutionLifecycle
 }
 
 function emitSessionUpdated(
@@ -69,52 +62,6 @@ export async function dispatchIntentTurn(
   actor: Actor,
   reservation: ReservedIntentTurn,
 ): Promise<void> {
-  if (deps.execution) {
-    await deps.execution
-      .dispatch(reservation.turnId, (control) =>
-        dispatchOwnedIntentTurn(deps, sessionId, actor, reservation, control),
-      )
-      .catch((error: unknown) => {
-        log.warn('intent-original-owner-pending', {
-          sessionId,
-          turnId: reservation.turnId,
-          err: error instanceof Error ? error.message : String(error),
-        })
-      })
-    return
-  }
-  await dispatchOwnedIntentTurn(deps, sessionId, actor, reservation)
-}
-
-/** Bootstrap uses this exact dispatcher for cold result recovery as well. */
-export async function recoverOwnedIntentTurn(
-  deps: Omit<IntentDispatchDeps, 'configSnapshot'>,
-  checkpoint: IntentExecutionCheckpoint,
-  control: IntentExecutionControl,
-): Promise<void> {
-  const owner = await admitDurableWorkOwner(
-    deps.identityAccess,
-    checkpoint.reservation.launchSession.ownerUserId,
-  )
-  if (!owner) throw new Error('intent-original-owner-unavailable')
-  await dispatchOwnedIntentTurn(
-    { ...deps, configSnapshot: checkpoint.configSnapshot },
-    checkpoint.sessionId,
-    actorOfDirectAuthority(owner),
-    checkpoint.reservation,
-    control,
-    checkpoint,
-  )
-}
-
-async function dispatchOwnedIntentTurn(
-  deps: IntentDispatchDeps,
-  sessionId: string,
-  actor: Actor,
-  reservation: ReservedIntentTurn,
-  control?: IntentExecutionControl,
-  original?: IntentExecutionCheckpoint,
-): Promise<void> {
   // RFC-359 —— 这个函数的**全部** 13 个调用点都是 fire-and-forget（应答先回、回合在后台跑），
   // 所以它必须自己保证**永不 reject**。
   //
@@ -130,27 +77,6 @@ async function dispatchOwnedIntentTurn(
   // 兜住并记一条 warn 就够：该回合要么已被下面的 catch 结算过，要么本进程正在收尾、
   // 下次启动由恢复路径重新认领。
   try {
-    let checkpoint = original
-    if (control) {
-      const read = deps.persistence.readExecutionCheckpoint.bind(deps.persistence)
-      checkpoint ??= (await control.checkpoint(() => read(reservation.turnId))) ?? undefined
-      if (checkpoint?.phase === 'closed') return
-      if (!checkpoint) {
-        const reserved: IntentExecutionCheckpoint = {
-          version: 1,
-          revision: 0,
-          phase: 'reserved',
-          sessionId,
-          reservation,
-          configSnapshot: deps.configSnapshot,
-        }
-        const write = deps.persistence.writeExecutionCheckpoint.bind(deps.persistence)
-        await control.checkpoint(() => write({ checkpoint: reserved, expectedRevision: null }))
-        checkpoint = reserved
-      }
-      if (checkpoint.phase === 'reserved' && !control.current())
-        throw new IntentExecutionDeferredError()
-    }
     const EXECUTION_BROADCAST_THROTTLE_MS = 500
     let lastExecutionBroadcastAt = 0
     let pendingExecution: { sessionId: string; turnId: string; eventSeq: number } | undefined
@@ -193,9 +119,7 @@ async function dispatchOwnedIntentTurn(
 
     let outcome: Awaited<ReturnType<typeof runIntentTurn>> | undefined
     try {
-      const config =
-        checkpoint?.snapshot?.config ??
-        (await resolveIntentTurnConfig(deps.runtimeResolver, deps.configSnapshot))
+      const config = await resolveIntentTurnConfig(deps.runtimeResolver, deps.configSnapshot)
       outcome = await runIntentTurn(
         {
           persistence: deps.persistence,
@@ -228,43 +152,17 @@ async function dispatchOwnedIntentTurn(
             }
           },
           systemAgents: deps.systemAgents,
-          ...(control && checkpoint ? { execution: { control, checkpoint } } : {}),
         },
         { sessionId, actor, reservation },
       )
     } catch (error) {
-      if (error instanceof IntentExecutionDeferredError) throw error
-      // Issued facts belong to the original turn tail. Never replace them with
-      // the reservation-only error path if a selected producer failed.
-      if (control && (await deps.persistence.readExecutionCheckpoint(reservation.turnId))?.receipt)
-        throw error
       const detail = error instanceof Error ? error.message : String(error)
-      const settleStartFailure = () =>
-        settleReservedIntentTurnStartFailure(deps.persistence, {
-          sessionId,
-          actor,
-          reservation,
-          detail,
-        })
-      const settled = control
-        ? await control.checkpoint(settleStartFailure)
-        : await settleStartFailure()
-      if (control && checkpoint) {
-        const write = deps.persistence.writeExecutionCheckpoint.bind(deps.persistence)
-        const closed: IntentExecutionCheckpoint = {
-          ...checkpoint,
-          revision: checkpoint.revision + 1,
-          phase: 'closed',
-          outcome: {
-            turnId: reservation.turnId,
-            kind: 'error',
-            errorCode: 'intent-turn-start-failed',
-          },
-        }
-        await control.checkpoint(() =>
-          write({ checkpoint: closed, expectedRevision: checkpoint!.revision }),
-        )
-      }
+      const settled = await settleReservedIntentTurnStartFailure(deps.persistence, {
+        sessionId,
+        actor,
+        reservation,
+        detail,
+      })
       log.warn('intent-turn-fire-failed', { sessionId, err: detail, settled })
       if (settled) {
         deps.events.publish({
@@ -277,57 +175,35 @@ async function dispatchOwnedIntentTurn(
     } finally {
       if (executionTimer !== undefined) clearTimeout(executionTimer)
       flushExecution()
-      if (!control || control.current()) {
-        const activate = () =>
-          activateIntentWorkingSetChange(
-            deps.persistence,
-            intentResourceVisibility(deps.resourceCatalogFor(actor)),
-            actor,
-            sessionId,
-            deps.configSnapshot.intentBuilderMaxGenerateRounds ?? 50,
-          )
-        const next = control ? await control.checkpoint(activate) : await activate()
-        if (next.reservation !== null) {
-          emitSessionUpdated(deps.events, sessionId, actor.user.id)
-          void dispatchIntentTurn(deps, sessionId, actor, next.reservation)
-        } else if (outcome?.graphRepair !== undefined) {
-          // RFC-358 T6（决策 D2）—— 图校验红了，自动再开一轮让模型自己修。
-          //
-          // 预约已经在 settle 的**同一个事务**里铸好（没有 in-flight 空窗），这里只负责
-          // 把它跑起来。「只修一轮」的判据也在那个事务里：修复轮自己的 turn 行带标记，
-          // 它再红一次就不会有第三轮。
-          //
-          // 用户提交的 working-set 变更优先——那是人的新输入，比自动修复重要，所以这条
-          // 挂在 `next.reservation === null` 的分支上。
-          log.info('intent-graph-repair-turn', {
-            sessionId,
-            afterTurnId: outcome.turnId,
-            blockingErrors: outcome.blockingErrors ?? 0,
-          })
-          emitSessionUpdated(deps.events, sessionId, actor.user.id)
-          void dispatchIntentTurn(deps, sessionId, actor, outcome.graphRepair)
-        }
-      } else if (outcome?.graphRepair) {
-        // The durable reservation was minted with the original result. Let
-        // the same owner retain it without authorizing a new invocation.
-        const successor = outcome.graphRepair
-        void dispatchIntentTurn(deps, sessionId, actor, successor).catch((error: unknown) => {
-          log.warn('intent-original-successor-dispatch-failed', {
-            sessionId,
-            turnId: successor.turnId,
-            err: error instanceof Error ? error.message : String(error),
-          })
+      const next = await activateIntentWorkingSetChange(
+        deps.persistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
+        actor,
+        sessionId,
+        deps.configSnapshot.intentBuilderMaxGenerateRounds ?? 50,
+      )
+      if (next.reservation !== null) {
+        emitSessionUpdated(deps.events, sessionId, actor.user.id)
+        void dispatchIntentTurn(deps, sessionId, actor, next.reservation)
+      } else if (outcome?.graphRepair !== undefined) {
+        // RFC-358 T6（决策 D2）—— 图校验红了，自动再开一轮让模型自己修。
+        //
+        // 预约已经在 settle 的**同一个事务**里铸好（没有 in-flight 空窗），这里只负责
+        // 把它跑起来。「只修一轮」的判据也在那个事务里：修复轮自己的 turn 行带标记，
+        // 它再红一次就不会有第三轮。
+        //
+        // 用户提交的 working-set 变更优先——那是人的新输入，比自动修复重要，所以这条
+        // 挂在 `next.reservation === null` 的分支上。
+        log.info('intent-graph-repair-turn', {
+          sessionId,
+          afterTurnId: outcome.turnId,
+          blockingErrors: outcome.blockingErrors ?? 0,
         })
+        emitSessionUpdated(deps.events, sessionId, actor.user.id)
+        void dispatchIntentTurn(deps, sessionId, actor, outcome.graphRepair)
       }
     }
   } catch (escaped) {
-    if (control) {
-      const read = deps.persistence.readExecutionCheckpoint.bind(deps.persistence)
-      const primary = await control.checkpoint(() => read(reservation.turnId))
-      // Auxiliary notifications cannot replace an already acknowledged
-      // business outcome. Unclosed original facts still belong to the owner.
-      if (primary?.phase !== 'closed') throw escaped
-    }
     log.warn('intent-turn-dispatch-escaped', {
       sessionId,
       turnId: reservation.turnId,

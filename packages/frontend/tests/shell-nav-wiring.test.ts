@@ -23,9 +23,9 @@ const navGroupTsx = readFileSync(resolve(here, '../src/components/shell/NavGroup
 describe('RFC-032 shell wiring — extracted components retain the grouped navigation', () => {
   test('__root delegates to AppShell, which owns active resolution', () => {
     expect(rootTsx).toMatch(/from '@\/components\/shell\/AppShell'/)
-    expect(rootTsx).toMatch(/<HostExecutionProvider>/)
+    expect(rootTsx).toMatch(/<ExecutionStatusProvider>/)
     expect(rootTsx).toMatch(
-      /<AppShell pathname=\{pathname\} statusNotice=\{<HostExecutionBanner \/>\}>/,
+      /<AppShell pathname=\{pathname\} statusNotice=\{<ExecutionStandbyBanner \/>\}>/,
     )
     expect(appShellTsx).toMatch(/resolveActiveNav\(pathname\)/)
   })

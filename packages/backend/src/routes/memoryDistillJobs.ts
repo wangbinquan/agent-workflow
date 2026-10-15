@@ -49,26 +49,6 @@ export function mountMemoryDistillJobRoutes(
     app,
     {
       method: 'POST',
-      path: '/api/memory-distill-jobs/:id/recover',
-      permissions: ['memory:update', 'tasks:execute', 'memory-distill-jobs:manage'],
-      tokenAccess: 'allow',
-      summary: 'Recover and settle the original issued distill execution',
-    },
-    async (c) => {
-      const id = c.req.param('id')
-      if (!(await deps.memoryDistillCommands.recoverIssued(id)))
-        throw new ConflictError(
-          'distill-execution-recovery-unproven',
-          `The original execution of distill job ${id} has not been acknowledged`,
-        )
-      return c.json({ ok: true })
-    },
-  )
-
-  registerRoute(
-    app,
-    {
-      method: 'POST',
       path: '/api/memory-distill-jobs/:id/retry',
       executionGroup: 'memory',
       permissions: ['memory:update', 'tasks:execute', 'memory-distill-jobs:manage'],

@@ -28,26 +28,6 @@ export type SystemAgentRunStatus =
   | 'result-error'
   | 'unreaped'
 
-export interface SystemAgentExecutionRecovery {
-  readonly executionRef: string
-  /** Original physical retirement and material cleanup, with no new invocation. */
-  recoverOriginal(): Promise<boolean>
-}
-
-export interface SystemAgentExecutionReceipt {
-  readonly executionRef: string
-  readonly retainedRef: string
-  readonly startedAt: number | null
-  readonly recoveryRef: string | null
-}
-
-/** Consumer-owned durability. Prepared ACK precedes submit; started ACK
- * precedes activation where the selected native/hosted binding supports it. */
-export interface SystemAgentExecutionReceiptSink {
-  prepared(receipt: SystemAgentExecutionReceipt): Promise<void>
-  started(receipt: SystemAgentExecutionReceipt): Promise<void>
-}
-
 export interface PreparedSystemAgentRunResult {
   status: SystemAgentRunStatus
   exitCode: number | null
@@ -65,11 +45,6 @@ export interface PreparedSystemAgentRunResult {
   retainedRef: string
   /** True when the scratch dir was deliberately kept (failure diagnosis / GC). */
   scratchRetained: boolean
-  /** Present for an unknown original execution; its status remains unreaped. */
-  executionRecovery?: SystemAgentExecutionRecovery
-  executionReceipt?: SystemAgentExecutionReceipt
-  /** The gated original helper retired without activating the target runtime. */
-  executionNotActivated?: boolean
   /** Metadata-only stdout evidence; never contains assistant text. */
   outputEvidence: SystemAgentOutputEvidence
   /**
@@ -87,8 +62,6 @@ export interface PreparedSystemAgentRunResult {
 
 /** The business policy remains independent of material locations and targets. */
 export interface SystemAgentRunPolicy {
-  /** Selected owner checks actual authority immediately before a new submit. */
-  readonly admitExecution?: () => boolean
   readonly feature: string
   readonly abortSignal?: AbortSignal
   readonly eventSink?: SystemAgentEventSinkV1
@@ -97,7 +70,6 @@ export interface SystemAgentRunPolicy {
   readonly observationDemand?: SystemAgentObservationDemand
   readonly runtimeObservationIdentity?: RuntimeObservationIdentity
   readonly resumeSessionId?: string
-  readonly executionReceipts?: SystemAgentExecutionReceiptSink
 }
 
 export interface PreparedSystemAgentRunOptions extends SystemAgentRunPolicy {

@@ -3,8 +3,6 @@ import type { SystemAgentRunFamily } from '@/modules/task-execution/public/parti
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { createMemoryDistillQueries } from './application/distillQueries'
-import { recoverOriginalMemoryExecution } from './application/distill/recoverExecution'
-import type { MemoryDistillExecutionRecord } from './application/ports/distillExecutionJournal'
 import type { MemoryDistillReadStore } from './application/ports/distillReadStore'
 import type { MemoryInjectionReadStore } from './application/ports/injectionReadStore'
 import type { MemoryResourceScopeAccessParticipant } from './application/ports/resourceScopeAccess'
@@ -26,10 +24,6 @@ import {
 
 // RFC-352 T7：bootstrap 只经 composition 取 memory 的东西，不深入 application。
 export { setMemoryDistillPolicyProvider } from './application/distill/schedule'
-import { IndeterminateRuntimeProcessError } from './application/distill/memoryDistiller'
-export { IndeterminateRuntimeProcessError }
-import { MemoryDistillSettlementPendingError } from './application/distill/settlement'
-export { MemoryDistillSettlementPendingError }
 import { DrizzleMemoryDistillReadStore } from './infrastructure/memoryDistillReadStore'
 import { DrizzleMemoryDistillWorkStore } from './infrastructure/memoryDistillWorkStore'
 import { DrizzleMemoryInjectionReadStore } from './infrastructure/memoryInjectionReadStore'
@@ -80,63 +74,6 @@ function composeMemoryOperations(input: {
   readonly catalog?: MemoryCatalogOperations
 }): MemoryOperations {
   const distillQueries = createMemoryDistillQueries(input.readStore)
-  const originalExecutions = new Map<
-    string,
-    IndeterminateRuntimeProcessError | MemoryDistillSettlementPendingError
-  >()
-  const continuations = new Map<string, readonly MemoryDistillExecutionRecord[]>()
-  let activeSelectedTicks = 0
-  const journal = input.workStore.executionJournal
-  const loadOpen = journal.listOpen.bind(journal),
-    loadHistory = journal.findByJob.bind(journal)
-  const originalRecords = async (jobId: string, attemptIndex: number) =>
-    (await loadHistory(jobId)).filter((row) => row.attemptIndex === attemptIndex)
-  const recoverPersisted = async (
-    records: readonly MemoryDistillExecutionRecord[],
-    explicit: boolean,
-  ) => {
-    const result = await recoverOriginalMemoryExecution({
-      store: input.workStore,
-      systemAgents: input.systemAgents,
-      records,
-      now: Date.now,
-      allowPhysicalRecovery: explicit,
-    })
-    if (result.kind === 'continuation') continuations.set(result.records[0]!.jobId, result.records)
-    else if (result.kind === 'settled' && records[0]) continuations.delete(records[0].jobId)
-    return result
-  }
-  const retainDurableRecovery = (records: readonly MemoryDistillExecutionRecord[]) => {
-    const head = records[0]!
-    const recover = async (explicit: boolean) =>
-      recoverPersisted(await originalRecords(head.jobId, head.attemptIndex), explicit)
-    const error = new IndeterminateRuntimeProcessError(
-      'original durable distillation still requires recovery',
-      async () => (await recover(true)).kind !== 'unproven',
-    )
-    error.retainOriginalSettlement(
-      head.original.map((row) => row.id),
-      async () => {
-        if ((await recover(false)).kind === 'unproven')
-          throw new Error('memory-distill-original-durable-recovery-unproven')
-      },
-    )
-    for (const id of error.originalJobIds) originalExecutions.set(id, error)
-    return error
-  }
-  const retainOriginalFailure = (error: unknown) => {
-    if (
-      error instanceof IndeterminateRuntimeProcessError ||
-      error instanceof MemoryDistillSettlementPendingError
-    )
-      for (const id of error.originalJobIds) originalExecutions.set(id, error)
-  }
-  const unacknowledgedExecution = () =>
-    [...new Set(originalExecutions.values())].find((original) =>
-      original instanceof IndeterminateRuntimeProcessError
-        ? !original.originalRecoveryAcknowledged()
-        : !original.originalSettlementAcknowledged(),
-    )
   return Object.freeze({
     distillQueries,
     injectionQueries: input.injectionQueries,
@@ -146,70 +83,17 @@ function composeMemoryOperations(input: {
         await enqueueDistillJob(input.workStore, command),
       retryFailed: async (jobId: string) => await retryFailedJob(input.workStore, jobId),
       cancelPending: async (jobId: string) => await cancelPendingJob(input.workStore, jobId),
-      async recoverIssued(jobId: string) {
-        const original = originalExecutions.get(jobId)
-        if (original === undefined) {
-          // The running original owner still receives this execution's result.
-          // A cold recovery command must not steal a normally active attempt.
-          if (activeSelectedTicks > 0) return false
-          const open = await loadOpen()
-          const selected = open.find((row) => row.original.some((subject) => subject.id === jobId))
-          const history = selected
-            ? await originalRecords(selected.jobId, selected.attemptIndex)
-            : await loadHistory(jobId)
-          if (history.length === 0) return false
-          const attempt = Math.max(...history.map((row) => row.attemptIndex))
-          const result = await recoverPersisted(
-            history.filter((row) => row.attemptIndex === attempt),
-            true,
-          )
-          return result.kind !== 'unproven'
-        }
-        if (original instanceof IndeterminateRuntimeProcessError)
-          return await original.recoverOriginal()
-        try {
-          await original.retryOriginalSettlement()
-        } catch (error) {
-          if (!(error instanceof IndeterminateRuntimeProcessError)) throw error
-          retainOriginalFailure(error)
-          return await error.recoverOriginal()
-        }
-        return original.originalSettlementAcknowledged()
-      },
     }),
     distillWorker: Object.freeze({
-      async tick(options: Omit<MemoryDistillWorkerOptions, 'enabled' | 'intervalMs'> = {}) {
-        const unacknowledged = unacknowledgedExecution()
-        if (unacknowledged) throw unacknowledged
-        const continuationKey = continuations.keys().next().value
-        const continuation =
-          continuationKey === undefined ? undefined : continuations.get(continuationKey)
-        if (continuation !== undefined && options.execution === undefined)
-          throw new Error('memory-distill-durable-continuation-requires-execution-authority')
-        const selected = options.execution !== undefined
-        if (selected) activeSelectedTicks += 1
-        try {
-          return await distillTick({
-            ...options,
-            ...(continuation === undefined ? {} : { restore: continuation }),
-            store: input.workStore,
-            reviewedArtifacts: input.reviewedArtifacts,
-            nodeRunPrompts: input.nodeRunPrompts,
-            runtimeResolver: input.runtimeResolver,
-            systemAgents: input.systemAgents,
-            retainOriginalFailure,
-          }).then((result) => {
-            if (continuationKey !== undefined && result.picked > 0)
-              continuations.delete(continuationKey)
-            return result
-          })
-        } catch (error) {
-          retainOriginalFailure(error)
-          throw error
-        } finally {
-          if (selected) activeSelectedTicks -= 1
-        }
-      },
+      tick: async (options: Omit<MemoryDistillWorkerOptions, 'enabled' | 'intervalMs'> = {}) =>
+        await distillTick({
+          ...options,
+          store: input.workStore,
+          reviewedArtifacts: input.reviewedArtifacts,
+          nodeRunPrompts: input.nodeRunPrompts,
+          runtimeResolver: input.runtimeResolver,
+          systemAgents: input.systemAgents,
+        }),
       start: (options: MemoryDistillWorkerOptions = {}) =>
         startMemoryDistillLoop({
           ...options,
@@ -219,25 +103,7 @@ function composeMemoryOperations(input: {
           runtimeResolver: input.runtimeResolver,
           systemAgents: input.systemAgents,
         }),
-      async recoverRunning() {
-        const unacknowledged = unacknowledgedExecution()
-        if (unacknowledged) throw unacknowledged
-        const open = await loadOpen()
-        const groups = new Map<string, readonly MemoryDistillExecutionRecord[]>()
-        for (const row of open)
-          if (!groups.has(row.jobId + ':' + row.attemptIndex))
-            groups.set(
-              row.jobId + ':' + row.attemptIndex,
-              await originalRecords(row.jobId, row.attemptIndex),
-            )
-        for (const records of groups.values())
-          if ((await recoverPersisted(records, false)).kind === 'unproven')
-            throw retainDurableRecovery(records)
-        const preserved = [...continuations.values()].flatMap((records) =>
-          records[0]!.original.map((row) => row.id),
-        )
-        return await recoverRunning(input.workStore, preserved)
-      },
+      recoverRunning: async () => await recoverRunning(input.workStore),
       listJobs: async (filter = {}) => await distillQueries.listJobs(filter),
     }),
   })

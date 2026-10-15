@@ -139,7 +139,6 @@ export function distillTick(options: NativeTickOptions): ReturnType<typeof selec
       'sourceContextBudget',
       'timeoutMs',
       'now',
-      'execution',
     ]),
   )
 }

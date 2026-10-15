@@ -12,7 +12,6 @@ export function mountRuntimeRoutes(app: Hono, deps: RuntimeRouteDependencies): v
     {
       method: 'GET',
       path: '/api/runtime/models',
-      executionGroup: 'diagnostics',
       permissions: ['runtime:read'],
       tokenAccess: 'allow',
       summary: 'List models the selected runtime offers',

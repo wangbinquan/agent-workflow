@@ -42,11 +42,12 @@ export function fullAccessActorResponse(): Response {
 /** Seed the exact token-scoped query consumed by usePermission/useActor. */
 export function seedFullAccessActor(client: QueryClient, token = 'tok'): void {
   client.setQueryData(['auth', 'me', token], fullAccessActorPayload())
-  // These existing authenticated fixtures represent the standalone server.
-  // Hosting-specific cases seed/serve their own explicit selected status.
+  // These authenticated fixtures represent the standalone server. Hosted
+  // cases provide their own execution status.
   client.setQueryData(['execution', 'status', getAuthSessionRevision()], {
-    mode: 'native',
-    status: null,
+    mode: 'standalone',
+    state: 'active',
+    reason: null,
   })
 }
 
@@ -56,14 +57,14 @@ function isAuthMeRequest(input: RequestInfo | URL, init?: RequestInit): boolean 
   return method === 'GET' && new URL(url, 'http://daemon.test').pathname === '/api/auth/me'
 }
 
-function isStandaloneHostStatusRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
+function isExecutionStatusRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
   const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
   return method === 'GET' && new URL(url, 'http://daemon.test').pathname === '/api/execution/status'
 }
 
-function standaloneHostStatusResponse(): Response {
-  return new Response(JSON.stringify({ mode: 'native', status: null }), {
+function standaloneExecutionStatusResponse(): Response {
+  return new Response(JSON.stringify({ mode: 'standalone', state: 'active', reason: null }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
@@ -75,7 +76,7 @@ export function withFullAccessActorFetch(
 ): typeof fetch {
   return async (input, init) => {
     if (isAuthMeRequest(input, init)) return fullAccessActorResponse()
-    if (isStandaloneHostStatusRequest(input, init)) return standaloneHostStatusResponse()
+    if (isExecutionStatusRequest(input, init)) return standaloneExecutionStatusResponse()
     return await handler(input, init)
   }
 }
@@ -89,7 +90,7 @@ function requestDescription(input: RequestInfo | URL, init?: RequestInit): strin
 export const unexpectedNetworkFetch: typeof fetch = async (input, init) => {
   const request = requestDescription(input, init)
   if (isAuthMeRequest(input, init)) return fullAccessActorResponse()
-  if (isStandaloneHostStatusRequest(input, init)) return standaloneHostStatusResponse()
+  if (isExecutionStatusRequest(input, init)) return standaloneExecutionStatusResponse()
   unexpectedRequests.push(request)
   throw new Error(
     `Unexpected network request in Vitest: ${request}. Mock globalThis.fetch in this test.`,

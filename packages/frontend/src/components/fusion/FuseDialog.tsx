@@ -10,7 +10,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import type { Fusion, MemorySummary, Skill } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -41,7 +41,7 @@ export function FuseDialog({
   entry: FuseDialogEntry
 }) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('knowledge')
+  const execution = useExecutionAvailability('knowledge')
   const navigate = useNavigate()
 
   const [skillId, setSkillId] = useState(entry.kind === 'from-skill' ? entry.skillId : '')

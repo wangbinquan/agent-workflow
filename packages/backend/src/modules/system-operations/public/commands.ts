@@ -1,5 +1,4 @@
 import type { Config } from '@agent-workflow/shared'
-
 import type {
   ActivateLocalRestoreInput,
   CancelStagedRestoreResult,
@@ -16,11 +15,6 @@ import type {
   StartDatabaseMigrationInput,
 } from './types'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
-
-/** Retry this host's activation after original owner recovery has settled. */
-export interface HostExecutionRecoveryCommands {
-  retryActivation(): Promise<void>
-}
 
 export interface RequestBackupCommand {
   execute(

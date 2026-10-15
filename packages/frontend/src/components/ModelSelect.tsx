@@ -25,7 +25,7 @@ import { TextInput } from '@/components/Form'
 import { Select, type SelectOption } from '@/components/Select'
 import { resolveApiError } from '@/i18n/errors'
 import { NoticeBanner } from '@/components/NoticeBanner'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 export const RUNTIME_MODELS_QUERY_KEY = ['runtime', 'models'] as const
 /**
@@ -66,7 +66,7 @@ interface Props {
 
 export function ModelSelect({ value, onChange, runtime = 'opencode', runtimeName }: Props) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('diagnostics')
+  const execution = useExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const isClaude = runtime === 'claude'
   // RFC-114: a named runtime wins; else the protocol namespace; else default.

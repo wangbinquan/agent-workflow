@@ -318,11 +318,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     })
     const requests: SystemAgentRunRequest[] = []
     const selected = Object.freeze<SystemAgentRunFamily>({
-      recovery: {
-        recoverReference: async () => {
-          throw new Error('Narrative known results must not recover an execution')
-        },
-      },
       workspaces: {
         capture(scope) {
           return Object.freeze({ ...scope })
@@ -350,9 +345,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
         return { ...response, retainedRef: 'remote-narrative-result:17' }
       },
       retainedContents: {
-        inspect() {
-          throw new Error('Narrative does not inspect completed scratch')
-        },
         forget() {
           throw new Error('Narrative does not separately forget completed scratch')
         },
@@ -560,7 +552,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
         | Parameters<typeof native.family.retainedContents.release>[0]['scope']
         | undefined
       const retainedContents: SystemAgentRunFamily['retainedContents'] = {
-        inspect: native.family.retainedContents.inspect.bind(native.family.retainedContents),
         release() {
           throw new Error('Narrative must keep its original core-only physical cleanup')
         },
@@ -573,7 +564,6 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
         },
       }
       const selected: SystemAgentRunFamily = {
-        recovery: native.family.recovery,
         workspaces: native.family.workspaces,
         retainedContents,
         async run(request) {

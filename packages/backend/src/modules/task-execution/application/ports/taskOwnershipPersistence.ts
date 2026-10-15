@@ -7,7 +7,6 @@ import type {
   VerifiedTakeoverProof,
   WorkerIdentity,
 } from '../../domain/ownership'
-import type { TaskHostAdmissionAttempt } from '../taskHostAdmission'
 
 /** Provider-neutral, Promise-shaped ownership/CAS/lease boundary. Atomic
  * mutations are named; no database or generic transaction scope escapes. */
@@ -17,7 +16,6 @@ export interface TaskOwnershipPersistence {
     readonly identity: WorkerIdentity
     readonly now: number
     readonly leaseMs: number
-    readonly hostAdmission?: TaskHostAdmissionAttempt
   }): Promise<OwnershipToken>
   heartbeat(input: {
     readonly token: OwnershipToken

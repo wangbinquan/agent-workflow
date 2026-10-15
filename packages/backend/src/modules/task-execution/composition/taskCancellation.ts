@@ -17,7 +17,6 @@ import { createLogger } from '@/util/log'
 import { cancelTaskProjection } from '../infrastructure/childTaskLifecycleParticipant'
 import { taskExecutionModule } from '../public/participants'
 import { createTaskExecutionPersistence } from './taskExecutionPersistence'
-import { captureTaskDriveBinding, type TaskDriveBinding } from './taskDriveBinding'
 
 const log = createLogger('task')
 
@@ -29,15 +28,11 @@ export interface TaskCancellation {
   cancel(taskId: string, cause?: TaskCancelCause): Promise<void>
 }
 
-export function composeTaskCancellation(
-  db: ProviderNeutralDatabase,
-  driveBinding?: TaskDriveBinding,
-): TaskCancellation {
-  const binding = captureTaskDriveBinding(driveBinding)
+export function composeTaskCancellation(db: ProviderNeutralDatabase): TaskCancellation {
   const dependencies = {
     db,
-    persistence: binding?.persistence ?? createTaskExecutionPersistence(db),
-    stop: binding?.executionModule.runtimeRegistry ?? taskExecutionModule.runtimeRegistry,
+    persistence: createTaskExecutionPersistence(db),
+    stop: taskExecutionModule.runtimeRegistry,
     log,
   }
   return Object.freeze({

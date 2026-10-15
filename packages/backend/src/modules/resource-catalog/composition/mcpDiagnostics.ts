@@ -6,8 +6,6 @@ import { createMcpDiagnosticsOperations } from '../application/mcps/diagnosticsO
 import type { McpOperationCoordinatorPort } from '../application/mcps/ports'
 import { createMcpDiagnosticsContexts } from '../infrastructure/mcpDiagnosticsContexts'
 import type { McpRuntimeTestReconciliationParticipant } from '../public/participants'
-import type { McpDiagnosticsStoredQueries } from '../application/mcps/runtimeDiagnosticsQueries'
-export type { McpDiagnosticsExecutionLifecycle } from '../application/mcps/runtimeDiagnosticsExecution'
 
 export type McpDiagnosticsApplicationInput = McpDiagnosticsDependencies
 
@@ -16,17 +14,9 @@ export function createMcpDiagnosticsApplication(input: McpDiagnosticsApplication
   return new McpDiagnosticsApplication(input)
 }
 
-/** Select all three stored queries from the same cold application instance. */
-export function selectMcpDiagnosticsStoredQueries(
-  application: McpDiagnosticsApplication,
-): McpDiagnosticsStoredQueries {
-  return application.storedQueries
-}
-
 export interface McpDiagnosticsCompositionInput extends McpDiagnosticsApplicationInput {
   readonly requestBinding: Parameters<typeof createMcpDiagnosticsContexts>[0]
   readonly coordinator: McpOperationCoordinatorPort
-  readonly queryMode?: 'native' | 'stored'
 }
 export type McpDiagnosticsRuntime = ReturnType<typeof composeMcpDiagnostics>
 
@@ -37,31 +27,11 @@ export function composeMcpDiagnostics(input: McpDiagnosticsCompositionInput) {
 /** The ordinary and explicit native roots share the same complete runtime graph. */
 export function bindMcpDiagnosticsRuntime(
   application: McpDiagnosticsApplication,
-  input: Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator' | 'queryMode'>,
+  input: Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator'>,
 ) {
-  if (
-    input.queryMode !== undefined &&
-    input.queryMode !== 'native' &&
-    input.queryMode !== 'stored'
-  ) {
-    throw new Error('mcp-diagnostics-query-mode-invalid')
-  }
-  if (application.executionLifecycle !== undefined && input.queryMode === 'native') {
-    throw new Error('mcp-diagnostics-host-requires-stored-queries')
-  }
   const contexts = createMcpDiagnosticsContexts(input.requestBinding)
   const operations = createMcpDiagnosticsOperations({
-    application:
-      input.queryMode === 'stored' || application.executionLifecycle !== undefined
-        ? Object.freeze({
-            create: application.create.bind(application),
-            message: application.message.bind(application),
-            cancel: application.cancel.bind(application),
-            end: application.end.bind(application),
-            recover: application.recover.bind(application),
-            ...selectMcpDiagnosticsStoredQueries(application),
-          })
-        : application,
+    application,
     contexts: contexts.resolver,
     coordinator: input.coordinator,
   })
@@ -73,9 +43,6 @@ export function bindMcpDiagnosticsRuntime(
     queries: operations.queries,
     contexts: Object.freeze({ command: contexts.command, query: contexts.query }),
     reconciliation,
-    ...(application.executionLifecycle === undefined
-      ? {}
-      : { execution: application.executionLifecycle }),
     prepareMcpDelete: (id: string) => application.prepareMcpDelete(id),
     reconcileDurableIntents: reconciliation.reconcileDurableIntents,
     start: () => application.start(),

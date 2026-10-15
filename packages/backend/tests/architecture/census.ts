@@ -74,11 +74,6 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 /** 只有 bootstrap 可以指向模块的 `composition` 入口（RFC-294 §G1）。 */
 export const BOOTSTRAP_FILES = [
   'packages/backend/src/main.ts',
-  // RFC-370: these are actual root assembly, never business consumers.
-  'packages/backend/src/cli/daemonHostExecutionBootstrap.ts',
-  'packages/backend/src/cli/daemonHostExecutionOwners.ts',
-  'packages/backend/src/cli/daemonHostExecutionRecovery.ts',
-  'packages/backend/src/cli/embeddedHostExecutionApplication.ts',
   // Development reload assembles the same daemon host and retains its lifetime.
   'packages/backend/src/cli/dev.ts',
   'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',

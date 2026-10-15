@@ -116,7 +116,6 @@ export type {
   TaskSourceTerminationReceipt,
 } from '../application/applySourceTerminationEffect'
 export type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
-export { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'
 /** Required runtime participants; production construction has no fallback. */
 export interface SchedulerRuntimeTopology {
   readonly schedulerDriver: SchedulerDriverPort
@@ -192,16 +191,12 @@ export type {
   VisibleTaskIdsInput,
 } from '../application/ports/taskAuthorization'
 
-export type { TaskRecoveryOperations } from '../application/ports/taskRecoveryOperations'
 export type {
-  TaskResourceRecoveryGrant,
   TaskBootOrphanOperations,
   TaskPeriodicRecoveryOperations,
-  TaskRuntimeSessionLeaseRepairOperations,
-  TaskBootRecoveryWrites,
-  TaskRecoveryWritePurposes,
-  TaskRecoveryWriteSelection,
-} from '../application/ports/taskRecoveryWritePurposes'
+  TaskRecoveryOperations,
+} from '../application/ports/taskRecoveryOperations'
+export type { TaskRuntimeSessionLeaseRepairOperations } from '../application/ports/runtimeSessionLeaseOperations'
 
 export interface TaskDecisionParticipantInTx {
   acceptGateDecisionTx(input: AcceptHumanGateDecisionInput): AcceptedHumanGateDecision
@@ -386,18 +381,7 @@ export type {
   SystemAgentRunFamily,
   SystemAgentRunRequest,
 } from '../application/ports/systemAgentRunFamily'
-export type {
-  PreparedSystemAgentRunResult,
-  SystemAgentExecutionRecovery,
-  SystemAgentExecutionReceipt,
-  SystemAgentExecutionReceiptSink,
-} from '../application/ports/systemAgentRun'
-export type {
-  ExecutionEffectPort,
-  ExecutionRecoveryPort,
-  ExecutionRecoveryReferencePort,
-  ExecutionRecoveryResult,
-} from '../application/ports/executionEffect'
+export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
 export type { SystemAgentObservationRun } from '../application/ports/systemAgentObservation'
 export { classifyMissingEnvelope } from '../application/systemAgentRun'
 export type {

@@ -4,8 +4,6 @@ import type { Logger } from '@/util/log'
 export interface ExecutionStartReceipt {
   readonly executionRef: string
   readonly startedAt: number
-  /** Opaque durable original identity; interpreted only by its selected owner. */
-  readonly recoveryRef?: string
 }
 
 export type ExecutionOutcome =
@@ -54,25 +52,8 @@ export interface ExecutionEffectResult {
   readonly pumpError?: string
 }
 
-export interface ExecutionRecoveryResult {
-  readonly executionRef: string
-  /** Acknowledges physical retirement only; never a business success/exit code. */
-  readonly state: 'reaped' | 'unknown'
-}
-
-/** Recover only the selected original attempt. Missing facts remain unknown. */
-export interface ExecutionRecoveryPort {
-  recoverOriginal(input: { readonly executionRef: string }): Promise<ExecutionRecoveryResult>
-}
-
-/** Rebuild recovery from the original durable receipt without a new binding/submit. */
-export interface ExecutionRecoveryReferencePort {
-  recoverReference(input: {
-    readonly executionRef: string
-    readonly recoveryRef: string
-  }): Promise<ExecutionRecoveryResult>
-}
-
-export interface ExecutionEffectPort extends ExecutionRecoveryPort {
+/** Current real callers consume submit. Recovery/event transport and message
+ * capabilities acquire their own consumers in the remaining A-T5/A-T6 work. */
+export interface ExecutionEffectPort {
   submit(request: ExecutionEffectRequest): Promise<ExecutionEffectResult>
 }

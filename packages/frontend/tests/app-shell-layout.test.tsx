@@ -5,11 +5,14 @@ import { useEffect, type AnchorHTMLAttributes, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
-// This suite exercises the original standalone shell/auth branches. Selected
-// host loading/error/recovery is covered by the RFC-370 provider tests.
-vi.mock('../src/hooks/useHostExecutionStatus', async (importOriginal) => ({
+// This suite exercises the standalone shell/auth branches. The hosted standby
+// banner and gating are covered by rfc370-v2-execution-availability.
+vi.mock('../src/hooks/useExecutionStatus', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useHostExecutionStatus: () => ({ data: { mode: 'native', status: null }, isError: false }),
+  useExecutionStatus: () => ({
+    data: { mode: 'standalone', state: 'active', reason: null },
+    isError: false,
+  }),
 }))
 
 interface MockLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {

@@ -112,7 +112,7 @@ describe('RFC-364 production bindings', () => {
       source,
       (node) => ts.isCallExpression(node) && compact(node.expression, source) === 'registerRoute',
     ).filter((node) => node.getText(source).includes("path: '/api/mcps/:id/runtime-test"))
-    expect(calls).toHaveLength(8)
+    expect(calls).toHaveLength(7)
     for (const call of calls) {
       expect(call.getText(source)).not.toContain('runExclusive')
       expect(call.getText(source)).not.toContain('loadVisibleMcp')

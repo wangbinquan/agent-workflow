@@ -23,7 +23,6 @@ class ChannelEnvironment {
     }
     this.#onControl = (event) => {
       if (event.data?.type === 'drain') this.#post('drain-received')
-      if (event.data?.type === 'wake') this.#post('wake-received')
     }
     globalThis.addEventListener('message', this.#onControl)
     this.pluginGenerationGc = Object.freeze({

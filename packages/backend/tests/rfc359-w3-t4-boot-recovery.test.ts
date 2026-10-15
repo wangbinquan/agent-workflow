@@ -289,12 +289,12 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
 test('源码锁：两个 daemon 入口都在 HTTP 之前跑同一段 boot 恢复，且在 delete 认领续做之前', () => {
   const cli = resolve(import.meta.dir, '..', 'src', 'cli')
   const start = readFileSync(resolve(cli, 'start.ts'), 'utf8')
-  expect(start).toContain('await runTaskExecutionBootRecovery(bootRecovery)')
+  expect(start).toContain('await runTaskExecutionBootRecovery({')
   expect(start).not.toContain('createExclusiveDaemonLockProof(')
   expect(start).toMatch(
     /await recoverInterruptedTaskDeletes\(\s*db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
   )
-  expect(start.indexOf('await runTaskExecutionBootRecovery(bootRecovery)')).toBeLessThan(
+  expect(start.indexOf('await runTaskExecutionBootRecovery({')).toBeLessThan(
     start.indexOf('await recoverInterruptedTaskDeletes('),
   )
   const daemon = readFileSync(resolve(cli, 'postgresqlDaemonApplication.ts'), 'utf8')
@@ -302,7 +302,7 @@ test('源码锁：两个 daemon 入口都在 HTTP 之前跑同一段 boot 恢复
     /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
   )
   const gate = daemon.indexOf('skillCatalogBoot.activateAvailabilityGate()')
-  const recovery = daemon.indexOf('await runTaskExecutionBootRecovery(bootRecovery)', gate)
+  const recovery = daemon.indexOf('await runTaskExecutionBootRecovery({', gate)
   const deleteRecovery = daemon.indexOf('await recoverInterruptedTaskDeletes(', recovery)
   const httpCreate = daemon.indexOf('const app = createComposedApp', deleteRecovery)
   expect(gate).toBeGreaterThan(-1)

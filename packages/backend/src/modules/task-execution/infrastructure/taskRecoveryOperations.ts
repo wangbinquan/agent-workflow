@@ -49,7 +49,6 @@ import type {
 } from '../application/ports/taskRecoveryOperations'
 import { hasUndispatchedDesignerRecoveryEvidence } from '../application/ports/taskRecoveryOperations'
 import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinuation'
-import type { TaskResourceRecoveryWrite } from './taskResourceRecoveryWrite'
 
 const CLARIFY_RERUN_CAUSES = ['clarify-answer', 'cross-clarify-questioner-rerun'] as const
 const LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE = 400
@@ -547,19 +546,9 @@ export type TaskRecoveryMutationOperations = Pick<
 export function createTaskRecoveryOperations(
   db: ProviderNeutralDatabase,
   mutations: TaskRecoveryMutationOperations,
-  eventWrite?: TaskResourceRecoveryWrite,
 ): TaskRecoveryOperations {
   const operations: TaskRecoveryOperations = {
     async recordEvent(input: RecordTaskRecoveryEventInput): Promise<void> {
-      if (eventWrite !== undefined) {
-        return await eventWrite.write({
-          db,
-          selection: eventWrite.selection,
-          body: async (tx) => {
-            await tx.insert(recoveryEvents).values(input).run()
-          },
-        })
-      }
       await db.insert(recoveryEvents).values(input).run()
     },
 

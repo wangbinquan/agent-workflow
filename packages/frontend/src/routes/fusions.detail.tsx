@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { type Fusion, type Memory } from '@agent-workflow/shared'
 import { api, type ApiError } from '@/api/client'
 import { ConfirmButton } from '@/components/ConfirmButton'
@@ -32,7 +32,7 @@ const ACTIVE = new Set(['running', 'applying'])
 
 function FusionDetailPage() {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('knowledge')
+  const execution = useExecutionAvailability('knowledge')
   const { id } = Route.useParams()
   const qc = useQueryClient()
   const [rejectOpen, setRejectOpen] = useState(false)

@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
@@ -181,7 +181,7 @@ interface ManifestFile {
 
 function MissionDetailPage(): ReactElement {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('development')
+  const execution = useExecutionAvailability('development')
   const { missionId } = Route.useParams()
   const qc = useQueryClient()
   const canInteract = usePermission('development-missions:interact')
@@ -743,7 +743,7 @@ function AnswersSection(props: {
   onSubmitted: () => void
 }): ReactElement {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('development')
+  const execution = useExecutionAvailability('development')
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const submit = useMutation({
     mutationFn: () => {

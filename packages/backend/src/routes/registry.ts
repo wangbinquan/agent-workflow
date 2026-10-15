@@ -36,11 +36,11 @@ import type { Handler, Hono, MiddlewareHandler } from 'hono'
 import type { BlankEnv } from 'hono/types'
 import {
   ROUTE_BACKED_POINTS,
-  HostExecutionGroupSchema,
-  type HostExecutionGroup,
+  ExecutionGroupSchema,
+  type ExecutionGroup,
   type Permission,
 } from '@agent-workflow/shared'
-import { runHttpHostExecutionRequest } from '@/platform/http/hostExecutionAvailability'
+import { assertExecutionAvailable } from '@/platform/http/executionAvailability'
 import { tryActorOf } from '@/auth/actor'
 import {
   registerHttpOperationProjection,
@@ -81,9 +81,10 @@ export interface RouteMeta<P extends string = string> {
   readonly method: HttpMethod
   /** Hono path template, byte-identical to the string passed at registration. */
   readonly path: P
-  /** New execution requires this actual root group; resource editing and
-   * original receipt intake/cancellation deliberately have no group gate. */
-  readonly executionGroup?: HostExecutionGroup
+  /** RFC-370 v2 H7: a route that starts execution names its group and is
+   * refused (503) while this instance is not active. Resource reads, edits and
+   * cancellations have no group and keep working on a standby instance. */
+  readonly executionGroup?: ExecutionGroup
   /**
    * Points required to pass. The array is an **AND** — every entry must be held.
    *
@@ -147,7 +148,7 @@ function sameMeta(a: RouteMeta, b: RouteMeta): boolean {
 function validate(meta: RouteMeta): void {
   if (
     meta.executionGroup !== undefined &&
-    !HostExecutionGroupSchema.safeParse(meta.executionGroup).success
+    !ExecutionGroupSchema.safeParse(meta.executionGroup).success
   )
     throw new RouteMetaError(`${key(meta.method, meta.path)}: unknown execution group`)
   if (meta.permissions.length === 0 && meta.publicReason === undefined) {
@@ -270,7 +271,10 @@ export function registerRoute<P extends string>(
   const operation = registerHttpOperationProjection(meta)
   const authorize = routeMetaGate(meta)
   const gate: MiddlewareHandler = (c, next) =>
-    authorize(c, () => runHttpHostExecutionRequest(app, meta.executionGroup, next))
+    authorize(c, async () => {
+      assertExecutionAvailable(app, meta.executionGroup)
+      await next()
+    })
   registerBoundOperationHandler({
     app,
     operationId: operation.operationId,

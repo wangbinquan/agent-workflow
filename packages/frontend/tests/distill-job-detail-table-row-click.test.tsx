@@ -13,11 +13,11 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
-import type { MemoryDistillJob, HostExecutionStatus } from '@agent-workflow/shared'
+import type { MemoryDistillJob, ExecutionStatus } from '@agent-workflow/shared'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { MemoryDistillJobsTable } from '../src/components/memory/MemoryDistillJobsTable'
 import { meQueryOptions } from '../src/hooks/useActor'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 import '../src/i18n'
 
 function mkJob(overrides: Partial<MemoryDistillJob> = {}): MemoryDistillJob {
@@ -52,7 +52,7 @@ afterEach(() => {
 async function renderTable(
   rows: MemoryDistillJob[],
   onPathChange: (p: string) => void,
-  execution: HostExecutionStatus = { mode: 'native', status: null },
+  execution: ExecutionStatus = { mode: 'standalone', state: 'active', reason: null },
 ) {
   const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -68,10 +68,7 @@ async function renderTable(
             status: 'active',
           },
           source: 'session',
-          permissions: [
-            'memory-distill-jobs:manage',
-            ...(execution.mode === 'execution' ? ['memory:update', 'tasks:execute'] : []),
-          ],
+          permissions: ['memory-distill-jobs:manage'],
           linkedIdentities: [],
           pats: [],
         }),
@@ -95,9 +92,9 @@ async function renderTable(
     getParentRoute: () => rootRoute,
     path: '/',
     component: () => (
-      <HostExecutionReadinessContext.Provider value={execution}>
+      <ExecutionStatusContext.Provider value={execution}>
         <MemoryDistillJobsTable />
-      </HostExecutionReadinessContext.Provider>
+      </ExecutionStatusContext.Provider>
     ),
   })
   const detailRoute = createRoute({
@@ -123,53 +120,26 @@ async function renderTable(
 }
 
 describe('MemoryDistillJobsTable row interactions (RFC-043)', () => {
-  test('an unavailable host exposes original recovery without spending a retry or navigating away', async () => {
+  test('a standby hosted instance disables retry without spending it or navigating away', async () => {
     let path = '/'
     const { fetchSpy } = await renderTable(
-      [mkJob({ status: 'running', attempts: 0, startedAt: 2 })],
+      [mkJob()],
       (next) => {
         path = next
       },
-      {
-        mode: 'execution',
-        status: {
-          phase: 'draining',
-          generation: 'original',
-          readyGroups: [],
-          reason: 'host-execution-owner-failed',
-        },
-      },
+      { mode: 'crewstation', state: 'standby', reason: null },
     )
-    const recover = await screen.findByTestId('distill-job-row-job-row-1-recover')
-    fireEvent.click(recover)
-    await waitFor(() => {
-      expect(
-        fetchSpy.mock.calls.some(
-          ([input, init]) =>
-            String(input).endsWith('/api/memory-distill-jobs/job-row-1/recover') &&
-            init?.method === 'POST',
-        ),
-      ).toBe(true)
-    })
+    const retry = (await screen.findByTestId(
+      'distill-job-row-job-row-1-retry',
+    )) as HTMLButtonElement
+    expect(retry.disabled).toBe(true)
+    fireEvent.click(retry)
     expect(
       fetchSpy.mock.calls.some(
         ([input, init]) => String(input).endsWith('/retry') && init?.method === 'POST',
       ),
     ).toBe(false)
     expect(path).toBe('/')
-    await waitFor(() => {
-      expect(screen.getByRole('status').textContent).toMatch(
-        /Original execution recovery|已确认原执行/,
-      )
-    })
-  })
-
-  test('normal active distillation does not expose an original-recovery action', async () => {
-    await renderTable([mkJob({ status: 'running', attempts: 0, startedAt: 2 })], () => {}, {
-      mode: 'execution',
-      status: { phase: 'active', generation: 'original', readyGroups: ['memory'], reason: null },
-    })
-    await screen.findByTestId('distill-job-row-job-row-1')
     expect(screen.queryByTestId('distill-job-row-job-row-1-recover')).toBeNull()
   })
 

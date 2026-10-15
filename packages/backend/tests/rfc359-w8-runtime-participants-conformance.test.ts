@@ -53,8 +53,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import ts from 'typescript'
-import { inverseTaskProviderHostAssembly } from './helpers/taskProviderHostAssemblyStatementInverse'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -577,25 +575,18 @@ test('第 12 刀 · 参与者已合一：仓里只剩一份实现，两个组合
 test('第 12 刀 · 引擎差异只剩三个端口：认领策略 / 活跃度 / 停机票据', () => {
   const participants = codeOnly(read('taskExecutionRuntimeParticipants.ts'))
   const provider = codeOnly(
-    inverseTaskProviderHostAssembly(
-      ts.createSourceFile(
-        'modules/task-execution/composition/providerRuntime.ts',
-        readFileSync(
-          resolve(
-            import.meta.dir,
-            '..',
-            'src',
-            'modules',
-            'task-execution',
-            'composition',
-            'providerRuntime.ts',
-          ),
-          'utf8',
-        ),
-        ts.ScriptTarget.Latest,
-        true,
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'providerRuntime.ts',
       ),
-    ).text,
+      'utf8',
+    ),
   )
 
   // 共用实现自己不许拼认领策略，也不许读任何进程全局注册表——三格全是收进来的。

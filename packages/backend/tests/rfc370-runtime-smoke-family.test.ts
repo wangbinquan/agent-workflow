@@ -121,7 +121,6 @@ function selectedInvocation(protocol: 'opencode' | 'claude-code' = 'opencode') {
         materialRef: material.materialRef,
         workspaceRef: workspace.workspace.reference,
         effect: {
-          recoverOriginal: async ({ executionRef }) => ({ executionRef, state: 'unknown' }),
           async submit(request) {
             state.submitted = request
             calls.push('submit')

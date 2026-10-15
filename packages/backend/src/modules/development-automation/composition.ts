@@ -202,7 +202,7 @@ export interface DevelopmentAutomationModule {
   attachMr(rawInput: unknown): ReturnType<typeof attachMergeRequest>
   resume(rawInput: unknown): ReturnType<typeof resumeMission>
   /** 30s 级 sweep：到期 durable wake（fireWake CAS 认领）+ 未消费 wake hint。 */
-  sweepWakes(execution?: { readonly current: () => boolean }): Promise<{ reconciled: number }>
+  sweepWakes(): Promise<{ reconciled: number }>
   /** hourly：未 claim 上传的 TTL 回收。 */
   sweepUploads(): Promise<{ swept: number }>
   /**
@@ -439,7 +439,7 @@ function composeDevelopmentAutomationFromPersistence(
     resume: (rawInput) => resumeMission(reconcileDeps, rawInput),
     submitAnswers: (rawInput) =>
       submitMissionAnswers({ store, snapshots, requirement: materializer, ports, now }, rawInput),
-    sweepWakes: (execution) => sweepMissionWakes(reconcileDeps, persistence.wakeReaders, execution),
+    sweepWakes: () => sweepMissionWakes(reconcileDeps, persistence.wakeReaders),
     sweepUploads: async () => ({ swept: await persistence.uploads.sweepExpired(now(), 1_000) }),
     sweepRetention: () => persistence.sweepRetention(lookup, now()),
     recover: () => recoverMissions(reconcileDeps, persistence.recoveryReaders),

@@ -28,7 +28,7 @@ import {
   ErrorResponseSchema,
   McpSchema,
   MaintenanceStatusSchema,
-  HostExecutionStatusSchema,
+  ExecutionStatusSchema,
   OverviewResponseSchema,
   ScheduledTaskListItemSchema,
   SkillSchema,
@@ -493,7 +493,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/intent-sessions' },
   { method: 'GET', path: '/api/intent-sessions/:id' },
   { method: 'GET', path: '/api/intent-sessions/:id/turns/:turnId/session' },
-  { method: 'POST', path: '/api/intent-sessions/:id/turns/:turnId/recover' },
   { method: 'POST', path: '/api/intent-sessions/:id/messages' },
   { method: 'POST', path: '/api/intent-sessions/:id/answers' },
   { method: 'POST', path: '/api/intent-sessions/:id/mount-approvals' },
@@ -818,7 +817,6 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/memory-distill-jobs' },
   { method: 'GET', path: '/api/memory-distill-jobs/:id' },
   { method: 'GET', path: '/api/memory-distill-jobs/:id/session' },
-  { method: 'POST', path: '/api/memory-distill-jobs/:id/recover' },
   { method: 'POST', path: '/api/memory-distill-jobs/:id/retry' },
   { method: 'POST', path: '/api/memory-distill-jobs/:id/cancel' },
 
@@ -847,9 +845,7 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- daemon effective binding (settings:read; Network tab readout) ----
   { method: 'GET', path: '/api/daemon' },
-  { method: 'POST', path: '/api/execution/recover' },
-  { method: 'GET', path: '/api/execution/status', happy: { schema: HostExecutionStatusSchema } },
-  { method: 'POST', path: '/api/mcps/:id/runtime-test-sessions/:sessionId/recover' },
+  { method: 'GET', path: '/api/execution/status', happy: { schema: ExecutionStatusSchema } },
 
   // ---- plantuml proxy (RFC-105 WP-B; any logged-in user) ----
   // No endpoint configured in the contract harness → 200 { unconfigured: true }.

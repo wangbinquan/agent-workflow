@@ -28,25 +28,10 @@ function session(
   close?: () => void | Promise<void>,
 ): TestSession {
   let phase: DaemonProviderRuntimeSessionPhase = 'frozen'
-  let executionEnabled = true
   const result = Object.freeze<TestSession>({
     provider,
     generationId,
     state: () => ({ phase, activeHandleIds: [] }),
-    // This bootstrap fixture has no handles; the real session suite covers execution control.
-    execution: Object.freeze({
-      async pause() {
-        executionEnabled = false
-      },
-      async resume() {
-        executionEnabled = true
-      },
-      state: () => ({
-        enabled: executionEnabled,
-        running: executionEnabled && phase === 'running',
-        activeHandleIds: [],
-      }),
-    }),
     runtime: Object.freeze({
       fetch: async () => new Response(`${provider}:${generationId}`),
       tryUpgrade: async () => false as const,
@@ -77,14 +62,11 @@ describe('RFC-359 complete asynchronous daemon bootstrap', () => {
   test('production awaits complete initialization before resuming the initial session and serving', () => {
     const start = readFileSync(resolve(import.meta.dir, '..', 'src/cli/start.ts'), 'utf8')
     const composeAt = start.indexOf('await composeDaemonProviderBootstrap({')
-    const resumeAt = start.indexOf('await resumeDaemonResourcesForServing({', composeAt)
+    const resumeAt = start.indexOf('await initial.session.resume(lifecycle)', composeAt)
     const serveAt = start.indexOf('await serveDaemon({', resumeAt)
     expect(composeAt).toBeGreaterThan(-1)
     expect(resumeAt).toBeGreaterThan(composeAt)
     expect(serveAt).toBeGreaterThan(resumeAt)
-    expect(start.slice(resumeAt, serveAt)).toContain('session: initial.session,')
-    expect(start.slice(resumeAt, serveAt)).toContain('scope: lifecycle,')
-    expect(start.slice(resumeAt, serveAt)).toContain('host: initial.hostExecution,')
     const initialization = start.slice(composeAt, resumeAt)
     expect(initialization).toContain('composeInitial: (bindings) =>')
     expect(initialization).toContain('async create(lifecycleInput, bindings)')

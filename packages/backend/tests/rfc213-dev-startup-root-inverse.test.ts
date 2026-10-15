@@ -23,7 +23,6 @@ test('the approved dev startup delta restores the original self-check and prepar
   expect(original).not.toContain('developmentIntegrity')
   expect(original).not.toContain('agent-workflow-http:')
   expect(original).toContain('  const server = Bun.serve({\n    port: input.bindPort,\n')
-  expect(original).toContain('      : { hostExecutionRuntime: input.hostExecutionRuntime }),')
   expect(restore(original)).toBe(original)
   expect(inverseRfc213DevStartupRoot(parse(current, path.replaceAll('/', '\\'))).text).toBe(
     original,

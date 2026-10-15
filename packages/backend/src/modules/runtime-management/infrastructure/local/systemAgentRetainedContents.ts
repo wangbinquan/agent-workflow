@@ -1,5 +1,4 @@
 import { join } from 'node:path'
-import { lstatSync } from 'node:fs'
 import type {
   SystemAgentRetainedContents,
   SystemAgentWorkspaceScope,
@@ -13,18 +12,12 @@ import {
   bindNativeAgentMaterialWorkspace,
   releaseSystemAgentScratch,
 } from './agentMaterialWorkspace'
-import {
-  createDurableSystemRetainedReference,
-  markDurableSystemRetainedReference,
-  releaseDurableSystemRetainedReference,
-} from './systemAgentRetainedReference'
 
 /** All physical layout and retained-result interpretation stays with this owner. */
 export function createLocalSystemAgentRetainedContents(input: { appHome(): string }) {
   const parents = new WeakMap<SystemAgentWorkspaceScope, string>()
   const retained = new Map<string, { readonly root: string }>()
   const referencesByRoot = new Map<string, Set<string>>()
-  const retired = new Set<string>()
   function register(reference: string, root: string) {
     retained.set(reference, { root })
     let references = referencesByRoot.get(root)
@@ -63,49 +56,15 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
     },
   })
   const contents: SystemAgentRetainedContents = Object.freeze<SystemAgentRetainedContents>({
-    inspect(request) {
-      if (retired.has(request.retainedRef)) return { available: false }
-      const durable = releaseDurableSystemRetainedReference({
-        retainedRef: request.retainedRef,
-        expectedParent: parent(request.scope),
-        expectedName: request.scope.name ?? '',
-        namespace: request.scope.namespace,
-        inspectOnly: true,
-      })
-      if (durable !== undefined)
-        return { available: !durable.removed && durable.reason === undefined }
-      const entry = retained.get(request.retainedRef)
-      if (!entry || entry.root !== join(parent(request.scope), request.scope.name ?? ''))
-        return { available: false }
-      try {
-        const info = lstatSync(entry.root)
-        return { available: info.isDirectory() && !info.isSymbolicLink() }
-      } catch {
-        return { available: false }
-      }
-    },
     forget(request) {
       const entry = retained.get(request.retainedRef)
       if (entry === undefined) return
-      retired.add(request.retainedRef)
       retained.delete(request.retainedRef)
       const references = referencesByRoot.get(entry.root)
       references?.delete(request.retainedRef)
       if (references?.size === 0) referencesByRoot.delete(entry.root)
     },
     release(request) {
-      if (retired.has(request.retainedRef)) return { removed: false, reason: 'unsafe-path' }
-      const durable = releaseDurableSystemRetainedReference({
-        retainedRef: request.retainedRef,
-        expectedParent: parent(request.scope),
-        expectedName: request.scope.name ?? '',
-        namespace: request.scope.namespace,
-      })
-      if (durable !== undefined) {
-        const entry = retained.get(request.retainedRef)
-        if (durable.removed && entry !== undefined) discardReferences(entry.root)
-        return durable
-      }
       const entry = retained.get(request.retainedRef)
       if (entry === undefined) return { removed: false, reason: 'unsafe-path' }
       const result = releaseSystemAgentScratch({
@@ -119,7 +78,6 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
   })
   function open(request: {
     readonly scope: SystemAgentWorkspaceScope
-    readonly resumeRetainedRef?: string
     readonly feature: () => string
     readonly seedFiles: () => readonly AgentMaterialSeedFile[] | undefined
   }) {
@@ -131,15 +89,6 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
       seedFiles: request.seedFiles,
     })
     const original = selected.workspace
-    const retainedRef =
-      request.resumeRetainedRef ??
-      createDurableSystemRetainedReference({
-        reference: original.retainedRef,
-        root: selected.locations.root,
-        parent: parent(request.scope),
-        namespace: request.scope.namespace,
-      })
-    let materialSelected = request.resumeRetainedRef === undefined
     const workspace: AgentMaterialWorkspace = {
       get workspace() {
         return original.workspace
@@ -148,30 +97,12 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
         return original.runContent
       },
       get retainedRef() {
-        return retainedRef
+        return original.retainedRef
       },
       prepare() {
-        // A protocol follow-up is a new invocation in the original material
-        // generation. Never replace its durable marker before the journal ACK.
-        if (request.resumeRetainedRef !== undefined) {
-          const existing = contents.inspect({ scope: request.scope, retainedRef })
-          if (existing instanceof Promise)
-            throw new Error('local-system-content-inspection-must-be-synchronous')
-          if (!existing.available) throw new Error('system-content-resume-generation-unavailable')
-          materialSelected = true
-          return original.prepare()
-        }
-        const result = original.prepare()
-        if (result !== undefined)
-          return result.then(() => {
-            markDurableSystemRetainedReference(selected.locations.root, retainedRef)
-          })
-        markDurableSystemRetainedReference(selected.locations.root, retainedRef)
+        return original.prepare()
       },
       discard() {
-        // A failed continuation check acquired no material. The common System
-        // setup-error cleanup must leave any replacement generation intact.
-        if (!materialSelected) return
         const discarded = original.discard()
         if (discarded !== undefined)
           return discarded.then(() => {
@@ -180,7 +111,7 @@ export function createLocalSystemAgentRetainedContents(input: { appHome(): strin
         discardReferences(selected.locations.root)
       },
     }
-    register(retainedRef, selected.locations.root)
+    register(original.retainedRef, selected.locations.root)
     return { workspace, locations: selected.locations }
   }
   /** Explicit native fixture projection; ordinary callers cannot access it. */

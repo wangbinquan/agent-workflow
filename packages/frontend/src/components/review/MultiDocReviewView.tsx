@@ -40,7 +40,7 @@ import { ReviewDecisionInfo } from '@/components/review/ReviewDecisionInfo'
 import { ReviewDocPane } from '@/components/review/ReviewDocPane'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { useTaskSync } from '@/hooks/useTaskSync'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { isReviewNodeAccessRevoked } from '@/lib/review/access'
 import { multiDocHotkeyAction, nextDocIndex } from '@/lib/review/multiDocHotkeys'
@@ -73,7 +73,7 @@ export function MultiDocReviewView({
   historicalRoundKey?: string | undefined
 }) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const qc = useQueryClient()
   const navigate = useNavigate()
 

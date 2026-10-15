@@ -1698,45 +1698,6 @@ export function createMcpRuntimeTestPersistence(
       })
     },
 
-    async deferUnspawnedTurn(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
-        const session = await tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
-          .get()
-        const turn = await tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, input.turnId))
-          .get()
-        if (session === undefined || turn === undefined || turn.sessionId !== session.id)
-          return false
-        // A concurrent explicit cancel/end has already consumed this admission.
-        // Its durable business intent wins; loss must not restore it to queued.
-        if (isTerminalTurn(turn.status)) return true
-        if (session.inFlightTurnId !== turn.id) return false
-        if (turn.pid !== null || turn.spawnedAt !== null || turn.spawnBinaryPath !== null)
-          return false
-        if (turn.status === 'queued') return true
-        const deferred = await tx
-          .update(mcpRuntimeTestTurns)
-          .set({ status: 'queued', startedAt: null })
-          .where(
-            and(
-              eq(mcpRuntimeTestTurns.id, turn.id),
-              eq(mcpRuntimeTestTurns.status, 'running'),
-              isNull(mcpRuntimeTestTurns.pid),
-              isNull(mcpRuntimeTestTurns.spawnedAt),
-              isNull(mcpRuntimeTestTurns.spawnBinaryPath),
-            ),
-          )
-          .returning({ id: mcpRuntimeTestTurns.id })
-          .all()
-        return deferred.length === 1
-      })
-    },
-
     async isSpawnAllowed(input) {
       return runResourceCatalogTransaction(db, async (tx) => {
         const session = await tx

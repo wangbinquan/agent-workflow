@@ -23,8 +23,6 @@ export interface SchedulerRunRowCandidate {
 
 export interface ResolveSchedulerRunRowInput<R extends SchedulerRunRowCandidate> {
   readonly lifecycle: NodeRunLifecyclePersistence
-  /** Old pending rows settle independently of preparing their successor. */
-  readonly supersededLifecycle?: Pick<NodeRunLifecyclePersistence, 'transition'>
   readonly projections: NodeExecutionPersistence
   readonly taskId: string
   readonly nodeId: string
@@ -125,7 +123,7 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     if (!superseded.has(row.id)) continue
     if ((row.containerRunId ?? null) !== input.containerRunId) continue
     try {
-      await (input.supersededLifecycle ?? input.lifecycle).transition({
+      await input.lifecycle.transition({
         nodeRunId: row.id,
         event: { kind: 'cancel-by-supersede', reason: 'superseded-by-newer-generation' },
         extra: { finishedAt: Date.now() },

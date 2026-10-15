@@ -30,12 +30,9 @@ export interface MemoryDistillCommands {
   enqueue(input: EnqueueMemoryDistillJobInput): Promise<EnqueueMemoryDistillJobResult | null>
   retryFailed(jobId: string): Promise<boolean>
   cancelPending(jobId: string): Promise<boolean>
-  /** Recover and settle the original issued execution; never enqueue a substitute. */
-  recoverIssued(jobId: string): Promise<boolean>
 }
 
 export interface MemoryDistillWorkerOptions {
-  readonly execution?: { readonly current: () => boolean }
   readonly enabled?: boolean
   readonly intervalMs?: number
   readonly runtimeName?: string | null

@@ -90,15 +90,3 @@ export interface MrTerminalEffectPersistencePort {
     readonly now: number
   }): Promise<void>
 }
-
-/** Exact claim settlement used by the selected host lifetime, including loss. */
-export interface MrTerminalEffectAuthoritySettlementPort {
-  settleClaim(input: {
-    readonly claim: MrControlEffectClaim
-    readonly workerId: string
-    readonly status: Exclude<MrControlEffectStatus, 'leased'>
-    readonly nextAttemptAt: number
-    readonly lastError: string | null
-    readonly now: number
-  }): Promise<void>
-}

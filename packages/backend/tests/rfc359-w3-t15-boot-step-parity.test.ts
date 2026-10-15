@@ -19,7 +19,7 @@ const ORDERED_BOOT_MARKERS = [
   'cleanupOrphanedGitCredentialLeases(',
   'skillCatalogBoot.runIdentityMigrationBarrier()',
   'repairFusionProvenance(',
-  'await runTaskExecutionBootRecovery(bootRecovery)',
+  'await runTaskExecutionBootRecovery({',
   'await recoverInterruptedTaskDeletes(',
   'archive.recover({',
   'Maintenance.recover({',

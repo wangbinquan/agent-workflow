@@ -56,18 +56,7 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
  * 先造出双方都依赖的那个纯端口，再由 bootstrap 把两个实例一次性交齐。
  */
 export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
-  // RFC-370 H7: this exact construction cycle is documented in
-  // host-execution-root-assembly.md. Admission precedes the provider graph;
-  // installation captures both complete owner families together, once, before
-  // authority activation. No execution method may observe a partial family.
-  // rfc370-host-execution-bootstrap tests missing/wrong/double installation.
-  'cli/daemonHostExecutionBootstrap.ts: marker=0, prose=0, holder=1',
-  // The scanner also counts operational lifetime state (selected frames,
-  // original pause tickets and blocked original Memory starts) in this new
-  // bootstrap file. These slots retain actual work until drain; they are not
-  // substitute dependencies. Owner/embedded tests exercise restart rejection,
-  // original-ticket draining and recovery without replacing the active work.
-  'cli/daemonHostExecutionOwners.ts: marker=0, prose=0, holder=5',
+  // RFC-370 v2 P1 removed the two v1 host execution bootstrap files and their six slots.
   // RFC-213: the existing development hot-reload startup retains its original preparation across retries.
   'cli/dev.ts: marker=0, prose=0, holder=1',
   // W12：realtime policy 改为构造参数，两个根都交齐词法闭包，不再有 bind 步骤。

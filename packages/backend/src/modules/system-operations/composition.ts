@@ -38,6 +38,17 @@ export function composeDaemonHostApplication(
   return Object.freeze({ run: () => runDaemonHostApplication(input) })
 }
 
+import type { ExecutionAuthorityPort } from './application/ports/executionAuthority'
+import { executionStatusOf } from './application/executionStatus'
+import { createLocalExecutionAuthority } from './infrastructure/local/localExecutionAuthority'
+
+export { executionStatusOf }
+
+/** A standalone daemon owns its execution; a hosted root selects its platform adapter instead. */
+export function composeLocalExecutionAuthority(): ExecutionAuthorityPort {
+  return createLocalExecutionAuthority()
+}
+
 import type { DatabasePreOpenRecoveryPort } from './application/ports/databasePreOpenRecovery'
 import {
   prepareDatabasePreOpenRecovery as prepareSelectedDatabasePreOpenRecovery,

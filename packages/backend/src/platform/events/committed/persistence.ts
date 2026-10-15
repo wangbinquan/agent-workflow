@@ -54,11 +54,3 @@ export interface CommittedEventDeliveryPersistencePort {
   deliveryPage(input: CommittedEventDeliveryPageInput): Promise<CommittedEventDeliveryPage>
   health(): Promise<CommittedEventDeliveryHealth>
 }
-
-/** Settlement of a claim whose durable consumer was never called. */
-export interface CommittedEventUnissuedClaimSettlement {
-  deferUnissued(input: {
-    readonly claim: ClaimedCommittedEventDelivery
-    readonly now: number
-  }): Promise<void>
-}

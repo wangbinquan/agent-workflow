@@ -32,14 +32,6 @@ import {
 } from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from '../infrastructure/runtimeSessionLeaseOperations'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
-import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
-import { createSelectedTaskExecutionProjectionPersistence } from '../infrastructure/taskHostExecutionProjectionPersistence'
-import { createSelectedTaskNodeWritePurposes } from '../infrastructure/taskHostNodeWritePurposes'
-import { createSelectedTaskRuntimeLifecycleWritePurposes } from '../infrastructure/taskHostRuntimeLifecycleWritePurposes'
-import { createSelectedHumanGateTaskWritePurposes } from '../infrastructure/taskHostHumanGateWritePurposes'
-import { createSelectedTaskRecoveryWritePurposes } from '../infrastructure/taskHostRecoveryWritePurposes'
-import type { TaskRuntimeSessionLeaseRepairOperations } from '../application/ports/taskRecoveryWritePurposes'
-import type { TaskResourceRecoveryWrite } from '../infrastructure/taskResourceRecoveryWrite'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -58,77 +50,65 @@ import type { TaskResourceRecoveryWrite } from '../infrastructure/taskResourceRe
  * 收敛后这四个方法一个 provider 名都不问，`createTaskExecutionPersistence` 的分派三元也就
  * 没有存在理由了。
  */
-interface RecoveryAdministrationDependencies {
-  readonly nodeLifecycle?: Pick<DrizzleNodeRunLifecyclePersistence, 'transition'>
-  readonly runtimeLeaseOperations?: TaskRuntimeSessionLeaseRepairOperations
-  readonly eventWrite?: TaskResourceRecoveryWrite
-}
-
 function createRecoveryAdministration(
   db: ProviderNeutralDatabase,
   taskLifecycle: Pick<DrizzleTaskRuntimeLifecyclePersistence, 'trySet' | 'trySetWithGuard'>,
-  dependencies: RecoveryAdministrationDependencies = {},
 ) {
-  const nodeLifecycle = dependencies.nodeLifecycle ?? new DrizzleNodeRunLifecyclePersistence(db)
-  const runtimeLeaseOperations =
-    dependencies.runtimeLeaseOperations ?? createRuntimeSessionLeaseOperationsInternal(db)
-  return createTaskRecoveryOperations(
-    db,
-    {
-      async interruptBootOrphanTask(input) {
-        return await taskLifecycle.trySetWithGuard(
-          {
-            taskId: input.taskId,
-            to: 'interrupted',
-            allowedFrom: [input.from],
-            extra: {
-              finishedAt: input.now,
-              errorSummary: input.failureCode,
-              errorMessage: input.errorMessage,
-            },
-            now: input.now,
-            reason: 'reapOrphanRuns',
-          },
-          (tx) =>
-            terminalizeTaskExecutionIntentsInTx(tx, {
-              taskId: input.taskId,
-              state: 'failed',
-              failureCode: input.failureCode,
-              now: input.now,
-            }),
-        )
-      },
-      async interruptNodeRun(input) {
-        try {
-          await nodeLifecycle.transition({
-            nodeRunId: input.nodeRunId,
-            event: { kind: 'mark-interrupted' },
-            extra: {
-              finishedAt: input.now,
-              ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
-            },
-          })
-          return true
-        } catch {
-          return false
-        }
-      },
-      async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
-        return repairRuntimeSessionLeasesAfterOrphanReap(runtimeLeaseOperations, true, nodeRunId)
-      },
-      async interruptPeriodicTaskIfIdle(input) {
-        return taskLifecycle.trySet({
+  const nodeLifecycle = new DrizzleNodeRunLifecyclePersistence(db)
+  const runtimeLeaseOperations = createRuntimeSessionLeaseOperationsInternal(db)
+  return createTaskRecoveryOperations(db, {
+    async interruptBootOrphanTask(input) {
+      return await taskLifecycle.trySetWithGuard(
+        {
           taskId: input.taskId,
           to: 'interrupted',
-          allowedFrom: ['running'],
-          extra: { finishedAt: input.now, errorSummary: input.failureCode },
+          allowedFrom: [input.from],
+          extra: {
+            finishedAt: input.now,
+            errorSummary: input.failureCode,
+            errorMessage: input.errorMessage,
+          },
           now: input.now,
-          reason: 'reconcileDeadRunningRuns',
-        })
-      },
+          reason: 'reapOrphanRuns',
+        },
+        (tx) =>
+          terminalizeTaskExecutionIntentsInTx(tx, {
+            taskId: input.taskId,
+            state: 'failed',
+            failureCode: input.failureCode,
+            now: input.now,
+          }),
+      )
     },
-    dependencies.eventWrite,
-  )
+    async interruptNodeRun(input) {
+      try {
+        await nodeLifecycle.transition({
+          nodeRunId: input.nodeRunId,
+          event: { kind: 'mark-interrupted' },
+          extra: {
+            finishedAt: input.now,
+            ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
+          },
+        })
+        return true
+      } catch {
+        return false
+      }
+    },
+    async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
+      return repairRuntimeSessionLeasesAfterOrphanReap(runtimeLeaseOperations, true, nodeRunId)
+    },
+    async interruptPeriodicTaskIfIdle(input) {
+      return taskLifecycle.trySet({
+        taskId: input.taskId,
+        to: 'interrupted',
+        allowedFrom: ['running'],
+        extra: { finishedAt: input.now, errorSummary: input.failureCode },
+        now: input.now,
+        reason: 'reconcileDeadRunningRuns',
+      })
+    },
+  })
 }
 
 /**
@@ -142,9 +122,7 @@ function createRecoveryAdministration(
  * 第三个 provider 在这里什么都不用加。
  */
 export interface TaskExecutionPersistenceDependencies {
-  readonly hostWrites?: TaskHostWriteBinding
   readonly workspacePresence?: WorkspacePresenceQueries
-  /** Selected by the original owner only after all runtime entrypoints pass acceptance. */
 }
 
 export function createTaskRuntimeLifecyclePersistence(
@@ -161,29 +139,12 @@ export function createTaskExecutionPersistence(
   db: ProviderNeutralDatabase,
   dependencies: TaskExecutionPersistenceDependencies = {},
 ): TaskExecutionPersistence {
-  const effects = new DrizzleTaskExecutionEffectPersistence(db, dependencies.hostWrites)
+  const effects = new DrizzleTaskExecutionEffectPersistence(db)
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
   const humanGateLifecycle = new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)
-  const nativeProjections = {
-    drive: new DrizzleTaskEngineApplicationPersistence(db),
-    wrapperRuns: new DrizzleWrapperRunPersistence(db),
-    runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
-  }
-  const projections =
-    dependencies.hostWrites === undefined
-      ? nativeProjections
-      : createSelectedTaskExecutionProjectionPersistence({
-          db,
-          hostWrites: dependencies.hostWrites,
-          ...nativeProjections,
-        })
-  const nativeNodes = {
-    nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
-    nodeExecution: new DrizzleNodeExecutionPersistence(db),
-  }
   return Object.freeze({
-    drive: projections.drive,
-    ownership: new DrizzleTaskOwnershipPersistence(db, dependencies.hostWrites),
+    drive: new DrizzleTaskEngineApplicationPersistence(db),
+    ownership: new DrizzleTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
@@ -191,12 +152,12 @@ export function createTaskExecutionPersistence(
     gateContinuationPreDrive: new DrizzleGateContinuationPreDrivePersistence(db),
     scheduler: new DrizzleSchedulerCompletionPersistence(db),
     childBudget: new DrizzleChildTaskBudgetQueries(db),
-    nodeRuns: nativeNodes.nodeRuns,
-    nodeExecution: nativeNodes.nodeExecution,
+    nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
+    nodeExecution: new DrizzleNodeExecutionPersistence(db),
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
-    wrapperRuns: projections.wrapperRuns,
+    wrapperRuns: new DrizzleWrapperRunPersistence(db),
     runtimeLifecycle,
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
     recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
@@ -205,36 +166,7 @@ export function createTaskExecutionPersistence(
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createRecoveryAdministration(db, runtimeLifecycle),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
-    runtimeSessionCapture: projections.runtimeSessionCapture,
-    ...(dependencies.hostWrites === undefined
-      ? {}
-      : {
-          nodeWriteMode: 'host-selected' as const,
-          runtimeLifecycleWriteMode: 'host-selected' as const,
-          humanGateWriteMode: 'host-selected' as const,
-          recoveryWriteMode: 'host-selected' as const,
-          recoveryWritePurposes: createSelectedTaskRecoveryWritePurposes({
-            db,
-            hostWrites: dependencies.hostWrites,
-            runtimeLifecycle,
-            nodeLifecycle: nativeNodes.nodeRuns,
-            createAdministration: (selected) =>
-              createRecoveryAdministration(db, selected.taskLifecycle, selected),
-          }),
-          humanGateWritePurposes: createSelectedHumanGateTaskWritePurposes({
-            humanGateLifecycle,
-            hostWrites: dependencies.hostWrites,
-          }),
-          runtimeLifecycleWritePurposes: createSelectedTaskRuntimeLifecycleWritePurposes({
-            runtimeLifecycle,
-            hostWrites: dependencies.hostWrites,
-          }),
-          nodeWritePurposes: createSelectedTaskNodeWritePurposes({
-            db,
-            hostWrites: dependencies.hostWrites,
-            ...nativeNodes,
-          }),
-        }),
+    runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })
 }
 

@@ -24,16 +24,11 @@ export class McpRuntimeTestLeaseError extends Error {
 /** Provider-neutral single-writer lease participant for one MCP playground. */
 export interface McpRuntimeTestLeaseOperations {
   claimNew(input: McpRuntimeTestLeaseInput): Promise<McpRuntimeTestLeaseToken>
-  /** First-turn dispatch may revisit its own released, never-spawned claim. */
-  claimPending(input: McpRuntimeTestLeaseInput): Promise<McpRuntimeTestLeaseToken>
   preclaim(input: McpRuntimeTestLeaseInput): Promise<McpRuntimeTestLeaseToken>
   rotate(
     token: McpRuntimeTestLeaseToken,
     nextRuntimeSessionId: string,
   ): Promise<McpRuntimeTestLeaseToken>
   release(token: McpRuntimeTestLeaseToken): Promise<boolean>
-  /** Original hosted release plus proof of an already committed exact-owner
-   * release. Native release keeps its existing affected-row return value. */
-  releaseAcknowledged(token: McpRuntimeTestLeaseToken): Promise<boolean>
   repairAfterReap(testSessionId: string, turnId: string, childReaped: true): Promise<boolean>
 }

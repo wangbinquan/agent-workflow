@@ -1,4 +1,3 @@
-import { composeLocalFusionWorkspaces } from '../src/modules/system-operations/composition/localFusionWorkspace'
 // RFC-319 B29 —— 融合的结果清单必须能穿过逐节点隔离边界。
 //
 // 2026-08-24 实测缺陷（`docs/audit-backlog.md` 有完整根因链）：merger 节点和其它
@@ -139,7 +138,6 @@ async function build(): Promise<Harness> {
     deps: {
       db,
       operations: composeSqliteFusionOperations({
-        fusionWorkspaces: composeLocalFusionWorkspaces(),
         ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
         appHome,

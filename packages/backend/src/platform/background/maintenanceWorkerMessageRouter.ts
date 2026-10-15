@@ -25,11 +25,10 @@ export type MaintenanceWorkerPhase = 'idle' | 'initialising' | 'ready'
 export type MaintenanceWorkerRouterAction =
   | { readonly kind: 'initialise'; readonly request: MaintenanceWorkerInitRequest }
   | { readonly kind: 'wake' }
-  | { readonly kind: 'activate' }
   | { readonly kind: 'drain' }
   /** Mark the drain only; the in-flight initialise() owes the receipt. */
   | { readonly kind: 'defer-drain' }
-  | { readonly kind: 'ignore'; readonly reason: 'wake-before-ready' | 'activation-before-ready' }
+  | { readonly kind: 'ignore'; readonly reason: 'wake-before-ready' }
   | { readonly kind: 'fail'; readonly error: string }
 
 /** Throws only for frames the protocol schema rejects. */
@@ -52,11 +51,6 @@ export function routeMaintenanceWorkerRequest(
     // No queue is needed: initialise() polls the ledger once it is ready, and a
     // wake for a generation that never initialised is stale by definition.
     return phase === 'ready' ? { kind: 'wake' } : { kind: 'ignore', reason: 'wake-before-ready' }
-  }
-  if (request.type === 'activate') {
-    return phase === 'ready'
-      ? { kind: 'activate' }
-      : { kind: 'ignore', reason: 'activation-before-ready' }
   }
   // A drain that races init must not close the connection underneath it.
   return phase === 'initialising' ? { kind: 'defer-drain' } : { kind: 'drain' }

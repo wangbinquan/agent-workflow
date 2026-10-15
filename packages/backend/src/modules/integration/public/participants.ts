@@ -60,4 +60,3 @@ export type {
   PipelineAdapterEffects,
   ApprovalAdapterEffects,
 } from '../application/ports/developmentAdapterEffects'
-export type { MrTerminalControlRuntime } from '../application/ports/mrTerminalControlRuntime'

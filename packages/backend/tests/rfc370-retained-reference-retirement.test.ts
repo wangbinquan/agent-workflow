@@ -62,7 +62,6 @@ test('forget retires exactly one reference and preserves physical diagnostics an
     feature: () => 'intent-builder',
     seedFiles: () => [],
   })
-  await second.workspace.prepare()
   mkdirSync(first.locations.root, { recursive: true })
   const diagnostic = join(first.locations.root, 'diagnostic.txt')
   writeFileSync(diagnostic, 'original failed turn')
@@ -99,7 +98,6 @@ test('forget retires exactly one reference and preserves physical diagnostics an
     feature: () => 'intent-builder',
     seedFiles: () => [],
   })
-  await fresh.workspace.prepare()
   mkdirSync(fresh.locations.root, { recursive: true })
   owner.contents.forget({ retainedRef: first.workspace.retainedRef })
   expect(
@@ -300,7 +298,7 @@ describeEachProvider('RFC-370 terminal Intent retained-reference retirement', (h
       expect(forgotten).toEqual([reference])
       expect(reference).toStartWith('aw-system-fixture:')
       expect(methodReads).toBe(1)
-      expect(ownerReads).toBe(1)
+      expect(ownerReads).toBe(mode === 'release-failure' ? 2 : 1)
       expect(releases).toBe(mode === 'release-failure' ? 1 : 0)
       expect(warnings).toBe(mode === 'diagnostic-failure' ? 1 : 0)
       expect(readFileSync(join(directory, 'diagnostic.txt'), 'utf8')).toBe(
@@ -537,7 +535,6 @@ describeEachProvider('RFC-370 Memory retained references across a terminal chain
         | Parameters<typeof native.family.retainedContents.release>[0]['scope']
         | undefined
       const retainedContents: SystemAgentRunFamily['retainedContents'] = {
-        inspect: (request) => native.family.retainedContents.inspect(request),
         release(request) {
           expect(this).toBe(retainedContents)
           releases.push(request.retainedRef)
@@ -554,7 +551,6 @@ describeEachProvider('RFC-370 Memory retained references across a terminal chain
       }
       const family: SystemAgentRunFamily = {
         workspaces: native.family.workspaces,
-        recovery: native.family.recovery,
         retainedContents,
         async run(request) {
           selectedScope ??= request.workspaceScope
@@ -636,7 +632,6 @@ test('a rejected invocation reads its reference once and retires that exact refe
         referenceReads = 0
       const forgotten: string[] = []
       const retainedContents: SystemAgentRunFamily['retainedContents'] = {
-        inspect: (request) => owner.contents.inspect(request),
         release: (request) => owner.contents.release(request),
         forget(request) {
           expect(this).toBe(retainedContents)
@@ -646,11 +641,6 @@ test('a rejected invocation reads its reference once and retires that exact refe
       }
       const family = composeSystemAgentRunFamily({
         workspaces: owner.workspaces,
-        recovery: {
-          recoverReference: async () => {
-            throw new Error('unselected recovery')
-          },
-        },
         retainedContents,
         invocations: {
           open() {

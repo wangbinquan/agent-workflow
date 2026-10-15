@@ -3,22 +3,9 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 import { DrizzleDynamicWorkflowPersistence } from '../infrastructure/dynamicWorkflowPersistence'
-import type { TaskHostWriteBinding } from '../infrastructure/hostExecutionWriteTransaction'
-import { createSelectedDynamicWorkflowWritePurposes } from '../infrastructure/taskHostDynamicWorkflowWritePurposes'
 
 export function composeDynamicWorkflowPersistence(
   db: ProviderNeutralDatabase,
-  options: { readonly hostWrites?: TaskHostWriteBinding } = {},
 ): DynamicWorkflowPersistence {
-  const native = new DrizzleDynamicWorkflowPersistence(db)
-  if (options.hostWrites === undefined) return native
-  return Object.freeze(
-    Object.assign(native, {
-      writeMode: 'host-selected' as const,
-      writePurposes: createSelectedDynamicWorkflowWritePurposes({
-        db,
-        hostWrites: options.hostWrites,
-      }),
-    }),
-  )
+  return new DrizzleDynamicWorkflowPersistence(db)
 }

@@ -1,0 +1,77 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:6eb9dac29f4c6e0d2740931a221f51e277b1b7a5be785c5af4bf87784ce3afc3', 189, 6)"
+    },
+    "beforeDigest": "sha256:a3ad6413ebd699120055279522bba8c20c89e1537b0b94e878a846c8bf490161"
+  },
+  "digest": "sha256:aa3e63299ad6398c341f2201671ba62b177b16defd99a5cc52c4910c54349265",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "retire:memory_distill_execution_receipts",
+      "sql": "DROP TABLE \"agent_workflow\".\"memory_distill_execution_receipts\""
+    },
+    {
+      "kind": "table",
+      "logicalId": "retire:system_host_execution_write_contexts",
+      "sql": "DROP TABLE \"agent_workflow\".\"system_host_execution_write_contexts\""
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:6eb9dac29f4c6e0d2740931a221f51e277b1b7a5be785c5af4bf87784ce3afc3', active_table_count = 189, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:32c305d87968bc9cd4bf179e3f94d5cee2a92a8dc3cfa5fbfbce93f2336da22b' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:32c305d87968bc9cd4bf179e3f94d5cee2a92a8dc3cfa5fbfbce93f2336da22b",
+    "planDigest": "sha256:99c39eca34db24ea8fa68f700e98460072aefac8d054dad449f7777b312c135d"
+  },
+  "id": "0033_rfc370_v2_retire_host_execution",
+  "indexAdditions": [],
+  "logicalIndexes": [],
+  "previousEntryDigest": "sha256:82c4eac31f41d8e8c65e7f9f0fe4fbac4731624de6a2f514a50548c205d199c6",
+  "retiredTables": ["memory_distill_execution_receipts", "system_host_execution_write_contexts"],
+  "sequence": 33,
+  "sqlDigest": "sha256:02f8e901ead7de8a6bc3355a7f528b80a02d1b0eaaf461ea8077cb15c96796c5",
+  "sqlFile": "0033_rfc370_v2_retire_host_execution.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1792024118175,
+        "hash": "5d445956574cf2f7870ae173526afd7124c9a781bbdf08a0ac6980f5037c0136",
+        "index": 256,
+        "tag": "0257_rfc370_v2_retire_host_execution"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:440dbb341aee79183da2e950fc22322c6d3d8d2dce0fa53356616d108d00ab04",
+      "count": 256,
+      "last": {
+        "folderMillis": 1791988700180,
+        "hash": "f3facc92b09341c278b2b90c4b966081f30cee635e531b6f639f4f28776a4b59",
+        "index": 255,
+        "tag": "0256_rfc371_observation_v2"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:ce900e0d21aeb13c024d3153f5f54d7ef0214bca9691a75dc879b0476eeb1452",
+      "count": 257,
+      "last": {
+        "folderMillis": 1792024118175,
+        "hash": "5d445956574cf2f7870ae173526afd7124c9a781bbdf08a0ac6980f5037c0136",
+        "index": 256,
+        "tag": "0257_rfc370_v2_retire_host_execution"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:6eb9dac29f4c6e0d2740931a221f51e277b1b7a5be785c5af4bf87784ce3afc3",
+    "planDigest": "sha256:818902839dd7dc861145b8577a2aa15fd2180b02da5aa1b7946e6237be43b09e"
+  },
+  "version": 4
+}

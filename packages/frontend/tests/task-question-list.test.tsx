@@ -18,8 +18,8 @@ import { resolve } from 'node:path'
 import { useRef, useState } from 'react'
 import { api, ApiError } from '@/api/client'
 import { TaskQuestionList, type TaskQuestionEntry } from '../src/components/tasks/TaskQuestionList'
-import type { HostExecutionStatus } from '@agent-workflow/shared'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import type { ExecutionStatus } from '@agent-workflow/shared'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import '../src/i18n'
 
@@ -59,7 +59,7 @@ async function wrap(
     { id: 'designer', label: 'designer' },
     { id: 'fixer', label: 'fixer' },
   ],
-  view: HostExecutionStatus = { mode: 'native', status: null },
+  view: ExecutionStatus = { mode: 'standalone', state: 'active', reason: null },
 ) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -71,9 +71,9 @@ async function wrap(
     path: '/',
     component: () => (
       <QueryClientProvider client={qc}>
-        <HostExecutionReadinessContext.Provider value={view}>
+        <ExecutionStatusContext.Provider value={view}>
           <TaskQuestionList taskId="task-1" nodeOptions={nodeOptions} />
-        </HostExecutionReadinessContext.Provider>
+        </ExecutionStatusContext.Provider>
       </QueryClientProvider>
     ),
   })
@@ -158,15 +158,7 @@ describe('TaskQuestionList board', () => {
     await wrap(
       [entry({ id: 'preserved-question', phase: 'staged', staged: true, roleKind: 'designer' })],
       undefined,
-      {
-        mode: 'resource-only',
-        status: {
-          phase: 'standby',
-          generation: 'question-resource-mode',
-          readyGroups: [],
-          reason: 'resource-only',
-        },
-      },
+      { mode: 'crewstation', state: 'standby', reason: null },
     )
     const dispatch = screen.getByTestId('tq-batch-dispatch') as HTMLButtonElement
     expect(dispatch.disabled).toBe(true)

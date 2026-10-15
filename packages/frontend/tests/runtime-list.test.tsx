@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { RuntimeList } from '../src/components/RuntimeList'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 
 // RFC-113: rows carry the execution profile + an isDefault flag (the server sets
 // isDefault = name === config.defaultRuntime). opencode is the default here.
@@ -131,19 +131,11 @@ afterEach(() => {
 describe('RuntimeList (RFC-112 PR-D)', () => {
   test('RFC-370 resource-only mode preserves editing and explicitly saves without a runtime probe', async () => {
     wrap(
-      <HostExecutionReadinessContext.Provider
-        value={{
-          mode: 'resource-only',
-          status: {
-            phase: 'standby',
-            generation: 'runtime-resource-mode',
-            readyGroups: [],
-            reason: 'resource-only',
-          },
-        }}
+      <ExecutionStatusContext.Provider
+        value={{ mode: 'crewstation', state: 'standby', reason: null }}
       >
         <RuntimeList />
-      </HostExecutionReadinessContext.Provider>,
+      </ExecutionStatusContext.Provider>,
     )
     await screen.findByText('my-oc')
     for (const testButton of screen.getAllByRole('button', { name: /^Test$/i })) {

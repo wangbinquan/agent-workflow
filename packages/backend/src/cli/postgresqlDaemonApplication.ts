@@ -1,7 +1,5 @@
-import type { FusionWorkspaceFactory } from '@/modules/knowledge-evolution/public/participants'
-import { composeLocalFusionWorkspaces } from '@/modules/system-operations/composition/localFusionWorkspace'
-import { selectTaskRuntimeLifecycleWrites } from '@/modules/task-execution/public/participants'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
+import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { composeSystemAgentObservations } from '@/modules/task-execution/composition/systemAgentObservations'
@@ -45,6 +43,7 @@ import type {
 } from '@/modules/development-automation/composition'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
 import {
+  composeLocalExecutionAuthority,
   readDaemonStartupRecoveryAuthority,
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
@@ -99,15 +98,7 @@ import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
   type BootExecutionRecoveryFactory,
-  type TaskExecutionBootRecoveryInput,
 } from '@/modules/task-execution/composition/bootRecovery'
-import type { DaemonHostExecutionBootstrap } from './daemonHostExecutionBootstrap'
-import type { HostExecutionGrantContext } from '@/modules/system-operations/public/participants'
-import {
-  composeIntentTurnExecution,
-  configureIntentTurnExecutionRecovery,
-  type IntentTurnExecutionLifecycle,
-} from '@/modules/intent/composition/execution'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
@@ -463,7 +454,6 @@ import type {
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 
 export interface PostgresqlDaemonApplicationInput {
-  readonly hostExecution?: DaemonHostExecutionBootstrap
   readonly provider: PostgresqlProviderRuntime
   readonly db: PostgresqlDatabaseClient
   readonly config: Config & {
@@ -495,13 +485,14 @@ export interface PostgresqlDaemonApplicationInput {
   readonly verificationCommands?: VerificationCommandEffectsFactory
   readonly customObserverPrograms?: CustomObserverProgramFactory
   readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
+  /** RFC-370 v2 H7: bootstrap selects the execution authority; standalone by default. */
+  readonly executionAuthority?: ExecutionAuthorityPort
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly portArtifactContentEffects?: PortArtifactContentEffects
-  fusionWorkspaces?: FusionWorkspaceFactory
   readonly taskRunSelection?: TaskRunRootSelection
   readonly developmentPurposes?: DevelopmentPurposeSelection
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
@@ -601,8 +592,6 @@ export interface PostgresqlDaemonApplication {
  * builders and cannot accidentally re-compose a second provider graph.
  */
 export interface PostgresqlDaemonApplicationRuntime {
-  readonly hostBootRecovery?: TaskExecutionBootRecoveryInput
-  readonly hostPreparations?: readonly ((context: HostExecutionGrantContext) => Promise<void>)[]
   readonly taskExecution: SelectedPostgresqlTaskExecutionProviderRuntime
   /**
    * RFC-359 —— 装配好的协作命令上下文。暴露它不是为了给 daemon 用（daemon 不碰它），
@@ -631,7 +620,6 @@ export interface PostgresqlDaemonApplicationRuntime {
     'activeApplyIds'
   >
   readonly resumeIntentSessions: (sessionIds: readonly string[], config: Config) => Promise<void>
-  readonly intentTurnExecution?: IntentTurnExecutionLifecycle
   readonly driveHumanGateContinuation: (input: {
     readonly taskId: string
     readonly continuationRef: string
@@ -653,20 +641,6 @@ export async function composePostgresqlApplication(
   input: PostgresqlApplicationInput,
   phase: PostgresqlApplicationPhase,
 ): Promise<PostgresqlDaemonApplication> {
-  if (
-    input.hostExecution &&
-    (phase.kind !== 'daemon' ||
-      input.hostExecution.scope.provider !== input.provider.runtime.provider ||
-      input.hostExecution.scope.generation !== input.provider.runtime.generationId)
-  )
-    throw new Error('postgresql-host-execution-scope-mismatch')
-  const hostPreparations: ((context: HostExecutionGrantContext) => Promise<void>)[] = []
-  const prepareOwner = async (
-    operation: (context?: HostExecutionGrantContext) => Promise<void>,
-  ) => {
-    if (input.hostExecution) hostPreparations.push((context) => operation(context))
-    else await operation()
-  }
   const developmentPurposeRoot = composeDevelopmentPurposeRoot({
     appHome: input.appHome,
     selection: input.developmentPurposes,
@@ -775,12 +749,10 @@ export async function composePostgresqlApplication(
         enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
       }),
     )
-    await prepareOwner(async () => {
-      const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)
-      if (removedCredentialLeases > 0) {
-        log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
-      }
-    })
+    const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)
+    if (removedCredentialLeases > 0) {
+      log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
+    }
   }
 
   // RFC-223 PR-5 / RFC-359 W1-T7d（P0-11）：技能身份屏障是 DB 就绪后的第一件事——恢复遗留结构操作、
@@ -880,7 +852,6 @@ export async function composePostgresqlApplication(
           },
         }),
     ...composeMcpRuntimeTestProvider(input.db),
-    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),
     isRuntimeEligible: isRuntimeMcpTestEligible,
     coordinator: mcpOperationCoordinator,
     requestBinding: {
@@ -1236,7 +1207,6 @@ export async function composePostgresqlApplication(
     })
   }
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
-    ...(input.hostExecution ? { host: input.hostExecution.taskHost } : {}),
     archive: input.taskArchive,
     workspaceReads,
     runtime: {
@@ -1340,16 +1310,14 @@ export async function composePostgresqlApplication(
   })
   // RFC-359 AC-1（plan §5hm）：驱动生命周期端口两个引擎共用一份。认领方式由这里绑定——
   // PG 用实例模块的 `claimPersisted`，SQLite 用进程级单例的 `claim({ db, intentId })`。
-  const taskDriverLifecycle =
-    taskExecutionProvider.driveBinding?.driverLifecycle ??
-    createTaskDriverLifecyclePort({
-      db: input.db,
-      module: taskExecutionProvider.executionModule,
-      claim: (intentId) => taskExecutionProvider.executionModule.claimPersisted({ intentId }),
-      persistence: taskExecutionProvider.persistence,
-      log,
-      finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
-    })
+  const taskDriverLifecycle = createTaskDriverLifecyclePort({
+    db: input.db,
+    module: taskExecutionProvider.executionModule,
+    claim: (intentId) => taskExecutionProvider.executionModule.claimPersisted({ intentId }),
+    persistence: taskExecutionProvider.persistence,
+    log,
+    finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
+  })
   const boundTaskDriveCoordinator = new DefaultTaskDriveCoordinator({
     // getter：`contextFor` 每次 drive 读一次，于是每次派发拿到的是当下的配置。
     get runtime() {
@@ -1403,10 +1371,7 @@ export async function composePostgresqlApplication(
     failureReporter: {
       async report({ taskId, error, execution }) {
         const now = Date.now()
-        await selectTaskRuntimeLifecycleWrites(
-          taskExecutionProvider.persistence,
-          'issuedResults',
-        ).trySet({
+        await taskExecutionProvider.persistence.runtimeLifecycle.trySet({
           taskId,
           to: 'failed',
           allowedFrom: ['pending', 'running'],
@@ -1495,7 +1460,6 @@ export async function composePostgresqlApplication(
     context: boundCollaborationContext,
   })
   const fusionOperations = composePostgresqlFusionOperations({
-    fusionWorkspaces: input.fusionWorkspaces ?? composeLocalFusionWorkspaces(),
     // RFC-353 T6/T7：同 SQLite 侧——provider 装配只在 bootstrap 根上完成。
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
     skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
@@ -1613,28 +1577,23 @@ export async function composePostgresqlApplication(
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
   const webhookTerminalControl = composeMrTerminalControl({
     db: input.db,
-    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),
     // RFC-359 AC-1（第 14 刀）：参与者与装配都合一了；这一支交的收尾是 source-control 的
     // `finalizeClaimedWorkspace`（与本文件驱动生命周期端口用的同一个）。此前这一格是空的，
     // 无 driver 的源终止只能靠 durable 消费者异步收尾，回执返回时工作区还没真收掉。
     taskTermination: composeTaskSourceTermination({
       db: input.db,
-      ...(input.hostExecution
-        ? { runtimeRegistry: taskExecutionProvider.executionModule.runtimeRegistry }
-        : {}),
       finalizeWithoutDriver: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
     }),
   })
   if (phase.kind === 'daemon') {
-    await prepareOwner(async (context) => {
-      if (!input.hostExecution) await webhookTerminalControl.reconcileOnBoot()
+    {
+      await webhookTerminalControl.reconcileOnBoot()
       const recoveredDeliveries = await recoverInterruptedDeliveries(
         composeWebhookDeliveryPersistenceFor(input.db),
       )
       if (recoveredDeliveries > 0) {
         log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
       }
-      if (context && !context.current()) return
       // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed
       // (marker-gated; a single maintenance_state read on every later boot).
       try {
@@ -1653,7 +1612,7 @@ export async function composePostgresqlApplication(
           error: err instanceof Error ? err.message : String(err),
         })
       }
-    })
+    }
   }
   const composedWebhookDispatcher = createWebhookDispatcher({
     persistence: composeWebhookDispatchPersistenceFor(input.db),
@@ -1680,7 +1639,6 @@ export async function composePostgresqlApplication(
   )
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composeEventCenter({
-    ...(input.hostExecution ? { executionMode: 'host' as const } : {}),
     db: input.db,
     customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
     typePackageDescriptorJsons: [
@@ -1907,12 +1865,10 @@ export async function composePostgresqlApplication(
   })
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(input.db)
   if (phase.kind === 'daemon') {
-    if (input.hostExecution) await digitalEmployee.maintenance.ready()
-    await prepareOwner(async (context) => {
+    {
       await employeeWriterCutover.activate()
-      if (context && !context.current()) return
       await digitalEmployee.maintenance.settleAutomaticUpgrades()
-    })
+    }
   } else {
     await phase.scope.trackReady(digitalEmployee.maintenance.ready())
   }
@@ -2219,14 +2175,12 @@ export async function composePostgresqlApplication(
     platformInventory: intentPlatformInventory,
   })
   const intentSessionEvents = createIntentSessionWsPublisher()
-  const intentTurnExecution = input.hostExecution ? composeIntentTurnExecution() : undefined
   const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
     observations: () => systemAgentObservations,
     appHome: () => intentDispatchDeps.appHome,
   })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
-    ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),
     events: intentSessionEvents,
     identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: input.appHome,
@@ -2261,7 +2215,6 @@ export async function composePostgresqlApplication(
     intentApply,
     intentPersistence,
     intentTurnRuntime: Object.freeze({
-      ...(intentTurnExecution ? { execution: intentTurnExecution } : {}),
       runtimeResolver: composeIntentTurnRuntimeResolver(
         intentPersistence,
         intentHttpSystemAgentBinding.bindRuntime,
@@ -2291,13 +2244,6 @@ export async function composePostgresqlApplication(
           }),
         }),
   })
-  if (intentTurnExecution) {
-    configureIntentTurnExecutionRecovery(intentTurnExecution, {
-      ...intentDispatchDeps,
-      ...intentRoutes.intentTurnRuntime,
-    })
-    hostPreparations.push(() => intentTurnExecution.prepare())
-  }
   const taskCatalog = composeTaskCatalog({
     sources: [
       ...taskExecutionCatalogSources,
@@ -2386,7 +2332,6 @@ export async function composePostgresqlApplication(
     }),
     daemon: Object.freeze({
       runtime: selectDaemonRuntimeQueries(input.daemonRuntime, { infoPath: input.daemonInfoPath }),
-      execution: input.hostExecution?.http,
     }),
     plantuml: Object.freeze({ configuration }),
     runtime: runtimeManagement.models,
@@ -2610,13 +2555,13 @@ export async function composePostgresqlApplication(
     intent: intentRoutes,
     identity: identityRoutes,
     system: systemRoutes,
+    executionAuthority: input.executionAuthority ?? composeLocalExecutionAuthority(),
   })
   // RFC-359 W3-T4（P0-3 / P0-4）：boot 恢复四步与 SQLite 同一段序列（composition/bootRecovery.ts）——
   // 撤销旧 daemon 的 owner → 收割孤儿 run → 修 runtime session lease → 清算 effect 并释放 / 闭合 owner。
   // 必须在 HTTP 与任何自动续跑之前；此前 PG daemon 从未跑过，重启一次就把上一代任务永久卡在 running。
-  let hostBootRecovery: TaskExecutionBootRecoveryInput | undefined
   if (phase.kind === 'daemon') {
-    const bootRecovery: TaskExecutionBootRecoveryInput = {
+    await runTaskExecutionBootRecovery({
       recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
       persistence: taskExecutionPersistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(input.db),
@@ -2639,16 +2584,11 @@ export async function composePostgresqlApplication(
           resolveConnection: (provider) => codeHostConnections.resolve(provider),
         }),
       log,
-    }
-    if (input.hostExecution) hostBootRecovery = bootRecovery
-    else {
-      await runTaskExecutionBootRecovery(bootRecovery)
-      // RFC-371 v2: calls still running from before this boot can no longer report.
-      const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
-      if (interruptedCalls > 0)
-        log.info('observation calls interrupted', { count: interruptedCalls })
-    }
-    await prepareOwner(async (context) => {
+    })
+    // RFC-371 v2: calls still running from before this boot can no longer report.
+    const interruptedCalls = await observationCalls.repairInterrupted(Date.now())
+    if (interruptedCalls > 0) log.info('observation calls interrupted', { count: interruptedCalls })
+    {
       // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在
       // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与
       // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。
@@ -2673,7 +2613,6 @@ export async function composePostgresqlApplication(
 
       // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步，
       // 与 cli/start.ts 同一段命令面。
-      if (context && !context.current()) return
       try {
         const archiveRecovery = await taskExecutionProvider.archive.recover({
           archiveDir: Paths.taskArchiveDir,
@@ -2688,7 +2627,6 @@ export async function composePostgresqlApplication(
           error: err instanceof Error ? err.message : String(err),
         })
       }
-      if (context && !context.current()) return
       try {
         const workspaceRecovery = await workspaceMaintenance.recover({
           activeTaskIds: [],
@@ -2710,7 +2648,6 @@ export async function composePostgresqlApplication(
       // RFC-359 W3-T15：以下 boot 步骤与 cli/start.ts 同序、同一份实现；此前 PG daemon 一步都没跑
       //（终态维护恢复里的 archive / workspace-gc / webhook prune / legacy pruned 四步仍是 SQLite 专属实现，归 T15-B）。
       // 5b5. RFC-165 §9：把存量 path-mode 定时启动载荷治愈成当前形状——幂等 + best-effort。
-      if (context && !context.current()) return
       try {
         const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
         const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
@@ -2724,7 +2661,6 @@ export async function composePostgresqlApplication(
       }
 
       // 5b5. RFC-170 T6：恢复崩溃留下的融合 DECISION 半状态（多事务决定）——best-effort。
-      if (context && !context.current()) return
       try {
         const { recoverFusionDecisions } =
           await import('@/modules/knowledge-evolution/public/operations')
@@ -2737,7 +2673,7 @@ export async function composePostgresqlApplication(
           error: err instanceof Error ? err.message : String(err),
         })
       }
-    })
+    }
 
     // 5e. RFC-101：内置 skill-fusion agent + workflow 幂等播种。
     try {
@@ -2797,21 +2733,13 @@ export async function composePostgresqlApplication(
         })
       }
     }
-    if (input.hostExecution) await reverifyResourceContent()
-    else void reverifyResourceContent()
+    void reverifyResourceContent()
   }
   const webSocket = buildWebSocketAdapter({
     realtime: core.realtime,
     identityAccess: core.identityAccess,
   })
   const runtime: PostgresqlDaemonApplicationRuntime = Object.freeze({
-    ...(intentTurnExecution ? { intentTurnExecution } : {}),
-    ...(input.hostExecution
-      ? {
-          hostBootRecovery,
-          hostPreparations: Object.freeze(hostPreparations),
-        }
-      : {}),
     taskExecution: taskExecutionProvider,
     collaborationContext: boundCollaborationContext,
     scheduledTasks: scheduledTaskRuntime,

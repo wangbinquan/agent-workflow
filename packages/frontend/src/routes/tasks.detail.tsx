@@ -6,7 +6,7 @@ import { isWorkgroupTask } from '@agent-workflow/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import type {
   Agent,
   ClarifyDirective,
@@ -137,7 +137,7 @@ function bannerErrorSignature(error: unknown): string {
 
 function TaskDetailPage() {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const { id } = Route.useParams()
   const search = Route.useSearch()
   const navigateTaskRoute = Route.useNavigate()

@@ -54,7 +54,6 @@ import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import type { IntentResolvedRuntime } from '../src/modules/intent/application/ports/intentAuxiliaryQueries'
-import { createFileIntentScratchStore } from '@/modules/intent/infrastructure/local/fileIntentScratchStore'
 
 const OWNER = 'user_owner_intent_000000000'
 
@@ -1174,11 +1173,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       mk('orphan-unknown', true)
       mk('fresh-terminal', false)
 
-      const removed = await sweepIntentScratch(
-        persistence,
-        createFileIntentScratchStore({ appHome, directoryName: 'intent-scratch' }),
-        24,
-      )
+      const removed = await sweepIntentScratch(persistence, appHome, 24)
       expect(removed).toBe(2) // terminal-old + unknown-old
       const left = new Set((await import('node:fs')).readdirSync(scratchRoot))
       expect(left.has(runningTurn)).toBe(true)

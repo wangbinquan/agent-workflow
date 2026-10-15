@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate, useSearch, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import type {
   DocVersionWithBodyAndComments,
   ReviewComment,
@@ -87,7 +87,7 @@ function ReviewDetailPage() {
   const search = useSearch({ from: Route.id }) as ReviewDetailSearch
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const qc = useQueryClient()
 
   const detail = useQuery<ReviewDetail>({

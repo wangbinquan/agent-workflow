@@ -10,7 +10,7 @@ import type { OpencodeModel, RuntimeModelsResponse } from '@agent-workflow/share
 import { groupByProvider, isCustomValue, ModelSelect } from '../src/components/ModelSelect'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 
 function wrap(node: React.ReactElement) {
   const qc = new QueryClient({
@@ -37,23 +37,15 @@ test('RFC-370 unavailable diagnostics keeps model identifiers editable without l
   const fetch = vi.spyOn(globalThis, 'fetch')
   const changed = vi.fn()
   wrap(
-    <HostExecutionReadinessContext.Provider
-      value={{
-        mode: 'resource-only',
-        status: {
-          phase: 'standby',
-          generation: 'model-resource-mode',
-          readyGroups: [],
-          reason: 'resource-only',
-        },
-      }}
+    <ExecutionStatusContext.Provider
+      value={{ mode: 'crewstation', state: 'standby', reason: null }}
     >
       <ModelSelect
         value="provider/retained-model"
         onChange={changed}
         runtimeName="stored-profile"
       />
-    </HostExecutionReadinessContext.Provider>,
+    </ExecutionStatusContext.Provider>,
   )
   const input = screen.getByRole('textbox') as HTMLInputElement
   expect(input.value).toBe('provider/retained-model')

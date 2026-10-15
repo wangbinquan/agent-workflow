@@ -1,6 +1,3 @@
-import { selectHumanGateTaskWrites } from '../application/humanGateTaskWriteSelection'
-import { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'
-import { selectTaskNodeRunWrites } from '../application/taskNodeWriteSelection'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
   isDaemonInterruptionAbortReason,
@@ -79,7 +76,7 @@ async function failRuntimeTask(
   errorMessage: string,
   failedNodeId?: string,
 ): Promise<void> {
-  const won = await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
+  const won = await opts.persistence.runtimeLifecycle.trySet({
     taskId: opts.taskId,
     to: 'failed',
     allowedFrom: ['pending', 'running'],
@@ -109,7 +106,7 @@ async function cancelRuntimeTask(
   await withTaskReviewMutationLock(opts.taskId, async () => {
     const now = Date.now()
     if (isDaemonInterruptionAbortReason(abortReason)) {
-      await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
+      await opts.persistence.runtimeLifecycle.trySet({
         taskId: opts.taskId,
         to: 'interrupted',
         allowedFrom: ['running'],
@@ -128,7 +125,7 @@ async function cancelRuntimeTask(
     }
     const structuredCause = taskStopCauseFromUnknown(abortReason)
     const projection = taskStopProjection(structuredCause ?? { kind: 'user' })
-    const won = await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
+    const won = await opts.persistence.runtimeLifecycle.trySet({
       taskId: opts.taskId,
       to: 'canceled',
       allowedFrom: ['running'],
@@ -349,7 +346,7 @@ async function runTaskEngineOrchestratorInner(
   // The unconditional write here used to revive canceled/done tasks and let a
   // second runTask take over a live one. CAS loss → another driver owns the
   // task (or it is terminal): log and step away without minting anything.
-  const claimed = await selectTaskRuntimeLifecycleWrites(opts.persistence, 'preparation').trySet({
+  const claimed = await opts.persistence.runtimeLifecycle.trySet({
     taskId,
     to: 'running',
     allowedFrom: ['pending'],
@@ -365,10 +362,7 @@ async function runTaskEngineOrchestratorInner(
   // RFC-333 T7: a manual question may have been created while this task was
   // pending/failed/interrupted. The exact owner consumes its durable park
   // obligation immediately after claim, before any new node work can start.
-  const initialManualPark = await selectHumanGateTaskWrites(
-    opts.persistence,
-    'issuedResults',
-  ).settleManualQuestionParks({
+  const initialManualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
     taskId,
     ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
     now: Date.now(),
@@ -577,7 +571,7 @@ async function runTaskEngineOrchestratorInner(
       }
       return {
         persistence: dynamicWorkflow.persistence,
-        nodeRuns: selectTaskNodeRunWrites(opts.persistence, 'preparation'),
+        nodeRuns: opts.persistence.nodeRuns,
         validationContext: dynamicWorkflow.validationContext,
       }
     }
@@ -733,10 +727,7 @@ async function runTaskEngineOrchestratorInner(
   // obligation at the owner-held settle point before choosing any outcome.
   // Explicit cancellation keeps its existing precedence.
   if (result.kind !== 'canceled' && opts.signal?.aborted !== true) {
-    const manualPark = await selectHumanGateTaskWrites(
-      opts.persistence,
-      'issuedResults',
-    ).settleManualQuestionParks({
+    const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
       taskId,
       ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
       now: Date.now(),
@@ -776,10 +767,7 @@ async function runTaskEngineOrchestratorInner(
         // running state before parking the new gate; otherwise workgroup
         // completion can be awaiting_confirmation forever while the task row
         // remains awaiting_human. This mirrors the done-settle path below.
-        const unparked = await selectHumanGateTaskWrites(
-          opts.persistence,
-          'issuedResults',
-        ).trySetWhenNoManualQuestionParks({
+        const unparked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
           taskId,
           to: 'running',
           allowedFrom: ['awaiting_human'],
@@ -792,10 +780,7 @@ async function runTaskEngineOrchestratorInner(
         manualQuestionPending = unparked.kind === 'manual-question-pending'
       }
       if (!manualQuestionPending) {
-        const parked = await selectHumanGateTaskWrites(
-          opts.persistence,
-          'issuedResults',
-        ).trySetWhenNoManualQuestionParks({
+        const parked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
           taskId,
           to: 'awaiting_review',
           allowedFrom: ['running'],
@@ -811,10 +796,7 @@ async function runTaskEngineOrchestratorInner(
       if (!manualQuestionPending) {
         break
       }
-      const manualPark = await selectHumanGateTaskWrites(
-        opts.persistence,
-        'issuedResults',
-      ).settleManualQuestionParks({
+      const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
         taskId,
         ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
         now: Date.now(),
@@ -852,7 +834,7 @@ async function runTaskEngineOrchestratorInner(
       return
     }
     if (
-      await selectTaskRuntimeLifecycleWrites(opts.persistence, 'issuedResults').trySet({
+      await opts.persistence.runtimeLifecycle.trySet({
         taskId,
         to: 'awaiting_human',
         allowedFrom: ['running'],
@@ -899,10 +881,7 @@ async function runTaskEngineOrchestratorInner(
       // running. The scope outcome proves no review/clarify gate remains,
       // and the in-tx manual-question assertion closes the external
       // late-arrival path.
-      const unparked = await selectHumanGateTaskWrites(
-        opts.persistence,
-        'issuedResults',
-      ).trySetWhenNoManualQuestionParks({
+      const unparked = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
         taskId,
         to: 'running',
         allowedFrom: ['awaiting_review', 'awaiting_human'],
@@ -913,10 +892,7 @@ async function runTaskEngineOrchestratorInner(
       manualQuestionPending = unparked.kind === 'manual-question-pending'
     }
     if (!manualQuestionPending) {
-      const settled = await selectHumanGateTaskWrites(
-        opts.persistence,
-        'issuedResults',
-      ).trySetWhenNoManualQuestionParks({
+      const settled = await opts.persistence.humanGateLifecycle.trySetWhenNoManualQuestionParks({
         taskId,
         to: 'done',
         allowedFrom: ['running'],
@@ -931,10 +907,7 @@ async function runTaskEngineOrchestratorInner(
     if (!manualQuestionPending) {
       break
     }
-    const manualPark = await selectHumanGateTaskWrites(
-      opts.persistence,
-      'issuedResults',
-    ).settleManualQuestionParks({
+    const manualPark = await opts.persistence.humanGateLifecycle.settleManualQuestionParks({
       taskId,
       ...(opts.executionContext === undefined ? {} : { token: opts.executionContext.token }),
       now: Date.now(),

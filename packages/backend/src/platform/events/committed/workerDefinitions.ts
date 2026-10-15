@@ -4,13 +4,8 @@
 import {
   defineManagedWorker,
   type ManagedWorkerDefinition,
-  type AuthorityManagedWorkerDefinition,
-  type BackgroundLifecycleContext,
 } from '@/platform/background/definitions'
-import type {
-  CommittedEventDispatcher,
-  AuthorityCommittedEventDispatcher,
-} from './dispatcherWorker'
+import type { CommittedEventDispatcher } from './dispatcherWorker'
 import type { CommittedEventDeliveryPersistencePort } from './persistence'
 
 interface WakeLatch {
@@ -49,35 +44,12 @@ export function createWakeLatch(): WakeLatch {
   }
 }
 
-interface CommittedEventWorkerInput {
+export function createCommittedEventDispatcherWorkerDefinition(input: {
   readonly persistence: CommittedEventDeliveryPersistencePort
+  readonly dispatcher: CommittedEventDispatcher
   readonly reconcileMs?: number
   readonly now?: () => number
-}
-
-export function createCommittedEventDispatcherWorkerDefinition(
-  input: CommittedEventWorkerInput & { readonly dispatcher: CommittedEventDispatcher },
-) {
-  return buildCommittedEventWorkerDefinition(input, () => input.dispatcher.drain(32))
-}
-
-export function createAuthorityCommittedEventDispatcherWorkerDefinition(
-  input: CommittedEventWorkerInput & { readonly dispatcher: AuthorityCommittedEventDispatcher },
-): Readonly<{ definition: Readonly<AuthorityManagedWorkerDefinition>; nudge: () => void }> {
-  const worker = buildCommittedEventWorkerDefinition(input, (context) => {
-    if (context.execution === undefined) throw new Error('committed-event-worker-execution-missing')
-    return input.dispatcher.drain(context.execution, 32)
-  })
-  return Object.freeze({
-    ...worker,
-    definition: Object.freeze({ ...worker.definition, supportsExecutionLifetime: true as const }),
-  })
-}
-
-function buildCommittedEventWorkerDefinition(
-  input: CommittedEventWorkerInput,
-  dispatch: (context: BackgroundLifecycleContext) => ReturnType<CommittedEventDispatcher['drain']>,
-): Readonly<{
+}): Readonly<{
   definition: Readonly<ManagedWorkerDefinition>
   nudge: () => void
 }> {
@@ -106,11 +78,9 @@ function buildCommittedEventWorkerDefinition(
       readiness = 'ready'
       try {
         while (!context.signal.aborted) {
-          if (context.execution !== undefined && !context.execution.current()) break
-          const result = await dispatch(context)
+          const result = await input.dispatcher.drain(32)
           cycles += 1
           deliveries += result.steps
-          if (context.execution !== undefined && !context.execution.current()) break
           if (!result.madeProgress) await latch.wait(reconcileMs, context.signal)
         }
       } catch (error) {

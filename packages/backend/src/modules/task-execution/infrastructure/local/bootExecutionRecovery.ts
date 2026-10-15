@@ -4,7 +4,6 @@ import {
   finalizeTaskExecutionRecovery,
   prepareTaskExecutionRecovery,
 } from '../../application/recoverTaskExecutions'
-import { selectTaskBootRecoveryWrites } from '../../application/taskRecoveryWriteSelection'
 import type {
   BootExecutionRecoveryFactory,
   BootExecutionRecoveryFamily,
@@ -15,25 +14,6 @@ import type {
 export function createLocalBootExecutionRecovery(
   input: TaskExecutionBootRecoveryInput,
 ): BootExecutionRecoveryFamily {
-  let selected: ReturnType<typeof selectTaskBootRecoveryWrites>
-  let selectionResolved = false
-  function selectAtStage(persistence: TaskExecutionBootRecoveryInput['persistence']) {
-    if (!selectionResolved) {
-      selected = selectTaskBootRecoveryWrites(persistence, input.recoveryGrant)
-      selectionResolved = true
-    }
-    return selected
-  }
-  function recoveryAtStage() {
-    if (selected !== undefined) return selected.recovery
-    const persistence = input.persistence
-    return selectAtStage(persistence)?.recovery ?? persistence.recovery
-  }
-  function orphanOperationsAtStage() {
-    if (selected !== undefined) return selected.operations
-    const persistence = input.persistence
-    return selectAtStage(persistence)?.operations ?? persistence.recoveryAdministration
-  }
   const reapResults = new WeakMap<object, ReapResult>()
   const finalizationResults = new WeakMap<
     object,
@@ -42,12 +22,12 @@ export function createLocalBootExecutionRecovery(
   return {
     async prepare() {
       return await prepareTaskExecutionRecovery({
-        persistence: recoveryAtStage(),
+        persistence: input.persistence.recovery,
         lockProof: input.lockProof,
       })
     },
     async reap() {
-      const reap = await reapOrphanRuns(orphanOperationsAtStage())
+      const reap = await reapOrphanRuns(input.persistence.recoveryAdministration)
       const reapRef = Object.freeze({})
       reapResults.set(reapRef, reap)
       return { counts: reap, reapRef }
@@ -56,7 +36,7 @@ export function createLocalBootExecutionRecovery(
       const reap = reapResults.get(reapRef)
       if (reap === undefined) throw new Error('boot recovery reference belongs to another pairing')
       const repairedRuntimeLeases = await repairRuntimeSessionLeasesAfterOrphanReap(
-        selected?.runtimeSessionLeases ?? input.runtimeSessionLeases,
+        input.runtimeSessionLeases,
         true,
       )
       const finalizationRef = Object.freeze({})
@@ -69,7 +49,7 @@ export function createLocalBootExecutionRecovery(
         throw new Error('boot recovery reference belongs to another pairing')
       const { reap, repairedRuntimeLeases } = result
       return await finalizeTaskExecutionRecovery({
-        persistence: recoveryAtStage(),
+        persistence: input.persistence.recovery,
         lockProof: input.lockProof,
         processEvidence: {
           orphanReaperCompleted: true,

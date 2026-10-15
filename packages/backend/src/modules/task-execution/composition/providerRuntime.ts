@@ -16,13 +16,7 @@ import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
 import type { ProviderTaskExecutionModule, TaskExecutionModule } from '../composition'
-import { taskExecutionModule, TaskExecutionModule as HostTaskExecutionModule } from '../composition'
-import {
-  captureTaskExecutionProviderHostSelection,
-  composeTaskDriveActivityParticipant,
-  type TaskDriveBinding,
-  type TaskExecutionProviderHostSelection,
-} from './taskDriveBinding'
+import { taskExecutionModule } from '../composition'
 import type { TaskArchiveMaintenanceCommand } from '../application/ports/taskArchiveMaintenanceCommand'
 import type {
   RepositoryPreparationRetryCommand,
@@ -57,7 +51,6 @@ import {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,
 } from '../infrastructure/taskDriverLifecycle'
-export { createDatabaseTaskDriverLifecyclePort }
 import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { composePostgresqlMemoryInjectionQueries } from '@/modules/memory/composition'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
@@ -127,8 +120,6 @@ interface SelectedTaskExecutionProviderRuntimeBase {
   readonly persistence: TaskExecutionPersistence
   readonly runtime: TaskExecutionRuntime
   readonly executionModule: TaskExecutionModule
-  /** Present only for an explicitly selected complete host instance. */
-  readonly driveBinding?: TaskDriveBinding
   readonly readModels: TaskExecutionReadModels
   readonly recovery: TaskRecoveryOperations
   readonly shutdown: TaskExecutionShutdownOperations
@@ -254,7 +245,6 @@ type SqliteRuntimeParticipantsAssembled =
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
-  readonly host?: TaskExecutionProviderHostSelection
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<
@@ -291,37 +281,17 @@ export function composeSqliteTaskExecutionProviderRuntime<
   db: DbClient,
   dependencies: SqliteTaskExecutionProviderRuntimeDependencies<C>,
 ): SelectedSqliteTaskExecutionProviderRuntime<C> {
-  const host = captureTaskExecutionProviderHostSelection(dependencies.host)
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const persistence = createTaskExecutionPersistence(db, {
-    ...(host === undefined ? {} : { hostWrites: host.writes }),
     workspacePresence: dependencies.runtime.workspacePresence,
   })
   const log = createLogger('task')
-  const executionModule =
-    host === undefined
-      ? taskExecutionModule
-      : new HostTaskExecutionModule(host.daemonGeneration, host)
-  const driverLifecycle = createDatabaseTaskDriverLifecyclePort({
-    db,
-    module: executionModule,
-    persistence,
-    log,
-    finalizeWorkspace: async (taskId: string) => {
-      await finishClaimedWebhookWorkspacePrune(db, taskId)
-    },
-  })
-  const driveBinding: TaskDriveBinding | undefined =
-    host === undefined
-      ? undefined
-      : Object.freeze({ executionModule, persistence, driverLifecycle })
   const participants = createTaskExecutionRuntimeParticipants(
     bindProviderTaskRunParticipantsInput(
       {
         db,
         persistence,
         ...dependencies.runtime,
-        ...(host === undefined ? {} : { db, persistence }),
         workspaceExcludeProfilesFor:
           dependencies.runtime.workspaceExcludeProfilesFor === undefined
             ? composeTaskWorkspaceExcludeProfilesFor()
@@ -332,15 +302,16 @@ export function composeSqliteTaskExecutionProviderRuntime<
         log,
         // RFC-359 AC-1（第 12 刀）：这一支的部署形态——进程级单例的同步认领
         //（执行上下文带 `legacyConnection`）+ 进程内注册表的活跃度 / 停机票据。
-        lifecycle: driverLifecycle,
-        activity:
-          driveBinding === undefined
-            ? composeLegacyTaskActivityParticipant()
-            : composeTaskDriveActivityParticipant(driveBinding),
-        stop:
-          driveBinding === undefined
-            ? composeLegacyTaskStopRegistry()
-            : executionModule.runtimeRegistry,
+        lifecycle: createDatabaseTaskDriverLifecyclePort({
+          db,
+          persistence,
+          log,
+          finalizeWorkspace: async (taskId: string) => {
+            await finishClaimedWebhookWorkspacePrune(db, taskId)
+          },
+        }),
+        activity: composeLegacyTaskActivityParticipant(),
+        stop: composeLegacyTaskStopRegistry(),
       },
       {
         nodeRunPromptsFor: (appHome) =>
@@ -412,12 +383,10 @@ export function composeSqliteTaskExecutionProviderRuntime<
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({
-    module: executionModule,
+    module: taskExecutionModule,
     lifecycleRepair,
     autoResume,
     recovery: persistence.recoveryAdministration,
-    recoveryWriteMode: persistence.recoveryWriteMode,
-    recoveryWritePurposes: persistence.recoveryWritePurposes,
     taskHasDriver: runtime.schedulerDriver.isTaskActive,
     buildScheduleLaunch,
   })
@@ -427,8 +396,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
     participants,
     persistence,
     runtime,
-    executionModule,
-    ...(driveBinding === undefined ? {} : { driveBinding }),
+    executionModule: taskExecutionModule,
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,
@@ -442,7 +410,6 @@ export function composeSqliteTaskExecutionProviderRuntime<
       db,
       schedulerDriver: runtime.schedulerDriver,
       ...dependencies.fusion,
-      ...(driveBinding === undefined ? {} : { driveBinding }),
     }),
     cancellation,
     trigger: Object.freeze({
@@ -497,7 +464,6 @@ type ProviderRuntimeWithoutChildLaunch<Runtime> = Runtime extends unknown
   : never
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
-  readonly host?: TaskExecutionProviderHostSelection
   readonly archive?: TaskArchiveContentBinding
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: ProviderRuntimeWithoutChildLaunch<PostgresqlTaskExecutionRuntimeDependencies>
@@ -528,21 +494,10 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   db: PostgresqlDatabaseClient,
   dependencies: PostgresqlTaskExecutionProviderRuntimeDependencies,
 ): SelectedPostgresqlTaskExecutionProviderRuntime {
-  const host = captureTaskExecutionProviderHostSelection(dependencies.host)
-  if (host !== undefined) {
-    if (
-      dependencies.runtime.persistence !== undefined ||
-      dependencies.runtime.executionModule !== undefined
-    )
-      throw new Error('task-host-provider-overrides-incompatible')
-    if (dependencies.runtime.daemonGeneration !== host.daemonGeneration)
-      throw new Error('task-host-daemon-generation-mismatch')
-  }
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const persistence =
     dependencies.runtime.persistence ??
     createTaskExecutionPersistence(db, {
-      ...(host === undefined ? {} : { hostWrites: host.writes }),
       workspacePresence: dependencies.runtime.workspacePresence,
     })
   const executionModule =
@@ -550,20 +505,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     createProviderTaskExecutionModule({
       daemonGeneration: dependencies.runtime.daemonGeneration,
       persistence,
-      ...(host === undefined ? {} : { host }),
     })
-  const driverLifecycle = createTaskDriverLifecyclePort({
-    db,
-    module: executionModule,
-    claim: (intentId) => executionModule.claimPersisted({ intentId }),
-    persistence,
-    log: dependencies.runtime.log,
-    finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
-  })
-  const driveBinding: TaskDriveBinding | undefined =
-    host === undefined
-      ? undefined
-      : Object.freeze({ executionModule, persistence, driverLifecycle })
   // RFC-359 AC-1（第 12 刀）：这一支的部署形态——持久化租约认领 + 注入的执行模块注册表。
   const activity = Object.freeze({
     isActive: (taskId: string) => executionModule.runtimeRegistry.hasTask(taskId),
@@ -585,7 +527,14 @@ export function composePostgresqlTaskExecutionProviderRuntime(
           dependencies.runtime.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
         memoryInjectionQueries: composePostgresqlMemoryInjectionQueries(db),
         childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
-        lifecycle: driverLifecycle,
+        lifecycle: createTaskDriverLifecyclePort({
+          db,
+          module: executionModule,
+          claim: (intentId) => executionModule.claimPersisted({ intentId }),
+          persistence,
+          log: dependencies.runtime.log,
+          finalizeWorkspace: dependencies.runtime.finalizeWorkspace,
+        }),
         activity,
         stop: executionModule.runtimeRegistry,
       },
@@ -677,8 +626,6 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     lifecycleRepair,
     autoResume,
     recovery: persistence.recoveryAdministration,
-    recoveryWriteMode: persistence.recoveryWriteMode,
-    recoveryWritePurposes: persistence.recoveryWritePurposes,
     taskHasDriver: runtime.schedulerDriver.isTaskActive,
     buildScheduleLaunch,
   })
@@ -688,7 +635,6 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     persistence,
     runtime,
     executionModule,
-    ...(driveBinding === undefined ? {} : { driveBinding }),
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,

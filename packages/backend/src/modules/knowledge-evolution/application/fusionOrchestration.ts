@@ -14,16 +14,31 @@
 // runtime imports imports fusion.ts back (only routes + the boot tick do), so
 // importing task/skill/skillVersion/memory here is acyclic.
 
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { Fusion, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
 import {
   FusionResultManifestSchema,
-  TERMINAL_TASK_STATUSES,
   PLATFORM_FUSION_MANIFEST,
+  PLATFORM_WORKSPACE_DIR,
+  TERMINAL_TASK_STATUSES,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { SYSTEM_USER_ID } from '@/auth/actor'
+import {
+  bindWorkspaceExcludeParticipant,
+  ensureBoundPlatformWorkspaceDirectory,
+} from '@/modules/source-control/composition'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
 import type {
   FusionDecisionRecoveryReceipt,
@@ -38,8 +53,7 @@ import type {
 } from '@/modules/knowledge-evolution/public/participants'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
-import type { FusionSeedGit, FusionWorkspace } from './ports/fusionWorkspace'
-const MANIFEST_REL = PLATFORM_FUSION_MANIFEST
+import { gitDiffSnapshot, runGit } from '@/util/git'
 
 // Built-in resource names live in the leaf systemResources module (single
 // source of truth shared with the list-hiding filter); re-exported here so
@@ -53,7 +67,6 @@ import {
   SKILL_MERGER_AGENT_NAME,
 } from '@/services/systemResources'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
 // RFC-353 T4（RFC-294 W4-E3）—— 纯判据 / 纯文本已迁进 knowledge-evolution 的 domain 层。
 // 这里只剩编排；`isValidFusionTransition` 继续从本模块再导出，既有 import 面不变
 // （consumer 在 T8 随路由与恢复入口一起切到 KE public）。
@@ -80,6 +93,7 @@ const FUSION_BUILTIN_IDENTITY = Object.freeze({
   mergerAgentId: SKILL_MERGER_AGENT_ID,
   mergerAgentName: SKILL_MERGER_AGENT_NAME,
 })
+const MANIFEST_REL = PLATFORM_FUSION_MANIFEST
 
 type FusionRow = FusionPersistenceRecord
 
@@ -106,7 +120,7 @@ export interface FusionDeps {
   /** RFC-115 (Codex F3): global default runtime NAME, threaded into the fusion task. */
   defaultRuntime?: string
   /** Deterministic seed-git failure injection for ownership regression tests. */
-  seedGit?: FusionSeedGit
+  seedGit?: typeof runGit
   /** Deterministic pre-handoff failure injection for ownership regression tests. */
   beforeStartTaskHandoff?: (event: {
     phase: 'create' | 'reject'
@@ -161,6 +175,62 @@ async function fusionWorkflowId(persistence: FusionPersistence): Promise<string>
 // Ephemeral worktree helpers
 // ---------------------------------------------------------------------------
 
+function fusionWorkDir(appHome: string, fusionId: string, iteration: number): string {
+  return join(appHome, 'fusions', fusionId, `iter${iteration}`, 'work')
+}
+
+/** git init the work dir, commit a baseline, return the baseline (root) sha. */
+async function seedWorktree(
+  workDir: string,
+  appHome: string,
+  git: typeof runGit = runGit,
+): Promise<string> {
+  const checkedGit = async (stage: string, args: string[]) => {
+    const result = await git(workDir, args)
+    if (result.exitCode !== 0) {
+      const reason = result.stderr.trim() || result.stdout.trim() || `git exited ${result.exitCode}`
+      throw new Error(`failed to ${stage} fusion worktree: ${reason}`)
+    }
+    return result
+  }
+
+  await checkedGit('initialize', ['init', '-b', 'fusion'])
+  await bindWorkspaceExcludeParticipant({ worktreePath: workDir, appHome }).ensure()
+  ensureBoundPlatformWorkspaceDirectory({ worktreePath: workDir, kind: 'fusion' })
+  await checkedGit('stage baseline for', [
+    '-c',
+    'user.name=agent-workflow',
+    '-c',
+    'user.email=agent-workflow@local',
+    'add',
+    '-A',
+  ])
+  await checkedGit('commit baseline for', [
+    '-c',
+    'user.name=agent-workflow',
+    '-c',
+    'user.email=agent-workflow@local',
+    'commit',
+    '--allow-empty',
+    '-m',
+    'fusion baseline',
+  ])
+  const head = await checkedGit('resolve baseline for', ['rev-list', '--max-parents=0', 'HEAD'])
+  const baseCommit = head.stdout.trim()
+  if (baseCommit === '')
+    throw new Error('failed to resolve baseline for fusion worktree: empty SHA')
+  return baseCommit
+}
+
+/** Copy a worktree's skill content (everything except .git and the scaffold). */
+function copyWorktreeContent(src: string, dst: string): void {
+  mkdirSync(dst, { recursive: true })
+  for (const entry of readdirSync(src)) {
+    if (entry === '.git' || entry === PLATFORM_WORKSPACE_DIR) continue
+    cpSync(join(src, entry), join(dst, entry), { recursive: true })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Launch
 // ---------------------------------------------------------------------------
@@ -172,10 +242,6 @@ export async function createFusion(
   launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
   const { operations, appHome } = deps
-  const workspace = operations.workspaces.create({
-    appHome,
-    ...(deps.seedGit ? { seedGit: deps.seedGit } : {}),
-  })
   const actor = scopeAuthority.actor
   await seedFusionResources(operations.persistence)
 
@@ -237,24 +303,24 @@ export async function createFusion(
 
   // 3. Seed the ephemeral repo from the skill's current files/.
   const fusionId = ulid()
-  const workDir = workspace.directory(fusionId, 1)
+  const workDir = fusionWorkDir(appHome, fusionId, 1)
   let ownershipTransferredToStartTask = false
   try {
     // Root creation through the startTask call is one ownership interval. Any
     // seed/git/pre-call failure is ours to reclaim; once startTask has accepted
     // the explicit cleanup lease, its outer launch guard owns success/failure.
-    await workspace.ensure(workDir)
+    mkdirSync(workDir, { recursive: true })
     // RFC-170 T6 (Codex F10/F11): seed from the token's immutable snapshot with a
     // generation (skillId) check; discard the worktree if it can't be seeded safely.
     await seedFusionFromSnapshot(
       operations.persistence,
-      workspace,
+      appHome,
       skill.id,
       skill.contentVersion,
       preconditionToken,
       workDir,
     )
-    const baseCommit = await workspace.seedBaseline(workDir)
+    const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
 
     // 4. Launch the engine task (preCreatedWorktree bypasses worktree creation;
     //    repoPath = the ephemeral repo so the StartTask schema is satisfied).
@@ -328,7 +394,7 @@ export async function createFusion(
     return rowToFusion(fresh)
   } finally {
     if (!ownershipTransferredToStartTask) {
-      await workspace.remove(workDir)
+      rmSync(workDir, { recursive: true, force: true })
     }
   }
 }
@@ -346,7 +412,6 @@ const FUSION_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['done', 'failed',
 /** Settle a running fusion against its engine task's terminal state. */
 export async function reconcileFusion(deps: FusionDeps, id: string): Promise<void> {
   const { operations } = deps
-  const workspace = operations.workspaces.create({ appHome: deps.appHome })
   const row = await operations.persistence.load(id)
   if (!row || row.status !== 'running' || row.currentTaskId === null) return
   // RFC-170 T6 (Codex F7): reconcile reads the task, then does async git/manifest
@@ -384,16 +449,22 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
   // Done — compute the proposed diff vs baseline + read the agent's manifest.
   const workDir = task.worktreePath
   try {
-    const { diff, manifest } = await workspace.captureResult(workDir)
-    if (manifest.kind === 'missing') {
+    const rootSha = (await runGit(workDir, ['rev-list', '--max-parents=0', 'HEAD'])).stdout.trim()
+    const diff = await gitDiffSnapshot(workDir, rootSha)
+    ensureBoundPlatformWorkspaceDirectory({ worktreePath: workDir, kind: 'fusion' })
+    const manifestPath = join(workDir, MANIFEST_REL)
+    if (!existsSync(manifestPath)) {
       await reconcileFail('agent did not write the fusion result manifest')
       return
     }
-    if (manifest.kind === 'not-plain-file') {
+    const manifestStat = lstatSync(manifestPath)
+    if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
       await reconcileFail('fusion result manifest is not a plain file')
       return
     }
-    const parsed = FusionResultManifestSchema.safeParse(JSON.parse(manifest.text))
+    const parsed = FusionResultManifestSchema.safeParse(
+      JSON.parse(readFileSync(manifestPath, 'utf-8')),
+    )
     if (!parsed.success) {
       await reconcileFail('fusion result manifest is invalid')
       return
@@ -438,21 +509,14 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
  */
 export async function awaitingApprovalFusionOwners(
   deps: FusionDeps,
-  mode: FusionReadMode = 'reconcile',
 ): Promise<Array<{ id: string; ownerUserId: string }>> {
-  if (mode === 'reconcile') await reconcileRunningFusions(deps)
+  await reconcileRunningFusions(deps)
   return [...(await deps.operations.persistence.listAwaitingApprovalOwners())]
 }
 
-export async function reconcileRunningFusions(
-  deps: FusionDeps,
-  execution?: BackgroundExecutionLifetime,
-): Promise<void> {
-  const current = execution?.current.bind(execution)
-  if (current?.() === false) return
+export async function reconcileRunningFusions(deps: FusionDeps): Promise<void> {
   const ids = await deps.operations.persistence.listIdsByStatus('running')
   for (const id of ids) {
-    if (current?.() === false) break
     try {
       await reconcileFusion(deps, id)
     } catch {
@@ -532,14 +596,8 @@ export function startFusionReconcileLoop(
 // Reads
 // ---------------------------------------------------------------------------
 
-export type FusionReadMode = 'reconcile' | 'stored'
-
-export async function getFusion(
-  deps: FusionDeps,
-  id: string,
-  mode: FusionReadMode = 'reconcile',
-): Promise<Fusion | null> {
-  if (mode === 'reconcile') await reconcileFusion(deps, id)
+export async function getFusion(deps: FusionDeps, id: string): Promise<Fusion | null> {
+  await reconcileFusion(deps, id)
   const row = await deps.operations.persistence.load(id)
   return row ? rowToFusion(row) : null
 }
@@ -554,9 +612,8 @@ export async function getFusion(
 export async function listFusionSummaries(
   deps: FusionDeps,
   filter: { skillId?: string; status?: FusionStatus } = {},
-  mode: FusionReadMode = 'reconcile',
 ): Promise<Fusion[]> {
-  if (mode === 'reconcile') await reconcileRunningFusions(deps)
+  await reconcileRunningFusions(deps)
   const rows = await deps.operations.persistence.listSummaries(filter)
   return rows.map(rowToFusion)
 }
@@ -674,7 +731,7 @@ async function casFusionStatus(
  */
 async function seedFusionFromSnapshot(
   persistence: FusionPersistence,
-  workspace: FusionWorkspace,
+  appHome: string,
   skillId: string,
   contentVersion: number,
   token: string | null,
@@ -687,8 +744,8 @@ async function seedFusionFromSnapshot(
     identity: Awaited<ReturnType<FusionPersistence['loadSkillIdentity']>>,
   ): boolean =>
     identity !== null && identity.id === skillId && identity.contentVersion === contentVersion
-  const seedDir = workspace.versionFiles(skillId, contentVersion)
-  if (!(await workspace.exists(seedDir))) {
+  const seedDir = join(appHome, 'skills', skillId, 'versions', `v${contentVersion}`, 'files')
+  if (!existsSync(seedDir)) {
     throw new ConflictError(
       'fusion-skill-unversioned',
       `the target skill has no v${contentVersion} snapshot to fuse from; re-save it first`,
@@ -698,7 +755,7 @@ async function seedFusionFromSnapshot(
   if (!matches(await persistence.loadSkillIdentity(skillId))) {
     throw new ConflictError('fusion-precondition-stale', 'the target skill changed; re-initiate')
   }
-  await workspace.copyContent(seedDir, workDir)
+  copyWorktreeContent(seedDir, workDir)
   // Post-copy: catch a recreate that raced the copy (no task has started).
   if (!matches(await persistence.loadSkillIdentity(skillId))) {
     throw new ConflictError(
@@ -710,10 +767,6 @@ async function seedFusionFromSnapshot(
 
 export async function approveFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
   const { operations, appHome } = deps
-  const workspace = operations.workspaces.create({
-    appHome,
-    ...(deps.seedGit ? { seedGit: deps.seedGit } : {}),
-  })
   const persistence = operations.persistence
   await reconcileFusion(deps, id)
   const row = await persistence.load(id)
@@ -730,7 +783,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
       `fusion is '${row.status}', not awaiting_approval`,
     )
   }
-  if (row.proposedWorktreePath === null || !(await workspace.exists(row.proposedWorktreePath))) {
+  if (row.proposedWorktreePath === null || !existsSync(row.proposedWorktreePath)) {
     throw new ConflictError('fusion-proposal-missing', 'the proposed change is no longer on disk')
   }
   // RFC-170 T6 (Codex F4): re-check write access to the CURRENT skill. A managed
@@ -799,10 +852,6 @@ export async function rejectFusion(
   launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
   const { operations, appHome } = deps
-  const workspace = operations.workspaces.create({
-    appHome,
-    ...(deps.seedGit ? { seedGit: deps.seedGit } : {}),
-  })
   const persistence = operations.persistence
   await reconcileFusion(deps, id)
   const row = await persistence.load(id)
@@ -852,10 +901,10 @@ export async function rejectFusion(
     }
 
     const nextIter = row.iteration + 1
-    const workDir = workspace.directory(row.id, nextIter)
+    const workDir = fusionWorkDir(appHome, row.id, nextIter)
     let ownershipTransferredToStartTask = false
     try {
-      await workspace.ensure(workDir)
+      mkdirSync(workDir, { recursive: true })
       // Baseline commit = the CURRENT skill files, so the approval diff is always
       // current-skill → proposed. apply() copies the whole worktree over the skill
       // under OCC, so the displayed diff must be measured from the skill — NOT the
@@ -866,17 +915,21 @@ export async function rejectFusion(
       // re-verify around the copy for a same-name recreate). A throw is caught below.
       await seedFusionFromSnapshot(
         persistence,
-        workspace,
+        appHome,
         row.skillId,
         row.baseSkillVersion,
         row.preconditionToken,
         workDir,
       )
-      const baseCommit = await workspace.seedBaseline(workDir)
+      const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
       // Then overlay the PRIOR proposal as uncommitted working changes, so the
       // agent refines its last attempt while the diff vs baseline stays full.
-      if (row.proposedWorktreePath !== null && (await workspace.exists(row.proposedWorktreePath))) {
-        await workspace.overlayProposal(row.proposedWorktreePath, workDir)
+      if (row.proposedWorktreePath !== null && existsSync(row.proposedWorktreePath)) {
+        for (const e of readdirSync(workDir)) {
+          if (e === '.git') continue
+          rmSync(join(workDir, e), { recursive: true, force: true })
+        }
+        copyWorktreeContent(row.proposedWorktreePath, workDir)
       }
 
       const taskId = ulid()
@@ -946,7 +999,7 @@ export async function rejectFusion(
       return rowToFusion(fresh)
     } finally {
       if (!ownershipTransferredToStartTask) {
-        await workspace.remove(workDir)
+        rmSync(workDir, { recursive: true, force: true })
       }
     }
   } catch (err) {

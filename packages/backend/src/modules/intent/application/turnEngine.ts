@@ -57,9 +57,6 @@ import type {
   IntentTurnRuntimeResolver,
 } from '@/modules/intent/application/ports/intentAuxiliaryQueries'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
-import type { IntentExecutionCheckpoint, IntentExecutionControl } from './ports/intentExecution'
-import { IntentExecutionDeferredError } from './executionLifecycle'
-import { recoverPersistedIntentExecution } from './recoverExecution'
 
 export const INTENT_BUILDER_AGENT_NAME = 'aw-intent-builder'
 export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'
@@ -104,10 +101,6 @@ export interface RunIntentTurnDeps {
   /** RFC-358 —— 工作流图校验（resource-catalog 的 public 合同，由 bootstrap 装配）。 */
   readonly graphValidation: IntentWorkflowGraphValidationPort
   readonly systemAgents: SystemAgentRunFamily
-  readonly execution?: {
-    readonly control: IntentExecutionControl
-    readonly checkpoint: IntentExecutionCheckpoint
-  }
   /** WS seam (T7 wires the broadcaster); default noop. */
   onSessionEvent?: (event: {
     type: string
@@ -234,47 +227,29 @@ export async function runIntentTurn(
 ): Promise<IntentTurnOutcome> {
   const log = deps.log ?? createLogger('intentTurn')
   const systemAgents = deps.systemAgents
-  let executionCheckpoint = deps.execution?.checkpoint
-  const control = deps.execution?.control
-  const originalWriteCheckpoint = deps.persistence.writeExecutionCheckpoint.bind(deps.persistence)
-  const writeCheckpoint = async (changes: Partial<IntentExecutionCheckpoint>) => {
-    if (!control || !executionCheckpoint) return
-    const expectedRevision = executionCheckpoint.revision
-    const next = JSON.parse(
-      JSON.stringify({ ...executionCheckpoint, ...changes, revision: expectedRevision + 1 }),
-    ) as IntentExecutionCheckpoint
-    await control.checkpoint(() => originalWriteCheckpoint({ checkpoint: next, expectedRevision }))
-    executionCheckpoint = next
-  }
-  const recoveredSnapshot =
-    executionCheckpoint?.phase === 'reserved' ? undefined : executionCheckpoint?.snapshot
-  if (recoveredSnapshot) deps = { ...deps, config: recoveredSnapshot.config }
   const now = Date.now()
   const turnId = input.reservation?.turnId ?? ulid()
   const envelopeNonce = input.reservation?.envelopeNonce ?? generateEnvelopeNonce()
 
   // ── mint the running turn + take the in-flight slot (one tx; nonce persists
   // with the row — design-gate P2-1) ──
-  if (control && !recoveredSnapshot && !control.current()) throw new IntentExecutionDeferredError()
-  const minted = recoveredSnapshot
-    ? { session: recoveredSnapshot.session, budget: recoveredSnapshot.budget }
-    : await deps.persistence.beginTurn({
-        ownerUserId: input.actor.user.id,
-        sessionId: input.sessionId,
-        turnId,
-        envelopeNonce,
-        now,
-        maxGenerateRounds: deps.config.maxGenerateRounds,
-        ...(input.reservation === undefined
-          ? {}
-          : {
-              reservation: {
-                turnId: input.reservation.turnId,
-                envelopeNonce: input.reservation.envelopeNonce,
-                budget: input.reservation.budget,
-              },
-            }),
-      })
+  const minted = await deps.persistence.beginTurn({
+    ownerUserId: input.actor.user.id,
+    sessionId: input.sessionId,
+    turnId,
+    envelopeNonce,
+    now,
+    maxGenerateRounds: deps.config.maxGenerateRounds,
+    ...(input.reservation === undefined
+      ? {}
+      : {
+          reservation: {
+            turnId: input.reservation.turnId,
+            envelopeNonce: input.reservation.envelopeNonce,
+            budget: input.reservation.budget,
+          },
+        }),
+  })
   deps.onSessionEvent?.({ type: 'intent.turn.started', sessionId: input.sessionId, turnId })
 
   const launchRevision = minted.session.contextRevision
@@ -315,7 +290,7 @@ export async function runIntentTurn(
       budgetDelta?: { generateRounds?: number; questionRounds?: number }
     } = {},
   ): Promise<IntentTurnOutcome> => {
-    const settlement: Parameters<IntentPersistence['settleTurn']>[0] = {
+    const settled = await deps.persistence.settleTurn({
       sessionId: input.sessionId,
       turnId,
       launchRevision,
@@ -346,12 +321,7 @@ export async function runIntentTurn(
           }
         : {}),
       now: Date.now(),
-      ...(executionCheckpoint ? { executionCheckpoint } : {}),
-    }
-    const originalSettle = deps.persistence.settleTurn.bind(deps.persistence)
-    const settled = control
-      ? await control.checkpoint(() => originalSettle(settlement))
-      : await originalSettle(settlement)
+    })
     liveTurnAborts.delete(input.sessionId)
     deps.onSessionEvent?.({ type: 'intent.turn.finished', sessionId: input.sessionId, turnId })
     return settled
@@ -359,252 +329,165 @@ export async function runIntentTurn(
 
   let forgetRetainedContents: (() => void) | undefined
   try {
-    const prepareAndRun = async () => {
-      // ── context assembly ──
-      const manifestBefore = sessionManifest(minted.session)
-      const roots = manifestBefore
-        .filter((e) => e.root)
-        .map((e) => ({ resourceType: e.resourceType, resourceId: e.resourceId }))
-      const dump = await buildIntentDump({
-        actor: input.actor,
-        resourceCatalog: deps.resourceCatalog,
-        appHome: deps.appHome,
-        mounts: roots,
-        priorManifest: manifestBefore,
-        // RFC-291 面 F — the rebuilt manifest drops evicted/deleted entries, so
-        // its ordinals alone can go backwards; the persisted watermark is what
-        // keeps a handle from being re-minted for a different resource.
-        handleWatermark: parseHandleWatermark(minted.session.handleWatermarkJson),
-        envelopeNonce,
-        runtimeInventory: deps.dumpAuxiliary.runtimeInventory,
-        loadAgentPorts: deps.dumpAuxiliary.loadAgentPorts,
-        platformInventory: deps.dumpAuxiliary.platformInventory,
-        ...(deps.config.effectiveDefaultRuntime === undefined
-          ? {}
-          : { effectiveDefaultRuntime: deps.config.effectiveDefaultRuntime }),
-      })
-      // Persist the fresh manifest (fences captured now = the commit baseline
-      // for whatever draft this turn produces).
-      await deps.persistence.refreshTurnManifest({
-        sessionId: input.sessionId,
-        turnId,
-        launchRevision,
-        manifest: dump.manifest,
-        handleWatermarkJson: JSON.stringify(dump.handleWatermark),
-        updatedAt: Date.now(),
-      })
+    // ── context assembly ──
+    const manifestBefore = sessionManifest(minted.session)
+    const roots = manifestBefore
+      .filter((e) => e.root)
+      .map((e) => ({ resourceType: e.resourceType, resourceId: e.resourceId }))
+    const dump = await buildIntentDump({
+      actor: input.actor,
+      resourceCatalog: deps.resourceCatalog,
+      appHome: deps.appHome,
+      mounts: roots,
+      priorManifest: manifestBefore,
+      // RFC-291 面 F — the rebuilt manifest drops evicted/deleted entries, so
+      // its ordinals alone can go backwards; the persisted watermark is what
+      // keeps a handle from being re-minted for a different resource.
+      handleWatermark: parseHandleWatermark(minted.session.handleWatermarkJson),
+      envelopeNonce,
+      runtimeInventory: deps.dumpAuxiliary.runtimeInventory,
+      loadAgentPorts: deps.dumpAuxiliary.loadAgentPorts,
+      platformInventory: deps.dumpAuxiliary.platformInventory,
+      ...(deps.config.effectiveDefaultRuntime === undefined
+        ? {}
+        : { effectiveDefaultRuntime: deps.config.effectiveDefaultRuntime }),
+    })
+    // Persist the fresh manifest (fences captured now = the commit baseline
+    // for whatever draft this turn produces).
+    await deps.persistence.refreshTurnManifest({
+      sessionId: input.sessionId,
+      turnId,
+      launchRevision,
+      manifest: dump.manifest,
+      handleWatermarkJson: JSON.stringify(dump.handleWatermark),
+      updatedAt: Date.now(),
+    })
 
-      const allTurns = (await deps.persistence.listTurns(input.sessionId)).filter(
-        (candidate) => candidate.id !== turnId,
-      )
-      const docTurns: IntentDocTurn[] = allTurns.map((t) => ({
-        seq: t.seq,
-        role: t.role,
-        kind: t.kind === 'running' ? 'error' : t.kind,
-        text: turnDisplayText(t),
-      }))
-      const lastAgentTurn = [...allTurns].reverse().find((t) => t.role === 'agent')
-      const pendingQuestions: IntentQuestion[] =
-        lastAgentTurn?.kind === 'questions'
-          ? ((JSON.parse(lastAgentTurn.contentJson) as { questions?: IntentQuestion[] })
-              .questions ?? [])
-          : []
-      const currentDraft =
-        minted.session.currentDraftId === null
-          ? undefined
-          : ((await deps.persistence.findDraft(minted.session.currentDraftId)) ?? undefined)
-      const validationErrors =
-        currentDraft === undefined
-          ? []
-          : ((JSON.parse(currentDraft.validationJson) as { errors?: string[] }).errors ?? [])
+    const allTurns = (await deps.persistence.listTurns(input.sessionId)).filter(
+      (candidate) => candidate.id !== turnId,
+    )
+    const docTurns: IntentDocTurn[] = allTurns.map((t) => ({
+      seq: t.seq,
+      role: t.role,
+      kind: t.kind === 'running' ? 'error' : t.kind,
+      text: turnDisplayText(t),
+    }))
+    const lastAgentTurn = [...allTurns].reverse().find((t) => t.role === 'agent')
+    const pendingQuestions: IntentQuestion[] =
+      lastAgentTurn?.kind === 'questions'
+        ? ((JSON.parse(lastAgentTurn.contentJson) as { questions?: IntentQuestion[] }).questions ??
+          [])
+        : []
+    const currentDraft =
+      minted.session.currentDraftId === null
+        ? undefined
+        : ((await deps.persistence.findDraft(minted.session.currentDraftId)) ?? undefined)
+    const validationErrors =
+      currentDraft === undefined
+        ? []
+        : ((JSON.parse(currentDraft.validationJson) as { errors?: string[] }).errors ?? [])
 
-      const intentDoc = buildIntentDoc({
-        sessionTitle: minted.session.title,
-        turns: docTurns,
-        currentDraftJson: currentDraft?.changesetJson ?? null,
-        validationErrors,
-        pendingQuestions,
-        hiddenDependencyNote:
-          dump.hiddenDependencies.length === 0
-            ? null
-            : `Some mounted resources depend on resources you cannot see (${dump.hiddenDependencies
-                .map((h) => `${h.parentHandle}: ${h.count}`)
-                .join(', ')}). Propose copies or ask the user instead of guessing their contents.`,
-        // RFC-291 面 C — id-only, never the name: these resources are ones the
-        // actor can no longer see, so echoing their names would leak them.
-        unavailableMountNote:
-          dump.unavailableMounts.length === 0
-            ? null
-            : `Mounted resources unavailable this epoch (deleted, or no longer visible to you): ${dump.unavailableMounts
-                .map((m) => `${m.handle} (${m.resourceType})`)
-                .join(
-                  ', ',
-                )}. They are absent from mounted/; do not guess their contents, and do not target them with an update.`,
-        envelopeNonce,
-        langDirective:
-          deps.config.lang === null
-            ? 'Write generated artifact prose (descriptions, prompts) in the language the user used in their intent.'
-            : `Write generated artifact prose (descriptions, prompts) in: ${deps.config.lang}.`,
-        // RFC-253 / RFC-269 — derive from the SAME lens the read redaction and the
-        // two author gates read, inverted once here. Recomputing the two
-        // `permissions.has(...)` checks locally would be a second source of truth
-        // for "may this session author privileged nodes".
-        privileges: privilegesFromLens(privilegedNodeLensFor(input.actor)),
-        requestedArtifactType: requestedArtifactTypeOf(allTurns),
-      })
+    const intentDoc = buildIntentDoc({
+      sessionTitle: minted.session.title,
+      turns: docTurns,
+      currentDraftJson: currentDraft?.changesetJson ?? null,
+      validationErrors,
+      pendingQuestions,
+      hiddenDependencyNote:
+        dump.hiddenDependencies.length === 0
+          ? null
+          : `Some mounted resources depend on resources you cannot see (${dump.hiddenDependencies
+              .map((h) => `${h.parentHandle}: ${h.count}`)
+              .join(', ')}). Propose copies or ask the user instead of guessing their contents.`,
+      // RFC-291 面 C — id-only, never the name: these resources are ones the
+      // actor can no longer see, so echoing their names would leak them.
+      unavailableMountNote:
+        dump.unavailableMounts.length === 0
+          ? null
+          : `Mounted resources unavailable this epoch (deleted, or no longer visible to you): ${dump.unavailableMounts
+              .map((m) => `${m.handle} (${m.resourceType})`)
+              .join(
+                ', ',
+              )}. They are absent from mounted/; do not guess their contents, and do not target them with an update.`,
+      envelopeNonce,
+      langDirective:
+        deps.config.lang === null
+          ? 'Write generated artifact prose (descriptions, prompts) in the language the user used in their intent.'
+          : `Write generated artifact prose (descriptions, prompts) in: ${deps.config.lang}.`,
+      // RFC-253 / RFC-269 — derive from the SAME lens the read redaction and the
+      // two author gates read, inverted once here. Recomputing the two
+      // `permissions.has(...)` checks locally would be a second source of truth
+      // for "may this session author privileged nodes".
+      privileges: privilegesFromLens(privilegedNodeLensFor(input.actor)),
+      requestedArtifactType: requestedArtifactTypeOf(allTurns),
+    })
 
-      // Protocol tail: the SHARED block renders "list ALL these ports" with a
-      // combined example — feeding it all four ports made models emit changeset
-      // AND questions together (live deepseek run, 2026-07-28 → every turn died
-      // on intent-ports-exclusive). Render the mainline shape (summary +
-      // changeset) and state the exclusive/optional forms explicitly beside it.
-      const prompt = `Read INTENT.md, inventory/ and mounted/ in your working directory, then produce this turn's result.${buildProtocolBlock(
-        ['summary', 'changeset'],
-        undefined,
-        envelopeNonce,
-      )}
+    // Protocol tail: the SHARED block renders "list ALL these ports" with a
+    // combined example — feeding it all four ports made models emit changeset
+    // AND questions together (live deepseek run, 2026-07-28 → every turn died
+    // on intent-ports-exclusive). Render the mainline shape (summary +
+    // changeset) and state the exclusive/optional forms explicitly beside it.
+    const prompt = `Read INTENT.md, inventory/ and mounted/ in your working directory, then produce this turn's result.${buildProtocolBlock(
+      ['summary', 'changeset'],
+      undefined,
+      envelopeNonce,
+    )}
 EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never both and never neither:
 - Default (you can produce the build/modify result now): emit \`summary\` + \`changeset\` exactly as shown above.
 - Only when you are blocked on user decisions: OMIT the \`changeset\` port entirely and emit \`summary\` plus <port name="questions">[{"id":"q1","question":"…","options":["…"],"multiSelect":false}]</port>.
 - In either mode you MAY add <port name="requests">[{"resourceType":"agent","name":"…","reason":"…"}]</port> to SUGGEST mounting existing resources you could not find in mounted/; suggestions are approval-gated and never auto-applied.`
-      const systemPrompt =
-        deps.config.extraInstructions === null
-          ? INTENT_BUILDER_SYSTEM_PROMPT
-          : `${INTENT_BUILDER_SYSTEM_PROMPT}\n\n## Administrator instructions\n\n${deps.config.extraInstructions}`
+    const systemPrompt =
+      deps.config.extraInstructions === null
+        ? INTENT_BUILDER_SYSTEM_PROMPT
+        : `${INTENT_BUILDER_SYSTEM_PROMPT}\n\n## Administrator instructions\n\n${deps.config.extraInstructions}`
 
-      // ── run ──
-      const releaseSlot = await intentSem.acquire()
-      let result: SystemAgentRunResult
-      try {
-        result = await systemAgents.run({
-          ...(control
-            ? {
-                admitExecution: control.current,
-                executionReceipts: {
-                  prepared: (receipt) =>
-                    writeCheckpoint({
-                      phase: 'prepared',
-                      receipt,
-                      snapshot: {
-                        config: deps.config,
-                        manifest: dump.manifest,
-                        agentBranchPorts: Object.fromEntries(dump.agentBranchPorts),
-                        session: minted.session,
-                        budget: minted.budget,
-                      },
-                    }),
-                  started: (receipt) => writeCheckpoint({ phase: 'started', receipt }),
-                },
-              }
-            : {}),
-          feature: 'intent-builder',
-          observationDemand: {
-            kind: 'intent-turn',
-            originalId: input.sessionId,
-            originalAttempt: turnId,
-            name: '意图分析',
-            ownerUserId: input.actor.user.id,
-            purpose: 'system',
-          },
-          ...(deps.config.runtime.observationIdentity
-            ? { runtimeObservationIdentity: deps.config.runtime.observationIdentity }
-            : {}),
-          agentName: INTENT_BUILDER_AGENT_NAME,
-          systemPrompt,
-          prompt,
-          protocol: deps.config.runtime.protocol,
-          runtimeBinding: deps.config.runtime.runtimeBinding,
-          // RFC-237 (P1-2): RFC-154 config-dir profile of the selected runtime
-          // row (folded over the protocol default by resolveInternalAgentRuntime)
-          // — a custom claude fork that changed its discovery surface still lands
-          // in the private per-run dir. opencode ignores both fields.
-          configDirEnv: deps.config.runtime.configDir.env,
-          configDirName: deps.config.runtime.configDir.name,
-          model: deps.config.runtime.model,
-          isSandbox: deps.config.runtime.isSandbox,
-          seedFiles: [{ path: 'INTENT.md', content: intentDoc }, ...dump.seedFiles],
-          workspaceScope: systemAgents.workspaces.capture({ namespace: 'intent', name: turnId }),
-          timeoutMs: deps.config.timeoutMs,
-          maxEventTextBytes: deps.config.stdoutCapBytes,
-          abortSignal: controller.signal,
-          eventSink: sessionEventSink,
-          // Intent owns the second phase: protocol failures keep the successful
-          // runtime scratch for bounded forensics; valid results release it.
-          retainScratchOnSuccess: true,
-          log,
-        })
-        const retainedRef = result.retainedRef
-        forgetRetainedContents = () => forget.call(retainedContents, { retainedRef })
-      } finally {
-        releaseSlot()
-      }
-      return { dump, result }
-    }
-    const retainedContents = systemAgents.retainedContents
-    const forget = retainedContents.forget.bind(retainedContents)
-    const completed =
-      recoveredSnapshot && executionCheckpoint && control
-        ? {
-            dump: {
-              manifest: recoveredSnapshot.manifest,
-              agentBranchPorts: new Map(
-                Object.entries(recoveredSnapshot.agentBranchPorts).map(([id, ports]) => [
-                  id,
-                  [...ports],
-                ]),
-              ),
-            },
-            result: await recoverPersistedIntentExecution({
-              checkpoint: executionCheckpoint,
-              control,
-              systemAgents,
-              eventSink: sessionEventSink,
-            }),
-          }
-        : await prepareAndRun()
-    const dump = completed.dump
-    let result = completed.result
-    const retainedRef = result.retainedRef
-    forgetRetainedContents = () => forget({ retainedRef })
-    if (control && result.status === 'unreaped' && !executionCheckpoint?.receipt)
-      await control.holdOriginal(() => Promise.resolve(false))
-    if (control && executionCheckpoint?.receipt) {
-      const { executionRecovery, ...originalResult } = result
-      void executionRecovery
-      await writeCheckpoint({
-        phase: recoveredSnapshot && result.status === 'aborted' ? 'reaped' : 'terminal',
-        result: originalResult,
+    // ── run ──
+    const releaseSlot = await intentSem.acquire()
+    let result: SystemAgentRunResult
+    try {
+      const retainedContents = systemAgents.retainedContents
+      const forget = retainedContents.forget
+      result = await systemAgents.run({
+        feature: 'intent-builder',
+        observationDemand: {
+          kind: 'intent-turn',
+          originalId: input.sessionId,
+          originalAttempt: turnId,
+          name: '意图分析',
+          ownerUserId: input.actor.user.id,
+          purpose: 'system',
+        },
+        ...(deps.config.runtime.observationIdentity
+          ? { runtimeObservationIdentity: deps.config.runtime.observationIdentity }
+          : {}),
+        agentName: INTENT_BUILDER_AGENT_NAME,
+        systemPrompt,
+        prompt,
+        protocol: deps.config.runtime.protocol,
+        runtimeBinding: deps.config.runtime.runtimeBinding,
+        // RFC-237 (P1-2): RFC-154 config-dir profile of the selected runtime
+        // row (folded over the protocol default by resolveInternalAgentRuntime)
+        // — a custom claude fork that changed its discovery surface still lands
+        // in the private per-run dir. opencode ignores both fields.
+        configDirEnv: deps.config.runtime.configDir.env,
+        configDirName: deps.config.runtime.configDir.name,
+        model: deps.config.runtime.model,
+        isSandbox: deps.config.runtime.isSandbox,
+        seedFiles: [{ path: 'INTENT.md', content: intentDoc }, ...dump.seedFiles],
+        workspaceScope: systemAgents.workspaces.capture({ namespace: 'intent', name: turnId }),
+        timeoutMs: deps.config.timeoutMs,
+        maxEventTextBytes: deps.config.stdoutCapBytes,
+        abortSignal: controller.signal,
+        eventSink: sessionEventSink,
+        // Intent owns the second phase: protocol failures keep the successful
+        // runtime scratch for bounded forensics; valid results release it.
+        retainScratchOnSuccess: true,
+        log,
       })
-      if (result.executionNotActivated && !control.current()) {
-        await writeCheckpoint({
-          phase: 'reserved',
-          receipt: undefined,
-          result: undefined,
-          retiredUnissued: [
-            ...(executionCheckpoint?.retiredUnissued ?? []),
-            {
-              receipt: originalResult.executionReceipt ?? executionCheckpoint!.receipt!,
-              result: originalResult,
-            },
-          ],
-        })
-        throw new IntentExecutionDeferredError()
-      }
-      if (result.status === 'unreaped') {
-        const originalRecovery = result.executionRecovery?.recoverOriginal.bind(
-          result.executionRecovery,
-        )
-        const release = retainedContents.release.bind(retainedContents)
-        const scope = systemAgents.workspaces.capture({ namespace: 'intent', name: turnId })
-        await control.holdOriginal(async () => {
-          if (!(await originalRecovery?.())) return false
-          return (await release({ retainedRef, scope })).removed
-        })
-        result = { ...result, status: 'aborted', scratchRetained: false }
-        const { executionRecovery: retiredRecovery, ...reapedResult } = result
-        void retiredRecovery
-        await writeCheckpoint({ phase: 'reaped', result: reapedResult })
-      }
+      const retainedRef = result.retainedRef
+      forgetRetainedContents = () => forget.call(retainedContents, { retainedRef })
+    } finally {
+      releaseSlot()
     }
     await markSessionCapture(
       result.status === 'unreaped' ? 'incomplete' : 'complete',
@@ -632,18 +515,11 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
     let runMeta = buildRunMeta()
     const releaseScratch = async (): Promise<void> => {
       if (!result.scratchRetained) return
-      const release = retainedContents.release.bind(retainedContents)
-      const original = {
+      const released = await systemAgents.retainedContents.release({
         retainedRef: result.retainedRef,
         scope: systemAgents.workspaces.capture({ namespace: 'intent', name: turnId }),
-      }
-      const remove = () => release(original)
-      const released = control
-        ? await control.checkpoint(async () => await remove())
-        : await remove()
-      if (!released.removed && control)
-        await control.holdOriginal(async () => (await remove()).removed)
-      if (released.removed || control) result = { ...result, scratchRetained: false }
+      })
+      if (released.removed) result = { ...result, scratchRetained: false }
       else {
         scratchReleaseFailed = true
         log.warn('intent-scratch-release-failed', { turnId, reason: released.reason })
@@ -878,7 +754,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       },
     )
   } catch (err) {
-    if (err instanceof IntentExecutionDeferredError) throw err
     await markSessionCapture('complete')
     log.error('intent-turn-crashed', {
       sessionId: input.sessionId,
@@ -890,7 +765,6 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       detail: err instanceof Error ? err.message : String(err),
     })
   } finally {
-    if (liveTurnAborts.get(input.sessionId) === controller) liveTurnAborts.delete(input.sessionId)
     try {
       forgetRetainedContents?.()
     } catch (error) {

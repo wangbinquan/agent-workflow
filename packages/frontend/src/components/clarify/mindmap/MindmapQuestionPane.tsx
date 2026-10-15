@@ -9,7 +9,7 @@ import {
 } from '@agent-workflow/shared'
 import { Field, TextArea } from '@/components/Form'
 import { ErrorBanner } from '@/components/ErrorBanner'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { VirtualList } from '@/components/VirtualList'
 import type { MindmapNodeSummary } from '@/lib/clarify/mindmap/projection'
 import { pendingMindmapDescendants } from '@/lib/clarify/mindmap/navigation'
@@ -47,7 +47,7 @@ interface Props {
 
 export function MindmapQuestionPane(props: Props) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const heading = useRef<HTMLHeadingElement>(null)
   const reading = useRef<HTMLDivElement>(null)
   const followup = useRef<HTMLDivElement>(null)

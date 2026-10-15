@@ -1,25 +1,2 @@
 export type { InstallationSeedCompletionPort } from '../application/ports/installationSeedCompletion'
-export type {
-  HostExecutionWriteContext,
-  HostExecutionWriteLeaseFacts,
-  HostExecutionWriteReceipt,
-} from '../application/ports/hostExecutionWriteContext'
-export type { HostExecutionWriteContextParticipant } from '../infrastructure/drizzleHostExecutionWriteContext'
-export type {
-  HostExecutionAdmission,
-  HostExecutionAdmissionLease,
-  HostExecutionAuthorityDriver,
-  HostExecutionAuthorityFactory,
-  HostExecutionAuthorityLifecycle,
-  HostExecutionAuthorityObservation,
-  HostExecutionAuthorityReference,
-  HostExecutionAvailabilityQueries,
-  HostExecutionGrantContext,
-  HostExecutionGroup,
-  HostExecutionPreparation,
-  HostExecutionRecoveryFamily,
-  HostExecutionResult,
-  HostExecutionRuntimeFamily,
-  HostExecutionStopReason,
-  HostExecutionWriteLifecycle,
-} from '../application/ports/hostExecutionAuthority'
+export type { ExecutionAuthorityPort } from '../application/ports/executionAuthority'

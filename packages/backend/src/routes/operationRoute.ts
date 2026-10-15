@@ -2,7 +2,7 @@
 
 import type { Context, Handler, Hono, MiddlewareHandler } from 'hono'
 import type { BlankEnv } from 'hono/types'
-import type { HostExecutionGroup } from '@agent-workflow/shared'
+import type { ExecutionGroup } from '@agent-workflow/shared'
 import { declareHttpOperation, registerOperationDescriptor } from '@/platform/operations/catalog'
 import type {
   CommandOperationDescriptor,
@@ -24,7 +24,7 @@ export interface OperationHttpBinding<P extends string, I, O, C> {
   readonly method: HttpMethod
   readonly path: P
   readonly tokenAccess: TokenAccess
-  readonly executionGroup?: HostExecutionGroup
+  readonly executionGroup?: ExecutionGroup
   /** Pure HTTP fields -> operation input projection; codec runs immediately after. */
   readonly decode: (context: Context<BlankEnv, P>) => Promise<unknown> | unknown
   /** Route-owned transport middleware that must remain in the declared handler chain. */

@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type * as ApiClientModule from '../src/api/client'
 import type * as UseActorModule from '../src/hooks/useActor'
 import type { DocVersion, ReviewDetail } from '@agent-workflow/shared'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 
 vi.mock('../src/api/client', async () => {
   const actual = await vi.importActual<typeof ApiClientModule>('../src/api/client')
@@ -175,19 +175,11 @@ test('RFC-370 unavailable Task execution preserves document selection while prev
     url === '/api/reviews/run' ? allSelected : undefined,
   )
   wrap(
-    <HostExecutionReadinessContext.Provider
-      value={{
-        mode: 'resource-only',
-        status: {
-          phase: 'standby',
-          generation: 'review-resource-mode',
-          readyGroups: [],
-          reason: 'resource-only',
-        },
-      }}
+    <ExecutionStatusContext.Provider
+      value={{ mode: 'crewstation', state: 'standby', reason: null }}
     >
       <MultiDocReviewView nodeRunId="run" />
-    </HostExecutionReadinessContext.Provider>,
+    </ExecutionStatusContext.Provider>,
   )
   await screen.findByText('Case A')
   expect((screen.getByTestId('multidoc-approve') as HTMLButtonElement).disabled).toBe(true)

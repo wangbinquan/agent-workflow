@@ -1,4 +1,3 @@
-import { selectTaskRuntimeLifecycleWrites } from '../application/taskRuntimeLifecycleWriteSelection'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 import type {
   FusionEngineTaskLaunch,
@@ -370,10 +369,7 @@ export function createPostgresqlFusionEngineTaskOperations(
         failureReporter: {
           async report({ taskId, error, execution }) {
             const now = Date.now()
-            await selectTaskRuntimeLifecycleWrites(
-              dependencies.persistence,
-              'issuedResults',
-            ).trySet({
+            await dependencies.persistence.runtimeLifecycle.trySet({
               taskId,
               to: 'failed',
               allowedFrom: ['pending', 'running'],

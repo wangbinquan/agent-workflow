@@ -16,7 +16,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import {
   RUNTIME_NUMERIC_BOUNDS,
   configDirEnvProblem,
@@ -118,7 +118,7 @@ export function RuntimeList({
   restoreFocusFallbackRef?: RefObject<HTMLElement | null>
 } = {}) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('diagnostics')
+  const execution = useExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const [editing, setEditing] = useState<RuntimeView | 'new' | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
@@ -350,7 +350,7 @@ function RuntimeFormDialog(props: {
   onSaved: () => void
 }) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('diagnostics')
+  const execution = useExecutionAvailability('diagnostics')
   const qc = useQueryClient()
   const isEdit = props.existing !== null
   const [name, setName] = useState(props.existing?.name ?? '')

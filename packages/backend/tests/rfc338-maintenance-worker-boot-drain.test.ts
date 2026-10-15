@@ -100,23 +100,6 @@ describe('RFC-338 maintenance Worker boot drain', () => {
     expect(() => routeMaintenanceWorkerRequest('idle', { type: 'nope' })).toThrow()
   })
 
-  test('host dispatch activation routes only after the real catalog handshake', () => {
-    const activate = { type: 'activate', version: MAINTENANCE_PROTOCOL_VERSION }
-    expect(routeMaintenanceWorkerRequest('idle', activate)).toEqual({
-      kind: 'ignore',
-      reason: 'activation-before-ready',
-    })
-    expect(routeMaintenanceWorkerRequest('initialising', activate)).toEqual({
-      kind: 'ignore',
-      reason: 'activation-before-ready',
-    })
-    expect(routeMaintenanceWorkerRequest('ready', activate)).toEqual({ kind: 'activate' })
-    expect(routeMaintenanceWorkerRequest('idle', { ...INIT, dispatchPaused: true })).toEqual({
-      kind: 'initialise',
-      request: { ...INIT, dispatchPaused: true },
-    })
-  })
-
   test('the Worker never routes a raw frame into initialise()', () => {
     const source = readFileSync(
       new URL('../src/platform/background/maintenanceWorker.ts', import.meta.url),

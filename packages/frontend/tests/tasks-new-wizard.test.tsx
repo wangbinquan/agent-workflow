@@ -33,8 +33,8 @@ import {
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import { taskWizardDraftKey, taskWizardNewDraftSourceId } from '../src/lib/task-wizard-draft'
 import '../src/i18n'
-import type { HostExecutionStatus } from '@agent-workflow/shared'
-import { HostExecutionReadinessContext } from '../src/hooks/useHostExecutionAvailability'
+import type { ExecutionStatus } from '@agent-workflow/shared'
+import { ExecutionStatusContext } from '../src/hooks/useExecutionAvailability'
 
 const permissionHarness = vi.hoisted(() => ({
   permissions: new Set<string>(),
@@ -419,7 +419,7 @@ async function renderWizard(
     waitForWizard?: boolean
     seedQueries?: (queryClient: QueryClient) => void
     onTaskPageRender?: () => void
-    execution?: HostExecutionStatus
+    execution?: ExecutionStatus
   } = {},
 ) {
   const mod = await import('../src/routes/tasks.new')
@@ -473,11 +473,11 @@ async function renderWizard(
   options.seedQueries?.(qc)
   render(
     <QueryClientProvider client={qc}>
-      <HostExecutionReadinessContext.Provider
-        value={options.execution ?? { mode: 'native', status: null }}
+      <ExecutionStatusContext.Provider
+        value={options.execution ?? { mode: 'standalone', state: 'active', reason: null }}
       >
         <RouterProvider router={router} />
-      </HostExecutionReadinessContext.Provider>
+      </ExecutionStatusContext.Provider>
     </QueryClientProvider>,
   )
   // Router mount is async — wait for the wizard shell before interacting.
@@ -546,15 +546,7 @@ describe('RFC-165 T12 — /tasks/new wizard', () => {
   test('resource-only retains the complete draft and scheduled save while disabling immediate launch', async () => {
     const calls = installFetch()
     await renderWizard(AGENT_NEW_URL, {
-      execution: {
-        mode: 'resource-only',
-        status: {
-          phase: 'standby',
-          generation: 'resource-only-wizard',
-          readyGroups: [],
-          reason: 'host-execution-resource-only',
-        },
-      },
+      execution: { mode: 'crewstation', state: 'standby', reason: null },
     })
     fireEvent.click(await screen.findByTestId('wizard-space-scratch'))
     await fillAgentDraft('保存资源后接入执行', 'Retain this task configuration', true)

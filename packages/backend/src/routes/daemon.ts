@@ -13,18 +13,13 @@
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
-import type { HttpHostExecutionSelection } from '@/platform/http/hostExecutionAvailability'
-import { ConflictError } from '@/util/errors'
+import { readExecutionStatus } from '@/platform/http/executionAvailability'
 
 export interface DaemonRouteDependencies {
   readonly runtime: DaemonRuntimeQueries
-  readonly execution?: HttpHostExecutionSelection
 }
 
 export function mountDaemonRoutes(app: Hono, deps: DaemonRouteDependencies): void {
-  const execution = deps.execution
-  const retryActivation = execution?.recovery?.retryActivation.bind(execution.recovery)
-  const readExecution = execution?.queries.readCurrent.bind(execution.queries)
   registerRoute(
     app,
     {
@@ -38,6 +33,8 @@ export function mountDaemonRoutes(app: Hono, deps: DaemonRouteDependencies): voi
       return c.json(await deps.runtime.readCurrent())
     },
   )
+  // RFC-370 v2 H7: every work entrypoint in the UI reads this to tell a standby
+  // CrewStation-hosted instance apart; standalone always reports `active`.
   registerRoute(
     app,
     {
@@ -46,27 +43,8 @@ export function mountDaemonRoutes(app: Hono, deps: DaemonRouteDependencies): voi
       permissions: [],
       tokenAccess: 'allow',
       publicReason: 'Execution availability is required by every authenticated work entrypoint',
-      summary: 'Execution availability of the actual application host',
+      summary: 'Whether this instance is currently executing work',
     },
-    (c) => c.json(readExecution?.() ?? { mode: 'native', status: null }),
-  )
-  registerRoute(
-    app,
-    {
-      method: 'POST',
-      path: '/api/execution/recover',
-      permissions: ['settings:write', 'tasks:execute'],
-      tokenAccess: 'allow',
-      summary: 'Retry activation after original host execution recovery',
-    },
-    async (c) => {
-      if (!retryActivation || readExecution?.().mode !== 'execution')
-        throw new ConflictError(
-          'host-execution-recovery-not-selected',
-          'This host has no selected execution recovery',
-        )
-      await retryActivation()
-      return c.json(readExecution())
-    },
+    (c) => c.json(readExecutionStatus(app)),
   )
 }

@@ -30,7 +30,7 @@
 //     Mutation check: flip auto-refresh back to touchRecency:true (or drop the
 //     arg) and test #2 goes red — the mirror stays due forever.
 
-import { expect, test, beforeEach, afterEach, beforeAll, spyOn } from 'bun:test'
+import { expect, test, beforeEach, afterEach, beforeAll } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -112,59 +112,6 @@ describeEachProvider(
         } catch {
           /* noop */
         }
-      }
-    })
-
-    test('RFC-370 an issued real refresh settles after loss while an unissued mirror remains due', async () => {
-      const store = composeSqliteRepositoryWorkspaceStore(db)
-      const row = (await db.select().from(cachedRepos).where(eq(cachedRepos.id, repoId)))[0]!
-      const unissued = 'host-unissued-mirror'
-      await db.insert(cachedRepos).values({
-        ...row,
-        id: unissued,
-        urlHash: `${row.urlHash}-unissued`,
-        localPath: join(appHome, 'must-not-be-refreshed'),
-      })
-      const originalList = store.listDueCachedRepos.bind(store)
-      const list = spyOn(store, 'listDueCachedRepos').mockImplementation(async (input) =>
-        [...(await originalList(input))].sort((a, b) =>
-          a.id === repoId ? -1 : b.id === repoId ? 1 : 0,
-        ),
-      )
-      let current = true
-      const originalRead = store.findCachedRepoById.bind(store)
-      const read = spyOn(store, 'findCachedRepoById').mockImplementation(async (id) => {
-        const cached = await originalRead(id)
-        // The actual refresh operation has now been invoked. Its original Git
-        // and stored receipt finish, without admitting the following mirror.
-        if (id === repoId) current = false
-        return cached
-      })
-      try {
-        const at = NOW + 60 * 60 * 1000
-        expect(
-          await refreshDueRepos(
-            store,
-            {
-              submoduleAutoRefresh: { enabled: true, intervalMs: 60_000, onlyRecentDays: 30 },
-            },
-            { now: () => at, appHome, execution: { current: () => current } },
-          ),
-        ).toEqual({ refreshed: 1, failed: 0 })
-        const refreshed = (
-          await db.select().from(cachedRepos).where(eq(cachedRepos.id, repoId))
-        )[0]!
-        expect(refreshed.lastAutoRefreshAt).toBe(at)
-        expect(refreshed.lastFetchedAt).toBe(NOW)
-        expect(refreshed.lastSubmoduleSyncOk).not.toBeNull()
-        expect(
-          (await db.select().from(cachedRepos).where(eq(cachedRepos.id, unissued)))[0]
-            ?.lastAutoRefreshAt,
-        ).toBeNull()
-        expect(read.mock.calls.some(([id]) => id === unissued)).toBe(false)
-      } finally {
-        read.mockRestore()
-        list.mockRestore()
       }
     })
 

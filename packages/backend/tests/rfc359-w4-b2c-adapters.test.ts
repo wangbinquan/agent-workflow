@@ -96,29 +96,6 @@ describeEachProvider('RFC-359 W4-B2c —— MCP playground 持久化', (harness)
 })
 
 describeEachProvider('RFC-359 W4-B2c —— 原生会话租约', (harness) => {
-  test('RFC-370 acknowledgement retry proves only the exact released owner while native release retains affected-row semantics', async () => {
-    const seeded = await seedSessionWithTurn(harness.db)
-    const leases = createMcpRuntimeTestLeaseOperations(harness.db)
-    const input = {
-      protocol: 'opencode' as const,
-      runtimeSessionId: seeded.runtimeSessionId,
-      testSessionId: seeded.sessionId,
-      turnId: seeded.turnId,
-      leaseNonceDigest: HASH,
-    }
-    const original = await leases.claimNew(input)
-    expect(await leases.release(original)).toBe(true)
-    expect(await leases.release(original)).toBe(false)
-    expect(await leases.releaseAcknowledged(original)).toBe(true)
-    const active = await leases.preclaim({ ...input, leaseNonceDigest: 'b'.repeat(64) })
-    expect(await leases.releaseAcknowledged(original)).toBe(false)
-    expect(await leases.release(active)).toBe(true)
-    expect(await leases.releaseAcknowledged({ ...active, testSessionId: 'another-owner' })).toBe(
-      false,
-    )
-    expect(await leases.releaseAcknowledged(active)).toBe(true)
-  })
-
   test('认领 → 释放；预占同一原生会话再释放；收割后修复', async () => {
     const db = harness.db
     const seeded = await seedSessionWithTurn(db)

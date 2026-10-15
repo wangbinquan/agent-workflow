@@ -57,7 +57,7 @@ import type { TaskQuestionEntry } from '@/components/tasks/TaskQuestionList'
 import { answersEqual, isAnswerFilled } from '@/lib/clarify/answers'
 import { useClarifyFollowup } from '@/lib/clarify/useClarifyFollowup'
 import { useActor } from '@/hooks/useActor'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { Dialog } from '@/components/Dialog'
 import { useClarifyWs } from '@/hooks/useClarifyWs'
@@ -107,7 +107,7 @@ function emptyAnswer(questionId: string): ClarifyAnswer {
 
 export function ClarifyDetailPage() {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nodeRunId = (Route as any).useParams().nodeRunId as string
   const qc = useQueryClient()

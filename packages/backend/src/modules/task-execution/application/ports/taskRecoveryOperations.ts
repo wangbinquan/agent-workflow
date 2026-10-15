@@ -311,3 +311,21 @@ export interface TaskRecoveryOperations {
     readonly promotionAfterMs: number
   }): Promise<TaskLifecycleAlertReconciliation>
 }
+
+/** Boot orphan reaping needs only these operations. */
+export type TaskBootOrphanOperations = Pick<
+  TaskRecoveryOperations,
+  'loadBootOrphanSnapshot' | 'interruptBootOrphanTask' | 'interruptNodeRun' | 'recordEvent'
+>
+
+/** Periodic orphan reconciliation needs only these operations. */
+export type TaskPeriodicRecoveryOperations = Pick<
+  TaskRecoveryOperations,
+  | 'listPeriodicReconcileCandidates'
+  | 'loadPeriodicReconcileSnapshot'
+  | 'findHeldRuntimeSessionId'
+  | 'interruptNodeRun'
+  | 'repairRuntimeSessionLeaseAfterOrphanReap'
+  | 'interruptPeriodicTaskIfIdle'
+  | 'recordEvent'
+>

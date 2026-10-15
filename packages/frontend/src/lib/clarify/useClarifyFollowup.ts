@@ -5,7 +5,7 @@ import type {
   ClarifyFollowupStatus,
 } from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 interface Operation {
   canceled: boolean
@@ -29,7 +29,7 @@ export function useClarifyFollowup(
   refresh: (originNodeRunId: string) => Promise<unknown>,
   server?: ClarifyFollowupStatus,
 ) {
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const rounds = useRef(new Map<string, RoundRequest>())
   const visible = useRef(nodeRunId)
   visible.current = nodeRunId

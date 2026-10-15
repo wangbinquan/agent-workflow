@@ -136,11 +136,9 @@ describe('createBackup', () => {
       sourceProvider: 'sqlite',
       sourceGenerationId: 'dbg_legacy_sqlite',
       schemaDigest: manifest.database.schemaDigest,
-      // The complete schema retains all sixteen RFC-371 derived/maintenance
-      // tables and the committed concurrent Memory receipt; all source tables
-      // remain covered by the original logical contract.
-      // RFC-371 v2 retired 81 v1 observation tables and added three.
-      activeTableCount: 191,
+      // RFC-371 v2 retired 81 v1 observation tables and added three; RFC-370 v2
+      // retired the host write-context and memory distill receipt tables.
+      activeTableCount: 189,
       archiveOnlyTableCount: 6,
     })
   })

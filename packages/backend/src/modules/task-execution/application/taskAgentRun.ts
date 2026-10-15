@@ -35,7 +35,6 @@
 //
 // Caller (scheduler / tests) is responsible for INSERT-ing the node_runs row
 // in 'pending' state before calling runNode().
-import { selectTaskNodeExecutionWrites, selectTaskNodeRunWrites } from './taskNodeWriteSelection'
 import type {
   ClarifyQuestion,
   ClarifyTruncationWarning,
@@ -353,7 +352,7 @@ export async function runNode(
   // here, while the row is still 'pending', made a refresh-on-receipt read a
   // status the DB didn't hold yet.
   try {
-    await selectTaskNodeExecutionWrites(opts.persistence, 'preparation').patch({
+    await opts.persistence.nodeExecution.patch({
       nodeRunId: opts.nodeRunId,
       values: {
         injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
@@ -421,7 +420,7 @@ export async function runNode(
     } catch (err) {
       if (err instanceof SignalPortInPromptError) {
         const ports = err.violations.map((v) => v.port).join(',')
-        await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
+        await opts.persistence.nodeRuns.set({
           nodeRunId: opts.nodeRunId,
           to: 'failed',
           allowedFrom: ['pending'],
@@ -534,12 +533,12 @@ export async function runNode(
   // (prompt_text 平均 ~6KB、占 node_runs 表 57%,而它只在详情页/会话视图被读)。
   // 落盘失败会回落成写列——prompt 是执行事实,宁可行胖也不能丢。
   // rfc053-allow-direct-status-write -- writing non-status field
-  await selectTaskNodeExecutionWrites(opts.persistence, 'preparation').patch({
+  await opts.persistence.nodeExecution.patch({
     nodeRunId: opts.nodeRunId,
     values: await nodeRunPrompts.store(opts.taskId, opts.nodeRunId, prompt),
   })
   // RFC-053: mark-running enforces pending → running.
-  await selectTaskNodeRunWrites(opts.persistence, 'preparation').transition({
+  await opts.persistence.nodeRuns.transition({
     nodeRunId: opts.nodeRunId,
     event: { kind: 'mark-running' },
     extra: { startedAt: Date.now() },
@@ -590,7 +589,7 @@ export async function runNode(
       // human-readable reset event instead of pretending resume succeeded.
       try {
         await persistRunnerWrite('node-run-event/session-reset', () =>
-          selectTaskNodeExecutionWrites(opts.persistence, 'preparation').appendEvent({
+          opts.persistence.nodeExecution.appendEvent({
             nodeRunId: opts.nodeRunId,
             ts: Date.now(),
             kind: 'text',
@@ -611,7 +610,7 @@ export async function runNode(
           err: detail,
         })
         try {
-          await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
+          await opts.persistence.nodeRuns.set({
             nodeRunId: opts.nodeRunId,
             to: 'failed',
             allowedFrom: ['running'],
@@ -660,7 +659,7 @@ export async function runNode(
         await releaseHeldRuntimeLease()
         const errorMessage =
           error instanceof Error ? error.message : 'runtime session is already in use'
-        await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
+        await opts.persistence.nodeRuns.set({
           nodeRunId: opts.nodeRunId,
           to: 'failed',
           allowedFrom: ['running'],
@@ -749,7 +748,7 @@ export async function runNode(
     const errorMessage = `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
     log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
     await releaseHeldRuntimeLease()
-    await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
+    await opts.persistence.nodeRuns.set({
       nodeRunId: opts.nodeRunId,
       to: 'failed',
       allowedFrom: ['running', 'pending'],
@@ -986,7 +985,7 @@ export async function runNode(
           // splice 之前没有 await：两条流各有自己的缓冲，且这一步对并发的另一条泵是原子的。
           const batch = rows.splice(0, rows.length)
           await persistRunnerWrite(operation, () =>
-            selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvents({
+            opts.persistence.nodeExecution.appendEvents({
               nodeRunId: opts.nodeRunId,
               events: batch,
             }),
@@ -1066,7 +1065,7 @@ export async function runNode(
         )
         try {
           await persistRunnerWrite('runtime-inventory/eager', () =>
-            selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').patch({
+            opts.persistence.nodeExecution.patch({
               nodeRunId: opts.nodeRunId,
               values: { runtimeInventoryJson },
             }),
@@ -1344,7 +1343,7 @@ export async function runNode(
       const decoded = compiled.detectPluginLoadFailure(line)
       if (decoded !== null) {
         await persistRunnerWrite('node-run-event/plugin-load-failed', () =>
-          selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').appendEvent({
+          opts.persistence.nodeExecution.appendEvent({
             nodeRunId: opts.nodeRunId,
             ts: Date.now(),
             kind: 'text',
@@ -1372,7 +1371,7 @@ export async function runNode(
     const localExecution = invocation.bindExecution(
       purpose.bindExecutionParticipants({
         persistence: taskEffects,
-        nodeExecution: () => selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults'),
+        nodeExecution: () => opts.persistence.nodeExecution,
         readOnlyWorkspace: () => opts.gitMutationPolicy === 'read-only',
       }),
     )
@@ -1509,7 +1508,7 @@ export async function runNode(
       // child) and the plan temp dir is cleaned by the finally.
       const errorMessage = `spawn ${runtime} failed: ${runResult.spawnError ?? 'unknown spawn failure'}`
       log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
-      await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
+      await opts.persistence.nodeRuns.set({
         nodeRunId: opts.nodeRunId,
         to: 'failed',
         allowedFrom: ['running', 'pending'],
@@ -1558,7 +1557,7 @@ export async function runNode(
       if (supersededEpochIds.length > 0) {
         const logicalSessionId = sessionId
         await persistRunnerWrite('node-run-event/session-epoch-retag', () =>
-          selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').retagSessionEpochs({
+          opts.persistence.nodeExecution.retagSessionEpochs({
             nodeRunId: opts.nodeRunId,
             supersededSessionIds: supersededEpochIds,
             logicalSessionId,
@@ -2001,7 +2000,7 @@ export async function runNode(
             try {
               const inactiveSet = new Set(parsed.inactivePorts)
               await persistRunnerWrite('node-run-output/batch', () =>
-                selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').upsertOutputs({
+                opts.persistence.nodeExecution.upsertOutputs({
                   nodeRunId: opts.nodeRunId,
                   outputs: [...parsed.ports].map(([name, content]) => ({
                     portName: name,
@@ -2173,7 +2172,7 @@ export async function runNode(
         ? 'interrupted'
         : status
     await finishCall(childUnkillable ? 'interrupted' : persistedStatus, processEndedAt)
-    await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
+    await opts.persistence.nodeRuns.set({
       nodeRunId: opts.nodeRunId,
       to: persistedStatus,
       allowedFrom: ['running'],
@@ -2195,7 +2194,7 @@ export async function runNode(
     // Runner-specific JSON fields not in NodeRunStatusUpdateExtra — write
     // them as a follow-up non-status update.
     // rfc053-allow-direct-status-write -- writing non-status fields
-    await selectTaskNodeExecutionWrites(opts.persistence, 'issuedResults').patch({
+    await opts.persistence.nodeExecution.patch({
       nodeRunId: opts.nodeRunId,
       values: {
         runtimeInventoryJson,
@@ -2290,7 +2289,7 @@ export async function runNode(
   const postSpawnErrorMessage = postSpawnFailureCode ?? 'runtime-spawn-failed'
   await finishCall('failed', Date.now())
   try {
-    await selectTaskNodeRunWrites(opts.persistence, 'issuedResults').set({
+    await opts.persistence.nodeRuns.set({
       nodeRunId: opts.nodeRunId,
       to: 'failed',
       allowedFrom: ['running'],

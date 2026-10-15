@@ -10,7 +10,6 @@
 
 import { driveMission } from './missionDriver'
 import type { ReconcileDeps } from './missionReconciler'
-import type { BackgroundExecutionLifetime } from '@/platform/background/definitions'
 
 export interface WakeSweepReaders {
   listUnconsumedWakeHintMissionIds(): Promise<string[]>
@@ -19,31 +18,17 @@ export interface WakeSweepReaders {
 export async function sweepMissionWakes(
   deps: ReconcileDeps,
   readers: WakeSweepReaders,
-  execution?: BackgroundExecutionLifetime,
 ): Promise<{ reconciled: number }> {
-  const current = execution?.current.bind(execution)
-  if (current?.() === false) return { reconciled: 0 }
   const now = deps.now()
   let reconciled = 0
   for (const wake of await deps.store.listDueWakes(now)) {
-    if (current?.() === false) break
     if (await deps.store.fireWake(wake.id, now)) {
-      await driveMission(
-        deps,
-        wake.missionId,
-        execution === undefined ? {} : { execution: { current: current! } },
-      )
+      await driveMission(deps, wake.missionId)
       reconciled += 1
     }
   }
-  if (current?.() === false) return { reconciled }
   for (const missionId of await readers.listUnconsumedWakeHintMissionIds()) {
-    if (current?.() === false) break
-    const outcome = await driveMission(
-      deps,
-      missionId,
-      execution === undefined ? {} : { execution: { current: current! } },
-    )
+    const outcome = await driveMission(deps, missionId)
     if (outcome.stop !== 'not-found') reconciled += 1
   }
   return { reconciled }

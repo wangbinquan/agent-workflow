@@ -39,7 +39,7 @@ import {
 import { TaskCreationRepositorySpace } from '@/components/task-creation/TaskCreationRepositorySpace'
 import { TaskCreationResourcePicker } from '@/components/task-creation/TaskCreationResourcePicker'
 import { useActor, usePermission } from '@/hooks/useActor'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 type IntakeKind = 'body' | 'files' | 'body-and-files' | 'external-id'
 
@@ -68,7 +68,7 @@ export function TaskCreationSubjectDescriptorContract(
   context: TaskCreationSubjectDescriptorContractProps,
 ) {
   const { t, i18n } = useTranslation()
-  const execution = useHostExecutionAvailability('digital-employee')
+  const execution = useExecutionAvailability('digital-employee')
   const language = i18n.resolvedLanguage ?? i18n.language
   const zh = language.startsWith('zh')
   const navigate = useNavigate()

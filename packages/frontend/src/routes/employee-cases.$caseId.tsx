@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 import type { CachedRepo, CaseMembers, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { api } from '@/api/client'
@@ -483,7 +483,7 @@ function contextFacts(
 }
 
 function EmployeeCaseDetailPage(): ReactElement {
-  const execution = useHostExecutionAvailability('digital-employee')
+  const execution = useExecutionAvailability('digital-employee')
   const { caseId } = Route.useParams()
   const search = Route.useSearch()
   const navigate = Route.useNavigate()

@@ -19,7 +19,7 @@ export interface McpDiagnosticsContextResolver {
 export function createMcpDiagnosticsOperations(input: {
   readonly application: Pick<
     McpDiagnosticsApplication,
-    'create' | 'message' | 'cancel' | 'end' | 'recover' | 'latest' | 'get' | 'sessionView'
+    'create' | 'message' | 'cancel' | 'end' | 'latest' | 'get' | 'sessionView'
   >
   readonly contexts: McpDiagnosticsContextResolver
   readonly coordinator: McpOperationCoordinatorPort
@@ -59,13 +59,6 @@ export function createMcpDiagnosticsOperations(input: {
       return coordinator.runExclusive(input.mcpId, async () => {
         const mcp = await visible(request, input.mcpId)
         return application.end(request.caller, mcp.id, input.sessionId)
-      })
-    },
-    async recover(context, input) {
-      const request = contexts.command(context)
-      return coordinator.runExclusive(input.mcpId, async () => {
-        const mcp = await visible(request, input.mcpId)
-        return application.recover(request.caller, mcp.id, input.sessionId)
       })
     },
   })

@@ -12,11 +12,11 @@
 import { Outlet, createRootRoute, redirect, useRouterState } from '@tanstack/react-router'
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react'
 import { AppShell } from '@/components/shell/AppShell'
-import { HostExecutionBanner } from '@/components/shell/HostExecutionBanner'
+import { ExecutionStandbyBanner } from '@/components/shell/ExecutionStandbyBanner'
 import { TourProvider } from '@/components/tour/SpotlightTour'
 import { RouteTransitionState } from '@/components/shell/RouteTransitionState'
 import { useApplyLanguage } from '@/hooks/useLanguage'
-import { HostExecutionProvider } from '@/hooks/useHostExecutionAvailability'
+import { ExecutionStatusProvider } from '@/hooks/useExecutionAvailability'
 import { useApplyTheme } from '@/hooks/useTheme'
 import { parseBootstrapTokenLocation } from '@/lib/bootstrap-token'
 import { getToken, setToken, subscribeAuth } from '@/stores/auth'
@@ -113,11 +113,11 @@ export function RootShell({
   }
   return (
     <TourProvider pathname={pathname}>
-      <HostExecutionProvider>
-        <AppShell pathname={pathname} statusNotice={<HostExecutionBanner />}>
+      <ExecutionStatusProvider>
+        <AppShell pathname={pathname} statusNotice={<ExecutionStandbyBanner />}>
           {children}
         </AppShell>
-      </HostExecutionProvider>
+      </ExecutionStatusProvider>
     </TourProvider>
   )
 }

@@ -9,7 +9,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import type { RunNowEligibility } from '@/lib/schedule-view'
 import { classifyWriteOutcome } from '@/lib/write-outcome'
-import { useHostExecutionAvailability } from '@/hooks/useHostExecutionAvailability'
+import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 
 export interface ScheduledRunNowSlots {
   action: ReactElement
@@ -34,7 +34,7 @@ export interface ScheduledRunNowActionProps {
  */
 export function ScheduledRunNowAction(props: ScheduledRunNowActionProps) {
   const { t } = useTranslation()
-  const execution = useHostExecutionAvailability('task')
+  const execution = useExecutionAvailability('task')
   const blockedReasonId = useId()
   const mutation = useMutation<{ taskId: string }, ApiError>({
     mutationFn: () => {
