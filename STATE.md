@@ -1,6 +1,8 @@
-## 2026-10-15 RFC-370 v2 M0：托管控制面（代码完成，待本机 CS 部署验收）
+## 2026-10-15 RFC-370 v2 M0：托管控制面（Done，本机 CS 部署验收通过）
 
-按 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md) §5.1 实现 M0（免 Codex 门）：`AW_DEPLOYMENT_MODE=crewstation` 时同一条启动 / 迁移序列换用托管适配器——数据库由迁移 Job 按 PG 历史迁移、全新库一次复制初始行，服务只校验 schema；配置与技能文件树进数据库（SQLite `0258` / PG `0034` 三张新表）；主密钥取 `AW_SECRET_KEY`；身份走 CrewStation 网关令牌（`external_identities` 映射、首访建最低权限账号、`AW_ADMIN_SUBJECTS` 建管理员）；探针 `/live` `/ready`；执行权恒为 standby（远程执行随 M1），失权排空后以 1 退出；插件安装与资源包应用明确 503（随 M2）；前端网关会话并隐藏本地登录与平台接管的设置页；`deploy/crewstation/` 与 `scripts/crewstation-publish.ts` 负责镜像与发布。单机行为不变。详情与本地验证见 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)「M0」；下一步发布到本机 CS 做浏览器验收。
+按 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md) §5.1 实现 M0（免 Codex 门）：`AW_DEPLOYMENT_MODE=crewstation` 时同一条启动 / 迁移序列换用托管适配器——数据库由迁移 Job 按 PG 历史迁移、全新库一次复制初始行，服务只校验 schema；配置与技能文件树进数据库（SQLite `0258` / PG `0034` 三张新表）；主密钥取 `AW_SECRET_KEY`；身份走 CrewStation 网关令牌（`external_identities` 映射、首访建最低权限账号、`AW_ADMIN_SUBJECTS` 建管理员）；探针 `/live` `/ready`；执行权恒为 standby（远程执行随 M1），失权排空后以 1 退出；插件安装与资源包应用明确 503（随 M2）；前端网关会话并隐藏本地登录与平台接管的设置页；`deploy/crewstation/` 与 `scripts/crewstation-publish.ts` 负责镜像与发布。单机行为不变。详情与本地验证见 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)「M0」。
+
+**本机 CS 部署验收（通过）**：发布脚本推送已提交快照、经平台发布接口发布（构建 → `agent-workflow migrate` → 待命槽 → 切流），Playwright 无头 Chromium 经平台网关在 v0.5.0（`9a3d757bd`）上 7 项全过：平台身份登录为管理员、设置 / 账户 / 用户页以平台身份呈现、Agent / 技能 / MCP / 工作流编辑保存、插件与资源包应用 503 并显示原因、任务入口待命、重建服务 Pod 后数据仍在。验收中修复四处平台身份呈现问题（`5f5cad1c6`、`2cccf56f0`：账户菜单、账户概览、用户页建号 / 重置密码 / 行标签、托管拒绝文案），以及发布接口（`27822dff5`）与启动探针上限（`5386c8842`）；同期 CI 修复 `5e617acd8`（M0 回归用例少传参数致主 CI Typecheck 红；生命周期 e2e 的失效节点级 `retries` 致 macOS 偶发超时）、`afd7686a3`（任务列表 e2e 同类）。主 CI 在 `20b0667f9`、`db7d322dc` success。M1 前待定：托管连接池预算（共享 PG `max_connections=100`，本应用稳态每实例约 6 个、启动瞬时约 15 个）待 CS 按套餐给连接配额。下一步 M1：先重塑执行端口（v2 §3.3），再接 CS 执行权、执行适配器与工作区。
 
 ## 2026-10-15 并行反问丢一轮：同波兄弟人工门停靠修复（CI 修复）
 

@@ -5,7 +5,7 @@
 | 步骤                                     | 状态                     | 证据         |
 | ---------------------------------------- | ------------------------ | ------------ |
 | P1 单机统一                              | Done                     | 见下方「P1」 |
-| M0 控制面上线                            | 代码完成，待本机 CS 验收 | 见下方「M0」 |
+| M0 控制面上线                            | Done                     | 见下方「M0」 |
 | M1 远程执行闭环                          | 未开始                   | —            |
 | M2 能力等价                              | 未开始                   | —            |
 | M3 事件与运维                            | 未开始                   | —            |
@@ -38,7 +38,8 @@ CI（`a5ae4b5b7`）：主 CI `38670196680`、windows-platform `38670196656`、po
 - 技能文件树存 `skill_content_entries`（在用 / 版本 / 暂存 / 回收站），树摘要与文件版 `hashDir` 共用 `digestSortedTree`；插件安装与资源包应用在托管下返回 503 `hosted-capability-unavailable`（M2 随 CS 原生配置叠加提供）。
 - 探针 `/live`、`/ready`（不等待执行权）；执行权恒为 standby（原因 `remote-execution-not-available`），后台任务在首次 active 时启动；失权或激活失败排空后以 1 退出（排空失败也以 1 退出）。
 - 前端：页面标记托管形态后走网关会话（不存不发本地令牌、WebSocket 不带令牌、会话失效经网关重载且 30 秒内至多一次），隐藏本地登录 / 引导 / 退出 / 口令与令牌，设置页的数据库 / 认证 / 网络三页在托管下不是页签（URL 按 RFC-198 规范化到 runtime）；待命横幅说明远程执行尚未接入。
-- 镜像与发布：`deploy/crewstation/`（Dockerfile、Manifest 模板）与 `scripts/crewstation-publish.ts`（按本地档案渲染 Manifest、推送源码快照并 `crewstation publish`）。
+- 镜像与发布：`deploy/crewstation/`（Dockerfile、Manifest 模板）与 `scripts/crewstation-publish.ts`（按本地档案渲染 Manifest、推送已提交源码快照，再经平台发布接口发布该提交；切流由项目负责人 `crewstation traffic switch`）。
+- 平台身份的呈现：账户菜单显示平台显示名，账户概览写明登录由 CrewStation 平台管理，用户页不提供本地建号与重置密码、每行标为平台账户（`accountCredentialManager` / `accountMenuLabel`）；托管拒绝码有精确中英文案与下一步提示。
 
 已知限制（随后续里程碑解决）：仓库克隆需要 git / 工作区，随 M1；数据库维护 / 备份路由在托管下未做服务端拒绝（设置页已隐藏，备份进对象存储随 M3）。
 
@@ -46,7 +47,17 @@ CI（`a5ae4b5b7`）：主 CI `38670196680`、windows-platform `38670196656`、po
 
 提交：源码 `8683b5a81`、配套 `ce9edaad9`。本机托管冒烟（真 PostgreSQL 17 + 本地 JWKS 签发器 + 编译版二进制，`AW_DEPLOYMENT_MODE=crewstation`）发现并修复三处，均补回归用例：①托管库没有登记活动世代，PG 世代写入围栏拒绝初始行复制（`515209c95`，配套 `324f3f204`，另把 RFC-349 死锁故障注入改为确定性时序）；②插件与资源包操作合同未声明 `unavailable`，托管拒绝变成 500 合同违规（见下一笔）；③托管 `migrate` 的连接读 `process.env` 而非传入的 env（同 ①）。修复后冒烟全部通过：迁移 Job 首跑安装并复制初始行、重跑幂等；服务的 `/live` `/ready`、页面部署标记、网关身份（管理员 / 最低权限 / 缺失 / 伪造 / 他服务令牌）、执行待命状态与发起任务 503、设置页数据库只读与保存、Agent / 工作流 / 技能（含文件树）/ MCP 的创建、插件安装 503、WebSocket 带 / 不带身份；以全新空 home 重启后数据与身份映射全部仍在。
 
-本机 CS 部署验收在完成后补记。
+本机 CS 部署验收（2026-10-15，通过）：docker-desktop kind 上的本机 CrewStation，项目 `agent-workflow`（DigitalWorker；平台供给 db-small PostgreSQL 与 `CS_DATABASE_URL`，`AW_SECRET_KEY` 密钥与 `AW_ADMIN_SUBJECTS` 配置）。`scripts/crewstation-publish.ts` 推送已提交快照并经平台发布接口发布：构建镜像 → 迁移 Job（首个版本 “PostgreSQL schema applied … active tables: 192”、“initial rows installed (7 rows in 4 tables)”，之后各版本 “schema verified … initial rows already installed”）→ 部署待命槽 → `crewstation traffic switch --to preview` 切流。浏览器验收用 Playwright 无头 Chromium 经平台网关（携平台会话 cookie；本机 Chrome 扩展未连接），最终在 v0.5.0（`9a3d757bd`）上 7 项全部通过：
+
+- 平台身份：配置的管理员 subject 以 `cs-<uuid>` 账号登录且为管理员，账户菜单显示平台显示名；首屏带部署标记，WebSocket（authority / presence）经网关建立；`/auth`、`/setup/admin` 回到首页，无本地退出。
+- 设置与账户：设置页无数据库 / 认证 / 网络三页（`?tab=database` 规范化），界面语言经设置保存；账户页无安全 / 令牌两节，概览写明由 CrewStation 平台管理；用户页无本地建号、有平台成员说明、每行为平台账户、编辑对话框无重置密码。
+- 资源：Agent 新建并编辑保存、技能（含 SKILL.md 内容）、远程 MCP、工作流（快速创建 + 定义保存，编辑器渲染两个节点）全部成功。
+- 拒绝与待命：插件安装、带技能的资源包应用均为 503 `hosted-capability-unavailable`，界面给出精确原因与下一步；任务入口显示待命横幅，发起任务为 503 `execution-standby`。
+- 删除服务 Pod 重建后，上述资源（含编辑结果与技能文件内容）与管理员身份全部仍在。
+
+验收中发现并修复：`5f5cad1c6`（账户菜单显示合成用户名、账户概览称本地账户与本地密码、用户页提供本地建号与重置密码、托管拒绝只显示「请求失败」）、`2cccf56f0`（用户目录每行仍标本地账户）；发布脚本最初调用 `crewstation publish`，因其要求开发会话而 412，改为平台发布接口（`27822dff5`）；启动探针按平台上限改为 `periodSeconds: 3, failureThreshold: 100`（`5386c8842`）。同期 CI 修复：`5e617acd8`（`6b1727e40` 的回归用例少传一个参数，主 CI Typecheck 自那时起红；生命周期 e2e 写的节点级 `retries` 早被 RFC-115 删除，实际跑满 8 次致 macOS 偶发超时），`afd7686a3`（任务列表 e2e 同类隐患）。主 CI 在 `20b0667f9`（`38706829578`）、`db7d322dc`（`38708137794`）success。
+
+环境观察（M1 前确定）：本机 CS 的共享 PostgreSQL `max_connections=100`，平台自身约 50、其他测试项目约 30～40；本应用稳态每实例约 6 个连接、启动瞬时约 15 个，两次重建 Pod 时维护进程各有一次拿不到连接（`remaining connection slots are reserved…`），由 supervisor 自动重启恢复。托管连接池（默认每实例 16，蓝绿两槽同时在线）的预算待 CS「连接配额、池化按套餐实施」提供后确定。单节点集群 CPU 请求接近满载时，500m 套餐的滚动发布起不来新 Pod（v0.4.0 因此超时失败），验收改用本机新建的 250m / 512Mi 套餐 `agent-workflow-control`，M0 控制面在 250m 下启动与验收正常。
 
 ## 环境
 
