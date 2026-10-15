@@ -30,10 +30,10 @@ export function assertExecutionAvailable(app: object, group: ExecutionGroup | un
   if (group === undefined) return
   const status = readExecutionStatus(app)
   if (isExecutionAvailable(status)) return
-  throw new DomainError(
-    'execution-standby',
-    'This instance is not executing work right now',
-    503,
-    { group, mode: status.mode, state: status.state, reason: status.reason },
-  )
+  throw new DomainError('execution-standby', 'This instance is not executing work right now', 503, {
+    group,
+    mode: status.mode,
+    state: status.state,
+    reason: status.reason,
+  })
 }

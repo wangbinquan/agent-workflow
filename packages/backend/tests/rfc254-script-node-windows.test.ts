@@ -81,6 +81,21 @@ describe('RFC-254 T22 — interpreter resolution', () => {
     expect(candidates.some((c) => c.toLowerCase().includes('system32'))).toBe(false)
   })
 
+  // 2026-10-14 回归锁（CI 38668183358 的 Windows e2e 分片 2/4）：Git for Windows 新版的工具链
+  // 目录是 `ucrt64`（ARM64 版 `clangarm64`），`which('git')` 命中 `…\\Git\\ucrt64\\bin\\git.exe`。
+  // 中间层名单只认 mingw 时推导停在 `ucrt64` 之下，RFC-253 T41 的脚本节点全部
+  // `script-interpreter-missing`。
+  for (const toolchain of ['ucrt64', 'clangarm64', 'clang64']) {
+    test(`Windows bash 在 git 由 ${toolchain}\\bin 命中时仍能找到真正的 bash`, () => {
+      const which = (cmd: string): string | null =>
+        cmd === 'git' ? win(`C:/Program Files/Git/${toolchain}/bin/git.exe`) : null
+      const candidates = interpreterCandidatePaths('bash', 'win32', 'bash', which)
+      expect(candidates).toContain(win('C:/Program Files/Git/bin/bash.exe'))
+      expect(candidates).toContain(win('C:/Program Files/Git/usr/bin/bash.exe'))
+      expect(candidates.every((c) => c.startsWith(win('C:/Program Files/Git/')))).toBe(true)
+    })
+  }
+
   test('候选集覆盖 usr\\bin 布局，且逐级向上不越过 3 层', () => {
     const dirname = (p: string): string => p.slice(0, Math.max(0, p.lastIndexOf('\\')))
     const got = gitBashCandidatesFromGitPath(win('C:/Program Files/Git/cmd/git.exe'), dirname)

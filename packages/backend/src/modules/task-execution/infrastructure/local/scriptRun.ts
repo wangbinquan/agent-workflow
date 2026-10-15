@@ -115,7 +115,20 @@ export function gitBashCandidatesFromGitPath(
   // `<root>\\mingw64\\bin\\git.exe` 上两层，而**永远走不到盘根**——先前用「上 3 层」
   // 封顶的写法会一路捞出 `C:\\bin\\bash.exe`，那既越过了 git 的安装树，也就失去了
   // 「WSL 启动器不可达」这个承重不变量的依据。
-  const INTERMEDIATE = new Set(['bin', 'cmd', 'mingw64', 'mingw32', 'usr'])
+  // 2026-10-14：Git for Windows 新版把工具链目录从 `mingw64` 换成 `ucrt64`（ARM64 版是
+  // `clangarm64`，另有 `clang64`），`windows-latest` 上 `which('git')` 随之命中
+  // `<root>\\ucrt64\\bin\\git.exe`；名单只认 mingw 时走到 `ucrt64` 就停，所有 bash 脚本节点
+  // 都以 `script-interpreter-missing` 失败。
+  const INTERMEDIATE = new Set([
+    'bin',
+    'cmd',
+    'mingw64',
+    'mingw32',
+    'ucrt64',
+    'clang64',
+    'clangarm64',
+    'usr',
+  ])
   for (;;) {
     const parent = dirnameOf(dir)
     if (parent.length === 0 || parent === dir) break
