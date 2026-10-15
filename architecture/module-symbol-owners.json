@@ -6,7 +6,7 @@
     "moduleFiles": 1697,
     "productionFiles": 3103,
     "sharedFiles": 161,
-    "symbolsIncludingFileRoots": 27162
+    "symbolsIncludingFileRoots": 27172
   },
   "entries": [
     {
@@ -112028,6 +112028,18 @@
       "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/application/pricing.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/pricing.ts#isBuiltinProtocol",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isBuiltinProtocol",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/pricing.ts",
       "id": "owner:packages/backend/src/modules/run-observability/application/pricing.ts#newest",
       "removeAfterWave": null,
       "status": "current-module",
@@ -112056,6 +112068,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ObservationPricing",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/pricing.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/pricing.ts#priceLines",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "priceLines",
       "targetContext": "run-observability",
       "targetLayer": "application"
     },
@@ -112320,6 +112344,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "count",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/usage.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/usage.ts#finalUsageOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "finalUsageOf",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -217454,6 +217490,18 @@
       "currentLayer": "util",
       "exported": false,
       "file": "packages/backend/src/util/errors.ts",
+      "id": "owner:packages/backend/src/util/errors.ts#isUserAccessError",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "isUserAccessError",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": false,
+      "file": "packages/backend/src/util/errors.ts",
       "id": "owner:packages/backend/src/util/errors.ts#log",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -217508,6 +217556,18 @@
       "symbol": "UnauthorizedError",
       "targetContext": "platform",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": false,
+      "file": "packages/backend/src/util/errors.ts",
+      "id": "owner:packages/backend/src/util/errors.ts#USER_ACCESS_STATUS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "USER_ACCESS_STATUS",
+      "targetContext": "platform",
+      "targetLayer": "domain"
     },
     {
       "currentContext": "legacy",
@@ -242598,6 +242658,18 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "RANGE_MS",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/observationFormat.ts",
+      "id": "owner:packages/frontend/src/components/observability/observationFormat.ts#runtimeLabel",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "runtimeLabel",
       "targetContext": "frontend",
       "targetLayer": "components"
     },
@@ -305076,12 +305148,36 @@
     {
       "currentContext": "shared",
       "currentLayer": "contracts",
+      "exported": false,
+      "file": "packages/shared/src/schemas/observation.ts",
+      "id": "owner:packages/shared/src/schemas/observation.ts#BUILTIN_RUNTIME_PREFIX",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "BUILTIN_RUNTIME_PREFIX",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/schemas/observation.ts",
       "id": "owner:packages/shared/src/schemas/observation.ts#formatObservationCny",
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "formatObservationCny",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observation.ts",
+      "id": "owner:packages/shared/src/schemas/observation.ts#OBSERVATION_BUILTIN_PROTOCOLS",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "OBSERVATION_BUILTIN_PROTOCOLS",
       "targetContext": "shared-contracts",
       "targetLayer": "contracts"
     },
@@ -305154,6 +305250,30 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "ObservationAgentRow",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observation.ts",
+      "id": "owner:packages/shared/src/schemas/observation.ts#observationBuiltinProtocol",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "observationBuiltinProtocol",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observation.ts",
+      "id": "owner:packages/shared/src/schemas/observation.ts#observationBuiltinRuntimeId",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "observationBuiltinRuntimeId",
       "targetContext": "shared-contracts",
       "targetLayer": "contracts"
     },
@@ -326677,5 +326797,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bca5ebffb9ff29ce34e1e5d5df90947f44b70f51e31b669632cb6d08aa3af711"
+  "sourceDigest": "sha256:fd820b5a4fd7ce721170b7976d1f9f1fd229b785c5b6b54a152f7c245d42afc4"
 }
