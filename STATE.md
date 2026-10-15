@@ -1,3 +1,7 @@
+## 2026-10-14 CI 提速（CI 微调，不走 RFC）
+
+**诊断**：主 CI 每次 push 有 72 个 job，合计约 383 runner-分钟。单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，原因是账号并发配额（20 个 job，其中 macOS 5 个）导致排队：19 个 macOS job 是关键路径，macOS e2e 排队 22–38 分钟。**用户裁决四项全做**：①后端 checkout 加 `filter: blob:none`（保留 `fetch-depth: 0`），Windows 前端跳过 bun cache；②Ubuntu 后端 32→24 片；③macOS 后端 12 片移到新增的 `.github/workflows/backend-macos-nightly.yml`（每天 04:00 UTC，可手动触发；命令、片数、15 分钟预算、`AW_TEST_PROVIDERS=sqlite` 原样）；④去掉 macOS 前端 vitest（保留 ubuntu + Windows）。预计每次 push 减到 44 个 job、约 260 runner-分钟，macOS 只剩构建和 e2e 共 4 个 job。三个拓扑守卫已同步，通用经验写入 `docs/dev-gotchas.md`。
+
 ## 2026-10-14 RFC-370 接手：v2 重设计（进行中）
 
 用户要求接手 RFC-370、按最优架构重新设计并实现（免 Codex 设计门），裁定：CrewStation 表达不了的能力由本 RFC 在 CS 仓补平台合同、完整等价后才关闭；首次托管只做全新安装，不做旧单机实例迁入；原会话已停，可直接替换阶段 A 代码。设计见 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md)，进度只记 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)。要点：单机与托管同一业务路径；执行权改为“崩溃即退出”（单机启动即 active，托管按 CS 租约，首次 active 才启动后台任务、失权即退出由平台重启），删除只有测试在走的 19 owner 平行路径；执行端口改为“调用 + 归一化事件”，本地与 CS 两个实现；托管装配集中到 `src/bootstrap/`。交付顺序 P1 单机统一 → M0 控制面上线本机 CS → M1 远程执行闭环 → M2 能力等价（含 CS 侧 RFC）→ M3 事件与运维。

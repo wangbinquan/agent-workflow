@@ -37,6 +37,11 @@ const frontendPkg = JSON.parse(
 ) as RootPackageJson
 const backendBunfig = readFileSync(resolve(root, 'packages', 'backend', 'bunfig.toml'), 'utf8')
 const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+// 2026-10-14 CI 提速：macOS 后端腿从 ci.yml 移到这条 nightly，命令 / 片数 / 预算原样。
+const macosBackendNightly = readFileSync(
+  resolve(root, '.github', 'workflows', 'backend-macos-nightly.yml'),
+  'utf8',
+)
 const visualWorkflow = readFileSync(
   resolve(root, '.github', 'workflows', 'visual-regression-nightly.yml'),
   'utf8',
@@ -222,7 +227,8 @@ describe('repository test entrypoint', () => {
     expect(backendBunfig).toContain('preload = ["./tests/setup.ts"]')
     // CI shards the backend suite across runners: each shard is an isolated VM,
     // which is why sharding is safe where `bun test --parallel` deadlocks on the
-    // single-instance daemon flock. Both CI legs keep --isolate --randomize; the
+    // single-instance daemon flock. Both CI legs (per-push ubuntu, nightly macOS)
+    // keep --isolate --randomize; the
     // ubuntu shards additionally instrument coverage and emit the lcov report
     // consumed by Codecov. The local root gate uses complete serial shards with
     // distinct home/temp namespaces; backendPkg.scripts.test remains the
@@ -230,12 +236,14 @@ describe('repository test entrypoint', () => {
     expect(ciWorkflow).toContain(
       `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }} --coverage --coverage-reporter=lcov`,
     )
-    expect(ciWorkflow).toContain(
+    expect(macosBackendNightly).toContain(
       `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }}\n`,
     )
-    expect(ciWorkflow).toContain('name: Derive reproducible backend test seed')
-    expect(ciWorkflow).toContain('echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"')
-    expect(ciWorkflow).toContain('echo "Backend test seed: $seed"')
+    for (const workflow of [ciWorkflow, macosBackendNightly]) {
+      expect(workflow).toContain('name: Derive reproducible backend test seed')
+      expect(workflow).toContain('echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"')
+      expect(workflow).toContain('echo "Backend test seed: $seed"')
+    }
   })
 
   test('logger tests capture through a local sink without mutating process stdout', () => {
@@ -293,13 +301,22 @@ describe('repository test entrypoint', () => {
       os: string[]
       shard: number[]
       shards: number[]
-      include: { os: string; shard: number; shards: number }[]
+      include?: { os: string; shard: number; shards: number }[]
     } = parse(backendJob)['test-backend'].strategy.matrix
+    expect(matrix.include).toBeUndefined()
+    const macosJob: {
+      'runs-on': string
+      strategy: { 'fail-fast': boolean; matrix: { shard: number[]; shards: number[] } }
+    } = parse(macosBackendNightly).jobs['test-backend-macos']
+    expect(macosJob['runs-on']).toBe('macos-latest')
+    expect(macosJob.strategy['fail-fast']).toBe(false)
     const backendLegs = [
       ...matrix.os.flatMap((os) =>
         matrix.shard.flatMap((shard) => matrix.shards.map((shards) => ({ os, shard, shards }))),
       ),
-      ...matrix.include,
+      ...macosJob.strategy.matrix.shard.flatMap((shard) =>
+        macosJob.strategy.matrix.shards.map((shards) => ({ os: 'macos-latest', shard, shards })),
+      ),
     ]
     expect([...new Set(backendLegs.map((leg) => leg.os))].sort()).toEqual([
       'macos-latest',
@@ -314,12 +331,15 @@ describe('repository test entrypoint', () => {
       // RFC-370 CI 修复：run 36404992960 的 5/12 持续执行仍耗尽总预算，扩到十六片。
       // 2026-10-06: 13/16 exhausted the original job budget while the suite advanced.
       // Thirty-two independent runners retain both providers and every original test.
-      ['ubuntu-latest', 32],
+      // 2026-10-14 CI 提速：32 → 24 片。实测单片 5~7 分钟，主要开销在排队与每片 ~1.5 分钟
+      // 的固定开销；24 片单片 ~8~10 分钟，仍在预算 ~67% 以内。
+      ['ubuntu-latest', 24],
       // RFC-359 W57：macOS 从四片加到六片——四片时最长的一片长期在 15 分钟预算的 75%~90%，
       // 实测有一次跑到 15 分 16 秒被超时杀掉（GitHub 把超时报成 `cancelled`，聚合 job 随之判红）。
       // 处置照 ci.yml 自己立的规矩：加 runner，不动预算、不改单条用例超时。
       // 2026-10-06: two complete 6/6 runs hit the same job budget while tests advanced.
       // Twelve independent runners retain the complete discovery set and all original budgets.
+      // 2026-10-14：这 12 片整体移到 backend-macos-nightly.yml。
       ['macos-latest', 12],
     ] as const) {
       // Every N/M occurs once, so native Bun sharding partitions the complete
@@ -334,8 +354,11 @@ describe('repository test entrypoint', () => {
       'name: Backend tests (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})',
     )
     expect(occurrenceCount(backendJob, `--shard=\${{ matrix.shard }}/\${{ matrix.shards }}`)).toBe(
-      2,
+      1,
     )
+    expect(
+      occurrenceCount(macosBackendNightly, `--shard=\${{ matrix.shard }}/\${{ matrix.shards }}`),
+    ).toBe(1)
     const coverageStep = workflowStep(
       backendJob,
       'Upload backend coverage to Codecov (ubuntu shards)',
@@ -352,8 +375,9 @@ describe('repository test entrypoint', () => {
     // RFC-254 T31: the frontend leg is the first test matrix to gain Windows.
     // It went in only after the suite was measured green on a real Windows host
     // (702 files / 5957 tests, 0 fail); the backend matrix deliberately stays
-    // two-OS below until the same is true there.
-    expect(frontendJob).toContain('os: [ubuntu-latest, macos-latest, windows-latest]')
+    // without Windows below until the same is true there.
+    // 2026-10-14 CI 提速：macOS 腿去掉（jsdom vitest 与平台基本无关）。
+    expect(frontendJob).toContain('os: [ubuntu-latest, windows-latest]')
     expect(frontendJob).toContain('shard: [1, 2, 3]')
     expect(occurrenceCount(frontendJob, `--shard=\${{ matrix.shard }}/3`)).toBe(1)
 

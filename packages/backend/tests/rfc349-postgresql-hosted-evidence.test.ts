@@ -173,20 +173,21 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     // Ubuntu 侧每个文件跑两遍，连续两次 run 的 shard 1/8 撞上 15 分钟 job 预算。
     // 9a591ff3a 再扩到十六片；2026-10-06 macOS 六片两次仍触达原预算，扩到十二片。
     // 精确登记完整矩阵；所有覆盖要求、provider、命令及原预算不变。
+    // 2026-10-14 CI 提速：Ubuntu 32 → 24 片（单片仍在预算 ~67% 内）；macOS 12 片整体移到
+    // `backend-macos-nightly.yml`，片数与预算原样。
     // Parse the owning job: the shard text must not accept an unrelated matrix elsewhere
     // in this workflow or reject the stronger expanded leg.
     const matrix = parse(owners['ci.yml']).jobs['test-backend'].strategy.matrix
     expect(matrix.os).toEqual(['ubuntu-latest'])
-    expect(matrix.shard).toEqual(Array.from({ length: 32 }, (_, index) => index + 1))
-    expect(matrix.shards).toEqual([32])
-    expect(matrix.include).toEqual(
-      Array.from({ length: 12 }, (_, index) => ({
-        os: 'macos-latest',
-        shard: index + 1,
-        shards: 12,
-      })),
-    )
+    expect(matrix.shard).toEqual(Array.from({ length: 24 }, (_, index) => index + 1))
+    expect(matrix.shards).toEqual([24])
+    expect(matrix.include).toBeUndefined()
     expect(matrix.exclude).toBeUndefined()
+    const macosMatrix = parse(
+      readFileSync(resolve(ROOT, '.github', 'workflows', 'backend-macos-nightly.yml'), 'utf8'),
+    ).jobs['test-backend-macos'].strategy.matrix
+    expect(macosMatrix.shard).toEqual(Array.from({ length: 12 }, (_, index) => index + 1))
+    expect(macosMatrix.shards).toEqual([12])
     // 全量 e2e 腿不得重新加上 PR 档的过滤，否则 `@nightly` 会全域失守：删掉的那 9 条
     // lane 里的 e2e 正是靠「不过滤」才和它等价。只看真正执行的 `run:` 行——这份 YAML 的
     // 注释里就写着 PR 档用 `--grep-invert '@nightly'`，全文匹配会把注释也算进去。
@@ -204,26 +205,28 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
   // hold on the leg that inherited the coverage, or the same two failures simply
   // move rather than being covered.
   test('the owning Main CI backend job still carries the environment that lane needed', () => {
-    const mainCi = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
-
-    const backend: {
-      strategy: { matrix: { os: string[]; include: { os: string }[] } }
+    type BackendJob = {
+      'runs-on': string
+      strategy: { matrix: { os?: string[] } }
       steps: { uses?: string; with?: { 'fetch-depth'?: number }; run?: string }[]
-    } = parse(mainCi).jobs['test-backend']
-    expect(
-      backend.steps.some(
-        (step) => step.uses?.startsWith('actions/checkout@') && step.with?.['fetch-depth'] === 0,
-      ),
-    ).toBe(true)
-    expect(
-      backend.steps.some((step) => step.run?.includes('bun install -g opencode-ai@latest')),
-    ).toBe(true)
-    // Both OS legs still own this same environment, including appended matrix entries.
-    const matrix = backend.strategy.matrix
-    expect([...new Set([...matrix.os, ...matrix.include.map((leg) => leg.os)])].sort()).toEqual([
-      'macos-latest',
-      'ubuntu-latest',
-    ])
+    }
+    const workflow = (name: string) =>
+      parse(readFileSync(resolve(ROOT, '.github', 'workflows', name), 'utf8'))
+    const ubuntu: BackendJob = workflow('ci.yml').jobs['test-backend']
+    const macos: BackendJob = workflow('backend-macos-nightly.yml').jobs['test-backend-macos']
+    expect(ubuntu.strategy.matrix.os).toEqual(['ubuntu-latest'])
+    expect(macos['runs-on']).toBe('macos-latest')
+    // Both OS legs (per-push ubuntu, nightly macOS) still own this same environment.
+    for (const backend of [ubuntu, macos]) {
+      expect(
+        backend.steps.some(
+          (step) => step.uses?.startsWith('actions/checkout@') && step.with?.['fetch-depth'] === 0,
+        ),
+      ).toBe(true)
+      expect(
+        backend.steps.some((step) => step.run?.includes('bun install -g opencode-ai@latest')),
+      ).toBe(true)
+    }
   })
 
   test('locks before/after crash coverage for every migration phase and the first target chunk', () => {

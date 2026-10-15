@@ -13,7 +13,9 @@
 //   ① backend 分片作业在 ubuntu 上确实起了 postgres 服务容器；
 //   ② ubuntu 那一步确实把 `AW_TEST_POSTGRESQL_URL` 交给了 `bun test`；
 //   ③ 全部 workflow / job / step 的 env 块里，仅允许已登记的两处 SQLite 收窄；
-//   ④ macOS 步骤明确排除 ubuntu，Windows platform 作业固定 Windows runner 且没有 PostgreSQL 服务。
+//   ④ macOS backend nightly 作业与 Windows platform 作业各自固定 runner 且没有 PostgreSQL 服务。
+//      （2026-10-14 CI 提速：macOS 后端从 ci.yml 的 step 级收窄移到 `backend-macos-nightly.yml`
+//      的 job 级收窄；ubuntu 腿的双引擎接线不变。）
 //
 // ③④ 同时锁位置和运行条件；更改 runner 或再加一处收窄都需要更新判据。
 
@@ -189,6 +191,15 @@ export function excludesUbuntu(condition: string): boolean {
   return /matrix\.os\s*!=\s*'ubuntu-latest'/.test(condition)
 }
 
+export function isMacosNightlyOverride(row: ProviderOverride): boolean {
+  return (
+    row.workflow === 'backend-macos-nightly.yml' &&
+    row.job === 'test-backend-macos' &&
+    row.scope === 'job' &&
+    row.runner === 'macos-latest'
+  )
+}
+
 export function isWindowsPlatformOverride(row: ProviderOverride): boolean {
   return (
     row.workflow === 'windows-platform.yml' &&
@@ -235,7 +246,7 @@ describe('RFC-359 W8 —— CI 的双引擎接线', () => {
     ).toBeGreaterThanOrEqual(1)
   })
 
-  test('③④ AW_TEST_PROVIDERS 仅用于 macOS backend 步骤与 Windows platform 作业', () => {
+  test('③④ AW_TEST_PROVIDERS 仅用于 macOS backend nightly 作业与 Windows platform 作业', () => {
     const overrides = providerOverrides(files)
     expect(
       overrides
@@ -245,13 +256,15 @@ describe('RFC-359 W8 —— CI 的双引擎接线', () => {
         '有一整条 lane 的 PostgreSQL 验证被静默关掉，而**不会有任何用例变红**。' +
         '要新增只有一种情况：又出现一个起不了服务容器的 runner——那就连同理由一起更新本判据。',
     ).toEqual([
-      'ci.yml:test-backend:step:Test backend (macOS shard — no coverage)=sqlite',
+      'backend-macos-nightly.yml:test-backend-macos:job:(job)=sqlite',
       'windows-platform.yml:platform:job:(job)=sqlite',
     ])
 
     for (const row of overrides) {
       expect(
-        isWindowsPlatformOverride(row) || (row.scope === 'step' && excludesUbuntu(row.condition)),
+        isWindowsPlatformOverride(row) ||
+          isMacosNightlyOverride(row) ||
+          (row.scope === 'step' && excludesUbuntu(row.condition)),
         `${row.workflow}:${row.job}:${row.step} 关掉了 PostgreSQL，但它的 \`if\` 没有明确排除 ` +
           `ubuntu（当前条件：${row.condition || '(无)'}）。ubuntu 是唯一带 postgres 服务容器的 ` +
           `runner，在那里关掉双引擎等于把 RFC-359 的验证面归零。`,
@@ -263,6 +276,13 @@ describe('RFC-359 W8 —— CI 的双引擎接线', () => {
     const platform = jobsOf(windows).find(([name]) => name === 'platform')?.[1]
     expect(platform?.['runs-on']).toBe('windows-latest')
     expect(platform?.services).toBeUndefined()
+
+    const macosNightly = parse(
+      readFileSync(join(WORKFLOWS, 'backend-macos-nightly.yml'), 'utf8'),
+    ) as unknown
+    const macos = jobsOf(macosNightly).find(([name]) => name === 'test-backend-macos')?.[1]
+    expect(macos?.['runs-on']).toBe('macos-latest')
+    expect(macos?.services).toBeUndefined()
   })
 })
 
@@ -328,8 +348,35 @@ jobs:
     expect(rows.map((row) => row.scope)).toEqual(['workflow', 'job'])
     for (const row of rows) {
       expect(isWindowsPlatformOverride(row)).toBe(false)
+      expect(isMacosNightlyOverride(row)).toBe(false)
       expect(excludesUbuntu(row.condition)).toBe(false)
     }
+  })
+
+  test('macOS nightly 例外同时匹配工作流、作业、env 层级和固定 runner', () => {
+    const rows = providerOverrides([
+      [
+        'backend-macos-nightly.yml',
+        `jobs:
+  test-backend-macos:
+    runs-on: macos-latest
+    env:
+      AW_TEST_PROVIDERS: sqlite
+    steps:
+      - run: bun test
+`,
+      ],
+    ])
+    expect(rows).toHaveLength(1)
+    const row = rows[0]!
+    expect(isMacosNightlyOverride(row)).toBe(true)
+    expect(isWindowsPlatformOverride(row)).toBe(false)
+    expect(isMacosNightlyOverride({ ...row, workflow: 'ci.yml' })).toBe(false)
+    expect(isMacosNightlyOverride({ ...row, job: 'test-backend' })).toBe(false)
+    expect(isMacosNightlyOverride({ ...row, scope: 'workflow' })).toBe(false)
+    expect(isMacosNightlyOverride({ ...row, scope: 'step' })).toBe(false)
+    expect(isMacosNightlyOverride({ ...row, runner: 'ubuntu-latest' })).toBe(false)
+    expect(isMacosNightlyOverride({ ...row, runner: '${{ matrix.os }}' })).toBe(false)
   })
 
   test('Windows 例外同时匹配工作流、作业、env 层级和固定 runner', () => {

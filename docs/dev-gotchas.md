@@ -368,6 +368,15 @@
 
 - **给共享 harness 加东西，别让不需要它的用例陪着付钱**（同日，自伤后自修）。我给一张 8 类资源的 ACL 矩阵加了第五个用户，只有其中 1 类用得上，但它建在 `beforeEach` 里——`createUser` 会**故意慢速**哈希密码，于是另外 7 类 × 33 条用例全在为一条用例付这笔钱。高负载下随即出现一次与本改动无关的用例超时红。**没拿「重跑九次都绿」当通过依据**（含三次 `--isolate --randomize`）：能消掉的时序面就消掉。**定式**：往共享 fixture 里加**慢**操作（密码哈希、子进程、文件系统、网络桩）时按需构造，别无条件建。
 
+## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
+
+本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。
+
+- 判断要不要加分片前，先按 run 拉 `startedAt - run.createdAt` 看排队时间。如果排队时间远大于 job 自身时长，加分片只会多付每片约 1.5 分钟的固定开销（checkout、装依赖、起 PG），墙钟反而更长。分片只用来让单片留在 15 分钟预算内，目标是预算的约 67%。
+- 固定开销要按 job 数乘起来算：后端 checkout 用 `fetch-depth: 0` 时每片要约 60 秒，现在加了 `filter: blob:none`（历史提交与树照常全量拉取，blob 按需取，provenance 守卫的 `git show <sha>:<path>` 不受影响）。Windows 恢复 bun cache 要 78–90 秒，所以 Windows 腿一律跳过这个 cache。
+- 处置（2026-10-14 用户裁决）：Ubuntu 后端分片 32→24；macOS 后端 12 片移到 `backend-macos-nightly.yml`（命令、片数、预算都不变）；去掉 macOS 前端 vitest。拓扑由 `root-test-entrypoint` / `rfc349-postgresql-hosted-evidence` / `rfc359-w8-ci-dual-engine-wiring` 三个测试钉住。
+- 手动触发多条 nightly 时，**不要和推 main 撞在同一时间**，它们会和主 CI 抢同一组 20 个槽。
+
 ## 单引擎测试迁双引擎：先搜 `.run()`，它是唯一编译器帮不上忙的那一种（2026-09-14 连撞三批）
 
 把一份钉死在 bun:sqlite 上的测试改成 `describeEachProvider` 时，真正的工作量不是换 harness，

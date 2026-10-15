@@ -450,7 +450,7 @@ export const RFC349_T10_WORKFLOW_TEST_FILES = Object.freeze(
  *
  *   backend×4 —— 当时 Main CI 同命令同 env，ubuntu + macOS 各 4 片，且种子每轮按
  *                run number 变；这里写死 `--seed=349001`，永远只探同一个顺序。
- *   frontend  —— Main CI 跑 ubuntu + macOS + Windows 各 3 片。
+ *   frontend  —— Main CI 跑 ubuntu + Windows 各 3 片（2026-10-14 CI 提速去掉 macOS 腿）。
  *   e2e×4     —— `e2e-full-nightly` 逐字相同的 `--shard=N/4 --workers=1` 全量档。
  *
  * 而它们被 `needs:` 挂在取证 job 后面（取证红了整批 skip），历史上几乎没真跑过；
@@ -477,8 +477,8 @@ export const RFC349_T10_REGRESSION_COVERAGE_OWNERS = Object.freeze([
     evidenceRole: 'ui-only-full-regression',
     ownerWorkflow: 'ci.yml',
     command: 'bun run --filter @agent-workflow/frontend test',
-    // 删掉的那条只跑 ubuntu；Main CI 三个 OS。
-    strongerBecause: 'os: [ubuntu-latest, macos-latest, windows-latest]',
+    // 删掉的那条只跑 ubuntu；Main CI 跑 ubuntu + Windows 两个 OS。
+    strongerBecause: 'os: [ubuntu-latest, windows-latest]',
   },
   {
     lane: 'e2e',

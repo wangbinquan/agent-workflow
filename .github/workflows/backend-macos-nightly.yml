@@ -1,0 +1,86 @@
+# macOS backend suite — nightly.
+#
+# Why a separate workflow (2026-10-14 CI 提速):
+#   * Main CI's wall clock is bounded by the account's concurrency quota
+#     (20 jobs, of which only 5 may be macOS). The twelve macOS backend shards
+#     alone took ~78 runner-minutes per push and sat in front of the macOS e2e
+#     shards, making the macOS queue the critical path of every run.
+#   * The same suite still runs on every push on ubuntu (24 shards, SQLite +
+#     PostgreSQL). macOS-only regressions now surface with ≤ 24h latency, and
+#     `workflow_dispatch` gives pre-merge feedback when a change touches
+#     darwin-specific process / filesystem / git behaviour.
+#
+# The shard count, job budget, seed derivation and test command are exactly
+# what ci.yml's macOS legs used (see the history in ci.yml `test-backend`).
+
+name: backend-macos-nightly
+
+on:
+  schedule:
+    # 04:00 UTC daily — clear of the other nightlies (05:00–09:00 UTC).
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-backend-macos:
+    name: Backend tests (macos-latest shard ${{ matrix.shard }}/${{ matrix.shards }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        shards: [12]
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      # RFC-359 §11.1：macOS runner 没有服务容器，显式声明只跑 SQLite；Ubuntu（ci.yml）仍跑双引擎。
+      AW_TEST_PROVIDERS: sqlite
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # RFC-294 N1 provenance guards replay pinned snapshots; keep the full
+          # commit graph, fetch blobs on demand (same as ci.yml).
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install current opencode (diagnostic compatibility coverage)
+        shell: bash
+        run: |
+          bun install -g opencode-ai@latest
+          export PATH="$HOME/.bun/bin:$PATH"
+          opencode --version
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Derive reproducible backend test seed
+        shell: bash
+        run: |
+          seed=$(( (GITHUB_RUN_NUMBER * 10 + MATRIX_SHARD) % 2147483647 ))
+          if (( seed == 0 )); then seed=1; fi
+          echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"
+          echo "Backend test seed: $seed"
+        env:
+          MATRIX_SHARD: ${{ matrix.shard }}
+
+      - name: Test backend (macOS shard — no coverage)
+        shell: bash
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }}
+        env:
+          RUN_GIT_NETWORK: '1'
