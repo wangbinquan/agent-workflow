@@ -1,3 +1,7 @@
+## 2026-10-14 RFC-371 v2 断代后的真实任务验证与五处修正
+
+用户问「重构后旧数据界面都不显示，是丢失还是断代」：是 v2 设计内的断代——`0256` 退役 v1 的 81 张观测表、不迁移（v2 §7、§9），业务事实不受影响，迁移前全库在 `backupOnMigration` 备份里；本机库约 23 GB 空闲页可经「数据库维护」回收。用 dist 二进制在本机正式数据目录新跑 9 个任务（单节点子 Agent、并行、串行、独立 Agent、取消、`kill -9` 后恢复）：27 次调用逐条与 OpenCode 原生库对拍全等，验收价（仅配在验收运行时）计价精确，四个统计接口与库内求和一致。发现并修正五处（`a3ce7991e`，`14ef0b09c` 收拢查询表达式，配套 `202adfb71`）：未注册运行时的调用（旧 `*Model` 设置的系统 Agent）以 `builtin:<protocol>` 作价格线键并可定价；总览按任务汇总含系统调用；外部取消/中断的 complete 快照记为下界 partial；任务详情状态改走公共 PageHeader；`UserAccessError` 不再落成 500。详见 [断代验证](design/RFC-371-run-observability/cutover-verification-20261014.md)。本机 PG 侧受并发 RFC-370 在制 schema 影响无法自测，以确切 SHA 的 CI 为准。census 用 HEAD 版脚本 `--source-ref` 只读已提交对象生成，未读入、未改动 RFC-370 在制文件；本笔退役 `202adfb71` 的一次性许可（27172 保持）。
+
 ## 2026-10-14 CI 提速（CI 微调，不走 RFC）
 
 **诊断**：主 CI 每次 push 有 72 个 job，合计约 383 runner-分钟。单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，原因是账号并发配额（20 个 job，其中 macOS 5 个）导致排队：19 个 macOS job 是关键路径，macOS e2e 排队 22–38 分钟。**用户裁决四项全做**：①后端 checkout 加 `filter: blob:none`（保留 `fetch-depth: 0`），Windows 前端跳过 bun cache；②Ubuntu 后端 32→24 片；③macOS 后端 12 片移到新增的 `.github/workflows/backend-macos-nightly.yml`（每天 04:00 UTC，可手动触发；命令、片数、15 分钟预算、`AW_TEST_PROVIDERS=sqlite` 原样）；④去掉 macOS 前端 vitest（保留 ubuntu + Windows）。预计每次 push 减到 44 个 job、约 260 runner-分钟，macOS 只剩构建和 e2e 共 4 个 job。三个拓扑守卫已同步，通用经验写入 `docs/dev-gotchas.md`。
