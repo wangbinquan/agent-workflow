@@ -317,6 +317,12 @@ participant 消费 prepared operation；随后通过 task-execution 自有 lifec
 participant 失败都会回滚整笔 DB mutation，prepared operation 留给 retry/recovery。T7 已把 collaboration 的 ORM、node mint 与
 lifecycle 适配实现下沉到 infrastructure，application 不再反向 import legacy service / `drizzle-orm`。
 
+> 2026-10-15 勘误（同波兄弟门）：持 owner token 的 TaskParkTx 以 owner 围栏（ownerId + daemon 代际 + epoch + claimed）作为
+> 执行代际判据，任务跃迁按**事务内当前**修订号做 CAS——同一波里先停靠的兄弟门已把任务推到 awaiting_human 时后一个门合流，
+> 被决定放回 running 时重新停靠，离开运行生命周期的任务仍按合法源状态拒绝。此前按准备时记下的修订号做 CAS，两个并行提问方
+> 同时收尾会让后一个门以「修订号已变」失败、整轮问题丢失（`rfc333-sibling-gate-park.test.ts`）。无主停靠仍以准备时的修订号为
+> 唯一围栏。
+
 ## 5. 打开人工门
 
 ### 5.1 review open

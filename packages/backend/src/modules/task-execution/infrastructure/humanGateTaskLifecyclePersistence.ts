@@ -56,6 +56,31 @@ async function fence(
   await assertTaskOwnerTx(tx, token, now)
 }
 
+/**
+ * 停靠按哪个任务修订号做 CAS。
+ *
+ * 门在准备时记下当时读到的修订号；同一波里两个提问方几乎同时收尾时，先停靠的那个把任务
+ * running→awaiting_human、修订号加一，后一个拿着旧修订号停靠就会被判「修订号已变」而丢掉整轮问题
+ * （rfc333-sibling-gate-park.test.ts）。带 owner token 的停靠已经在同一笔事务里过了 owner 围栏
+ * （ownerId + daemon 代际 + epoch + claimed），那才是执行代际的判据——所以按任务**此刻**的修订号
+ * 跃迁：兄弟门已停靠就合流，被决定放回 running 就重新停靠，离开运行生命周期的任务仍由
+ * `transitionHumanGateTask` 的合法源状态拒绝。无主停靠没有别的围栏，准备时的修订号仍是唯一判据。
+ */
+async function parkRevision(
+  tx: TaskExecutionTransaction,
+  input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0],
+): Promise<number> {
+  if (input.token === undefined) return input.prepared.expectedTaskRevision
+  const row = (
+    await tx
+      .select({ lifecycleEventRevision: tasks.lifecycleEventRevision })
+      .from(tasks)
+      .where(eq(tasks.id, input.prepared.taskId))
+      .limit(1)
+  )[0]
+  return row?.lifecycleEventRevision ?? input.prepared.expectedTaskRevision
+}
+
 function gatesIn(tx: TaskExecutionTransaction): DatabaseHumanGateOpenParticipantInTx {
   return new DatabaseHumanGateOpenParticipantInTx(
     tx,
@@ -94,7 +119,7 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
       }
       const parked = await transitionHumanGateTask(tx, {
         taskId: input.prepared.taskId,
-        expectedTaskRevision: input.prepared.expectedTaskRevision,
+        expectedTaskRevision: await parkRevision(tx, input),
         transition: consumed.gate.kind === 'review' ? 'park-review' : 'park-human',
         now: input.now,
         committedEventIdentity: {
