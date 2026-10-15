@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 27,
-    "transactionCallbacks": 259
+    "transactionCallbacks": 262
   },
   "entries": [
     {
@@ -1890,6 +1890,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillContent.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillContent.ts#transaction:111",
+      "line": 111,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillContent.ts#createDatabaseSkillContent",
+      "status": "clear",
+      "symbol": "createDatabaseSkillContent",
+      "targetContext": "resource-catalog",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#transaction:455",
@@ -2816,6 +2828,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/system-operations/infrastructure/databaseApplicationConfiguration.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/system-operations/infrastructure/databaseApplicationConfiguration.ts#transaction:63",
+      "line": 63,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseApplicationConfiguration.ts#createDatabaseApplicationConfiguration",
+      "status": "clear",
+      "symbol": "createDatabaseApplicationConfiguration",
+      "targetContext": "system-operations",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:540",
@@ -3036,6 +3060,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/platform/persistence/hostedInstallationSeed.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/platform/persistence/hostedInstallationSeed.ts#transaction:112",
+      "line": 112,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/hostedInstallationSeed.ts#seedHostedInstallation",
+      "status": "clear",
+      "symbol": "seedHostedInstallation",
+      "targetContext": "platform",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/maintenanceRunStore.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/platform/persistence/maintenanceRunStore.ts#transaction:125",
@@ -3172,7 +3208,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fbdda3b715d7c25987b0de52d0cc51130b9d1ef4257544df1cfd73dc4b9bb208",
+  "sourceDigest": "sha256:0382fdd061d34f0d7cf6770c38cd016d1bb3ef7c86729418076d9d0b7da84768",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

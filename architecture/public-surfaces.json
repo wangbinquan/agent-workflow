@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 1278,
+    "consumers": 1280,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1573,
@@ -163010,6 +163010,8 @@
         "maxUnionVariants": 16
       },
       "consumerEdgeIds": [
+        "import:544ac4fcaeefe1f63eff",
+        "import:9ac02453a14c71af5502",
         "import:cd7b108c37332c378eb5",
         "import:d19aa30d1500c0b465b4"
       ],
@@ -163025,6 +163027,8 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163043,6 +163047,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163051,6 +163056,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163059,6 +163065,8 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163067,6 +163075,8 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163085,6 +163095,8 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163103,6 +163115,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163111,6 +163124,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163119,6 +163133,8 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163127,6 +163143,8 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163155,6 +163173,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163163,6 +163182,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163185,12 +163205,16 @@
       "members": [],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff"
+          ],
           "name": "close",
           "signatureDigest": "sha256:6a8683020bea564c25f6810b2a01cbb73802656b55a813b0f62dd6ca36e88b69"
         },
         {
           "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502",
             "import:cd7b108c37332c378eb5",
             "import:d19aa30d1500c0b465b4"
           ],
@@ -163198,18 +163222,35 @@
           "signatureDigest": "sha256:8979ae4d3deddb4dce71ef006907fc7cb526476cd2dfde5a2fd8dd7798293f71"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff"
+          ],
           "name": "onLost",
           "signatureDigest": "sha256:0a85a5a1c65de656d1fee30683407c2d02807d2edb4064ddca66e136274a64e7"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:544ac4fcaeefe1f63eff",
+            "import:9ac02453a14c71af5502"
+          ],
           "name": "whenActive",
           "signatureDigest": "sha256:4f1e87346fb6d42903f68d911c2634af7868fe734032136705920e447376d969"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/participants.ts#$file",
       "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:544ac4fcaeefe1f63eff",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:9ac02453a14c71af5502",
+          "file": "packages/backend/src/cli/executionActivation.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/executionActivation.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:cd7b108c37332c378eb5",
@@ -207177,7 +207218,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fbdda3b715d7c25987b0de52d0cc51130b9d1ef4257544df1cfd73dc4b9bb208",
+  "sourceDigest": "sha256:0382fdd061d34f0d7cf6770c38cd016d1bb3ef7c86729418076d9d0b7da84768",
   "targetContexts": [
     "collaboration",
     "development-automation",

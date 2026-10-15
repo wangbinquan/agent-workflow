@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:fbdda3b715d7c25987b0de52d0cc51130b9d1ef4257544df1cfd73dc4b9bb208`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:0382fdd061d34f0d7cf6770c38cd016d1bb3ef7c86729418076d9d0b7da84768`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,14 +10,14 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2204 |
+| backend production TS 文件 | 2217 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1630 / 18 |
+| `modules/**` 文件 / 非空 context | 1640 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
-| production ambient wiring seam | 506 |
+| production ambient wiring seam | 508 |
 | background work entries | 355 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 76 |
@@ -29,17 +29,17 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 506 |
-| `architectureExceptions` | 5671 |
+| `ambientWiring` | 508 |
+| `architectureExceptions` | 5726 |
 | `backgroundJobs` | 355 |
-| `crossContextImports` | 6456 |
+| `crossContextImports` | 6519 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26692 |
-| `mutationEntrypoints` | 1917 |
+| `moduleSymbolOwners` | 26833 |
+| `mutationEntrypoints` | 1930 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1210 |
-| `transactionExternalEffects` | 259 |
+| `transactionExternalEffects` | 262 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -48,7 +48,7 @@
 | context / layer | 数量 |
 | --- | --- |
 | task-execution / application | 138 |
-| resource-catalog / infrastructure | 131 |
+| resource-catalog / infrastructure | 134 |
 | task-execution / infrastructure | 130 |
 | task-execution / composition | 89 |
 | resource-catalog / application | 78 |
@@ -60,10 +60,10 @@
 | source-control / infrastructure | 36 |
 | task-execution / domain | 36 |
 | development-automation / domain | 34 |
+| system-operations / infrastructure | 32 |
 | integration / application | 31 |
 | intent / application | 30 |
 | source-control / application | 30 |
-| system-operations / infrastructure | 29 |
 | system-operations / application | 27 |
 | integration / infrastructure | 26 |
 | identity-access / application | 25 |
@@ -75,11 +75,11 @@
 | development-automation / composition | 18 |
 | intent / domain | 18 |
 | code-capability / infrastructure | 15 |
+| identity-access / infrastructure | 15 |
+| system-operations / composition | 15 |
 | collaboration / domain | 14 |
 | digital-employee / application | 14 |
 | source-control / composition | 14 |
-| system-operations / composition | 14 |
-| identity-access / infrastructure | 12 |
 | code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
 | memory / application | 11 |
@@ -148,7 +148,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| platform | 202 |
+| platform | 203 |
 | task-execution | 74 |
 | resource-catalog | 51 |
 | runtime-management | 45 |
@@ -156,8 +156,8 @@
 | collaboration | 31 |
 | workspace-insight | 31 |
 | integration | 28 |
+| bootstrap | 25 |
 | source-control | 24 |
-| bootstrap | 23 |
 | development-automation | 10 |
 | system-operations | 9 |
 | digital-employee | 3 |
@@ -208,14 +208,14 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3520 |
-| legacy-inbound | 1930 |
+| legacy-outbound | 3562 |
+| legacy-inbound | 1943 |
 | offered-consumption | 347 |
-| infrastructure-external | 288 |
+| infrastructure-external | 291 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 97 |
+| required-implementation | 83 |
 | authority-type-only | 78 |
-| required-implementation | 78 |
 | external-layer-debt | 4 |
 | provider-mirror | 2 |
 
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3520 |
-| legacy-inbound | 1930 |
+| legacy-outbound | 3562 |
+| legacy-inbound | 1943 |
 | temporary-internal-debt | 112 |
 | off-dag-offered | 97 |
 | no-circular | 6 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2901 |
-| W9-D | 1065 |
+| W9 | 2942 |
+| W9-D | 1079 |
 | W4-E1 | 824 |
 | W5 | 203 |
 | W4 | 201 |

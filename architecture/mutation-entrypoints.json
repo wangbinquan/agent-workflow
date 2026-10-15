@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1917,
+    "entries": 1930,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -768,6 +768,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/dev.ts#createDevelopmentDaemonState",
       "symbol": "createDevelopmentDaemonState",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/cli/executionActivation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/executionActivation.ts#createExecutionExitRequests",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/executionActivation.ts#createExecutionExitRequests",
+      "symbol": "createExecutionExitRequests",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/cli/executionActivation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/cli/executionActivation.ts#startOnExecutionActive",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/cli/executionActivation.ts#startOnExecutionActive",
+      "symbol": "startOnExecutionActive",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -10317,6 +10367,73 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/crewstation/crewStationAuthentication.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/crewstation/crewStationAuthentication.ts#createCrewStationCredentialAdapters",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/crewstation/crewStationAuthentication.ts#createCrewStationCredentialAdapters",
+      "symbol": "createCrewStationCredentialAdapters",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/crewstation/crewStationIdentityToken.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/crewstation/crewStationIdentityToken.ts#createCrewStationIdentityTokenVerifier",
+      "missingControls": [
+        "audit",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/crewstation/crewStationIdentityToken.ts#createCrewStationIdentityTokenVerifier",
+      "symbol": "createCrewStationIdentityTokenVerifier",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/externalIdentityProvisioning.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/externalIdentityProvisioning.ts#createExternalIdentityProvisioning",
+      "missingControls": [
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/externalIdentityProvisioning.ts#createExternalIdentityProvisioning",
+      "symbol": "createExternalIdentityProvisioning",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -17617,6 +17734,125 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/catalogQuery.ts#createResourceCatalogSummaryReadPort",
       "symbol": "createResourceCatalogSummaryReadPort",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities.ts#createHostedPluginInstaller",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities.ts#createHostedPluginInstaller",
+      "symbol": "createHostedPluginInstaller",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities.ts#createHostedResourcePackageArtifacts",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities.ts#createHostedResourcePackageArtifacts",
+      "symbol": "createHostedResourcePackageArtifacts",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillContent.ts#createDatabaseSkillContent",
+      "missingControls": [
+        "audit",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillContent.ts#createDatabaseSkillContent",
+      "symbol": "createDatabaseSkillContent",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts#deleteTree",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts#deleteTree",
+      "symbol": "deleteTree",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts#renameTree",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts#renameTree",
+      "symbol": "renameTree",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -25612,6 +25848,75 @@
       "symbol": "RestoreDirection",
       "targetContext": "system-operations",
       "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/crewstation/hostedDatabaseInstallation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/crewstation/hostedDatabaseInstallation.ts#createHostedDatabaseInstallation",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/crewstation/hostedDatabaseInstallation.ts#createHostedDatabaseInstallation",
+      "symbol": "createHostedDatabaseInstallation",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts#createStandbyExecutionAuthority",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts#createStandbyExecutionAuthority",
+      "symbol": "createStandbyExecutionAuthority",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/databaseApplicationConfiguration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/databaseApplicationConfiguration.ts#createDatabaseApplicationConfiguration",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseApplicationConfiguration.ts#createDatabaseApplicationConfiguration",
+      "symbol": "createDatabaseApplicationConfiguration",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -45906,7 +46211,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fbdda3b715d7c25987b0de52d0cc51130b9d1ef4257544df1cfd73dc4b9bb208",
+  "sourceDigest": "sha256:0382fdd061d34f0d7cf6770c38cd016d1bb3ef7c86729418076d9d0b7da84768",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
