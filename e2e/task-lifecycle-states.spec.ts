@@ -61,7 +61,7 @@ interface BasicFixtures {
 /** Minimal linear workflow: input → agent-single → output. */
 async function seedLinearWorkflow(
   daemon: DaemonHandle,
-  opts: { agentName: string; nodeRetries?: number; outputs?: string[] } = {
+  opts: { agentName: string; outputs?: string[] } = {
     agentName: 'lifecycle-agent',
   },
 ): Promise<BasicFixtures> {
@@ -84,9 +84,6 @@ async function seedLinearWorkflow(
   if (!aRes.ok) throw new Error(`seed agent: ${aRes.status}`)
   const agent = (await aRes.json()) as { id: string }
 
-  const agentNodeOverrides: Record<string, unknown> = {}
-  if (opts.nodeRetries !== undefined) agentNodeOverrides.retries = opts.nodeRetries
-
   const wfRes = await fetch(`${daemon.baseUrl}/api/workflows`, {
     method: 'POST',
     headers,
@@ -105,7 +102,6 @@ async function seedLinearWorkflow(
             agentName: opts.agentName,
             promptTemplate: '{{topic}}',
             position: { x: 320, y: 0 },
-            ...agentNodeOverrides,
           },
           {
             id: 'out_1',
@@ -510,21 +506,26 @@ test('task lifecycle: done (fast stub happy path)', async ({ page }) => {
 })
 
 // LOCKS: task-state-failed — agent exits non-zero with no retries → task=failed.
+//
+// The retry budget is global (RFC-115 removed the per-node `retries` override)
+// and RFC-313 made the attempt cap (1+defaultNodeRetries)×(1+sessionRestartBudget)
+// = 8 by default. A dead per-node `retries: 0` left this case running all eight
+// attempts; on a loaded macOS runner (CI 38697276940, 2026-10-15) eight ~7 s
+// spawns outlasted the 60 s wait. Pin both budgets to 0 so the case exercises
+// exactly what it names: one non-zero exit, task failed.
 test('task lifecycle: failed (stub exit 1, retries=0)', async ({ page }) => {
   const repo = makeFixtureRepo()
   const daemon = await startDaemon({
     stubMode: 'slow',
     extraEnv: { STUB_OPENCODE_SLEEP_MS: '0', STUB_OPENCODE_EXIT_CODE: '1' },
+    configOverrides: { defaultNodeRetries: 0, sessionRestartBudget: 0 },
   })
   try {
     const rec = attachWsTaskStatusRecorder(page)
     await primeAuthLocalStorage(page, daemon)
     await page.goto(`${daemon.baseUrl}/tasks`)
 
-    const fixtures = await seedLinearWorkflow(daemon, {
-      agentName: 'lifecycle-failed',
-      nodeRetries: 0,
-    })
+    const fixtures = await seedLinearWorkflow(daemon, { agentName: 'lifecycle-failed' })
     const taskId = await launchTask(daemon, fixtures.workflowId, repo.repoDir)
 
     // This path includes the real clone + runner teardown before the task can

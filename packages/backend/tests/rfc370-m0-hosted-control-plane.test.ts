@@ -317,6 +317,7 @@ test('hosted refusals reach the caller as 503 through the operation contracts', 
     } as never,
     {} as never,
     {} as never,
+    {} as never,
   )
   await expect(
     invokeOperation(plugins.create, {} as never, { name: 'hosted-plugin', spec: 'plugin@1.0.0' }),
