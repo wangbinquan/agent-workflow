@@ -1,3 +1,15 @@
+## 2026-10-15 RFC-370 v2 M0：托管控制面（代码完成，待本机 CS 部署验收）
+
+按 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md) §5.1 实现 M0（免 Codex 门）：`AW_DEPLOYMENT_MODE=crewstation` 时同一条启动 / 迁移序列换用托管适配器——数据库由迁移 Job 按 PG 历史迁移、全新库一次复制初始行，服务只校验 schema；配置与技能文件树进数据库（SQLite `0258` / PG `0034` 三张新表）；主密钥取 `AW_SECRET_KEY`；身份走 CrewStation 网关令牌（`external_identities` 映射、首访建最低权限账号、`AW_ADMIN_SUBJECTS` 建管理员）；探针 `/live` `/ready`；执行权恒为 standby（远程执行随 M1），失权排空后以 1 退出；插件安装与资源包应用明确 503（随 M2）；前端网关会话并隐藏本地登录与平台接管的设置页；`deploy/crewstation/` 与 `scripts/crewstation-publish.ts` 负责镜像与发布。单机行为不变。详情与本地验证见 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)「M0」；下一步发布到本机 CS 做浏览器验收。
+
+## 2026-10-15 并行反问丢一轮：同波兄弟人工门停靠修复（CI 修复）
+
+e2e-full 夜跑 `a5ae4b5b7` 的 `centralized-answer-pane` 两次都只等到 1 个待答轮次，10-12 / 10-13 的 `cross-clarify-multi-source` 也有同形偶发。根因：两个并行提问方同时收尾时，后一个人工门拿着准备前读到的任务修订号停靠，因先停靠的兄弟门已把修订号加一而以「revision changed」失败，整轮问题丢失。持 owner token 的停靠改为以 owner 围栏为执行代际判据、按事务内当前修订号做 CAS（兄弟门已停靠则合流，离开运行生命周期仍拒绝；无主停靠保持原判据），评审门与澄清门同一原子。回归用例 `rfc333-sibling-gate-park.test.ts`（双引擎，修复前 4 条全红）；RFC-333 design.md 补勘误。提交 `3bbac78ee`、配套 `e4b5adcc5`（`parkRevision` 使 `rfc294-module-symbol-owners` 26691→26692，一次性 allowGrowth）；中间态 `3bbac78ee` 因配套未同推，主 CI 只红在规范清单对拍（zsh 分词坑第六次，已记 `docs/dev-gotchas.md`）。**CI（`e4b5adcc5`）**：主 CI `38688049980` success；e2e-full `38688106226` 四片与覆盖账本对账 success。
+
+## 2026-10-14 RFC-370 v2 P1：单机统一（Done）
+
+按 [v2 重设计](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md) §3.2、§5 完成 P1（免 Codex 门）：单机与托管走同一条业务路径，只在 bootstrap 选择适配器。system-operations 新增执行权端口 `ExecutionAuthorityPort`（standby / active(fence) / frozen）与单机实现（启动即 active、epoch 1、永不丢失）；`GET /api/execution/status` 返回 `{ mode, state, reason }`，声明了 `executionGroup` 的路由在实例非 active 时返回 503 `execution-standby`（HTTP 与 MCP 同一道门）；前端只在 CrewStation 实例且已知非 active 时禁用执行入口。删除 v1 的 host 执行平行路径与“原执行恢复”机制（连同四个 recover 端点与前端恢复按钮），SQLite `0257` / PG `0033` 删除只被它们读写的两张表；一次整体删除（约 7.3 万行），拆开的中间态无法编译。提交：源码 `099ce7a85`、配套 `c6c1d0118`、首轮 CI 修复 `bd8432e20`（格式；新版 Git for Windows 的 `ucrt64` bash 推导）、`a5ae4b5b7` 投影并退役许可。**CI（`a5ae4b5b7`）**：主 CI `38670196680`、windows-platform `38670196656`、postgresql-evidence `38681079138`、backend-macos-nightly `38681088676`、e2e-webkit-nightly `38681085745` 均 success；e2e-full `38681082449` 的唯一失败是上一条记录的既有竞态，修复后 `e4b5adcc5` 上 e2e-full 全绿。详见 [status.md](design/RFC-370-crewstation-hosted-deployment/status.md)「P1」。
+
 ## 2026-10-14 RFC-371 v2 断代后的真实任务验证与五处修正
 
 用户问「重构后旧数据界面都不显示，是丢失还是断代」：是 v2 设计内的断代——`0256` 退役 v1 的 81 张观测表、不迁移（v2 §7、§9），业务事实不受影响，迁移前全库在 `backupOnMigration` 备份里；本机库约 23 GB 空闲页可经「数据库维护」回收。用 dist 二进制在本机正式数据目录新跑 9 个任务（单节点子 Agent、并行、串行、独立 Agent、取消、`kill -9` 后恢复）：27 次调用逐条与 OpenCode 原生库对拍全等，验收价（仅配在验收运行时）计价精确，四个统计接口与库内求和一致。发现并修正五处（`a3ce7991e`，`14ef0b09c` 收拢查询表达式，配套 `202adfb71`）：未注册运行时的调用（旧 `*Model` 设置的系统 Agent）以 `builtin:<protocol>` 作价格线键并可定价；总览按任务汇总含系统调用；外部取消/中断的 complete 快照记为下界 partial；任务详情状态改走公共 PageHeader；`UserAccessError` 不再落成 500。详见 [断代验证](design/RFC-371-run-observability/cutover-verification-20261014.md)。本机 PG 侧受并发 RFC-370 在制 schema 影响无法自测，以确切 SHA 的 CI 为准。census 用 HEAD 版脚本 `--source-ref` 只读已提交对象生成，未读入、未改动 RFC-370 在制文件；本笔退役 `202adfb71` 的一次性许可（27172 保持）。

@@ -17,15 +17,28 @@ export const NUL = '\x00'
  * hashes DIFFERENTLY (the file's bytes vanish) — an integrity re-hash catches it.
  */
 export function hashDir(dir: string): string {
-  const h = createHash('sha256')
-  if (!existsSync(dir)) return h.digest('hex')
+  if (!existsSync(dir)) return digestSortedTree([], () => new Uint8Array())
   const rels: string[] = []
   collectFiles(dir, '', rels)
   rels.sort()
-  for (const rel of rels) {
+  return digestSortedTree(rels, (rel) => readFileSync(join(dir, rel)))
+}
+
+/**
+ * The one tree digest: each relative path (already in `Array.prototype.sort()`
+ * order) followed by its bytes, NUL-separated. `hashDir` feeds it from disk and
+ * RFC-370 M0's database skill trees feed it from rows, so a tree hashes the same
+ * wherever it is stored.
+ */
+export function digestSortedTree(
+  sortedPaths: readonly string[],
+  read: (path: string) => Uint8Array,
+): string {
+  const h = createHash('sha256')
+  for (const rel of sortedPaths) {
     h.update(rel)
     h.update(NUL)
-    h.update(readFileSync(join(dir, rel)))
+    h.update(read(rel))
     h.update(NUL)
   }
   return h.digest('hex')

@@ -17,7 +17,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { ACTOR_QUERY_KEY } from '@/hooks/useActor'
 import { appQueryClient } from '@/lib/query-client'
-import { clearToken, getBaseUrl, getToken, subscribeAuth } from '@/stores/auth'
+import {
+  GATEWAY_SESSION_TOKEN,
+  clearToken,
+  getBaseUrl,
+  getToken,
+  subscribeAuth,
+} from '@/stores/auth'
 
 type Listener = (msg: unknown) => void
 type ConnectionStateListener = (state: WebSocketConnectionState) => void
@@ -354,6 +360,7 @@ function wsUrl(path: string, token: string): string {
   const base = getBaseUrl()
   const u = new URL(path, base)
   u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:'
-  u.searchParams.set('token', token)
+  // RFC-370 M0: behind the gateway the upgrade request carries the platform identity.
+  if (token !== GATEWAY_SESSION_TOKEN) u.searchParams.set('token', token)
   return u.toString()
 }

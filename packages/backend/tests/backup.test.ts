@@ -137,8 +137,9 @@ describe('createBackup', () => {
       sourceGenerationId: 'dbg_legacy_sqlite',
       schemaDigest: manifest.database.schemaDigest,
       // RFC-371 v2 retired 81 v1 observation tables and added three; RFC-370 v2
-      // retired the host write-context and memory distill receipt tables.
-      activeTableCount: 189,
+      // retired the host write-context and memory distill receipt tables; RFC-370 M0
+      // added the hosted configuration document, external identity and skill content tables.
+      activeTableCount: 192,
       archiveOnlyTableCount: 6,
     })
   })

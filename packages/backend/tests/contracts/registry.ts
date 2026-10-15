@@ -111,6 +111,19 @@ export const ENDPOINTS: EndpointSpec[] = [
         .passthrough(),
     },
   },
+  // RFC-370 v2 §3.7 — platform probes; readiness never waits for execution authority.
+  {
+    method: 'GET',
+    path: '/live',
+    public: true,
+    happy: { schema: z.object({ alive: z.literal(true) }).strict() },
+  },
+  {
+    method: 'GET',
+    path: '/ready',
+    public: true,
+    happy: { schema: z.object({ ready: z.literal(true) }).strict() },
+  },
 
   // ---- auth (RFC-036) ----
   { method: 'POST', path: '/api/auth/login', public: true },

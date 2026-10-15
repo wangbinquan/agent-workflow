@@ -64,7 +64,10 @@ import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/comp
 import type { CollaborationRouteContext } from '@/modules/collaboration/public/types'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
-import { createSecretBox } from '@/auth/secretBox'
+import { createSecretBox, type SecretBox } from '@/auth/secretBox'
+import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
+import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
+import { createExecutionExitRequests, startOnExecutionActive } from './executionActivation'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import type { loadConfig } from '@/config'
@@ -507,6 +510,18 @@ export interface StartOptions {
   attemptContext?: AttemptContextStorePort
   daemonHost?: DaemonHostLifecyclePort
   startupLease?: DaemonStartupLeasePort
+  /** RFC-370 v2 H7 — the deployment's execution authority; standalone is always active. */
+  executionAuthority?: ExecutionAuthorityPort
+  /** RFC-370 v2 §3.6 — the deployment's credential mechanism; standalone sessions by default. */
+  credentials?: CredentialAdapterSelection
+  /** RFC-370 M0 — a platform-provided master key instead of the local secret.key file. */
+  secretBox?: SecretBox
+  /**
+   * RFC-370 M0 — where git and agent runtimes execute. `remote` (a CrewStation
+   * service slot) has neither on its host, so the local git and runtime probes
+   * do not apply; the selected execution adapters own those dependencies.
+   */
+  executionHost?: 'local' | 'remote'
 }
 
 interface DaemonProviderHttpAdmission {
@@ -574,6 +589,11 @@ interface DaemonProviderRuntimeComposition {
   readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
   readonly shutdownIdentity: () => void | Promise<void>
   readonly closeProvider: () => void | Promise<void>
+  /** RFC-370 v2 §3.2 — background handles start when this authority is first active. */
+  readonly execution?: {
+    readonly authority: Pick<ExecutionAuthorityPort, 'current' | 'whenActive'>
+    readonly onActivationFailure: (error: unknown) => void
+  }
 }
 
 type DatabaseMigrationAdmission = Parameters<typeof composeDatabaseMigrationModule>[0]['admission']
@@ -590,11 +610,37 @@ function _bindTaskExecutionProviderBackground(
   })
 }
 
+/** RFC-370 v2 §3.2 — a selected authority gates the background set; standalone has none. */
+function executionActivationOf(
+  input: Pick<
+    DaemonProviderSessionComposeInput,
+    'executionAuthority' | 'onExecutionActivationFailure'
+  >,
+): Pick<DaemonProviderRuntimeComposition, 'execution'> {
+  if (input.executionAuthority === undefined) return {}
+  const authority = input.executionAuthority
+  const onActivationFailure =
+    input.onExecutionActivationFailure ??
+    ((error: unknown) => {
+      throw error
+    })
+  return { execution: { authority, onActivationFailure } }
+}
+
 /** Join one provider's already-composed application and background lifetimes. */
 async function _createComposedDaemonProviderRuntimeSession(
   input: DaemonProviderRuntimeComposition,
 ) {
   const httpAdmission = createDaemonProviderHttpAdmission()
+  const execution = input.execution
+  const gated = (factories: readonly DaemonProviderRuntimeHandleFactory[] | undefined) =>
+    factories === undefined || execution === undefined
+      ? factories
+      : factories.map((factory) =>
+          startOnExecutionActive(execution.authority, factory, execution.onActivationFailure),
+        )
+  const runtimeFactories = gated(input.runtimeFactories)
+  const backgroundWriterFactories = gated(input.backgroundWriterFactories)
   return await createDaemonProviderRuntimeSession({
     provider: input.provider,
     generationId: input.generationId,
@@ -609,10 +655,8 @@ async function _createComposedDaemonProviderRuntimeSession(
       closeWebSocketAdmission: input.webSocket.admission.close,
       openWebSocketAdmission: input.webSocket.admission.open,
     }),
-    ...(input.runtimeFactories === undefined ? {} : { runtimeFactories: input.runtimeFactories }),
-    ...(input.backgroundWriterFactories === undefined
-      ? {}
-      : { backgroundWriterFactories: input.backgroundWriterFactories }),
+    ...(runtimeFactories === undefined ? {} : { runtimeFactories }),
+    ...(backgroundWriterFactories === undefined ? {} : { backgroundWriterFactories }),
     ...(input.providerCloseParticipants === undefined
       ? {}
       : { providerCloseParticipants: input.providerCloseParticipants }),
@@ -708,6 +752,10 @@ async function composePostgresqlProviderSession(
     daemonInfoPath: Paths.daemonInfo,
     lockPath: Paths.lock,
     secretBox: input.secretBox,
+    ...(input.executionAuthority === undefined
+      ? {}
+      : { executionAuthority: input.executionAuthority }),
+    ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
     sourceWriteWindow: input.sourceWriteWindow,
     databaseMigration,
     dbVersion: input.dbVersion,
@@ -1176,6 +1224,7 @@ async function composePostgresqlProviderSession(
   const session = await _createComposedDaemonProviderRuntimeSession({
     provider: 'postgresql',
     generationId: input.provider.generation.payload.generationId,
+    ...executionActivationOf(input),
     app: application.app,
     webSocket: application.webSocket,
     runtimeFactories: [
@@ -1259,7 +1308,11 @@ interface DaemonProviderSessionComposeInput {
   readonly attemptContext?: AttemptContextStorePort
   readonly daemonRuntime: DaemonRuntimeQueries
   readonly token: string
-  readonly secretBox: ReturnType<typeof createSecretBox>
+  readonly secretBox: SecretBox
+  readonly executionAuthority?: ExecutionAuthorityPort
+  readonly credentials?: CredentialAdapterSelection
+  /** Reported when a background handle fails to start on activation. */
+  readonly onExecutionActivationFailure?: (error: unknown) => void
   readonly dbVersion: number
   readonly migrationAdmission: DatabaseMigrationAdmission
   readonly sourceWriteWindow: DatabaseSourceWriteWindow
@@ -1322,6 +1375,7 @@ export async function serveDaemon(input: {
   readonly lock: DaemonStartupLease
   readonly daemonHost: DaemonHostLifecyclePort
   readonly log: ReturnType<typeof createLogger>
+  readonly exitRequests?: (requestExit: (reason: string) => void) => void
 }): Promise<never> {
   const server = Bun.serve({
     // Bun --hot otherwise aliases the HTTP and control listeners when both
@@ -1366,6 +1420,7 @@ export async function serveDaemon(input: {
     },
     releaseAuthority: () => input.lock.release(),
     releaseAuthorityOnExit: () => input.lock.releaseOnExit(),
+    ...(input.exitRequests === undefined ? {} : { exitRequests: input.exitRequests }),
   })
   return await application.run()
 }
@@ -1581,58 +1636,75 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       theme: config.theme,
     })
 
-    // 4. git version probe — RFC-130 D7: every node run merge-backs via
-    // `git merge-tree --write-tree` (git >= 2.38). On older git the daemon boots
-    // fine and every task dies at merge-back (AFTER its agent already ran) with a
-    // cryptic `merge-back-failed: git merge-tree: usage: ...` — refuse at boot
-    // instead. Unlike optional agent runtimes, git is a platform dependency for
-    // repository/worktree/snapshot/merge-back operations. Side effect: populate
-    // the RFC-034 capability cache read by resolveSubmoduleParams.
-    const gitCaps = await detectGitCapabilities()
-    const gitGateError = mergeTreeGateError(gitCaps)
-    if (gitGateError !== null) {
-      log.error('git incompatible', {
-        found: gitCaps.version?.raw ?? null,
-        requiredMinimum: MIN_GIT_VERSION,
-      })
-      console.error(
-        `agent-workflow: ${gitGateError}\n` +
-          `  upgrade git to >= ${MIN_GIT_VERSION} and restart; the daemon's PATH must resolve the upgraded binary.`,
-      )
-      await lock.release()
-      process.exit(1)
-    }
-    log.info('git probe ok', { version: gitCaps.version?.raw ?? null })
-
-    // RFC-111 D10: claude-code is optional — probe it SOFT (warn only, NEVER
-    // refuse to start) when it is the configured default. RFC-226 makes OpenCode
-    // optional too, but deliberately does not probe it here at all: its
-    // version/build admission belongs to explicit runtime validation and use.
-    if (config.defaultRuntime === 'claude-code') {
-      const ccDriver = getRuntimeDriver('claude-code')
-      const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
-      if (!claudeProbe.compatible) {
-        log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
-          binary: claudeProbe.binary,
-          found: claudeProbe.version,
-          requiredMinimum: ccDriver.minVersion,
-          reason: claudeProbe.incompatibleReason ?? 'not found',
+    // RFC-370 M0: a CrewStation service slot has no git and no agent runtime on
+    // its host — execution and workspaces run in platform task containers — so
+    // the local host probes below apply only where this process executes work.
+    if ((opts.executionHost ?? 'local') === 'local') {
+      // 4. git version probe — RFC-130 D7: every node run merge-backs via
+      // `git merge-tree --write-tree` (git >= 2.38). On older git the daemon boots
+      // fine and every task dies at merge-back (AFTER its agent already ran) with a
+      // cryptic `merge-back-failed: git merge-tree: usage: ...` — refuse at boot
+      // instead. Unlike optional agent runtimes, git is a platform dependency for
+      // repository/worktree/snapshot/merge-back operations. Side effect: populate
+      // the RFC-034 capability cache read by resolveSubmoduleParams.
+      const gitCaps = await detectGitCapabilities()
+      const gitGateError = mergeTreeGateError(gitCaps)
+      if (gitGateError !== null) {
+        log.error('git incompatible', {
+          found: gitCaps.version?.raw ?? null,
+          requiredMinimum: MIN_GIT_VERSION,
         })
-      } else {
-        log.info('claude-code probe ok', {
-          version: claudeProbe.version,
-          binary: claudeProbe.binary,
-        })
+        console.error(
+          `agent-workflow: ${gitGateError}\n` +
+            `  upgrade git to >= ${MIN_GIT_VERSION} and restart; the daemon's PATH must resolve the upgraded binary.`,
+        )
+        await lock.release()
+        process.exit(1)
       }
+      log.info('git probe ok', { version: gitCaps.version?.raw ?? null })
+
+      // RFC-111 D10: claude-code is optional — probe it SOFT (warn only, NEVER
+      // refuse to start) when it is the configured default. RFC-226 makes OpenCode
+      // optional too, but deliberately does not probe it here at all: its
+      // version/build admission belongs to explicit runtime validation and use.
+      if (config.defaultRuntime === 'claude-code') {
+        const ccDriver = getRuntimeDriver('claude-code')
+        const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
+        if (!claudeProbe.compatible) {
+          log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
+            binary: claudeProbe.binary,
+            found: claudeProbe.version,
+            requiredMinimum: ccDriver.minVersion,
+            reason: claudeProbe.incompatibleReason ?? 'not found',
+          })
+        } else {
+          log.info('claude-code probe ok', {
+            version: claudeProbe.version,
+            binary: claudeProbe.binary,
+          })
+        }
+      }
+    } else {
+      log.info('execution runs on the platform; local git and runtime probes skipped')
     }
 
     // Provider-independent bootstrap secrets are needed by either selected
     // composition. They are created before opening a client, but no owner module
     // receives them until its verified provider graph is composed below.
-    const secretBox = createSecretBox(Paths.secretKeyFile)
-    log.info('secret box ready', { keyFile: Paths.secretKeyFile })
+    const secretBox = opts.secretBox ?? createSecretBox(Paths.secretKeyFile)
+    log.info('secret box ready', {
+      keyFile: opts.secretBox === undefined ? Paths.secretKeyFile : 'deployment-provided',
+    })
     const token = ensureTokenFile(Paths.tokenFile)
     log.info('token ready', { tokenFile: Paths.tokenFile })
+    // RFC-370 v2 §3.2 — crash-only execution authority: leaving active, or a
+    // background set that fails to activate, drains and exits non-zero so the
+    // platform restarts this instance as standby. Standalone never loses it.
+    const executionExit = createExecutionExitRequests()
+    opts.executionAuthority?.onLost((state) => {
+      log.warn('execution authority lost', { state: state.kind })
+      executionExit.request(`execution-authority-${state.kind}`)
+    })
     const dbVersion = existsSync(migrationsFolder)
       ? readdirSync(migrationsFolder).filter((file) => file.endsWith('.sql')).length
       : 0
@@ -1747,6 +1819,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       daemonRuntime: daemonHost,
       token,
       secretBox,
+      ...(opts.executionAuthority === undefined
+        ? {}
+        : { executionAuthority: opts.executionAuthority }),
+      ...(opts.credentials === undefined ? {} : { credentials: opts.credentials }),
+      onExecutionActivationFailure(error: unknown) {
+        log.error('background activation failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        executionExit.request('execution-activation-failed')
+      },
       dbVersion,
       log,
       lock,
@@ -1814,6 +1896,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       lock,
       daemonHost,
       log,
+      exitRequests: executionExit.subscribe,
     })
   })
 }
@@ -1917,6 +2000,7 @@ async function composeSqliteProviderSession(
   const providerCore = composeSqliteDaemonProviderCore({
     daemonToken: token,
     db,
+    ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
     sourceWriteWindow: sourceWriteWindow,
     appHome: Paths.root,
     dbPath: Paths.db,
@@ -3401,7 +3485,7 @@ async function composeSqliteProviderSession(
     conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
     providerCore,
     token,
-    executionAuthority: composeLocalExecutionAuthority(),
+    executionAuthority: input.executionAuthority ?? composeLocalExecutionAuthority(),
     digitalEmployeePlatformTools,
     configPath: Paths.config,
     configuration,
@@ -4089,6 +4173,7 @@ async function composeSqliteProviderSession(
   const initialProviderSession = await _createComposedDaemonProviderRuntimeSession({
     provider: 'sqlite',
     generationId: lifecycle.generationId,
+    ...executionActivationOf(input),
     app,
     webSocket: ws,
     runtimeFactories: providerRuntimeFactories,

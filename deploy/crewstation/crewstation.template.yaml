@@ -1,0 +1,29 @@
+# RFC-370 M0 — CrewStation Manifest of the agent-workflow control plane.
+# `scripts/crewstation-publish.ts` renders the {{...}} values from a local
+# deployment profile (project-specific plan and configuration ids) and places
+# the result at the root of the CrewStation project repository.
+apiVersion: crewstation/v3
+kind: DigitalWorker
+spec:
+  service:
+    command: [agent-workflow, start]
+    port: 3000
+    servicePlanId: '{{SERVICE_PLAN_ID}}'
+    replicas: 1
+    probes:
+      startup: { path: /ready, periodSeconds: 2, timeoutSeconds: 3, failureThreshold: 150 }
+      readiness: { path: /ready, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 }
+      liveness: { path: /live, periodSeconds: 10, timeoutSeconds: 3, failureThreshold: 3 }
+  env:
+    # 32 random bytes as base64 (`openssl rand -base64 32`); seals stored secrets.
+    - name: AW_SECRET_KEY
+      from: secret
+      configDefinitionId: '{{SECRET_KEY_DEFINITION_ID}}'
+    # CrewStation user subjects (`user:<uuid>`) that start as administrators.
+    - name: AW_ADMIN_SUBJECTS
+      from: config
+      configDefinitionId: '{{ADMIN_SUBJECTS_DEFINITION_ID}}'
+      default: ''
+  release:
+    migrationCommand: [agent-workflow, migrate]
+    migration: { compatibility: expand-only, destructive: false, rollback: switch-back }

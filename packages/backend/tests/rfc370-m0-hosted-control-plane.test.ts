@@ -1,0 +1,426 @@
+// RFC-370 M0 — the CrewStation-hosted control plane around the shared boot
+// (design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md §3.1, §3.2, §3.7, §5.1).
+// Locks: the deployment is chosen explicitly and the hosted inputs are all
+// validated at once; a hosted standby instance serves HTTP while its background
+// set waits for execution authority (standalone factories are untouched);
+// leaving authority exits non-zero through the normal drain; capabilities not
+// available yet are refused with their reason; the SPA learns the deployment
+// from the served page; the platform probes answer without authority; and the
+// Manifest is rendered from a validated profile.
+import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { Hono } from 'hono'
+import { parse as parseYaml } from 'yaml'
+import {
+  composeDeploymentStartOptions,
+  DeploymentModeError,
+  readDeploymentMode,
+} from '@/cli/deployment'
+import { createExecutionExitRequests, startOnExecutionActive } from '@/cli/executionActivation'
+import type { DaemonProviderRuntimeHandleFactory } from '@/cli/daemonProviderRuntimeSession'
+import { getEmbeddedFrontendResponse, withDeploymentMarker } from '@/embed'
+import {
+  createHostedPluginInstaller,
+  createHostedResourcePackageArtifacts,
+} from '@/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities'
+import { runDaemonHostApplication } from '@/modules/system-operations/application/daemonHostApplication'
+import type { ExecutionFence } from '@/modules/system-operations/application/ports/executionAuthority'
+import {
+  CrewStationEnvironmentError,
+  readCrewStationDatabaseEnvironment,
+  readCrewStationEnvironment,
+} from '@/modules/system-operations/composition/crewstationDeployment'
+import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'
+import { mountHealthRoutes } from '@/routes/health'
+import {
+  parseDeploymentProfile,
+  renderCrewStationManifest,
+} from '../../../scripts/lib/crewstation-manifest'
+
+const KEY = Buffer.alloc(32, 7).toString('base64')
+const HOSTED_ENV = {
+  CS_PROJECT: 'agent-workflow',
+  CS_SERVICE: 'agent-workflow',
+  CS_DATABASE_URL: 'postgres://u:p@db:5432/aw',
+  CS_JWKS_URL: 'http://api.svc.cs.internal/.well-known/jwks.json',
+  PORT: '3000',
+  AW_SECRET_KEY: KEY,
+}
+
+test('the deployment is selected explicitly; standalone needs nothing', async () => {
+  expect(readDeploymentMode({})).toBe('standalone')
+  expect(readDeploymentMode({ AW_DEPLOYMENT_MODE: 'standalone' })).toBe('standalone')
+  expect(readDeploymentMode({ AW_DEPLOYMENT_MODE: 'crewstation' })).toBe('crewstation')
+  // Platform variables alone never switch the deployment.
+  expect(readDeploymentMode(HOSTED_ENV)).toBe('standalone')
+  expect(() => readDeploymentMode({ AW_DEPLOYMENT_MODE: 'cloud' })).toThrow(DeploymentModeError)
+  expect(await composeDeploymentStartOptions({})).toEqual({})
+})
+
+test('hosted inputs are validated at once and parsed', () => {
+  const environment = readCrewStationEnvironment({
+    ...HOSTED_ENV,
+    AW_ADMIN_SUBJECTS: ' user:a, b  user:a ',
+    CS_OBJECTS_URL: 'http://objects/v3/objects',
+  })
+  expect(environment).toMatchObject({
+    project: 'agent-workflow',
+    service: 'agent-workflow',
+    port: 3000,
+    objectsUrl: 'http://objects/v3/objects',
+    objectSpaceId: null,
+    adminSubjects: ['user:a', 'user:b'],
+  })
+  expect(environment.secretKey.equals(Buffer.alloc(32, 7))).toBe(true)
+  expect(readCrewStationEnvironment(HOSTED_ENV).objectsUrl).toBeNull()
+
+  let error: unknown
+  try {
+    readCrewStationEnvironment({
+      PORT: '99999',
+      AW_SECRET_KEY: 'c2hvcnQ=',
+      CS_JWKS_URL: 'relative',
+    })
+  } catch (caught) {
+    error = caught
+  }
+  expect(error).toBeInstanceOf(CrewStationEnvironmentError)
+  expect((error as CrewStationEnvironmentError).problems).toEqual([
+    'CS_PROJECT is required',
+    'CS_SERVICE is required',
+    'CS_DATABASE_URL is required',
+    'PORT must be a TCP port number, got "99999"',
+    'CS_JWKS_URL must be an absolute URL',
+    'AW_SECRET_KEY must be 32 random bytes encoded as base64 (for example `openssl rand -base64 32`)',
+  ])
+  expect(readCrewStationDatabaseEnvironment(HOSTED_ENV)).toEqual({
+    project: 'agent-workflow',
+    service: 'agent-workflow',
+  })
+  expect(() => readCrewStationDatabaseEnvironment({ CS_PROJECT: 'p' })).toThrow(
+    CrewStationEnvironmentError,
+  )
+})
+
+test('a hosted M0 instance stays on standby with its reason', async () => {
+  const authority = createStandbyExecutionAuthority({ reason: 'remote-execution-not-available' })
+  expect(authority.mode).toBe('crewstation')
+  expect(authority.current()).toEqual({ kind: 'standby', reason: 'remote-execution-not-available' })
+  const outcome = await Promise.race([
+    authority.whenActive().then(() => 'active'),
+    new Promise((resolve) => setTimeout(() => resolve('still-standby'), 20)),
+  ])
+  expect(outcome).toBe('still-standby')
+  expect(typeof authority.onLost(() => {})).toBe('function')
+})
+
+function controllableAuthority(kind: 'active' | 'standby') {
+  let activate!: (fence: ExecutionFence) => void
+  const active = new Promise<ExecutionFence>((resolve) => {
+    activate = resolve
+  })
+  return {
+    authority: {
+      current: () =>
+        kind === 'active'
+          ? ({ kind: 'active', fence: { epoch: 1, token: 't' } } as const)
+          : ({ kind: 'standby', reason: null } as const),
+      whenActive: () => active,
+    },
+    activate: () => activate({ epoch: 2, token: 'lease' }),
+  }
+}
+
+function recordingFactory(log: string[], fail = false): DaemonProviderRuntimeHandleFactory {
+  return {
+    id: 'worker',
+    start() {
+      if (fail) throw new Error('start failed')
+      log.push('start')
+      return { stop: () => void log.push('stop'), drain: () => void log.push('drain') }
+    },
+  }
+}
+
+const lifecycle = { operationId: 'op', provider: 'postgresql', generationId: 'g' } as never
+
+test('a standalone authority keeps the background factory unchanged', () => {
+  const factory = recordingFactory([])
+  expect(startOnExecutionActive(controllableAuthority('active').authority, factory, () => {})).toBe(
+    factory,
+  )
+})
+
+test('a standby instance starts its background set on activation only', async () => {
+  const log: string[] = []
+  const gate = controllableAuthority('standby')
+  const handle = await startOnExecutionActive(
+    gate.authority,
+    recordingFactory(log),
+    () => {},
+  ).start(lifecycle)
+  await Promise.resolve()
+  expect(log).toEqual([])
+  gate.activate()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(log).toEqual(['start'])
+  await handle.drain()
+  await handle.stop()
+  expect(log).toEqual(['start', 'drain', 'stop'])
+
+  const never: string[] = []
+  const stopped = controllableAuthority('standby')
+  const waiting = await startOnExecutionActive(
+    stopped.authority,
+    recordingFactory(never),
+    () => {},
+  ).start(lifecycle)
+  await waiting.stop()
+  stopped.activate()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(never).toEqual([])
+
+  const failures: unknown[] = []
+  const failing = controllableAuthority('standby')
+  await startOnExecutionActive(failing.authority, recordingFactory([], true), (error) =>
+    failures.push(error),
+  ).start(lifecycle)
+  failing.activate()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(failures).toHaveLength(1)
+})
+
+test('exit requests made before the host subscribes are delivered once it does', () => {
+  const exits = createExecutionExitRequests()
+  const seen: string[] = []
+  exits.request('execution-authority-frozen')
+  exits.subscribe((reason) => seen.push(reason))
+  exits.request('execution-activation-failed')
+  expect(seen).toEqual(['execution-authority-frozen', 'execution-activation-failed'])
+})
+
+test('leaving execution authority drains and exits non-zero', async () => {
+  const steps: string[] = []
+  let requestExit!: (reason: string) => void
+  let terminated!: (code: number) => void
+  const exitCode = new Promise<number>((resolve) => {
+    terminated = resolve
+  })
+  void runDaemonHostApplication({
+    host: {
+      readCurrent: () => null,
+      publishReady: () => void steps.push('ready'),
+      withdrawReady: () => void steps.push('withdraw'),
+      subscribeShutdown: () => ({ close: () => void steps.push('control-closed') }),
+      announceReady: () => {},
+      terminate: (code) => {
+        terminated(code)
+        return new Promise<never>(() => {})
+      },
+    },
+    databaseProvider: 'postgresql',
+    readyInfo: () => ({ host: '0.0.0.0', port: 3000, url: 'http://x/', startedAt: 'now' }),
+    readBootstrapRequired: () => false,
+    readyBrowserUrl: () => 'http://x/',
+    stopListener: () => void steps.push('listener'),
+    stopApplication: () => void steps.push('application'),
+    releaseAuthority: () => void steps.push('release'),
+    releaseAuthorityOnExit: () => {},
+    describeFailure: String,
+    log: { info: () => {}, warn: () => {} },
+    exitRequests: (request) => {
+      requestExit = request
+    },
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  requestExit('execution-authority-frozen')
+  expect(await exitCode).toBe(1)
+  expect(steps).toEqual(expect.arrayContaining(['withdraw', 'listener', 'application', 'release']))
+})
+
+test('an exit request whose drain fails still exits non-zero', async () => {
+  const warnings: string[] = []
+  let requestExit!: (reason: string) => void
+  let terminated!: (code: number) => void
+  const exitCode = new Promise<number>((resolve) => {
+    terminated = resolve
+  })
+  void runDaemonHostApplication({
+    host: {
+      readCurrent: () => null,
+      publishReady: () => {},
+      withdrawReady: () => {},
+      subscribeShutdown: () => ({ close: () => {} }),
+      announceReady: () => {},
+      terminate: (code) => {
+        terminated(code)
+        return new Promise<never>(() => {})
+      },
+    },
+    databaseProvider: 'postgresql',
+    readyInfo: () => ({ host: '0.0.0.0', port: 3000, url: 'http://x/', startedAt: 'now' }),
+    readBootstrapRequired: () => false,
+    readyBrowserUrl: () => 'http://x/',
+    stopListener: () => {},
+    stopApplication: () => {},
+    releaseAuthority: () => {
+      throw new Error('lease release failed')
+    },
+    releaseAuthorityOnExit: () => {},
+    describeFailure: String,
+    log: { info: () => {}, warn: (message) => void warnings.push(message) },
+    exitRequests: (request) => {
+      requestExit = request
+    },
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  requestExit('execution-activation-failed')
+  // The platform restarts the instance only after it exits.
+  expect(await exitCode).toBe(1)
+  expect(warnings).toContain('daemon exit request drain error')
+})
+
+test('plugin installation and resource packages are refused with the reason', async () => {
+  const installer = createHostedPluginInstaller()
+  await expect(installer.install('p1', 'some-npm-plugin')).rejects.toMatchObject({
+    code: 'hosted-capability-unavailable',
+    status: 503,
+    details: { capability: 'plugin-install' },
+  })
+  await expect(installer.checkForUpdate('p1', 'x', '/c')).rejects.toMatchObject({ status: 503 })
+  const packages = createHostedResourcePackageArtifacts()
+  expect(() => packages.skills.planCreate({} as never, {} as never)).toThrow(
+    'Applying resource packages is not available',
+  )
+  expect(() => packages.plugins.planInstall({} as never, {} as never)).toThrow(
+    'Applying resource packages is not available',
+  )
+  await packages.skills.compensate({} as never, {} as never)
+})
+
+test('a hosted page states its deployment; standalone pages are unchanged', async () => {
+  const html = '<!doctype html><html><head><title>aw</title></head><body></body></html>'
+  const asset = {
+    body: new TextEncoder().encode(html).buffer as ArrayBuffer,
+    contentType: 'text/html',
+  }
+  expect(withDeploymentMarker(asset, 'standalone')).toBe(asset)
+  const hosted = new TextDecoder().decode(withDeploymentMarker(asset, 'crewstation').body)
+  expect(hosted).toContain('<meta name="agent-workflow-deployment" content="crewstation"></head>')
+  const lookup = async (path: string) =>
+    path === 'index.html'
+      ? asset
+      : path === 'assets/app.js'
+        ? { ...asset, contentType: 'text/javascript' }
+        : null
+  for (const path of ['/', '/tasks/1', '/index.html']) {
+    const response = await getEmbeddedFrontendResponse(path, lookup, 'crewstation')
+    expect(await response!.text()).toContain('agent-workflow-deployment')
+  }
+  const script = await getEmbeddedFrontendResponse('/assets/app.js', lookup, 'crewstation')
+  expect(await script!.text()).not.toContain('agent-workflow-deployment')
+  const standalone = await getEmbeddedFrontendResponse('/', lookup)
+  expect(await standalone!.text()).toBe(html)
+})
+
+test('platform probes answer without execution authority', async () => {
+  let fail = false
+  const app = new Hono()
+  mountHealthRoutes(
+    app,
+    { opencodeVersion: null, dbVersion: 1 },
+    {
+      snapshot: () => ({
+        accessUpdate: { success: 0, noOp: 0, conflict: 0, rejected: 0 },
+        authorityReresolution: 0,
+        invalidStoredGrant: 0,
+        wsTargetedRefreshFailure: 0,
+      }),
+    },
+    {
+      async countRunningTasks() {
+        if (fail) throw new Error('database down')
+        return 0
+      },
+    },
+  )
+  const live = await app.request('/live')
+  expect(live.status).toBe(200)
+  expect(await live.json()).toEqual({ alive: true })
+  expect(await (await app.request('/ready')).json()).toEqual({ ready: true })
+  fail = true
+  const unready = await app.request('/ready')
+  expect(unready.status).toBe(503)
+  expect(await unready.json()).toEqual({ ready: false, reason: 'database-unavailable' })
+  expect((await app.request('/live')).status).toBe(200)
+})
+
+test('the Manifest is rendered from a validated deployment profile', () => {
+  const profile = parseDeploymentProfile({
+    project: 'agent-workflow',
+    repository: 'http://gitlab/aw/agent-workflow.git',
+    branch: 'main',
+    servicePlanId: '01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10',
+    secretKeyDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000001',
+    adminSubjectsDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000002',
+  })
+  expect(
+    renderCrewStationManifest(
+      'plan: {{SERVICE_PLAN_ID}}\nkey: {{SECRET_KEY_DEFINITION_ID}}\nadmins: {{ADMIN_SUBJECTS_DEFINITION_ID}}\n',
+      profile,
+    ),
+  ).toBe(
+    'plan: 01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10\nkey: 01a0bf5d-8f4b-7100-8000-000000000001\nadmins: 01a0bf5d-8f4b-7100-8000-000000000002\n',
+  )
+  expect(() => renderCrewStationManifest('{{UNKNOWN}}', profile)).toThrow(
+    'unknown manifest placeholder',
+  )
+  expect(() => parseDeploymentProfile({ ...profile, servicePlanId: 'small' })).toThrow(
+    'must be a resource UUID',
+  )
+  expect(() => parseDeploymentProfile({ ...profile, branch: '' })).toThrow(
+    'profile.branch is required',
+  )
+})
+
+test('the shipped Manifest template and image start the hosted control plane', () => {
+  const root = new URL('../../../deploy/crewstation/', import.meta.url)
+  const manifest = parseYaml(
+    renderCrewStationManifest(
+      readFileSync(new URL('crewstation.template.yaml', root), 'utf8'),
+      parseDeploymentProfile({
+        project: 'agent-workflow',
+        repository: 'http://gitlab/aw/agent-workflow.git',
+        branch: 'main',
+        servicePlanId: '01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10',
+        secretKeyDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000001',
+        adminSubjectsDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000002',
+      }),
+    ),
+  ) as {
+    apiVersion: string
+    kind: string
+    spec: {
+      service: { command: string[]; port: number; probes: Record<string, { path: string }> }
+      env: { name: string; from: string }[]
+      release: { migrationCommand: string[] }
+    }
+  }
+  expect(manifest).toMatchObject({ apiVersion: 'crewstation/v3', kind: 'DigitalWorker' })
+  expect(manifest.spec.service.command).toEqual(['agent-workflow', 'start'])
+  expect(manifest.spec.service.port).toBe(3000)
+  expect(manifest.spec.service.probes.liveness!.path).toBe('/live')
+  expect(manifest.spec.service.probes.readiness!.path).toBe('/ready')
+  expect(manifest.spec.release.migrationCommand).toEqual(['agent-workflow', 'migrate'])
+  expect(manifest.spec.env).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: 'AW_SECRET_KEY', from: 'secret' }),
+      expect.objectContaining({ name: 'AW_ADMIN_SUBJECTS', from: 'config' }),
+    ]),
+  )
+  const dockerfile = readFileSync(new URL('Dockerfile', root), 'utf8')
+  expect(dockerfile).toContain('AW_DEPLOYMENT_MODE=crewstation')
+  expect(dockerfile).toContain('CMD ["agent-workflow", "start"]')
+  expect(dockerfile).toMatch(/^USER agent-workflow$/m)
+  expect(dockerfile).toContain('bun run build:binary')
+})

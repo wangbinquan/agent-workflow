@@ -314,6 +314,8 @@ describe('RFC-305 identity-access architecture', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
+      // RFC-370 M0：部署选择点装配 CrewStation 的 HTTP / WebSocket 凭据适配器（bootstrap 唯一装配）。
+      'packages/backend/src/cli/deployment.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/authentication',
@@ -325,6 +327,8 @@ describe('RFC-305 identity-access architecture', () => {
       // 组合根**（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上），列表行的
       // owner 身份投影在这里装配后注入任务路由——与另外两个根同形。
       'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition',
+      // RFC-370 M0：启动参数携带部署选定的凭据适配器（类型），两个 provider 根按它装配。
+      'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',

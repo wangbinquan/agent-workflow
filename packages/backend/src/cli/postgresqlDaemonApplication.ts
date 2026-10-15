@@ -53,7 +53,7 @@ import {
   composeRunObservationCalls,
 } from '@/modules/run-observability/composition/runObservation'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
-import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
+import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
   composeApplicationConfigurationBinding,
@@ -487,6 +487,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
   /** RFC-370 v2 H7: bootstrap selects the execution authority; standalone by default. */
   readonly executionAuthority?: ExecutionAuthorityPort
+  /** RFC-370 v2 §3.6: bootstrap selects the credential mechanism; standalone by default. */
+  readonly credentials?: CredentialAdapterSelection
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -707,6 +709,7 @@ export async function composePostgresqlApplication(
   const core = composePostgresqlDaemonProviderCore({
     daemonToken: input.token,
     db: input.db,
+    ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
     ...(input.sourceWriteWindow === undefined
       ? {}
       : { sourceWriteWindow: input.sourceWriteWindow }),
@@ -2536,11 +2539,7 @@ export async function composePostgresqlApplication(
   const composition: PostgresqlAppCompositionInput = Object.freeze({
     token: input.token,
     configuration,
-    authentication: composeLocalHttpAuthentication({
-      auth: core.authRuntime,
-      daemonToken: input.token,
-      identityAccess,
-    }),
+    authentication: core.httpAuthentication,
     core,
     public: publicRoutes,
     platform: platformRoutes,

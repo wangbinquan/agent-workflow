@@ -25,6 +25,7 @@ export const RFC349_SOURCE_TABLES = [
   'action_template_revisions',
   'action_templates',
   'agents',
+  'application_configuration',
   'auth_login_policy',
   'automation_policies',
   'automation_policy_revisions',
@@ -117,6 +118,7 @@ export const RFC349_SOURCE_TABLES = [
   'event_sources',
   'event_subscriptions',
   'event_type_catalog',
+  'external_identities',
   'fusions',
   'intent_apply_journal',
   'intent_draft_resolutions',
@@ -169,6 +171,7 @@ export const RFC349_SOURCE_TABLES = [
   'sc_preparation_operations',
   'sc_repository_snapshots',
   'sc_repository_sources',
+  'skill_content_entries',
   'skill_operation_locks',
   'skill_operations',
   'skill_versions',
@@ -406,6 +409,7 @@ function ownerFor(table: string): OwnerContext {
     table === 'users' ||
     table.startsWith('oidc_') ||
     table === 'auth_login_policy' ||
+    table === 'external_identities' ||
     table === 'resource_grants' ||
     table.startsWith('token_')
   ) {
@@ -429,7 +433,8 @@ function ownerFor(table: string): OwnerContext {
   if (
     table.startsWith('maintenance_') ||
     table.startsWith('lifecycle_') ||
-    table === 'recovery_events'
+    table === 'recovery_events' ||
+    table === 'application_configuration'
   ) {
     return 'system-operations'
   }

@@ -1800,6 +1800,13 @@
       "when": 1792024118175,
       "tag": "0257_rfc370_v2_retire_host_execution",
       "breakpoints": true
+    },
+    {
+      "idx": 257,
+      "version": "6",
+      "when": 1792039191120,
+      "tag": "0258_rfc370_m0_hosted_control_plane",
+      "breakpoints": true
     }
   ]
 }

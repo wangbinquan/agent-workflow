@@ -20,6 +20,7 @@ import { ExecutionStatusProvider } from '@/hooks/useExecutionAvailability'
 import { useApplyTheme } from '@/hooks/useTheme'
 import { parseBootstrapTokenLocation } from '@/lib/bootstrap-token'
 import { getToken, setToken, subscribeAuth } from '@/stores/auth'
+import { isGatewayIdentity } from '@/stores/deployment'
 
 export const Route = createRootRoute({
   beforeLoad: ({ location }) => {
@@ -36,6 +37,14 @@ export const Route = createRootRoute({
           replace: true,
         })
       }
+    }
+    // RFC-370 M0: behind the CrewStation gateway there is no local sign-in or
+    // first-administrator setup; identity always comes from the platform.
+    if (
+      isGatewayIdentity() &&
+      (location.pathname === '/auth' || location.pathname === '/setup/admin')
+    ) {
+      throw redirect({ to: '/', replace: true })
     }
     if (location.pathname === '/auth') return
     if (getToken() === null) {

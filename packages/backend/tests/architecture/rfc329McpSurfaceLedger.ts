@@ -38,6 +38,9 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: 'GET /api/execution/status', group: '/api/daemon', category: 'system-point' },
   { leaf: 'GET /.well-known/mcp', group: '(infrastructure)', category: 'deliberate' },
   { leaf: 'GET /health', group: '(infrastructure)', category: 'deliberate' },
+  // RFC-370 v2 §3.7: platform liveness / readiness probes, like /health.
+  { leaf: 'GET /live', group: '(infrastructure)', category: 'deliberate' },
+  { leaf: 'GET /ready', group: '(infrastructure)', category: 'deliberate' },
   { leaf: 'GET /api/clarify/pending-count', group: '/api/clarify', category: 'deliberate' },
   {
     leaf: 'POST /api/clarify/:id/followup',

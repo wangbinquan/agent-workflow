@@ -16,6 +16,7 @@ import { clearAllReviewDrafts } from '@/lib/review/draftStore'
 import { clearAllPatReconciliationMarkers } from '@/lib/pat-reconciliation'
 import { clearAllTaskWizardDrafts } from '@/lib/task-wizard-draft'
 import { clearToken, getToken, subscribeAuth } from '@/stores/auth'
+import { isGatewayIdentity } from '@/stores/deployment'
 
 export function UserMenu() {
   const { data, isLoading } = useActor()
@@ -167,9 +168,13 @@ export function UserMenu() {
               (rendered next to LanguageSwitch when settings:read is present) is the
               canonical entry to /settings. Keeping a duplicate link here
               just adds visual noise. */}
-          <button className="user-menu__item user-menu__item--danger" onClick={logout}>
-            {t('userMenu.logout', { defaultValue: 'Sign out' })}
-          </button>
+          {/* RFC-370 M0: behind the CrewStation gateway the session belongs to the
+              platform; there is no local sign-out. */}
+          {!isGatewayIdentity() && (
+            <button className="user-menu__item user-menu__item--danger" onClick={logout}>
+              {t('userMenu.logout', { defaultValue: 'Sign out' })}
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -69,9 +69,10 @@ import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-mana
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import {
+  composeLocalCredentialAdapters,
   composeLocalHttpAuthentication,
-  composeLocalWebSocketAuthentication,
   composeHttpAuthenticationMiddleware,
+  type CredentialAdapterSelection,
 } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import type {
@@ -136,7 +137,7 @@ import type {
   IntegrationTriggerResourceBinding,
 } from '@/services/scheduledTasks'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
-import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
+import { getEmbeddedFrontendResponse, IS_EMBEDDED, type FrontendDeploymentMode } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
 import { assertOperationCatalogClosed, registerOperationAlias } from '@/platform/operations/catalog'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
@@ -694,6 +695,8 @@ interface DaemonProviderCoreCommonInput {
   readonly presenceProjection: DaemonPresenceProjectionSink
   readonly identityId?: () => string
   readonly now?: () => number
+  /** RFC-370 v2 §3.6 — the deployment's credential mechanism; standalone by default. */
+  readonly credentials?: CredentialAdapterSelection
 }
 
 export interface ComposeSqliteDaemonProviderCoreInput extends DaemonProviderCoreCommonInput {
@@ -725,6 +728,8 @@ export interface DaemonProviderCore<
   /** The one window both the auth runtime and the token-call audit consult. */
   readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly identityAccess: IdentityAccessRuntime
+  /** The selected credential mechanism's HTTP admission (WebSocket uses its twin). */
+  readonly httpAuthentication: HttpAuthenticationParticipant
   readonly healthDatabase: HealthDatabaseReadModel
   readonly runtimeRegistry: RuntimeRegistryOperations
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
@@ -766,6 +771,12 @@ export function composeSqliteDaemonProviderCore(
     db: input.db,
     ...daemonIdentityOptions(input),
   })
+  const credentials = (input.credentials ?? composeLocalCredentialAdapters)({
+    db: input.db,
+    auth: authRuntime,
+    daemonToken: input.daemonToken,
+    identityAccess,
+  })
 
   return Object.freeze({
     provider: 'sqlite',
@@ -773,6 +784,7 @@ export function composeSqliteDaemonProviderCore(
     sourceWriteWindow,
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
+    httpAuthentication: credentials.http,
     healthDatabase: createHealthDatabaseReadModel(input.db),
     runtimeRegistry: composeRuntimeRegistryOperations(
       input.db,
@@ -783,11 +795,7 @@ export function composeSqliteDaemonProviderCore(
     repositoryTransportCredentialRepository,
     realtime: composeRealtimeRuntimeFor({
       db: input.db,
-      credentials: composeLocalWebSocketAuthentication({
-        auth: authRuntime,
-        daemonToken: input.daemonToken,
-        identityAccess,
-      }),
+      credentials: credentials.webSocket,
       policy: input.realtimePolicy,
     }),
     systemOperations: composeSystemOperations({
@@ -826,6 +834,12 @@ export function composePostgresqlDaemonProviderCore(
     db: input.db,
     ...daemonIdentityOptions(input),
   })
+  const credentials = (input.credentials ?? composeLocalCredentialAdapters)({
+    db: input.db,
+    auth: authRuntime,
+    daemonToken: input.daemonToken,
+    identityAccess,
+  })
 
   return Object.freeze({
     provider: 'postgresql',
@@ -833,6 +847,7 @@ export function composePostgresqlDaemonProviderCore(
     sourceWriteWindow,
     tokenCallAudit: createTokenCallAudit(input.db),
     identityAccess,
+    httpAuthentication: credentials.http,
     healthDatabase: createHealthDatabaseReadModel(input.db),
     runtimeRegistry: composeRuntimeRegistryOperations(
       input.db,
@@ -843,11 +858,7 @@ export function composePostgresqlDaemonProviderCore(
     repositoryTransportCredentialRepository,
     realtime: composeRealtimeRuntimeFor({
       db: input.db,
-      credentials: composeLocalWebSocketAuthentication({
-        auth: authRuntime,
-        daemonToken: input.daemonToken,
-        identityAccess,
-      }),
+      credentials: credentials.webSocket,
       policy: input.realtimePolicy,
     }),
     systemOperations: composePostgresqlSystemOperations({
@@ -4283,6 +4294,8 @@ export interface HttpRequestAppDeps {
   readonly core: ComposedAppDeps['core']
   readonly publicRoutes: ComposedAppDeps['publicRoutes']
   readonly mountApi: AppRouteMount
+  /** RFC-370 M0 — states the deployment to the embedded SPA; standalone by default. */
+  readonly deploymentMode?: FrontendDeploymentMode
 }
 
 export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
@@ -4358,7 +4371,11 @@ export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
           404,
         )
       }
-      const response = await getEmbeddedFrontendResponse(c.req.path)
+      const response = await getEmbeddedFrontendResponse(
+        c.req.path,
+        undefined,
+        deps.deploymentMode ?? 'standalone',
+      )
       if (response !== null) return response
       return c.json(
         { ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` },
@@ -4379,6 +4396,7 @@ export function createComposedApp(deps: ComposedAppDeps): Hono {
     authentication: deps.authentication,
     core: deps.core,
     publicRoutes: deps.publicRoutes,
+    deploymentMode: deps.executionAuthority?.mode ?? 'standalone',
     mountApi(app) {
       mountApiRoutes(app, deps)
       mountMcpTransport(app, {

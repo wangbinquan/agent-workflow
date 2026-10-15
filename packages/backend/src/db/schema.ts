@@ -504,6 +504,33 @@ export const skillOperationLocks = sqliteTable('skill_operation_locks', {
 })
 
 // -----------------------------------------------------------------------------
+// RFC-370 M0 skill_content_entries — skill file trees of a deployment without a
+// persistent local disk (CrewStation service slots). One row per file of one
+// tree: `live`, an immutable `version:<n>`, an operation's `staging:<id>` or a
+// deletion's `trash:<id>`. Text stays UTF-8; other bytes are base64. Standalone
+// keeps its skills directory and never writes this table.
+// -----------------------------------------------------------------------------
+export const skillContentEntries = sqliteTable(
+  'skill_content_entries',
+  {
+    skillId: text('skill_id').notNull(),
+    tree: text('tree').notNull(),
+    path: text('path').notNull(),
+    encoding: text('encoding', { enum: ['utf8', 'base64'] }).notNull(),
+    content: text('content').notNull(),
+    size: integer('size').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.skillId, t.tree, t.path] }),
+    encodingEnum: check(
+      'skill_content_entries_encoding_enum',
+      sql`${t.encoding} IN ('utf8', 'base64')`,
+    ),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // workflows — DB is source of truth; YAML import/export is a transport, not source.
 // -----------------------------------------------------------------------------
 export const workflows = sqliteTable(
@@ -3904,6 +3931,50 @@ export const authLoginPolicy = sqliteTable(
       sql`${t.oidcDefaultRole} IN ('guest', 'user')`,
     ),
     idFixed: check('auth_login_policy_id_fixed', sql`${t.id} = 'global'`),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-370 M0 external_identities — identities asserted by an external platform
+// (CrewStation's signed identity token). One (issuer, subject) pair maps to
+// exactly one user and is never merged by email. Standalone never writes it.
+// -----------------------------------------------------------------------------
+export const externalIdentities = sqliteTable(
+  'external_identities',
+  {
+    id: text('id').primaryKey(),
+    issuer: text('issuer').notNull(),
+    subject: text('subject').notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    linkedAt: integer('linked_at').notNull(),
+  },
+  (t) => ({
+    userIdx: index('idx_external_identities_user').on(t.userId),
+    issuerSubjectUq: uniqueIndex('external_identities_issuer_subject_unique').on(
+      t.issuer,
+      t.subject,
+    ),
+  }),
+)
+
+// -----------------------------------------------------------------------------
+// RFC-370 M0 application_configuration — the Settings document of a hosted
+// instance. A CrewStation service slot has no persistent disk, so the document
+// that standalone keeps in config.json lives here (system-operations owns it).
+// Standalone never writes this table.
+// -----------------------------------------------------------------------------
+export const applicationConfiguration = sqliteTable(
+  'application_configuration',
+  {
+    id: text('id').primaryKey(),
+    document: text('document').notNull(),
+    revision: integer('revision').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    idFixed: check('application_configuration_id_fixed', sql`${t.id} = 'global'`),
   }),
 )
 

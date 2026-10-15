@@ -55,6 +55,12 @@ export type DatabaseGenerationFile = z.infer<typeof DatabaseGenerationFileSchema
 export type ResolvedDatabaseGeneration =
   | { readonly source: 'legacy-missing-pointer'; readonly payload: DatabaseGenerationPayload }
   | { readonly source: 'verified-pointer'; readonly payload: DatabaseGenerationPayload }
+  /**
+   * RFC-370 M0 — a CrewStation-hosted installation. Its PostgreSQL database was
+   * provisioned by the platform and installed by the release migration Job, so
+   * there is no local pointer and no SQLite migration manifest behind it.
+   */
+  | { readonly source: 'hosted-installation'; readonly payload: DatabaseGenerationPayload }
 
 export class DatabaseGenerationError extends Error {
   constructor(
@@ -264,4 +270,29 @@ export function readDatabaseGenerationFromArtifacts(
   }
   verifyGenerationManifest(file, artifacts)
   return { source: 'verified-pointer', payload: file.payload }
+}
+
+/**
+ * RFC-370 M0 — the hosted generation identity is derived from the platform's
+ * stable project/service names, so every replica and every restart of the same
+ * service names the same database generation without local state.
+ */
+export function hostedDatabaseGeneration(input: {
+  readonly project: string
+  readonly service: string
+  readonly schemaDigest: string
+}): ResolvedDatabaseGeneration {
+  const identity = sha256Hex(`crewstation\u0000${input.project}\u0000${input.service}`)
+  return {
+    source: 'hosted-installation',
+    payload: {
+      version: 1,
+      generationId: `dbg_cs_${identity.slice(0, 32)}`,
+      provider: 'postgresql',
+      operationId: null,
+      schemaDigest: input.schemaDigest,
+      manifestDigest: null,
+      activatedAt: 0,
+    },
+  }
 }

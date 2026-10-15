@@ -93,6 +93,7 @@ import {
   type SettingsConfigScopeId,
 } from '@/lib/settings-drafts'
 import { Route as RootRoute } from './__root'
+import { isGatewayIdentity } from '@/stores/deployment'
 
 /**
  * RFC-270 — the `/settings` access guard.
@@ -171,6 +172,13 @@ export const SETTINGS_TABS = [
   'rendering',
   'authentication',
 ] as const satisfies readonly SettingsTab[]
+
+/** RFC-370 M0 — the platform provisions the database, owns sign-in and binds the listener. */
+export const GATEWAY_HIDDEN_SETTINGS_TABS: ReadonlySet<SettingsTab> = new Set<SettingsTab>([
+  'database',
+  'authentication',
+  'network',
+])
 
 interface SettingsSearch extends Record<string, unknown> {
   tab?: SettingsTab
@@ -271,8 +279,13 @@ function SettingsSectionNav({
   )
 }
 
+/** A Settings tab this deployment shows (RFC-370 M0: not the platform-owned ones behind the gateway). */
 function isSettingsTab(tab: unknown): tab is SettingsTab {
-  return typeof tab === 'string' && (SETTINGS_TABS as readonly string[]).includes(tab)
+  return (
+    typeof tab === 'string' &&
+    (SETTINGS_TABS as readonly string[]).includes(tab) &&
+    !(isGatewayIdentity() && GATEWAY_HIDDEN_SETTINGS_TABS.has(tab as SettingsTab))
+  )
 }
 
 export function validateSettingsSearch(raw: Record<string, unknown>): SettingsSearch {
@@ -298,6 +311,10 @@ function SettingsPage() {
   // keeps URL and panel aligned in embedded/test routers that can hand a route
   // raw search state during initial hydration.
   const tab = isSettingsTab(search.tab) ? search.tab : 'runtime'
+  // RFC-370 M0: behind the CrewStation gateway the platform provisions the
+  // database, owns sign-in and binds the listener, so those tabs do not apply
+  // (isSettingsTab rejects them, and the URL canonicalizes like any bad tab).
+  const gateway = isGatewayIdentity()
   const claimRuntimeFlash = useCallback((key: number) => {
     if (claimedRuntimeFlashRef.current === key) return false
     claimedRuntimeFlashRef.current = key
@@ -415,7 +432,13 @@ function SettingsPage() {
       ],
     },
   ]
-  const activeSection = sectionGroups
+  const visibleSectionGroups = gateway
+    ? sectionGroups.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !GATEWAY_HIDDEN_SETTINGS_TABS.has(item.key)),
+      }))
+    : sectionGroups
+  const activeSection = visibleSectionGroups
     .flatMap((group) => group.items)
     .find((section) => section.key === tab)
   let panelContent: React.ReactNode = null
@@ -457,7 +480,7 @@ function SettingsPage() {
   const sectionShell = (
     <div className="page-section-layout settings-section-layout">
       <SettingsSectionNav
-        groups={sectionGroups}
+        groups={visibleSectionGroups}
         active={tab}
         fusionDirty={fusionDraft.dirty}
         fusionStale={fusionDraft.stale}

@@ -1264,6 +1264,13 @@ git fetch origin main; git merge --ff-only origin/main; git push origin main   #
 push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推；③别指望 `set -o shwordsplit`——
 每个 Bash 调用都是新 shell。
 
+### 第六次复发：与第一次一模一样（2026-10-15）
+
+`FILES="…13 个架构产物…"; git add -- $FILES && git commit … -- $FILES`，紧跟
+`git fetch …; git merge --ff-only …; git push origin main`——add 失败短路了 commit，`;` 后的 push 照跑，
+修复源码笔 `3bbac78ee` 单独上了 main，它的主 CI 只红在规范清单对拍（未投影），一分钟后补推配套 `e4b5adcc5`。
+上面的定式本来就够：路径清单写进文件用 `$(cat list.txt)`，或直接把路径写在命令里；push 只接在 `&&` 链的末尾。
+
 ### 第五次复发：`set -- $R` 把整串塞进 `$1`，于是**所有 CI 守候都是空转**（2026-09-18）
 
 这次不在 `git add` 上，而在一个后台轮询脚本里——同一个分词坑，换了个壳：

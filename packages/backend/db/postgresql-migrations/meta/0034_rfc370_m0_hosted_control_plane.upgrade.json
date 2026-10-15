@@ -1,0 +1,635 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:9a9f65081c639b1d354a58e543207a8bf87c68d33797a321a338c23720228493', 192, 6)"
+    },
+    "beforeDigest": "sha256:68c8d8089a8e0c110ee38ed1347188ae0e9ef3c57a135a8cf1b33e756b00ef91"
+  },
+  "digest": "sha256:6322046db97442d37cde414508aba1f0517680d2a6249649bb85f16fdd75cefd",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "application_configuration",
+      "sql": "CREATE TABLE \"agent_workflow\".\"application_configuration\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"application_configuration_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "external_identities",
+      "sql": "CREATE TABLE \"agent_workflow\".\"external_identities\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"issuer\" TEXT COLLATE \"C\" NOT NULL,\n  \"subject\" TEXT COLLATE \"C\" NOT NULL,\n  \"user_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"linked_at\" BIGINT NOT NULL,\n  CONSTRAINT \"external_identities_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "skill_content_entries",
+      "sql": "CREATE TABLE \"agent_workflow\".\"skill_content_entries\" (\n  \"skill_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"tree\" TEXT COLLATE \"C\" NOT NULL,\n  \"path\" TEXT COLLATE \"C\" NOT NULL,\n  \"encoding\" TEXT COLLATE \"C\" NOT NULL,\n  \"content\" TEXT COLLATE \"C\" NOT NULL,\n  \"size\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"skill_content_entries_pkey\" PRIMARY KEY (\"skill_id\", \"tree\", \"path\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "external_identities:index:idx_external_identities_user",
+      "sql": "CREATE INDEX \"idx_external_identities_user\" ON \"agent_workflow\".\"external_identities\" (\"user_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "external_identities:index:external_identities_issuer_subject_unique",
+      "sql": "CREATE UNIQUE INDEX \"external_identities_issuer_subject_unique\" ON \"agent_workflow\".\"external_identities\" (\"issuer\", \"subject\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "application_configuration:check:application_configuration_id_fixed",
+      "sql": "ALTER TABLE \"agent_workflow\".\"application_configuration\" ADD CONSTRAINT \"application_configuration_id_fixed\" CHECK (\"id\" = 'global')"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "external_identities:fk:external_identities_user_id_users_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"external_identities\" ADD CONSTRAINT \"external_identities_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"agent_workflow\".\"users\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "skill_content_entries:check:skill_content_entries_encoding_enum",
+      "sql": "ALTER TABLE \"agent_workflow\".\"skill_content_entries\" ADD CONSTRAINT \"skill_content_entries_encoding_enum\" CHECK (\"encoding\" IN ('utf8', 'base64'))"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:9a9f65081c639b1d354a58e543207a8bf87c68d33797a321a338c23720228493', active_table_count = 192, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:6eb9dac29f4c6e0d2740931a221f51e277b1b7a5be785c5af4bf87784ce3afc3' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:6eb9dac29f4c6e0d2740931a221f51e277b1b7a5be785c5af4bf87784ce3afc3",
+    "planDigest": "sha256:818902839dd7dc861145b8577a2aa15fd2180b02da5aa1b7946e6237be43b09e"
+  },
+  "id": "0034_rfc370_m0_hosted_control_plane",
+  "indexAdditions": [
+    {
+      "position": 13,
+      "statement": {
+        "kind": "table",
+        "logicalId": "application_configuration",
+        "sql": "CREATE TABLE \"agent_workflow\".\"application_configuration\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"application_configuration_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 100,
+      "statement": {
+        "kind": "table",
+        "logicalId": "external_identities",
+        "sql": "CREATE TABLE \"agent_workflow\".\"external_identities\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"issuer\" TEXT COLLATE \"C\" NOT NULL,\n  \"subject\" TEXT COLLATE \"C\" NOT NULL,\n  \"user_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"linked_at\" BIGINT NOT NULL,\n  CONSTRAINT \"external_identities_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 153,
+      "statement": {
+        "kind": "table",
+        "logicalId": "skill_content_entries",
+        "sql": "CREATE TABLE \"agent_workflow\".\"skill_content_entries\" (\n  \"skill_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"tree\" TEXT COLLATE \"C\" NOT NULL,\n  \"path\" TEXT COLLATE \"C\" NOT NULL,\n  \"encoding\" TEXT COLLATE \"C\" NOT NULL,\n  \"content\" TEXT COLLATE \"C\" NOT NULL,\n  \"size\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"skill_content_entries_pkey\" PRIMARY KEY (\"skill_id\", \"tree\", \"path\")\n)"
+      }
+    },
+    {
+      "position": 355,
+      "statement": {
+        "kind": "index",
+        "logicalId": "external_identities:index:idx_external_identities_user",
+        "sql": "CREATE INDEX \"idx_external_identities_user\" ON \"agent_workflow\".\"external_identities\" (\"user_id\")"
+      }
+    },
+    {
+      "position": 356,
+      "statement": {
+        "kind": "index",
+        "logicalId": "external_identities:index:external_identities_issuer_subject_unique",
+        "sql": "CREATE UNIQUE INDEX \"external_identities_issuer_subject_unique\" ON \"agent_workflow\".\"external_identities\" (\"issuer\", \"subject\")"
+      }
+    },
+    {
+      "position": 561,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "application_configuration:check:application_configuration_id_fixed",
+        "sql": "ALTER TABLE \"agent_workflow\".\"application_configuration\" ADD CONSTRAINT \"application_configuration_id_fixed\" CHECK (\"id\" = 'global')"
+      }
+    },
+    {
+      "position": 688,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "external_identities:fk:external_identities_user_id_users_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"external_identities\" ADD CONSTRAINT \"external_identities_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"agent_workflow\".\"users\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 788,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "skill_content_entries:check:skill_content_entries_encoding_enum",
+        "sql": "ALTER TABLE \"agent_workflow\".\"skill_content_entries\" ADD CONSTRAINT \"skill_content_entries_encoding_enum\" CHECK (\"encoding\" IN ('utf8', 'base64'))"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 3,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"application_configuration\".\"id\" = 'global'",
+            "name": "application_configuration_id_fixed"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "application_configuration",
+        "indexes": [],
+        "migrationKey": ["id"],
+        "ownerContext": "system-operations",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "application_configuration",
+          "sqlite": "application_configuration"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "system-operations",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "applicationConfiguration",
+        "sourceTable": "application_configuration",
+        "unique": []
+      }
+    },
+    {
+      "position": 96,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "issuer",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "subject",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "user_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "linked_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["user_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "users",
+            "name": "external_identities_user_id_users_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "external_identities",
+        "indexes": [
+          {
+            "columns": ["user_id"],
+            "name": "idx_external_identities_user",
+            "unique": false,
+            "where": null
+          },
+          {
+            "columns": ["issuer", "subject"],
+            "name": "external_identities_issuer_subject_unique",
+            "unique": true,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "identity-access",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "external_identities",
+          "sqlite": "external_identities"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "identity-access",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "externalIdentities",
+        "sourceTable": "external_identities",
+        "unique": [
+          {
+            "columns": ["issuer", "subject"],
+            "expression": null,
+            "name": "external_identities_issuer_subject_unique"
+          }
+        ]
+      }
+    },
+    {
+      "position": 149,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"skill_content_entries\".\"encoding\" IN ('utf8', 'base64')",
+            "name": "skill_content_entries_encoding_enum"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "skill_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "tree",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "path",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["utf8", "base64"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "encoding",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "content",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "size",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "skill_content_entries",
+        "indexes": [],
+        "migrationKey": ["skill_id", "tree", "path"],
+        "ownerContext": "resource-catalog",
+        "primaryKey": ["skill_id", "tree", "path"],
+        "providerTables": {
+          "postgresql": "skill_content_entries",
+          "sqlite": "skill_content_entries"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "resource-catalog",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "skillContentEntries",
+        "sourceTable": "skill_content_entries",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:aa3e63299ad6398c341f2201671ba62b177b16defd99a5cc52c4910c54349265",
+  "sequence": 34,
+  "sqlDigest": "sha256:e0f6074b1d52d1244cd8049397b0b2291598a370f0fdfca334d8164e437e7356",
+  "sqlFile": "0034_rfc370_m0_hosted_control_plane.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1792039191120,
+        "hash": "fedc7c274471b84f102c0700108ab877a7846a7d2af511a2f728215d9a988f90",
+        "index": 257,
+        "tag": "0258_rfc370_m0_hosted_control_plane"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:ce900e0d21aeb13c024d3153f5f54d7ef0214bca9691a75dc879b0476eeb1452",
+      "count": 257,
+      "last": {
+        "folderMillis": 1792024118175,
+        "hash": "5d445956574cf2f7870ae173526afd7124c9a781bbdf08a0ac6980f5037c0136",
+        "index": 256,
+        "tag": "0257_rfc370_v2_retire_host_execution"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:130be6d2f3aa4df25be91bd2d5582af81bf91d2ed4110e7488cf9669e08cb470",
+      "count": 258,
+      "last": {
+        "folderMillis": 1792039191120,
+        "hash": "fedc7c274471b84f102c0700108ab877a7846a7d2af511a2f728215d9a988f90",
+        "index": 257,
+        "tag": "0258_rfc370_m0_hosted_control_plane"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:9a9f65081c639b1d354a58e543207a8bf87c68d33797a321a338c23720228493",
+    "planDigest": "sha256:adf8a530455431365c9faca02b6bc98a3ff9af72faf938a572172871e6d32b83"
+  },
+  "version": 2
+}

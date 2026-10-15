@@ -74,6 +74,8 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 /** 只有 bootstrap 可以指向模块的 `composition` 入口（RFC-294 §G1）。 */
 export const BOOTSTRAP_FILES = [
   'packages/backend/src/main.ts',
+  // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.
+  'packages/backend/src/cli/deployment.ts',
   // Development reload assembles the same daemon host and retains its lifetime.
   'packages/backend/src/cli/dev.ts',
   'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',

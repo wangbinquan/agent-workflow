@@ -30,13 +30,13 @@ afterEach(() => {
 })
 
 describe('RFC-349 SQLite logical source', () => {
-  test('preflights all 195 tables and paginates with lossless migration keys', async () => {
+  test('preflights all 198 tables and paginates with lossless migration keys', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
     const source = openSqliteLogicalSource({ path, contract })
     try {
       const snapshot = await source.preflight()
-      expect(Object.keys(snapshot.tableRows)).toHaveLength(195)
+      expect(Object.keys(snapshot.tableRows)).toHaveLength(198)
       expect(Object.keys(snapshot.tableRows).sort()).toEqual(
         contract.tables.map((table) => table.id).sort(),
       )
@@ -104,13 +104,13 @@ describe('RFC-349 SQLite logical source', () => {
     }
   })
 
-  test('runs the production 195-table source scan and chunk reads through a Worker', async () => {
+  test('runs the production 198-table source scan and chunk reads through a Worker', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()
     const source = await openSqliteLogicalSourceWorker({ path, contract })
     try {
       const snapshot = await source.preflight()
-      expect(Object.keys(snapshot.tableRows)).toHaveLength(195)
+      expect(Object.keys(snapshot.tableRows)).toHaveLength(198)
       expect(Object.keys(snapshot.tableRows).sort()).toEqual(
         contract.tables.map((table) => table.id).sort(),
       )

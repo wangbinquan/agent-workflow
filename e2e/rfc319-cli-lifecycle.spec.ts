@@ -585,6 +585,13 @@ test('RFC-319 OPS-009: status 的三态各说各的话，running 那一档的读
     )
 
     const health = await readHealth(daemon.baseUrl)
+    // RFC-370 v2 §3.7：平台探针与 /health 同一个公开面，同一实例同时可用。
+    const live = await fetch(`${daemon.baseUrl}/live`)
+    expect(live.status, '`/live` 不是 200 ⇒ 平台存活探针会反复重启一个健康的实例').toBe(200)
+    expect(await live.json()).toEqual({ alive: true })
+    const ready = await fetch(`${daemon.baseUrl}/ready`)
+    expect(ready.status, '`/ready` 不是 200 ⇒ 平台永远不会把流量切到这个实例').toBe(200)
+    expect(await ready.json()).toEqual({ ready: true })
     expect(
       statusField(on.out, 'pid'),
       '`status` 报的 PID 与锁文件里的不是同一个 ⇒ 用户按它去 `kill` / 去 `ps` 查的是别的进程',

@@ -18,6 +18,7 @@ import {
   type AccountSection,
 } from '@/lib/account-navigation'
 import { Route as RootRoute } from './__root'
+import { isGatewayIdentity } from '@/stores/deployment'
 
 export const Route = createRoute({
   getParentRoute: () => RootRoute,
@@ -31,7 +32,12 @@ function AccountPage() {
   const actor = useActor()
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
-  const section = parseAccountSection(search.section)
+  // RFC-370 M0: behind the CrewStation gateway the platform owns sign-in, so the
+  // local password / session and personal-token sections do not apply.
+  const gateway = isGatewayIdentity()
+  const requested = parseAccountSection(search.section)
+  const section =
+    gateway && (requested === 'security' || requested === 'tokens') ? 'overview' : requested
   const groups: readonly PageSectionGroup<AccountSection>[] = [
     {
       key: 'account',
@@ -42,16 +48,20 @@ function AccountPage() {
           label: t('account.sections.overview'),
           description: t('account.sectionDescriptions.overview'),
         },
-        {
-          key: 'security',
-          label: t('account.sections.security'),
-          description: t('account.sectionDescriptions.security'),
-        },
-        {
-          key: 'tokens',
-          label: t('account.sections.tokens'),
-          description: t('account.sectionDescriptions.tokens'),
-        },
+        ...(gateway
+          ? []
+          : [
+              {
+                key: 'security' as const,
+                label: t('account.sections.security'),
+                description: t('account.sectionDescriptions.security'),
+              },
+              {
+                key: 'tokens' as const,
+                label: t('account.sections.tokens'),
+                description: t('account.sectionDescriptions.tokens'),
+              },
+            ]),
         {
           key: 'codePush',
           label: t('account.sections.codePush'),

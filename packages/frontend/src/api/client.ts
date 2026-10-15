@@ -5,7 +5,7 @@
 // - Surfaces backend DomainError responses (`{ error: { code, message } }`)
 //   as ApiError so callers can branch on code without re-parsing.
 
-import { clearToken, getBaseUrl, getToken } from '@/stores/auth'
+import { authorizationHeaderFor, clearToken, getBaseUrl, getToken } from '@/stores/auth'
 
 export class ApiError extends Error {
   readonly status: number
@@ -204,7 +204,7 @@ async function cappedErrorText(res: Response, cap = 2048): Promise<string> {
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (token !== null) headers.Authorization = `Bearer ${token}`
+  Object.assign(headers, authorizationHeaderFor(token))
   let body: BodyInit | undefined
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -318,7 +318,7 @@ export async function apiPostBytes<T>(
     'content-type': 'application/octet-stream',
     ...extraHeaders,
   }
-  if (token !== null) headers.Authorization = `Bearer ${token}`
+  Object.assign(headers, authorizationHeaderFor(token))
   const { signal, deadline } = withDeadline(
     opts?.signal,
     opts?.deadlineMs ?? payloadDeadlineMs(bytes.byteLength),
@@ -351,7 +351,7 @@ export async function apiPostMultipart<T>(
 ): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (token !== null) headers.Authorization = `Bearer ${token}`
+  Object.assign(headers, authorizationHeaderFor(token))
 
   // Body-size-bound: budget from the bytes actually being uploaded.
   const { signal, deadline } = withDeadline(
@@ -402,7 +402,7 @@ export async function apiGetBlob(
 ): Promise<Blob> {
   const token = getToken()
   const headers: Record<string, string> = { Accept: '*/*' }
-  if (token !== null) headers.Authorization = `Bearer ${token}`
+  Object.assign(headers, authorizationHeaderFor(token))
   // Fixed budget by default: the caller cannot know the byte count before the
   // response arrives, and the server does not guarantee Content-Length — so a
   // payload-derived budget would be guesswork. A genuinely large download must
@@ -452,7 +452,7 @@ export async function apiGetEvidenceRange(
 ): Promise<EvidenceRange> {
   const token = getToken()
   const headers: Record<string, string> = { Accept: '*/*' }
-  if (token !== null) headers.Authorization = `Bearer ${token}`
+  Object.assign(headers, authorizationHeaderFor(token))
   const { signal, deadline } = withDeadline(opts?.signal, CLIENT_HARD_DEADLINE_MS)
   const res = await fetchOrNetworkError(buildUrl(path, query), { method: 'GET', headers, signal })
   if (res.status === 401) clearToken()

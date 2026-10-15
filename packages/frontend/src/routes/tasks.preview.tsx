@@ -16,7 +16,7 @@ import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
 import { api, ApiError, fetchOrNetworkError } from '@/api/client'
 import { fetchWorktreeFile } from '@/api/worktreeFiles'
 import { portArtifactItemUrl } from '@/lib/worktree-download'
-import { getBaseUrl, getToken } from '@/stores/auth'
+import { authorizationHeaderFor, getBaseUrl, getToken } from '@/stores/auth'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { EmptyState } from '@/components/EmptyState'
 import { LoadingState } from '@/components/LoadingState'
@@ -111,7 +111,7 @@ function ArtifactPreviewBody({
     queryFn: async ({ signal }) => {
       const token = getToken()
       const headers: Record<string, string> = {}
-      if (token !== null) headers.Authorization = `Bearer ${token}`
+      Object.assign(headers, authorizationHeaderFor(token))
       // RFC-203: tagged fetch — this queryFn's rejection feeds <ErrorBanner>/
       // resolveApiError, so offline must classify as network-unreachable
       // instead of leaking a verbatim TypeError("Failed to fetch").

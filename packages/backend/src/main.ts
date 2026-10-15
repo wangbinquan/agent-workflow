@@ -25,7 +25,7 @@ import { composeDoctorApplication } from '@/modules/system-operations/compositio
 import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
 import { frameBackfillCommand } from './cli/frameBackfill'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
-import { migrateCommand } from './cli/migrate'
+import { composeDeploymentStartOptions, migrateForDeployment } from './cli/deployment'
 import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand, type StartOptions } from './cli/start'
 import {
@@ -368,7 +368,10 @@ async function main(): Promise<void> {
       if (port !== undefined) opts.port = port
       const host = readFlag(Bun.argv, '--host')
       if (host !== undefined) opts.host = host
-      const start = (development?: StartOptions) => startCommand({ ...opts, ...development })
+      // RFC-370 v2 §3.1: the deployment selects its adapters once; flags still win.
+      const deployment = await composeDeploymentStartOptions(process.env)
+      const start = (development?: StartOptions) =>
+        startCommand({ ...deployment, ...opts, ...development })
       if (process.env.AGENT_WORKFLOW_DEV_HOT_RELOAD === '1') {
         const retained = globalThis as typeof globalThis & {
           agentWorkflowDevelopment?: DevelopmentDaemonState
@@ -471,7 +474,7 @@ async function main(): Promise<void> {
     }
 
     case 'migrate': {
-      const { output } = await migrateCommand()
+      const { output } = await migrateForDeployment(process.env)
       process.stdout.write(output)
       break
     }

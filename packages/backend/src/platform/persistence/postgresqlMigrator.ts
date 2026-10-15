@@ -25,7 +25,8 @@ export class PostgresqlMigrationError extends Error {
       | 'postgresql-schema-lock-held'
       | 'postgresql-schema-partial'
       | 'postgresql-schema-drift'
-      | 'postgresql-schema-prepare-failed',
+      | 'postgresql-schema-prepare-failed'
+      | 'postgresql-schema-not-current',
     message: string,
   ) {
     super(message)
@@ -474,6 +475,38 @@ export async function migratePostgresqlSchema(input: {
         // Releasing the reserved session below is the final lock release.
       }
     }
+    connection.release()
+  }
+}
+
+/**
+ * RFC-370 M0 — verify without changing the schema. A hosted service never
+ * migrates: the release pipeline's migration Job is the single writer of DDL,
+ * and a service that finds an empty or older schema refuses to start until it
+ * has run.
+ */
+export async function verifyPostgresqlSchema(input: {
+  readonly runtime: PostgresqlDatabaseRuntime
+  readonly history: PostgresqlMigrationHistory
+}): Promise<PostgresqlMigrationReceipt> {
+  const plan = input.history.head.plan
+  const connection = await input.runtime.providerPool().reserve()
+  try {
+    const state = historyState(await targetSnapshot(connection, true), input.history, undefined)
+    if (state === 'empty') {
+      throw new PostgresqlMigrationError(
+        'postgresql-schema-not-current',
+        'the PostgreSQL schema is not installed; run the migration job first',
+      )
+    }
+    if (state.length !== 0) {
+      throw new PostgresqlMigrationError(
+        'postgresql-schema-not-current',
+        `the PostgreSQL schema is ${state.length} migration(s) behind this binary; run the migration job first`,
+      )
+    }
+    return receipt(plan, false)
+  } finally {
     connection.release()
   }
 }

@@ -66,4 +66,42 @@ export function mountHealthRoutes(
       })
     },
   )
+
+  // RFC-370 v2 §3.7 — platform probes. `/live` only proves the process answers;
+  // `/ready` proves the database (schema verified at boot) answers queries. A
+  // hosted standby instance is ready: readiness never waits for execution
+  // authority, or a release waiting to take over could never be routed to.
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/live',
+      permissions: [],
+      publicReason:
+        'platform liveness probe; mounted before multiAuth and outside /api/* like /health',
+      tokenAccess: 'allow',
+      summary: 'Liveness probe for platform orchestration',
+    },
+    (c) => c.json({ alive: true }),
+  )
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/ready',
+      permissions: [],
+      publicReason:
+        'platform readiness probe; mounted before multiAuth and outside /api/* like /health',
+      tokenAccess: 'allow',
+      summary: 'Readiness probe for platform orchestration',
+    },
+    async (c) => {
+      try {
+        await database.countRunningTasks()
+        return c.json({ ready: true })
+      } catch {
+        return c.json({ ready: false, reason: 'database-unavailable' }, 503)
+      }
+    },
+  )
 }

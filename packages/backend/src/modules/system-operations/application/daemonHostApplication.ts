@@ -12,6 +12,12 @@ export interface DaemonHostApplicationOptions {
   readonly releaseAuthority: () => void | Promise<void>
   readonly releaseAuthorityOnExit: () => void
   readonly describeFailure: (error: unknown) => string
+  /**
+   * RFC-370 v2 §3.2 — a hosted instance that leaves execution authority (or
+   * fails to activate) exits through the same drain with a non-zero status so
+   * the platform restarts it as standby. Standalone never requests it.
+   */
+  readonly exitRequests?: (requestExit: (reason: string) => void) => void
   readonly log: {
     info(message: string, fields?: Record<string, unknown>): void
     warn(message: string, fields?: Record<string, unknown>): void
@@ -24,7 +30,7 @@ export async function runDaemonHostApplication(
   const waitForHostExit = (): Promise<never> => new Promise(() => {})
   const readinessInFlight = new Set<Promise<void>>()
   let shuttingDown = false
-  const shutdown = async (signal: string, terminate = true): Promise<void> => {
+  const shutdown = async (signal: string, terminate = true, exitCode = 0): Promise<void> => {
     if (shuttingDown) return
     shuttingDown = true
     const admittedReadiness = [...readinessInFlight]
@@ -71,8 +77,20 @@ export async function runDaemonHostApplication(
       }
     }
     await input.releaseAuthority()
-    if (terminate) await input.host.terminate(0)
+    if (terminate) await input.host.terminate(exitCode)
   }
+  input.exitRequests?.((reason) => {
+    // The platform restarts this instance only once it exits: a drain that
+    // fails still ends the process with the same non-zero status.
+    void shutdown(reason, true, 1).catch((error: unknown) => {
+      input.log.warn('daemon exit request drain error', {
+        databaseProvider: input.databaseProvider,
+        reason,
+        error: input.describeFailure(error),
+      })
+      return input.host.terminate(1)
+    })
+  })
   const controlListener = Promise.resolve().then(() =>
     input.host.subscribeShutdown({
       onShutdown: shutdown,

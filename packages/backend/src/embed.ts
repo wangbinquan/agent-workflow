@@ -81,16 +81,45 @@ const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
 export async function getEmbeddedFrontendResponse(
   requestPath: string,
   lookup: EmbeddedAssetLookup = getEmbeddedAsset,
+  deployment: FrontendDeploymentMode = 'standalone',
 ): Promise<Response | null> {
   const directPath = stripLeadingSlash(requestPath)
   const direct = await lookup(directPath)
-  if (direct !== null) return embeddedAssetResponse(direct, directPath)
+  if (direct !== null) {
+    return embeddedAssetResponse(
+      directPath === 'index.html' ? withDeploymentMarker(direct, deployment) : direct,
+      directPath,
+    )
+  }
 
   if (isViteAssetPath(directPath)) return null
 
   const indexHtml = await lookup('index.html')
   if (indexHtml === null) return null
-  return embeddedAssetResponse(indexHtml, 'index.html')
+  return embeddedAssetResponse(withDeploymentMarker(indexHtml, deployment), 'index.html')
+}
+
+export type FrontendDeploymentMode = 'standalone' | 'crewstation'
+
+/** The SPA reads this synchronously before routing (RFC-370 M0). */
+export const DEPLOYMENT_META_NAME = 'agent-workflow-deployment'
+
+/**
+ * RFC-370 M0 — a hosted page states its deployment so the SPA knows, before
+ * its first route, that identity comes from the platform gateway rather than
+ * a local credential. Standalone pages are served byte-for-byte unchanged.
+ */
+export function withDeploymentMarker(
+  asset: EmbeddedAsset,
+  deployment: FrontendDeploymentMode,
+): EmbeddedAsset {
+  if (deployment === 'standalone') return asset
+  const html = new TextDecoder().decode(asset.body)
+  const marker = `<meta name="${DEPLOYMENT_META_NAME}" content="${deployment}">`
+  const injected = html.includes('</head>')
+    ? html.replace('</head>', `${marker}</head>`)
+    : `${marker}${html}`
+  return { ...asset, body: new TextEncoder().encode(injected).buffer as ArrayBuffer }
 }
 
 /**

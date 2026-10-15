@@ -30,7 +30,11 @@ import {
 } from './postgresqlDatabaseClient'
 import type { LogicalSchemaContract } from './schemaContract'
 import type { PostgresqlMigrationHistory } from './postgresqlMigrationSequence'
-import { migratePostgresqlSchema, type PostgresqlMigrationReceipt } from './postgresqlMigrator'
+import {
+  migratePostgresqlSchema,
+  verifyPostgresqlSchema,
+  type PostgresqlMigrationReceipt,
+} from './postgresqlMigrator'
 import { readDbMigrationIdentity } from './sqlite/systemBackupManifest'
 
 export class DatabaseProviderRuntimeError extends Error {
@@ -456,6 +460,63 @@ export async function prepareDatabaseProviderRuntime(
       receipt,
       // 措辞逐字保留（`tests/cli.test.ts` 与托管取证都读这句），世代号照旧从 adopt 出来的
       // runtime 上取——不改数据来源，只改「在哪里定稿」。
+      describeSchemaOutcome: () =>
+        `PostgreSQL schema ${receipt.applied ? 'applied' : 'verified'} ` +
+        `(generation: ${adopted.generation.payload.generationId}, active tables: ${receipt.activeTableCount})\n`,
+      openBootstrapClient: () => adopted.openClient(),
+    }
+  } catch (error) {
+    await runtime.close()
+    throw error
+  }
+}
+
+export type PreparedPostgresqlProviderSchema = Extract<
+  PreparedDatabaseProviderSchema,
+  { readonly provider: 'postgresql' }
+>
+
+/**
+ * RFC-370 M0 — prepare the CrewStation-provisioned PostgreSQL database. The
+ * release migration Job applies the schema history (`apply`); a serving
+ * instance only verifies that the schema is already current (`verify`) and
+ * never changes it.
+ */
+export async function prepareHostedPostgresqlProviderRuntime(input: {
+  readonly config: DatabaseConfig
+  readonly contract: LogicalSchemaContract
+  readonly generation: ResolvedDatabaseGeneration
+  readonly history: PostgresqlMigrationHistory
+  readonly schema: 'apply' | 'verify'
+  readonly env?: Readonly<Record<string, string | undefined>>
+  readonly postgresqlPoolFactory?: (options: PostgresqlPoolOptions) => PostgresqlPool
+}): Promise<PreparedPostgresqlProviderSchema> {
+  if (
+    input.config.provider !== 'postgresql' ||
+    input.generation.payload.provider !== 'postgresql'
+  ) {
+    throw new DatabaseProviderRuntimeError(
+      'database-provider-config-generation-mismatch',
+      'a hosted installation only runs on PostgreSQL',
+    )
+  }
+  const runtime = createPostgresqlDatabaseRuntime({
+    config: input.config,
+    generationId: input.generation.payload.generationId,
+    env: input.env,
+    poolFactory: input.postgresqlPoolFactory,
+  })
+  try {
+    const receipt =
+      input.schema === 'apply'
+        ? await migratePostgresqlSchema({ runtime, history: input.history })
+        : await verifyPostgresqlSchema({ runtime, history: input.history })
+    const adopted = composePostgresqlProviderRuntime(input, input.generation, runtime)
+    return {
+      provider: 'postgresql',
+      databaseConfig: input.config,
+      runtime: adopted,
+      receipt,
       describeSchemaOutcome: () =>
         `PostgreSQL schema ${receipt.applied ? 'applied' : 'verified'} ` +
         `(generation: ${adopted.generation.payload.generationId}, active tables: ${receipt.activeTableCount})\n`,

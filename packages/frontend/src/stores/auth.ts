@@ -4,7 +4,19 @@
 // Exposed as a tiny event-target so React components can subscribe via
 // useSyncExternalStore without pulling in a state-management lib.
 
+import { isGatewayIdentity } from './deployment'
+
 const TOKEN_KEY = 'agent-workflow.token'
+
+/**
+ * RFC-370 M0 — behind the CrewStation gateway there is no local credential:
+ * the platform injects the user's identity into every request. The store then
+ * reports this marker as the session so every "signed in?" check holds, and
+ * no request carries it as a bearer credential (see `authorizationHeaderFor`).
+ */
+export const GATEWAY_SESSION_TOKEN = 'crewstation-gateway'
+const GATEWAY_RELOAD_KEY = 'agent-workflow.gateway-reload-at'
+const GATEWAY_RELOAD_INTERVAL_MS = 30_000
 const BASE_URL_KEY = 'agent-workflow.baseUrl'
 
 // Default to the page's own origin so:
@@ -63,7 +75,15 @@ function safeStorage(): Storage | null {
 })()
 
 export function getToken(): string | null {
+  if (isGatewayIdentity()) return GATEWAY_SESSION_TOKEN
   return safeStorage()?.getItem(TOKEN_KEY) ?? null
+}
+
+/** The bearer header for a local credential; the gateway session sends none. */
+export function authorizationHeaderFor(token: string | null): Record<string, string> {
+  return token === null || token === GATEWAY_SESSION_TOKEN
+    ? {}
+    : { Authorization: `Bearer ${token}` }
 }
 
 export function getAuthSessionRevision(): number {
@@ -83,10 +103,39 @@ export function setToken(token: string): void {
 }
 
 export function clearToken(): void {
+  if (isGatewayIdentity()) {
+    // The platform session ended: reloading lets the gateway send the browser
+    // to its sign-in page. Throttled so a persistent rejection cannot loop.
+    reloadThroughGateway()
+    return
+  }
   const changed = getToken() !== null
   safeStorage()?.removeItem(TOKEN_KEY)
   if (changed) authSessionRevision += 1
   emit()
+}
+
+let reloadPage = (): void => {
+  window.location.reload()
+}
+
+/** Test seam: observe the gateway reload without navigating the test document. */
+export function setGatewayReloadForTest(reload: () => void): void {
+  reloadPage = reload
+}
+
+function reloadThroughGateway(): void {
+  if (typeof window === 'undefined') return
+  const now = Date.now()
+  let last = 0
+  try {
+    last = Number(window.sessionStorage.getItem(GATEWAY_RELOAD_KEY) ?? '0')
+    window.sessionStorage.setItem(GATEWAY_RELOAD_KEY, String(now))
+  } catch {
+    // Without session storage the reload is still bounded by the interval check below.
+  }
+  if (now - last < GATEWAY_RELOAD_INTERVAL_MS) return
+  reloadPage()
 }
 
 export function getBaseUrl(): string {
