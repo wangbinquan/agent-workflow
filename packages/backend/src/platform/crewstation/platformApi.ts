@@ -51,6 +51,8 @@ export interface CrewStationPlatformApiOptions {
   readonly fetch?: typeof fetch
   /** Per attempt; the platform answers v3 calls well within this. */
   readonly timeoutMs?: number
+  /** Rotate a live SSE connection without treating the rotation as an outage. */
+  readonly streamWindowMs?: number
   /** Total attempts for a retryable failure (first attempt included). */
   readonly attempts?: number
   readonly sleep?: (ms: number) => Promise<void>
@@ -153,7 +155,7 @@ export function createCrewStationPlatformApi(
       for (const [key, value] of Object.entries(query)) {
         if (value !== undefined) search.set(key, String(value))
       }
-      const timeout = AbortSignal.timeout(Math.max(timeoutMs, 35_000))
+      const timeout = AbortSignal.timeout(options.streamWindowMs ?? Math.max(timeoutMs, 35_000))
       const response = await fetcher(`${base}${path}?${search}`, {
         headers: { accept: 'text/event-stream' },
         signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
@@ -189,6 +191,12 @@ export function createCrewStationPlatformApi(
           }
           if (part.done) return
         }
+      } catch (error) {
+        // A connection that delivered headers is deliberately bounded. Its
+        // normal rotation resumes through the caller's durable cursor; only
+        // actual stream failures count toward the outage budget. A caller's
+        // cancellation still propagates so it can perform the cancel protocol.
+        if (!timeout.aborted || signal?.aborted) throw error
       } finally {
         await reader.cancel().catch(() => undefined)
         reader.releaseLock()

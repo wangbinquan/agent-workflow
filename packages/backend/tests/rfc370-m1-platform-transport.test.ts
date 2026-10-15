@@ -68,6 +68,50 @@ test('transient HTTP errors repeat exactly the same mutation body and request ke
   ])
 })
 
+test('SSE window rotation keeps complete events and leaves partial framing for cursor refill', async () => {
+  const api = createCrewStationPlatformApi({
+    baseUrl: 'http://platform',
+    streamWindowMs: 20,
+    fetch: (async (_url, init) =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode('data: {"cursor":"c1"}\n\ndata: {"cursor":'),
+            )
+            init!.signal!.addEventListener('abort', () => controller.error(init!.signal!.reason), {
+              once: true,
+            })
+          },
+        }),
+      )) as typeof fetch,
+  })
+  const events: unknown[] = []
+  for await (const event of api.stream('/events', {})) events.push(event)
+  expect(events).toEqual([{ cursor: 'c1' }])
+})
+
+test('real SSE failures and caller aborts still propagate instead of being hidden as rotation', async () => {
+  for (const callerAbort of [false, true]) {
+    const stop = new AbortController()
+    const failure = new Error(callerAbort ? 'caller cancelled' : 'connection reset')
+    const api = createCrewStationPlatformApi({
+      baseUrl: 'http://platform',
+      fetch: (async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              if (callerAbort) stop.abort(failure)
+              controller.error(failure)
+            },
+          }),
+        )) as unknown as typeof fetch,
+    })
+    const iterator = api.stream('/events', {}, stop.signal)[Symbol.asyncIterator]()
+    await expect(iterator.next()).rejects.toThrow(failure.message)
+  }
+})
+
 test('workspace JSON is argument-safe, chunked and bounded before dispatch', () => {
   const input = { script: 'echo "hello"; $(do-not-execute) `literal`\n中文' + 'a'.repeat(40_000) }
   const argv = workspaceHelperArguments('run-script', input)
