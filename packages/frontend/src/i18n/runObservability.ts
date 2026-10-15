@@ -120,6 +120,7 @@ export const runObservabilityZh = {
   modelsHint: '模型为运行时实际报告的模型；未定价的模型可以在设置中配置价格。',
   modelsEmpty: '该时间范围内没有模型用量',
   unattributed: '未归属模型',
+  builtinRuntime: '内置 {{protocol}}',
   configurePrice: '配置价格',
   listTruncated: '只显示消耗最多的 {{count}} 项',
 
@@ -270,6 +271,7 @@ export const runObservabilityEn: RunObservabilityMessages = {
     'Models are the ones the runtime reported; unpriced models can be priced in Settings.',
   modelsEmpty: 'No model usage in this time range',
   unattributed: 'Unattributed model',
+  builtinRuntime: 'Built-in {{protocol}}',
   configurePrice: 'Set price',
   listTruncated: 'Showing the {{count}} largest consumers',
 

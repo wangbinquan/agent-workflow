@@ -4,6 +4,9 @@ export const observationPricingZh = {
   hint: '按运行时和实际模型维护人民币单价。新价格只影响保存之后开始的调用，已记录的调用保持原价。',
   empty: '没有已注册的运行时',
   runtimeModels: '{{name}} 的模型',
+  builtinRuntimeModels: '内置 {{protocol}} 的模型（未注册运行时）',
+  builtinHint:
+    '系统 Agent 通过旧的模型设置运行、或没有对应的运行时注册时，调用记在该协议的内置默认运行时上，在这里单独定价。',
   configured: '配置模型',
   colModel: '模型',
   colCalls: '已出现调用',
@@ -52,6 +55,9 @@ export const observationPricingEn: ObservationPricingMessages = {
   hint: 'CNY prices per runtime and actual model. A new price applies only to calls that start after it is saved; recorded calls keep their price.',
   empty: 'No registered runtimes',
   runtimeModels: 'Models of {{name}}',
+  builtinRuntimeModels: 'Models of the built-in {{protocol}} (no runtime registration)',
+  builtinHint:
+    'Calls made without a runtime registration (for example system agents configured through a legacy model setting) run on the protocol’s built-in default runtime and are priced here.',
   configured: 'Configured model',
   colModel: 'Model',
   colCalls: 'Calls seen',

@@ -174,6 +174,8 @@ export interface ObservationCall {
   readonly attempt: number | null
   readonly agentId: string | null
   readonly agentName: string
+  /** Price-line key: a runtime registration id, or a built-in runtime key. */
+  readonly runtimeId: string | null
   readonly runtimeName: string | null
   readonly protocol: string
   readonly status: ObservationCallStatus
@@ -295,6 +297,8 @@ export interface ObservationPricingRuntime {
   readonly runtimeId: string
   readonly name: string
   readonly protocol: string
+  /** A protocol's built-in default runtime rather than a registration. */
+  readonly builtin: boolean
   readonly configuredModel: string | null
   readonly models: readonly ObservationPriceLine[]
 }
@@ -305,6 +309,26 @@ export interface ObservationPricingDirectory {
 
 export interface ObservationPriceHistory {
   readonly items: readonly ObservationPrice[]
+}
+
+/**
+ * A call that ran without a runtime registration (a system agent configured
+ * through a legacy `*Model` setting, or a protocol fallback) used the
+ * protocol's built-in default runtime. It keeps a price line of its own,
+ * keyed `builtin:<protocol>`, so it can be priced like any registration.
+ */
+export const OBSERVATION_BUILTIN_PROTOCOLS = ['opencode', 'claude-code'] as const
+const BUILTIN_RUNTIME_PREFIX = 'builtin:'
+
+export function observationBuiltinRuntimeId(protocol: string): string {
+  return `${BUILTIN_RUNTIME_PREFIX}${protocol}`
+}
+
+/** The protocol of a built-in runtime key, or null for a registration id. */
+export function observationBuiltinProtocol(runtimeId: string | null): string | null {
+  return runtimeId !== null && runtimeId.startsWith(BUILTIN_RUNTIME_PREFIX)
+    ? runtimeId.slice(BUILTIN_RUNTIME_PREFIX.length)
+    : null
 }
 
 const RATE_PATTERN = /^(0|[1-9]\d{0,8})(?:\.(\d{1,6}))?$/

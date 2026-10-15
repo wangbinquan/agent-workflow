@@ -10,7 +10,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { TableViewport } from '@/components/TableViewport'
 import { OBSERVATION_QUERY, observationApi, type ObservationWindow } from './observationClient'
-import { durationLabel, formatCount } from './observationFormat'
+import { durationLabel, formatCount, runtimeLabel } from './observationFormat'
 import { UsageCells, UsageHeaderCells } from './ObservationUsage'
 
 export function ObservationAgentsPanel({ window }: { window: ObservationWindow }) {
@@ -111,7 +111,7 @@ export function ObservationAgentsPanel({ window }: { window: ObservationWindow }
               <tbody>
                 {models.data.items.map((row) => (
                   <tr key={`${row.runtimeId ?? ''}\u0000${row.model}`}>
-                    <th scope="row">{row.runtimeName ?? row.protocol}</th>
+                    <th scope="row">{runtimeLabel(row, t)}</th>
                     <td>{row.model || t('runObservability.unattributed')}</td>
                     <td className="observability__num">{count(row.usage.calls)}</td>
                     <UsageCells usage={row.usage} />

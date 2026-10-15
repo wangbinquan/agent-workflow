@@ -103,6 +103,7 @@ function call(overrides: Partial<ObservationCall>): ObservationCall {
     attempt: 1,
     agentId: 'a1',
     agentName: 'planner',
+    runtimeId: 'rt-1',
     runtimeName: 'claude-main',
     protocol: 'claude-code',
     status: 'done',
@@ -308,7 +309,12 @@ test('tasks filter by keyword and status and page by cursor; a task opens its ca
   expect(last('/api/observability/tasks')!.searchParams.get('cursor')).toBeNull()
 
   fireEvent.click(await screen.findByRole('button', { name: '查看 Nightly build' }))
-  expect(await screen.findByRole('heading', { name: 'Nightly build' })).toBeDefined()
+  const heading = await screen.findByRole('heading', { name: 'Nightly build' })
+  // Locks the 2026-10-14 visual finding: the status chip sat directly in the
+  // column-flex heading and stretched across the page; the shared PageHeader
+  // puts it in the meta line.
+  const header = heading.closest('.page__header') as HTMLElement
+  expect(within(header).getByText('已完成').closest('.page__meta')).not.toBeNull()
   const calls = screen.getByRole('table', { name: '调用明细' })
   expect(within(calls).getByText('plan · 第 2 次')).toBeDefined()
   expect(within(calls).getByText('系统 · 合并冲突处理')).toBeDefined()
@@ -370,6 +376,13 @@ test('agents and models list consumption; an unpriced model links to its price l
           model: '',
           usage: usage({ calls: 1, input: 1 }),
         },
+        {
+          runtimeId: 'builtin:opencode',
+          runtimeName: null,
+          protocol: 'opencode',
+          model: 'opencode-go/deepseek',
+          usage: usage({ calls: 2, input: 9, unpricedCalls: 2 }),
+        },
       ],
     },
   }))
@@ -379,7 +392,11 @@ test('agents and models list consumption; an unpriced model links to its price l
   expect(within(agents).getByText('1 分钟')).toBeDefined()
   const models = screen.getByRole('table', { name: '运行时 × 模型' })
   expect(within(models).getByText('未归属模型')).toBeDefined()
-  const link = within(models).getByRole('link', { name: '配置价格' })
+  // A call without a runtime registration is named after its built-in runtime,
+  // not shown as if it ran on a registration, and its price line is reachable.
+  const builtin = within(models).getByRole('row', { name: /^内置 opencode/ })
+  expect(within(builtin).getByRole('link', { name: '配置价格' })).toBeDefined()
+  const link = within(models).getAllByRole('link', { name: '配置价格' })[0]!
   fireEvent.click(link)
   await waitFor(() => expect(router.state.location.pathname).toBe('/settings'))
   expect(router.state.location.search).toMatchObject({ tab: 'runtime' })

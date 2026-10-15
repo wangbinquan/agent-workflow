@@ -6,7 +6,7 @@ import type {
   ObservationCostState,
   ObservationUsage,
 } from '@agent-workflow/shared'
-import { formatObservationCny } from '@agent-workflow/shared'
+import { formatObservationCny, observationBuiltinProtocol } from '@agent-workflow/shared'
 import { formatDurationMs } from '@/lib/duration'
 import type { ObservationWindow } from './observationClient'
 
@@ -81,4 +81,18 @@ export function durationLabel(ms: number | null, t: Translate): string {
 export function systemKindLabel(kind: string | null, t: Translate): string {
   if (!kind) return '—'
   return t(`runObservability.kind.${kind}`, { defaultValue: kind })
+}
+
+/** A runtime registration's name, or the built-in runtime a call ran on without one. */
+export function runtimeLabel(
+  row: {
+    readonly runtimeId: string | null
+    readonly runtimeName: string | null
+    readonly protocol: string
+  },
+  t: Translate,
+): string {
+  const builtin = observationBuiltinProtocol(row.runtimeId)
+  if (builtin !== null) return t('runObservability.builtinRuntime', { protocol: builtin })
+  return row.runtimeName ?? row.protocol
 }

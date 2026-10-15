@@ -3,19 +3,20 @@
 // the UI. Non-administrators only aggregate tasks the task owner confirms are
 // visible to them, plus their own task-less system calls.
 
-import type {
-  ObservationAgentPage,
-  ObservationAgentRow,
-  ObservationCall,
-  ObservationModelPage,
-  ObservationOverview,
-  ObservationSystemPage,
-  ObservationSystemQuery,
-  ObservationTaskDetail,
-  ObservationTaskPage,
-  ObservationTaskPageQuery,
-  ObservationUsage,
-  ObservationWindowQuery,
+import {
+  observationBuiltinRuntimeId,
+  type ObservationAgentPage,
+  type ObservationAgentRow,
+  type ObservationCall,
+  type ObservationModelPage,
+  type ObservationOverview,
+  type ObservationSystemPage,
+  type ObservationSystemQuery,
+  type ObservationTaskDetail,
+  type ObservationTaskPage,
+  type ObservationTaskPageQuery,
+  type ObservationUsage,
+  type ObservationWindowQuery,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type {
@@ -153,6 +154,7 @@ function callView(
     attempt: attempt ? attempt.retryIndex + 1 : null,
     agentId: row.agentId,
     agentName: row.agentName,
+    runtimeId: row.runtimeId ?? observationBuiltinRuntimeId(row.protocol),
     runtimeName: row.runtimeName,
     protocol: row.protocol,
     status: row.status,
@@ -262,7 +264,9 @@ export function createObservationQueries(deps: {
       const [byPurpose, byDay, byTask, byAgent, counts] = await Promise.all([
         aggregate(scopes, base, 'purpose'),
         aggregate(scopes, base, 'day', query.tzOffset),
-        aggregate(scopes, { ...base, purpose: 'task' }, 'task'),
+        // A task's consumption includes the system work done for it (merge,
+        // commit, memory extraction), as on the task list and task detail.
+        aggregate(scopes, base, 'task'),
         aggregate(scopes, base, 'agent'),
         deps.tasks.counts(actor, base),
       ])

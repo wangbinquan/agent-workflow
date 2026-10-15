@@ -2,10 +2,12 @@
 // end once. Writes for one call are serialized here so a late progress update
 // can never overwrite the final snapshot.
 
+import { observationBuiltinRuntimeId } from '@agent-workflow/shared'
 import type { CallObservations, CallObservationLifecycle } from './callObservations'
 import type { CallStore, PricedModelUsage } from './ports/callStore'
 import type { PriceStore } from './ports/priceStore'
 import {
+  finalUsageOf,
   normalizeObservedUsage,
   sumBuckets,
   totalTokens,
@@ -101,7 +103,9 @@ export function createCallRecorder(deps: {
           ownerUserId: call.ownerUserId ?? null,
           agentId: call.agentId,
           agentName: call.agentName,
-          runtimeId: call.runtimeId,
+          // Without a registration the call ran on the protocol's built-in
+          // default runtime, which keeps a price line of its own.
+          runtimeId: call.runtimeId ?? observationBuiltinRuntimeId(call.protocol),
           runtimeName: call.runtimeName,
           protocol: call.protocol,
           startedAt: call.startedAt,
@@ -114,8 +118,9 @@ export function createCallRecorder(deps: {
     },
     finish(callId, outcome) {
       const end = { status: outcome.status, endedAt: outcome.endedAt }
+      const usage = outcome.usage ? finalUsageOf(outcome.usage, outcome.status) : null
       return enqueue(callId, () =>
-        outcome.usage ? write(callId, outcome.usage, end) : deps.store.end(callId, end, clock()),
+        usage ? write(callId, usage, end) : deps.store.end(callId, end, clock()),
       )
     },
     async repairInterrupted(bootAt) {

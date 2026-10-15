@@ -41,6 +41,15 @@ export function RuntimePricing() {
   // Without settings write permission the section stays empty instead of erroring.
   const forbidden = query.error instanceof ApiError && [401, 403].includes(query.error.status)
   const runtimes = forbidden ? [] : (query.data?.runtimes ?? [])
+  // A built-in runtime has no registration name; it is named after its protocol.
+  const displayName = (runtime: ObservationPricingRuntime) =>
+    runtime.builtin
+      ? t('runObservability.builtinRuntime', { protocol: runtime.protocol })
+      : runtime.name
+  const linesTitle = (runtime: ObservationPricingRuntime) =>
+    runtime.builtin
+      ? t('observationPricing.builtinRuntimeModels', { protocol: runtime.protocol })
+      : t('observationPricing.runtimeModels', { name: runtime.name })
   const summary = (price: ObservationPrice | null) =>
     price === null
       ? t('observationPricing.unpriced')
@@ -61,25 +70,20 @@ export function RuntimePricing() {
         ) : null}
         <div className="stack--md">
           {runtimes.map((runtime) => (
-            <section
-              key={runtime.runtimeId}
-              className="stack--sm"
-              aria-label={t('observationPricing.runtimeModels', { name: runtime.name })}
-            >
+            <section key={runtime.runtimeId} className="stack--sm" aria-label={linesTitle(runtime)}>
               <h4>
-                {t('observationPricing.runtimeModels', { name: runtime.name })}{' '}
-                <span className="muted">{runtime.protocol}</span>
+                {linesTitle(runtime)} <span className="muted">{runtime.protocol}</span>
               </h4>
+              {runtime.builtin ? (
+                <p className="muted">{t('observationPricing.builtinHint')}</p>
+              ) : null}
               {runtime.models.length === 0 ? (
                 <p className="muted">{t('observationPricing.noModels')}</p>
               ) : (
-                <TableViewport
-                  label={t('observationPricing.runtimeModels', { name: runtime.name })}
-                  minWidth="sm"
-                >
+                <TableViewport label={linesTitle(runtime)} minWidth="sm">
                   <table
                     className="data-table data-table--compact"
-                    aria-label={t('observationPricing.runtimeModels', { name: runtime.name })}
+                    aria-label={linesTitle(runtime)}
                   >
                     <thead>
                       <tr>
@@ -153,7 +157,7 @@ export function RuntimePricing() {
       </SettingsCard>
       {editing ? (
         <PriceEditor
-          runtime={{ runtimeId: editing.runtime.runtimeId, name: editing.runtime.name }}
+          runtime={{ runtimeId: editing.runtime.runtimeId, name: displayName(editing.runtime) }}
           model={editing.model}
           current={editing.current}
           triggerRef={trigger}
@@ -162,7 +166,7 @@ export function RuntimePricing() {
       ) : null}
       {history ? (
         <PriceHistory
-          runtime={{ runtimeId: history.runtime.runtimeId, name: history.runtime.name }}
+          runtime={{ runtimeId: history.runtime.runtimeId, name: displayName(history.runtime) }}
           model={history.model}
           triggerRef={trigger}
           onClose={() => setHistory(null)}

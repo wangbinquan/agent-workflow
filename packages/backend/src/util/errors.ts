@@ -151,6 +151,14 @@ export const errorHandler: ErrorHandler = (err, c) => {
   if (isIllegalNodeRunTransition(err)) {
     return c.json<ErrorPayload>({ ok: false, code: err.code, message: err.message }, 422)
   }
+  // Identity-access keeps its UserAccessError free of HTTP types; a route that
+  // forwards one unmapped (e.g. a launch rejected for a missing account email)
+  // must still answer with the account problem, not an internal error.
+  if (isUserAccessError(err)) {
+    const payload: ErrorPayload = { ok: false, code: err.code, message: err.message }
+    if (err.details !== undefined) payload.details = err.details
+    return c.json<ErrorPayload>(payload, USER_ACCESS_STATUS[err.kind])
+  }
   log.error('unhandled error', {
     name: err.name,
     message: err.message,
@@ -166,6 +174,23 @@ function isIllegalNodeRunTransition(
   err: unknown,
 ): err is { code: 'illegal-node-run-transition'; message: string } {
   return err instanceof Error && (err as { code?: unknown }).code === 'illegal-node-run-transition'
+}
+
+const USER_ACCESS_STATUS = {
+  validation: 422,
+  conflict: 409,
+  forbidden: 403,
+  'not-found': 404,
+} as const
+
+function isUserAccessError(err: unknown): err is Error & {
+  kind: keyof typeof USER_ACCESS_STATUS
+  code: string
+  details?: unknown
+} {
+  if (!(err instanceof Error) || err.name !== 'UserAccessError') return false
+  const { kind, code } = err as { kind?: unknown; code?: unknown }
+  return typeof code === 'string' && typeof kind === 'string' && kind in USER_ACCESS_STATUS
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   callCost,
   durationLabel,
   observationWindow,
+  runtimeLabel,
   systemKindLabel,
   tokenTotal,
   usageCost,
@@ -82,6 +83,20 @@ describe('RFC-371 v2 observation display rules', () => {
     expect(systemKindLabel('memory-distill', t)).toBe('记忆提取')
     expect(systemKindLabel('future-kind', t)).toBe('future-kind')
     expect(systemKindLabel(null, t)).toBe('—')
+  })
+
+  // Locks the 2026-10-14 verification finding: calls without a runtime
+  // registration were shown under the bare protocol, as if they had run on the
+  // registration of that name.
+  test('a built-in runtime is named as such; a registration by its name', () => {
+    const row = (runtimeId: string | null, runtimeName: string | null) => ({
+      runtimeId,
+      runtimeName,
+      protocol: 'opencode',
+    })
+    expect(runtimeLabel(row('builtin:opencode', null), t)).toBe('内置 opencode')
+    expect(runtimeLabel(row('rt-1', 'opencode-hw'), t)).toBe('opencode-hw')
+    expect(runtimeLabel(row('rt-1', null), t)).toBe('opencode')
   })
 
   test('URL search falls back to the 7-day overview and keeps only valid fields', () => {

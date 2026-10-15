@@ -174,7 +174,10 @@ test('a CNY price per runtime model is saved and survives reopening its history'
   page,
 }) => {
   const directory = await api<ObservationPricingDirectory>('/api/observability/pricing')
-  const runtime = directory.runtimes.find((entry) => entry.protocol === 'opencode')
+  // A registration, not the built-in line that unregistered system calls price on.
+  const runtime = directory.runtimes.find(
+    (entry) => entry.protocol === 'opencode' && !entry.builtin,
+  )
   expect(runtime).toBeDefined()
   if (!runtime) throw new Error('The real daemon did not register its OpenCode runtime')
   const model = `browser/fixture-${randomUUID().slice(0, 8)}`

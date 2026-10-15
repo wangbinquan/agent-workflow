@@ -12,7 +12,13 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { Select } from '@/components/Select'
 import { TableViewport } from '@/components/TableViewport'
 import { OBSERVATION_QUERY, observationApi, type ObservationWindow } from './observationClient'
-import { callCost, durationLabel, formatCount, systemKindLabel } from './observationFormat'
+import {
+  callCost,
+  durationLabel,
+  formatCount,
+  runtimeLabel,
+  systemKindLabel,
+} from './observationFormat'
 import { CursorPager } from './ObservationTasks'
 import { UsageCells, UsageHeaderCells } from './ObservationUsage'
 
@@ -128,7 +134,7 @@ export function ObservationSystemPanel(props: {
                         {call.systemLabel ? <div className="muted">{call.systemLabel}</div> : null}
                       </th>
                       <td>{call.agentName}</td>
-                      <td>{call.runtimeName ?? call.protocol}</td>
+                      <td>{runtimeLabel(call, t)}</td>
                       <td>
                         {t(`runObservability.callStatus.${call.status}`)}
                         {call.usageState !== 'complete' ? (

@@ -49,11 +49,20 @@ function fixture(options: { directoryStatus?: number } = {}) {
         runtimeId: 'rt-1',
         name: 'claude-main',
         protocol: 'claude-code',
+        builtin: false,
         configuredModel: 'sonnet',
         models: [
           { model: 'haiku', calls: 3, current: haiku.at(-1) ?? null },
           { model: 'sonnet', calls: 0, current: null },
         ],
+      },
+      {
+        runtimeId: 'builtin:opencode',
+        name: 'opencode',
+        protocol: 'opencode',
+        builtin: true,
+        configuredModel: null,
+        models: [{ model: 'opencode-go/deepseek', calls: 13, current: null }],
       },
     ],
   })
@@ -138,6 +147,24 @@ test('each runtime lists its configured and reported models with their current p
   ).toBe(true)
 })
 
+// Locks the 2026-10-14 verification finding: calls without a runtime
+// registration (legacy system-agent model settings) need a price line too.
+test('a built-in runtime is listed under its protocol and opens the same editor', async () => {
+  fixture()
+  const table = await screen.findByRole('table', {
+    name: '内置 opencode 的模型（未注册运行时）',
+  })
+  expect(screen.getByText(/系统 Agent 通过旧的模型设置运行/)).toBeDefined()
+  const line = within(table).getByRole('row', { name: /^opencode-go\/deepseek/ })
+  expect(within(line).getByText('13')).toBeDefined()
+  fireEvent.click(within(line).getByRole('button', { name: '配置价格' }))
+  expect(
+    await screen.findByRole('dialog', {
+      name: '内置 opencode · opencode-go/deepseek · Token 单价',
+    }),
+  ).toBeDefined()
+})
+
 test('invalid rates never reach the server; a valid save closes the editor', async () => {
   const f = fixture()
   await screen.findByRole('table', { name: 'claude-main 的模型' })
@@ -190,7 +217,8 @@ test('a conflict keeps the draft and the save can continue from the latest versi
 test('a new model needs a name; history shows unknown rates as unpriced', async () => {
   const f = fixture()
   await screen.findByRole('table', { name: 'claude-main 的模型' })
-  fireEvent.click(screen.getByRole('button', { name: '为其他模型定价' }))
+  const runtime = screen.getByRole('region', { name: 'claude-main 的模型' })
+  fireEvent.click(within(runtime).getByRole('button', { name: '为其他模型定价' }))
   let dialog = await screen.findByRole('dialog')
   fireEvent.click(within(dialog).getByRole('button', { name: '保存价格' }))
   expect(await within(dialog).findByText('请填写模型名称')).toBeDefined()

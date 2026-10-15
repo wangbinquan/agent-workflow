@@ -360,6 +360,160 @@ describeEachProvider('RFC-371 v2 observation store', (harness) => {
     ])
   })
 
+  // Locks the 2026-10-14 verification finding: system agents configured through
+  // a legacy `*Model` setting run without a runtime registration and stayed
+  // unpriced forever. They now price on their protocol's built-in line.
+  test('a call without a runtime registration is priced on its protocol built-in line', async () => {
+    const db = harness.db
+    await seedBase(db)
+    const now = { value: T0 }
+    const { calls, pricing, queries } = compose(db, now)
+    const builtin = {
+      purpose: 'system' as const,
+      systemKind: 'memory-distill',
+      agentId: null,
+      agentName: 'aw-memory-distiller',
+      runtimeId: null,
+      runtimeName: null,
+      protocol: 'opencode',
+    }
+    const usage = {
+      state: 'complete' as const,
+      models: [model('opencode-go/deepseek', 1_000_000, 0)],
+    }
+    await calls.accept(call('b-unpriced', { ...builtin, startedAt: T0 + 1 }))
+    await calls.finish('b-unpriced', { status: 'done', endedAt: T0 + 2, usage })
+    expect(
+      (await db.select().from(observationCalls).where(eq(observationCalls.id, 'b-unpriced')))[0],
+    ).toMatchObject({ runtimeId: 'builtin:opencode', costState: 'unpriced' })
+    // A call recorded before built-in keys existed joins the same line.
+    await db.insert(observationCalls).values({
+      id: 'b-legacy',
+      purpose: 'system',
+      taskId: 't-own',
+      nodeRunId: null,
+      systemKind: 'memory-distill',
+      systemLabel: null,
+      ownerUserId: null,
+      agentId: null,
+      agentName: 'aw-memory-distiller',
+      runtimeId: null,
+      runtimeName: null,
+      protocol: 'opencode',
+      status: 'done',
+      startedAt: T0 + 3,
+      endedAt: T0 + 4,
+      usageState: 'complete',
+      inputTokens: 5,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      costNano: 0,
+      costState: 'unpriced',
+      updatedAt: T0 + 4,
+    })
+    await db.insert(observationCallModels).values({
+      callId: 'b-legacy',
+      model: 'opencode-go/deepseek',
+      inputTokens: 5,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      priceId: null,
+      costNano: null,
+      costState: 'unpriced',
+    })
+
+    const before = await pricing.directory()
+    expect(before.runtimes.map((runtime) => [runtime.runtimeId, runtime.builtin])).toEqual([
+      ['rt-1', false],
+      ['builtin:opencode', true],
+    ])
+    expect(before.runtimes[1]).toMatchObject({
+      name: 'opencode',
+      protocol: 'opencode',
+      configuredModel: null,
+      models: [{ model: 'opencode-go/deepseek', calls: 2, current: null }],
+    })
+
+    const saved = await pricing.save(
+      'builtin:opencode',
+      {
+        model: 'opencode-go/deepseek',
+        rates: { input: '2', cacheRead: '0.5', cacheWrite: '3', output: '8' },
+        effectiveFrom: 0,
+        note: '',
+        expectedLatestId: null,
+      },
+      'u-admin',
+    )
+    expect(saved.runtimeId).toBe('builtin:opencode')
+    // Only the built-in lines of known protocols exist.
+    await expect(
+      pricing.save(
+        'builtin:unknown',
+        {
+          model: 'm',
+          rates: { input: '1', cacheRead: null, cacheWrite: null, output: null },
+          effectiveFrom: 0,
+          note: '',
+          expectedLatestId: null,
+        },
+        'u-admin',
+      ),
+    ).rejects.toMatchObject({ code: 'runtime-not-found' })
+
+    now.value = T0 + 10
+    await calls.accept(call('b-priced', { ...builtin, startedAt: T0 + 10 }))
+    await calls.finish('b-priced', { status: 'done', endedAt: T0 + 11, usage })
+    expect(
+      (await db.select().from(observationCalls).where(eq(observationCalls.id, 'b-priced')))[0],
+    ).toMatchObject({ costNano: 2_000_000_000, costState: 'priced' })
+
+    const models = await queries.models(admin, WINDOW)
+    expect(models.items.map((row) => [row.runtimeId, row.model, row.usage.calls])).toEqual([
+      ['builtin:opencode', 'opencode-go/deepseek', 3],
+    ])
+    expect(models.items[0]?.usage).toMatchObject({ unpricedCalls: 2, costNano: 2_000_000_000 })
+    const detail = await queries.task(admin, 't-own')
+    expect(detail?.calls.map((row) => [row.id, row.runtimeId])).toEqual([
+      ['b-unpriced', 'builtin:opencode'],
+      ['b-legacy', 'builtin:opencode'],
+      ['b-priced', 'builtin:opencode'],
+    ])
+  })
+
+  // Locks the 2026-10-14 verification finding: a process stopped from outside
+  // may be mid-request, and OpenCode records a request's tokens only once it
+  // completes, so the summary of a canceled or interrupted call is a lower bound.
+  test('a canceled or interrupted call keeps its usage as a lower bound', async () => {
+    const db = harness.db
+    await seedBase(db)
+    const now = { value: T0 }
+    const { calls } = compose(db, now)
+    const complete = { state: 'complete' as const, models: [model('sonnet', 10, 1)] }
+    for (const [id, status] of [
+      ['k-done', 'done'],
+      ['k-failed', 'failed'],
+      ['k-canceled', 'canceled'],
+      ['k-interrupted', 'interrupted'],
+    ] as const) {
+      await calls.accept(call(id))
+      await calls.finish(id, { status, endedAt: T0 + 1, usage: complete })
+    }
+    const states = Object.fromEntries(
+      (await db.select().from(observationCalls)).map((row) => [row.id, row.usageState]),
+    )
+    expect(states).toEqual({
+      'k-done': 'complete',
+      'k-failed': 'complete',
+      'k-canceled': 'partial',
+      'k-interrupted': 'partial',
+    })
+  })
+
   test('statistics for an administrator cover every call in the window', async () => {
     const db = harness.db
     await seedBase(db)
@@ -463,6 +617,9 @@ describeEachProvider('RFC-371 v2 observation store', (harness) => {
       ['t-collab', 'task t-collab'],
       ['t-hidden', 'task t-hidden'],
     ])
+    // Locks the 2026-10-14 verification finding: a task's consumption on the
+    // overview includes its system work (here the merge), like the task list.
+    expect(overview.topTasks[0]?.usage).toMatchObject({ calls: 3, input: 1540, output: 154 })
     expect(overview.topAgents[0]).toMatchObject({ agentId: 'a1', agentName: 'planner', tasks: 1 })
 
     const page = await queries.tasks(admin, { from: WINDOW.from, to: WINDOW.to })

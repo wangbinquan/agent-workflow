@@ -10,6 +10,7 @@ import { ErrorBanner } from '@/components/ErrorBanner'
 import { ExecutionSwimlane } from '@/components/ExecutionSwimlane'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
+import { PageHeader } from '@/components/PageHeader'
 import { TableViewport } from '@/components/TableViewport'
 import { TaskStatusChip } from '@/components/TaskStatusChip'
 import { ApiError } from '@/api/client'
@@ -18,6 +19,7 @@ import {
   callCost,
   durationLabel,
   formatCount,
+  runtimeLabel,
   systemKindLabel,
   tokenTotal,
   usageCost,
@@ -84,10 +86,11 @@ export function ObservationTaskDetailView(props: { taskId: string; onBack: () =>
   return (
     <div className="stack--md">
       {back}
-      <header className="page__heading">
-        <h2 className="page__title">{data.task.name}</h2>
-        <TaskStatusChip status={data.task.status} />
-      </header>
+      <PageHeader
+        headingLevel={2}
+        title={data.task.name}
+        meta={<TaskStatusChip status={data.task.status} />}
+      />
       <div className="observability__metrics">
         <Card title={t('runObservability.wallClock')}>
           <p className="observability__metric-value">{durationLabel(wall, t)}</p>
@@ -180,7 +183,7 @@ export function ObservationTaskDetailView(props: { taskId: string; onBack: () =>
                     >
                       <th scope="row">{callLabel(call, t)}</th>
                       <td>{call.agentName}</td>
-                      <td>{call.runtimeName ?? call.protocol}</td>
+                      <td>{runtimeLabel(call, t)}</td>
                       <td>
                         {call.models.length === 0
                           ? '—'

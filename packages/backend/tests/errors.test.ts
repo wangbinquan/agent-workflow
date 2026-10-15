@@ -8,6 +8,7 @@ import {
   ValidationError,
   errorHandler,
 } from '../src/util/errors'
+import { UserAccessError } from '../src/modules/identity-access/public/types'
 
 function buildApp(handler: () => never): Hono {
   const app = new Hono()
@@ -80,5 +81,49 @@ describe('errorHandler middleware', () => {
     expect(res.status).toBe(401)
     const body = (await res.json()) as Record<string, unknown>
     expect(body.code).toBe('unauthorized')
+  })
+})
+
+// Locks the 2026-10-14 verification finding: POST /api/tasks for an account
+// without an email answered `500 internal-error`, because the launch path
+// forwarded identity-access's HTTP-free UserAccessError unmapped.
+describe('errorHandler maps identity-access errors', () => {
+  test.each([
+    ['validation', 422],
+    ['conflict', 409],
+    ['forbidden', 403],
+    ['not-found', 404],
+  ] as const)('%s → %i with the access code', async (kind, status) => {
+    const app = buildApp(() => {
+      throw new UserAccessError(
+        kind,
+        'git-identity-email-missing',
+        'configure an account email before creating a task',
+        { field: 'email' },
+      )
+    })
+    const res = await app.request('/')
+    expect(res.status).toBe(status)
+    expect(await res.json()).toEqual({
+      ok: false,
+      code: 'git-identity-email-missing',
+      message: 'configure an account email before creating a task',
+      details: { field: 'email' },
+    })
+  })
+
+  test('an unknown kind or an impostor name is still an internal error', async () => {
+    const forged = Object.assign(new Error('x'), {
+      name: 'UserAccessError',
+      kind: 'odd',
+      code: 'c',
+    })
+    const plain = Object.assign(new Error('y'), { name: 'UserAccessError' })
+    for (const error of [forged, plain]) {
+      const res = await buildApp(() => {
+        throw error
+      }).request('/')
+      expect(res.status).toBe(500)
+    }
   })
 })

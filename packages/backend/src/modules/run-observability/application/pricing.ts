@@ -2,10 +2,13 @@
 
 import { ulid } from 'ulid'
 import {
+  OBSERVATION_BUILTIN_PROTOCOLS,
+  observationBuiltinProtocol,
   observationMicroToRate,
   observationRateToMicro,
   type ObservationPrice,
   type ObservationPriceHistory,
+  type ObservationPriceLine,
   type ObservationPricingDirectory,
   type SaveObservationPrice,
 } from '@agent-workflow/shared'
@@ -45,6 +48,38 @@ export function priceView(version: PriceVersion): ObservationPrice {
 const newest = (a: PriceVersion, b: PriceVersion) =>
   b.createdAt - a.createdAt || (b.id < a.id ? -1 : b.id > a.id ? 1 : 0)
 
+const isBuiltinProtocol = (protocol: string | null): protocol is string =>
+  protocol !== null && (OBSERVATION_BUILTIN_PROTOCOLS as readonly string[]).includes(protocol)
+
+/** One runtime's price lines: its configured model, every model it reported, every priced model. */
+function priceLines(
+  runtimeId: string,
+  configuredModel: string | null,
+  seen: readonly { readonly runtimeId: string; readonly model: string; readonly calls: number }[],
+  versions: readonly PriceVersion[],
+): ObservationPriceLine[] {
+  const lines = new Map<string, { calls: number; versions: PriceVersion[] }>()
+  const line = (model: string) => {
+    let found = lines.get(model)
+    if (!found) {
+      found = { calls: 0, versions: [] }
+      lines.set(model, found)
+    }
+    return found
+  }
+  if (configuredModel) line(configuredModel)
+  for (const row of seen) if (row.runtimeId === runtimeId) line(row.model).calls += row.calls
+  for (const version of versions)
+    if (version.runtimeId === runtimeId) line(version.model).versions.push(version)
+  return [...lines.entries()]
+    .map(([model, value]) => ({
+      model,
+      calls: value.calls,
+      current: value.versions.length ? priceView([...value.versions].sort(newest)[0]!) : null,
+    }))
+    .sort((a, b) => b.calls - a.calls || a.model.localeCompare(b.model))
+}
+
 export interface ObservationPricing {
   directory(): Promise<ObservationPricingDirectory>
   history(runtimeId: string, model: string): Promise<ObservationPriceHistory>
@@ -65,39 +100,36 @@ export function createObservationPricing(deps: {
         deps.prices.all(),
         deps.calls.runtimeModels(),
       ])
+      // Built-in runtimes appear once a call ran on one or a price line exists.
+      const builtin = [
+        ...new Set(
+          [...seen.map((row) => row.runtimeId), ...versions.map((version) => version.runtimeId)]
+            .filter((id) => isBuiltinProtocol(observationBuiltinProtocol(id)))
+            .sort(),
+        ),
+      ]
       return {
-        runtimes: runtimes.map((runtime) => {
-          const lines = new Map<string, { calls: number; versions: PriceVersion[] }>()
-          const line = (model: string) => {
-            let found = lines.get(model)
-            if (!found) {
-              found = { calls: 0, versions: [] }
-              lines.set(model, found)
-            }
-            return found
-          }
-          if (runtime.model) line(runtime.model)
-          for (const row of seen)
-            if (row.runtimeId === runtime.registrationId) line(row.model).calls += row.calls
-          for (const version of versions)
-            if (version.runtimeId === runtime.registrationId)
-              line(version.model).versions.push(version)
-          return {
+        runtimes: [
+          ...runtimes.map((runtime) => ({
             runtimeId: runtime.registrationId,
             name: runtime.name,
             protocol: runtime.protocol,
+            builtin: false,
             configuredModel: runtime.model,
-            models: [...lines.entries()]
-              .map(([model, value]) => ({
-                model,
-                calls: value.calls,
-                current: value.versions.length
-                  ? priceView([...value.versions].sort(newest)[0]!)
-                  : null,
-              }))
-              .sort((a, b) => b.calls - a.calls || a.model.localeCompare(b.model)),
-          }
-        }),
+            models: priceLines(runtime.registrationId, runtime.model, seen, versions),
+          })),
+          ...builtin.map((runtimeId) => {
+            const protocol = observationBuiltinProtocol(runtimeId)!
+            return {
+              runtimeId,
+              name: protocol,
+              protocol,
+              builtin: true,
+              configuredModel: null,
+              models: priceLines(runtimeId, null, seen, versions),
+            }
+          }),
+        ],
       }
     },
 
@@ -107,9 +139,11 @@ export function createObservationPricing(deps: {
     },
 
     async save(runtimeId, input, actorId) {
-      const { runtimes } = await deps.runtimes.directory()
-      if (!runtimes.some((runtime) => runtime.registrationId === runtimeId))
-        throw new ObservationPriceError('runtime-not-found', 'Runtime registration not found')
+      if (!isBuiltinProtocol(observationBuiltinProtocol(runtimeId))) {
+        const { runtimes } = await deps.runtimes.directory()
+        if (!runtimes.some((runtime) => runtime.registrationId === runtimeId))
+          throw new ObservationPriceError('runtime-not-found', 'Runtime registration not found')
+      }
       const micro = (rate: string | null) => (rate === null ? null : observationRateToMicro(rate))
       const version: PriceVersion = {
         id: ulid(),

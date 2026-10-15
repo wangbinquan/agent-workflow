@@ -73,6 +73,20 @@ export function totalTokens(row: UsageBuckets): number {
   return row.input + row.cacheRead + row.cacheWrite + row.output
 }
 
+/**
+ * The final snapshot of an ended call. A canceled or interrupted process was
+ * stopped from outside, possibly mid-request: a runtime records a request's
+ * usage only once it completes, so whatever it reported is a lower bound.
+ */
+export function finalUsageOf(
+  usage: ObservedUsage,
+  status: 'done' | 'failed' | 'canceled' | 'interrupted',
+): ObservedUsage {
+  return usage.state === 'complete' && (status === 'canceled' || status === 'interrupted')
+    ? { ...usage, state: 'partial' }
+    : usage
+}
+
 /** The persisted usage state of a call given its latest snapshot. */
 export function usageStateOf(usage: ObservedUsage | null, ended: boolean): ObservationUsageState {
   if (usage?.state === 'complete') return 'complete'
