@@ -1,3 +1,7 @@
+## 2026-10-16 RFC-294：全面审视与三件套刷新（文档）
+
+按用户要求全面审视 RFC-294 的实现情况，证据与判断见 [2026-10-16 全面审视](design/RFC-294-backend-layered-target-architecture/review-2026-10-16.md)；基线为已提交 HEAD `879cb0743`（含 RFC-370 M1 三个尚未推送的本地提交），账本投影停在 `96fbcd71b`。物理迁移已基本完成（`modules/` 约占后端源码三分之二，route→DB 与 `AppDeps` 反向依赖为 0，后端值级 SCC 为 1），但腐化转到了模块内部：`composition/` 承载约 2.3 万行业务与机制实现；装配根膨胀到约 12.3k 行，SQLite 与 PostgreSQL 两个根约 55% 逐字重复，同一 SQLite daemon 内重复构造模块（代码注释记录了由此引起的两个缺陷）；context 间出现值级环，`platform/` 反向依赖模块；NodeRun 新旧判定仍按普通 `ulid()` 字典序，同毫秒约半数逆序。三件套据此重写：修订八处已不合理的原设计（R1～R8：总纲不再手写 exact 接口；治理改为少量硬结构门 + 按需报告；执行结构如实分层；部署 profile 成为一等维度；薄入口根共享唯一模块工厂图等），新增对所有新代码立即生效的约束 C1～C9，给出后继队列 S1～S8（NodeRun `seq`、唯一工厂图与生命周期程序、死代码清扫、治理简化、恢复 context DAG、执行机制归位、唯一 AtomicApply、`util/git` 叶子化），各后继均需独立批准。刷新前全文归档为 `archive-20261016-{proposal,design,plan}.md`；design §3.1 / §3.4 的机器解析块逐字保留，并用脚本核对新旧解析结果一致（69 条边、18 个 context）。本次只改文档与索引，未改生产代码、测试、`status.md` 或 `architecture/*`，未运行测试。本文件中 RFC-370 的未提交段落原样保留在工作区，未纳入本提交。
+
 ## 2026-10-15 RFC-370 v2 M1：远程执行候选（In Progress）
 
 完整 M1 候选及测试已编写，集中静态检查与架构写点登记中；尚未取得本候选精确 SHA CI 和 CS 实机执行证据。涵盖执行边界、CS 租约／写屏障、持久执行绑定与事件重放、取消／重启接管、单仓 Git 包装器与脚本任务容器、对象产物；SQLite 0259 / PG 0035。正式 M0 服务继续运行。M2 的 CS 配套 RFC-040 为 Draft，等待用户批准；详见 [RFC-370 status](design/RFC-370-crewstation-hosted-deployment/status.md)。本次继续保留原有未提交 RFC-370 执行端口准备与所有并发产出。

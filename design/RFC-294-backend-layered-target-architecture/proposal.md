@@ -1,481 +1,302 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
 - RFC 定位：**长期架构重构 RFC**（用户于 2026-10-14 明确）。持续维护目标架构、迁移波次、跨 RFC 依赖与完成证据；
-  具体生产迁移由范围明确、独立批准的 successor RFC 承接。长期维护不降低原退出标准，也不把未完成项无限展期。
-- 目标架构状态：Approved（2026-08-30 review 记账：D1～D9 已由 RFC-328/331/332/333/334/339/341/342/343/344/345/346 的逐 RFC 用户批准实质确认，见 `review-2026-08-30.md` §A1；本总纲不因 Approved 而自动授权任何未立项 wave）
-- 迁移状态：**In Progress（长期推进，2026-10-14 对账）**。P0 全部收束；W2、W3 与 W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已由独立 successor 关闭。
-  W4 其余部分、W5/W6/W7/W9 继续开放，W8 为可选后续能力线。
-- 最新整体审视：[2026-10-14 仓库架构与 RFC-294 落地调研](./review-2026-10-14.md)。结论为执行、事务与恢复机制已有实质落地，
-  context 边界、composition 收缩和统一生命周期仍处迁移中；报告列出逐 Wave 判定、源码依据、治理口径问题和建议顺序。
-- [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已 Done：数据库事务、daemon 启动、task launch/routes、
-  nodeRun mint 均已有共用实现；这消除了 provider 分叉前置，但不等于 context 边界、唯一 AtomicApply lifecycle、NodeRun v2 identity
-  或 DaemonContainer 已完成。具体抵扣与余项见 [plan §1.2](./plan.md#12-rfc-359-完成后的对账2026-09-20)。
-- 本轮调研基线为 `e4b5adcc5dd4c03f2f884d8f3befa0d9b555a0fb`；基线、源码快照与 CI 的证据边界见调研记录。
-  当前数值以 canonical 和 [generated status](./status.md) 为准，不在三件套复制维护指标。历史实现基线
-  `123ce2dbc94b10d2c88bf978437bfa0db1b898ba` 的 Main CI 35492271521（46/46 success）仅作历史证据。
-- [RFC-360 Runtime Management](../RFC-360-runtime-management-context-cutover/proposal.md)、
-  [RFC-361 Execution Contract provider](../RFC-361-execution-contract-provider-cutover/proposal.md)、
-  [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md) 均 Done。
-  只抵扣 E4b 全纵切、E9 的 EC provider 与 E1/SC 合同准备；剩余 wave 不扩大认领。
-- 后继已按各自批准范围完成：[RFC-363 Task/SC 生产切换](../RFC-363-task-source-control-launch-cutover/proposal.md)、
-  [RFC-364 MCP diagnostics](../RFC-364-mcp-runtime-diagnostics-cutover/proposal.md)、
-  [RFC-365 Event target providers](../RFC-365-event-automation-target-providers/proposal.md)、
-  [RFC-368 Reaction 执行切换](../RFC-368-reaction-execution-cutover/proposal.md)。分别抵扣 E1/W5 的启动与工作区纵切、E6、
-  E9 的 Event target 与 Reaction 切片；完整 E1/W5/E9 仍须按其余退出项核对。RFC-368 的用户裁决与偏离项继续以其设计为准。
-- 性质：长期目标架构总纲 + 迁移治理合同；未完成 wave 不因局部模块、单一 provider 实现或账本存在而倒签 Done。
-  旧 measurement seed、历次 SHA 与 hosted 证据保留在 plan 历史章节；不得把历史数字当作当前新增债务额度。
-- 架构重采触发器：后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量/行为证据，不追着重算总体架构，也不给
-  W0-R～W9 credit；只有 production context owner、public/required contract、schema/single-writer、composition root、cross-context
-  edge 或 worker/lifecycle owner 变化时才刷新本基线
-- 直接输入：
-  - `design/system-commons-unification-audit-2026-08-12.md`
-  - `design/task-execution-architecture-audit-2026-08-03.md`
-  - RFC-271、RFC-280、RFC-282、RFC-284～RFC-289、RFC-292、RFC-295、RFC-297～RFC-337 的已发布部分
+  具体生产迁移由范围明确、独立批准的 successor RFC 承接。长期维护不降低退出标准，也不把未完成项无限展期。
+- **2026-10-16 整体刷新**：按用户要求全面审视实现情况后重写三件套。审视证据与判断见
+  [2026-10-16 全面审视](./review-2026-10-16.md)；刷新前全文归档于 `archive-20261016-{proposal,design,plan}.md`
+  （取自已推送提交 `643d64db6`），仅供追溯，不再作为退出门。
+- 目标架构状态：Approved。D1～D8 沿用 2026-08-30 记账的批准（各 successor 逐项确认，见 `review-2026-08-30.md` §A1）；
+  本次按用户授权的整体刷新修订 D9、新增 D10～D13（§9）。总纲批准不授权任何未立项的生产迁移。
+- 迁移状态：**In Progress（长期推进）**。P0、W2、W3 与 W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已由 successor 关闭；
+  RFC-363/364/365/368 按各自范围抵扣 E1/W5、E6、E9 的纵切。其余开放项与下一批后继见 [plan](./plan.md) §3。
+- 当前机器指标只在生成的 [status.md](./status.md) 维护；带日期的 review 保存当次快照。三件套不手抄指标。
+- 架构重采触发器不变：只有 production context owner、public / required 合同、schema / 单写、装配根、跨 context 边或
+  worker / lifecycle owner 变化时才刷新基线；纯测试、文档、视觉原语与边角功能不给任何波次计 credit。
 
 ## 0. 长期维护方式
 
-1. `proposal.md` 维护长期定位、目标与总体迁移状态；`design.md` 维护目标合同；`plan.md` 维护 wave 归属、依赖与退出门。
-2. `status.md` 与 `architecture/*.json` 保持生成事实源；带日期的 `review-YYYY-MM-DD.md` 保存一次调研的源码基线、判断及证据边界，
-   不替代生成指标，也不被后续快照覆盖成另一轮结论。
-3. successor 完成时，同步其实际抵扣范围和剩余责任；新合同批准、源码接线、功能验收、exact-SHA CI 和整波退出分别记账。
+1. `proposal.md` 维护定位、目标、修订记录、立即生效约束与决策；`design.md` 维护目标合同；`plan.md` 维护波次判定、
+   后继队列、依赖与退出门。
+2. `status.md` 与 `architecture/*.json` 是生成事实源；带日期的 `review-YYYY-MM-DD.md` 保存一次审视的基线、判断与证据边界，
+   不被后续快照改写。
+3. successor 完成时同步其实际抵扣范围与剩余责任；合同批准、源码接线、功能验收、exact-SHA CI 与整波退出分别记账。
    后继 RFC 中已批准的功能取舍优先于总纲旧文字，不能以长期重构为由恢复已被用户否决的要求。
-4. 架构显著变化时按既有触发器重采；用户要求整体审视时新增调研快照。此次定位与文档更新不授权新的生产代码、schema 或产品行为变更。
-5. 必选迁移波次达到原退出门后，才能将整体迁移状态改为 Done；可选 W8 独立决策。完成后的目标架构仍可作为后续 RFC 的设计依据。
+4. 总纲只定方向、边界、层次规则、不变量与 owner；**精确接口以代码与后继 RFC 的 design 为准**（D13）。
+5. 必选波次全部达到退出门后，整体迁移才可置 Done；W8 独立决策。
 
 ## 1. 摘要裁决
 
 后台的最终结构采用 **feature-first bounded context（按领域聚合）+ 模块内分层**，而不是继续把
-`routes/`、`services/`、`db/` 横向铺开，也不是一次性把 300 多个 service 文件机械搬目录。
-
-每个领域模块内部固定分为：
+`routes/`、`services/`、`db/` 横向铺开，也不是一次性机械搬目录。每个领域模块内部固定分为：
 
 ```text
-inbound adapter ──► public application commands/queries
+inbound adapter ──► public application commands/queries/operations
                               │
-                              ├──► domain
-                              └──► application-owned ports ◄── infrastructure
+                              ├──► domain（纯值与规则）
+                              └──► application-owned ports ◄── infrastructure/<profile>/（local、crewstation…）
 
-engine ──► domain + application-owned ports + kernel contracts
-bootstrap ──► public contracts + concrete infrastructure（只装配，不做业务判断）
+engine ──► domain + application-owned ports + 本模块机制库
+composition.ts ──► 只构造与注入（不做业务判断、不放实现）
+bootstrap ──► 唯一模块工厂图：选择 provider 与部署 profile 的适配器，供各薄入口根共用
 ```
 
-`domain` 与 `ports` 不是 `domain → ports` 关系：domain 只依赖中性值对象；需要时由 application/engine 依赖
-application-owned port。运行时调用方向与源码 import 方向不能混写。
-
-全局依赖方向为：
+全局依赖方向：
 
 ```text
-HTTP / MCP / Webhook / Schedule / CLI
+HTTP / MCP / Webhook / Schedule / CLI / Worker / 任务镜像助手（薄入口根）
                   │
                   ▼
         Application Commands / Queries
                   │
                   ▼
-       Task Engines / Node Executors
-                  │
-                  ▼
-             Execution Kernel
+   任务控制面 / scope 解释器 / 节点执行器（task-execution 内）
                   │
                   ▼
        Domain + Application Port Contracts
                   ▲
                   │
- DB / FS / Git / Runtime / WS / Clock / Outbox
+ DB（SQLite/PostgreSQL）/ FS / Git / Runtime / WS / Clock / Outbox / 托管平台
+（infrastructure/<profile>/ 与 platform 机制实现端口）
 
-Bootstrap / Composition Root 只负责把两侧接起来，不承载业务判断。
+bootstrap 只负责把两侧接起来，不承载业务判断；platform 只提供领域中性的机制，不依赖任何模块。
 ```
 
 最终目标不是“所有代码都走一个万能 service”，而是：
 
-1. 同一种机制只有一个内核；
+1. 同一种机制只有一个实现；
 2. 不同领域规则保留在各自模块；
 3. 跨模块只依赖公开合同，不读取对方表、内部文件或全局单例；
-4. 业务写命令显式携带 trusted authority，internal effect 携 family-scoped capability，并统一并发 fence、事务边界、
-   审计和提交后事件；
-5. 运行态身份、生命周期、恢复与副作用先成为可建模概念，再扩能力。
+4. 业务写命令显式携带可信 authority，并统一并发 fence、事务边界、审计和提交后事件；
+5. 运行态身份、生命周期、恢复与副作用先成为可建模概念，再扩能力；
+6. **部署形态（单机 / 托管）与存储 provider（SQLite / PostgreSQL）只是适配器选择**，业务路径只有一条。
 
-## 2. 为什么还需要本 RFC
+## 2. 为什么还需要本 RFC（2026-10-16 现状）
 
-RFC-280/282/284/285/292 已经完成了多块重要归一：agent spawn、资源注入、runtime driver、
-ACL 判据、生命周期写点、RouteMeta 权限元数据、触发上下文等都已经有单一事实源。当前问题不再是
-“完全没有抽象”，而是抽象停在了机制层，尚未形成稳定的后台层次架构。
+横向层的物理迁移已经基本完成：`modules/` 已占后端源码约三分之二，`services/` 大幅收缩，route→DB、transport→DB 与
+`AppDeps` 反向依赖归零，后端值级环只剩 `util/git` 一族。执行协调器、闭集注册表、WrapperRuntime、已提交事件和
+双库共用事务都是真实生产链。
 
-RFC-331 前的 committed source `158b67296b05a11f22a92ab64b2045643f895f9f` 保留为历史基线；当前全仓已发布
-payload `f94290d715365ee6c46e927c211a00326834157b` 的 replayed shape 如下，并由 provenance pin
-`d2a4cc742c6dbb318b237ede15155b354cd79584` / final SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 固定。
-各已关闭 wave 的自身候选与 current 全仓 snapshot 分栏：
+但腐化换了形态，在模块内部、装配根和执行链上重新出现（证据见 [review §5](./review-2026-10-16.md)）：
 
-> **指标只在生成文件里维护（2026-08-30 review §A2）**：下表的「当前值」列是 2026-08-30 前的手抄快照，已**冻结不再更新**；
-> 当前值以 [`status.md`](./status.md)（`bun run architecture:status` 从 committed `architecture/*.json` 渲染，守卫
-> `rfc294-review-status-projection.test.ts` 钉死投影相等）为唯一事实源。「说明」列仍有效。
+- `composition/` 成了新的 `services/`：大量业务与执行机制住在装配层，engine 层只剩委托壳；
+- 装配根倍增，SQLite 与 PostgreSQL 两个根的装配大段逐字重复，SQLite daemon 内 HTTP 装配又把若干模块构造一遍并已造成缺陷；
+- context 之间出现值级环，`platform/` 开始承载领域状态机并反向依赖模块；
+- NodeRun 的新旧判定依赖非单调的 ULID，托管跨主机后还依赖时钟；
+- 两套 apply 生命周期与两套资源写入栈，校验规则已经分叉；
+- 托管部署作为新维度加入，但缺少总纲层面的落位规则；
+- 原有治理方式（全量精确账本）每个提交都要付出成本，却没有挡住上述退化。
 
-| 指标                                       |                   当前值 | 说明                                                                                         |
-| ------------------------------------------ | -----------------------: | -------------------------------------------------------------------------------------------- |
-| dep graph modules                          |           current replay | static depcheck：31 条 accepted known；first-party unresolved=0，module 总数不从文档常量反推 |
-| backend TypeScript 源文件                  |                      997 | `packages/backend/src/**/*.ts` production corpus                                             |
-| `services/` 内实现文件                     |                      378 | legacy 横向层仍是主要物理债                                                                  |
-| `modules/**` production TS/TSX             |  454 / 12 个非空物理模块 | `task-execution=125`、`development-automation=115`；完整分布见 `plan.md` §1                  |
-| `scheduler.ts`                             |                   523 行 | W2/W3 mechanics 已迁出；仍保留 W5 commit-push 与 compatibility mechanics                     |
-| `task.ts`                                  |                 7,396 行 | admission 后执行已统一走 coordinator；W4 前仍保留 exact legacy composition seams             |
-| route→DB / transport→DB 值级边             |                   15 / 2 | route 债未降；RFC-317 T41 把两条 WS transport→DB 显式纳入账本                                |
-| route/MCP `AppDeps` consumer 文件          |                       53 | transport 仍反向依赖 composition root                                                        |
-| 值级 SCC                                   | backend 4 个 / 全仓 6 个 | RFC-331 已落只消除 task SCC family；其他 backend/shared/frontend family 保留                 |
-| `KNOWN_VIOLATIONS`                         |                       31 | RFC-331 精确删除 task family 六条 debt；其他分类不倒签完成                                   |
-| production background / ambient census     |                265 / 448 | current exact inventory；periodic/worker/local/disabled 与 register/global setter 分栏       |
-| RFC-317 boundary census                    | inbound 89 / outbound 23 | current canonical import projection；guard 保持补充 registry                                 |
-| TaskCatalog membership                     |    `public` / `internal` | migration `0203`；TaskExecution 单写/继承，所有 public feed 复用 `public` predicate          |
-| ACL / grant-addressable resource type 分母 |                  15 / 16 | RFC-330 新增 `employee_tool` / `employee_job_template`；grant 另含 `scheduled_task`          |
-
-RFC-305/306/308/310～315 已经证明目标方向可落地：identity authority/presence、branch activation、source-control
-participant、数字员工 OS、统一任务目录、retry policy、事件读写形状、事件自动化授权以及 archive/retention 都已有真实纵切。
-RFC-318～337 又补入最小工具合同、用户面 E2E 治理、冻结 creator identity、publication transport/credential、central cadence、
-adapter revision/binding、graded ACL、review/memory/MCP 完整面、durable execution authority 与 DE ACL/成员制；RFC-325 只作用于前端原语。
-RFC-334 关闭 W2-C node layer；RFC-335 分离 IA 的 display/Git identity；RFC-336/337 补齐数字员工高级参数与 Case detail
-projection，并把 detail DTO 留在 development-automation 私有 composition，而非扩宽 digital-employee public surface。
-其中 RFC-331/332/334 分别完成 W2-A topology、W2-B TaskEngine 与 W2-C NodeExecutor，但“聚合与行为已落”“模块内分层已落”“跨 context exact
-surface 与 consumer 已切完”是三种不同状态；除 W0-R 治理基线外，其他 RFC-294 wave 均未满足完整退出门。
-RFC-317 已 Done，并把 W0-R 的公共内核子集从 census 推进为真实机器门。N1a 现已把四份机器账本从历史
-`recordedAtSha` 升级为 `originSha/currentSnapshotSha/contentDigest`，fresh checkout replay 与 tamper mutation 对拍 current payload；
-N1b 以唯一生成器产出七份 canonical manifest/report，并把 RFC-317 subset 通过 owner/import/facade FK 投影进去。当前分母为
-18186 个 module symbol owner、1339 条 observed cross-context import、1304 条 exact architecture exception、379 个 facade、358 个 public
-surface、952 个 mutation、264 个 transaction external-effect candidate、218 个 background entry、440 个 ambient seam、2 个
-`node_runs INSERT` 与 5 条 governed field growth；global RI、first-party unresolved=0 和 target implementation SCC gate 闭合。
-RFC-317 T10～T73 / AC-1～14 继续作为 behavior/machine oracle，不重开。
-
-因此 N1/W0-R 的**治理基线**已经退出；尚未完成的是 20 条 required-port debt、legacy inbound/outbound/facade、worker 与最终
-public consumer 的物理 cutover。这些是 W4/W5/W9 的 production migration，不得倒算为 N1 未建账，也不得把 N1 记为行为 wave 完成。
-
-TaskCatalog 的 public predicate 已扩到 `/api/task-catalog`、legacy `GET /api/tasks`、首页 running/recent 等 public feed，direct-id lookup
-仍按审计语义保留。因此“internal task 会从 public 列表泄漏”的旧判断已经失效；但 Catalog route 仍接 full `Actor`/string filter，
-composition 与 legacy `services/taskOperations` adapter 仍在。这是正确性行为 oracle，不是 W4-E10 public/inbound cutover credit。
-
-典型结构性裂缝已经产生正确性问题，而不仅是“代码不好看”：
-
-- Memory 通用 PATCH 先按旧 scope 授权，事务内却能把 approved memory 移到新 scope；新 scope
-  不再校验，随后内容会按新 scope 注入 agent prompt。
-- Intent 与 BundleApply 各维护一套 claim/stage/commit/compensate/converge 引擎，前者已经出现
-  lock 永不释放、补偿失败仍终态化、收敛漏 artifact 的漂移。
-- RFC-326 已把 review 的简化锚点解析、批量评论/选择/decision 路径收进单事务并种下 `collaboration` 领域切片；但
-  clarify/questions、durable continuation intent、commit 后效果与统一 public/MCP cutover 仍未归一。
-- RFC-328 已把 task execution ownership 收敛为 durable owner/intent/effect/fence + exact-token registry；当前残余是
-  `task.ts ↔ scheduler.ts` 拓扑、四级 engine 与 legacy application 边界，不再把 `activeTasks/driverLease/status CAS` 写成 current authority。
-- lifecycle 状态写点已归一，但 WS、child budget、execution watch、terminal human-gate sweep 等
-  提交后效果仍由调用点和全局 hook 自觉拼接。
-- fanout child 的身份与来源仍依赖 `parentNodeRunId`、ULID 新旧和 JSON consumed map 组合推断；
-  RFC-289 已关闭设计的“当前 wrapper parent”与跨 generation 复用直接冲突。
-- HTTP/MCP/API docs 复用 route/server 注册表，54 个 route/MCP consumer 仍导入 `AppDeps`，同时暴露 DB、配置、dispatcher 和测试 seam，
-  transport、composition root 与 application 边界没有真正分开。
-
-继续以“小 helper 收口 + 大文件内再抽函数”的方式推进，只能降低重复行数，不能保证下一项能力不会
-再次沿旁路长出第二套实现。本 RFC 因此定义所有后续重构必须共同指向的终局。
+继续"小 helper 收口 + 大文件内再抽函数"只能降低重复行数，不能阻止下一项能力沿旁路长出第二套实现。本 RFC
+因此持续定义所有后续重构必须共同指向的终局，并给出马上止血的约束（§6）。
 
 ## 3. 目标
 
-### G1：形成可机器验证的单向层次
+### G1：可机器验证的单向层次
 
-- Domain 不依赖 Hono、Drizzle、SQLite、WS、FS、Git、Runtime driver 或进程全局状态。
-- Application 只依赖本模块 domain/ports、`platform/contracts` 与其他模块受控
-  `public/{commands,queries,participants,events,types}` 精确入口；consumer-owned required SPI 只经
-  `composition/required-ports` 给 bootstrap 与指定 provider adapter，bootstrap 只额外依赖 module `composition.ts`。
-- Engine 只依赖 domain/ports，不直接发布 WS、不直接读 route context。
-- Infrastructure 实现 ports；除 bootstrap 外，不得反向调用 application 内部实现。
-- Inbound adapter 只解析协议、调用 command/query、映射错误和 DTO。
-- Bootstrap 是唯一知道具体实现、定时任务和 adapter 装配的位置。
-- 目标依赖规范由 offered-consumption DAG、consumer-owned required-SPI implementation edges 与 IA authority type-only matrix
-  共同组成；三者必须与各模块最小 public surface 及 canonical manifests 双向相等，不能让一条边只存在于散文、表格或图中的某一处。
+- Domain 不依赖 Hono、Drizzle、具体数据库、WS、FS、Git、Runtime driver、部署平台或进程全局状态。
+- Application 只依赖本模块 domain / ports、`platform/contracts` 与其他模块受控 public 精确入口；不 import infrastructure、
+  不直接执行 FS / 进程 / 网络 effect。
+- Engine 只依赖本模块 domain / ports / 机制库；不直接发布 WS、不读 route context。
+- Infrastructure 实现 ports；按部署 profile 分目录；不反向调用 application 内部实现。
+- `composition.ts` 只构造与注入；`composition/` 下不放实现。
+- Inbound adapter 只解析协议、调用 command / query、映射错误和 DTO。
+- `platform/` 只放领域中性机制，**不 import 任何 `modules/`**。
+- Bootstrap 是唯一知道具体实现、provider、部署 profile 与后台作业装配的位置。
+- context 级值依赖必须是 DAG；目标 DAG 与 IA type-only 矩阵见 design §3.1。
 
 ### G2：按领域模块获得唯一 owner
 
-最终后台至少形成以下 bounded contexts：
+| 模块 | 唯一拥有的能力 |
+| --- | --- |
+| `identity-access` | user / OIDC / session / token、profile / email、Git commit identity、role / permission、request authority 与认证审计 |
+| `task-execution` | Task / NodeRun 生命周期、三类任务引擎（DAG、workgroup 轮次、动态工作流）、scope / wrapper、节点执行器、执行机制库、运行态 ownership、恢复、执行身份与 catalog membership |
+| `task-catalog` | 多来源只读目录：来源注册、actor-filtered 合并列表 / cursor / facets；不拥有任何写模型 |
+| `digital-employee` | 员工类型 / 岗位 / 员工、EmployeeCase、Context / Attention / Reaction、冻结 adapter binding 与确定性职责执行 |
+| `event-center` | Event / Source catalog、Subscription、Observer、EventRecord / Delivery 与来源中性的 `EventResponseRule` |
+| `execution-contract` | 执行器中立的输入输出指南、兼容校验、fixture、exact 输出规则与验证回执 |
+| `development-automation` | Mission / ActionRun / AgentAttempt、策略与配置资源、evidence / effect intent、MR 生命周期；目标上吸收 capability template |
+| `resource-catalog` | agent / skill / MCP / plugin / workflow / workgroup 六个聚合与共享的 ACL / ref / revision / catalog 小内核；**不拥有执行** |
+| `collaboration` | review / clarify / question 等人工门、锚点 / 决定、park / release / rerun 命令 |
+| `knowledge-evolution` | memory→skill 融合、融合决策 / provenance、skill restore 的成员关系不变量 |
+| `integration` | webhook endpoint / secret、`WebhookTrigger`、schedule、code-host 出入口、外部 adapter definition / connection |
+| `intent` | Intent 会话、working set、turn / draft / checkpoint；资源提交只经共享 apply 端口 |
+| `memory` | memory 生命周期、scope policy、注入快照与 distill |
+| `source-control` | repo / repo-group / cache / worktree / submodule、Git transport credential、publication 与 Git 操作语义、工作区 GC 策略 |
+| `runtime-management` | runtime inventory / profile / status / probe / diagnostic |
+| `run-observability` | 运行时调用观测、用量与按运行时 × 模型的价格（RFC-371 v2 形态） |
+| `workspace-insight` | structural diff、code intelligence、change narrative 与只读内容分析 |
+| `system-operations` | 备份 / 恢复 / 诊断编排、执行权（standby / active / frozen）端口；不拥有业务策略 |
+| `platform`（非业务 context） | 持久化 / 事务、进程 / runtime 机制、事件 outbox、配置、后台生命周期机制、错误 / 观测、厂商协议客户端 |
 
-| 模块                         | 唯一拥有的能力                                                                                                                                     |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity-access`            | user/OIDC/session/token、profile/email sync、Git commit identity、role/permission、opaque request/transaction authority 与认证审计                 |
-| `task-execution`             | Task/NodeRun 生命周期、调度、恢复、运行态 ownership、wrapper/fanout、执行身份/provenance 与 task catalog membership 分类                           |
-| `task-catalog`               | 多任务来源的只读 source registry、actor-filtered 合并列表/cursor/facets；只消费来源 owner 的 catalog-visible 投影，不拥有 Task/EmployeeCase 写模型 |
-| `digital-employee`           | 员工类型/岗位/员工定义、EmployeeCase、Context/Attention/Reaction、冻结 adapter binding、员工调用通道与确定性职责执行                               |
-| `event-center`               | Event/Source catalog、Subscription、ObserverActivation、observation cursor、EventRecord/Delivery 与 source-neutral `EventResponseRule`             |
-| `execution-contract`         | 执行器中立的输入输出指南、Agent/Workflow/Program 兼容校验、fixture、exact 输出规则与验证回执                                                       |
-| `development-automation`     | DevelopmentMission/ActionRun/AgentAttempt、确定性策略与配置资源、evidence/effect intent、MR 生命周期编排                                           |
-| `resource-catalog`           | agent/skill/MCP/plugin/workflow/workgroup 六个聚合子模块；共享 ACL/ref/revision/catalog kernel 与 `none/read/write/own` 判据                       |
-| `collaboration`              | review/clarify/question 等 human gate、review anchor/decision、授权、park/release/rerun 命令                                                       |
-| `knowledge-evolution`        | memory→skill fusion aggregate、融合决策/provenance，以及 skill restore 时 fused-membership 不变量                                                  |
-| `integration`                | webhook endpoint/secret、`WebhookTrigger`、schedule、code-host ingress/egress、外部 adapter definition/connection 及其触发合同                     |
-| `intent`                     | Intent 会话、working set、turn/draft/checkpoint；资源提交只通过共享 atomic apply port                                                              |
-| `memory`                     | memory 生命周期、scope policy、注入快照与 distill；fusion 生命周期不再埋在 memory CRUD 中                                                          |
-| `source-control`             | repo/repo-group/cache/worktree/submodule、用户/全局 Git transport credential、publication transport 与 Git 操作语义                                |
-| `runtime-management`         | runtime inventory/profile/status/probe/diagnostic；执行只消费冻结 RuntimeDriver port                                                               |
-| `workspace-insight`          | structural diff、code intelligence、change narrative 与只读内容分析                                                                                |
-| `system-operations`          | admin backup/restore/recovery/diagnostic orchestration；不拥有 readiness、task limits 或 workspace GC policy                                       |
-| `platform`（非业务 context） | persistence/tx、runtime/process mechanism、event outbox、config、background、errors/observability                                                  |
+`code-capability` 不是目标 context：它的历史查询与 capability template 写入是待吸收的兼容岛（目标 owner 为
+development-automation），不得在其中新增能力。跨域共享只能是稳定值对象、port 或领域事件。
 
-跨域共享只能是稳定值对象、port 或领域事件；不能以“复用方便”为由共享 Drizzle table、route context、
-内部 service 或可变 singleton。
+### G3：执行结构如实分层
 
-current committed tree 的 12 个物理 context 已包含 IA/SC/DA/DE/EventCenter/ExecutionContract/TaskCatalog、3 文件
-`collaboration` seed 与 50 文件 `task-execution`。RFC-318～330 分别推进工具合同、E2E 治理、身份/传输、cadence、adapter、ACL、
-review/memory/MCP 面、durable execution authority 与 DE 成员/授权纵切。它们更新 owner oracle 与后续 required/offered participant，
-但 IA 仍有 route 直读、SC 仍有 path/fallback、Integration 仍直读 grant schema、DE↔TE 仍有 contract debt、Collaboration 主体仍在
-legacy `services/review.ts`、后台仍无全量 managed registry，所以不能据此宣布 W2/W4/W9 整波 exit。
-DE↔TE 的目标不是再加 callback bridge，而是 DE-owned `ReactionExecutionPortV1` + tx-bound
-`ReactionExecutionAdmissionParticipantInTxV1`：TE exact adapters 分别实现 execution 与同事务 claim-fence/admission，DE claim CAS、
-TE journal、operation/requestHash/epoch fence 原子对拍后才允许 act。
+`task-execution` 内部固定为：
 
-`resource-catalog` 内共享的是 ACL/ref/revision/catalog 小内核，不是一个 `switch(resourceType)` 万能 CRUD。原始
-agent/skill/MCP/plugin/workflow/workgroup 六个 aggregate 仍各自保留 command 与不变量；当前 ACL catalog 为 15 类，grant-addressable
-分母为 16 类（RFC-330 新增 `employee_tool` / `employee_job_template`，另含 `scheduled_task`），`ResourceAccess` 为
-`none/read/write/own`。`capability_template`、`employee_definition` 与五类数字员工/研发配置资源仍由各自业务 owner 写，定时任务也仍由自身 aggregate 写；不能因为复用 ACL/grant
-行就转归 resource-catalog。
+1. **任务控制面**：`TaskDriveCoordinator` 与三类任务引擎（DAG、workgroup 轮次、动态工作流），负责任务级推进、暂停 /
+   恢复 / 取消；
+2. **scope 解释器**：DAG scope、frontier 与 loop / git / fanout 策略，**显式允许递归**（wrapper 回到 scope）；
+3. **节点执行器**：agent / script / call / code-host / review / clarify 等 kind，各自拥有本 kind 的执行主体；
+4. **执行机制库**：assembly（spawn / iso / merge / settle 的装配顺序）、隔离与合并、许可与限流、NodeRun 铸造、进程。
 
-RFC-304 的 `code-capability` 不再是目标态 active writer context：RFC-310 已把五条能力的写模型切到
-`development-automation`。当前残留 19 个 production 文件只作为历史查询/兼容资源岛；其中 capability template 同步仍是
-活跃兼容例外，必须在 retention/owner 决策后迁走或退役，不能借兼容名义恢复 code-round writer。
-
-RFC-310 的 2026-08-21 架构修订进一步把**通用、有状态的数字员工机制**从代码领域中拆出：
-`digital-employee` 只拥有 Context + Event 驱动的员工职责运行模型，`event-center` 只拥有按订阅激活的事件观察与投递；
-`execution-contract` 只拥有 executor-neutral 的 schema guide、transport、兼容探测、fixture 与 exact output validator；
-`development-automation` 收缩为首个代码员工类型包，负责研发 Context/Event/schema guide、职责规则和默认工具需求。四者不得以
-共享表、内部 import 或 bootstrap `if type === development` 重新耦合。数字员工 authoring/runtime/reaction host 必须消费同一
-`ExecutionContractParticipant`，不得把它做成 optional 后退回类型内资源探测或 fixture。该 vertical slice 的临时 exact owner/import 账本在
-RFC-310 `os-architecture-manifest.json`；它作为专项 projection 受 N1 已落的全仓七份 canonical manifest/owner FK 约束，不能成为平行真值。
-完整 schema guide 留在 `execution-contract` 内部：类型包以 exact ref + strict `guideJson` 注册，public list/get 只暴露低于 DTO
-预算的 runtime view 与只读序列化文档，禁止把字段指南展开成跨域 mega DTO。Agent 声明与固定 `agent-result` 的增删由该 context 的
-规整命令拥有，所有 Agent 保存入口复用，不能让 UI、bundle 或 intent 各自复制生命周期规则。
-
-RFC-310 后续统一任务创建又形成了独立 `task-catalog` 读模型。它只拥有来源注册、闭合 query/cursor 与合并后的
-actor-filtered projection；`task-execution` 与 `digital-employee` 分别实现 consumer-owned source adapter，业务启动仍调用各自
-source-specific command。统一 UI/共享 source metadata 不授权后端创造一个 `StartAnything` command，也不允许 catalog 读取
-Task/EmployeeCase 内部表。当前实现仍把完整 `Actor`、string filter 与 composition 直接暴露给 route，这些是 W4 的待收编
-facade，不是目标接口。
-
-### G3：执行链形成四级内核
-
-`task-execution` 内部固定为四层：
-
-1. `TaskEngine`：任务级 frontier、暂停/恢复/取消与 scope 推进；
-2. `WrapperRuntime`：loop/git/fanout 的 scoped graph 行为；
-3. `NodeExecutor`：agent/script/call/code-host/review/clarify 等 kind 的显式执行器；
-4. `ExecutionKernel`：许可、iso、spawn、retry、merge、settle 所需的机制原语。
-
-RFC-287 的 `runAssembly(spec)` 是第 4 层的必要第一刀，但不等于整套目标架构；它不能继续吸收 task
-控制面、fanout 身份、human gate 或领域状态判断。
-
-RFC-313 的 `retryAttemptCap` 纯乘积/ceiling 算术已有 task-execution 与 digital-employee 两个生产 consumer，因此归
-`platform/contracts` 的中性 value/policy contract；TaskExecution 只拥有 envelope followup/session-restart policy/state，
-DigitalEmployee 只拥有 reaction/outbox retry policy/state。ExecutionKernel 不因复用这段算术而取得另一域的 retry policy。
+每一层必须拥有自己的决策，不允许“类型化委托壳 + composition 里的真实主体”。机制库是引擎内部的库，不是链上的一级。
 
 ### G4：写命令和提交后副作用归一
 
-所有业务 aggregate mutation 都必须通过显式 application command；lease/outbox/projection 等 mechanical writer 则走
-owner 定义的窄 claim/fence，不伪装业务 command：
+所有业务 aggregate mutation 走显式 application command；lease / outbox / projection 等机械写入走 owner 定义的窄 claim /
+fence。业务写命令使用可信 current authority，内部 effect 使用 family-scoped capability；同一事务内重读授权依赖的状态，
+需要并发保护的资源带 expected revision / epoch，状态变更与 audit / domain event 同事务提交；正确性关键副作用走持久
+outbox，可重建副作用走 reconcile，WS 只在提交后消费同一已提交事件。这是事务纪律，不是万能 CRUD engine。
 
-- direct/delegated business command 必须使用 trusted current authority；internal effect 使用 event-family/job-scoped
-  private capability，不允许 `actor?`、调用点伪造 `SystemActor` 或一个万能 system key；
-- 在同一事务内重读授权依赖的旧状态与新目标；
-- 需要并发保护的资源必须带 expected revision/version/epoch；
-- 状态变更与 audit/domain event 同事务提交；
-- 正确性关键副作用走 durable outbox；可重建副作用走 reconcile；WS 等短暂通知只允许在 commit 后
-  消费同一 committed event，不能在事务内外发；
-- adapter 不能自行补一段 DB 查询、broadcast 或补偿逻辑。
+### G5：运行态身份与 provenance 成为一等模型
 
-这是一套 command envelope 与事务纪律，不是一个万能 CRUD engine。资源删除、memory scope move、
-task retry、review decision 仍保留各自的领域不变量。
-
-### G5：运行态身份和 provenance 成为一等模型
-
-最终不再用 ULID 大小、nullable parent 与多个附加列共同猜测“这行是谁”。NodeRun 至少显式建模：
-
-- `RunRole`（node-attempt/container/synthetic）与 synthetic owner axes；
-- `scopePath` / `containerRunId`；
-- 每个 physical row 的 task-scoped 单调 `seq`（`UNIQUE(taskId,seq)`）；
-- 逻辑执行代 `generationSeq`，与 retry `attemptIndex` 分离；
-- `attemptIndex`；
-- `shardKey`；
-- 历史 parent 与当前 selected run 分离；
-- consumer→producer 的逐边 provenance。
-
-freshness、resume、retry、fanout replay 和 aggregator 都消费同一 selected-run/provenance 合同，
-不再各自拼 SQL + JSON + ULID fallback。
+NodeRun 的先后**首先**由每任务单调的 `seq` 决定（与 ULID 和主机时钟无关）；随后显式建模 `RunRole`、scope / container、
+逻辑执行代、`attemptIndex`、`shardKey`、历史 parent 与当前 selected run 的分离，以及 consumer→producer 的逐边 provenance。
+freshness、resume、retry、fanout replay 与 aggregator 消费同一合同。
 
 ### G6：恢复型副作用只保留一套 lifecycle engine
 
-BundleApply 已经具备较完整的 record-before-act、big transaction、compensation、roll-forward 与 convergence
-合同。最终由 `platform/atomic-apply` 唯一拥有 `AtomicApplyEngine` 状态机，ResourcePackage、Intent 资源提交、
-fusion approve 与 skill restore 等经行为对拍后以 domain provider 接入。场景可以保留自己的 aggregate、journal
-adapter 与 versioned artifact payload，但不能复制 claim/prestage/commit/compensate/roll-forward/converge lifecycle、
-active set 或恢复终态。若某场景经证明确实不是同一生命周期，则保留自己的**领域状态机**，但仍必须复用事务、
-fence、journal 和 post-commit 原语，不能再造另一台名为 apply 的通用恢复引擎。
+`platform/atomic-apply` 唯一拥有 AtomicApply 状态机；ResourcePackage、Intent 资源提交、fusion approve 与 skill restore
+经行为对拍后以 domain provider 接入。同时只保留**一套**资源写入栈，同一非法输入在任何入口得到同一错误；收敛保护使用
+持久 claim，不依赖进程内集合。确证不是同一生命周期的场景保留领域状态机，但复用事务、fence、journal 与提交后原语。
 
-### G7：迁移过程本身可验证、可回退、不中断并发开发
+### G7：部署与存储差异只在适配器与装配处出现
 
-- 每波先固定行为 oracle，再引入合同，再切一个 consumer，最后删除旧实现；
+单机与托管走同一条业务路径；SQLite 与 PostgreSQL 共用同一事务语义与业务算法。端口按语义定义，适配器按 profile 分目录，
+选择只在 bootstrap 发生一次；进程角色（服务槽、迁移作业、Worker、任务镜像助手）显式化；进程内不变量要么声明为
+standalone-only，要么改为持久 claim。
+
+### G8：迁移过程可验证、可回退、不中断并发开发
+
+- 每个后继先固定行为 oracle，再引入合同，再切 consumer，最后删除旧实现；
 - 只保留一跳、无状态、无业务判断的兼容 facade；
-- 不允许两套独立业务 writer；涉及 schema 时采用 expand → backfill/oracle → cutover → contract，兼容期只允许
-  同一 writer 在同一事务维护 canonical 字段与确定性的 legacy projection；
-- `scheduler.ts`、`task.ts`、`lifecycle.ts` 等高冲突文件严格串行；
-- 每波独立提交、独立门禁、独立实现门，不以“大重构最后一起测”作为安全策略。
+- 不允许两套独立业务 writer；schema 采用 expand → backfill / oracle → cutover → contract；
+- 高冲突文件（装配根、`nodeRunMint`、freshness、迁移目录）严格串行；
+- 架构门是少量、能证明会红的硬结构门，而不是需要每个提交伴随维护的全量账本（D9）。
 
 ## 4. 必须保留的现有资产
 
-本 RFC 不推倒重来，下列已归一能力作为目标架构的既有地基：
+- `RouteMeta` / OperationCatalog 与 HTTP / MCP 声明式门；
+- `resourceAcl` 的资源可见 / 管理判据；
+- `RuntimeDriver`、`SpawnPlan`、`managedProcess` 与 RFC-280/282 的资源注入链；
+- 生命周期写点（`setTaskStatus` / `trySetTaskStatus` 及其 CAS 转移表）与 node status / merge state 唯一写点；
+- 唯一 NodeRun 铸造程序（`node_runs` 单一 INSERT 站点）；
+- RFC-328 的持久 ownership / intent / effect / fence 与 exact-token registry；
+- RFC-341 的已提交事件与逐 consumer delivery；
+- RFC-359 的 `DatabaseSession` 双库共用事务；
+- RFC-292 trigger namespace 的全纵切归一范例；RFC-371 v2 的“删 v1、按目标分层重做”范例；
+- depcheck 的 `no-circular` / `KNOWN_VIOLATIONS` 双向棘轮。
 
-- `RouteMeta` 与 HTTP/MCP 声明式鉴权门；
-- `resourceAcl.ts` 的资源可见/管理判据；
-- `RuntimeDriver`、`SpawnPlan`、`managedProcess` 和 RFC-280/282 的资源注入链；
-- `setTaskStatus` / `trySetTaskStatus`、node status/merge state 的唯一写点；
-- `nodeRunMint`、freshness 纯函数、retry index 原语；
-- RFC-359 `DatabaseSession` 作为双库共用事务原语；存量 `dbTxSync` 仅作同步兼容，不接 async callback；
-- RFC-292 的 trigger namespace 作为“shared contract → admission → persistence → execution → UI”
-  全纵切归一范例；
-- dependency-cruiser + `KNOWN_VIOLATIONS` 的账外新违规/stale 账双向棘轮。
+## 5. 原设计修订记录（2026-10-16）
 
-## 5. RFC-287 与已关闭 RFC-288/289 的定位
+| 编号 | 原设计 | 已不合理的原因（证据见 review §4） | 修订 |
+| --- | --- | --- | --- |
+| R1 | 总纲手写 exact 接口与字段级账本 schema | design.md 定义的 327 个类型名中 76% 从未出现在代码；外迁裁决六周未执行；后继普遍改名改形 | 总纲只定方向与边界，接口以代码和后继 design 为准（D13） |
+| R2 | 逐 symbol / 逐边 / 逐字段全量账本治理 | 约六分之一的提交只为维护账本、常驻约 34 MB JSON；“只降不升”的库存靠自助增长许可照样上升，96% 的 exception 是簿记；持久改善全部来自少数 depcheck 式规则 | 少量硬结构门 + 按需报告（D9 修订） |
+| R3 | 四级线性链，ExecutionKernel 为最底层 | 只有 WrapperRuntime 是真实层；kernel 无落位；执行是递归 scope 解释而非链 | 如实分层，机制库归引擎（G3、D12） |
+| R4 | 非目标“单 daemon”，无部署维度 | 托管已有服务槽、迁移作业、任务镜像助手与执行权租约；接入靠 55 槽 `StartOptions` 覆盖 | 部署 profile 成为一等维度（G7、D10） |
+| R5 | 唯一 bootstrap 根，W9 最后再收 | 根在 W9 前已膨胀 4.6 倍并三份重复、同进程重复构造 | 薄入口根 + 唯一模块工厂图，提前到下一批（D11） |
+| R6 | 按“指向 legacy 文件的边”计债，W9/W9-D 兜底 | 70% 的条目落在兜底桶；平台原语边被当作债 | 按具体结构规则记债，删除兜底桶 |
+| R7 | 若干依赖与退出门 | W4-B / W4-D 的计数早已归零；W7 依赖 W5 无技术理由；code-capability 并非“只剩一个写点”；加固类退出项与 2026-08-26 硬规则冲突 | 重写波次依赖与退出门（plan） |
+| R8 | 目标 context 表 | 缺 run-observability；workspace-insight 无模块；workgroup 引擎住在 resource-catalog；public 入口多出 `operations` | 更新 G2 与 design §3 |
 
-### 5.1 RFC-287：已落地，保留为 W1 behavior baseline
+## 6. 立即生效的架构约束
 
-RFC-287 已经 Done。它把五条 scheduler spawn 装配线统一到 `runAssembly(spec)`，并交付 G4 配额设置、G5 公开
-`file://` 收缩、G6 仓库同步窗口和 G7 task 落库后可见的 `__repo_prep__`/失败留痕等行为。这些均进入兼容 oracle，RFC-294
-不重新打开其批准范围，也不得回滚公开 `file://` 收缩、stale-source hard-fail 或现有 prep 可见性。
+以下约束自本次刷新起对**所有新增代码**生效，不等待任何后继 RFC；它们只限制新代码的落点，不要求改动存量。
+在制 RFC（例如 RFC-370）在收口前按这些约束对账；确需偏离的，在该 RFC 的 design 里逐条列出理由并呈用户确认
+（CLAUDE.md §RFC workflow 第 8 条）。后继 S4 把可机器化的条目变成硬门。
 
-同时必须区分“RFC-287 已交付”与“RFC-294 后来定义的终局边界”。当前 assembly 仍在 legacy `services/`；生产 G7
-仍由 `startTaskImpl` 推进，task 与 synthetic run 不是原子 admission，stronger “所有入口共用 normal `runTask` 第 0 步 +
-durable operation/receipt + SC sealed source”也不是已落事实。若目标仍保留这些能力，必须按 `plan.md` §5.2 重分配：
-
-- assembly port/物理归位进入 W2-A；
-- durable execution authority 进入 P0-D；
-- task/repository admission、claim、retry/resume/boot 同路已由 RFC-332 / W2-B 落地；
-- source seal/frozen preparation policy 进入 W4-E1/W5；
-- audit/committed event/after-commit WS 进入 W3。
-
-这不是把 RFC-287 判回未完成，而是禁止用一个已经 Done 的编号替后来扩大的架构合同背书。RFC-287 的 G1～G3
-assembly 仍只属于 ExecutionKernel 机制层；G4～G7 不能被塞进 `RunAssembly`，后续迁移必须保持现有 wire/status/错误与
-恢复 oracle，任何能力变化另行呈批。
-
-### 5.2 RFC-288：已关闭；结论和六条环债转入 W2
-
-RFC-288 已于 2026-08-14 由用户决定关闭：**未实现、零生产改动，旧 plan 永久不可执行**。关闭不否定
-task↔scheduler 解环，而是因为三轮设计门后其有效范围已完全收敛为本 RFC §16.2/W2 的四合同拓扑。P0-D 后来已由
-RFC-328 落地；六条 depcheck ledger 的 owner 现由 RFC-331 承接，旧 RFC-288 plan 仍永久不可执行。
-
-RFC-331 必须复用 RFC-288 留下的九条结论与 RFC-328 已落事实，并完成：
-
-- `TaskRuntimeRegistry` 与 `TaskOwnershipPort`：直接复用 RFC-328 exact-token registry 与 durable authority，不新建；
-- `TaskStatusPublisher`：只发布现有 ephemeral WS projection；durable lifecycle outbox 已由 RFC-328 落地且保持唯一；
-- `SchedulerDriverPort`：由 application 显式注入，未装配时 bootstrap fail-fast；
-- purpose-specific status/call-graph read model；workspace materialization 仍归后续 owner wave。
-
-同一 `TaskExecutionContext` 已由 RFC-328 穿入四个 kick；RFC-331 只把四点改走显式 driver port，并保持
-`OwnershipToken`/epoch、非可选 `abortAll(reason)` 与 RFC-202 `interrupted` 语义。N1/W0-R、P0-D 退出证据均已具备；
-RFC-331 D1～D8、能力影响清单与 DEV-1 临时 compatibility 偏离已于 2026-08-27 获用户批准；
-T3～T12 已发布，provenance 已真实 repin，exact-SHA hosted CI 已收口，RFC-331 / W2-A 为 Done。
-RFC-332 已完成 W2-B 发布、provenance 与 exact-SHA hosted closeout；这不是重新打开 RFC-288，也不自动授权
-后续 wave。RFC-333 已完成 P0-C，三类人工门原子 open/decision、durable continuation、慢 sibling handoff 与
-deferred-question 交接均已通过 exact-SHA 主 CI 和全部 scheduled workflow；RFC-334 随后完成 W2-C；RFC-339 已于
-2026-08-29 完成 W2-D 主实现、canonical replay 与 hosted/scheduled closeout。
-
-### 5.3 RFC-289：已关闭；产品目标排在身份/provenance 之后另立新号
-
-fanout 内链是合理能力扩张，但当前设计把 child 上游限定为
-`parentNodeRunId === 当前 wrapperRunId`，同时既有跨 generation replay 明确保留 child 原 parent；两者不能
-同时成立。当前 child 行也不记录内链 consumed provenance，`pickReusableShardRun` 只看 shardKey/valueHash/status，
-所以“已有 consumed gate 会让 B 随 A 失效”并不成立。
-
-RFC-289 同样已于 2026-08-14 关闭：**未实现、零生产改动**。关闭的是当前设计，不是 fanout 内链产品目标；旧
-T2～T8 不得继续执行。W7 完成后，如仍要该能力，必须另立新编号并满足：
-
-- 通过 generation 的 selected-run map 找同 shard 上游，而不是改写历史 parent；
-- 在 B 行持久记录它实际消费的 A child run；
-- reuse 同时比较 shard identity 与 consumed dependency fingerprint；
-- validator 规则从可达的真实集合推导，避免死规则或重复规则；
-- 先完成 NodeRun 身份轴与兼容迁移，再解除能力挡板。
-
-W7 之前继续保留 `fanout-inner-chain-unsupported` 挡板。该能力属于独立、可选的 post-W7 扩张线；没有新 RFC 的
-独立批准时跳过 W8，不阻塞 RFC-294 核心分层迁移与 W9 清仓。
-
-## 6. 前置 P0 正确性与一致性阻断
-
-大规模搬迁不能掩盖现有正确性缺口。下列功能正确性项必须在各自依赖的 wave 前以独立 RFC/修复批处理；
-本节不授权新增安全策略或收缩产品能力：
-
-1. **Memory scope move（Done / RFC-342）**：通用 PATCH 禁止改 scope；专用 command 在同一事务用 trusted current authority
-   校验旧 scope、新 scope与目标存在性。command input 不接收或持久化 Actor/权限快照；approved/archived 是否允许移动
-   必须单列能力影响请批，默认 fail-closed。
-2. **Memory 提交后事件（Done / RFC-342）**：事务内不得同步 publish，避免 rollback 后 ghost WS。
-3. **Intent apply（P0-B Done / RFC-343）**：已修 lock 清理与不可恢复终态；后续仍由 W6 让 Intent 以 provider 接入 AtomicApplyEngine；
-   不继续双修两套 converger。
-4. **Human-gate 原子性 residual（Done / RFC-333 + RFC-341）**：review/clarify/questions 的 durable decision、node/task
-   transition、continuation intent 与 committed event 已按适用合同同事务提交；route/MCP request-owned resume saga 已归零。
-5. **最小 durable ownership fence（Done / RFC-328）**：人工、自动与 scheduler 入口已统一到 durable intent/owner epoch；
-   execution-plane DB mutation、FS/Git/process/outbound effect、runtime registry、terminal maintenance 与 lifecycle outbox 已形成
-   单一权威。它是 RFC-331 的已满足前置，不再作为待办重做。
-6. **关闭项承接**：RFC-288 的九条结论与六条环债只作为 W2 新号 implementation RFC 的输入；RFC-289 的五条
-   identity/provenance 要求只作为 W7 后新号能力 RFC 的输入。两份 CLOSED 文档都不再充当 gate，也不再修订状态。
-
-RFC-287 已落地，旧的 P0-A/B/C/D→W1 箭头改记 prerequisite deviation，不伪造历史顺序。P0-A/B/C 分别重新绑定
-W4-E2、W6、W2-C/W3；RFC-342、RFC-343 与 RFC-333 已把 P0-A/B/C 全部关闭。N1/W0-R、P0-D、RFC-331 W2-A、
-RFC-332 W2-B、RFC-334 W2-C、RFC-339 W2-D 与 RFC-341 W3 也均完成 hosted/scheduled closeout。
-后续 wave 仍须新 RFC 与明确批准。W7 identity/provenance 完成后才允许新号
-fanout 能力 RFC；未获批时跳过 W8。最新 partial order 以 `plan.md` §3.1 为准。
+- **C1 composition 只装配**：`modules/*/composition/` 与 `composition.ts` 只构造与注入；新的业务、机制与适配器实现
+  不得放进 composition。
+- **C2 不再复制装配根**：不得新增装配根；新模块接线只写一次，写在两种 provider、两种部署 profile 共用的
+  provider-neutral 函数里，不得在 SQLite 与 PostgreSQL 根、或 `cli/start.ts` 与 `server.ts` 各写一份。
+- **C3 部署维度**：domain / application / engine / 入站适配器 / platform / 入口根不得按部署模式分支；application 端口不得
+  出现厂商字面量；部署适配器放 `infrastructure/<profile>/`，厂商协议客户端放 `platform/<vendor>/` 且操作类型化，
+  不得以 `operation: string` + `input: unknown` 传递。
+- **C4 platform 单向**：`platform/` 不得 import `modules/`；领域状态机、业务策略与装配不得放进 `platform/`。
+- **C5 不按 id 判新旧**：不得新增按 node_run（或其他 ULID）id 判断先后、新旧或顺序的业务代码；需要顺序的地方使用
+  显式序号（存量由 S1 收口）。
+- **C6 不新增深引用与再导出桶**：不得新增 import 其他 context 的 infrastructure / application / composition 内部文件的边；
+  不得新增 `export *` 形式转出 drizzle、schema 或模块内部的桶文件。
+- **C7 无 consumer 不公开**：不得新增没有生产 consumer 的 public 符号或端口；“以后可能用”不是理由。
+- **C8 后台作业有主**：新的周期作业或常驻循环必须作为带 stop 的工厂接入 provider runtime session（两种 provider 共用
+  同一份定义），不得私设 `setInterval` / 循环。
+- **C9 治理不再扩表**：不新增全量库存类账本与新的增长许可类别；架构门只增加能证明会红的结构规则。
 
 ## 7. 非目标
 
-- 本 RFC 当前批次不修改生产代码、DB schema、API、MCP、WS 或产品能力。
-- 不一次性搬迁全部 `services/` 文件；目录变化随 owner/接口/consumer 切换发生。
+- 本批次只改文档，不修改生产代码、测试、schema、API、MCP、WS、账本生成物或产品能力。
+- 不一次性搬迁全部存量；目录变化随 owner / 接口 / consumer 切换发生。
 - 不把六类资源硬做成同一套泛型 CRUD；只统一 command、policy、repository、event 的合同形态。
 - 不把 call-workflow 当 wrapper，也不把 workgroup assignment 混进 NodeRun 状态机。
-- 不重写已有 RuntimeDriver/managedProcess/resource injection。
-- 不以微服务、容器或多进程 daemon 为目标；当前仍是单 daemon，但内部边界必须支持可靠测试与演进。
-- 不承诺一次 RFC 完成全部迁移；本 RFC 是 umbrella contract，各行为/迁移波次仍需独立 RFC 和批准。
+- 不重写已有 RuntimeDriver / managedProcess / 资源注入链。
+- 不以微服务拆分为目标：业务仍在同一个进程映像内；多进程只来自部署角色（服务槽、迁移作业、Worker、任务镜像助手），
+  它们共享同一张模块工厂图。
+- 不在架构门里做任何安全检视或加固（2026-08-26 用户硬规则）。
 
 ## 8. 能力影响
 
-当前设计批 **零产品行为变化**。后续波次的能力影响按以下规则处理：
+本次刷新**零产品行为变化**。后续后继的能力影响按以下规则处理：
 
-| 类别                 | 处理                                                                      |
-| -------------------- | ------------------------------------------------------------------------- |
-| 纯依赖/目录/接口迁移 | 行为对拍，允许 facade，禁止 API/错误码/事件顺序变化                       |
-| 安全修复             | 独立 RFC 列收缩面、受影响 actor/状态/资源和迁移策略                       |
-| NodeRun schema       | 新旧 oracle + 存量任务 resume 兼容 + 删除 fallback 的明确时点             |
-| fanout 内链          | 作为能力扩张独立批准；失败/复用/恢复矩阵必须齐全                          |
-| lifecycle/outbox     | critical 事件至少一次；consumer 幂等；WS payload 保持兼容                 |
-| AtomicApply          | journal replay/duplicate/compensation 语义必须不弱于 BundleApply 当前合同 |
+| 类别 | 处理 |
+| --- | --- |
+| 纯依赖 / 目录 / 接口迁移、装配合并 | 行为对拍，允许一跳 facade，禁止 API / 错误码 / 事件顺序变化 |
+| 统一两套写入栈后错误码收敛 | 属用户可见变化：后继 RFC 列出受影响入口与错误码，呈用户确认 |
+| NodeRun schema / seq | 新旧 oracle + 存量任务 resume 兼容 + 删除回退判据的明确时点 |
+| fanout 内链 | 作为能力扩张独立批准；失败 / 复用 / 恢复矩阵必须齐全 |
+| lifecycle / outbox | critical 事件至少一次；consumer 幂等；WS payload 保持兼容 |
+| AtomicApply | journal replay / duplicate / compensation 语义不弱于当前合同 |
+| 治理门改造 | 只改测试与生成器，不改产品行为 |
 
-## 9. 需要用户批准的架构决策
-
-批准本 RFC 表示接受以下目标，而不是授权一次性实现所有波次：
+## 9. 架构决策
 
 - **D1**：采用 bounded-context feature-first，模块内分层；不建设新的横向 `services-v2/`。
-- **D2**：跨业务模块只能依赖受控 `public/{commands,queries,participants,events,types}` 精确入口；consumer-owned
-  required SPI 只经 `composition/required-ports` 给 bootstrap 与指定 provider adapter，bootstrap 只可额外依赖 module
-  `composition.ts`，Drizzle table 与内部实现不外泄。
-- **D3**：业务写命令强制 trusted authority + fence + transaction + audit/outbox；internal effect 强制 family-scoped
-  capability；transport 不持有业务写逻辑。
-- **D4**：Task ownership 最终用显式 lease/epoch/fencing，process registry 只做运行句柄缓存。
-- **D5**：NodeRun 增加 row kind、scope、persistent sequence 和逐边 provenance；ULID 不再承担 freshness 序号。
-- **D6**：`platform/atomic-apply` 唯一拥有通用 AtomicApply lifecycle；Intent/ResourcePackage/fusion/skill-restore
-  只提供领域 provider 或显式证明不适配，不得复制恢复机。
-- **D7**：RFC-287 作为已落 behavior baseline 保留；RFC-288/289 保持 CLOSED，不重新打开。W2 另立轻量实现 RFC，
-  fanout 内链在 W7 后另立新号能力 RFC。
-- **D8**：迁移采用逐域绞杀和单写源；任何兼容 facade 都有 owner、删除波次和棘轮。
-- **D9**：模块边界按 consumer 的最小信息预算治理：exact public entrypoint、offered/required 方向、递归 leaf 字段/方法级
-  consumer 账本、capability 防伪造、DTO/event codec 与 type-taint/god-port 棘轮均为硬合同。
+- **D2**：跨业务模块只依赖受控 `public/{commands,queries,participants,events,types,operations}` 精确入口；consumer-owned
+  required SPI 只经 `composition/required-ports` 给 bootstrap 与指定 provider adapter；bootstrap 只可额外依赖模块
+  `composition.ts`；Drizzle table 与内部实现不外泄。
+- **D3**：业务写命令强制可信 authority + fence + transaction + audit / outbox；内部 effect 使用 family-scoped capability；
+  transport 不持有业务写逻辑。
+- **D4**：Task ownership 使用持久 lease / epoch / fence，进程内 registry 只做句柄缓存（RFC-328 已落）。
+- **D5（修订）**：NodeRun 先引入每任务单调 `seq` 作为唯一先后判据，再补 row kind、scope、逻辑执行代与逐边 provenance；
+  ULID 不再承担任何顺序语义。
+- **D6（扩展）**：`platform/atomic-apply` 唯一拥有 AtomicApply lifecycle，并且只保留一套资源写入栈与持久收敛 claim。
+- **D7**：RFC-287 作为已落行为基线保留；RFC-288/289 保持 CLOSED；fanout 内链在 W7 后另立新号能力 RFC。
+- **D8**：逐域绞杀与单写源；任何兼容 facade 都有 owner 与删除后继。
+- **D9（修订）**：架构治理由**少量硬结构门**（各有会红的变异测试、不设增长许可）与**按需生成的库存报告**组成；
+  逐 symbol / 逐边 / 逐字段的全量账本不再作为任何波次的退出条件，也不要求伴随提交。
+- **D10（新增）**：部署 profile 是一等架构维度：端口按语义归拥有方，适配器按 profile 分目录，选择只在 bootstrap 一次，
+  业务层零部署分支，跨进程协议类型化，进程内不变量须声明适用 profile 或改为持久 claim。
+- **D11（新增）**：入口根是薄的、可以有多个，但共享唯一的模块工厂图与唯一的生命周期程序；provider 与部署 profile 都是
+  图内的适配器选择。
+- **D12（新增）**：`composition/` 只装配；实现落在 domain / application / engine / infrastructure；task-execution 的机制库
+  归 engine；不允许“类型化委托壳”层。
+- **D13（新增）**：总纲定方向、边界、层次规则、不变量与 owner；精确接口以代码（`public/*.ts`、`application/ports/*.ts`）
+  与后继 RFC 的 design 为准，总纲中的类型草图不构成合同。
 
-## 10. 验收标准
+## 10. 验收标准（整体迁移）
 
-- **AC-1**：design.md 给出完整依赖规范、目录树、每层职责和禁止依赖；offered、required implementation 与 authority type-only
-  三类 edge 均有明确图/矩阵承载，同一 context pair 的双重角色不被折叠。
-- **AC-2**：每个现存散点能力都有唯一目标 owner；没有“公共 service 待定”桶。
-- **AC-3**：TaskEngine/WrapperRuntime/NodeExecutor/ExecutionKernel 四级合同清楚，并说明合理特化。
-- **AC-4**：command/query、transaction/outbox、error、observability、background、composition root 合同完整。
-- **AC-5**：NodeRun identity/provenance 的目标模型可覆盖 retry/resume/wrapper/fanout/call/review/clarify。
-- **AC-6**：RFC-287 的已落基线、RFC-288/289 的关闭语义、结论承接与新号 successor 顺序无歧义。
-- **AC-7**：plan.md 为每波列前置、输入、动作、退出门、回滚点、冲突面和量化指标。
-- **AC-8**：终局量化目标至少包含值级 SCC=0、route→db=0、KNOWN_VIOLATIONS=0、生产全局 setter=0、
-  跨 context internal import=0、事务内外发事件=0。
-- **AC-9**：兼容策略覆盖 REST/MCP/WS、存量 DB、在途 task/resume、测试 seam 和多 session 并发开发。
-- **AC-10**：本批仅设计文档、索引与 STATE；未夹带生产代码或测试变更。
-- **AC-11**：每个 bounded context 有最小 public surface 与明确禁止跨界字段；机器账本能对 symbol/method/recursive-field/
-  consumer/authority/transaction/data-class 做 unknown+stale 双向检查，以 transitive leaf/union budget 阻止 nested payload
-  逃逸，并以变异测试证明 taint、伪造、错绑和 god-port 会红。
-- **AC-12**：context DAG、authority type-only matrix、模块 public-surface 表与终局 canonical manifests 双向一致；缺边、多边、
-  错 direction/role、同向 offered+required edge 被合并或仅存在于散文的变异必须报红。
+- **AC-1**：design 给出依赖规范、层次矩阵、context DAG 与 IA type-only 矩阵；三者与生成器常量一致（现有守卫保持）。
+- **AC-2**：每个现存能力都有唯一目标 owner；没有“公共 service 待定”桶。
+- **AC-3**：任务控制面 / scope 解释器 / 节点执行器 / 执行机制库四层各自拥有决策，`composition/` 不承载实现。
+- **AC-4**：command / query、事务 / outbox、错误、后台生命周期、装配根合同在代码中各只有一份实现。
+- **AC-5**：NodeRun 先后只由 `seq` 决定；身份与 provenance 覆盖 retry / resume / wrapper / fanout / call / review / clarify。
+- **AC-6**：RFC-287 基线、RFC-288/289 关闭语义与新号 successor 顺序无歧义。
+- **AC-7**：plan 为每个余下波次与后继列出前置、动作、退出门、回滚点与冲突面。
+- **AC-8**：终局判据全部成立——后端 / 全仓值级 SCC=0、`KNOWN_VIOLATIONS`=0、route / transport→DB=0、context 值级依赖
+  无环、`platform`→`modules`=0、跨 context 内部 import=0、composition 内实现=0、业务层部署分支=0、AtomicApply lifecycle=1、
+  资源写入栈=1、装配为唯一模块工厂图、后台作业全部经唯一生命周期程序且有 stop。
+- **AC-9**：兼容策略覆盖 REST / MCP / WS、存量 DB、在途 task / resume、测试 seam 与多 session 并发开发。
+- **AC-10**：每个硬结构门都有能证明会红的变异测试；库存报告可从任意已提交源码按需重新生成。
+- **AC-11**：部署 profile 规则（D10）在托管与单机两种装配下都有结构门或行为对拍证据。
+- **AC-12**：本刷新批次只改文档、索引与 STATE；未夹带生产代码、测试或生成物变更。
+
+## 11. 与 RFC-287 / 288 / 289 的关系
+
+- **RFC-287**：Done，作为 assembly 与仓库准备行为的兼容基线保留；后来写入的 ownership、admission、事件与模块归位分属
+  P0-D、W2～W5 的合同，不倒签给 RFC-287。不得恢复公开 `file://`、stale source 静默启动，或删除现有 `__repo_prep__` 可见性。
+- **RFC-288**：CLOSED（未实现、零生产改动），结论已由 RFC-331 / W2-A 承接完毕。
+- **RFC-289**：CLOSED（未实现、零生产改动）；fanout 内链的产品目标保留，W7 完成后另立新号 RFC，未获批时保留
+  `fanout-inner-chain-unsupported` 挡板并跳过 W8。
+- 已关闭各波的详细合同、证据与 SHA 见归档 `archive-20261016-plan.md`。
