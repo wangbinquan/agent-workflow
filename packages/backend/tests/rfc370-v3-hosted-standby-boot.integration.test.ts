@@ -16,6 +16,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { migrateForDeployment } from '@/cli/deployment'
@@ -174,7 +175,12 @@ if (providers.includes('postgresql')) {
     })
     let output = ''
     const daemon = Bun.spawn({
-      cmd: [process.execPath, 'run', new URL('../src/main.ts', import.meta.url).pathname, 'start'],
+      cmd: [
+        process.execPath,
+        'run',
+        fileURLToPath(new URL('../src/main.ts', import.meta.url)),
+        'start',
+      ],
       env,
       stdout: 'pipe',
       stderr: 'pipe',
