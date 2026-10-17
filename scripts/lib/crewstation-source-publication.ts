@@ -133,10 +133,11 @@ export function createGitLabPublication(input: {
       if ((await head(input.branch)).id !== input.expectedHead)
         throw new Error('publication-target-advanced')
       if (input.actions.length === 0) return input.expectedHead
+      // Commit onto the existing branch: GitLab rejects `start_sha` (a new-branch
+      // start point) when the branch exists. The head check above, the
+      // per-file `last_commit_id` and the parent check below keep it exact.
       const commit = await read<PublicationCommit>('/repository/commits', {
         branch: input.branch,
-        start_sha: input.expectedHead,
-        force: false,
         commit_message: input.message,
         actions: input.actions,
         author_name: input.authorName,

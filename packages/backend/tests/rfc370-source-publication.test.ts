@@ -96,3 +96,39 @@ test('an advanced target blocks the commit and credentials never enter errors', 
   expect(calls).toHaveLength(1)
   expect(calls[0]).not.toContain('secret')
 })
+
+// GitLab answers 400 "A branch called 'main' already exists" when a commit to
+// an existing branch names `start_sha` (only valid for a new branch). The local
+// RFC-370 deployment hit it; the request must target the branch itself.
+test('a publication commits onto the existing branch without a new-branch start point', async () => {
+  const bodies: unknown[] = []
+  const publisher = createGitLabPublication({
+    apiUrl: 'https://gitlab.test',
+    project: 'group/repo',
+    token: 'secret',
+    fetch: (async (url, init) => {
+      if (init?.method === 'POST') {
+        bodies.push(JSON.parse(String(init.body)))
+        return Response.json({ id: 'next', message: '', parent_ids: ['old'] })
+      }
+      return Response.json({
+        id: bodies.length === 0 ? 'old' : 'next',
+        message: '',
+        parent_ids: [],
+      })
+    }) as typeof fetch,
+  })
+  expect(
+    await publisher.commit({
+      branch: 'main',
+      expectedHead: 'old',
+      message: 'candidate',
+      actions: [{ action: 'delete', file_path: 'a', last_commit_id: 'a' }],
+      authorName: 'Fixture',
+      authorEmail: 'fixture@example.test',
+    }),
+  ).toBe('next')
+  expect(bodies).toHaveLength(1)
+  expect(bodies[0]).toMatchObject({ branch: 'main', commit_message: 'candidate' })
+  expect(bodies[0]).not.toHaveProperty('start_sha')
+})
