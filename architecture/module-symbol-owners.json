@@ -129514,7 +129514,7 @@
     {
       "currentContext": "system-operations",
       "currentLayer": "composition",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/composition/crewstationDeployment.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition/crewstationDeployment.ts#HOSTED_DATABASE_POOL_MAX",
       "removeAfterWave": "W9-D",
@@ -333809,5 +333809,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:803223b5ae372be3365abdfb0767bdd2699407a9e51a069e432f464cfd29574e"
+  "sourceDigest": "sha256:671a04657244b241c542868a4168edb4483adc488460fb77d8957cc0b75244a6"
 }
