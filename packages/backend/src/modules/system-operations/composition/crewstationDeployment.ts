@@ -181,7 +181,7 @@ export function readCrewStationEnvironment(
  * default of 16, two slots exhausted the local platform's shared server
  * (RFC-370 acceptance, 2026-10-17).
  */
-export const HOSTED_DATABASE_POOL_MAX = 8
+const HOSTED_DATABASE_POOL_MAX = 8
 
 export function crewStationDatabaseConfig(
   env: Readonly<Record<string, string | undefined>> = process.env,

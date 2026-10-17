@@ -29,7 +29,6 @@ import { runDaemonHostApplication } from '@/modules/system-operations/applicatio
 import type { ExecutionFence } from '@/modules/system-operations/application/ports/executionAuthority'
 import {
   CrewStationEnvironmentError,
-  HOSTED_DATABASE_POOL_MAX,
   crewStationDatabaseConfig,
   readCrewStationDatabaseEnvironment,
   readCrewStationEnvironment,
@@ -65,11 +64,10 @@ test('the deployment is selected explicitly; standalone needs nothing', async ()
 // RFC-370 acceptance (2026-10-17): with the standalone default of 16, the two
 // release slots of one service exhausted the platform's shared PostgreSQL.
 test('a hosted pool is small by default and sized by AW_DATABASE_POOL_MAX', () => {
-  expect(HOSTED_DATABASE_POOL_MAX).toBeLessThan(16)
   expect(crewStationDatabaseConfig({})).toMatchObject({
     provider: 'postgresql',
     urlEnv: 'CS_DATABASE_URL',
-    poolMax: HOSTED_DATABASE_POOL_MAX,
+    poolMax: 8,
   })
   expect(crewStationDatabaseConfig({ AW_DATABASE_POOL_MAX: ' 24 ' })).toMatchObject({ poolMax: 24 })
   for (const bad of ['0', '257', '4.5', 'many'])
