@@ -6,7 +6,7 @@
     "moduleFiles": 1779,
     "productionFiles": 3203,
     "sharedFiles": 162,
-    "symbolsIncludingFileRoots": 27755
+    "symbolsIncludingFileRoots": 27756
   },
   "entries": [
     {
@@ -129508,6 +129508,18 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "CrewStationSystemSelections",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/crewstationDeployment.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/crewstationDeployment.ts#HOSTED_DATABASE_POOL_MAX",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "HOSTED_DATABASE_POOL_MAX",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -333797,5 +333809,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:11efc2dfb59b03a6ab747e8dacaa616a8b47ba39555628a4fe718ebee5576221"
+  "sourceDigest": "sha256:803223b5ae372be3365abdfb0767bdd2699407a9e51a069e432f464cfd29574e"
 }
