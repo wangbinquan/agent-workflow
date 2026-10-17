@@ -413,7 +413,7 @@
       "evidence": [
         {
           "file": "packages/backend/tests/rfc310-digital-employee-system-mock-e2e.test.ts",
-          "test": "signed ISSUE -> Event Center -> MR -> red gates -> repair -> ready -> merged"
+          "test": "%s ISSUE -> Event Center -> MR -> red gates -> repair -> ready -> merged"
         },
         {
           "file": "e2e/rfc294-webhook-runtime-failures.spec.ts",

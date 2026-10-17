@@ -1,22 +1,22 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 508,
-    "architectureExceptions": 5726,
-    "backgroundJobs": 355,
-    "crossContextImports": 6519,
+    "ambientWiring": 512,
+    "architectureExceptions": 6411,
+    "backgroundJobs": 392,
+    "crossContextImports": 7284,
     "facades": 295,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26842,
-    "mutationEntrypoints": 1930,
+    "moduleSymbolOwners": 27755,
+    "mutationEntrypoints": 2056,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1210,
-    "transactionExternalEffects": 262
+    "publicSurfaces": 1237,
+    "transactionExternalEffects": 282
   },
   "metrics": {
-    "ambientWiringEntries": 508,
+    "ambientWiringEntries": 512,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2217,
+    "backendProductionFiles": 2374,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,13 +25,14 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 355,
+    "backgroundEntries": 392,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
       "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
       "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts",
       "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
       "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
@@ -47,10 +48,10 @@
       "packages/backend/src/services/scheduledTaskScheduler.ts",
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
-    "directNativeIntervals": 22,
-    "directNativeTimers": 76,
-    "inboundBoundaryEdges": 307,
-    "knownViolations": 8,
+    "directNativeIntervals": 23,
+    "directNativeTimers": 87,
+    "inboundBoundaryEdges": 313,
+    "knownViolations": 7,
     "moduleContexts": [
       {
         "context": "code-capability",
@@ -58,19 +59,19 @@
       },
       {
         "context": "collaboration",
-        "files": 114
+        "files": 120
       },
       {
         "context": "development-automation",
-        "files": 178
+        "files": 188
       },
       {
         "context": "digital-employee",
-        "files": 42
+        "files": 43
       },
       {
         "context": "event-center",
-        "files": 29
+        "files": 31
       },
       {
         "context": "execution-contract",
@@ -78,15 +79,15 @@
       },
       {
         "context": "identity-access",
-        "files": 56
+        "files": 58
       },
       {
         "context": "integration",
-        "files": 85
+        "files": 97
       },
       {
         "context": "intent",
-        "files": 71
+        "files": 75
       },
       {
         "context": "knowledge-evolution",
@@ -98,7 +99,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 267
+        "files": 276
       },
       {
         "context": "run-observability",
@@ -106,15 +107,15 @@
       },
       {
         "context": "runtime-management",
-        "files": 61
+        "files": 64
       },
       {
         "context": "source-control",
-        "files": 98
+        "files": 126
       },
       {
         "context": "system-operations",
-        "files": 84
+        "files": 104
       },
       {
         "context": "task-catalog",
@@ -122,10 +123,10 @@
       },
       {
         "context": "task-execution",
-        "files": 421
+        "files": 463
       }
     ],
-    "moduleFiles": 1640,
+    "moduleFiles": 1779,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -138,7 +139,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 42,
+    "outboundBoundaryEdges": 43,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -161,5 +162,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7e58697a0d3c8fc5572dd35ad095848fc6c6168265d8f58c4063fbf043da0a87"
+  "sourceDigest": "sha256:3a4cb2694c69cb3cd899063c670149637dc140ca6f7aa6894a96a3bd67e355cc"
 }

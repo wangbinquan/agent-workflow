@@ -200,8 +200,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:18ecb7b36860450488ef",
         "import:53d90dd43875e762240b",
         "import:7a503b2be3c9d8ab6f45",
+        "import:dc6eff346ac5d398b424",
         "import:fe9bf989f8cfd9610140"
       ],
       "exportedSymbols": [],
@@ -1165,6 +1167,8 @@
         "import:1f1dfaf525355b129cec",
         "import:2817d22a583bfbf6e223",
         "import:2eea0a70136595f1cfca",
+        "import:2ff3335e51304f5e520b",
+        "import:3de2b1e5195ec607bc67",
         "import:3dfc5d8044fabe57926e",
         "import:46f76cdc06775ed19dfa",
         "import:537871ccfb897af979ec",
@@ -1175,9 +1179,13 @@
         "import:7d9eb056bd9dea080620",
         "import:9db8f302d772a44f5c37",
         "import:9f76905b3029eb6fce30",
+        "import:aeebf5fce61b802be928",
         "import:b6567e3b9d71cfe5f86d",
         "import:ba9985978f3d9967b916",
+        "import:cf25c65d05ae3b3407b3",
+        "import:d280085611d3cebca5bc",
         "import:dc67a5116cc173d45941",
+        "import:dfa728f20f51deaae088",
         "import:e2c1cbe8e77a3153bfe2",
         "import:e47b300b88bf07b12403",
         "import:ec4ab55e96557fbc1779",
@@ -1331,6 +1339,7 @@
     {
       "boundaryEdgeIds": [
         "import:3039f82e02ac27574e68",
+        "import:5403294705a7bda23c29",
         "import:5aef6f30ff5dbb1f2d8d"
       ],
       "exportedSymbols": [
@@ -1349,6 +1358,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:08fe6fa658f571c65215",
         "import:223e0cd8394e53cbe18c",
         "import:8ba1c8249feca47d9878",
         "import:c610a40ee57a389b46ec"
@@ -1452,6 +1462,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0297b0f945a199db18ab",
         "import:2336edf349078afbda97",
         "import:42c591f50dda68aa294c",
         "import:6f51fc0d437acf111d84",
@@ -1735,6 +1746,7 @@
       "boundaryEdgeIds": [
         "import:30cd2473871c8a106200",
         "import:48e43757f141cd47a95c",
+        "import:49755adde5b869caf33e",
         "import:4e6c0c0c89eead3ac8d2"
       ],
       "exportedSymbols": [],
@@ -1755,6 +1767,7 @@
         "import:4a9b387f1fbe819827a6",
         "import:5eec16ee0b8a0b6f1ceb",
         "import:746d9a4d69f2eba2df16",
+        "import:bd731d590bd3079eccdc",
         "import:d09d2c76fcd4f64eede0"
       ],
       "exportedSymbols": [
@@ -1788,10 +1801,12 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:00cca383bf06dd7274ff",
         "import:0b6df777cb457cba9996",
         "import:2fac77682979a4639fa2",
         "import:713c0a4e96e1133e8a2e",
         "import:74ea1d3e03f9794067d7",
+        "import:793dc691f0b9bb1afd59",
         "import:fdee11d0fccb6d25bfe6"
       ],
       "exportedSymbols": [
@@ -2207,6 +2222,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:3ab4e5863ef31f03c047",
         "import:402971768d790b6645f3",
         "import:db754ee018f051e986cd"
       ],
@@ -2727,6 +2743,9 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:174f59af44ef1c18b2ad",
+        "import:8243b772f68b5281c119",
+        "import:96682744311d1aebdab5",
         "import:a2ffaf9bae592d170a59",
         "import:e3a682574200f15d95b5",
         "import:f3883ba48bf224cf3e0e"
@@ -2945,11 +2964,13 @@
     {
       "boundaryEdgeIds": [
         "import:226085b06d2750120645",
+        "import:3afd2d58fe480da1f155",
         "import:5250099df6210eb0e0f3",
         "import:5e097b2bed2b13cee4f8",
         "import:9461d35855bd3d3a7299",
         "import:abe9a9d637c9528c351d",
-        "import:d6167c57cd78e7a38c02"
+        "import:d6167c57cd78e7a38c02",
+        "import:e5f4ca6461b17284ccef"
       ],
       "exportedSymbols": [
         "SealResult",
@@ -3755,12 +3776,15 @@
         "import:64a3671d1cfcaeb2a1c6",
         "import:70fef04c52ff0c283a17",
         "import:79e677a27db127530105",
+        "import:7c42bfe79e568bd36852",
         "import:7fffe1f742017d910ca9",
         "import:835ec062b66a4ad7e8a4",
         "import:c507036df92521701751",
         "import:d50add293d533727c6e4",
+        "import:d5b422262084ae7a49ba",
         "import:d84409822ef4e47283a6",
         "import:d98eada297d0a956485e",
+        "import:e22e127d40e404d3a707",
         "import:e476ae62c20624ad3827",
         "import:ea97292b0b4cff7fc31f",
         "import:ec966ccb441f6ab979e4",
@@ -4190,6 +4214,7 @@
         "import:5b628f6136e3b8310324",
         "import:5c6302c94f8d4b6d3a5d",
         "import:5f13ba9cdabe85fd2703",
+        "import:629db5b4352c94f1cb35",
         "import:64cce34581a2c498d55f",
         "import:668e88a4c0f34dfa5f36",
         "import:6cd1ab696b243d253d1f",
@@ -4201,6 +4226,7 @@
         "import:7af33829e520bd6a97b6",
         "import:7e35a4d0936147f04ed8",
         "import:7ebd2695d0ca6170e289",
+        "import:8247e87cc62bd3504c46",
         "import:84369c5691cec1b9fbcd",
         "import:865179f7fc585ca586f8",
         "import:86bcfc72d0b503706527",
@@ -4216,12 +4242,14 @@
         "import:a99307c8c8debf377c51",
         "import:ad7b42c7d621553136df",
         "import:b234142f2b81b77760e6",
+        "import:b2925fec26602d2941d5",
         "import:b2f9ab2d2a56ded2ee87",
         "import:b3dbd11de74379d1e698",
         "import:b63768891ca64af1cb8d",
         "import:b7435b12258845618f09",
         "import:b7d325a8d761ddf10b9f",
         "import:bc66a63defffbd003625",
+        "import:cb275c4b05a724ecbaab",
         "import:d070f91205f306479806",
         "import:dc3c32ec5d84e4835f82",
         "import:df6b655178f56883e1ff",
@@ -4300,6 +4328,7 @@
       "boundaryEdgeIds": [
         "import:018b39ab07e8e1cf873a",
         "import:06d43f7c8e0e605685d2",
+        "import:136ee1ccd4f5c2d59e1d",
         "import:2c328611ec36a818e2d2",
         "import:2dcfbc5351c19063ccd2",
         "import:3ceb55f57502b92e8498",
@@ -4600,6 +4629,7 @@
         "import:7de942c04a3ad9660b3e",
         "import:7f9d7ee01c53e4d73565",
         "import:81ec44c850bdd5c4df2c",
+        "import:916e5701b425afecd8bf",
         "import:9e7faba224d109447b84",
         "import:9efed3fd60ee041116f9",
         "import:a8ed06a908e09228393c",
@@ -4667,6 +4697,7 @@
       "boundaryEdgeIds": [
         "import:04b6266a4ce33123bf23",
         "import:402d2d0abfa866168ddc",
+        "import:9ea8301fbe64619cad90",
         "import:aafa840419142282eb13",
         "import:de3fe7a080dfe8fdc572"
       ],
@@ -5958,13 +5989,16 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:12475f95d332f17edaf9",
+        "import:80d72e759e9ec9eab129",
+        "import:a4de397fbfbd37b71365",
+        "import:db5cb3d0cc3a9f60edd7"
+      ],
       "exportedSymbols": [
         "CODE_HOST_ADAPTERS",
         "CodeHostAdapter",
         "CodeHostReportSink",
-        "HeaderBag",
-        "NormalizeResult",
         "replayHeaders"
       ],
       "file": "packages/backend/src/services/webhook/codeHostAdapter.ts",
@@ -6035,11 +6069,13 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:28d128b20814e99ab959",
+        "import:34839365d36c65b031c9",
+        "import:b949f0fd92ae7b8efa53"
+      ],
       "exportedSymbols": [
         "githubAdapter",
-        "githubApiBaseUrl",
-        "githubNormalize",
         "githubVerify"
       ],
       "file": "packages/backend/src/services/webhook/githubAdapter.ts",
@@ -6051,12 +6087,15 @@
       "targetLayer": "infrastructure"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:1161ad1c4e898fae3062",
+        "import:418f10ea900f885f9085",
+        "import:97f0998c57f78a59b5e6",
+        "import:eafa49f34b939b77cd0c",
+        "import:ef16f967611464317b32"
+      ],
       "exportedSymbols": [
         "gitlabAdapter",
-        "gitlabApiBaseUrl",
-        "gitlabNormalize",
-        "gitlabSummaryKindOf",
         "gitlabVerify"
       ],
       "file": "packages/backend/src/services/webhook/gitlabAdapter.ts",
@@ -6418,5 +6457,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7e58697a0d3c8fc5572dd35ad095848fc6c6168265d8f58c4063fbf043da0a87"
+  "sourceDigest": "sha256:3a4cb2694c69cb3cd899063c670149637dc140ca6f7aa6894a96a3bd67e355cc"
 }
