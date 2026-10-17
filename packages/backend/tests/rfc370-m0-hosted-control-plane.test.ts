@@ -29,6 +29,8 @@ import { runDaemonHostApplication } from '@/modules/system-operations/applicatio
 import type { ExecutionFence } from '@/modules/system-operations/application/ports/executionAuthority'
 import {
   CrewStationEnvironmentError,
+  HOSTED_DATABASE_POOL_MAX,
+  crewStationDatabaseConfig,
   readCrewStationDatabaseEnvironment,
   readCrewStationEnvironment,
 } from '@/modules/system-operations/composition/crewstationDeployment'
@@ -58,6 +60,22 @@ test('the deployment is selected explicitly; standalone needs nothing', async ()
   expect(readDeploymentMode(HOSTED_ENV)).toBe('standalone')
   expect(() => readDeploymentMode({ AW_DEPLOYMENT_MODE: 'cloud' })).toThrow(DeploymentModeError)
   expect(await composeDeploymentStartOptions({})).toEqual({})
+})
+
+// RFC-370 acceptance (2026-10-17): with the standalone default of 16, the two
+// release slots of one service exhausted the platform's shared PostgreSQL.
+test('a hosted pool is small by default and sized by AW_DATABASE_POOL_MAX', () => {
+  expect(HOSTED_DATABASE_POOL_MAX).toBeLessThan(16)
+  expect(crewStationDatabaseConfig({})).toMatchObject({
+    provider: 'postgresql',
+    urlEnv: 'CS_DATABASE_URL',
+    poolMax: HOSTED_DATABASE_POOL_MAX,
+  })
+  expect(crewStationDatabaseConfig({ AW_DATABASE_POOL_MAX: ' 24 ' })).toMatchObject({ poolMax: 24 })
+  for (const bad of ['0', '257', '4.5', 'many'])
+    expect(() => crewStationDatabaseConfig({ AW_DATABASE_POOL_MAX: bad })).toThrow(
+      'AW_DATABASE_POOL_MAX must be an integer from 1 to 256',
+    )
 })
 
 test('hosted inputs are validated at once and parsed', () => {

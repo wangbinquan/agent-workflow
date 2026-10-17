@@ -60,7 +60,7 @@ export async function migrateForDeployment(
   const prepared = await prepareManualDatabaseMigration({
     kind: 'selected',
     configuration: {
-      read: () => crewStationDatabaseConfig(),
+      read: () => crewStationDatabaseConfig(env),
       write: () => {
         throw new Error('the CrewStation database connection is provided by the platform')
       },

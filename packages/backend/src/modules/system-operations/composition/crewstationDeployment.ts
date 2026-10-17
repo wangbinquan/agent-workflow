@@ -174,10 +174,28 @@ export function readCrewStationEnvironment(
   })
 }
 
-export function crewStationDatabaseConfig(): DatabaseConfig {
+/**
+ * A hosted instance shares the platform's PostgreSQL with every other service,
+ * and both release slots are connected during a handoff, so the pool stays small
+ * unless the plan allows more (`AW_DATABASE_POOL_MAX`). With the standalone
+ * default of 16, two slots exhausted the local platform's shared server
+ * (RFC-370 acceptance, 2026-10-17).
+ */
+export const HOSTED_DATABASE_POOL_MAX = 8
+
+export function crewStationDatabaseConfig(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): DatabaseConfig {
+  const raw = env.AW_DATABASE_POOL_MAX?.trim()
+  const poolMax = raw === undefined || raw === '' ? HOSTED_DATABASE_POOL_MAX : Number(raw)
+  if (!Number.isInteger(poolMax) || poolMax < 1 || poolMax > 256)
+    throw new Error(
+      `AW_DATABASE_POOL_MAX must be an integer from 1 to 256, got ${JSON.stringify(raw)}`,
+    )
   return PostgresqlDatabaseConfigSchema.parse({
     provider: 'postgresql',
     urlEnv: CREWSTATION_DATABASE_URL_ENV,
+    poolMax,
   })
 }
 
@@ -192,7 +210,7 @@ export async function prepareCrewStationDatabase(input: {
 }): Promise<PreparedPostgresqlProviderSchema> {
   const contract = buildLogicalSchemaContract()
   return await prepareHostedPostgresqlProviderRuntime({
-    config: crewStationDatabaseConfig(),
+    config: crewStationDatabaseConfig(input.env ?? process.env),
     contract,
     generation: hostedDatabaseGeneration({
       project: input.environment.project,
