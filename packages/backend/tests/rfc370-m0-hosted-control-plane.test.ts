@@ -485,6 +485,14 @@ test('the Manifest is rendered from a validated deployment profile', () => {
     'GIT_CONFIG_PARAMETERS',
   )
   expect(gitProfile.agentProfiles[0]!.businessConfig.allowedEnvNames).toContain('AW_GIT_AUTH_31')
+  // Commands and Agents receive the runtime form under its own name; the
+  // deployment variable reaches task containers as project configuration.
+  expect(gitProfile.agentProfiles[0]!.businessConfig.allowedEnvNames).toContain(
+    'AW_GIT_RUNTIME_BINDINGS',
+  )
+  expect(gitProfile.agentProfiles[0]!.businessConfig.allowedEnvNames).not.toContain(
+    'AW_GIT_CREDENTIAL_BINDINGS',
+  )
   expect(gitProfile.agentProfiles[0]!.businessConfig.allowedEnvNames.length).toBeLessThanOrEqual(
     128,
   )
@@ -495,7 +503,7 @@ test('the Manifest is rendered from a validated deployment profile', () => {
     JSON.parse(renderCrewStationManifest('{{COMMAND_BUSINESS_CONFIG_JSON}}', gitProfile)),
   ).toEqual({
     allowedEnvNames: [
-      'AW_GIT_CREDENTIAL_BINDINGS',
+      'AW_GIT_RUNTIME_BINDINGS',
       ...Array.from({ length: 32 }, (_, index) => `AW_GIT_AUTH_${index}`),
     ],
   })

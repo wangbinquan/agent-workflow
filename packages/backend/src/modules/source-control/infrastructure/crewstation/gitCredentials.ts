@@ -136,15 +136,24 @@ export function compileHostedGitEnvironment(
     env[authEnv] = { secret: { configDefinitionId: binding.privateKeySecretId } }
     return { kind: binding.kind, url: binding.url, knownHosts: binding.knownHosts, authEnv }
   })
-  env.AW_GIT_CREDENTIAL_BINDINGS = JSON.stringify(runtime)
+  env.AW_GIT_RUNTIME_BINDINGS = JSON.stringify(runtime)
   return Object.freeze(env)
 }
 
+/**
+ * The runtime form a task command or Agent receives: bindings with the
+ * `AW_GIT_AUTH_<n>` names CS resolves. It must not reuse the deployment
+ * variable `AW_GIT_CREDENTIAL_BINDINGS`: CrewStation gives every task container
+ * the project's configuration as environment, so that name already carries the
+ * public form (Secret ids) there, and a command without credentials failed on
+ * it (`hosted-git-credential-bindings-invalid`, RFC-370 acceptance 2026-10-17).
+ */
 export function readHostedGitRuntimeBindings(
   env: Readonly<Record<string, string | undefined>>,
 ): readonly HostedGitRuntimeBinding[] {
-  if (!env.AW_GIT_CREDENTIAL_BINDINGS?.trim()) return []
-  return parseBindings(() => runtimeBindings.parse(JSON.parse(env.AW_GIT_CREDENTIAL_BINDINGS!)))
+  const raw = env.AW_GIT_RUNTIME_BINDINGS
+  if (!raw?.trim()) return []
+  return parseBindings(() => runtimeBindings.parse(JSON.parse(raw)))
 }
 
 /** Git's command-scope environment parser accepts single-quoted key/value
@@ -159,9 +168,9 @@ const gitParameter = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
 export function createHostedGitAgentEnvironment(raw: string | undefined) {
   const environment = compileHostedGitEnvironment(raw) ?? {}
   const bindings = readHostedGitRuntimeBindings({
-    AW_GIT_CREDENTIAL_BINDINGS:
-      typeof environment.AW_GIT_CREDENTIAL_BINDINGS === 'string'
-        ? environment.AW_GIT_CREDENTIAL_BINDINGS
+    AW_GIT_RUNTIME_BINDINGS:
+      typeof environment.AW_GIT_RUNTIME_BINDINGS === 'string'
+        ? environment.AW_GIT_RUNTIME_BINDINGS
         : undefined,
   })
   const credentialHelper = '!agent-workflow __hosted-git-credential'

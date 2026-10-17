@@ -104,7 +104,7 @@ export function parseDeploymentProfile(raw: unknown): CrewStationDeploymentProfi
           ...(record.gitCredentialsDefinitionId === undefined
             ? []
             : [
-                'AW_GIT_CREDENTIAL_BINDINGS',
+                'AW_GIT_RUNTIME_BINDINGS',
                 ...Array.from({ length: 32 }, (_, index) => `AW_GIT_AUTH_${index}`),
                 'GIT_SSH_COMMAND',
                 'GIT_SSH_VARIANT',
@@ -199,7 +199,7 @@ export function renderCrewStationManifest(
           profile.gitCredentialsDefinitionId === undefined
             ? []
             : [
-                'AW_GIT_CREDENTIAL_BINDINGS',
+                'AW_GIT_RUNTIME_BINDINGS',
                 ...Array.from({ length: 32 }, (_, index) => `AW_GIT_AUTH_${index}`),
               ],
       })

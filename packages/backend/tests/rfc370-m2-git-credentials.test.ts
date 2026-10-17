@@ -36,7 +36,7 @@ const bindings = (url = 'https://git.test/owner/repo.git') =>
 const runtime = (url?: string) => {
   const environment = compileHostedGitEnvironment(bindings(url))!
   return {
-    AW_GIT_CREDENTIAL_BINDINGS: environment.AW_GIT_CREDENTIAL_BINDINGS as string,
+    AW_GIT_RUNTIME_BINDINGS: environment.AW_GIT_RUNTIME_BINDINGS as string,
     AW_GIT_AUTH_0: 'original-private-password',
   }
 }
@@ -82,7 +82,7 @@ test('Agent Git keeps the frozen Secret reference and exact quoted identity with
     expect(createHostedGitAgentEnvironment(undefined)({})).toBeUndefined()
     expect(
       createHostedGitAgentEnvironment(undefined)({ gitUserName: gitName, gitUserEmail: gitEmail }),
-    ).not.toHaveProperty('AW_GIT_CREDENTIAL_BINDINGS')
+    ).not.toHaveProperty('AW_GIT_RUNTIME_BINDINGS')
     expect(() =>
       createHostedGitAgentEnvironment(bindings())({
         gitUserName: 'name\ninjected',
@@ -153,16 +153,23 @@ test('HTTP helper matches exact authority and repository, rejects protocol/contr
       AW_GIT_AUTH_0: 'secret\npassword=other',
     }),
   ).toBe('')
-  expect(
-    hostedGitCredentialResponse('get', request, { AW_GIT_CREDENTIAL_BINDINGS: 'invalid' }),
-  ).toBe('')
+  expect(hostedGitCredentialResponse('get', request, { AW_GIT_RUNTIME_BINDINGS: 'invalid' })).toBe(
+    '',
+  )
   const git = taskImageGitEnvironment(env)
   expect(JSON.stringify(git)).not.toContain('original-private-password')
   expect(Object.values(git)).toContain('http.followRedirects')
   expect(Object.values(git)).toContain('credential.useHttpPath')
   expect(() =>
-    taskImageGitEnvironment({ AW_GIT_CREDENTIAL_BINDINGS: env.AW_GIT_CREDENTIAL_BINDINGS }),
+    taskImageGitEnvironment({ AW_GIT_RUNTIME_BINDINGS: env.AW_GIT_RUNTIME_BINDINGS }),
   ).toThrow('secret-unavailable')
+  // RFC-370 acceptance (2026-10-17): CrewStation gives every task container the
+  // project's configuration as environment, so the deployment's public binding
+  // JSON is present even for commands that carry no credentials. It is never
+  // read as runtime bindings: such a command runs without Git credentials
+  // instead of failing with `hosted-git-credential-bindings-invalid`.
+  expect(taskImageGitEnvironment({ AW_GIT_CREDENTIAL_BINDINGS: bindings() })).toEqual({})
+  expect(taskImageGitEnvironment({ ...env, AW_GIT_CREDENTIAL_BINDINGS: bindings() })).toEqual(git)
 })
 
 test('SSH request identity includes the exact port, account and shell-quoted repository', async () => {
@@ -228,7 +235,7 @@ process.exit(17);
       ...process.env,
       PATH: `${root}:${process.env.PATH}`,
       SSH_FIXTURE_RECEIPT: receipt,
-      AW_GIT_CREDENTIAL_BINDINGS: publicEnv.AW_GIT_CREDENTIAL_BINDINGS as string,
+      AW_GIT_RUNTIME_BINDINGS: publicEnv.AW_GIT_RUNTIME_BINDINGS as string,
       AW_GIT_AUTH_0: 'synthetic-private-key',
     }
     expect(
