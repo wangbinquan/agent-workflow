@@ -908,9 +908,19 @@ async function composePostgresqlProviderSession(
     closeParticipantId: 'maintenance-final-close',
     service: maintenanceService,
   })
-  const mcpRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
+  // RFC-370 — the service's first start recovers boot sessions, which writes.
+  // Binding it lazily keeps that out of composition: a hosted standby instance
+  // starts it when its activation-gated runtime handle starts, as it does for
+  // every other background owner (an eager pause runs the recovery at boot and
+  // fails there without the execution lease). The start runs the same
+  // start → pause → resume sequence the eager binding ran, only later.
+  const mcpRuntimeBindings = createLazyPausableDaemonRuntimeServiceBindings({
     runtimeId: 'mcp-runtime-tests',
     closeParticipantId: 'mcp-runtime-tests-final-close',
+    start: async () => {
+      await runtime.mcpRuntimeTests.pause()
+      await runtime.mcpRuntimeTests.resume()
+    },
     service: runtime.mcpRuntimeTests,
   })
   const taskExecutionBindings = await _bindTaskExecutionProviderBackground(
