@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1649,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 27245,
+    "recursiveFields": 27264,
     "symbols": 1237
   },
   "entries": [
@@ -147082,7 +147082,7 @@
       "budget": {
         "maxMethods": 9,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 137,
+        "maxTransitiveLeafFields": 141,
         "maxUnionVariants": 50
       },
       "consumerEdgeIds": [
@@ -147335,6 +147335,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:parent.commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -147411,6 +147418,13 @@
           ],
           "fieldPath": "$call.$parameter:parent.commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -147748,6 +147762,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$return.commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -147824,6 +147845,13 @@
           ],
           "fieldPath": "$call.$return.commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -147929,7 +147957,7 @@
             "import:aca00230c3b17c6913b4"
           ],
           "name": "commitPrepared",
-          "signatureDigest": "sha256:fe506a08b7e32a1128d074645ea27a50ef92a2ae8aeeddb43de6d8b78bae77ad"
+          "signatureDigest": "sha256:0c4c86489c65e21a635f8a5f2591cdd225bc87f67f9b88fc2aecc26b9b8a98f7"
         },
         {
           "consumerEdgeIds": [
@@ -148003,7 +148031,7 @@
       "budget": {
         "maxMethods": 10,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 142,
+        "maxTransitiveLeafFields": 146,
         "maxUnionVariants": 50
       },
       "consumerEdgeIds": [
@@ -148314,6 +148342,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:factory.$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -148393,6 +148428,13 @@
           ],
           "fieldPath": "$call.$parameter:factory.$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -148738,6 +148780,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$return.commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -148817,6 +148866,13 @@
           ],
           "fieldPath": "$call.$return.commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -148931,7 +148987,7 @@
             "import:7e976b837118a9142b3c"
           ],
           "name": "commitPrepared",
-          "signatureDigest": "sha256:fe506a08b7e32a1128d074645ea27a50ef92a2ae8aeeddb43de6d8b78bae77ad"
+          "signatureDigest": "sha256:0c4c86489c65e21a635f8a5f2591cdd225bc87f67f9b88fc2aecc26b9b8a98f7"
         },
         {
           "consumerEdgeIds": [
@@ -149849,7 +149905,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 29,
+        "maxTransitiveLeafFields": 31,
         "maxUnionVariants": 13
       },
       "consumerEdgeIds": [
@@ -149907,6 +149963,11 @@
             "import:cabef91250a5f2a23a04"
           ],
           "fieldPath": "$method:commitPrepared.$parameter:input.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commitPrepared.$parameter:input.preparedTree",
           "type": "string"
         },
         {
@@ -149974,6 +150035,11 @@
           ],
           "fieldPath": "$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -150065,7 +150131,7 @@
             "import:cabef91250a5f2a23a04"
           ],
           "name": "commitPrepared",
-          "signatureDigest": "sha256:603f0dd4cc549b371a9671afd23fadc19ba208560eadb5cc3169ad160ea2bcd1"
+          "signatureDigest": "sha256:50ba64bed1601047762e7a5d524af66621f6fcdd22262c303e2ed419bcab6a0d"
         },
         {
           "consumerEdgeIds": [
@@ -150094,7 +150160,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:83447f9f111eba65e4443f9107c981e5a71130bba27c80ae0090f2ff85e6fbbe",
+      "signatureDigest": "sha256:2c6ef3bb5c362d5ed3e6be349e19ed99507b78ef58a6c76066f986c479def566",
       "status": "target-context-current-surface",
       "symbol": "RepositoryCommitCandidateParticipant",
       "transaction": "caller-tx",
@@ -151543,7 +151609,7 @@
       "budget": {
         "maxMethods": 10,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 143,
+        "maxTransitiveLeafFields": 147,
         "maxUnionVariants": 50
       },
       "consumerEdgeIds": [
@@ -151868,6 +151934,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:selected.$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -151964,6 +152037,13 @@
           ],
           "fieldPath": "$call.$parameter:selected.$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -152376,6 +152456,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$return.$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -152472,6 +152559,13 @@
           ],
           "fieldPath": "$call.$return.$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -152605,7 +152699,7 @@
             "import:baa4367c7a8c8c97002e"
           ],
           "name": "commitPrepared",
-          "signatureDigest": "sha256:fe506a08b7e32a1128d074645ea27a50ef92a2ae8aeeddb43de6d8b78bae77ad"
+          "signatureDigest": "sha256:0c4c86489c65e21a635f8a5f2591cdd225bc87f67f9b88fc2aecc26b9b8a98f7"
         },
         {
           "consumerEdgeIds": [
@@ -157833,6 +157927,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.preparedTree",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.receipt.excludedPaths",
           "type": "readonly string[]"
         },
@@ -157868,7 +157967,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:64f8bee2cfb1f66307e3a5a99df79404f0b746799454a88689489834dfa3018e",
+      "signatureDigest": "sha256:78e3e5e9d0dacf88a7cbe71aa85916f795bc68ee8c5d18ae3f85bbf3082921e8",
       "status": "target-context-current-surface",
       "symbol": "PrepareRepositoryCommitResult",
       "transaction": "none",
@@ -158237,7 +158336,7 @@
       "budget": {
         "maxMethods": 9,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 71,
+        "maxTransitiveLeafFields": 73,
         "maxUnionVariants": 25
       },
       "consumerEdgeIds": [
@@ -158555,6 +158654,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "fieldPath": "$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "$method:bind.$return.commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -158648,6 +158754,13 @@
           ],
           "fieldPath": "$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "fieldPath": "$method:bind.$return.commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -158773,7 +158886,7 @@
             "import:880337bfbd0ecfb25957"
           ],
           "name": "commitPrepared",
-          "signatureDigest": "sha256:fe506a08b7e32a1128d074645ea27a50ef92a2ae8aeeddb43de6d8b78bae77ad"
+          "signatureDigest": "sha256:0c4c86489c65e21a635f8a5f2591cdd225bc87f67f9b88fc2aecc26b9b8a98f7"
         },
         {
           "consumerEdgeIds": [
@@ -158885,7 +158998,7 @@
       "budget": {
         "maxMethods": 8,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 68,
+        "maxTransitiveLeafFields": 70,
         "maxUnionVariants": 25
       },
       "consumerEdgeIds": [
@@ -159138,6 +159251,13 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "commitOperations.$method:commitPrepared.$parameter:input.preparedTree",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [],
           "fieldPath": "commitOperations.$method:commitPrepared.$parameter:input.verification.$variant:0",
           "type": "'normal'"
@@ -159214,6 +159334,13 @@
           ],
           "fieldPath": "commitOperations.$method:prepare.$return.$variant:0.ok",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "commitOperations.$method:prepare.$return.$variant:0.preparedTree",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -159314,7 +159441,7 @@
             "import:ce2def67b1209d2380a6"
           ],
           "name": "commitPrepared",
-          "signatureDigest": "sha256:fe506a08b7e32a1128d074645ea27a50ef92a2ae8aeeddb43de6d8b78bae77ad"
+          "signatureDigest": "sha256:0c4c86489c65e21a635f8a5f2591cdd225bc87f67f9b88fc2aecc26b9b8a98f7"
         },
         {
           "consumerEdgeIds": [
@@ -215631,7 +215758,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4dd8d10da6c8a7e9a399a801b8308bb84a790d58bcb5a7c5f2fc8ce264a52f24",
+  "sourceDigest": "sha256:c9ff755fc6ce5738e1c51476def7f015d408f55f36b0e744d78b13bb5fbc8e2f",
   "targetContexts": [
     "collaboration",
     "development-automation",
