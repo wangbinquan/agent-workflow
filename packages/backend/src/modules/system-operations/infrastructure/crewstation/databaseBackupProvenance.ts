@@ -2,6 +2,11 @@
 // installed operation. A migrated SQLite database cannot pass by lacking archive
 // files. A database restored from a hosted backup names that backup, which is
 // then retained (never pruned) for the lifetime of the restored generation.
+//
+// The installing operation keeps the contract digest of the schema it installed;
+// later expand-only migrations advance only the generation's digest. Provenance
+// is the source both rows name, not that install-time digest (requiring the two
+// digests to match failed every installation upgraded after it was installed).
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { POSTGRESQL_METADATA_SCHEMA } from '@/platform/persistence/postgresqlSchema'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
@@ -14,7 +19,7 @@ export async function readHostedDatabaseBackupProvenance(
   const rows = await runtime
     .providerPool()
     .unsafe(
-      `SELECT g.source_generation_id AS generation_source, o.source_generation_id AS operation_source FROM "${POSTGRESQL_METADATA_SCHEMA}".database_generations g JOIN "${POSTGRESQL_METADATA_SCHEMA}".logical_copy_operations o ON o.operation_id = g.operation_id WHERE g.generation_id = $1 AND g.state = 'active' AND g.contract_digest = $2 AND o.contract_digest = g.contract_digest AND o.stage IN ('activated', 'finalized')`,
+      `SELECT g.source_generation_id AS generation_source, o.source_generation_id AS operation_source FROM "${POSTGRESQL_METADATA_SCHEMA}".database_generations g JOIN "${POSTGRESQL_METADATA_SCHEMA}".logical_copy_operations o ON o.operation_id = g.operation_id WHERE g.generation_id = $1 AND g.state = 'active' AND g.contract_digest = $2 AND o.stage IN ('activated', 'finalized')`,
       [runtime.generationId, contract.digest],
     )
   if (rows.length !== 1 || rows[0]!.generation_source !== rows[0]!.operation_source)

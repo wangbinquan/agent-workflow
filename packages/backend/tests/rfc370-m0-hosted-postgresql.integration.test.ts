@@ -23,7 +23,10 @@ import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/d
 import { authLoginPolicy } from '@/db/schema'
 import { prepareCrewStationDatabase } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createDatabaseApplicationConfiguration } from '@/modules/system-operations/infrastructure/databaseApplicationConfiguration'
+import { readHostedDatabaseBackupProvenance } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupProvenance'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { POSTGRESQL_METADATA_SCHEMA } from '@/platform/persistence/postgresqlSchema'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
 const PROJECT = 'agent-workflow'
@@ -75,6 +78,47 @@ if (providers.includes('postgresql')) {
     await emptyDatabase()
     await expect(serve(PROJECT)).rejects.toMatchObject({ code: 'postgresql-schema-not-current' })
   }, 120_000)
+
+  // RFC-370 v3 acceptance: hosted backups failed on the real M0 → v3 database with
+  // `hosted-backup-installation-provenance-missing`. Its installing operation keeps
+  // the M0 schema digest, while the v3 Job advanced only the generation's digest,
+  // and provenance required the two to match.
+  test('an installation upgraded after it was installed keeps its hosted backup provenance', async () => {
+    await emptyDatabase()
+    await migrateForDeployment(jobEnv(PROJECT))
+    const meta = `"${POSTGRESQL_METADATA_SCHEMA}"`
+    const probe = createPostgresqlDatabaseRuntime({
+      config: PostgresqlDatabaseConfigSchema.parse({ provider: 'postgresql', urlEnv }),
+      generationId: 'dbg_rfc370_provenance_probe',
+    })
+    const [active] = await probe
+      .providerPool()
+      .unsafe(`SELECT generation_id FROM ${meta}.database_generations WHERE state = 'active'`)
+    await probe.close()
+    const runtime = createPostgresqlDatabaseRuntime({
+      config: PostgresqlDatabaseConfigSchema.parse({ provider: 'postgresql', urlEnv }),
+      generationId: String(active!.generation_id),
+    })
+    try {
+      const contract = buildLogicalSchemaContract()
+      const pool = runtime.providerPool()
+      expect(await readHostedDatabaseBackupProvenance(runtime, contract)).toEqual([])
+      // As an earlier release's installation leaves it.
+      await pool.unsafe(`UPDATE ${meta}.logical_copy_operations SET contract_digest = $1`, [
+        `sha256:${'0'.repeat(64)}`,
+      ])
+      expect(await readHostedDatabaseBackupProvenance(runtime, contract)).toEqual([])
+      // Rows that do not name the same hosted source still prove nothing.
+      await pool.unsafe(
+        `UPDATE ${meta}.database_generations SET source_generation_id = 'dbg_standalone_sqlite'`,
+      )
+      await expect(readHostedDatabaseBackupProvenance(runtime, contract)).rejects.toThrow(
+        'hosted-backup-installation-provenance-missing',
+      )
+    } finally {
+      await runtime.close()
+    }
+  }, 300_000)
 
   test('the Job installs, registers and seeds once; the instance verifies and writes; another service is refused', async () => {
     await emptyDatabase()
