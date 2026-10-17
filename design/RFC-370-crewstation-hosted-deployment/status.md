@@ -2,15 +2,15 @@
 
 > 唯一的进度记录。设计见 [v2 重设计](./redesign-v2-20261014.md)，其中 §9 是 2026-10-16 接手审视与 v3 修订（取代 §5.2 及旧 status 中与之冲突的实现细节）；v2 M2/M3 在制品的旧记录逐字归档在 [status-archive-m2m3-20261016.md](./status-archive-m2m3-20261016.md)；本目录其余文档是 v1 历史。
 
-| 步骤                         | 状态                       | 证据                                                               |
-| ---------------------------- | -------------------------- | ------------------------------------------------------------------ |
-| P1 单机统一                  | Done                       | 见下方「P1」                                                       |
-| M0 控制面上线                | Done                       | 见下方「M0」                                                       |
-| v3 修订实现（§9.2 V1～V13）  | 实现与用例完成，集中验证中 | 见下方「v3 修订实施」                                              |
-| M1 远程执行闭环              | In Progress                | 源码已上 main；实机验收待执行                                      |
-| M2 能力等价                  | In Progress                | 实机验收待执行                                                     |
-| M3 事件与运维                | In Progress                | 实机验收待执行                                                     |
-| CS RFC-040 / RFC-042（附属） | In Progress                | CS `61478743`、`516b83a1` 已推送且准确 SHA CI 成功；实机验收待执行 |
+| 步骤                         | 状态                       | 证据                                                                           |
+| ---------------------------- | -------------------------- | ------------------------------------------------------------------------------ |
+| P1 单机统一                  | Done                       | 见下方「P1」                                                                   |
+| M0 控制面上线                | Done                       | 见下方「M0」                                                                   |
+| v3 修订实现（§9.2 V1～V13）  | 实现与用例完成，集中验证中 | 见下方「v3 修订实施」                                                          |
+| M1 远程执行闭环              | In Progress                | 源码已上 main；实机验收待执行                                                  |
+| M2 能力等价                  | In Progress                | 实机验收待执行                                                                 |
+| M3 事件与运维                | In Progress                | 实机验收待执行                                                                 |
+| CS RFC-040 / RFC-042（附属） | In Progress                | CS `61478743`、`516b83a1`、`8d127df9` 已推送且准确 SHA CI 成功；实机验收待执行 |
 
 ## 2026-10-16 v3 修订实施（接手）
 
@@ -29,7 +29,15 @@
 - **V11 迁移收敛**：全部未发布迁移收敛为 SQLite `0259_rfc370_hosted_deployment` / PostgreSQL `0035_rfc370_hosted_deployment`（只增，紧随已发布的 0258 / 0034）；schema **216 source / 210 active / 6 archive-only**，逻辑摘要 `sha256:be5ad8b0edbc7bad31d4b3005824aef9c662efa8fb86747702f24f69ff640203`。已推送但未发布的旧 M1 0259 / 0035 被替换：应用过旧 0259 / 0035 的开发库须重建（正式 M0 库停在 0034，不受影响）。
 - **V12 / V13（CS）**：CS `61478743`（RFC-040 材料固定引用释放与 native 探针 v2；RFC-042 放弃动作、第二次恢复槽位校验、verify 可重试与应用层预检）与 `516b83a1`（能力探针对模型偶发未按指令回显重试 3 次，每次全新 Agent 身份）均已推送，准确 SHA CI `38974772647`、`38980577018` 全部成功。
 
-集中验证（进行中，见下节更新）。
+集中验证（本地，候选 `166e918bd`）：backend 四分片（SQLite + PostgreSQL）首轮 26,107 项通过、46 项失败，逐项修复后失败文件复跑全绿（只剩依赖提交后投影的账本项）；架构守卫在 census 投影后 839 / 0；frontend 7216 项（修 2 项后全绿）、shared 2324 项、system-mocks 91 项；三包 tsc、eslint（含 promises）、prettier、depcheck 通过。
+
+提交与 CI：`166e918bd`（v3 主体，含 Codex 产出）→ `7ea27f56c`（census 投影与一次性增长许可）→ `bb0b74ea5`（归档 status 的相对链接、gitleaks 对测试夹具 Secret 引用的放行）→ `50ca1e0a7`（投影到 `bb0b74ea5` 并退役 18 条增长许可）→ `3387c37ed`（发布到既有镜像分支，去掉 `start_sha` / `force`）。主 CI：`7ea27f56c` 的 `38999520956` 红在 Markdown link check、gitleaks（均由 `bb0b74ea5` 修复）与 backend 16/24 的两条他人用例 5s 超时（RFC-213、RFC-075，同分片邻居正常，判为 runner 卡顿）；`bb0b74ea5` 的 `39000900443` 红在 14/24 的 T17 过期许可（`50ca1e0a7` 修复）和 6/24 的本 RFC `rfc370-m2-plugin-generations` 两条 SQLite 用例 5s 超时——同次运行里该文件的 SQLite 用例耗时 1–5.7s（其他运行 14–28ms），紧随其后的 PostgreSQL 变体耗时正常，判为约 15s 的 runner 卡顿，已按 dev-gotchas 给该文件显式 15s 墙钟预算；`50ca1e0a7` 的 `39001168574`、`3387c37ed` 的 `39001431851`（49 个 job）全部 success。
+
+## 2026-10-17 托管实机验收（进行中）
+
+- **任务镜像**：CS 运行镜像的源码构建器资源固定（500m / 1 Gi / 3 Gi 缓存），AW 二进制构建实测峰值内存约 2.15 GB，平台内构建被驱逐（缓存超 3 Gi）。改为运维在平台外从准确提交构建、作为「已有镜像」登记并做任务用途验证，步骤写入 [docs/crewstation-deployment.md](../../docs/crewstation-deployment.md)。`3387c37ed` 的任务镜像 `runtime/agent-workflow/task@sha256:860b8932…`（底座 `7701acd4`）已登记：镜像 `01a1480f-2e12-7000-bff7-3cfdcce5ccc6`，修订 3 `01a1483d-38a4-…`，版本 `01a1483d-402a-7000-8067-e7737ee88bba`。
+- **CS 缺陷（已修）**：任务镜像验证在真实平台上 200ms 内一律以「验证已取消或租约丢失」结束——自 CS `463f24d8` 起本机再无验证通过。Runner 探针经 task-runtime 的嵌套准入回调验证心跳，嵌套作用域只带 task-runtime 自己的准入键，心跳核对 runtime-environment 的准入必然失败。CS `8d127df9` 把心跳绑定到原验证回调的上下文（回归用例在嵌套准入中回调心跳），准确 SHA CI `39007600564` 九项全部成功，已部署本机；之后验证越过心跳进入环境创建。
+- **阻塞（待用户决定，涉及共享平台）**：①本机平台的运行镜像底座被固定在 `CS_BASE_IMAGE_TAG=rfc027-final-0c8be5fd`（2026-09-27 RFC-028 验收时的 Runner）。AW 的 Git 凭据以项目 Secret 注入命令环境，平台要求 Runner 声明 `commandSecretEnvVersion`（CS `92889e87` 起），该底座上的任务镜像无法运行带凭据的命令；需把底座改回当前 Runner（缺省 `dev`，`sha256:5a748ec6…`）后重建任务镜像。修改共享配置被权限策略拦截。②任务用途验证使用平台缺省任务档位（`coding-medium`，1 CPU），单节点 CPU 请求已占 9.1 / 10 核，验证 Pod 因 `Insufficient cpu` 无法调度；占用方主要是其他 session 的服务与任务。
 
 ## P1 单机统一
 
@@ -85,6 +93,6 @@ M1 三个提交 `962dd1e5c` / `2b92ec1b1` / `879cb0743` 已随并发 session 的
 
 ## 环境
 
-- 本机 CS：docker-desktop kind 集群，命名空间 `crewstation-system`；本机 GitLab `aw-local-gitlab`（127.0.0.1:8929）。CS 已部署 `61478743`。
+- 本机 CS：docker-desktop kind 集群，命名空间 `crewstation-system`；本机 GitLab `aw-local-gitlab`（127.0.0.1:8929）。CS 已部署 `8d127df9`。
 - AW 项目 `01a13e6d-3e00-7000-9e3c-6a69d77164b3`、服务 `01a13e6d-3e01-7000-ab4c-e0f049700850`（命名空间 `cs-agent-workflow`，`agent-workflow.cs.localhost`）；正式 M0 v0.5.0 蓝绿两槽保持运行，验收不停止、不删除它。
-- 单节点 CPU 请求接近上限（约 0.3 核余量），磁盘约 9.8 GB 可用；任务档位用 100m 的 `rfc003-integration-qa`。
+- 单节点 CPU 请求接近上限（2026-10-17 为 9.1 / 10 核），kind 节点所在磁盘约 4.6 GB 可用；任务档位用 100m 的 `rfc003-integration-qa`。验收仓库为本机 GitLab 项目 550 `crewstation/aw-rfc370-acceptance`，凭据经 `AW_GIT_CREDENTIAL_BINDINGS` 绑定项目 Secret。

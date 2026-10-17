@@ -118,4 +118,4 @@ agent-workflow downgrade-audit rfc-295   # 输出 OK / BLOCKED
 - **运维 dashboards / alerts**：本仓**没有**任何监控栈接线（零 Prometheus / Grafana / alert
   规则）。这类产物的形态完全取决于部署方自己的监控系统，凭空写一份等于交付一份没人会用的
   文档——RFC-310 T111② 据此登记为**不做**，需要时按实际监控栈另立 RFC。
-- **集群 / 滚动发布 / 蓝绿**：产品是单进程自托管 daemon，不存在这些形态。
+- **集群 / 滚动发布 / 蓝绿**：单机形态是单进程自托管 daemon，不存在这些形态；CrewStation 托管形态（RFC-370）的发布、切流、回退与恢复见 [crewstation-deployment.md](./crewstation-deployment.md)。

@@ -3,7 +3,7 @@
 // to the generation (registered in one journal transaction, no per-file JSON
 // rewrite); retirement releases the scope with the generation row and the
 // hosted object maintenance job unpins them.
-import { expect, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { hostedObjectPublications, pluginArtifactGenerations, plugins } from '@/db/schema'
 import { createHostedBackupReleaseHorizon } from '@/modules/system-operations/infrastructure/crewstation/backupReleaseHorizon'
@@ -16,6 +16,14 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
+
+// Wall-clock allowance, not tolerance for a slower implementation: these
+// cases take 14–28 ms on SQLite and ~350 ms on PostgreSQL, but CI run
+// 39000900443 (shard 6/24) hit a ~15 s runner stall in which the same SQLite
+// cases took 1–5.7 s and two crossed bun's default 5000 ms (the PostgreSQL
+// variants right after ran at normal speed). See docs/dev-gotchas.md on tests
+// that need an explicit budget under shared-runner load.
+setDefaultTimeout(15_000)
 
 describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
   const fixture = () => {
