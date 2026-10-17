@@ -77,6 +77,71 @@ test('transient HTTP errors repeat exactly the same mutation body and request ke
   ])
 })
 
+// RFC-370 acceptance (2026-10-17): a task failed at its second workspace command
+// with `409 stale_generation` while the lease was still held — the platform
+// refuses fenced calls until each renewal reaches its object-write control.
+test('a stale-generation refusal is retried with the same body; a persistent one surfaces; disabled retries stay single', async () => {
+  const stale = () =>
+    Response.json(
+      { error: 'conflict', message: 'stale', details: { code: 'stale_generation' } },
+      { status: 409 },
+    )
+  const bodies: string[] = []
+  const api = createCrewStationPlatformApi({
+    baseUrl: 'http://platform',
+    sleep: async () => undefined,
+    fetch: (async (_url, init) => {
+      bodies.push(String(init?.body))
+      return bodies.length === 1 ? stale() : Response.json({ id: 'accepted' })
+    }) as typeof fetch,
+  })
+  expect(await api.post('/subtasks', { requestKey: 'one', fence: { epoch: 4 } })).toEqual({
+    id: 'accepted',
+  })
+  expect(new Set(bodies)).toEqual(new Set(['{"requestKey":"one","fence":{"epoch":4}}']))
+  expect(bodies).toHaveLength(2)
+
+  let calls = 0
+  const lost = createCrewStationPlatformApi({
+    baseUrl: 'http://platform',
+    attempts: 3,
+    sleep: async () => undefined,
+    fetch: (async (_url, _init) => {
+      calls += 1
+      return stale()
+    }) as typeof fetch,
+  })
+  await expect(lost.post('/subtasks', { requestKey: 'two' })).rejects.toMatchObject({
+    status: 409,
+    code: 'stale_generation',
+  })
+  expect(calls).toBe(3)
+
+  calls = 0
+  await expect(lost.post('/claim-next', {}, { retry: false })).rejects.toMatchObject({
+    code: 'stale_generation',
+  })
+  expect(calls).toBe(1)
+
+  // Other conflicts are answers, not transient refusals.
+  calls = 0
+  const conflict = createCrewStationPlatformApi({
+    baseUrl: 'http://platform',
+    sleep: async () => undefined,
+    fetch: (async (_url, _init) => {
+      calls += 1
+      return Response.json(
+        { error: 'conflict', message: 'changed', details: { code: 'idempotency_conflict' } },
+        { status: 409 },
+      )
+    }) as typeof fetch,
+  })
+  await expect(conflict.post('/subtasks', { requestKey: 'three' })).rejects.toMatchObject({
+    code: 'idempotency_conflict',
+  })
+  expect(calls).toBe(1)
+})
+
 test('SSE window rotation keeps complete events and leaves partial framing for cursor refill', async () => {
   const api = createCrewStationPlatformApi({
     baseUrl: 'http://platform',

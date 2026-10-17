@@ -7,6 +7,13 @@
 // only moves JSON, bounds every call, and retries what the platform declares
 // safe to retry (rate limits and unavailability, always with the caller's
 // unchanged requestKey).
+//
+// `409 stale_generation` is retried the same way: the platform answers it while
+// the latest lease renewal is still being propagated to its object-write control
+// (every renewal advances it), so a call carrying the current fence can be
+// refused for a moment and succeed unchanged. A fence that really lost the lease
+// keeps failing and the error surfaces after the bounded attempts; the authority
+// loop observes the loss on its own (RFC-370 acceptance, 2026-10-17).
 
 import { timeoutSignal } from '@/util/timeoutSignal'
 
@@ -145,7 +152,17 @@ export function createCrewStationPlatformApi(
         await sleep(retryAfterMs(response, attempt))
         continue
       }
-      throw await errorOf(response)
+      const error = await errorOf(response)
+      if (
+        response.status === 409 &&
+        error.code === 'stale_generation' &&
+        attempt + 1 < totalAttempts
+      ) {
+        lastError = error
+        await sleep(retryAfterMs(response, attempt))
+        continue
+      }
+      throw error
     }
     throw lastError instanceof Error ? lastError : new Error('CrewStation request failed')
   }
