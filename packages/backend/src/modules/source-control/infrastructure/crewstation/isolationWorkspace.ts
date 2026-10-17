@@ -67,7 +67,9 @@ export function createHostedIsolationWorkspaces(
         submodulePresence: (reference) => call('submodulePresence', [reference]),
         changedFiles: (reference, baseline) => call('changedFiles', [reference, baseline]),
         blobHashes: (reference, paths) => call('blobHashes', [reference, paths]),
-        snapshot: (workspace, _log, paths) => call('snapshot', [workspace, null, paths]),
+        // The request is JSON: a positional `undefined` would arrive as null, so
+        // "no extra forced paths" is sent as the empty list it means.
+        snapshot: (workspace, _log, paths) => call('snapshot', [workspace, null, paths ?? []]),
         async merge(workspace, trees, _log, resolveSubConflict) {
           if (resolveSubConflict === undefined) return call('merge', [workspace, trees])
           const answers: [string, boolean][] = []

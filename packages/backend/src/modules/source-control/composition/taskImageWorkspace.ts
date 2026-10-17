@@ -312,10 +312,11 @@ export async function executeTaskImageWorkspaceOperation(
         case 'blobHashes':
           return scope.blobHashes(...(input.args as Parameters<typeof scope.blobHashes>))
         case 'snapshot':
+          // Arguments arrive as JSON, which carries an absent optional list as null.
           return scope.snapshot(
             input.args[0] as Parameters<typeof scope.snapshot>[0],
             undefined,
-            input.args[2] as string[] | undefined,
+            (input.args[2] as string[] | null | undefined) ?? undefined,
           )
         case 'merge':
           return scope.merge(...(input.args as Parameters<typeof scope.merge>))
