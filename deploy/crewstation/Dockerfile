@@ -13,8 +13,14 @@ RUN bun install --frozen-lockfile \
  && cp "$(ls dist/agent-workflow-linux-* | grep -v -- '-e2e-' | head -n 1)" /agent-workflow
 
 FROM debian:bookworm-slim
-RUN apt-get -o Acquire::Retries=5 update \
- && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates \
+# Retry the whole apt step on transient mirror failures (see task.Dockerfile).
+RUN for attempt in 1 2 3 4 5; do \
+      apt-get -o Acquire::Retries=5 update \
+      && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates \
+      && break; \
+      echo "apt attempt $attempt failed" >&2; sleep $((attempt * 10)); \
+    done \
+ && dpkg -s ca-certificates >/dev/null \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 10001 agent-workflow
 COPY --from=build /agent-workflow /usr/local/bin/agent-workflow

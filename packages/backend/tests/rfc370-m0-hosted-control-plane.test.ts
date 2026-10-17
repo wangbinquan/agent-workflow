@@ -582,13 +582,20 @@ test('the shipped Manifest template and image start the hosted control plane', (
   expect(taskDockerfile.match(/^FROM .+$/gm)?.at(-1)).toBe('FROM ${CS_BASE_IMAGE}')
   expect(taskDockerfile).not.toMatch(/^(ENTRYPOINT|CMD)\s/m)
   expect(taskDockerfile).toContain('/usr/local/bin/agent-workflow')
-  // Operators build both images from a pinned commit; one failed mirror fetch
-  // must not fail the whole build (2026-10-17 acceptance: repeated apt exit 100).
+  // Both images are built from a pinned commit (the service image by the
+  // platform, the task image by the operator); a dropped mirror connection or an
+  // HTTP 500 EOF, which Acquire::Retries does not retry, must not fail the build
+  // (2026-10-17 acceptance: repeated apt exit 100 in both builds).
   for (const text of [dockerfile, taskDockerfile]) {
     const aptLines = text
       .split('\n')
       .filter((entry) => /\bapt-get\b/.test(entry) && /\b(update|install)\b/.test(entry))
     expect(aptLines.length, 'precondition: both images still install packages').toBe(2)
     for (const line of aptLines) expect(line).toContain('apt-get -o Acquire::Retries=')
+    // The whole step is retried, and the packages are verified afterwards so an
+    // exhausted retry loop still fails the build instead of shipping without them.
+    expect(text).toMatch(
+      /for attempt in 1 2 3 4 5; do[\s\S]*&& break;[\s\S]*done[\s\S]*&& dpkg -s /,
+    )
   }
 })
