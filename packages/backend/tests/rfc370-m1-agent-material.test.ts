@@ -146,7 +146,7 @@ test('Agent material includes Git identity and Secret references in its frozen r
         kind: 'http',
         url: 'https://git.example.test/team/repo.git',
         username: 'developer',
-        passwordSecretId: '01a1428d-05f5-7000-9af3-aef7382bfe08',
+        passwordSecretId: '01a1428d-05f5-7000-9af3-aef7382bfe08', // gitleaks:allow — a CS Secret resource id
       },
     ]),
   )

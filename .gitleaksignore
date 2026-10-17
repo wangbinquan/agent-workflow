@@ -98,3 +98,7 @@ a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-p
 # Preserve the actual document; exempt only its two published fingerprints.
 f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtures/rfc372-real-mindmap.json:generic-api-key:531
 f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtures/rfc372-real-mindmap.json:generic-api-key:532
+# RFC-370 M1 — the hosted Git credential binding fixture names a CrewStation
+# Secret by its resource UUID (`passwordSecretId`); it is a reference, not a
+# credential. The line also carries `gitleaks:allow`.
+166e918bdf5584a1d2b8773d5d2a145386a14f93:packages/backend/tests/rfc370-m1-agent-material.test.ts:generic-api-key:149
