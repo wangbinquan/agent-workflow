@@ -38568,7 +38568,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/platform/crewstation/platformApi.ts",
@@ -38577,7 +38577,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/crewstation/platformApi.ts#createCrewStationPlatformApi",
@@ -49172,7 +49171,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d62b0f658188bf944b4843d870c6c2cfb580da2bfc035df748eb114049454adc",
+  "sourceDigest": "sha256:11efc2dfb59b03a6ab747e8dacaa616a8b47ba39555628a4fe718ebee5576221",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
