@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, posix } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { sha256Hex } from '@/util/hash'
 import type {
@@ -7,6 +7,7 @@ import type {
   PlannedReviewArtifact,
 } from '../application/ports/humanGateArtifactStore'
 import type { HumanGateArtifactSnapshot } from '../application/ports/humanGateOperationStore'
+import { planReviewArtifact } from '../application/reviewArtifactPlan'
 import { HumanGateOperationError } from '../domain/humanGateOperation'
 
 function absolutePath(appHome: string, relativePath: string): string {
@@ -51,29 +52,7 @@ function finalizeReceipt(artifact: HumanGateArtifactSnapshot): string {
 export class FsHumanGateArtifactStore implements HumanGateArtifactStore {
   constructor(private readonly appHome: string) {}
 
-  planReviewArtifact(input: {
-    operationId: string
-    artifactKey: string
-    finalPath: string
-    body: string
-  }): PlannedReviewArtifact {
-    const body = bytesOf(input.body)
-    const operationSegment = sha256Hex(input.operationId).slice(0, 24)
-    const artifactSegment = sha256Hex(input.artifactKey).slice(0, 24)
-    return {
-      operationId: input.operationId,
-      artifactKey: input.artifactKey,
-      stagedPath: posix.join(
-        'runs',
-        '.human-gate-staging',
-        operationSegment,
-        `${artifactSegment}.md`,
-      ),
-      finalPath: input.finalPath,
-      sha256: sha256Hex(body),
-      byteSize: body.byteLength,
-    }
-  }
+  readonly planReviewArtifact = planReviewArtifact
 
   stageReviewArtifact(plan: PlannedReviewArtifact, body: string): string {
     const bytes = bytesOf(body)

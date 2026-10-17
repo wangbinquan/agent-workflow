@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 258 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 259 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -581,8 +581,11 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-370 v2: 0257 drops the host write-context and memory distill receipt tables.
     // RFC-370 M0: 0258 adds the hosted configuration document, external identity and skill
     // content tables.
-    // Journal tags begin at 0001, so the reviewed 0258 head contains 258 entries.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(258)
+    // RFC-370 §9.2 V11: 0259 adds every hosted-deployment table (execution
+    // bindings, workspace commands, object publications, recovery requests) in
+    // one additive migration that squashes the unreleased M1-M3 increments.
+    // Journal tags begin at 0001, so the reviewed 0259 head contains 259 entries.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(259)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

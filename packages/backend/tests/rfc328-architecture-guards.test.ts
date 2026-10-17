@@ -117,13 +117,24 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
+    // RFC-370 M1: runNode reaches its process through the selected agent
+    // invocation; each binding's `execute` brackets its act (the native child
+    // submission, or the hosted CS run / adopt) with the durable process effect.
+    'packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
     [
       {
-        callable: 'runNode',
-        // RFC-370: runNode's actual act is the selected execution submission;
-        // the original native primitive remains inside its local participant.
+        callable: 'execute',
         actCallees: new Set(['submit']),
+        observerCallees: new Set(['createProcessEffectAttemptObserver']),
+      },
+    ],
+  ],
+  [
+    'packages/backend/src/modules/task-execution/composition/crewstationAgentInvocation.ts',
+    [
+      {
+        callable: 'execute',
+        actCallees: new Set(['run', 'adopt']),
         observerCallees: new Set(['createProcessEffectAttemptObserver']),
       },
     ],
@@ -275,6 +286,14 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'runtime-management/composition/runtimeDiagnosticTargets: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
   'runtime-management/infrastructure/local/runtimeManagementEffects: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
   'runtime-management/composition/runtimeManagement: packages/backend/src/modules/task-execution/composition/localRuntimeManagement.ts',
+  // RFC-370 M2: the hosted Runtime Management and System Agent families pair
+  // the same RM compositions as their local counterparts above (CS material and
+  // contents instead of native files); retire together with them in A-T7.
+  'runtime-management/composition/crewstationRuntimeManagement: packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
+  'runtime-management/composition/crewstationSystemAgentMaterial: packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
+  'runtime-management/composition/crewstationSystemAgentMaterial: packages/backend/src/modules/task-execution/composition/crewstationSystemAgentRunFamily.ts',
+  'runtime-management/composition/runtimeManagement: packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
+  'runtime-management/composition/systemAgentMaterial: packages/backend/src/modules/task-execution/composition/crewstationSystemAgentRunFamily.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   // RFC-370 H3: standalone binds the neutral SC presence query at this composition.
@@ -356,6 +375,7 @@ function callName(node: ts.CallExpression): string | null {
 
 function namedCallable(node: ts.Node): string | null {
   if (ts.isFunctionDeclaration(node) && node.name !== undefined) return node.name.text
+  if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name)) return node.name.text
   if (
     (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
     ts.isVariableDeclaration(node.parent) &&
@@ -671,12 +691,12 @@ describe('RFC-328 architecture guards', () => {
     expect(
       rfc328GuardViolations(
         fixture(
-          'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
-          'async function runNode() { await localExecution.effect.submit({}) }',
+          'packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
+          'const binding = { async execute() { await native.effect.submit({}) } }',
         ),
       ),
     ).toContain(
-      'unregistered task effect boundary: packages/backend/src/modules/task-execution/application/taskAgentRun.ts#runNode',
+      'unregistered task effect boundary: packages/backend/src/modules/task-execution/composition/agentInvocation.ts#execute',
     )
     const preparationActs = ['prepareDurableRepositoryWorkspace', 'prepareLegacyDeferredWorkspace']
     const preparationPath = 'packages/backend/src/services/task.ts'

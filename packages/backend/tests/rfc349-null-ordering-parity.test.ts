@@ -37,6 +37,11 @@ const srcRoot = resolve(import.meta.dir, '..', 'src')
  * 每条都必须是能在同一个查询里读出来的判据，不是「一般不会为空」。
  */
 const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
+  // RFC-370 v3 V6：中立托管对象发布日志的两处有序读取。
+  'modules/system-operations/infrastructure/crewstation/objectPublications.ts': {
+    scope: '同一个 WHERE 里有 `scope IS NOT NULL`（按 scope 分页的 owner 范围枚举）',
+    releasedAt: '只读 state=releasing 的行；转为 releasing 的同一次更新写入 releasedAt',
+  },
   // RFC-359 W4-B4a：中立文件纳入 PG 执行面后首次被扫到的四处「最新 gate revision」读法，形状相同。
   'modules/collaboration/infrastructure/humanGateOperationJournal.ts': {
     resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',

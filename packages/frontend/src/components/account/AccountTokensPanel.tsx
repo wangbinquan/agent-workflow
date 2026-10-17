@@ -7,10 +7,12 @@ import { api } from '@/api/client'
 import { Card } from '@/components/Card'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { EmptyState } from '@/components/EmptyState'
+import { NoticeBanner } from '@/components/NoticeBanner'
 import { RelativeTime } from '@/components/RelativeTime'
 import { StatusChip } from '@/components/StatusChip'
 import { CreateTokenDialog } from '@/components/account/CreateTokenDialog'
 import { ACTOR_QUERY_KEY, type MeResponse } from '@/hooks/useActor'
+import { isGatewayIdentity } from '@/stores/deployment'
 
 export function AccountTokensPanel({ me }: { me: MeResponse }) {
   const { t } = useTranslation()
@@ -64,6 +66,16 @@ export function AccountTokensPanel({ me }: { me: MeResponse }) {
           </button>
         </div>
       </header>
+      {isGatewayIdentity() && (
+        <NoticeBanner
+          tone="info"
+          size="compact"
+          title={t('account.token.hostedUsageTitle')}
+          testid="token-hosted-usage"
+        >
+          {t('account.token.hostedUsage')}
+        </NoticeBanner>
+      )}
       <Card className="account-tokens-card">
         {tokens.length === 0 ? (
           <EmptyState

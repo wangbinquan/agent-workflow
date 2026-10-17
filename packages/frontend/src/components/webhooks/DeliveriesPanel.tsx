@@ -66,8 +66,18 @@ type TerminalControlAudit = {
   targets: TerminalControlTarget[]
 }
 
+/** RFC-370 v3 — the CrewStation event a delegated delivery came from. */
+type PlatformEventProvenance = {
+  eventId: string
+  eventType: string | null
+  deliveries: { deliveryId: string; attempt: number; receivedAt: number }[]
+}
+
 type DeliveryDetail = DeliveryRow & {
   bodyJson: string | null
+  verificationMethod?: 'direct-signature' | 'cs-delegated'
+  bodyRepresentation?: 'http-bytes' | 'reserialized-json'
+  platformEvent?: PlatformEventProvenance | null
   terminalControl: TerminalControlAudit | null
 }
 
@@ -454,7 +464,54 @@ function DeliveryDetailDialog(props: { id: string; onClose: () => void }) {
                 <code>{detail.data.streamHint ?? t('common.emDash')}</code>
               </dd>
             </div>
+            <div>
+              <dt>{t('webhookDeliveries.detail.verification')}</dt>
+              <dd>
+                {t(`webhookDeliveries.verification.${detail.data.verificationMethod ?? 'unknown'}`)}
+              </dd>
+            </div>
+            <div>
+              <dt>{t('webhookDeliveries.detail.bodySource')}</dt>
+              <dd>
+                {t(`webhookDeliveries.bodySources.${detail.data.bodyRepresentation ?? 'unknown'}`)}
+              </dd>
+            </div>
+            {detail.data.platformEvent && (
+              <div>
+                <dt>{t('hostedEvents.platformEvent')}</dt>
+                <dd>
+                  <code data-testid="webhook-delivery-platform-event">
+                    {detail.data.platformEvent.eventId}
+                  </code>
+                  {detail.data.platformEvent.eventType !== null && (
+                    <> · {detail.data.platformEvent.eventType}</>
+                  )}
+                </dd>
+              </div>
+            )}
+            {detail.data.platformEvent && detail.data.platformEvent.deliveries.length > 0 && (
+              <div>
+                <dt>{t('hostedEvents.platformDeliveries')}</dt>
+                <dd data-testid="webhook-delivery-platform-deliveries">
+                  {detail.data.platformEvent.deliveries.map((delivery) => (
+                    <div key={delivery.deliveryId}>
+                      <code>
+                        {t('hostedEvents.platformDelivery', {
+                          deliveryId: delivery.deliveryId,
+                          attempt: delivery.attempt,
+                        })}
+                      </code>
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            )}
           </dl>
+          {detail.data.verificationMethod === 'cs-delegated' && (
+            <NoticeBanner tone="info" size="compact">
+              {t('webhookDeliveries.delegatedExplanation')}
+            </NoticeBanner>
+          )}
           {detail.data.terminalControl !== null && (
             <section data-testid="webhook-terminal-control-audit">
               <h3 className="webhook-delivery-detail__body-title">

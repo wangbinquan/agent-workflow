@@ -1,4 +1,9 @@
 import type { RepositoryPreviewIndexScope } from './repositoryPreviewIndex'
+import type {
+  CommitPreparedResult,
+  PrepareRepositoryCommitResult,
+  RepositoryCommitPreviewResult,
+} from '../../public/types'
 
 export interface RepositoryGitOptions {
   env?: Record<string, string | undefined>
@@ -44,6 +49,30 @@ export interface SubmoduleEntry {
   pathDepth: number
 }
 
+/** Git options that can cross into another environment (no abort signal). */
+export type RepositoryCommitGitOptions = Omit<RepositoryGitOptions, 'signal'>
+
+/** RFC-370 §9.2 V3 — commit use cases a scope executes where the repository
+ * lives: each is ONE remote operation running the same native function, not
+ * one round trip per Git step. Absent for the native scope. */
+export interface RepositoryCommitWorkspaceOperations {
+  prepare(input: {
+    readonly configuredPatterns: readonly string[]
+    readonly gitOptions?: RepositoryCommitGitOptions
+  }): Promise<PrepareRepositoryCommitResult>
+  commitPrepared(input: {
+    readonly message: string
+    readonly verification: 'normal' | 'artifact'
+    readonly authorName?: string | null
+    readonly authorEmail?: string | null
+    readonly gitOptions?: RepositoryCommitGitOptions
+  }): Promise<CommitPreparedResult>
+  preview(input: {
+    readonly configuredPatterns: readonly string[]
+    readonly gitOptions?: RepositoryCommitGitOptions
+  }): Promise<RepositoryCommitPreviewResult>
+}
+
 /** A complete receiver for local repository effects, including its candidate index. */
 export interface RepositoryGitWorkspaceScope {
   readonly workspaceRef: string
@@ -56,6 +85,7 @@ export interface RepositoryGitWorkspaceScope {
   ): Promise<Result>
   /** Synchronous logical binding; physical effects remain in the methods above. */
   subrepository(relativePath: string): RepositoryGitWorkspaceScope
+  readonly commitOperations?: RepositoryCommitWorkspaceOperations
 }
 
 export interface RepositoryGitWorkspaceFactory {

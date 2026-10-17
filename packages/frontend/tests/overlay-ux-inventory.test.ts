@@ -118,6 +118,12 @@ const OVERLAY_CALLSITES = {
     family: 'access-and-settings',
     count: 1,
   },
+  // RFC-370 v3 V5 — verifying a hosted backup shows its complete restore
+  // reference and the CrewStation restore steps in one Dialog.
+  'components/settings/HostedBackupCard.tsx': {
+    family: 'access-and-settings',
+    count: 1,
+  },
   'components/users/CreateUserDialog.tsx': { family: 'access-and-settings', count: 1 },
   'components/users/EditUserDialog.tsx': { family: 'access-and-settings', count: 1 },
   'components/users/ResetUserPasswordDialog.tsx': {

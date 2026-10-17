@@ -351,7 +351,8 @@ export interface McpRuntimeTestPersistence {
   recoverQuarantined(input: {
     readonly sessionId: string
     readonly turnId: string
-    readonly expectedPid: number
+    readonly expectedPid: number | null
+    readonly expectedSpawnedAt?: number | null
     readonly now: number
   }): Promise<boolean>
   expireTurns(now: number, idleDeadlineAt: number): Promise<McpRuntimeTestExpiredTurnResult>

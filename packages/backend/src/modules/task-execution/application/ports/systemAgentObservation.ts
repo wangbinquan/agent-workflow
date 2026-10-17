@@ -32,6 +32,8 @@ export interface SystemAgentObservationRun {
 
 export interface SystemAgentObservationFactory {
   open(input: {
+    /** Stable identity supplied by transports that can adopt a prior call. */
+    readonly callId?: string
     readonly feature: string
     readonly agentName: string
     readonly protocol: RuntimeKind

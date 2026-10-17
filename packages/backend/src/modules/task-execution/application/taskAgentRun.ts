@@ -39,6 +39,7 @@ import type {
   ClarifyQuestion,
   ClarifyTruncationWarning,
   InventorySnapshot,
+  StartupObservation,
 } from '@agent-workflow/shared'
 import {
   DAEMON_SHUTDOWN_ABORT_REASON,
@@ -932,6 +933,7 @@ export async function runNode(
     let mcpInventorySeen = false
     /** RFC-280 T3 — the runtime's own startup report (claude init), one-shot. */
     let capturedStartupInventory: StartupInventory | null = null
+    let capturedStartupObservation: StartupObservation | null = null
     /**
      * RFC-297 live parity: init-event runtimes report their inventory while the
      * child is still running. Persist the first report immediately so the
@@ -1029,9 +1031,11 @@ export async function runNode(
      * RFC-242 §4.4）。
      */
     const consumeInventoryPayload = async (event: NormalizedEvent): Promise<void> => {
+      if (capturedStartupObservation === null && event.data?.startupObservation !== undefined)
+        capturedStartupObservation = event.data.startupObservation
       const faces = event.data?.inventory?.faces
-      if (faces === undefined) return
-      if (capturedStartupInventory === null) {
+      if (faces === undefined && capturedStartupObservation === null) return
+      if (capturedStartupInventory === null && faces !== undefined) {
         capturedStartupInventory = {
           ...(faces.tools === undefined ? {} : { tools: faces.tools.map((t) => t.key) }),
           ...(faces.agents === undefined ? {} : { agents: faces.agents.map((a) => a.key) }),
@@ -1054,6 +1058,7 @@ export async function runNode(
             freshRun: freshAgentRun,
             declared: injectionDeclared,
             claudeInit: capturedStartupInventory,
+            streamObservation: capturedStartupObservation,
             snapshot: null,
             now: event.timestamp ?? Date.now(),
           }),
@@ -1077,7 +1082,7 @@ export async function runNode(
           })
         }
       }
-      if (declaredMcpServers.size === 0 || mcpInventorySeen || faces.mcps === undefined) return
+      if (declaredMcpServers.size === 0 || mcpInventorySeen || faces?.mcps === undefined) return
       mcpInventorySeen = true
       // 运行时报告的 MCP 可用性仍是运维遥测，不是执行准入判据（RFC-242 原语义）。
       const declaredUnusable = faces.mcps
@@ -1248,20 +1253,20 @@ export async function runNode(
         // parent_session_id=null so the SessionTab parser can bucket parent
         // events against post-run captured child events without ambiguity.
         const evtSessionId = ev.sessionId ?? sessionId ?? null
-        // RFC-297 T5: `startup_inventory` 只由 `drainFinalEvents()` 铸造，任何
-        // stdout 行都解析不出它，而 `node_run_events.kind` 的 enum 里也没有它。
-        // 读进局部常量是必要的：`kind` 是可变属性，窄化跨不进下面的延迟回调。
+        // Inventory has its own durable column, including selected adapters
+        // that deliver it in-stream. Never duplicate that payload as text.
         const persistedKind: PersistedEventKind = ev.kind === 'startup_inventory' ? 'text' : ev.kind
         if (callAccepted) usageWriter.observeLine(ev.rawLine)
-        stdoutEvents.push({
-          ...(record.sourceKey === undefined ? {} : { sourceKey: record.sourceKey }),
-          nodeRunId: opts.nodeRunId,
-          ts,
-          kind: persistedKind,
-          payload: ev.rawLine,
-          sessionId: evtSessionId,
-          parentSessionId: null,
-        })
+        if (ev.persist !== false)
+          stdoutEvents.push({
+            ...(record.sourceKey === undefined ? {} : { sourceKey: record.sourceKey }),
+            nodeRunId: opts.nodeRunId,
+            ts,
+            kind: persistedKind,
+            payload: ev.rawLine,
+            sessionId: evtSessionId,
+            parentSessionId: null,
+          })
         broadcastParentRunning()
       } else {
         // Non-JSON stdout lines shouldn't happen with --format json, but record
@@ -1323,9 +1328,10 @@ export async function runNode(
     spawnedCleanupHooks.push(() => livePoller.stop())
     // A one-shot binding so onStderrLine can reference it before its decl below.
 
-    const persistStderrLine = async (line: string): Promise<void> => {
+    const persistStderrLine = async (line: string, sourceKey?: string): Promise<void> => {
       stderrTailBuf = appendBoundedTail(stderrTailBuf, clampTailLine(line), MAX_STDERR_TAIL_CHARS)
       stderrEvents.push({
+        ...(sourceKey === undefined ? {} : { sourceKey }),
         nodeRunId: opts.nodeRunId,
         ts: Date.now(),
         kind: 'stderr',
@@ -1340,6 +1346,7 @@ export async function runNode(
       if (decoded !== null) {
         await persistRunnerWrite('node-run-event/plugin-load-failed', () =>
           opts.persistence.nodeExecution.appendEvent({
+            ...(sourceKey === undefined ? {} : { sourceKey: `${sourceKey}:plugin-load-failed` }),
             nodeRunId: opts.nodeRunId,
             ts: Date.now(),
             kind: 'text',
@@ -2089,6 +2096,7 @@ export async function runNode(
         freshRun: freshAgentRun,
         declared: injectionDeclared,
         claudeInit: capturedStartupInventory,
+        streamObservation: capturedStartupObservation,
         snapshot: capturedInventorySnapshot,
         now: Date.now(),
       }),
@@ -2101,6 +2109,7 @@ export async function runNode(
       // 该判据此前在这里与 MCP 测试台各写一遍，第三个运行时接入要记得改两处。
       const observation = await observationForVerification(caps, {
         claudeInit: capturedStartupInventory,
+        streamObservation: capturedStartupObservation,
         loadSnapshot: () => capturedInventorySnapshot,
       })
       const verification = verifyStartup(injectionDeclared, observation)

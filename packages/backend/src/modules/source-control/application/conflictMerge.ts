@@ -45,7 +45,7 @@ export async function prepareConflictMerge(
   },
   effects: ConflictMergeWorkspaceEffects,
 ): Promise<PrepareConflictMergeResult> {
-  const ws = await effects.allocate(input.workspacesRoot)
+  const ws = await effects.allocate(input.workspacesRoot, input.baselineRepoPath)
   const cleanup = (): void | Promise<void> => effects.discard(ws)
   const fail = async (
     code: 'conflict-workspace-failed' | 'no-conflict' | 'merge-failed',

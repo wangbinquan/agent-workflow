@@ -1,3 +1,4 @@
+import type { TaskRecoveryProviderSelection } from './taskRecoverySelection'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
@@ -465,6 +466,8 @@ type ProviderRuntimeWithoutChildLaunch<Runtime> = Runtime extends unknown
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly archive?: TaskArchiveContentBinding
+  /** RFC-370 §9.2 V4 — hosted (PostgreSQL-only) platform recovery consumer. */
+  readonly recoverySelection?: TaskRecoveryProviderSelection
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: ProviderRuntimeWithoutChildLaunch<PostgresqlTaskExecutionRuntimeDependencies>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime | Promise<ChildResumeRuntime>
@@ -621,7 +624,15 @@ export function composePostgresqlTaskExecutionProviderRuntime(
       : { now: dependencies.lifecycleRepair.now }),
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
+  const recoveryConsumer = dependencies.recoverySelection?.({
+    db,
+    assertManualExecutionAllowed: taskRoutes.assertManualExecutionAllowed,
+    async resumeTaskAs(actor, taskId) {
+      await taskRoutes.resume({ actor, taskId })
+    },
+  })
   const background = composeTaskExecutionProviderBackground({
+    ...(recoveryConsumer === undefined ? {} : { recoveryConsumer }),
     module: executionModule,
     lifecycleRepair,
     autoResume,

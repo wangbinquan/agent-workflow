@@ -242,6 +242,13 @@ export async function exportLogicalDatabaseArtifact(input: {
   readonly contract: LogicalSchemaContract
   readonly artifactRoot: string
   readonly preservedArchive?: VerifiedLogicalDatabaseArtifactSource
+  /** A fresh hosted PostgreSQL has never held the retired SQLite tables.
+   * Its adapter must prove the hosted installation marker, rather than silently
+   * replacing a migrated installation's historical archive with empty rows. */
+  readonly emptyArchive?: {
+    readonly kind: 'born-hosted'
+    assertProvenance(): Promise<void>
+  }
   readonly chunkRows?: number
   readonly now?: () => number
   readonly onProgress?: (progress: LogicalDatabaseExportProgress) => void
@@ -265,12 +272,21 @@ export async function exportLogicalDatabaseArtifact(input: {
   if (
     input.sourceProvider === 'postgresql' &&
     input.contract.archiveOnlyTableCount > 0 &&
-    input.preservedArchive === undefined
+    input.preservedArchive === undefined &&
+    input.emptyArchive === undefined
   ) {
     throw new LogicalDatabaseExportError(
       'logical-export-archive-required',
       'PostgreSQL logical backup requires the preserved legacy archive',
     )
+  }
+  if (input.emptyArchive !== undefined) {
+    if (input.sourceProvider !== 'postgresql' || input.preservedArchive !== undefined)
+      throw new LogicalDatabaseExportError(
+        'logical-export-archive-required',
+        'empty hosted archive provenance cannot replace a preserved archive',
+      )
+    await input.emptyArchive.assertProvenance()
   }
   const chunkRows = input.chunkRows ?? 250
   if (!Number.isSafeInteger(chunkRows) || chunkRows < 1 || chunkRows > 10_000) {
@@ -309,19 +325,21 @@ export async function exportLogicalDatabaseArtifact(input: {
   for (const table of input.contract.tables) {
     const accumulator = createTableEntryAccumulator({ table, contract: input.contract })
     if (table.disposition === 'ARCHIVE_THEN_OMIT' && input.sourceProvider === 'postgresql') {
-      const preserved = input.preservedArchive!
-      const entry = preserved.verification.manifest.payload.tables.find(
-        (candidate) => candidate.table === table.id,
-      )
-      if (entry === undefined || entry.disposition !== 'ARCHIVE_THEN_OMIT') {
-        throw new LogicalDatabaseExportError(
-          'logical-export-archive-required',
-          `preserved logical archive is missing ${table.id}`,
+      if (input.emptyArchive === undefined) {
+        const preserved = input.preservedArchive!
+        const entry = preserved.verification.manifest.payload.tables.find(
+          (candidate) => candidate.table === table.id,
         )
-      }
-      for (let index = 0; index < entry.chunkCount; index += 1) {
-        const sourceChunk = preserved.readChunk(table, index)
-        accumulator.add(persist(table, sourceChunk.payload.rows, index))
+        if (entry === undefined || entry.disposition !== 'ARCHIVE_THEN_OMIT') {
+          throw new LogicalDatabaseExportError(
+            'logical-export-archive-required',
+            `preserved logical archive is missing ${table.id}`,
+          )
+        }
+        for (let index = 0; index < entry.chunkCount; index += 1) {
+          const sourceChunk = preserved.readChunk(table, index)
+          accumulator.add(persist(table, sourceChunk.payload.rows, index))
+        }
       }
     } else {
       let afterKey: readonly CanonicalLogicalValue[] | null = null
@@ -362,9 +380,11 @@ export async function exportLogicalDatabaseArtifact(input: {
     const entry = accumulator.finish()
     const expectedRows =
       table.disposition === 'ARCHIVE_THEN_OMIT' && input.sourceProvider === 'postgresql'
-        ? input.preservedArchive!.verification.manifest.payload.tables.find(
-            (candidate) => candidate.table === table.id,
-          )?.rowCount
+        ? input.emptyArchive !== undefined
+          ? 0
+          : input.preservedArchive!.verification.manifest.payload.tables.find(
+              (candidate) => candidate.table === table.id,
+            )?.rowCount
         : input.expectedTableRows[table.id]
     if (entry.rowCount !== expectedRows) {
       throw new LogicalDatabaseExportError(
@@ -387,6 +407,7 @@ export async function exportLogicalDatabaseArtifact(input: {
     })
   }
   await input.source.assertUnchanged()
+  await input.emptyArchive?.assertProvenance()
   const manifest = createLogicalArtifactManifest({
     operationId: input.operationId,
     sourceProvider: input.sourceProvider,

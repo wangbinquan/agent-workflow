@@ -388,9 +388,24 @@ describe('RFC-062 grep guard', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'inventoryRead.ts'),
     ).text()
     expect(src).toContain("'in-flight'")
-    // Also lock the runRootFor call inside the in-flight branch — if someone
-    // refactors the read-end away, this guard turns red with the right signal.
-    expect(src).toContain('runRootFor(taskId, nodeRunId)')
+    // RFC-370 keeps the original live-file behavior behind the selected
+    // content owner; hosted readers must never probe a service-local run dir.
+    expect(src).toContain('content.readLive({ taskId, nodeRunId })')
+    expect(src).not.toContain('runRootFor(')
+    const local = await Bun.file(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'local',
+        'taskRuntimeInventoryContent.ts',
+      ),
+    ).text()
+    expect(local).toContain('runRootFor(taskId, nodeRunId)')
+    expect(local).toContain('readSnapshotFromRunDir(')
   })
 })
 

@@ -6,7 +6,7 @@ import type { RepositoryCandidateGitOutcome } from './ports/repositoryCandidateE
 import type {
   EmployeeCaseGitOperand,
   EmployeeCaseWorkspaceEffects,
-  EmployeeCaseWorkspaceEffectsFactory,
+  EmployeeCaseWorkspaceStepEffectsFactory,
 } from './ports/employeeCaseWorkspaceEffects'
 import { createSha256DigestBuilder } from '@/util/hash'
 import { redactSensitiveString } from '@/util/redact'
@@ -124,7 +124,7 @@ export async function materializeEmployeeCaseWorkspace(
     readonly baselineRepoPath: string
     readonly baselineSha: string
   },
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<{ readonly workspacePath: string }> {
   return withEmployeeCaseEffects(effects, async (scope) => {
     return { workspacePath: await cloneBaseline(scope, input) }
@@ -138,7 +138,7 @@ export async function rematerializeEmployeeCaseWorkspace(
     readonly baselineSha: string
     readonly currentWorkspacePath: string
   },
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<{ readonly workspacePath: string }> {
   return withEmployeeCaseEffects(effects, async (scope) => {
     const preservationRoot = scope.sibling(input.caseRoot, `.platform-${ulid()}`)
@@ -171,7 +171,7 @@ export async function fetchEmployeeWorkspaceRemoteHead(
     readonly publicationSubject?: CandidatePublicationSubject
     readonly publicationTransport?: CandidatePublicationTransport
   },
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<
   | { readonly ok: true; readonly headSha: string }
   | {
@@ -258,7 +258,7 @@ export async function resolveEmployeeWorkspaceBaseline(
     readonly preferredBranch: string | null
     readonly sourceBranch: string | null
   },
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<{
   readonly baselineSha: string
   readonly targetBranch: string
@@ -322,7 +322,7 @@ export async function importEmployeeWorkspaceCommit(
     readonly sourceRepoPath: string
     readonly commitSha: string
   },
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<void> {
   return withEmployeeCaseEffects(effects, async (scope) => {
     const fetched = await scope.runGit(input.baselineRepoPath, [
@@ -348,7 +348,7 @@ export async function checkpointEmployeeCaseWorkspace(
     readonly workspacePath: string
     readonly checkpointRoot: string
   },
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<{ readonly checkpointDigest: string }> {
   return withEmployeeCaseEffects(effects, async (scope) => {
     const staging = scope.sibling(input.checkpointRoot, `.tmp-${ulid()}`)
@@ -375,7 +375,7 @@ export async function restoreEmployeeCaseWorkspace(
     readonly checkpointRoot: string
     readonly expectedCheckpointDigest: string
   },
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<{ readonly workspacePath: string }> {
   return withEmployeeCaseEffects(effects, async (scope) => {
     if (!(await scope.exists(input.checkpointRoot)))
@@ -392,7 +392,7 @@ export async function restoreEmployeeCaseWorkspace(
 
 export async function discardEmployeeCaseWorkspace(
   caseRoot: string,
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
 ): Promise<void> {
   return withEmployeeCaseEffects(effects, async (scope) => {
     await scope.remove(caseRoot)
@@ -404,7 +404,7 @@ function literalGitOperands(values: readonly string[]): readonly EmployeeCaseGit
 }
 
 async function withEmployeeCaseEffects<T>(
-  effects: EmployeeCaseWorkspaceEffectsFactory,
+  effects: EmployeeCaseWorkspaceStepEffectsFactory,
   operation: (scope: EmployeeCaseWorkspaceEffects) => Promise<T>,
 ): Promise<T> {
   const scope = await effects.acquire()

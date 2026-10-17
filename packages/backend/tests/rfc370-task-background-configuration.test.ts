@@ -36,7 +36,11 @@ function barrier() {
   return { pending, release }
 }
 
-function fixture(db: ProviderNeutralDatabase, resumeWait?: () => Promise<void>) {
+function fixture(
+  db: ProviderNeutralDatabase,
+  resumeWait?: () => Promise<void>,
+  recoveryTick?: () => Promise<void>,
+) {
   const module = new TaskExecutionModule('rfc370-background')
   const scheduled = scheduledTaskRuntime(db)
   const recovery = createTaskExecutionPersistence(db).recoveryAdministration
@@ -46,6 +50,7 @@ function fixture(db: ProviderNeutralDatabase, resumeWait?: () => Promise<void>) 
     repaired: [] as TaskLifecycleAutoRepairPolicy[],
   }
   const control = composeTaskExecutionProviderBackground({
+    ...(recoveryTick ? { recoveryConsumer: { tick: recoveryTick } } : {}),
     module,
     recovery,
     taskHasDriver: () => false,
@@ -78,6 +83,64 @@ function fixture(db: ProviderNeutralDatabase, resumeWait?: () => Promise<void>) 
 }
 
 describeEachProvider('RFC-370 Task background selected settings', (harness) => {
+  test('hosted recovery shares provider pause, drain, resume and final stop', async () => {
+    const timeout = spyOn(globalThis, 'setTimeout')
+    const entered = barrier(),
+      release = barrier()
+    let ticks = 0
+    const { control, scheduleDependencies } = fixture(harness.db, undefined, async () => {
+      ticks++
+      if (ticks === 1) {
+        entered.release()
+        await release.pending
+      }
+    })
+    const lastRecoveryTick = () => {
+      const index =
+        timeout.mock.calls
+          .map((args, index) => (args[1] === 5000 ? index : -1))
+          .filter((index) => index >= 0)
+          .at(-1) ?? -1
+      const args = timeout.mock.calls[index],
+        result = timeout.mock.results[index]
+      if (!args || result?.type !== 'return' || typeof args[0] !== 'function')
+        throw new Error('recovery timer absent')
+      clearTimeout(result.value)
+      return () => Reflect.apply(args[0] as (...args: unknown[]) => void, undefined, args.slice(2))
+    }
+    try {
+      await control.start({
+        configuration: { read: async () => ({ ...DEFAULT_CONFIG, autoResumeOnBoot: false }) },
+        scheduled: scheduleDependencies,
+      })
+      const first = lastRecoveryTick()
+      first()
+      await entered.pending
+      let paused = false
+      const drain = control.pause().then(() => {
+        paused = true
+      })
+      await Promise.resolve()
+      expect(paused).toBe(false)
+      release.release()
+      await drain
+      first()
+      expect(ticks).toBe(1)
+      await control.resume()
+      const second = lastRecoveryTick()
+      second()
+      await control.awaitIdle()
+      expect(ticks).toBe(2)
+      await control.stop()
+      second()
+      expect(ticks).toBe(2)
+      await expect(control.resume()).rejects.toThrow()
+    } finally {
+      release.release()
+      await control.stop()
+      timeout.mockRestore()
+    }
+  })
   test('startup waits for settings, recovery stays detached, and pause drains both', async () => {
     const readEntered = barrier(),
       readRelease = barrier(),

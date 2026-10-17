@@ -51,7 +51,10 @@ import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
+import type {
+  TaskExecutionReadModels,
+  TaskRuntimeInventoryContent,
+} from '@/modules/task-execution/public/types'
 import type {
   TaskRouteListFilters,
   TaskRouteOperations,
@@ -85,6 +88,7 @@ export interface TaskRouteDependencies {
   readonly configuration: ApplicationConfigurationQueries
   readonly operations: TaskRouteOperations
   readonly taskExecutionReadModels: TaskExecutionReadModels
+  readonly runtimeInventoryContent: TaskRuntimeInventoryContent
   readonly taskRecoveryOperations: TaskRecoveryOperations
   readonly codeWorkspace: Parameters<typeof getTaskStructuralDiff>[0]
   readonly repositoryWorkspace: Parameters<typeof getTaskFileContent>[0]
@@ -116,6 +120,8 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
   if (deps.changeNarrative === undefined) {
     throw new Error('task-change-narrative-not-composed')
   }
+  if (deps.runtimeInventoryContent === undefined)
+    throw new Error('task-runtime-inventory-content-not-composed')
   const { operations, taskExecutionReadModels, taskRecoveryOperations } = deps
   const { codeWorkspace, repositoryWorkspace, changeNarrative } = deps
   registerRoute(
@@ -1023,6 +1029,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
           c.req.param('nodeRunId'),
           {},
           operations.nodeRunPrompts,
+          operations.archivedEvents,
         ),
       )
     },
@@ -1055,6 +1062,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
           taskExecutionReadModels.runtimeInventory,
           c.req.param('id'),
           c.req.param('nodeRunId'),
+          deps.runtimeInventoryContent,
         ),
       )
     },

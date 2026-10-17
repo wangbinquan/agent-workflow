@@ -12,6 +12,7 @@ export type VerifiedWebhookDeliveryInput = Readonly<{
   rawBodyText: string
   eventHeader: string | null
   objectKind: string | null
+  transportReceiptRef?: string
   replay?: Readonly<{
     rootDeliveryId: string
     terminalRootRevision: number | null

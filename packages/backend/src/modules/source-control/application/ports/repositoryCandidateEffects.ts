@@ -53,7 +53,9 @@ export interface RepositoryCandidateSession {
   close(): Completion<void>
 }
 
-export interface RepositoryCandidateEffectsFactory {
+/** Per-step effects of one in-process candidate session (the native
+ * selection, also used inside a hosted task image against its volume). */
+export interface RepositoryCandidateStepEffectsFactory {
   acquire(input: {
     readonly baselineReference: string
     readonly overlayReference?: string

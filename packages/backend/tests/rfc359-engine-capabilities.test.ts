@@ -8,12 +8,12 @@
 // RFC-359 W5-T21 落地后由全量 PG lane 保证「有库时必跑」）。
 
 import { describe, expect, test } from 'bun:test'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { tasks } from '@/db/schema'
+import { hostedExecutionControl, tasks } from '@/db/schema'
 import {
   createPostgresqlCapabilities,
   createSqliteCapabilities,
@@ -87,6 +87,9 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     await session.transaction(async (tx) => {
       await cap.lockAggregateRoot(tx, tasks, tasks.id, 'nope')
       await cap.advisoryLock(tx, 'k')
+      // RFC-370 v3：共享孪生在 SQLite 上同样是 no-op（BEGIN IMMEDIATE 已独占）。
+      await cap.holdAggregateRoot(tx, tasks, tasks.id, 'nope')
+      await cap.advisoryLockShared(tx, 'k')
     })
     expect(render(cap.claimLockClause())).toBe('')
   })
@@ -356,6 +359,64 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         const [row] = await db.all<{ v: unknown }>(sql`select v from cap_scratch`)
         expect(typeof row!.v).toBe('string')
         expect(cap.numericFromRawRow(row!.v, 'v')).toBe(1788278410000)
+
+        // ⑪ RFC-370 v3 —— holdAggregateRoot（FOR KEY SHARE）与 advisoryLockShared：
+        //    持有者之间互不等待；原地改非键列（续租）不等持有者；FOR UPDATE（转移）
+        //    与排他 advisory lock 都要等全部持有者提交。
+        await db.insert(hostedExecutionControl).values({
+          id: 'global',
+          epoch: 1,
+          owner: 'holder',
+          phase: 'active',
+          leaseId: 'lease',
+          expiresAt: 1,
+          updatedAt: 1,
+        })
+        const root = [hostedExecutionControl, hostedExecutionControl.id, 'global'] as const
+        const waitingAfter = async (operation: Promise<unknown>, ms = 300) =>
+          await Promise.race([
+            operation.then(() => 'done' as const),
+            new Promise<'waiting'>((resolve) => setTimeout(() => resolve('waiting'), ms)),
+          ])
+        let releaseKeyHolder!: () => void
+        const keyHolderReleased = new Promise<void>((resolve) => (releaseKeyHolder = resolve))
+        let keyHolderReady!: () => void
+        const keyHolderHolding = new Promise<void>((resolve) => (keyHolderReady = resolve))
+        const keyHolder = session.transaction(async (tx) => {
+          await cap.advisoryLockShared(tx, 'rfc370-cap-window')
+          await cap.holdAggregateRoot(tx, ...root)
+          keyHolderReady()
+          await keyHolderReleased
+        })
+        await keyHolderHolding
+        try {
+          const secondHolder = session.transaction(async (tx) => {
+            await cap.advisoryLockShared(tx, 'rfc370-cap-window')
+            await cap.holdAggregateRoot(tx, ...root)
+          })
+          expect(await waitingAfter(secondHolder)).toBe('done')
+          const inPlace = session.transaction(async (tx) => {
+            await tx
+              .update(hostedExecutionControl)
+              .set({ expiresAt: 2 })
+              .where(eq(hostedExecutionControl.id, 'global'))
+          })
+          expect(await waitingAfter(inPlace)).toBe('done')
+          const exclusive = session.transaction(async (tx) => {
+            await cap.advisoryLock(tx, 'rfc370-cap-window')
+          })
+          const transition = session.transaction(async (tx) => {
+            await cap.lockAggregateRoot(tx, ...root)
+          })
+          expect(await waitingAfter(exclusive)).toBe('waiting')
+          expect(await waitingAfter(transition)).toBe('waiting')
+          releaseKeyHolder()
+          await keyHolder
+          await Promise.all([exclusive, transition])
+        } finally {
+          releaseKeyHolder()
+          await keyHolder
+        }
       } finally {
         restoreProvider?.()
         try {

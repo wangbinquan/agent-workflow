@@ -1,18 +1,47 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
-import type { GitCommitIdentity } from '@agent-workflow/shared'
+import { gitUrlCacheKeyWith, parseGitUrl, type GitCommitIdentity } from '@agent-workflow/shared'
+import { sha1Hex } from '@/util/hash'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import { runGit, isGitWorkTree, gitDiffSnapshot, worktreeDiff, initScratchRepo } from '@/util/git'
 import { detectSubmodules, listEffectiveSubmodules } from '@/services/gitSubmodule'
+import { listAvailableRefs } from '@/services/gitRepoCache'
+import { DomainError } from '@/util/errors'
 import {
   materializeWorktree,
+  materializeGroupSpace,
   cleanupMaterializedSpace,
+  resolveRepoSourceSingleWithProvider,
 } from '../infrastructure/workspaceMaterializer'
 import type { MaterializedSpace, ResolvedRepoSource } from '../application/workspaceMaterialization'
 import { bindFileAgentWorkspaceGitControlObservation } from '../infrastructure/local/fileAgentWorkspaceGitControl'
 import { createNodeWorkspaceMaintenanceFilesystem } from '../infrastructure/nodeWorkspaceMaintenanceFilesystem'
-import { createLocalIsolationWorkspaceFactory } from '../infrastructure/local/localIsolationWorkspace'
+import {
+  createLocalIsolationWorkspaceFactory,
+  prepareLocalIsolationConflict,
+} from '../infrastructure/local/localIsolationWorkspace'
 import type { IsolationWorkspaceBinding } from '../application/ports/isolationWorkspace'
+import type { IsolationConflict } from '../application/ports/isolationWorkspace'
+import {
+  finishConflictResolution,
+  type PreparedConflictResolution,
+} from '@/platform/workspace/local/isolation'
+import {
+  executeTaskImageRepositoryOperation,
+  TASK_IMAGE_REPOSITORY_OPERATIONS,
+} from './taskImageRepositoryEffects'
+import { executeTaskImageUploadOperation, TASK_IMAGE_UPLOAD_OPERATIONS } from './taskImageUploads'
+import { assertHostedRepositoryUrl } from '../infrastructure/crewstation/repositoryUrl'
+import { createVolumeRepositoryMirrorStore } from '../infrastructure/crewstation/volumeRepositoryMirrors'
+import { REPOSITORY_COMMIT_OPERATION } from '../infrastructure/crewstation/workspaceEffects'
+import { createFileRepositoryPreviewIndexPort } from '../infrastructure/local/fileRepositoryPreviewIndex'
+import {
+  commitPreparedRepository,
+  prepareRepositoryCommit,
+  readRepositoryCommitPreview,
+} from '../application/repositoryCommit'
+import type { RepositoryCommitWorkspaceOperations } from '../application/ports/repositoryGitWorkspace'
+import { executeTaskImageIsolationMergeStep } from './taskImageIsolation'
 
 interface ResolveRepositoryInput {
   readonly id: string
@@ -21,53 +50,67 @@ interface ResolveRepositoryInput {
   readonly timeoutMs?: number
 }
 
+/** RFC-370 §9.2 V3: the volume reuses the standalone mirror cache primitive
+ * itself (temp dir + rename, recursive submodules, fetch with prune, and the
+ * fast-forward of the requested branch) over a registry that is the volume's
+ * own `repos/` directory. The exact commit is frozen for materialization. */
 async function resolveRepository(
   input: ResolveRepositoryInput,
   root: string,
   signal?: AbortSignal,
 ): Promise<ResolvedRepoSource> {
-  const workPath = (path: string) => requireWorkPath(path, root)
   // Credentials belong to the task's injected Git credential environment.
   // They must not be captured in a command request or its persisted argv.
-  const url = URL.canParse(input.url) ? new URL(input.url) : null
-  if (url !== null && (url.username !== '' || url.password !== '' || url.protocol === 'file:')) {
-    throw new Error('hosted-repository-requires-remote-url-and-platform-credentials')
-  }
-  if (url === null && !/^[^/@\s]+@[^/:\s]+:[^\s]+$/.test(input.url))
-    throw new Error('hosted-repository-remote-url-required')
-  const repoPath = workPath(join(root, 'repos', input.id))
-  mkdirSync(dirname(repoPath), { recursive: true })
-  const options = {
-    timeoutMs: input.timeoutMs ?? 1_800_000,
-    ...(signal === undefined ? {} : { signal }),
-  }
-  if (!existsSync(join(repoPath, '.git'))) {
-    const clone = await runGit(root, ['clone', '--no-checkout', '--', input.url, repoPath], options)
-    if (clone.exitCode !== 0) throw new Error(`repository-clone-failed: ${clone.stderr}`)
-  } else {
-    const fetched = await runGit(repoPath, ['fetch', '--prune', 'origin'], options)
-    if (fetched.exitCode !== 0) throw new Error(`repository-fetch-failed: ${fetched.stderr}`)
-  }
-  const requested = input.ref || 'origin/HEAD'
-  let revision = await runGit(repoPath, [
-    'rev-parse',
-    '--verify',
-    `${input.ref ? `origin/${input.ref}` : requested}^{commit}`,
-    '--',
-  ])
-  if (revision.exitCode !== 0 && input.ref)
-    revision = await runGit(repoPath, ['rev-parse', '--verify', `${requested}^{commit}`, '--'])
+  assertHostedRepositoryUrl(input.url)
+  const source = await resolveRepoSourceSingleWithProvider(
+    { repoUrl: input.url, ...(input.ref ? { ref: input.ref } : {}) },
+    {},
+    {
+      appHome: root,
+      repositoryWorkspace: createVolumeRepositoryMirrorStore(root),
+      loadFrozenSpaceLayout: async () => {
+        throw new Error('hosted-frozen-space-layout-unavailable')
+      },
+      cloneTimeoutMs: input.timeoutMs ?? 1_800_000,
+      ...(signal === undefined ? {} : { sourceTerminationLaunchSignal: signal }),
+    },
+  )
+  const repoPath = requireWorkPath(source.repoPath, root)
+  const requested = input.ref || source.baseBranch || 'HEAD'
+  const revision = await runGit(repoPath, ['rev-parse', '--verify', `${requested}^{commit}`, '--'])
+  // Same structured refusal as the standalone launch (code, status, refs).
   if (revision.exitCode !== 0)
-    throw new Error(`repo-ref-not-found: ${requested}: ${revision.stderr}`)
+    throw new DomainError('repo-ref-not-found', `ref '${requested}' not found`, 400, {
+      ref: requested,
+      availableRefs: await listAvailableRefs(repoPath, 10),
+    })
   return {
+    ...source,
     repoPath,
     repoUrl: input.url,
     cachedRepoId: input.id,
-    baseBranch: input.ref || 'HEAD',
+    baseBranch: input.ref || source.baseBranch || 'HEAD',
     resolvedCommit: revision.stdout.trim(),
-    pathFetchError: null,
-    ffWarnings: [],
   }
+}
+
+/** The branch a development mirror held before a refresh (null when the
+ * mirror does not exist yet or holds no such branch). */
+async function developmentBranchBefore(
+  input: ResolveRepositoryInput,
+  root: string,
+): Promise<{ readonly repoPath: string; readonly ref: string; readonly sha: string } | null> {
+  const parsed = parseGitUrl(input.url)
+  if (parsed === null) return null
+  const mirror = await createVolumeRepositoryMirrorStore(root).findCachedRepoByHash(
+    gitUrlCacheKeyWith(parsed, sha1Hex).hash,
+  )
+  if (mirror === null) return null
+  const branch = input.ref || mirror.defaultBranch
+  if (!branch) return null
+  const ref = `refs/heads/${branch}`
+  const sha = await runGit(mirror.localPath, ['rev-parse', '--verify', ref, '--'])
+  return sha.exitCode === 0 ? { repoPath: mirror.localPath, ref, sha: sha.stdout.trim() } : null
 }
 
 async function materializeSingle(
@@ -140,7 +183,102 @@ export async function executeTaskImageWorkspaceOperation(
 ): Promise<unknown> {
   const root = resolve(volumeRoot)
   const workPath = (path: string) => requireWorkPath(path, root)
+  if ((TASK_IMAGE_REPOSITORY_OPERATIONS as readonly string[]).includes(operation))
+    return executeTaskImageRepositoryOperation(operation, value, root)
+  if ((TASK_IMAGE_UPLOAD_OPERATIONS as readonly string[]).includes(operation))
+    return executeTaskImageUploadOperation(operation, value, root)
   switch (operation) {
+    case 'prepare-development-repository': {
+      const input = value as ResolveRepositoryInput
+      // The canonical development baseline only ever fast-forwards. The mirror
+      // primitive moves a requested branch to its remote tip, so the branch it
+      // held before is captured first and a diverged branch is put back.
+      const before = await developmentBranchBefore(input, root)
+      const source = await resolveRepository(input, root, signal)
+      if (
+        input.ref &&
+        source.ffWarnings.some(
+          (outcome) => outcome.branch === input.ref && outcome.warning === 'origin-ref-missing',
+        )
+      )
+        throw new DomainError(
+          'repo-ref-not-found',
+          `default branch '${input.ref}' no longer exists in the remote; refusing to freeze the stale local branch`,
+          400,
+          { ref: input.ref },
+        )
+      const remoteHead =
+        input.ref ||
+        (
+          await runGit(source.repoPath, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])
+        ).stdout
+          .trim()
+          .replace(/^origin\//, '')
+      if (
+        !remoteHead ||
+        (await runGit(source.repoPath, ['check-ref-format', `refs/heads/${remoteHead}`]))
+          .exitCode !== 0
+      )
+        throw new Error('hosted-repository-default-branch-unavailable')
+      const ref = `refs/heads/${remoteHead}`
+      const current = await runGit(source.repoPath, ['rev-parse', '--verify', ref, '--'])
+      const previous =
+        before !== null && before.ref === ref && before.repoPath === source.repoPath
+          ? before.sha
+          : current.exitCode === 0
+            ? current.stdout.trim()
+            : null
+      if (previous !== null && previous !== source.resolvedCommit) {
+        const ancestor = await runGit(source.repoPath, [
+          'merge-base',
+          '--is-ancestor',
+          previous,
+          source.resolvedCommit!,
+        ])
+        if (ancestor.exitCode !== 0) {
+          if (current.exitCode === 0 && current.stdout.trim() !== previous)
+            await runGit(source.repoPath, ['update-ref', ref, previous, current.stdout.trim()])
+          throw new Error('hosted-development-repository-non-fast-forward')
+        }
+      }
+      const updated = await runGit(source.repoPath, [
+        'update-ref',
+        ref,
+        source.resolvedCommit!,
+        current.exitCode === 0 ? current.stdout.trim() : '',
+      ])
+      if (updated.exitCode !== 0) throw new Error('hosted-development-repository-head-changed')
+      const head = await runGit(source.repoPath, ['symbolic-ref', 'HEAD', ref])
+      if (head.exitCode !== 0) throw new Error('hosted-development-repository-head-unavailable')
+      return { path: source.repoPath, defaultBranch: remoteHead }
+    }
+    case 'isolation-conflict-prepare': {
+      const input = value as { conflict: IsolationConflict; containerRef: string }
+      return prepareLocalIsolationConflict(
+        {
+          ...input.conflict,
+          canonicalRef: workPath(input.conflict.canonicalRef),
+        },
+        workPath(input.containerRef),
+      )
+    }
+    case 'isolation-conflict-finish': {
+      const input = value as {
+        prepared: Extract<PreparedConflictResolution, { kind: 'agent' }>
+        agentError?: string
+      }
+      return finishConflictResolution(
+        {
+          ...input.prepared,
+          resolveIso: workPath(input.prepared.resolveIso),
+          conflict: {
+            ...input.prepared.conflict,
+            canonWorktreePath: workPath(input.prepared.conflict.canonWorktreePath),
+          },
+        },
+        { agentError: input.agentError },
+      )
+    }
     case 'isolation': {
       const input = value as { binding: IsolationWorkspaceBinding; method: string; args: unknown[] }
       const scope = await createLocalIsolationWorkspaceFactory().bind({
@@ -181,6 +319,13 @@ export async function executeTaskImageWorkspaceOperation(
           )
         case 'merge':
           return scope.merge(...(input.args as Parameters<typeof scope.merge>))
+        case 'merge-step':
+          return executeTaskImageIsolationMergeStep(
+            input.args[0] as Parameters<typeof scope.merge>[0],
+            input.args[1] as Parameters<typeof scope.merge>[1],
+            input.args[2] as [string, boolean][],
+            root,
+          )
         case 'undoShard':
           return scope.undoShard(...(input.args as Parameters<typeof scope.undoShard>))
         case 'discard':
@@ -192,6 +337,42 @@ export async function executeTaskImageWorkspaceOperation(
           )
         default:
           throw new Error('workspace-isolation-operation-unknown')
+      }
+    }
+    case REPOSITORY_COMMIT_OPERATION: {
+      const input = value as {
+        method: keyof RepositoryCommitWorkspaceOperations
+        path: string
+        input: Record<string, unknown>
+      }
+      const repoPath = workPath(input.path)
+      const request = input.input as { gitOptions?: Parameters<typeof runGit>[2] }
+      const gitOptions = request.gitOptions === undefined ? {} : { gitOptions: request.gitOptions }
+      const configuredPatterns = (input.input.configuredPatterns as readonly string[]) ?? []
+      switch (input.method) {
+        case 'prepare':
+          return prepareRepositoryCommit({ repoPath, configuredPatterns, ...gitOptions })
+        case 'commitPrepared': {
+          const commit = input.input as Parameters<
+            RepositoryCommitWorkspaceOperations['commitPrepared']
+          >[0]
+          return commitPreparedRepository({
+            repoPath,
+            message: commit.message,
+            verification: commit.verification,
+            ...(commit.authorName === undefined ? {} : { authorName: commit.authorName }),
+            ...(commit.authorEmail === undefined ? {} : { authorEmail: commit.authorEmail }),
+            ...gitOptions,
+          })
+        }
+        case 'preview':
+          return readRepositoryCommitPreview({
+            repoPath,
+            configuredPatterns,
+            previewIndex: createFileRepositoryPreviewIndexPort({ repoPath, ...gitOptions }),
+          })
+        default:
+          throw new Error('workspace-repository-commit-operation-unknown')
       }
     }
     case 'git': {
@@ -252,6 +433,33 @@ export async function executeTaskImageWorkspaceOperation(
       return resolveRepository(value as ResolveRepositoryInput, root, signal)
     case 'materialize-single':
       return materializeSingle(value as Parameters<typeof materializeSingle>[0], root, signal)
+    case 'materialize-group': {
+      const input = value as Omit<
+        Parameters<typeof materializeGroupSpace>[0],
+        'appHome' | 'signal' | 'lifecycleHook' | 'worktreeMaterializer'
+      >
+      if (input.planned.length !== input.resolvedSources.length)
+        throw new Error('hosted-repository-source-layout-mismatch')
+      const groupRoot = workPath(join(root, 'worktrees', 'group', input.taskId))
+      const child = (path: string) => {
+        if (
+          path.includes('\\') ||
+          path.includes('\0') ||
+          path.split('/').some((part) => part === '.' || part === '..')
+        )
+          throw new Error('hosted-repository-layout-path-invalid')
+        const absolute = workPath(resolve(groupRoot, path))
+        if (absolute !== groupRoot && !absolute.startsWith(groupRoot + sep))
+          throw new Error('hosted-repository-layout-path-invalid')
+      }
+      for (const planned of input.planned) {
+        child(planned.mountPath)
+        child(planned.subdir)
+      }
+      for (const path of input.nodePaths) child(path)
+      for (const source of input.resolvedSources) workPath(source.repoPath)
+      return materializeGroupSpace({ ...input, appHome: root, signal })
+    }
     case 'cleanup-space':
       return cleanupMaterializedSpace(value as MaterializedSpace)
     case 'scratch': {

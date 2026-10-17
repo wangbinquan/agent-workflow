@@ -16,8 +16,12 @@ import { runObservabilityZh, type RunObservabilityMessages } from './runObservab
 import { mindmapZh, type MindmapMessages } from './mindmap'
 import { markdownEditorZh, type MarkdownEditorMessages } from './markdownEditor'
 import { executionZh, type ExecutionMessages } from './execution'
+import { hostedEventsZh, type HostedEventMessages } from './hostedEvents'
+import { hostedBackupZh, type HostedBackupMessages } from './hostedBackup'
 
 export interface Resources {
+  hostedBackup: HostedBackupMessages
+  hostedEvents: HostedEventMessages
   execution: ExecutionMessages
   markdownEditor: MarkdownEditorMessages
   mindmap: MindmapMessages
@@ -1079,6 +1083,9 @@ export interface Resources {
     token: {
       create: string
       docsLink: string
+      /** RFC-370 v3 V10 — how a token is used behind the CrewStation gateway. */
+      hostedUsageTitle: string
+      hostedUsage: string
       createTitle: string
       createdTitle: string
       nameHint: string
@@ -2163,6 +2170,8 @@ export interface Resources {
       git: string
       codeHosts: string
       network: string
+      /** RFC-370 v3 V10 — behind the CrewStation gateway only external access applies. */
+      networkHosted: string
       appearance: string
       rendering: string
       authentication: string
@@ -2348,6 +2357,7 @@ export interface Resources {
         intentRecovery: string
         lifecycleInvariants: string
         stuckTaskDetector: string
+        hostedObjectRecovery: string
         humanGateRecovery: string
         walCheckpoint: string
       }
@@ -3806,7 +3816,12 @@ export interface Resources {
       uuid: string
       stream: string
       payload: string
+      verification: string
+      bodySource: string
     }
+    verification: Record<'direct-signature' | 'cs-delegated' | 'unknown', string>
+    bodySources: Record<'http-bytes' | 'reserialized-json' | 'unknown', string>
+    delegatedExplanation: string
     terminalControl: {
       title: string
       kind: string
@@ -6799,6 +6814,8 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  hostedEvents: hostedEventsZh,
+  hostedBackup: hostedBackupZh,
   execution: executionZh,
   markdownEditor: markdownEditorZh,
   mindmap: mindmapZh,
@@ -7679,6 +7696,9 @@ export const zhCN: Resources = {
     token: {
       create: '创建令牌',
       docsLink: '接入文档',
+      hostedUsageTitle: '在 CrewStation 托管部署中使用令牌',
+      hostedUsage:
+        '自动化请求要同时带上同一用户的 CrewStation 平台会话和这里创建的令牌（Authorization: Bearer <令牌>）：平台网关凭会话放行，Agent Workflow 凭令牌限定权限。只带其中一个会被拒绝；会话过期后需重新登录平台，令牌不会延长会话。',
       createTitle: '创建访问令牌',
       createdTitle: '令牌已创建',
       nameHint: '给它一个能看出用途的名字，例如哪台机器、哪条流水线。吧名字只在这里显示。',
@@ -9271,6 +9291,8 @@ export const zhCN: Resources = {
       git: '控制平台代理提交排除、submodule 与后台刷新。',
       codeHosts: '配置 GitLab / GitHub 的出站凭据',
       network: '设置 daemon 监听地址与端口。',
+      networkHosted:
+        '开启或关闭对外接口（API 令牌签发与 MCP 入口）；监听地址由 CrewStation 平台管理。',
       appearance: '选择主题与界面语言。',
       rendering: '配置外部图表渲染服务。',
       authentication: '管理 OIDC 登录提供商。',
@@ -9464,6 +9486,7 @@ export const zhCN: Resources = {
         intentRecovery: '意图恢复',
         lifecycleInvariants: '生命周期一致性检查',
         stuckTaskDetector: '卡住任务检测',
+        hostedObjectRecovery: '托管对象恢复与回收',
         humanGateRecovery: '人工门恢复',
         walCheckpoint: 'WAL checkpoint',
       },
@@ -11444,7 +11467,21 @@ export const zhCN: Resources = {
       uuid: '事件 UUID',
       stream: '事件流',
       payload: '事件内容',
+      verification: '验证方式',
+      bodySource: '正文来源',
     },
+    verification: {
+      'direct-signature': '直连签名校验',
+      'cs-delegated': 'CrewStation 委托验证',
+      unknown: '未记录',
+    },
+    bodySources: {
+      'http-bytes': '上游 HTTP 正文',
+      'reserialized-json': '平台重新序列化的 JSON',
+      unknown: '未记录',
+    },
+    delegatedExplanation:
+      '此事件由 CrewStation 验证并转发，正文来自平台事件信封。追溯投递时请使用平台回执；页面展示的 JSON 不用于重算上游签名。',
     terminalControl: {
       title: 'MR / PR 终态控制',
       kind: '控制事实',
@@ -14173,6 +14210,20 @@ export const zhCN: Resources = {
       '安装插件和应用资源包将随 CrewStation 原生配置叠加提供；浏览、编辑和保存现有资源不受影响。',
     'execution-standby': '本实例当前没有执行权，任务与自动运行暂不可用。',
     'setting-managed-by-deployment': '这项设置由部署环境提供，不能在这里修改。',
+    'hosted-database-write-unavailable':
+      'CrewStation 正在迁移或恢复本服务的数据库，现在可以浏览，但不能保存修改。',
+    'hosted-database-write-unavailable__hint':
+      '平台完成迁移或恢复后会自动恢复写入，请稍后重试这次操作。',
+    'hosted-backup-worktrees-unsupported': '托管备份只包含数据库，不能包含任务工作区。',
+    'hosted-backup-worktrees-unsupported__hint':
+      '任务工作区位于 CrewStation 平台持久卷上；卷丢失时通过平台恢复动作（重建或重启）处理。请创建不含工作区的备份。',
+    'backup-invalid': '备份请求无效。',
+    'backup-in-progress': '已有数据库备份正在进行。',
+    'backup-in-progress__hint': '请等待它完成后刷新备份记录。',
+    'backup-not-found': '该备份已不存在。',
+    'backup-not-ready': '只有已完成的备份才能校验。',
+    'backup-archive-unavailable': '该备份的归档在 CrewStation 对象存储中已不可用。',
+    'backup-archive-unavailable__hint': '不要使用它的恢复引用。请新建一份备份并校验新备份。',
     'network-unreachable__hint': '请确认 daemon 正在运行、网络可达后重试。',
     'request-timeout': '请求超时，已停止等待。',
     'request-timeout__hint': '服务端可能仍在处理这次请求。刷新页面确认结果后再决定是否重试。',
@@ -14210,6 +14261,7 @@ export const zhCN: Resources = {
     'task-terminal': '所属任务已结束，本条待办已封存，提交未保存。',
     'task-not-resumable': '该任务还在运行或未失败，无法 resume。',
     'task-still-running': '任务还在运行，请先取消。',
+    'task-recovery-in-progress': '该任务或共享工作区正在恢复，请等待当前恢复完成后再操作。',
     'task-not-syncable': '任务正在运行，无法同步工作流定义。',
     'task-not-syncable__hint': '等任务结束或取消后再同步。',
     'task-host-sync-unsupported': '代理 / 工作组任务没有可同步的工作流。',

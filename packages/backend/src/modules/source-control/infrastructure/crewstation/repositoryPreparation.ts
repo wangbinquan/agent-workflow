@@ -4,6 +4,7 @@ import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { RepositoryPreparationEffectFactory } from '../../application/ports/repositoryPreparationEffects'
 import type { ScratchWorkspaceEffects } from '../../application/ports/scratchWorkspaceEffects'
+import type { RepositoryPreparationFacts } from '../../domain/repositoryPreparationFacts'
 import type {
   MaterializedSpace,
   ResolvedRepoSource,
@@ -11,6 +12,7 @@ import type {
 } from '../../application/workspaceMaterialization'
 import { composeRepositoryWorkspaceStore } from '../repositoryWorkspaceStore'
 import { hostedWorkspaceReference, parseHostedWorkspaceReference } from './workspaceReference'
+import { assertHostedRepositoryUrl } from './repositoryUrl'
 
 function mapSpace<Value>(value: Value, path: (value: string) => string): Value {
   const visit = (item: unknown): unknown => {
@@ -35,11 +37,19 @@ export function nativeSpace(space: MaterializedSpace): MaterializedSpace {
   )
 }
 
-interface HostedPreparationPlan {
+interface HostedSinglePreparationPlan {
   readonly version: 1
   readonly taskId: string
   readonly source: ResolvedRepoSource
 }
+interface HostedGroupPreparationPlan {
+  readonly version: 2
+  readonly taskId: string
+  readonly kind: RepositoryPreparationFacts['kind']
+  readonly sources: readonly ResolvedRepoSource[]
+  readonly layout: RepositoryPreparationFacts['layout']
+}
+type HostedPreparationPlan = HostedSinglePreparationPlan | HostedGroupPreparationPlan
 
 export function createHostedRepositoryPreparation(input: {
   readonly db: ProviderNeutralDatabase
@@ -65,53 +75,71 @@ export function createHostedRepositoryPreparation(input: {
           await request.assertCurrent()
           if (request.signal.aborted)
             return { kind: 'stopped', receiptJson: JSON.stringify({ version: 1 }) }
-          if (facts.layout.repos.length !== 1)
-            throw new Error('hosted-capability-unavailable: repository groups require RFC-370 M2')
-          const planned = facts.layout.repos[0]!
-          const row = await store.findCachedRepoById(planned.cachedRepoId)
-          if (row === null) throw new Error('cached-repo-not-found')
-          const url = unsealRepoUrl(row, input.secretBox, store)
-          if (url === null) throw new Error('cached-repo-credential-unavailable')
-          const parsed = URL.canParse(url) ? new URL(url) : null
-          if (
-            parsed !== null &&
-            (parsed.username !== '' ||
-              parsed.password !== '' ||
-              !['https:', 'http:', 'ssh:', 'git:'].includes(parsed.protocol))
-          ) {
-            throw new Error('hosted-repository-requires-remote-url-and-platform-credentials')
+          if (facts.layout.repos.length === 0) throw new Error('hosted-repository-layout-empty')
+          const sources: ResolvedRepoSource[] = []
+          for (const [index, planned] of facts.layout.repos.entries()) {
+            await request.assertCurrent()
+            if (request.signal.aborted)
+              return { kind: 'stopped', receiptJson: JSON.stringify({ version: 1 }) }
+            const row = await store.findCachedRepoById(planned.cachedRepoId)
+            if (row === null) throw new Error('cached-repo-not-found')
+            const url = unsealRepoUrl(row, input.secretBox, store)
+            if (url === null) throw new Error('cached-repo-credential-unavailable')
+            assertHostedRepositoryUrl(url)
+            const source = await call<ResolvedRepoSource>(
+              index === 0 ? 'resolve' : `resolve:${index}`,
+              'resolve-repository',
+              {
+                id: row.id,
+                url,
+                ref: planned.ref || row.defaultBranch || undefined,
+                timeoutMs: request.cloneTimeoutMs,
+              },
+            )
+            sources.push(source)
           }
-          if (parsed === null && !/^[^/@\s]+@[^/:\s]+:[^\s]+$/.test(url))
-            throw new Error('hosted-repository-remote-url-required')
-          const source = await call<ResolvedRepoSource>('resolve', 'resolve-repository', {
-            id: row.id,
-            url,
-            ref: planned.ref || row.defaultBranch || undefined,
-            timeoutMs: request.cloneTimeoutMs,
-          })
           await request.assertCurrent()
           return {
             kind: 'resolved',
             planJson: JSON.stringify({
-              version: 1,
+              version: 2,
               taskId: request.taskId,
-              source,
+              kind: facts.kind,
+              sources,
+              layout: facts.layout,
             } satisfies HostedPreparationPlan),
           }
         },
         async materialize(materialization) {
           await request.assertCurrent()
           const plan = JSON.parse(materialization.planJson) as HostedPreparationPlan
-          if (plan.version !== 1 || plan.taskId !== request.taskId)
+          if ((plan.version !== 1 && plan.version !== 2) || plan.taskId !== request.taskId)
             throw new Error('repository-preparation-replay-mismatch')
+          const single =
+            plan.version === 1 || (plan.kind === 'repository' && plan.sources.length === 1)
+          const physical = single
+            ? {
+                taskId: request.taskId,
+                source: plan.version === 1 ? plan.source : plan.sources[0]!,
+                workingBranch: request.workingBranch,
+                gitCommitIdentity: request.gitCommitIdentity,
+              }
+            : {
+                taskId: request.taskId,
+                planned: plan.layout.repos,
+                nodePaths: plan.layout.nodes.map((node) => node.path),
+                resolvedSources: plan.sources,
+                workingBranch: request.workingBranch,
+                gitUserName: request.gitCommitIdentity?.name ?? null,
+                gitUserEmail: request.gitCommitIdentity?.email ?? null,
+              }
           const space = hostedSpace(
             request.taskId,
-            await call<MaterializedSpace>('materialize', 'materialize-single', {
-              taskId: request.taskId,
-              source: plan.source,
-              workingBranch: request.workingBranch,
-              gitCommitIdentity: request.gitCommitIdentity,
-            }),
+            await call<MaterializedSpace>(
+              'materialize',
+              single ? 'materialize-single' : 'materialize-group',
+              physical,
+            ),
           )
           await materialization.checkpoint(JSON.stringify({ version: 1, space }))
           await request.assertCurrent()

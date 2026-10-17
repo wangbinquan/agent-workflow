@@ -1,6 +1,15 @@
-import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
-import type { ScratchWorkspaceEffects } from '@/modules/source-control/application/ports/scratchWorkspaceEffects'
-import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/application/ports/workspaceMaintenance'
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
+import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
+import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
+import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
+import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
+import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
+import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
+import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/composition'
+import type { ScratchWorkspaceEffects } from '@/modules/source-control/composition'
+import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
@@ -20,15 +29,19 @@ import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
-  RepositoryCandidateEffectsFactory,
 } from '@/modules/source-control/public/types'
+import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
   selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
+import type {
+  PortArtifactContentEffects,
+  TaskRuntimeInventoryContent,
+} from '@/modules/task-execution/public/types'
+import { composeTaskRuntimeInventoryContent } from '@/modules/task-execution/composition/taskRuntimeInventoryContent'
 import type {
   NodeRunPromptContentEffects,
   TaskDeletionEffects,
@@ -408,6 +421,7 @@ import { mcpRouteNow } from '@/routes/mcps'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
+import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
 import {
   composePostgresqlAppDeps,
   composePostgresqlDaemonProviderCore,
@@ -474,6 +488,11 @@ export interface PostgresqlDaemonApplicationInput {
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
+  readonly beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
+  readonly databaseBackup?: DatabaseBackupEffects
+  readonly archivedNodeEvents?: TaskArchivedEventsReader
+  readonly crewStationEvents?: CrewStationEventIngress
+  readonly intentArtifacts?: IntentArtifactSelection
   readonly evidenceArtifacts?: EvidenceArtifactPort
   readonly resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
@@ -496,16 +515,28 @@ export interface PostgresqlDaemonApplicationInput {
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   readonly taskDeletionEffects?: TaskDeletionEffects
+  /** RFC-370 §9.2 V3: a hosted publication's network Git runs in its task volume. */
+  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly portArtifactContentEffects?: PortArtifactContentEffects
+  readonly runtimeInventoryContent?: TaskRuntimeInventoryContent
   readonly taskRunSelection?: TaskRunRootSelection
+  readonly taskRecovery?: TaskRecoveryDeploymentSelection
+  readonly taskInputFiles?: TaskInputFiles
   readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
   readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
   readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
   readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
   readonly recoveredExecutionTaskIds?: () => readonly string[]
+  readonly runtimeManagement?: typeof composeLocalRuntimeManagement
+  readonly reviewArtifacts?: ReviewArtifactSelection
+  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
+  readonly mcpDiagnostics?: typeof composeLocalMcpDiagnostics
   readonly developmentPurposes?: DevelopmentPurposeSelection
+  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
+    typeof createDevelopmentWorkspaceRepositoryPreparation
+  >
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -617,6 +648,8 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly developmentAutomation: ReturnType<typeof composeDevelopmentAutomation>
   readonly digitalEmployee: DigitalEmployeeModuleWithRuntime
   readonly employeeWriterCutover: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
+  readonly archivedNodeEvents?: TaskArchivedEventsReader
+  readonly crewStationEvents?: CrewStationEventIngress
   readonly eventCenter: Awaited<ReturnType<typeof composeEventCenter>>
   readonly fusion: ReturnType<typeof composePostgresqlFusionOperations>
   readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
@@ -716,6 +749,7 @@ export async function composePostgresqlApplication(
     redactTaskEventPayload: redactEventPayload,
   })
   const core = composePostgresqlDaemonProviderCore({
+    databaseBackup: input.databaseBackup,
     daemonToken: input.token,
     db: input.db,
     ...(input.credentials === undefined ? {} : { credentials: input.credentials }),
@@ -838,12 +872,15 @@ export async function composePostgresqlApplication(
   })
   const mcpProbeStore = composeMcpProbeStore(input.db)
   const mcpRuntimeTests = (
-    phase.kind === 'daemon' ? composeLocalMcpDiagnostics : phase.scope.createMcpRuntimeTests
+    phase.kind === 'daemon'
+      ? (input.mcpDiagnostics ?? composeLocalMcpDiagnostics)
+      : phase.scope.createMcpRuntimeTests
   )({
     observe:
-      ({ session, turn, runtime }) =>
+      ({ session, turn, runtime, callId }) =>
       (startedAt) =>
         systemAgentObservations.open({
+          ...(callId === undefined ? {} : { callId }),
           feature: 'mcp-runtime-test',
           agentName: 'aw-mcp-runtime-test',
           protocol: session.runtimeProtocol,
@@ -973,12 +1010,14 @@ export async function composePostgresqlApplication(
       }
     },
   })
-  const repositoryPublicationTransport = createRepositoryPublicationTransport({
-    repository: repositoryTransportRepository,
-    secretBox: input.secretBox,
-    appHome: input.appHome,
-    endpointDiscovery: repositoryEndpointDiscovery,
-  })
+  const repositoryPublicationTransport =
+    input.repositoryPublicationTransport ??
+    createRepositoryPublicationTransport({
+      repository: repositoryTransportRepository,
+      secretBox: input.secretBox,
+      appHome: input.appHome,
+      endpointDiscovery: repositoryEndpointDiscovery,
+    })
   const developmentDeliveryProvider = createDevelopmentDeliveryProvider({
     db: input.db,
     secretBox: input.secretBox,
@@ -1117,9 +1156,11 @@ export async function composePostgresqlApplication(
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
   const collaborationRuntime = createCollaborationRuntimeMechanics(input.db, {
+    reviewArtifacts: input.reviewArtifacts,
     portArtifactReaderFor: () => portArtifacts,
   })
   const boundCollaborationContext: CollaborationRouteContext = createCollaborationCommandContext({
+    reviewArtifacts: input.reviewArtifacts,
     db: input.db,
     appHome: input.appHome,
     taskExecutionReadModels: taskExecutionPersistence.reads,
@@ -1128,7 +1169,12 @@ export async function composePostgresqlApplication(
     // RFC-359 W1-T2b：快速澄清决定同样是一份实现；蒸馏入队走 PG 侧的 memory 命令面。
     clarifyDecisions: createClarifyDecisionCommand(input.db, memoryOperations.distillCommands),
     // RFC-359 W1-T2c：评审决定同样是一份实现（决定 / 评论 / 选择五个事务体跑在 DatabaseSession 上）。
-    reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
+    reviewDecisions: createReviewDecisionCommand({
+      db: input.db,
+      appHome: input.appHome,
+      reviewArtifacts: input.reviewArtifacts,
+      rollbackSnapshots: input.reviewRollbackSnapshots,
+    }),
   })
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
   const workgroupTurns = composeWorkgroupTurnsOperations(
@@ -1222,6 +1268,7 @@ export async function composePostgresqlApplication(
     })
   }
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
+    recoverySelection: input.taskRecovery?.(identityAccess),
     archive: input.taskArchive,
     workspaceReads,
     runtime: {
@@ -1277,6 +1324,7 @@ export async function composePostgresqlApplication(
       cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
     },
     routeLaunch: {
+      inputFiles: input.taskInputFiles,
       workspaceUploads,
       configPath: input.configPath,
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
@@ -1293,6 +1341,7 @@ export async function composePostgresqlApplication(
       workgroup: workgroupLaunchResources,
     },
     routes: () => ({
+      archivedEvents: input.archivedNodeEvents,
       effects: input.taskDeletionEffects,
       nodeRunPrompts,
       collaboration: boundCollaborationContext,
@@ -1431,6 +1480,7 @@ export async function composePostgresqlApplication(
         createWorkspaceContentScope(workspaceRef, input.workspaceContent),
     }),
     taskExecutionReadModels: taskExecutionProvider.readModels,
+    runtimeInventoryContent: composeTaskRuntimeInventoryContent(input.runtimeInventoryContent),
     taskRecoveryOperations: taskExecutionProvider.recovery,
     codeWorkspace,
     repositoryWorkspace: core.repositoryWorkspaceStore,
@@ -1660,6 +1710,7 @@ export async function composePostgresqlApplication(
   )
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composeEventCenter({
+    beforeObservationWrite: input.beforeEventObservationWrite,
     db: input.db,
     customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
     typePackageDescriptorJsons: [
@@ -1747,11 +1798,13 @@ export async function composePostgresqlApplication(
     appHome: input.appHome,
     reactionRounds: employeeReactionRounds,
     inputArtifacts: employeeInputArtifacts,
-    repositoryPreparation: createDevelopmentWorkspaceRepositoryPreparation({
-      store: repositoryWorkspaceStore,
-      appHome: input.appHome,
-      secretBox: input.secretBox,
-    }),
+    repositoryPreparation:
+      input.developmentWorkspaceRepositoryPreparation ??
+      createDevelopmentWorkspaceRepositoryPreparation({
+        store: repositoryWorkspaceStore,
+        appHome: input.appHome,
+        secretBox: input.secretBox,
+      }),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
       effects: input.employeeCaseWorkspaceEffects,
@@ -2166,11 +2219,13 @@ export async function composePostgresqlApplication(
   const intentArtifactRecovery = composeIntentApplyArtifactLifecycle({
     db: input.db,
     appHome: input.appHome,
+    content: input.intentArtifacts?.artifactContent,
   })
   // RFC-359 —— 与 SQLite 根**逐字同一份**装配（`composeIntentApplyOperations`）。
   const intentApplyOperations = composeIntentApplyOperations({
     db: input.db,
     appHome: input.appHome,
+    ...input.intentArtifacts,
     aclIdentities: resourceCatalog.persistence.identities,
     artifacts: intentArtifactRecovery,
     // RFC-358 §7（AC-6）—— 与 SQLite provider 同一道门、同一份判据。
@@ -2287,6 +2342,7 @@ export async function composePostgresqlApplication(
     }),
     documentation: Object.freeze({ configuration }),
     webhookIngress: composeWebhookIngressTransport({
+      crewStationEvents: input.crewStationEvents,
       webhookIngressPersistence: composeWebhookIngressPersistenceFor(input.db),
       secretBox: input.secretBox,
       digitalEmployeeEventCenter: eventCenter,
@@ -2308,7 +2364,7 @@ export async function composePostgresqlApplication(
       memories: memoryCatalog,
       tasks: taskExecutionProvider.overview,
     })
-  const runtimeManagement = composeLocalRuntimeManagement({
+  const runtimeManagement = (input.runtimeManagement ?? composeLocalRuntimeManagement)({
     observations: () => systemAgentObservations,
     configuration: {
       current: () => configuration.read(),
@@ -2787,6 +2843,8 @@ export async function composePostgresqlApplication(
     developmentAutomation,
     digitalEmployee,
     employeeWriterCutover,
+    archivedNodeEvents: input.archivedNodeEvents,
+    crewStationEvents: input.crewStationEvents,
     eventCenter,
     fusion: fusionOperations,
     resourceLimits: resourceLimitOperations,

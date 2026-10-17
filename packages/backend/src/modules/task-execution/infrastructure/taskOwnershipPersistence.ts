@@ -70,7 +70,10 @@ function stale(message: string): TaskExecutionError {
 }
 
 /** 任务还剩没结算的 attempt 或没释放的资源占用 —— owner 不能干净让出。 */
-async function hasUnresolvedEffects(tx: DatabaseTransaction, taskId: string): Promise<boolean> {
+export async function hasUnresolvedTaskEffectsInTx(
+  tx: DatabaseTransaction,
+  taskId: string,
+): Promise<boolean> {
   const attempts = await tx
     .select({ id: taskExecutionEffectAttempts.id })
     .from(taskExecutionEffectAttempts)
@@ -102,6 +105,80 @@ async function hasUnresolvedEffects(tx: DatabaseTransaction, taskId: string): Pr
     )
     .limit(1)
   return holds[0] !== undefined
+}
+
+/** A durable continuation may survive its daemon. Requeue only the exact
+ * claimed intent, after the caller has verified its business checkpoint and
+ * every old writer. The successor still acquires a new ordinary owner epoch;
+ * neither a recovery receipt nor a stale worker can revive the old token. */
+export async function releaseRecoveredOwnerInTx(
+  tx: DatabaseTransaction,
+  input: Parameters<TaskOwnershipPersistence['releaseRecovered']>[0] & {
+    readonly preserveIntentId?: string
+  },
+): Promise<OwnerSnapshot> {
+  assertVerifiedTakeoverProof(input.proof)
+  if (
+    input.proof.taskId !== input.owner.taskId ||
+    input.proof.oldEpoch !== input.owner.epoch ||
+    input.proof.oldOwnerRevision !== input.expectedRevision
+  )
+    throw new Error('takeover proof does not match recovered owner')
+  if (await hasUnresolvedTaskEffectsInTx(tx, input.owner.taskId))
+    throw new TaskExecutionError(
+      'task-execution-recovery-required',
+      `task '${input.owner.taskId}' still has unresolved effects`,
+    )
+  if (input.preserveIntentId === undefined) {
+    await terminalizeTaskExecutionIntentsInTx(tx, {
+      taskId: input.owner.taskId,
+      state: 'failed',
+      failureCode: 'daemon-restart-recovered',
+      now: input.now,
+      claimedOwnerEpoch: input.owner.epoch,
+    })
+  } else {
+    const requeued = await tx
+      .update(taskExecutionIntents)
+      .set({
+        state: 'pending',
+        claimedEpoch: null,
+        claimedAt: null,
+        updatedAt: input.now,
+      })
+      .where(
+        and(
+          eq(taskExecutionIntents.id, input.preserveIntentId),
+          eq(taskExecutionIntents.taskId, input.owner.taskId),
+          eq(taskExecutionIntents.state, 'claimed'),
+          eq(taskExecutionIntents.claimedEpoch, input.owner.epoch),
+        ),
+      )
+      .returning({ id: taskExecutionIntents.id })
+    if (requeued.length !== 1) throw stale('recovered continuation intent changed')
+  }
+  const [row] = await tx
+    .update(taskExecutionOwners)
+    .set({
+      state: 'released',
+      revision: input.expectedRevision + 1,
+      recoveryCode: 'daemon-restart-recovered',
+      recoveryProofDigest: input.proof.evidenceDigest,
+      updatedAt: input.now,
+    })
+    .where(
+      and(
+        eq(taskExecutionOwners.taskId, input.owner.taskId),
+        eq(taskExecutionOwners.ownerId, input.owner.ownerId),
+        eq(taskExecutionOwners.daemonGeneration, input.owner.daemonGeneration),
+        eq(taskExecutionOwners.epoch, input.owner.epoch),
+        eq(taskExecutionOwners.revision, input.expectedRevision),
+        inArray(taskExecutionOwners.state, ['revoked', 'recovery-required']),
+      ),
+    )
+    .returning()
+  if (!row) throw stale(`task '${input.owner.taskId}' recovery release lost`)
+  return snapshot(row)
 }
 
 /**
@@ -428,7 +505,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
       // 已被授权重试的 open effect 是持久续跑点、不是还在动作的写者：它的资源占用在同一笔结算
       // 事务里已经释放。owner 可以让出，下一次合法续跑再做那次已授权的同代重试。
       // prepared / acting / recovery-required 的 attempt 与任何幸存的占用仍然挡住释放。
-      if (await hasUnresolvedEffects(tx, input.token.taskId)) {
+      if (await hasUnresolvedTaskEffectsInTx(tx, input.token.taskId)) {
         throw new TaskExecutionError(
           'task-execution-recovery-required',
           `task '${input.token.taskId}' still has unresolved effects or resource holds`,
@@ -473,55 +550,7 @@ export class DrizzleTaskOwnershipPersistence implements TaskOwnershipPersistence
   }
 
   async releaseRecovered(input: Parameters<TaskOwnershipPersistence['releaseRecovered']>[0]) {
-    assertVerifiedTakeoverProof(input.proof)
-    if (
-      input.proof.taskId !== input.owner.taskId ||
-      input.proof.oldEpoch !== input.owner.epoch ||
-      input.proof.oldOwnerRevision !== input.expectedRevision
-    ) {
-      throw new Error('takeover proof does not match recovered owner')
-    }
-    return await databaseSessionFor(this.db).serializable(async (tx) => {
-      if (await hasUnresolvedEffects(tx, input.owner.taskId)) {
-        throw new TaskExecutionError(
-          'task-execution-recovery-required',
-          `task '${input.owner.taskId}' still has unresolved effects`,
-        )
-      }
-      // 缺口 08：被中断的那一代 intent 转 failed 的同时，绑在它上面、尚未消费的重放授权
-      // 必须退回 requires-actor —— 否则接管之后授权悬空。
-      await terminalizeTaskExecutionIntentsInTx(tx, {
-        taskId: input.owner.taskId,
-        state: 'failed',
-        failureCode: 'daemon-restart-recovered',
-        now: input.now,
-        claimedOwnerEpoch: input.owner.epoch,
-      })
-      const row = (
-        await tx
-          .update(taskExecutionOwners)
-          .set({
-            state: 'released',
-            revision: input.expectedRevision + 1,
-            recoveryCode: 'daemon-restart-recovered',
-            recoveryProofDigest: input.proof.evidenceDigest,
-            updatedAt: input.now,
-          })
-          .where(
-            and(
-              eq(taskExecutionOwners.taskId, input.owner.taskId),
-              eq(taskExecutionOwners.ownerId, input.owner.ownerId),
-              eq(taskExecutionOwners.daemonGeneration, input.owner.daemonGeneration),
-              eq(taskExecutionOwners.epoch, input.owner.epoch),
-              eq(taskExecutionOwners.revision, input.expectedRevision),
-              inArray(taskExecutionOwners.state, ['revoked', 'recovery-required']),
-            ),
-          )
-          .returning()
-      )[0]
-      if (row === undefined) throw stale(`task '${input.owner.taskId}' recovery release lost`)
-      return snapshot(row)
-    })
+    return databaseSessionFor(this.db).serializable((tx) => releaseRecoveredOwnerInTx(tx, input))
   }
 
   async read(taskId: string) {

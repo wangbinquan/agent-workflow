@@ -296,6 +296,7 @@ describe('RFC-370 selected invocation preparation', () => {
       'protocol',
       'workspace',
       'usage',
+      'protocol',
       'cwd',
       'run',
       'receipt',

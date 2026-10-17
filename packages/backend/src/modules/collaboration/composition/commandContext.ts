@@ -12,7 +12,7 @@ import type { TaskExecutionReadModels } from '@/modules/task-execution/public/ty
 import type { HumanGateOperationStore } from '../application/ports/humanGateOperationStore'
 import type { ClarifyQuestionSnapshotReader } from '../application/ports/clarifyQuestionSnapshotReader'
 import type { HumanGateArtifactStore } from '../application/ports/humanGateArtifactStore'
-import type { ReviewArtifactContentPort } from '../application/ports/reviewArtifactContent'
+import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
 import type { ManualQuestionOpenWriter } from '../application/ports/manualQuestionOpenWriter'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { ReviewNodeReviewerStore } from '../application/ports/reviewNodeReviewerStore'
@@ -82,10 +82,7 @@ export type CollaborationCommandContextInput = Omit<
 > & {
   readonly db: ProviderNeutralDatabase
   readonly appHome?: string
-  readonly reviewArtifacts?: {
-    readonly store: HumanGateArtifactStore
-    readonly content: ReviewArtifactContentPort
-  }
+  readonly reviewArtifacts?: ReviewArtifactSelection
 }
 
 export type PostgresqlCollaborationCommandContextInput = Omit<

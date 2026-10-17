@@ -1,3 +1,4 @@
+import { composeHostedTaskMaterialReferences } from '@/modules/task-execution/composition/crewstationTaskRunSelection'
 import { expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -13,6 +14,8 @@ import type {
   CreateBusinessMaterial,
 } from '@/platform/crewstation/businessExecution'
 import { createLogger } from '@/util/log'
+import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
+import { createHostedGitAgentEnvironment } from '@/modules/source-control/composition/crewstationGitCredentials'
 
 const unavailable = (): never => {
   throw new Error('unexpected native effect')
@@ -54,18 +57,26 @@ const intent = (): AgentMaterialIntent => ({
   nodeRunId: 'run',
   log: createLogger('hosted-agent-test'),
 })
-function fixture(existing: HostedExecutionBinding | null = null) {
+function fixture(
+  existing: HostedExecutionBinding | null = null,
+  overrides: Partial<Parameters<typeof createHostedAgentInvocationPreparation>[0]> = {},
+) {
   const materials: CreateBusinessMaterial[] = []
   const executions: HostedExecution = {
+    workspaceSettled: async () => true,
     find: async () => existing,
     run: unavailable,
     adopt: unavailable,
     cancel: unavailable,
+    observing: () => false,
   }
   const api: CrewStationBusinessExecution = {
     createTask: unavailable,
     getTask: unavailable,
     closeTask: unavailable,
+    pauseTask: unavailable,
+    resumeTask: unavailable,
+    listSubtasks: unavailable,
     async createMaterial(_task, material) {
       materials.push(material)
       return { materialId: 'material', digest: 'digest', sizeBytes: 12 }
@@ -92,6 +103,7 @@ function fixture(existing: HostedExecutionBinding | null = null) {
     workspace,
     profiles: [{ protocol: 'opencode', model: null, agentProfileId: 'profile' }],
     skillFiles: async () => [{ path: 'skill/SKILL.md', content: 'skill body' }],
+    ...overrides,
   })
   return { preparation, materials, executions }
 }
@@ -125,6 +137,27 @@ test('hosted Agent material preserves definition, memory, selected skills and st
     inventory: false,
     sessionCapture: false,
   })
+})
+
+test('Agent material includes Git identity and Secret references in its frozen request digest', async () => {
+  const materialEnvironment = createHostedGitAgentEnvironment(
+    JSON.stringify([
+      {
+        kind: 'http',
+        url: 'https://git.example.test/team/repo.git',
+        username: 'developer',
+        passwordSecretId: '01a1428d-05f5-7000-9af3-aef7382bfe08',
+      },
+    ]),
+  )
+  const f = fixture(null, { materialEnvironment })
+  const input = { ...intent(), gitUserName: 'AW Developer', gitUserEmail: 'dev@example.test' }
+  await f.preparation.compile(input)
+  await f.preparation.compile(input)
+  await f.preparation.compile({ ...input, gitUserEmail: 'changed@example.test' })
+  expect(f.materials[0]!.env).toEqual(materialEnvironment(input))
+  expect(f.materials[0]!.requestKey).toBe(f.materials[1]!.requestKey)
+  expect(f.materials[0]!.requestKey).not.toBe(f.materials[2]!.requestKey)
 })
 
 test('unsupported model options and missing model mappings fail before platform submission', async () => {
@@ -239,15 +272,31 @@ test('restart uses the accepted material and original Agent request even when de
     state: 'running',
     cancelRequested: false,
     cancelReason: null,
+    epoch: 1,
     createdAt: Date.now(),
+    agentContext: {
+      version: 1,
+      protocol: 'opencode',
+      startupInventory: true,
+      declared: { ...emptyDeclaredManifest(), skills: ['original-skill'] },
+    },
   }
-  const f = fixture(original)
+  const f = fixture(original, {
+    materialEnvironment: unavailable,
+    nativeConfigAvailable: unavailable,
+    materialObjectsAvailable: unavailable,
+    startupInventoryAvailable: unavailable,
+    pluginFiles: unavailable,
+    skillFiles: unavailable,
+    materialFiles: { stage: unavailable, published: unavailable },
+  })
   let adopted: string | undefined
   f.executions.adopt = async (executionId) => {
     adopted = executionId
     return {
       binding: original,
       timedOut: false,
+      cancelled: false,
       result: {
         exitCode: 0,
         reason: 'completed',
@@ -264,8 +313,10 @@ test('restart uses the accepted material and original Agent request even when de
     injection: { mcps: [], profile: profile('now-unmapped') },
   })
   expect(prepared.materialRef).toBe('original-material')
+  expect(prepared.declared.skills).toEqual(['original-skill'])
   expect(f.materials).toHaveLength(0)
   const invocation = await prepared.bind()
+  expect(invocation.protocol.capabilities.startupObservation).toBe('init-event')
   expect(
     (
       await invocation.execute(
@@ -279,4 +330,122 @@ test('restart uses the accepted material and original Agent request even when de
     ).result,
   ).toBe('ok')
   expect(adopted).toBe(original.executionId)
+})
+
+test('hosted task material keeps the frozen plugin generation rather than resolving current metadata', () => {
+  const references = composeHostedTaskMaterialReferences()
+  const snapshot = {
+    kind: 'agent-injection' as const,
+    root: {} as Parameters<typeof references.references>[0]['root'],
+    dependents: [],
+    mcps: [],
+    skills: [],
+    plugins: [
+      {
+        id: 'plugin',
+        name: 'plugin',
+        enabled: true,
+        options: {},
+        runtimeSpecifier: 'file://cs-plugin:plugin/GENERATION/index.js',
+        resolvedVersion: '1.0.0',
+      },
+    ],
+  }
+  const material = references.references(snapshot)
+  snapshot.plugins[0]!.runtimeSpecifier = 'file://cs-plugin:plugin/NEXT/index.js'
+  expect(material.plugins[0]!.content.reference).toBe('cs-plugin:plugin/GENERATION/index.js')
+})
+
+test('adoption of a profile-only execution never uploads a replacement material', async () => {
+  const original: HostedExecutionBinding = {
+    executionId: 'agent:task:run',
+    taskId: 'task',
+    nodeRunId: 'run',
+    businessTaskId: 'parent',
+    requestKey: 'accepted-key',
+    request: {
+      kind: 'agent',
+      name: 'original',
+      agentProfileId: 'old-profile',
+      prompt: 'original-prompt',
+    },
+    subtaskId: 'subtask',
+    attempt: 1,
+    materialDigest: null,
+    lastCursor: null,
+    result: null,
+    state: 'running',
+    cancelRequested: false,
+    cancelReason: null,
+    epoch: 1,
+    createdAt: 1,
+  }
+  const f = fixture(original)
+  const compiled = await f.preparation.compile({
+    ...intent(),
+    injection: { mcps: [], profile: profile('now-unmapped') },
+  })
+  expect(f.materials).toHaveLength(0)
+  expect(compiled.materialRef).toBe('hosted-execution:agent:task:run')
+  expect((await compiled.bind()).materialRef).toBe(compiled.materialRef)
+  expect(compiled.declared.unsupported).toContain('hosted-declaration-not-recorded')
+  expect(original.request).not.toHaveProperty('materialId')
+})
+
+test('M2 native preparation stages binary skill objects and records material publication before binding', async () => {
+  const events: string[] = []
+  const bytes = new Uint8Array([0, 255, 128])
+  const f = fixture(null, {
+    nativeConfigAvailable: async () => true,
+    materialObjectsAvailable: async () => true,
+    startupInventoryAvailable: async () => true,
+    skillFiles: async () => [{ path: 'skill/data.bin', bytes }],
+    materialFiles: {
+      async stage(request) {
+        expect(request).toMatchObject({
+          executionId: 'agent:task:run',
+          taskId: 'task',
+          businessTaskId: 'parent',
+          files: [{ path: 'skill/data.bin', bytes }],
+        })
+        events.push('staged')
+        return [
+          {
+            path: 'skill/data.bin',
+            object: { objectId: 'object', sha256: 'a'.repeat(64), size: 3 },
+          },
+        ]
+      },
+      async published(executionId, materialId) {
+        expect(executionId).toBe('agent:task:run')
+        expect(materialId).toBe('material')
+        expect(f.materials).toHaveLength(1)
+        events.push('published')
+      },
+    },
+  })
+  const prepared = await f.preparation.compile({
+    ...intent(),
+    injection: {
+      mcps: [],
+      skills: [
+        {
+          name: 'skill',
+          sourceKind: 'managed',
+          content: { owner: 'resource-catalog', reference: 'skill', version: 1 },
+        },
+      ],
+    },
+  })
+  expect(events).toEqual(['staged', 'published'])
+  expect(f.materials[0]).toMatchObject({
+    nativeConfig: {
+      version: 1,
+      protocol: 'opencode',
+      agent: { name: 'agent', body: 'definition\n\nmemory' },
+    },
+    skills: [{ path: 'skill/data.bin', object: { objectId: 'object', size: 3 } }],
+  })
+  expect(f.materials[0]).not.toHaveProperty('systemPrompt')
+  expect(prepared.declared.skills).toEqual(['skill'])
 })

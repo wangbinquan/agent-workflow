@@ -74,6 +74,7 @@ import {
   updateAgentPersistenceValues,
 } from '../agentPersistence'
 import { createMcpInsertValues, mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
+import { assertHostedPluginPublicationInTx } from '../crewstation/pluginPublication'
 import {
   createPluginInsertValues,
   pluginConfigHash,
@@ -710,6 +711,11 @@ function createPluginPort(
           )
         }
         if (prepared.staged === null) throw new Error('plugin install result missing')
+        await assertHostedPluginPublicationInTx(
+          transaction,
+          plan.resourceId,
+          prepared.staged.cachedPath,
+        )
         const at = now()
         const inserted = await transaction
           .insert(plugins)
@@ -757,6 +763,11 @@ function createPluginPort(
         )
       }
       const install = prepared.staged
+      await assertHostedPluginPublicationInTx(
+        transaction,
+        plan.resourceId,
+        install?.cachedPath ?? current.cachedPath,
+      )
       const updatedAt = monotonicNow(current.updatedAt)
       const changed = await transaction
         .update(plugins)

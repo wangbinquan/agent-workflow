@@ -3100,12 +3100,13 @@ async function runOneScriptAttempt(
       }
     },
     requireStartReceipt: true,
-    onStdoutLine: async (line) => {
+    onStdoutLine: async (line, sourceKey) => {
       // NOT masked, deliberately: stdout is the DATA channel. Its bytes become
       // the port value verbatim (AC-27), so masking this mirror would show the
       // operator something the downstream node never sees. A script that prints
       // its own credential to stdout has published it as data.
       await opts.persistence.nodeExecution.appendEvent({
+        ...(sourceKey === undefined ? {} : { sourceKey }),
         nodeRunId: a.nodeRunId,
         ts: Date.now(),
         kind: 'text',
@@ -3113,13 +3114,14 @@ async function runOneScriptAttempt(
         ...executionContextInput(state),
       })
     },
-    onStderrLine: async (line) => {
+    onStderrLine: async (line, sourceKey) => {
       // RFC-253 T28 — stderr is the DIAGNOSTIC channel and these rows are a
       // read surface (node-run events route, /session reconstruction, WS
       // replay). Masking only the failure detail below was not enough: that
       // value is `stderrTail`, a strict SUFFIX of the very bytes this sink
       // stores, so the same secret stayed in the clear one table over.
       await opts.persistence.nodeExecution.appendEvent({
+        ...(sourceKey === undefined ? {} : { sourceKey }),
         nodeRunId: a.nodeRunId,
         ts: Date.now(),
         kind: 'stderr',

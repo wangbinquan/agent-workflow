@@ -20,7 +20,11 @@ import {
   createPostgresqlAdditiveUpgrade,
   createPostgresqlRetirementUpgrade,
   createPostgresqlCheckUpgrade,
+  createPostgresqlIndexPredicateUpgrade,
+  logicalIndexPredicateReplacements,
   createPostgresqlIndexUpgrade,
+  createPostgresqlOwnershipUpgrade,
+  logicalOwnerReplacements,
   createPostgresqlSourceRevisionUpgrade,
   logicalSourceRevisionReplacement,
   createPostgresqlMigrationRoot,
@@ -141,15 +145,22 @@ export async function generatePostgresqlMigrationHistory(
   const retiresTables = upgrade.from.contract.tables.some(
     (t) => !target.contract.tables.some((next) => next.id === t.id),
   )
-  const step = replacesSourceRevision
-    ? createPostgresqlSourceRevisionUpgrade({ ...upgrade })
-    : retiresTables
-      ? createPostgresqlRetirementUpgrade({ ...upgrade })
-      : replacesChecks
-        ? createPostgresqlCheckUpgrade({ ...upgrade })
-        : addsTables
-          ? createPostgresqlAdditiveUpgrade({ ...upgrade })
-          : createPostgresqlIndexUpgrade({ ...upgrade })
+  const replacesOwners = logicalOwnerReplacements(upgrade.from.contract, target.contract).length > 0
+  const replacesIndexPredicates =
+    logicalIndexPredicateReplacements(upgrade.from.contract, target.contract).length > 0
+  const step = replacesIndexPredicates
+    ? createPostgresqlIndexPredicateUpgrade({ ...upgrade })
+    : replacesOwners
+      ? createPostgresqlOwnershipUpgrade({ ...upgrade })
+      : replacesSourceRevision
+        ? createPostgresqlSourceRevisionUpgrade({ ...upgrade })
+        : retiresTables
+          ? createPostgresqlRetirementUpgrade({ ...upgrade })
+          : replacesChecks
+            ? createPostgresqlCheckUpgrade({ ...upgrade })
+            : addsTables
+              ? createPostgresqlAdditiveUpgrade({ ...upgrade })
+              : createPostgresqlIndexUpgrade({ ...upgrade })
   const sqlFile = resolve(folder, step.sqlFile)
   const journalFile = resolve(folder, 'meta', `${step.id}.upgrade.json`)
   if (await writeImmutable(sqlFile, renderPostgresqlUpgradeSql(step))) created.push(sqlFile)

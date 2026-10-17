@@ -305,7 +305,11 @@ function composeDevelopmentAutomationFromPersistence(
     ...(deps.requirementSource === undefined ? {} : { source: deps.requirementSource }),
     now,
   })
-  const seedsRoot = factory.resolve(deps.appHome, 'evidence', 'seeds')
+  const seedsRoot = factory.resolve(
+    factory.applicationRootReference ?? deps.appHome,
+    'evidence',
+    'seeds',
+  )
   const templates = persistence.actionTemplates
   const verificationProfiles = persistence.verificationProfiles
   const playbookSaga = persistence.playbookSaga
@@ -345,7 +349,11 @@ function composeDevelopmentAutomationFromPersistence(
           {
             evidence,
             seedsRoot,
-            workspacesRoot: factory.resolve(deps.appHome, 'workspaces', 'actions'),
+            workspacesRoot: factory.resolve(
+              factory.applicationRootReference ?? deps.appHome,
+              'workspaces',
+              'actions',
+            ),
           },
           input,
           actionWorkspaceEffects,
@@ -391,7 +399,11 @@ function composeDevelopmentAutomationFromPersistence(
             prepare: (input: Parameters<ConflictMergePort['prepare']>[0]) =>
               deps.conflictMerge!.prepare({
                 ...input,
-                workspacesRoot: factory.resolve(deps.appHome, 'workspaces', 'conflicts'),
+                workspacesRoot: factory.resolve(
+                  factory.applicationRootReference ?? deps.appHome,
+                  'workspaces',
+                  'conflicts',
+                ),
               }),
             finish: (input: Parameters<ConflictMergePort['finish']>[0]) =>
               deps.conflictMerge!.finish(input),

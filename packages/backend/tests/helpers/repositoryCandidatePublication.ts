@@ -1,6 +1,6 @@
 // RFC-370: complete selected receivers map opaque references to real native Git.
 import type {
-  RepositoryCandidateEffectsFactory,
+  RepositoryCandidateStepEffectsFactory,
   RepositoryCandidateSession,
   RepositoryCandidateWorkspace,
   RepositoryCandidateGitOptions,
@@ -16,7 +16,7 @@ export class CandidatePublicationStore {
   readonly locations = new Map<string, string>()
   readonly trace: string[] = []
   readonly hooks = new Map<string, () => void | Promise<void>>()
-  readonly acquisitions: Array<Parameters<RepositoryCandidateEffectsFactory['acquire']>[0]> = []
+  readonly acquisitions: Array<Parameters<RepositoryCandidateStepEffectsFactory['acquire']>[0]> = []
   readonly baselineCommands: Array<{ reference: string; args: readonly string[] }> = []
   readonly networkCommands: Array<{ reference: string; args: readonly string[] }> = []
   workspacesCreated = 0
@@ -55,11 +55,11 @@ export class CandidatePublicationStore {
   }
 }
 
-export class MappedCandidateFactory implements RepositoryCandidateEffectsFactory {
+export class MappedCandidateFactory implements RepositoryCandidateStepEffectsFactory {
   readonly #native = createFileRepositoryCandidateEffectsFactory()
   constructor(readonly store: CandidatePublicationStore) {}
 
-  async acquire(input: Parameters<RepositoryCandidateEffectsFactory['acquire']>[0]) {
+  async acquire(input: Parameters<RepositoryCandidateStepEffectsFactory['acquire']>[0]) {
     this.store.acquisitions.push(input)
     return this.store.effect('candidate:acquire', async () => {
       const native = await this.#native.acquire({

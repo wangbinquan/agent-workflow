@@ -23,6 +23,7 @@ import {
   type ObservedInventoryFaces,
   type ObservedInventoryItem,
   type RuntimeInventoryObservation,
+  type StartupObservation,
 } from '@agent-workflow/shared'
 import type { DeclaredManifestV1 } from '@/services/execution/agentInjection'
 import type { RuntimeDriverCapabilities } from '@/services/runtime/types'
@@ -42,9 +43,17 @@ export function buildRuntimeInventoryObservation(input: {
   claudeInit: ClaudeInitLike | null
   /** opencode：退出后读到的 dump 快照（含失败桩）。 */
   snapshot: SnapshotLike | null
+  streamObservation?: StartupObservation | null
   now: number
 }): RuntimeInventoryObservation {
   const { capabilities: caps } = input
+  if (input.streamObservation && input.streamObservation.state !== 'verified') {
+    return {
+      state: input.streamObservation.state,
+      reason: input.streamObservation.reason,
+      message: null,
+    }
+  }
   const observed = observedFacesOf(input)
   if (observed !== null) {
     const faces: InventoryFaces = {}
@@ -86,11 +95,13 @@ function observedFacesOf(input: {
   capabilities: RuntimeDriverCapabilities
   claudeInit: ClaudeInitLike | null
   snapshot: SnapshotLike | null
+  streamObservation?: StartupObservation | null
 }): ObservedInventoryFaces | null {
   if (input.snapshot !== null && input.snapshot.captured) {
     return inventoryFacesFromSnapshot(input.snapshot)
   }
-  const init = input.claudeInit
+  const init =
+    input.streamObservation?.state === 'verified' ? input.streamObservation : input.claudeInit
   if (init === null) return null
   const named = (names: readonly string[] | undefined): ObservedInventoryItem[] | undefined =>
     names === undefined ? undefined : names.map((name) => ({ key: name, name }))

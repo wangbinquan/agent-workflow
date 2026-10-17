@@ -392,6 +392,12 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
   'rfc359-w8-logical-source-conformance.test.ts: 1',
   'rfc359-w8-migrator-conformance.test.ts: 1',
+  // RFC-370 v3 V5: HTTP-boundary locks of `POST /api/backup` (hosted decode and
+  // C10 refusal; the unchanged standalone contract). The backup adapter is a
+  // stub and the database only backs the HTTP root's session/auth, so neither
+  // asserts provider behaviour.
+  'rfc370-m3-backup-http.test.ts: 1',
+  'rfc370-v3-standalone-backup-request.test.ts: 1',
   // RFC-371：嵌套子会话数字采集的原生只读 SQLite 夹具，AW 账本另做双 provider 回归。
   // RFC-370: one native SQLite client records real writer-lease/transaction ACKs.
   // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
@@ -883,6 +889,11 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   //     回滚，放 `beforeAll` 的铺陈会被抹掉。注册顺序即执行顺序：harness 的 `beforeEach`
   //     在 body 之前就登记了，所以 body 里的 `beforeEach` 一定跑在回滚之后。
   'rfc257-webhook-error-codes.test.ts',
+  // RFC-370 v3 V5: `POST /api/backup` boundary locks through the SQLite HTTP root
+  // with a stubbed backup adapter; migrate to the dual-provider HTTP application
+  // harness next wave.
+  'rfc370-m3-backup-http.test.ts',
+  'rfc370-v3-standalone-backup-request.test.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑦）：`rfc268-webhook-scratch-launch.test.ts` **转为
   // sanctioned**（`sqlite-execution-engine` 那一类），不是迁移发生了，而是**它一直就属于那一类、
   // 只是被一层门面挡住了**：它原本从 `services/execution/executor.ts` 取 `cancelExecution`，

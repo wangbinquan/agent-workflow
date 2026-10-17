@@ -1,7 +1,18 @@
+import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
+import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
+import type { TaskRecoveryDeploymentSelection } from '@/modules/task-execution/composition/taskRecoverySelection'
+import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
+import type { HumanGateArtifactRecovery } from '@/modules/collaboration/public/commands'
+import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
+import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
+import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
+import type { composeLocalRuntimeManagement } from '@/modules/task-execution/composition/localRuntimeManagement'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
-import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
-import type { ScratchWorkspaceEffects } from '@/modules/source-control/application/ports/scratchWorkspaceEffects'
-import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/application/ports/workspaceMaintenance'
+import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/composition'
+import type { ScratchWorkspaceEffects } from '@/modules/source-control/composition'
+import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/composition'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
 import { composeDevelopmentPurposeRoot, type DevelopmentPurposeSelection } from '@/server'
@@ -20,15 +31,18 @@ import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
-  RepositoryCandidateEffectsFactory,
 } from '@/modules/source-control/public/types'
+import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
   selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
+import type {
+  PortArtifactContentEffects,
+  TaskRuntimeInventoryContent,
+} from '@/modules/task-execution/public/types'
 import type {
   NodeRunPromptContentEffects,
   TaskDeletionEffects,
@@ -78,6 +92,7 @@ import type { loadConfig } from '@/config'
 // RFC-366: the stored budget may carry only the RFC-044 pair; the resolver is the
 // single place the newer per-source caps get their defaults.
 import {
+  DAEMON_SHUTDOWN_ABORT_REASON,
   DEFAULT_DISTILL_POLICY,
   resolveDistillPolicy,
   resolveSourceContextBudget,
@@ -411,6 +426,8 @@ import {
   createManagedWorkerRuntimeHandleFactory,
   createPausableDaemonRuntimeServiceBindings,
   createPollingDaemonRuntimeHandleFactory,
+  createSignalledDaemonRuntimeHandleFactory,
+  type SignalledDaemonRuntimeOwner,
 } from './daemonProviderRuntimeHandles'
 import {
   composePostgresqlDaemonApplication,
@@ -448,6 +465,7 @@ import { composeIntentWorkflowGraphValidation } from '@/modules/intent/compositi
 
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
 import {
   selectSkillContentDependencies,
   type SkillContentBinding,
@@ -484,6 +502,12 @@ export interface StartOptions {
   employeeInputArtifacts?: EmployeeInputArtifactPort
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
+  beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
+  humanGateArtifactRecovery?: HumanGateArtifactRecovery
+  databaseBackup?: DatabaseBackupEffects
+  archivedNodeEvents?: TaskArchivedEventsReader
+  crewStationEvents?: CrewStationEventIngress
+  intentArtifacts?: IntentArtifactSelection
   evidenceArtifacts?: EvidenceArtifactPort
   resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
@@ -503,17 +527,31 @@ export interface StartOptions {
   actionWorkspaceEffects?: ActionWorkspaceEffects
   conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   taskDeletionEffects?: TaskDeletionEffects
+  /** RFC-370 §9.2 V3 — hosted only: publication network Git in the task volume. */
+  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
+  runtimeInventoryContent?: TaskRuntimeInventoryContent
   taskRunSelection?: TaskRunRootSelection
+  taskRecovery?: TaskRecoveryDeploymentSelection
+  taskInputFiles?: TaskInputFiles
   readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
   readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
   readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
   readonly recoveredExecutionTaskIds?: () => readonly string[]
+  /** RFC-370 §9.2 V1 — deployment workers started with execution authority. */
+  readonly hostedBackgroundOwners?: readonly SignalledDaemonRuntimeOwner[]
+  readonly runtimeManagement?: typeof composeLocalRuntimeManagement
+  readonly reviewArtifacts?: ReviewArtifactSelection
+  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
+  readonly mcpDiagnostics?: typeof composeLocalMcpDiagnostics
   readonly developmentPurposes?: DevelopmentPurposeSelection
+  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
+    typeof createDevelopmentWorkspaceRepositoryPreparation
+  >
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
@@ -717,9 +755,13 @@ async function composePostgresqlProviderSession(
 
   const application = await composePostgresqlDaemonApplication({
     taskDeletionEffects: input.taskDeletionEffects,
+    repositoryPublicationTransport: input.repositoryPublicationTransport,
     nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
     portArtifactContentEffects: input.portArtifactContentEffects,
+    runtimeInventoryContent: input.runtimeInventoryContent,
     taskRunSelection: input.taskRunSelection,
+    taskRecovery: input.taskRecovery,
+    taskInputFiles: input.taskInputFiles,
     repositoryPreparationEffects: input.repositoryPreparationEffects,
     scratchWorkspaceEffects: input.scratchWorkspaceEffects,
     workspaceMaintenanceFilesystem: input.workspaceMaintenanceFilesystem,
@@ -727,7 +769,12 @@ async function composePostgresqlProviderSession(
     initializeExecution: input.initializeExecution,
     recoveredExecutionTaskIds: input.recoveredExecutionTaskIds,
     systemAgentRunFamily: input.systemAgentRunFamily,
+    mcpDiagnostics: input.mcpDiagnostics,
     developmentPurposes: input.developmentPurposes,
+    runtimeManagement: input.runtimeManagement,
+    reviewArtifacts: input.reviewArtifacts,
+    reviewRollbackSnapshots: input.reviewRollbackSnapshots,
+    developmentWorkspaceRepositoryPreparation: input.developmentWorkspaceRepositoryPreparation,
     workspaceExcludeProfiles: input.workspaceExcludeProfiles,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     actionWorkspaceEffects: input.actionWorkspaceEffects,
@@ -744,6 +791,11 @@ async function composePostgresqlProviderSession(
     employeeInputArtifacts: input.employeeInputArtifacts,
     missionInputBlobs: input.missionInputBlobs,
     pluginInstaller: input.pluginInstaller,
+    beforeEventObservationWrite: input.beforeEventObservationWrite,
+    databaseBackup: input.databaseBackup,
+    archivedNodeEvents: input.archivedNodeEvents,
+    crewStationEvents: input.crewStationEvents,
+    intentArtifacts: input.intentArtifacts,
     evidenceArtifacts: input.evidenceArtifacts,
     resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
     resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
@@ -874,6 +926,7 @@ async function composePostgresqlProviderSession(
 
   const humanGateRecovery = createPostgresqlHumanGateContinuationRecoveryQueries(db)
   const humanGateWorker = createHumanGateContinuationWorkerDefinition({
+    artifacts: input.humanGateArtifactRecovery,
     listPending: () => humanGateRecovery.listPending(),
     drive: runtime.driveHumanGateContinuation,
     onError(continuation) {
@@ -1065,6 +1118,10 @@ async function composePostgresqlProviderSession(
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
     runImmediately: true,
     async run() {
+      await runtime.crewStationEvents?.runPending({
+        observe: (observation) => runtime.eventCenter.commands.observe(observation),
+        wakeTerminalControl: (effectId) => runtime.webhookTerminalControl.wake(effectId),
+      })
       const result = await runEventCenterCycle(runtime.eventCenter.worker)
       if (result.steps >= 32) {
         input.log.warn('PostgreSQL event center reached its bounded step budget', { ...result })
@@ -1115,10 +1172,13 @@ async function composePostgresqlProviderSession(
       const current = await input.configuration.read()
       const ticker = startBackupScheduler({
         createScheduledBackup: () =>
-          application.core.systemOperations.application.commands.requestBackup.execute(
-            application.core.systemOperations.localContext,
-            { includeWorktrees: true },
-          ),
+          input.databaseBackup
+            ? // RFC-370 v3 C10: hosted backups never capture workspaces.
+              input.databaseBackup.request({ includeWorktrees: false, kind: 'scheduled' })
+            : application.core.systemOperations.application.commands.requestBackup.execute(
+                application.core.systemOperations.localContext,
+                { includeWorktrees: true },
+              ),
         intervalMs: current.backupIntervalMs,
         retentionCount: current.backupRetentionCount,
         retentionDays: current.backupRetentionDays,
@@ -1266,6 +1326,9 @@ async function composePostgresqlProviderSession(
       backupRuntimeFactory,
       submoduleRefreshRuntimeFactory,
       batchImportRuntimeFactory,
+      ...(input.hostedBackgroundOwners ?? []).map((owner) =>
+        createSignalledDaemonRuntimeHandleFactory(owner, DAEMON_SHUTDOWN_ABORT_REASON),
+      ),
     ],
     providerCloseParticipants: [
       memoryDistillRecoverOnClose,
@@ -1296,6 +1359,12 @@ interface DaemonProviderSessionComposeInput {
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
+  readonly beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
+  readonly humanGateArtifactRecovery?: HumanGateArtifactRecovery
+  readonly databaseBackup?: DatabaseBackupEffects
+  readonly archivedNodeEvents?: TaskArchivedEventsReader
+  readonly crewStationEvents?: CrewStationEventIngress
+  readonly intentArtifacts?: IntentArtifactSelection
   readonly evidenceArtifacts?: EvidenceArtifactPort
   readonly resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
@@ -1315,17 +1384,29 @@ interface DaemonProviderSessionComposeInput {
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   readonly taskDeletionEffects?: TaskDeletionEffects
+  readonly repositoryPublicationTransport?: RepositoryPublicationTransport
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
+  runtimeInventoryContent?: TaskRuntimeInventoryContent
   readonly taskRunSelection?: TaskRunRootSelection
+  readonly taskRecovery?: TaskRecoveryDeploymentSelection
+  readonly taskInputFiles?: TaskInputFiles
   readonly repositoryPreparationEffects?: RepositoryPreparationEffectFactory
   readonly scratchWorkspaceEffects?: ScratchWorkspaceEffects
   readonly workspaceMaintenanceFilesystem?: WorkspaceMaintenanceFilesystem
   readonly workspacePresence?: WorkspacePresenceQueries
   readonly initializeExecution?: (initialize: () => Promise<void>) => Promise<void>
   readonly recoveredExecutionTaskIds?: () => readonly string[]
+  readonly hostedBackgroundOwners?: readonly SignalledDaemonRuntimeOwner[]
+  readonly runtimeManagement?: typeof composeLocalRuntimeManagement
+  readonly reviewArtifacts?: ReviewArtifactSelection
+  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   readonly systemAgentRunFamily?: typeof composeLocalSystemAgentRunFamily
+  readonly mcpDiagnostics?: typeof composeLocalMcpDiagnostics
   readonly developmentPurposes?: DevelopmentPurposeSelection
+  readonly developmentWorkspaceRepositoryPreparation?: ReturnType<
+    typeof createDevelopmentWorkspaceRepositoryPreparation
+  >
   readonly workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
@@ -1357,6 +1438,42 @@ interface ComposedDaemonProviderSession {
     }
   }
   readonly session: Awaited<ReturnType<typeof _createComposedDaemonProviderRuntimeSession>>
+}
+
+/** RFC-370 §9.2 V9 — selections only the hosted deployment supplies. A hosted
+ * deployment always runs on PostgreSQL, so the SQLite root never threads them:
+ * it composes the standalone owners directly. */
+export const HOSTED_ONLY_SELECTIONS = [
+  'reviewArtifacts',
+  'reviewRollbackSnapshots',
+  'taskInputFiles',
+  'mcpDiagnostics',
+  'beforeEventObservationWrite',
+  'humanGateArtifactRecovery',
+  'runtimeInventoryContent',
+  'runtimeManagement',
+  'developmentWorkspaceRepositoryPreparation',
+  'archivedNodeEvents',
+  'crewStationEvents',
+  'intentArtifacts',
+  'databaseBackup',
+  'hostedBackgroundOwners',
+  'taskRecovery',
+  'repositoryPublicationTransport',
+] as const satisfies readonly (keyof DaemonProviderSessionComposeInput)[]
+type HostedOnlySelection = (typeof HOSTED_ONLY_SELECTIONS)[number]
+type SqliteProviderSessionComposeInput = Omit<
+  DaemonProviderSessionComposeInput,
+  HostedOnlySelection
+>
+
+export function standaloneSelectionsOf(
+  input: DaemonProviderSessionComposeInput,
+): SqliteProviderSessionComposeInput {
+  const hosted = HOSTED_ONLY_SELECTIONS.filter((key) => input[key] !== undefined)
+  if (hosted.length > 0)
+    throw new Error(`hosted-deployment-requires-postgresql: ${hosted.join(', ')}`)
+  return input
 }
 
 type DaemonProviderSessionComposer = (
@@ -1803,17 +1920,27 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
     const sessionInput = Object.freeze({
       taskDeletionEffects: opts.taskDeletionEffects,
+      repositoryPublicationTransport: opts.repositoryPublicationTransport,
       nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
       portArtifactContentEffects: opts.portArtifactContentEffects,
+      runtimeInventoryContent: opts.runtimeInventoryContent,
       taskRunSelection: opts.taskRunSelection,
+      taskRecovery: opts.taskRecovery,
+      taskInputFiles: opts.taskInputFiles,
       repositoryPreparationEffects: opts.repositoryPreparationEffects,
       scratchWorkspaceEffects: opts.scratchWorkspaceEffects,
       workspaceMaintenanceFilesystem: opts.workspaceMaintenanceFilesystem,
       workspacePresence: opts.workspacePresence,
       initializeExecution: opts.initializeExecution,
       recoveredExecutionTaskIds: opts.recoveredExecutionTaskIds,
+      hostedBackgroundOwners: opts.hostedBackgroundOwners,
       systemAgentRunFamily: opts.systemAgentRunFamily,
+      mcpDiagnostics: opts.mcpDiagnostics,
       developmentPurposes: opts.developmentPurposes,
+      runtimeManagement: opts.runtimeManagement,
+      reviewArtifacts: opts.reviewArtifacts,
+      reviewRollbackSnapshots: opts.reviewRollbackSnapshots,
+      developmentWorkspaceRepositoryPreparation: opts.developmentWorkspaceRepositoryPreparation,
       workspaceExcludeProfiles: opts.workspaceExcludeProfiles,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
       actionWorkspaceEffects: opts.actionWorkspaceEffects,
@@ -1829,6 +1956,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       employeeInputArtifacts: opts.employeeInputArtifacts,
       missionInputBlobs: opts.missionInputBlobs,
       pluginInstaller: opts.pluginInstaller,
+      beforeEventObservationWrite: opts.beforeEventObservationWrite,
+      humanGateArtifactRecovery: opts.humanGateArtifactRecovery,
+      databaseBackup: opts.databaseBackup,
+      archivedNodeEvents: opts.archivedNodeEvents,
+      crewStationEvents: opts.crewStationEvents,
+      intentArtifacts: opts.intentArtifacts,
       evidenceArtifacts: opts.evidenceArtifacts,
       resourcePackageSkillArtifacts: opts.resourcePackageSkillArtifacts,
       resourcePackagePluginArtifacts: opts.resourcePackagePluginArtifacts,
@@ -1941,6 +2074,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 async function composeSqliteProviderSession(
   input: DaemonProviderSessionComposeInput,
 ): Promise<ComposedDaemonProviderSession> {
+  // RFC-370 §9.2 V9: a SQLite root refuses hosted-only selections before any
+  // composition (hosted deployments are PostgreSQL-only).
+  standaloneSelectionsOf(input)
   const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
     actionWorkspaceEffects: input.actionWorkspaceEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
@@ -2322,7 +2458,10 @@ async function composeSqliteProviderSession(
             db,
             appHome: Paths.root,
             taskExecutionReadModels: readModels,
-            reviewDecisions: createReviewDecisionCommand({ db, appHome: Paths.root }),
+            reviewDecisions: createReviewDecisionCommand({
+              db,
+              appHome: Paths.root,
+            }),
             questionDispatches: createQuestionDispatchCommand(db),
             clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
           })
@@ -2805,9 +2944,10 @@ async function composeSqliteProviderSession(
   // The routes receive this same explicit application-owned instance.
   const mcpRuntimeTests = composeLocalMcpDiagnostics({
     observe:
-      ({ session, turn, runtime }) =>
+      ({ session, turn, runtime, callId }) =>
       (startedAt) =>
         systemAgentObservations.open({
+          ...(callId === undefined ? {} : { callId }),
           feature: 'mcp-runtime-test',
           agentName: 'aw-mcp-runtime-test',
           protocol: session.runtimeProtocol,

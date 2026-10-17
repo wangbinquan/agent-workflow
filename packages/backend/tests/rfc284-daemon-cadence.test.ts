@@ -32,6 +32,8 @@ describe('RFC-284 T22 — DAEMON_CADENCE 数值锁', () => {
       developmentRetentionSweep: 3_600_000,
       // RFC-310 OS：durable Event → Reaction driver 1Hz。
       digitalEmployeeOs: 1_000,
+      // RFC-370 v3 V6 新增（非调参）：托管对象发布日志的恢复 / 回收拍（10 分钟，非 hourly）。
+      hostedObjectRecovery: 600_000,
     })
   })
 })

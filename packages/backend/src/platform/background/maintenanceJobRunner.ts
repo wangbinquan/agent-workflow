@@ -1,4 +1,8 @@
 import type { MaintenanceJobKey } from '@agent-workflow/shared'
+import type {
+  DatabaseBackupMaintenance,
+  HostedObjectPublicationMaintenance,
+} from '@/modules/system-operations/public/commands'
 import { join } from 'node:path'
 
 import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
@@ -37,6 +41,9 @@ interface WebhookDeliveryGcCursor {
 }
 
 export interface MaintenanceSystemOperations {
+  readonly databaseBackups?: DatabaseBackupMaintenance
+  /** Hosted deployments only; standalone has no CS object publications. */
+  readonly objectPublications?: HostedObjectPublicationMaintenance
   readonly eventsArchive: {
     runSlice(input: {
       readonly thresholds: {
@@ -314,6 +321,10 @@ export async function runMaintenanceJob(input: {
     }
     case 'backupPrune': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
+      if (ownerCommands.system.databaseBackups) {
+        const result = await ownerCommands.system.databaseBackups.prune(payload)
+        return { counters: result, delta: NONE }
+      }
       const result = pruneBackups({
         dir: join(appHome, 'backups'),
         count: payload.retentionCount,
@@ -420,6 +431,14 @@ export async function runMaintenanceJob(input: {
     case 'walCheckpoint': {
       parseMaintenanceJobPayload(job, input.payload)
       return { counters: await ownerCommands.system.storage.run(), delta: NONE }
+    }
+    case 'hostedObjectRecovery': {
+      parseMaintenanceJobPayload(job, input.payload)
+      const maintenance = ownerCommands.system.objectPublications
+      return {
+        counters: maintenance === undefined ? { skipped: 1 } : { ...(await maintenance.run()) },
+        delta: NONE,
+      }
     }
     case 'humanGateRecovery': {
       // Historical durable rows may survive an in-place upgrade. The active

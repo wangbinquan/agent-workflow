@@ -66,6 +66,8 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
       'task-workspace-queries-not-composed',
       'task-repository-workspace-not-composed',
       'task-change-narrative-not-composed',
+      // RFC-370 M2: startup-inventory content is read through the selected owner.
+      'task-runtime-inventory-content-not-composed',
     ]) {
       expect(route).toContain(`throw new Error('${code}')`)
     }

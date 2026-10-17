@@ -259,7 +259,42 @@ const RootSchema: z.ZodType<PostgresqlMigrationRoot> = z
   .strict()
 const UpgradeSchema: z.ZodType<PostgresqlIndexUpgrade> = z
   .object({
-    version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+    version: z.union([
+      z.literal(1),
+      z.literal(2),
+      z.literal(3),
+      z.literal(4),
+      z.literal(5),
+      z.literal(6),
+      z.literal(7),
+    ]),
+    logicalIndexPredicates: z
+      .array(
+        z
+          .object({
+            tableId: z.string(),
+            name: z.string(),
+            fromExpression: z.null(),
+            toExpression: z.string().min(1),
+          })
+          .strict(),
+      )
+      .optional(),
+    indexPredicateReplacements: z
+      .array(
+        z
+          .object({
+            logicalId: z.string(),
+            before: StatementSchema,
+            drop: StatementSchema,
+            after: StatementSchema,
+          })
+          .strict(),
+      )
+      .optional(),
+    logicalOwners: z
+      .array(z.object({ tableId: z.string(), before: OwnerSchema, after: OwnerSchema }).strict())
+      .optional(),
     logicalSourceRevision: z
       .object({
         tableId: z.literal('observation_source_revisions'),

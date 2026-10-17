@@ -126,7 +126,13 @@ export function startMaintenanceWorkerSupervisor(
   const setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms))
   const clearTimer =
     options.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
-  const factory = options.workerFactory ?? DEFAULT_FACTORY
+  // RFC-370 §9.2 V9: a deployment that contributes Worker effects names its
+  // own Worker entry (which registers those effects); otherwise the platform
+  // entry runs unchanged.
+  const entry = options.effectsBootstrap?.workerEntry
+  const factory =
+    options.workerFactory ??
+    (entry === undefined ? DEFAULT_FACTORY : () => new Worker(entry) as unknown as WorkerLike)
 
   let worker: WorkerLike | null = null
   let stopped = false

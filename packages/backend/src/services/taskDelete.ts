@@ -234,7 +234,9 @@ export async function deleteTask(
     taskId,
     parentTaskId: row.parentTaskId,
     worktrees,
-    directories: maintenanceTaskIds.flatMap((id) => effects.content.directories(id)),
+    directories: maintenanceTaskIds.flatMap((id) =>
+      effects.content.directories(id, memberTaskRows.find((row) => row.id === id)?.worktreePath),
+    ),
   }
   let maintenanceClaim = await terminalMaintenance.claim({
     rootTaskId: taskId,

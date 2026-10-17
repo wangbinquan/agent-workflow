@@ -4,7 +4,7 @@ type Completion<T> = T | Promise<T>
 
 /** One complete physical conflict-scene owner; references belong to its implementation. */
 export interface ConflictMergeWorkspaceEffects {
-  allocate(storageRootReference?: string): Completion<string>
+  allocate(storageRootReference?: string, baselineReference?: string): Completion<string>
   cloneBaseline(
     workspaceReference: string,
     baselineReference: string,

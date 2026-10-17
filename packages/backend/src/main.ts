@@ -25,7 +25,11 @@ import { composeDoctorApplication } from '@/modules/system-operations/compositio
 import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
 import { frameBackfillCommand } from './cli/frameBackfill'
 import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
-import { composeDeploymentStartOptions, migrateForDeployment } from './cli/deployment'
+import {
+  composeDeploymentStartOptions,
+  migrateForDeployment,
+  verifyDatabaseRestoreForDeployment,
+} from './cli/deployment'
 import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand, type StartOptions } from './cli/start'
 import {
@@ -279,6 +283,24 @@ async function main(): Promise<void> {
     (localDatabaseMigrationOperations ??= composeLocalDatabaseMigrationOperations())
 
   switch (sub) {
+    case '__hosted-git-credential': {
+      const { hostedGitCredentialResponse } =
+        await import('./modules/source-control/composition/crewstationGitCredentials')
+      const out = hostedGitCredentialResponse(
+        Bun.argv[3] ?? '',
+        await Bun.stdin.text().catch(() => ''),
+        process.env,
+      )
+      if (out) process.stdout.write(out)
+      process.exit(0)
+      break
+    }
+    case '__hosted-git-ssh': {
+      const { runHostedGitSsh } =
+        await import('./modules/source-control/composition/crewstationGitCredentials')
+      process.exit(await runHostedGitSsh(Bun.argv.slice(3), process.env))
+      break
+    }
     case 'workspace': {
       const { runWorkspaceTaskImageCommand } = await import('./bootstrap/workspaceTaskImage')
       process.exit(await runWorkspaceTaskImageCommand(Bun.argv.slice(3)))
@@ -481,6 +503,11 @@ async function main(): Promise<void> {
     case 'migrate': {
       const { output } = await migrateForDeployment(process.env)
       process.stdout.write(output)
+      break
+    }
+
+    case 'verify-database-restore': {
+      process.stdout.write(await verifyDatabaseRestoreForDeployment(process.env))
       break
     }
 

@@ -8,6 +8,7 @@ import { sha256Hex } from '@/util/hash'
 import { ConflictError } from '@/util/errors'
 import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 import { withTaskExecutionWrite } from './ownedTaskExecution'
+import type { TaskInputFiles } from '../application/ports/taskInputFiles'
 
 /** Preserve the original upload writer and record its complete packed-path receipt
  * before admission. A resumed launch must not turn the same upload into "file (1)". */
@@ -16,6 +17,7 @@ export async function applyTaskWorkspaceUploads(input: {
   taskId: string
   plan: UploadPlan
   workspaceUploads?: WorkspaceUploadContentFactory
+  inputFiles?: TaskInputFiles
   /** Effect substitution is used by the process interruption oracle. */
   write?: (plan: UploadPlan) => Promise<UploadResult>
 }): Promise<WorkspaceUploadResult> {
@@ -27,6 +29,7 @@ export async function applyTaskWorkspaceUploads(input: {
       files: input.plan.files.map((file) => ({
         inputKey: file.inputKey,
         filename: file.filename,
+        declaredMime: file.declaredMime,
         bytes: sha256Hex(file.bytes),
       })),
       limits: input.plan.limits,
@@ -48,6 +51,16 @@ export async function applyTaskWorkspaceUploads(input: {
     uploadPlan?: { requestDigest: string; placements: string[] }
     uploads?: { requestDigest: string; packedByKey: Array<[string, string[]]> }
   }
+  if (receipt.uploads !== undefined && receipt.uploads.requestDigest !== requestDigest)
+    throw new ConflictError('workspace-upload-request-mismatch', 'workspace upload request changed')
+  if (receipt.uploadPlan !== undefined && receipt.uploadPlan.requestDigest !== requestDigest)
+    throw new ConflictError('workspace-upload-request-mismatch', 'workspace upload request changed')
+  await input.inputFiles?.retain({
+    taskId: input.taskId,
+    requestDigest,
+    files: input.plan.files,
+    limits: input.plan.limits,
+  })
   if (receipt.uploads !== undefined) {
     if (receipt.uploads.requestDigest !== requestDigest)
       throw new ConflictError(

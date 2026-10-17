@@ -132,16 +132,18 @@ describe('hosted presentation', () => {
     expect(validateSettingsSearch({ tab: 'database', q: 1 })).toEqual({ tab: 'database', q: 1 })
     stateDeployment('crewstation')
     // Dropped from the search, so the page shows Runtime and canonicalizes the URL (RFC-198).
-    for (const tab of ['database', 'authentication', 'network']) {
+    for (const tab of ['database', 'authentication']) {
       expect(validateSettingsSearch({ tab, q: 1 })).toEqual({ q: 1 })
     }
     expect(validateSettingsSearch({ tab: 'limits' })).toEqual({ tab: 'limits' })
+    // RFC-370 v3 V10: Network stays behind the gateway (external-access switch only).
+    expect(validateSettingsSearch({ tab: 'network' })).toEqual({ tab: 'network' })
   })
 
   test('the platform-owned Settings tabs are hidden', () => {
     const settings = readFileSync(resolve(__dirname, '..', 'src/routes/settings.tsx'), 'utf8')
     expect(settings).toMatch(
-      /GATEWAY_HIDDEN_SETTINGS_TABS: ReadonlySet<SettingsTab> = new Set<SettingsTab>\(\[\s*'database',\s*'authentication',\s*'network',\s*\]\)/,
+      /GATEWAY_HIDDEN_SETTINGS_TABS: ReadonlySet<SettingsTab> = new Set<SettingsTab>\(\[\s*'database',\s*'authentication',\s*\]\)/,
     )
     expect(settings).toContain('groups={visibleSectionGroups}')
   })
@@ -152,9 +154,8 @@ describe('hosted presentation', () => {
       /isGatewayIdentity\(\) &&\s*\(location\.pathname === '\/auth' \|\| location\.pathname === '\/setup\/admin'\)/,
     )
     expect(source('src/components/UserMenu.tsx')).toMatch(/\{!isGatewayIdentity\(\) && \(/)
-    expect(source('src/routes/account.tsx')).toMatch(
-      /gateway && \(requested === 'security' \|\| requested === 'tokens'\)/,
-    )
+    // RFC-370 v3 V10: integration tokens stay available behind the gateway.
+    expect(source('src/routes/account.tsx')).toMatch(/gateway && requested === 'security' \?/)
     expect(source('src/hooks/useWebSocket.ts')).toContain(
       "if (token !== GATEWAY_SESSION_TOKEN) u.searchParams.set('token', token)",
     )

@@ -541,7 +541,10 @@ export async function prepareHostedPostgresqlProviderRuntime(input: {
       receipt,
       describeSchemaOutcome: () =>
         `PostgreSQL schema ${receipt.applied ? 'applied' : 'verified'} ` +
-        `(generation: ${adopted.generation.payload.generationId}, active tables: ${receipt.activeTableCount})\n`,
+        `(generation: ${adopted.generation.payload.generationId}, active tables: ${receipt.activeTableCount}` +
+        (receipt.successorContractDigest === undefined
+          ? ')\n'
+          : `; the database already carries the newer expand-only schema ${receipt.successorContractDigest})\n`),
       openBootstrapClient: () => adopted.openClient(),
     }
   } catch (error) {

@@ -9,6 +9,7 @@
 //   · `sqliteTaskRouteOperations.ts`     —— SQLite 绑定
 // 本文件只放实现，不放任何一侧的装配。
 //
+import type { TaskArchivedEventsReader } from '../public/types'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import {
   CommitPushMetaSchema,
@@ -192,6 +193,7 @@ const RETRYABLE_TASK_STATUSES = [
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
+  readonly archivedEvents?: TaskArchivedEventsReader
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly nodeRunPrompts?: NodeRunPromptOperations
   readonly db: ProviderNeutralDatabase
@@ -1102,6 +1104,7 @@ async function assertNodeRunOwner(
  * PostgreSQL 那份写死 `Paths.logsDir`——合并成一份后两个引擎同样可测。
  */
 export interface TaskReadProjectionDependencies {
+  readonly archivedEvents?: TaskArchivedEventsReader
   readonly db: ProviderNeutralDatabase
   readonly logsDir?: string
 }
@@ -1123,7 +1126,10 @@ export async function nodeRunEventsProjection(
   const since = options.since ?? 0
   const limit = Math.min(options.limit ?? 500, 1000)
   const logsDir = dependencies.logsDir ?? Paths.logsDir
-  const archived = await readArchivedEvents(logsDir, taskId, nodeRunId, since, limit)
+  const archived =
+    dependencies.archivedEvents === undefined
+      ? await readArchivedEvents(logsDir, taskId, nodeRunId, since, limit)
+      : await dependencies.archivedEvents.read(taskId, nodeRunId, since, limit)
   const events = archived.map((event) => ({
     id: event.id,
     nodeRunId,
@@ -1193,13 +1199,16 @@ export async function nodeRunStdoutProjection(
   }
   if (capped) omitted = true
   if (!omitted) {
-    const archived = await readArchivedEvents(
-      dependencies.logsDir ?? Paths.logsDir,
-      taskId,
-      nodeRunId,
-      0,
-      STDOUT_TAIL_ROW_CAP + 1,
-    )
+    const archived =
+      dependencies.archivedEvents === undefined
+        ? await readArchivedEvents(
+            dependencies.logsDir ?? Paths.logsDir,
+            taskId,
+            nodeRunId,
+            0,
+            STDOUT_TAIL_ROW_CAP + 1,
+          )
+        : await dependencies.archivedEvents.read(taskId, nodeRunId, 0, STDOUT_TAIL_ROW_CAP + 1)
     if (archived.length > STDOUT_TAIL_ROW_CAP) {
       omitted = true
     } else {
@@ -2442,6 +2451,7 @@ export function createTaskRouteOperations(
 
   const operations: TaskRouteOperations = {
     nodeRunPrompts,
+    archivedEvents: dependencies.archivedEvents,
     // 列表三件：筛选 / 倒序 / 告警数 / owner 身份 / 子任务数由 `rfc359-w7` 的 A1–A5 对拍锁住。
     list: (filters) => taskListSummariesProjection(dependencies.db, filters),
     listItems: (filters) =>
@@ -2518,9 +2528,18 @@ export function createTaskRouteOperations(
     nodeRuns: (taskId) => taskNodeRunsProjection({ db: dependencies.db, nodeRunPrompts }, taskId),
     diff: (taskId) => taskDiffProjection({ db: dependencies.db, workspaceReads }, taskId),
     stdout: (taskId, nodeRunId) =>
-      nodeRunStdoutProjection({ db: dependencies.db }, taskId, nodeRunId),
+      nodeRunStdoutProjection(
+        { db: dependencies.db, archivedEvents: dependencies.archivedEvents },
+        taskId,
+        nodeRunId,
+      ),
     events: (taskId, nodeRunId, options) =>
-      nodeRunEventsProjection({ db: dependencies.db }, taskId, nodeRunId, { ...options }),
+      nodeRunEventsProjection(
+        { db: dependencies.db, archivedEvents: dependencies.archivedEvents },
+        taskId,
+        nodeRunId,
+        { ...options },
+      ),
     assertManualExecutionAllowed: (actor, taskId) =>
       assertManualExecutionAllowedProjection(
         { db: dependencies.db, resourceAuthorityFor: dependencies.resourceAuthorityFor },

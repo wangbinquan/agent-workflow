@@ -10,6 +10,7 @@
 // tree client-side from raw event rows. Here we just do the IO and
 // pass-through.
 
+import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
 import {
   isAgentNodeKind,
   parseSessionTree,
@@ -54,6 +55,7 @@ export async function getSessionTree(
   /** 测试注入:把两段上限调到几十条，才测得出「超限时根还对不对」。 */
   caps: { rootPrefix?: number; tail?: number } = {},
   selectedNodeRunPrompts?: NodeRunPromptOperations,
+  selectedArchivedEvents?: TaskArchivedEventsReader,
 ): Promise<{ tree: SessionTree }> {
   const nodeRunPrompts = selectNodeRunPromptOperations(selectedNodeRunPrompts)
   const prefixCap = caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP
@@ -134,7 +136,10 @@ export async function getSessionTree(
   // sessionId/parentSessionId,这里按 node_run 逐个补回并与 DB 行合并。
   const archivedEvents: ParseSessionInputEvent[] = []
   for (const id of targetNodeRunIds) {
-    const archived = await readArchivedEvents(logsDir, taskId, id, 0, ARCHIVED_SESSION_EVENT_CAP)
+    const archived =
+      selectedArchivedEvents === undefined
+        ? await readArchivedEvents(logsDir, taskId, id, 0, ARCHIVED_SESSION_EVENT_CAP)
+        : await selectedArchivedEvents.read(taskId, id, 0, ARCHIVED_SESSION_EVENT_CAP)
     for (const a of archived) {
       archivedEvents.push({
         id: a.id,

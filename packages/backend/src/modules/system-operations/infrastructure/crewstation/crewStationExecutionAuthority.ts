@@ -7,11 +7,17 @@
 // lease, renews it, records `preparing` in the application database (the
 // application barrier — older holders' transactions now fail), reports a
 // pending handoff ready, activates, and records `active`. Once active it renews
-// every `renewMs`; a rejected renewal, a freeze, or failures past the recorded
+// every `renewMs`; a rejected renewal, a freeze, or failures past the platform
 // expiry mean the lease is lost. The instance never returns to active: it
 // reports the loss once and the daemon exits through its graceful shutdown
 // (crash-only, §3.2); the platform restarts it as a standby.
-import { createHash } from 'node:crypto'
+//
+// RFC-370 v3 V7 — a platform freeze (migration or database restore) closes the
+// database write window and keeps the instance alive as a read-only standby
+// that reports the freeze ready; only the platform's current release can
+// acknowledge it, so any other instance keeps waiting instead of failing.
+// A slow database never costs the lease: the platform's renewal is adopted
+// first and the database mirror follows.
 import {
   isCrewStationApiError,
   type CrewStationPlatformApi,
@@ -22,8 +28,13 @@ import type {
   ExecutionAuthorityState,
   ExecutionFence,
 } from '../../application/ports/executionAuthority'
-import type { HostedExecutionControlStore } from '../../application/ports/hostedExecutionControl'
+import {
+  HostedExecutionControlRegressionError,
+  HostedExecutionControlStaleError,
+  type HostedExecutionControlStore,
+} from '../../application/ports/hostedExecutionControl'
 import { encodeHostedFenceToken } from '../hostedExecutionControl'
+import { sha256Hex } from '@/util/hash'
 
 const CONTROL_ROOT = '/v3/business-execution/control'
 
@@ -43,6 +54,8 @@ export const CREWSTATION_STANDBY_REASONS = {
   busy: 'execution-lease-held-elsewhere',
   notActiveRelease: 'not-the-active-release',
   frozen: 'execution-frozen-by-platform',
+  /** A platform migration or database restore: the database is read-only. */
+  databaseFrozen: 'database-frozen-by-platform',
   unreachable: 'platform-unreachable',
   rejected: 'execution-lease-rejected',
 } as const
@@ -60,12 +73,19 @@ function canonical(value: unknown): unknown {
 }
 
 export function preparationDigest(value: unknown): string {
-  return createHash('sha256')
-    .update(JSON.stringify(canonical(value)))
-    .digest('hex')
+  return sha256Hex(JSON.stringify(canonical(value)))
+}
+
+/** The application database refused this lease: a newer holder already recorded its own. */
+function supersededInDatabase(error: unknown): boolean {
+  return (
+    error instanceof HostedExecutionControlStaleError ||
+    error instanceof HostedExecutionControlRegressionError
+  )
 }
 
 function standbyReasonOf(error: unknown): string {
+  if (supersededInDatabase(error)) return CREWSTATION_STANDBY_REASONS.rejected
   if (!isCrewStationApiError(error)) return CREWSTATION_STANDBY_REASONS.unreachable
   if (error.code === 'execution_lease_busy') return CREWSTATION_STANDBY_REASONS.busy
   if (error.status === 403) return CREWSTATION_STANDBY_REASONS.notActiveRelease
@@ -73,7 +93,7 @@ function standbyReasonOf(error: unknown): string {
   return CREWSTATION_STANDBY_REASONS.rejected
 }
 
-export interface CrewStationExecutionAuthority extends ExecutionAuthorityPort {
+export interface CrewStationExecutionAuthorityPort extends ExecutionAuthorityPort {
   /** Start competing for the lease; idempotent. */
   start(): void
   readonly instanceId: string
@@ -89,7 +109,7 @@ export function createCrewStationExecutionAuthority(input: {
   readonly tickMs?: number
   readonly renewMs?: number
   readonly now?: () => number
-}): CrewStationExecutionAuthority {
+}): CrewStationExecutionAuthorityPort {
   const instanceId = input.instanceId ?? Bun.randomUUIDv7()
   const tickMs = input.tickMs ?? 5_000
   const renewMs = input.renewMs ?? 10_000
@@ -113,6 +133,8 @@ export function createCrewStationExecutionAuthority(input: {
   let timer: ReturnType<typeof setTimeout> | undefined
   let expiryTimer: ReturnType<typeof setTimeout> | undefined
   let lastRenewedAt = 0
+  /** `${epoch}:${operationId}` of the freeze the platform has accepted as ready. */
+  let acknowledgedMigration: string | undefined
 
   const lose = (next: ExecutionAuthorityState): void => {
     state = next
@@ -150,23 +172,58 @@ export function createCrewStationExecutionAuthority(input: {
     )
   }
 
-  const acquire = async (): Promise<void> => {
-    let control = await input.platform.get<ControlRecord>(CONTROL_ROOT)
+  /**
+   * Close the database write window for the platform's operation (waiting for
+   * every admitted write), then report it ready. Only the platform's current
+   * release may acknowledge a freeze; for any other instance the platform
+   * answers 403 and this instance simply stays a read-only standby.
+   */
+  const prepareMigration = async (control: ControlRecord): Promise<void> => {
     const migration = control.migration
-    if (migration !== undefined) {
-      await input.control.write({
-        epoch: control.epoch,
-        owner: null,
-        phase: 'frozen',
-        leaseId: null,
-        expiresAt: null,
-      })
+    if (migration === undefined) throw new Error('execution migration is missing')
+    state = { kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.databaseFrozen }
+    // Stop local admission immediately, but keep the process alive until the
+    // database write window drains and the platform receives ready.
+    held = undefined
+    if (expiryTimer !== undefined) clearTimeout(expiryTimer)
+    await input.control.write({
+      epoch: control.epoch,
+      owner: null,
+      phase: 'frozen',
+      leaseId: null,
+      expiresAt: null,
+      migrationOperationId: migration.operationId,
+    })
+    const acknowledgement = `${control.epoch}:${migration.operationId}`
+    if (closed || lost || acknowledgedMigration === acknowledgement) return
+    try {
       await input.platform.post(`${CONTROL_ROOT}/migrations/${migration.operationId}/ready`, {
         operationId: migration.operationId,
         expectedEpoch: control.epoch,
-        preparationDigest: preparationDigest({ epoch: control.epoch, phase: 'frozen' }),
+        preparationDigest: preparationDigest({
+          epoch: control.epoch,
+          phase: 'frozen',
+          migrationOperationId: migration.operationId,
+        }),
       })
-      state = { kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen }
+      acknowledgedMigration = acknowledgement
+    } catch (error) {
+      // Another release (or this pod before it is ready) cannot acknowledge;
+      // the window stays closed and the next tick asks again.
+      if (isCrewStationApiError(error) && error.status === 403) {
+        log.info('crewstation migration ready not accepted from this instance', {
+          operationId: migration.operationId,
+        })
+        return
+      }
+      throw error
+    }
+  }
+
+  const acquire = async (): Promise<void> => {
+    let control = await input.platform.get<ControlRecord>(CONTROL_ROOT)
+    if (control.migration !== undefined) {
+      await prepareMigration(control)
       return
     }
     control = await input.platform.post<ControlRecord>(`${CONTROL_ROOT}/claim`, { instanceId })
@@ -184,7 +241,8 @@ export function createCrewStationExecutionAuthority(input: {
     if (closed || lost) return
     if (!Number.isFinite(expiresAt) || expiresAt <= now())
       throw new Error('platform execution lease is already expired')
-    // The application barrier: from here on, an older holder's transactions fail.
+    // The application barrier: from here on, an older holder's transactions
+    // fail. A claim also reopens a write window a finished freeze left closed.
     await input.control.write({
       epoch: control.epoch,
       owner: instanceId,
@@ -228,6 +286,7 @@ export function createCrewStationExecutionAuthority(input: {
       token: encodeHostedFenceToken({ leaseId: lease.leaseId, instanceId }),
     }
     state = { kind: 'active', fence }
+    acknowledgedMigration = undefined
     log.info('crewstation execution lease active', { epoch: control.epoch })
     resolveActive(fence)
   }
@@ -238,11 +297,18 @@ export function createCrewStationExecutionAuthority(input: {
     try {
       const observed = await input.platform.get<ControlRecord>(CONTROL_ROOT)
       if (closed || lost) return
+      if (observed.migration !== undefined) {
+        try {
+          await prepareMigration(observed)
+        } finally {
+          lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.databaseFrozen })
+        }
+        return
+      }
       if (
         observed.phase !== 'active' ||
         observed.epoch !== current.epoch ||
-        observed.leaseOwner !== instanceId ||
-        observed.migration !== undefined
+        observed.leaseOwner !== instanceId
       ) {
         lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen })
         await input.control.write({
@@ -275,28 +341,39 @@ export function createCrewStationExecutionAuthority(input: {
         lose({ kind: 'standby', reason: CREWSTATION_STANDBY_REASONS.unreachable })
         return
       }
-      await input.control.write({
-        epoch: current.epoch,
-        owner: instanceId,
-        phase: 'active',
-        leaseId: current.leaseId,
-        expiresAt,
-      })
-      if (closed || lost) return
-      if (expiresAt <= now()) {
-        lose({ kind: 'standby', reason: CREWSTATION_STANDBY_REASONS.unreachable })
-        return
-      }
+      // The platform is the authority: adopt its renewal before the database
+      // mirror, so a slow database write cannot run the held lease out.
       held = { ...current, expiresAt }
       lastRenewedAt = now()
       armExpiry(expiresAt)
+      try {
+        await input.control.write({
+          epoch: current.epoch,
+          owner: instanceId,
+          phase: 'active',
+          leaseId: current.leaseId,
+          expiresAt,
+        })
+      } catch (error) {
+        if (!supersededInDatabase(error)) throw error
+        lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen })
+      }
     } catch (error) {
-      if (isCrewStationApiError(error) && error.status >= 400 && error.status < 500) {
+      if (
+        isCrewStationApiError(error) &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        // Rate limiting and request timeouts are transient: keep the lease
+        // and retry until its deadline, like an unreachable platform.
+        error.status !== 408 &&
+        error.status !== 429
+      ) {
         // The platform refused this lease (stale generation, frozen, revoked).
         lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen })
         return
       }
-      if (now() >= current.expiresAt) {
+      const deadline = held?.expiresAt ?? current.expiresAt
+      if (now() >= deadline) {
         lose({ kind: 'standby', reason: CREWSTATION_STANDBY_REASONS.unreachable })
         return
       }
@@ -308,9 +385,17 @@ export function createCrewStationExecutionAuthority(input: {
 
   const schedule = (delay: number): void => {
     if (closed || lost) return
-    timer = setTimeout(() => {
-      void step()
-    }, delay)
+    timer = setTimeout(runStep, delay)
+  }
+  // A step never stops the cadence: an unexpected failure is logged and the
+  // next tick retries (renewal failures are already handled inside `renew`).
+  const runStep = (): void => {
+    step().catch((error: unknown) => {
+      log.warn('crewstation execution authority step failed; retrying', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      schedule(tickMs)
+    })
   }
 
   const step = async (): Promise<void> => {
@@ -353,7 +438,7 @@ export function createCrewStationExecutionAuthority(input: {
     start() {
       if (started || closed) return
       started = true
-      void step()
+      runStep()
     },
     async close() {
       closed = true

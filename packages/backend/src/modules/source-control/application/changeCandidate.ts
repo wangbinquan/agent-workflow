@@ -9,7 +9,7 @@
 // （workspace validator 之外的纵深防御：candidate 树只承载常规文件）。
 
 import type {
-  RepositoryCandidateEffectsFactory,
+  RepositoryCandidateStepEffectsFactory,
   RepositoryCandidateSession,
   RepositoryCandidateWorkspace,
 } from './ports/repositoryCandidateEffects'
@@ -138,7 +138,7 @@ type StagedCandidateInSession =
 
 export async function stageCandidateTree(
   input: StageCandidateTreeInput,
-  factory: RepositoryCandidateEffectsFactory,
+  factory: RepositoryCandidateStepEffectsFactory,
 ): Promise<StageCandidateTreeResult> {
   const session = await factory.acquire({
     baselineReference: input.baselineRepoPath,
@@ -253,7 +253,7 @@ export async function stageCandidateTreeInSession(
 
 export async function deriveChangeCandidate(
   input: DeriveChangeCandidateInput,
-  factory: RepositoryCandidateEffectsFactory,
+  factory: RepositoryCandidateStepEffectsFactory,
 ): Promise<DeriveChangeCandidateResult> {
   const session = await factory.acquire({
     baselineReference: input.baselineRepoPath,

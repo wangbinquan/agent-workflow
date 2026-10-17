@@ -1,6 +1,6 @@
 import type {
   EmployeeCaseWorkspaceEffects,
-  EmployeeCaseWorkspaceEffectsFactory,
+  EmployeeCaseWorkspaceStepEffectsFactory,
 } from '@/modules/source-control/application/ports/employeeCaseWorkspaceEffects'
 import { createFileEmployeeCaseWorkspaceEffectsFactory } from '@/modules/source-control/infrastructure/local/fileEmployeeCaseWorkspaceEffects'
 
@@ -78,7 +78,7 @@ class HeldScope implements EmployeeCaseWorkspaceEffects {
   }
 }
 
-class HeldFactory implements EmployeeCaseWorkspaceEffectsFactory {
+class HeldFactory implements EmployeeCaseWorkspaceStepEffectsFactory {
   readonly #native = createFileEmployeeCaseWorkspaceEffectsFactory()
   readonly #gates: Gates
   constructor(control: Gates) {

@@ -199,10 +199,33 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-dirname',
-    file: 'services/webhook/gitlabAdapter.ts',
+    // RFC-370 M3: the GitLab normalization moved from the legacy adapter into
+    // the integration domain unchanged (shared by direct and CS-delivered events).
+    file: 'modules/integration/domain/gitlabNormalization.ts',
     match: "lastIndexOf('/')",
     count: 1,
     why: 'operand is a GitLab project path from the webhook payload (`group/subgroup/repo`) — a wire identifier that is `/`-separated on every platform, never a filesystem path (RFC-263)',
+  },
+  {
+    rule: 'posix-path-prefix',
+    file: 'modules/task-execution/infrastructure/crewstation/materialObjectUploads.ts',
+    match: '`${sha256Hex(executionId)}/`',
+    count: 1,
+    why: 'RFC-370: a CrewStation object-publication key prefix (`<digest>/<material>`) — a `/`-separated wire identifier on every platform, never a filesystem path',
+  },
+  {
+    rule: 'posix-path-prefix',
+    file: 'modules/task-execution/infrastructure/crewstation/taskArchiveContent.ts',
+    match: '`${reference}/`',
+    count: 1,
+    why: 'RFC-370: hosted task-archive entry keys are `/`-separated archive paths stored in the database, never host filesystem paths',
+  },
+  {
+    rule: 'null-device',
+    file: 'modules/source-control/infrastructure/crewstation/taskImageGitCredentials.ts',
+    match: "'/dev/null'",
+    count: 1,
+    why: 'RFC-370: `ssh -F /dev/null` inside the Linux task image (the GIT_SSH wrapper of a hosted volume); this code never runs on a Windows host',
   },
   {
     rule: 'posix-path-prefix',

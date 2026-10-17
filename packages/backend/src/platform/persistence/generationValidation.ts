@@ -285,8 +285,19 @@ export function hostedDatabaseGeneration(input: {
   readonly project: string
   readonly service: string
   readonly schemaDigest: string
+  readonly env?: Readonly<Record<string, string | undefined>>
 }): ResolvedDatabaseGeneration {
-  const identity = sha256Hex(`crewstation\u0000${input.project}\u0000${input.service}`).slice(0, 32)
+  const platformId = input.env?.CS_DATABASE_GENERATION_ID
+  const platformOperation = input.env?.CS_DATABASE_GENERATION_OPERATION
+  const resourceId = /^[a-f0-9]{8}-[a-f0-9]{4}-7[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
+  if (
+    (platformId || platformOperation) &&
+    (!resourceId.test(platformId ?? '') || !resourceId.test(platformOperation ?? ''))
+  )
+    throw new Error('hosted-database-generation-identity-invalid')
+  const identity = sha256Hex(
+    `crewstation\u0000${input.project}\u0000${input.service}${platformId ? `\u0000${platformId}\u0000${platformOperation}` : ''}`,
+  ).slice(0, 32)
   const generationId = `dbg_cs_${identity}`
   const operationId = `dbm_cs_${identity}`
   const manifest = canonicalSchemaJson({

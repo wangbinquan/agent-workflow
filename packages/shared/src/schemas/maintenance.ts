@@ -35,6 +35,7 @@ export const MAINTENANCE_JOB_KEYS = [
   'intentRecovery',
   'lifecycleInvariants',
   'stuckTaskDetector',
+  'hostedObjectRecovery',
   'humanGateRecovery',
   'walCheckpoint',
 ] as const

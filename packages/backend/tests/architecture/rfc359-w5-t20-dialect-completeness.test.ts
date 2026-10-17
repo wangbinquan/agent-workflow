@@ -120,6 +120,13 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
     why: 'PG 行锁；SQLite 在 BEGIN IMMEDIATE 下已独占，没有对应物。读—改—写中间不锁的形状在 SQLite 上碰巧正确、在 PG 上是竞态。',
   },
   {
+    id: 'for-share',
+    pattern: /\bfor\s+(?:key\s+)?share\b/iu,
+    dialect: 'postgresql-only',
+    capability: ['holdAggregateRoot'],
+    why: 'RFC-370 v3：PG 共享行锁（持有聚合根、挡住转移、不挡原地续租）；SQLite 独占事务下没有对应物。',
+  },
+  {
     id: 'skip-locked',
     pattern: /\bskip\s+locked\b/iu,
     dialect: 'postgresql-only',
@@ -172,7 +179,7 @@ const DIALECT_CONSTRUCTS: readonly DialectConstruct[] = [
     id: 'advisory-lock',
     pattern: /\bpg_advisory_[a-z_]*\s*\(/iu,
     dialect: 'postgresql-only',
-    capability: ['advisoryLock'],
+    capability: ['advisoryLock', 'advisoryLockShared'],
     why: 'PG 事务级 advisory lock；SQLite 的跨进程协调由 daemon 级 flock 承担。',
   },
   {

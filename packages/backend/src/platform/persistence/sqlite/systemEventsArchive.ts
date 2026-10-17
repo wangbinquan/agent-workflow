@@ -32,6 +32,7 @@ import type { Config } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
+import type { EventsArchiveContent } from '@/platform/background/eventsArchiveContent'
 export { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
@@ -57,6 +58,7 @@ export type EventsArchiveFaultPoint =
   | 'after-journal-finalize'
 
 export interface EventsArchiveOptions {
+  readonly content?: EventsArchiveContent
   /** Test-only window override used by the RFC-311 scale corpus. */
   scanWindowIds?: number
   /** Worker slice budget. */
@@ -165,7 +167,10 @@ export async function archiveEventsWithStore(
   ) {
     throw new Error('events-archive-known-global-rows-invalid')
   }
-  const recovered = await recoverPendingArchiveAppendFromState(store, logsDir)
+  const recovered =
+    opts.content === undefined
+      ? await recoverPendingArchiveAppendFromState(store, logsDir)
+      : await opts.content.recover()
   const { perNodeRunRows, globalRows } = await effectiveRowThresholds(
     store,
     config.eventsArchiveThresholds,
@@ -334,6 +339,22 @@ async function archiveOldestForNode(
     return { file: null, archived: toDrop - remaining }
   }
 
+  if (opts.content !== undefined) {
+    let archived = 0
+    let file: string | null = null
+    while (archived < toDrop) {
+      const rows = await store.listOldestEvents(
+        nodeRunId,
+        Math.min(toDrop - archived, ARCHIVE_BATCH_ROWS),
+      )
+      if (rows.length === 0) break
+      const receipt = await opts.content.archive({ taskId, nodeRunId, rows })
+      if (receipt.archived === 0) throw new Error('events-archive-content-no-progress')
+      archived += receipt.archived
+      file = receipt.file
+    }
+    return { file, archived }
+  }
   const file = jsonlPath(logsDir, taskId, nodeRunId)
   mkdirSync(dirname(file), { recursive: true })
   let dropped = 0

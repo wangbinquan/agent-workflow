@@ -12,7 +12,7 @@ type Completion<T> = T | Promise<T>
 /** Action-scene mechanics share the complete selected content-reference interpreter. */
 export interface ActionWorkspaceEffects {
   readonly contents: AutomationWorkspaceEffectsFactory
-  allocate(storageRootReference?: string): Completion<string>
+  allocate(storageRootReference?: string, baselineReference?: string): Completion<string>
   cloneBaseline(
     workspaceReference: string,
     baselineReference: string,

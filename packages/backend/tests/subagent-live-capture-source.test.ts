@@ -35,10 +35,11 @@ describe('RFC-048 source-layout guards', () => {
     const stmtMatch = stmtPattern.exec(src)
     expect(stmtMatch).not.toBeNull()
     // RFC-280 T7 / RFC-370: the bounded exit wait stays in the unified native
-    // executor, reached through the selected execution participant. The lifecycle
-    // contract is unchanged — poller stopped AFTER the run returns and BEFORE
-    // the post-run capture.
-    const exitedIdx = src.indexOf('await localExecution.effect.submit({')
+    // executor, reached through the selected agent invocation (RFC-370 M1 binds
+    // local and hosted execution behind one invocation). The lifecycle contract
+    // is unchanged — poller stopped AFTER the run returns and BEFORE the
+    // post-run capture.
+    const exitedIdx = src.indexOf('await invocation.execute(')
     const captureIdx = src.indexOf('await materialEvidence.captureSessions({')
     expect(exitedIdx).toBeGreaterThan(-1)
     expect(captureIdx).toBeGreaterThan(-1)

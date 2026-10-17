@@ -314,8 +314,9 @@ describe('RFC-305 identity-access architecture', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
-      // RFC-370 M0：部署选择点装配 CrewStation 的 HTTP / WebSocket 凭据适配器（bootstrap 唯一装配）。
-      'packages/backend/src/cli/deployment.ts -> @/modules/identity-access/composition/authentication',
+      // RFC-370 M0 / §9.2 V9：托管装配只在 bootstrap，装配 CrewStation 的 HTTP / WebSocket
+      // 凭据适配器、来源令牌校验与恢复请求人解析。
+      'packages/backend/src/bootstrap/crewstation.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/authentication',
@@ -380,7 +381,10 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',
+      // RFC-370 §9.2 V4: recovery requests act as the requesting platform user's AW account.
+      'packages/backend/src/modules/task-execution/composition/crewstationRecovery.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/task-execution/composition/taskRecoverySelection.ts -> @/modules/identity-access/public/participants',
       // RFC-357：列表页把 owner 身份收成一个**注入的端口**（`OwnerIdentityQueries`，
       // identity-access 的 exact public 面），由装配根提供实现。下面四条都是 type-only
       // 的 public 消费，与 postgresqlTaskRouteOperations 那条同型；模块自己去 compose

@@ -30,7 +30,7 @@ export interface AgentExecutionRecord {
 export interface AgentExecutionSink {
   record(record: AgentExecutionRecord): Promise<void>
   /** One runtime diagnostic line (local stderr). */
-  diagnostic(line: string): Promise<void>
+  diagnostic(line: string, sourceKey?: string): Promise<void>
   /** Everything delivered on `stream` since the last checkpoint is one batch. */
   checkpoint(stream: 'records' | 'diagnostics'): Promise<void>
   /** A record or diagnostic was delivered truncated (evidence incomplete). */
@@ -86,7 +86,7 @@ export interface AgentExecutionOutcome {
     readonly deadlineMs: number
     readonly log: Logger
   }): void
-  /** Settle the durable task effect after the caller committed its own
-   * projection; a no-op for executions without a task effect. */
+  /** Settle the durable execution and any task effect after the caller
+   * committed its projection; a no-op for untracked native execution. */
   settle(): Promise<void>
 }

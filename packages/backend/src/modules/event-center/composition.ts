@@ -44,6 +44,13 @@ import type {
 
 export { runEventCenterCycle, startEventCenterWorker } from './application/eventCenterWorker'
 export { createEventAutomationWorkIntentStore } from './infrastructure/eventAutomationWorkIntentStore'
+// RFC-370 M2: the hosted observer program receiver (task image) and its
+// CrewStation factory, reached by bootstrap through this exact entry.
+export { createCrewStationObserverProgramFactory } from './infrastructure/crewstation/observerProgram'
+export {
+  executeTaskImageObserver,
+  TASK_IMAGE_OBSERVER_OPERATIONS,
+} from './composition/taskImageObserver'
 export { selectLocalCustomObserverProgramFactory }
 export type { CustomObserverProgramFactory }
 
@@ -245,6 +252,7 @@ export type EventCenterAutomationCapability =
     }>
 
 export interface ComposeEventCenterOptions {
+  readonly beforeObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
   readonly db: ProviderNeutralDatabase
   readonly typePackageDescriptorJsons: readonly string[]
   /**
@@ -524,7 +532,7 @@ export async function composeEventCenter(
     ...shared,
     customObserverPrograms: selectLocalCustomObserverProgramFactory(options.customObserverPrograms),
     persistence: {
-      events: createEventStore(db),
+      events: createEventStore(db, options.beforeObservationWrite),
       customSources: createCustomEventSourceStore(db),
       responseRules: createEventResponseRuleStore(db),
       committedEvents: createCommittedEventDeliveryPersistence(db),

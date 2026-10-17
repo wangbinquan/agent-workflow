@@ -9,6 +9,9 @@ export interface TaskExecutionRecoveryPreparation {
 
 export interface TaskExecutionRecoveryFinalization {
   readonly releasedTaskIds: readonly string[]
+  /** Remote writers with no authoritative settlement retain their owner and
+   * effect holds. They are outside this boot's completed process barrier. */
+  readonly deferredTaskIds?: readonly string[]
   readonly outcomeUnknownTaskIds: readonly string[]
   readonly recoveredProcessEffectIds: readonly string[]
   readonly recoveredCodeHostEffectIds: readonly string[]
@@ -30,6 +33,7 @@ export interface TaskExecutionRecoveryPersistence {
   finalize(input: {
     readonly lockProof: ExclusiveDaemonLockProof
     readonly processEvidence: TaskExecutionProcessRecoveryEvidence
+    readonly deferredTaskIds?: readonly string[]
     readonly codeHostProbe?: (
       descriptor: CodeHostRecoveryDescriptor,
     ) => Promise<CodeHostProbeOutcome>
@@ -52,12 +56,14 @@ export async function finalizeTaskExecutionRecovery(input: {
   readonly persistence: TaskExecutionRecoveryPersistence
   readonly lockProof: ExclusiveDaemonLockProof
   readonly processEvidence: TaskExecutionProcessRecoveryEvidence
+  readonly deferredTaskIds?: readonly string[]
   readonly codeHostProbe?: (descriptor: CodeHostRecoveryDescriptor) => Promise<CodeHostProbeOutcome>
   readonly now?: number
 }): Promise<TaskExecutionRecoveryFinalization> {
   return await input.persistence.finalize({
     lockProof: input.lockProof,
     processEvidence: input.processEvidence,
+    ...(input.deferredTaskIds === undefined ? {} : { deferredTaskIds: input.deferredTaskIds }),
     ...(input.codeHostProbe === undefined ? {} : { codeHostProbe: input.codeHostProbe }),
     ...(input.now === undefined ? {} : { now: input.now }),
   })

@@ -41,7 +41,11 @@ export interface PostgresqlMigrationReceipt {
   readonly planDigest: string
   readonly applied: boolean
   readonly activeTableCount: number
+  /** Hosted verify only: the newer, expand-only contract the database already carries. */
+  readonly successorContractDigest?: string
 }
+
+export type PostgresqlSchemaSnapshot = TargetSnapshot
 
 interface TargetSnapshot {
   readonly applicationTables: readonly string[]
@@ -304,6 +308,76 @@ function receipt(plan: PostgresqlSchemaPlan, applied: boolean): PostgresqlMigrat
   }
 }
 
+/**
+ * RFC-370 v3 V7 — a hosted database may already carry a newer release's
+ * schema: the release pipeline migrates before the new release takes traffic,
+ * while the previous release keeps serving (and may restart) until the switch,
+ * or is switched back to. Hosted migrations are expand-only, so that schema
+ * still serves this binary when its recorded history extends this binary's own:
+ * every upgrade this binary knows after the installed baseline is recorded,
+ * further upgrades it does not know follow, the installed contract is one of
+ * those, every table this binary uses still exists, and the active generations
+ * follow the installed contract.
+ *
+ * Returns null when the installed contract is one this binary knows (the
+ * ordinary history check decides); anything else that is not such a successor
+ * is drift.
+ */
+export function expandOnlySuccessorOf(
+  snapshot: PostgresqlSchemaSnapshot,
+  history: PostgresqlMigrationHistory,
+): { readonly contractDigest: string } | null {
+  const installed = snapshot.contract
+  const baseline = snapshot.baseline
+  if (installed === null || baseline === null) return null
+  if (history.versions.some((version) => version.contract.digest === installed.digest)) return null
+  const baselineAt = history.versions.findIndex(
+    (version) =>
+      version.plan.contractDigest === baseline.contractDigest &&
+      version.plan.digest === baseline.planDigest,
+  )
+  if (baselineAt < 0) schemaDrift()
+  const upgrades = snapshot.migrations.filter((row) => row.baselineId !== POSTGRESQL_BASELINE_ID)
+  if (snapshot.migrations.length - upgrades.length !== 1) schemaDrift()
+  const unknown = new Map(upgrades.map((row) => [row.baselineId, row]))
+  if (unknown.size !== upgrades.length) schemaDrift()
+  for (const step of history.steps.slice(baselineAt)) {
+    const expected = postgresqlUpgradeReceipt(step)
+    const recorded = unknown.get(expected.baselineId)
+    if (
+      recorded === undefined ||
+      recorded.contractDigest !== expected.contractDigest ||
+      recorded.planDigest !== expected.planDigest
+    ) {
+      schemaDrift()
+    }
+    unknown.delete(expected.baselineId)
+  }
+  const knownIds = new Set(history.steps.map((step) => postgresqlUpgradeReceipt(step).baselineId))
+  const successor = [...unknown.values()]
+  if (
+    successor.some((row) => knownIds.has(row.baselineId) || !row.baselineId.startsWith('upgrade:'))
+  ) {
+    schemaDrift()
+  }
+  if (!successor.some((row) => row.contractDigest === installed.digest)) schemaDrift()
+  const tables = new Set(snapshot.applicationTables)
+  if (
+    history.head.plan.statements.some(
+      (statement) => statement.kind === 'table' && !tables.has(statement.logicalId),
+    )
+  ) {
+    schemaDrift()
+  }
+  if (
+    !snapshot.metadataTables.includes('database_generations') ||
+    snapshot.activeGenerations.some((generation) => generation.contractDigest !== installed.digest)
+  ) {
+    schemaDrift()
+  }
+  return { contractDigest: installed.digest }
+}
+
 export async function migratePostgresqlSchema(input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly plan?: PostgresqlSchemaPlan
@@ -372,6 +446,14 @@ export async function migratePostgresqlSchema(input: {
     }
 
     const snapshot = await targetSnapshot(connection, history !== undefined)
+    // RFC-370 v3 V7: a newer expand-only schema already serves this binary
+    // (a switch back to the previous release); there is nothing to apply.
+    const successor = history === undefined ? null : expandOnlySuccessorOf(snapshot, history)
+    if (successor !== null)
+      return await finish({
+        ...receipt(plan, false),
+        successorContractDigest: successor.contractDigest,
+      })
     const state =
       history === undefined
         ? assertSnapshot(snapshot, plan)
@@ -484,7 +566,8 @@ export async function migratePostgresqlSchema(input: {
  * RFC-370 M0 — verify without changing the schema. A hosted service never
  * migrates: the release pipeline's migration Job is the single writer of DDL,
  * and a service that finds an empty or older schema refuses to start until it
- * has run.
+ * has run. RFC-370 v3 V7: a newer schema that extends this binary's history
+ * (`expandOnlySuccessorOf`) serves it too.
  */
 export async function verifyPostgresqlSchema(input: {
   readonly runtime: PostgresqlDatabaseRuntime
@@ -496,7 +579,8 @@ export async function verifyPostgresqlSchema(input: {
   const connection = await input.runtime.providerPool().reserve()
   try {
     const snapshot = await targetSnapshot(connection, true)
-    const state = historyState(snapshot, input.history, undefined)
+    const successor = expandOnlySuccessorOf(snapshot, input.history)
+    const state = successor === null ? historyState(snapshot, input.history, undefined) : []
     if (state === 'empty') {
       throw new PostgresqlMigrationError(
         'postgresql-schema-not-current',
@@ -523,7 +607,9 @@ export async function verifyPostgresqlSchema(input: {
         `the PostgreSQL database does not serve generation ${expected.generationId}; run the migration job first`,
       )
     }
-    return receipt(plan, false)
+    return successor === null
+      ? receipt(plan, false)
+      : { ...receipt(plan, false), successorContractDigest: successor.contractDigest }
   } finally {
     connection.release()
   }

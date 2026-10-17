@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { rmSync } from 'node:fs'
 import type { ScriptLanguage } from '@agent-workflow/shared'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import {
@@ -16,6 +17,7 @@ export const TASK_IMAGE_EXECUTION_OPERATIONS = [
   'script-interpreter',
   'script-dependencies',
   'run-script',
+  'delete-task-content',
 ] as const
 
 export async function executeTaskImageExecutionOperation(
@@ -27,6 +29,12 @@ export async function executeTaskImageExecutionOperation(
   const root = resolve(volumeRoot)
   const workPath = (path: string) => requireWorkPath(path, root)
   switch (operation) {
+    case 'delete-task-content': {
+      const path = workPath((value as { path: string }).path)
+      if (path === root) throw new Error('hosted-task-delete-root-refused')
+      rmSync(path, { recursive: true, force: true })
+      return null
+    }
     case 'validate-output': {
       const input = value as Parameters<typeof resolveNativePortContentDetailed>[0]
       return resolveNativePortContentDetailed({
@@ -72,13 +80,13 @@ export async function executeTaskImageExecutionOperation(
           console.error(line)
         },
       })
-      // The platform owns process identity. Never return the helper's local
-      // PID as an AW control-plane execution identity.
+      // The platform owns process identity: never return the helper's local
+      // PID. Stdout already streamed as the command's output; the control
+      // plane rebuilds it from those events instead of a second copy here.
       return {
         result: {
           outcome: result.result.outcome,
           exitCode: result.result.exitCode,
-          rawStdout: result.result.rawStdout,
           stderrTail: result.result.stderrTail,
           truncated: result.result.truncated,
           spawnError: result.result.spawnError,

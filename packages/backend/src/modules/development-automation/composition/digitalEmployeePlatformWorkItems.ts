@@ -686,9 +686,16 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
   let pipelineEvidenceStore: EvidenceStore | undefined
   const evidenceStore = (): EvidenceArtifactPort =>
     input.evidenceArtifacts ??
-    (pipelineEvidenceStore ??= new EvidenceStore(factory.resolve(input.appHome, 'evidence')))
+    (pipelineEvidenceStore ??= new EvidenceStore(
+      factory.resolve(factory.applicationRootReference ?? input.appHome, 'evidence'),
+    ))
   const caseDirectory = (caseId: string) =>
-    factory.resolve(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
+    factory.resolve(
+      factory.applicationRootReference ?? input.appHome,
+      'workspaces',
+      'employee-cases',
+      stableIdentityComponent(caseId),
+    )
   const sceneRoot = (caseId: string) => factory.resolve(caseDirectory(caseId), 'scene')
   const workspacePath = (caseId: string) => factory.resolve(sceneRoot(caseId), 'workspace')
 

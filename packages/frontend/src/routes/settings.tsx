@@ -94,6 +94,7 @@ import {
 } from '@/lib/settings-drafts'
 import { Route as RootRoute } from './__root'
 import { isGatewayIdentity } from '@/stores/deployment'
+import { HostedBackupCard } from '@/components/settings/HostedBackupCard'
 
 /**
  * RFC-270 — the `/settings` access guard.
@@ -173,11 +174,12 @@ export const SETTINGS_TABS = [
   'authentication',
 ] as const satisfies readonly SettingsTab[]
 
-/** RFC-370 M0 — the platform provisions the database, owns sign-in and binds the listener. */
+/** RFC-370 M0 — the platform provisions the database and owns sign-in. The
+ * Network tab stays (RFC-370 v3 V10): behind the gateway it shows only the
+ * external-access switch API automation needs, never the listener. */
 export const GATEWAY_HIDDEN_SETTINGS_TABS: ReadonlySet<SettingsTab> = new Set<SettingsTab>([
   'database',
   'authentication',
-  'network',
 ])
 
 interface SettingsSearch extends Record<string, unknown> {
@@ -312,8 +314,8 @@ function SettingsPage() {
   // raw search state during initial hydration.
   const tab = isSettingsTab(search.tab) ? search.tab : 'runtime'
   // RFC-370 M0: behind the CrewStation gateway the platform provisions the
-  // database, owns sign-in and binds the listener, so those tabs do not apply
-  // (isSettingsTab rejects them, and the URL canonicalizes like any bad tab).
+  // database and owns sign-in, so those tabs do not apply (isSettingsTab
+  // rejects them, and the URL canonicalizes like any bad tab).
   const gateway = isGatewayIdentity()
   const claimRuntimeFlash = useCallback((key: number) => {
     if (claimedRuntimeFlashRef.current === key) return false
@@ -401,7 +403,11 @@ function SettingsPage() {
         {
           key: 'network',
           label: t('settings.tabNetwork'),
-          description: t('settings.sectionDescriptions.network'),
+          description: t(
+            gateway
+              ? 'settings.sectionDescriptions.networkHosted'
+              : 'settings.sectionDescriptions.network',
+          ),
         },
         {
           key: 'authentication',
@@ -1001,6 +1007,7 @@ const MAINTENANCE_JOB_I18N: Record<MaintenanceJobKey, string> = {
   intentRecovery: 'settings.maintenance.jobs.intentRecovery',
   lifecycleInvariants: 'settings.maintenance.jobs.lifecycleInvariants',
   stuckTaskDetector: 'settings.maintenance.jobs.stuckTaskDetector',
+  hostedObjectRecovery: 'settings.maintenance.jobs.hostedObjectRecovery',
   humanGateRecovery: 'settings.maintenance.jobs.humanGateRecovery',
   walCheckpoint: 'settings.maintenance.jobs.walCheckpoint',
 }
@@ -1732,6 +1739,14 @@ function formatMb(bytes: number): string {
 }
 
 export function BackupCard({ canRun }: { canRun: boolean }) {
+  return isGatewayIdentity() ? (
+    <HostedBackupCard canRun={canRun} />
+  ) : (
+    <LocalBackupCard canRun={canRun} />
+  )
+}
+
+function LocalBackupCard({ canRun }: { canRun: boolean }) {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
@@ -1910,6 +1925,9 @@ export function NetworkTab({ config }: TabProps) {
   const { t } = useTranslation()
   const draft = useTabState(SETTINGS_CONFIG_SCOPE_IDS.network, config)
   const { state, setState, save, restartRequired } = draft
+  // RFC-370 v3 V10: behind the CrewStation gateway the platform binds the
+  // listener; only the external-access switch below applies.
+  const gateway = isGatewayIdentity()
   // Read the daemon's EFFECTIVE binding (GET /api/daemon, from the run-info
   // file), but keep it outside the persisted draft. An ephemeral port is useful
   // context, not user intent: merely opening this tab must not make the section
@@ -1918,6 +1936,7 @@ export function NetworkTab({ config }: TabProps) {
   const daemon = useQuery<DaemonInfo | null>({
     queryKey: ['daemon-info'],
     queryFn: ({ signal }) => api.get('/api/daemon', undefined, signal),
+    enabled: !gateway,
   })
   const effective = daemon.data
   return (
@@ -1929,43 +1948,45 @@ export function NetworkTab({ config }: TabProps) {
       restartRequired={restartRequired}
       editState={draft}
     >
-      <SettingsCard
-        title={t('settings.cardGroups.networkListenerTitle')}
-        hint={t('settings.cardGroups.networkListenerHint')}
-      >
-        <Field label={t('settingsForm.bindHost')} required hint={t('settingsForm.bindHostHint')}>
-          <TextInput
-            value={state.bindHost ?? '127.0.0.1'}
-            onChange={(v) => setState({ ...state, bindHost: v })}
-          />
-        </Field>
-        <div>
-          <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
-            <SettingsNumberInput
-              setting="bindPort"
-              value={state.bindPort}
-              onChange={(v) => setState({ ...state, bindPort: v ?? 0 })}
-              placeholder={
-                state.bindPort == null && effective != null ? String(effective.port) : undefined
-              }
-              data-testid="settings-bind-port"
+      {!gateway && (
+        <SettingsCard
+          title={t('settings.cardGroups.networkListenerTitle')}
+          hint={t('settings.cardGroups.networkListenerHint')}
+        >
+          <Field label={t('settingsForm.bindHost')} required hint={t('settingsForm.bindHostHint')}>
+            <TextInput
+              value={state.bindHost ?? '127.0.0.1'}
+              onChange={(v) => setState({ ...state, bindHost: v })}
             />
           </Field>
-          {(state.bindPort == null || state.bindPort === 0) && effective != null && (
-            <div className="form-field__hint stack-top--xs">
-              <span>{t('settingsForm.bindPortCurrent', { port: effective.port })}</span>{' '}
-              <button
-                type="button"
-                className="btn btn--sm"
-                data-testid="settings-use-effective-port"
-                onClick={() => setState({ ...state, bindPort: effective.port })}
-              >
-                {t('settingsForm.bindPortUseCurrent')}
-              </button>
-            </div>
-          )}
-        </div>
-      </SettingsCard>
+          <div>
+            <Field label={t('settingsForm.bindPort')} hint={t('settingsForm.bindPortHint')}>
+              <SettingsNumberInput
+                setting="bindPort"
+                value={state.bindPort}
+                onChange={(v) => setState({ ...state, bindPort: v ?? 0 })}
+                placeholder={
+                  state.bindPort == null && effective != null ? String(effective.port) : undefined
+                }
+                data-testid="settings-bind-port"
+              />
+            </Field>
+            {(state.bindPort == null || state.bindPort === 0) && effective != null && (
+              <div className="form-field__hint stack-top--xs">
+                <span>{t('settingsForm.bindPortCurrent', { port: effective.port })}</span>{' '}
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  data-testid="settings-use-effective-port"
+                  onClick={() => setState({ ...state, bindPort: effective.port })}
+                >
+                  {t('settingsForm.bindPortUseCurrent')}
+                </button>
+              </div>
+            )}
+          </div>
+        </SettingsCard>
+      )}
 
       <SettingsCard
         title={t('settings.cardGroups.networkExternalTitle')}

@@ -17,6 +17,7 @@ import type {
   PluginProjection,
 } from '../application/plugins/ports'
 import type { PluginCatalogResource } from '../public/types'
+import { assertHostedPluginPublicationInTx } from './crewstation/pluginPublication'
 
 export interface PluginPersistenceRow {
   readonly id: string
@@ -190,6 +191,7 @@ export async function insertPluginRowInTx(
   tx: DatabaseTransaction,
   record: PluginInsertRecord,
 ): Promise<PluginPersistenceRow[]> {
+  await assertHostedPluginPublicationInTx(tx, record.id, record.cachedPath)
   return await tx
     .insert(plugins)
     .values({
@@ -205,6 +207,7 @@ export async function publishPluginRowInTx(
   captured: PluginPersistenceRow,
   set: LegacyPluginPublishSet,
 ): Promise<PluginPersistenceRow[]> {
+  await assertHostedPluginPublicationInTx(tx, captured.id, set.cachedPath)
   return await tx.update(plugins).set(set).where(fullPluginRowWhere(captured)).returning()
 }
 

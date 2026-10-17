@@ -365,7 +365,7 @@ async function hydrateFrozenPlatformArtifacts(
   const artifacts = frozenPlatformArtifactRefs(input.refs)
   for (const artifact of artifacts) {
     const sourceWorkspace = factory.resolve(
-      input.appHome,
+      factory.applicationRootReference ?? input.appHome,
       'workspaces',
       'employee-cases',
       artifact.sourceCaseKey,
@@ -670,7 +670,12 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
   const sourceControl = input.sourceControl
   const now = input.now ?? Date.now
   const caseDirectory = (caseId: string) =>
-    factory.resolve(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
+    factory.resolve(
+      factory.applicationRootReference ?? input.appHome,
+      'workspaces',
+      'employee-cases',
+      stableIdentityComponent(caseId),
+    )
   const sceneRoot = (caseId: string) => factory.resolve(caseDirectory(caseId), 'scene')
   const workspacePath = (caseId: string) => factory.resolve(sceneRoot(caseId), 'workspace')
   const checkpointRoot = (caseId: string, roundId: string) =>

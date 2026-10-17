@@ -15,10 +15,18 @@ const MaintenanceWorkerEffectsDescriptorSchema = z
           'resourcePackageRecovery',
           'pluginGenerationGc',
           'resourcePackageRecoveryContent',
+          'intentArtifactContent',
+          'intentScratch',
+          'workspaceMaintenance',
+          'databaseWrites',
+          'eventsArchive',
+          'databaseBackups',
+          'objectPublications',
         ]),
       )
       .min(1)
       .refine((values) => new Set(values).size === values.length, 'duplicate effect selection'),
+    workerEntry: z.string().min(1).optional(),
   })
   .strict()
 

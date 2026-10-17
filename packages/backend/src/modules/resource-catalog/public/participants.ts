@@ -14,6 +14,10 @@ import type {
   skillCatalogBootParticipantBrand,
 } from '../domain/participantBrands'
 import type {
+  IntentPluginArtifactOwner as HostedIntentPluginArtifactOwner,
+  IntentSkillArtifactOwner as HostedIntentSkillArtifactOwner,
+} from '../application/intent/artifactOwners'
+import type {
   CatalogSelectorKind,
   FrozenTaskExecutionResourceSnapshot,
   GetAgentResourceClosureStatusInput,
@@ -40,6 +44,24 @@ export type {
   IntentPluginArtifactOwner,
   IntentSkillArtifactOwner,
 } from '../application/intent/artifactOwners'
+
+/** RFC-370: the hosted skill stage identity named by Intent apply journals. */
+export interface HostedSkillStageIdentity {
+  readonly skillId: string
+  readonly operationId: string
+  readonly version: number
+}
+
+/** RFC-370: hosted Resource Catalog artifact owners consumed by Intent apply. */
+export interface HostedIntentResourceArtifacts {
+  readonly pluginArtifacts: HostedIntentPluginArtifactOwner
+  readonly skillArtifacts: HostedIntentSkillArtifactOwner
+  pluginExists(reference: string): Promise<boolean>
+  discardPlugin(reference: string): Promise<void>
+  stageSkillReference(identity: HostedSkillStageIdentity): string
+  publishSkill(identity: HostedSkillStageIdentity): Promise<unknown>
+  discardSkill(identity: HostedSkillStageIdentity): Promise<unknown>
+}
 
 /** Opaque request context minted by identity-access; never an Actor-shaped bag. */
 export type ResourceRequestContext = RequestAuthority

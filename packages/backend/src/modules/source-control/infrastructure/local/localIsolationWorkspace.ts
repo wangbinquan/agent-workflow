@@ -16,12 +16,19 @@ import {
   mergeBackNodeIso,
   rebuildIsoHandle,
   resolveConflictWithAgent,
+  prepareConflictResolution,
   snapshotNodeIsoFinal,
   undoPriorShardDeltaInIso,
   type IsoHandle,
   type MergeBackConflict,
+  type SubmoduleMergeResolutions,
 } from '@/platform/workspace/local/isolation'
 import { gitBlobHashes, gitChangedFiles, runGit } from '@/util/git'
+
+/** Task-image preparation uses precisely the same conflict interpretation. */
+export function prepareLocalIsolationConflict(conflict: IsolationConflict, containerRef: string) {
+  return prepareConflictResolution(nativeConflict(conflict), { containerPath: containerRef })
+}
 
 function describeWorkspace(handle: IsoHandle): IsolationWorkspace {
   return {
@@ -110,6 +117,31 @@ function nativeConflict(conflict: IsolationConflict): MergeBackConflict {
   }
 }
 
+/** Shared native merge receiver; task-image continuations add durable submodule receipts. */
+export async function mergeLocalIsolationWorkspace(
+  workspace: IsolationWorkspace,
+  trees: Record<string, string>,
+  log?: Parameters<IsolationWorkspaceScope['merge']>[2],
+  resolveSubConflict?: Parameters<IsolationWorkspaceScope['merge']>[3],
+  submoduleResolutions?: SubmoduleMergeResolutions,
+): Promise<Awaited<ReturnType<IsolationWorkspaceScope['merge']>>> {
+  const handle = nativeHandle(workspace)
+  try {
+    const result = await mergeBackNodeIso(
+      handle,
+      trees,
+      log,
+      resolveSubConflict === undefined
+        ? undefined
+        : (conflict) => resolveSubConflict(describeConflict(conflict)),
+      submoduleResolutions,
+    )
+    return { clean: result.clean, conflicts: result.conflicts.map(describeConflict), workspace }
+  } finally {
+    retainTopology(workspace, handle)
+  }
+}
+
 function bindLocalIsolationWorkspace(binding: IsolationWorkspaceBinding): IsolationWorkspaceScope {
   const canonRepos = binding.repositories.map((repo) => ({
     repoPath: repo.repositoryRef,
@@ -189,22 +221,7 @@ function bindLocalIsolationWorkspace(binding: IsolationWorkspaceBinding): Isolat
         retainTopology(workspace, handle)
       }
     },
-    async merge(workspace, trees, log, resolveSubConflict) {
-      const handle = nativeHandle(workspace)
-      try {
-        const result = await mergeBackNodeIso(
-          handle,
-          trees,
-          log,
-          resolveSubConflict === undefined
-            ? undefined
-            : (conflict) => resolveSubConflict(describeConflict(conflict)),
-        )
-        return { clean: result.clean, conflicts: result.conflicts.map(describeConflict), workspace }
-      } finally {
-        retainTopology(workspace, handle)
-      }
-    },
+    merge: mergeLocalIsolationWorkspace,
     undoShard: (input) =>
       undoPriorShardDeltaInIso(
         input.workspaceRef,

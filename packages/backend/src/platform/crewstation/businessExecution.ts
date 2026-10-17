@@ -4,7 +4,13 @@
 // and command subtasks run against it. Every mutation carries the execution
 // fence and a caller requestKey, so a retried call is a lookup of the original
 // operation, never a second one. Shapes declare only the fields aw reads.
-import type { CrewStationPlatformApi } from './platformApi'
+import { isCrewStationApiError, type CrewStationPlatformApi } from './platformApi'
+import type { HostedStartupInventory } from './startupInventory'
+import type {
+  BusinessEnvironmentValue,
+  BusinessMaterialFile,
+  BusinessNativeConfig,
+} from './nativeMaterial'
 
 export interface BusinessExecutionFence {
   readonly epoch: number
@@ -18,6 +24,8 @@ export interface BusinessTask {
   readonly id: string
   readonly state: BusinessTaskState | string
   readonly generation: number
+  readonly volumeUid?: string | null
+  readonly contractDigest?: string
   readonly resourceState?: string
   readonly message?: string
 }
@@ -49,6 +57,7 @@ export interface BusinessSubtask {
   readonly attempt: number
   readonly state: BusinessSubtaskState | string
   readonly executionId: string
+  readonly previousId?: string
   readonly sessionId?: string
   readonly materialDigest?: string
   readonly result?: BusinessResult
@@ -106,6 +115,7 @@ export type BusinessEvent = EventEnvelope &
       }
     | { readonly type: 'session'; readonly data: { readonly sessionId: string } }
     | { readonly type: 'usage'; readonly data: BusinessUsageSnapshot }
+    | { readonly type: 'startup-inventory'; readonly data: HostedStartupInventory }
     | {
         readonly type: 'output'
         readonly data: { readonly stream: 'stdout' | 'stderr'; readonly text: string }
@@ -160,6 +170,7 @@ export type SubmitBusinessSubtask =
       readonly prompt: string
       readonly materialId?: string
       readonly resumeSessionId?: string
+      readonly startupInventoryVersion?: 1
     }
   | {
       readonly kind: 'command'
@@ -168,7 +179,7 @@ export type SubmitBusinessSubtask =
       readonly name: string
       readonly cwd?: string
       readonly argv: readonly string[]
-      readonly env?: Readonly<Record<string, string>>
+      readonly env?: Readonly<Record<string, BusinessEnvironmentValue>>
       readonly timeoutSeconds?: number
     }
 
@@ -176,8 +187,9 @@ export interface CreateBusinessMaterial {
   readonly requestKey: string
   readonly fence: BusinessExecutionFence
   readonly systemPrompt?: string
-  readonly skills?: ReadonlyArray<{ readonly path: string; readonly content: string }>
-  readonly env?: Readonly<Record<string, string>>
+  readonly skills?: readonly BusinessMaterialFile[]
+  readonly nativeConfig?: BusinessNativeConfig
+  readonly env?: Readonly<Record<string, BusinessEnvironmentValue>>
 }
 
 const TASKS = '/v3/business-tasks'
@@ -190,6 +202,16 @@ export function businessSubtaskName(name: string): string {
 
 export function isTerminalSubtaskState(state: string): boolean {
   return state === 'succeeded' || state === 'failed' || state === 'cancelled'
+}
+
+/** RFC-370 §9.2 V3 — the parent was paused (or is still resuming) between
+ * the caller's readiness check and this request; resuming it and repeating
+ * the same idempotent request is the recovery. */
+export function isParentNotRunningError(error: unknown): boolean {
+  return (
+    isCrewStationApiError(error) &&
+    (error.code === 'task_paused' || error.code === 'task_not_running')
+  )
 }
 
 export interface CrewStationBusinessExecution {
@@ -208,6 +230,25 @@ export interface CrewStationBusinessExecution {
       readonly expectedGeneration: number
     },
   ): Promise<void>
+  /** Releases the task container while keeping the persistent volume (RFC-027). */
+  pauseTask(
+    taskId: string,
+    input: {
+      readonly requestKey: string
+      readonly fence: BusinessExecutionFence
+      readonly expectedGeneration: number
+    },
+  ): Promise<void>
+  resumeTask(
+    taskId: string,
+    input: {
+      readonly requestKey: string
+      readonly fence: BusinessExecutionFence
+      readonly expectedGeneration: number
+    },
+  ): Promise<void>
+  /** Every subtask of the task, including non-terminal ones. */
+  listSubtasks(taskId: string): Promise<readonly BusinessSubtask[]>
   createMaterial(taskId: string, input: CreateBusinessMaterial): Promise<BusinessMaterial>
   submitSubtask(taskId: string, input: SubmitBusinessSubtask): Promise<BusinessSubtask>
   getSubtask(taskId: string, subtaskId: string): Promise<BusinessSubtask>
@@ -261,11 +302,21 @@ export function createCrewStationBusinessExecution(
     async closeTask(taskId, input) {
       await platform.post(`${task(taskId)}/close`, input)
     },
+    async pauseTask(taskId, input) {
+      await platform.post(`${task(taskId)}/pause`, input)
+    },
+    async resumeTask(taskId, input) {
+      await platform.post(`${task(taskId)}/resume`, input)
+    },
+    async listSubtasks(taskId) {
+      return (await platform.get<{ items: BusinessSubtask[] }>(`${task(taskId)}/subtasks`)).items
+    },
     createMaterial: (taskId, input) =>
       platform.post<BusinessMaterial>(`${task(taskId)}/materials`, {
         requestKey: input.requestKey,
         fence: input.fence,
         ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
+        ...(input.nativeConfig === undefined ? {} : { nativeConfig: input.nativeConfig }),
         skills: input.skills ?? [],
         env: input.env ?? {},
       }),

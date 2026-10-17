@@ -1,6 +1,6 @@
 // RFC-359 W4-B4 —— webhook 投递审计 / 回放读模型：一份实现，两个 provider 共用。
 
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -8,12 +8,61 @@ import {
   taskCollaborators,
   tasks,
   webhookDeliveries,
+  csEventInbox,
+  csEventRoutes,
+  csEventTargets,
+  csWebhookVerifications,
   webhookMrControlEffects,
   webhookMrControlTargets,
 } from '@/db/schema'
-import type { WebhookDeliveryQueries } from '../application/ports/webhookDeliveryQueries'
+import type {
+  WebhookDeliveryQueries,
+  WebhookPlatformEventProvenance,
+} from '../application/ports/webhookDeliveryQueries'
+import { CREWSTATION_TARGET_RECEIPT_PREFIX } from './crewstation/eventContract'
+
+/** CrewStation redelivers one event a bounded number of times; the detail shows them all. */
+const PLATFORM_DELIVERY_LIMIT = 50
 
 export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): WebhookDeliveryQueries {
+  /** RFC-370 v3 — a delegated delivery's receipt names its frozen CrewStation target. */
+  const platformEventOf = async (
+    receipt: string,
+  ): Promise<WebhookPlatformEventProvenance | null> => {
+    if (!receipt.startsWith(CREWSTATION_TARGET_RECEIPT_PREFIX)) return null
+    const targetId = receipt.slice(CREWSTATION_TARGET_RECEIPT_PREFIX.length)
+    const route = (
+      await db
+        .select({
+          id: csEventRoutes.id,
+          eventId: csEventRoutes.eventId,
+          envelopeJson: csEventRoutes.envelopeJson,
+        })
+        .from(csEventTargets)
+        .innerJoin(csEventRoutes, eq(csEventRoutes.id, csEventTargets.logicalId))
+        .where(eq(csEventTargets.id, targetId))
+        .limit(1)
+    )[0]
+    if (route === undefined) return null
+    const deliveries = await db
+      .select({
+        deliveryId: csEventInbox.deliveryId,
+        attempt: csEventInbox.lastAttempt,
+        receivedAt: csEventInbox.receivedAt,
+      })
+      .from(csEventInbox)
+      .where(eq(csEventInbox.logicalId, route.id))
+      .orderBy(asc(csEventInbox.receivedAt), asc(csEventInbox.deliveryId))
+      .limit(PLATFORM_DELIVERY_LIMIT)
+    let eventType: string | null = null
+    try {
+      const envelope = JSON.parse(route.envelopeJson) as { eventType?: unknown }
+      if (typeof envelope.eventType === 'string') eventType = envelope.eventType
+    } catch {
+      eventType = null
+    }
+    return { eventId: route.eventId, eventType, deliveries }
+  }
   const queries: WebhookDeliveryQueries = {
     async page(input) {
       const conditions = [
@@ -79,11 +128,26 @@ export function createWebhookDeliveryQueries(db: ProviderNeutralDatabase): Webho
       return rows.map((row) => row.p)
     },
     async get(id) {
-      return (
-        (
-          await db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)).limit(1)
-        )[0] ?? null
-      )
+      const row = (
+        await db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)).limit(1)
+      )[0]
+      if (!row) return null
+      const verification = (
+        await db
+          .select()
+          .from(csWebhookVerifications)
+          .where(eq(csWebhookVerifications.deliveryId, id))
+          .limit(1)
+      )[0]
+      return {
+        ...row,
+        verificationMethod: verification ? 'cs-delegated' : 'direct-signature',
+        bodyRepresentation: verification ? 'reserialized-json' : 'http-bytes',
+        platformEvent:
+          verification === undefined
+            ? null
+            : await platformEventOf(verification.transportReceiptRef),
+      }
     },
     async terminalControl(deliveryId, actor) {
       const effect = (

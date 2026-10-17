@@ -1,3 +1,6 @@
+import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
+import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
+import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
 import { createFileReviewArtifactContent } from './local/fileReviewArtifactContent'
 // SQLite review persistence and decision mechanics (RFC-005 / RFC-349).
 //
@@ -544,6 +547,7 @@ async function upstreamPortArchiveJson(
 }
 
 export interface DispatchReviewArgs {
+  reviewArtifacts?: ReviewArtifactSelection
   /** Selected by the collaboration factory, outside the public dispatch business input. */
   portArtifactReader?: PortArtifactReader
   db: ProviderNeutralDatabase
@@ -854,7 +858,10 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         .map((document) => document.versionIndex),
     ) + 1
 
-  const refreshAwaitingReview = reuse?.status === 'awaiting_review' && !coversSource(reuse)
+  const refreshAwaitingReview =
+    reuse?.status === 'awaiting_review' &&
+    (!coversSource(reuse) ||
+      (args.reviewArtifacts !== undefined && pendingReuseDocVersions.length === 0))
   // RFC-333 T6: every new review-open and every source-refresh round is
   // prepared completely before one TaskParkTx makes the projection visible.
   // Only already-leaked legacy pending rows and same-source repair/resume stay
@@ -867,6 +874,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     const drafts: ReviewGateOpenDocumentDraft[] = []
     if (isMultiDoc) {
       const prior = await loadPriorRound(db, appHome, {
+        reviewArtifacts: args.reviewArtifacts,
         taskId,
         reviewNodeId: node.id,
         iteration,
@@ -1082,7 +1090,11 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         })),
       }),
     )
-    const collaboration = humanGateComposition.createCollaborationCommandContext({ db, appHome })
+    const collaboration = humanGateComposition.createCollaborationCommandContext({
+      db,
+      appHome,
+      reviewArtifacts: args.reviewArtifacts,
+    })
     const prepared = await prepareReviewGateOpen(collaboration, {
       taskId,
       reviewNodeId: node.id,
@@ -1222,6 +1234,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       // is the single injection point — iterate / reject / refresh / US-2 all
       // re-mint here (design §5). Empty on the first round → all unselected.
       const prior = await loadPriorRound(db, appHome, {
+        reviewArtifacts: args.reviewArtifacts,
         taskId,
         reviewNodeId: node.id,
         iteration,
@@ -1560,7 +1573,12 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
 async function loadPriorRound(
   db: ProviderNeutralDatabase,
   appHome: string,
-  args: { taskId: string; reviewNodeId: string; iteration: number },
+  args: {
+    taskId: string
+    reviewNodeId: string
+    iteration: number
+    reviewArtifacts?: ReviewArtifactSelection
+  },
 ): Promise<{ members: PriorRoundMember[]; nextGeneration: number }> {
   // Review node_runs at this workflow iteration (spans reruns + US-2 fresh run).
   const runIds = (
@@ -1602,7 +1620,11 @@ async function loadPriorRound(
     if (cur === undefined || r.id > cur.id) byIndex.set(idx, r)
   }
   const members: PriorRoundMember[] = []
-  const collaboration = humanGateComposition.createCollaborationCommandContext({ db, appHome })
+  const collaboration = humanGateComposition.createCollaborationCommandContext({
+    db,
+    appHome,
+    reviewArtifacts: args.reviewArtifacts,
+  })
   for (const r of byIndex.values()) {
     let body = ''
     try {
@@ -1627,12 +1649,13 @@ export async function readDocVersionBody(
   db: ProviderNeutralDatabase,
   appHome: string,
   docVersion: DocVersion,
+  reader?: CommittedReviewArtifactReader,
 ): Promise<string> {
   try {
     // RFC-359：正文读取器两引擎一份（日志校验 + final/staged 回退），不再经 SQLite 命令上下文。
-    return await new DatabaseCommittedReviewArtifactReader(
-      db,
-      createFileReviewArtifactContent(appHome),
+    return await (
+      reader ??
+      new DatabaseCommittedReviewArtifactReader(db, createFileReviewArtifactContent(appHome))
     ).read(docVersion.bodyPath)
   } catch {
     const abs = join(appHome, docVersion.bodyPath)
@@ -1969,6 +1992,7 @@ export async function getReviewDetail(
   db: ProviderNeutralDatabase,
   appHome: string,
   nodeRunId: string,
+  reader?: CommittedReviewArtifactReader,
 ): Promise<Omit<ReviewDetail, 'capabilities'>> {
   const allRows = await db
     .select()
@@ -2032,7 +2056,7 @@ export async function getReviewDetail(
   // "has doc_version ⟹ renders" invariant.
   let body: string
   try {
-    body = await readDocVersionBody(db, appHome, dv)
+    body = await readDocVersionBody(db, appHome, dv, reader)
   } catch {
     body = ''
   }
@@ -2043,7 +2067,7 @@ export async function getReviewDetail(
     // encapsulates that pending-first-else-newest-gen selection.
     documents = []
     for (const m of round.members) {
-      documents.push((await buildRoundMember(db, appHome, m)).summary)
+      documents.push((await buildRoundMember(db, appHome, m, reader)).summary)
     }
   }
   // RFC-142 (Codex impl-gate P2): decided versions must read the FROZEN
@@ -2126,11 +2150,12 @@ export async function getDocVersionDetail(
   appHome: string,
   nodeRunId: string,
   versionId: string,
+  reader?: CommittedReviewArtifactReader,
 ): Promise<(DocVersion & { body: string; comments: ReviewComment[] }) | null> {
   const dv = await getDocVersion(db, versionId)
   if (dv === null) return null
   if (dv.reviewNodeRunId !== nodeRunId) return null
-  const body = await readDocVersionBody(db, appHome, dv)
+  const body = await readDocVersionBody(db, appHome, dv, reader)
   const comments = await commentsForDocVersion(db, dv)
   return { ...dv, body, comments }
 }
@@ -2217,11 +2242,12 @@ async function buildRoundMember(
   db: ProviderNeutralDatabase,
   appHome: string,
   m: typeof docVersions.$inferSelect,
+  reader?: CommittedReviewArtifactReader,
 ): Promise<{ summary: ReviewDocumentSummary; decision: DocVersionDecision }> {
   const mdv = rowToDocVersion(m)
   let mbody = ''
   try {
-    mbody = await readDocVersionBody(db, appHome, mdv)
+    mbody = await readDocVersionBody(db, appHome, mdv, reader)
   } catch {
     mbody = ''
   }
@@ -2367,6 +2393,7 @@ export async function listReviewRounds(
   db: ProviderNeutralDatabase,
   appHome: string,
   nodeRunId: string,
+  reader?: CommittedReviewArtifactReader,
 ): Promise<ReviewRoundSummary[]> {
   const rows = await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, nodeRunId))
   const groups = groupDocVersionRounds(rows)
@@ -2380,7 +2407,7 @@ export async function listReviewRounds(
     }
     const members: ReviewRoundMember[] = []
     for (const m of g.members) {
-      const built = await buildRoundMember(db, appHome, m)
+      const built = await buildRoundMember(db, appHome, m, reader)
       members.push({ ...built.summary, decision: built.decision })
     }
     out.push({
@@ -2405,6 +2432,7 @@ export async function listReviewRounds(
 // ---------------------------------------------------------------------------
 
 export interface AddReviewCommentArgs {
+  reviewReader?: CommittedReviewArtifactReader
   db: ProviderNeutralDatabase
   appHome: string
   nodeRunId: string
@@ -2540,7 +2568,7 @@ async function addReviewCommentUnlocked(
 ): Promise<AddReviewCommentResult> {
   await assertReviewRoundWritable(args.db, args.nodeRunId)
   const dv = await selectPendingDocVersion(args.db, args.nodeRunId, args.docVersionId)
-  const body = await readDocVersionBody(args.db, args.appHome, dv)
+  const body = await readDocVersionBody(args.db, args.appHome, dv, args.reviewReader)
   const { anchor: canonical, warnings } = resolveCommentAnchor(body, args)
 
   const id = ulid()
@@ -2902,6 +2930,8 @@ export const REVIEW_DECISION_POLICY = {
 } as const satisfies { [K in ReviewDecisionKind]: ReviewDecisionPolicyOf<K> }
 
 export interface SubmitReviewDecisionArgs {
+  reviewReader?: CommittedReviewArtifactReader
+  rollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   db: ProviderNeutralDatabase
   appHome: string
   nodeRunId: string
@@ -3351,7 +3381,10 @@ async function submitReviewDecisionUnlocked(
     await Promise.all(
       effectiveDvs.map(
         async (document) =>
-          [document.id, await readDocVersionBody(args.db, args.appHome, document)] as const,
+          [
+            document.id,
+            await readDocVersionBody(args.db, args.appHome, document, args.reviewReader),
+          ] as const,
       ),
     ),
   )
@@ -3459,6 +3492,7 @@ async function submitReviewDecisionUnlocked(
     }))
     if (candidates.some((candidate) => candidate.targets.length > 0)) {
       workspaceRollbackPlan = await humanGateComposition.prepareWorkspaceRollbackPlan({
+        inspector: args.rollbackSnapshots,
         taskId: taskRow.id,
         candidates,
       })

@@ -16,9 +16,9 @@ import { removeTempDirSync } from './fixtures/tempDir'
 
 describe('RFC-370 isolation native compatibility', () => {
   test('every legacy native runtime export keeps the original object identity', () => {
-    for (const [name, value] of Object.entries(native)) {
-      if (name === 'discardIsolationWorkspace') continue
-      expect((legacy as Record<string, unknown>)[name], name).toBe(value)
+    for (const [name, value] of Object.entries(legacy)) {
+      if (name === 'discardNodeIso') continue
+      expect((native as Record<string, unknown>)[name], name).toBe(value)
     }
     expect(legacy.discardNodeIso).toBe(discardNodeIso)
     expect('discardIsolationWorkspace' in legacy).toBe(false)

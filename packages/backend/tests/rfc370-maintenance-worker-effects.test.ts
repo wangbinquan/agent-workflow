@@ -37,6 +37,50 @@ const descriptor = (
 
 const context = { appHome: 'logical:worker-home', instanceRef: 'worker-instance-one' }
 
+// RFC-370 v3 V6: one hosted object recovery/GC job replaces the per-owner
+// development and employee publication recovery that ran as side effects.
+test('hosted object maintenance is selected in the Worker environment and requires its complete port', async () => {
+  let calls = 0
+  const effects = {
+    run: async () => {
+      calls++
+      return { resolved: 1, released: 2 }
+    },
+  }
+  const scope = openMaintenanceWorkerEffectsScope({
+    descriptor: descriptor(['objectPublications']),
+    context,
+    importModule: async () => ({
+      createEffects: () => ({ objectPublications: effects, dispose() {} }),
+    }),
+  })
+  const selected = await scope.ready
+  expect(calls).toBe(0)
+  expect(await selected.objectPublications!.run()).toEqual({ resolved: 1, released: 2 })
+  expect(calls).toBe(1)
+  await scope.dispose()
+  const incomplete = openMaintenanceWorkerEffectsScope({
+    descriptor: descriptor(['objectPublications']),
+    context,
+    importModule: async () => ({
+      createEffects: () => ({ objectPublications: {}, dispose() {} }),
+    }),
+  })
+  await expect(incomplete.ready).rejects.toThrow(
+    'maintenance-worker-effects-incomplete:objectPublications',
+  )
+  await incomplete.dispose()
+  for (const retired of ['developmentArtifacts', 'employeeArtifacts']) {
+    const scope = openMaintenanceWorkerEffectsScope({
+      descriptor: descriptor([retired as MaintenanceWorkerEffectsCapability]),
+      context,
+      importModule: async () => ({ createEffects: () => ({ dispose() {} }) }),
+    })
+    await expect(scope.ready).rejects.toThrow('maintenance-worker-effects-unknown-selection')
+    await scope.dispose()
+  }
+})
+
 class PrototypeRecoveryContent implements ResourcePackageRecoveryEffectsFactory {
   readonly #prefix: string
   constructor(prefix: string) {
@@ -648,4 +692,73 @@ test('actual Worker failure messages retain the original query cause and termina
   const inner = new Error('inner', { cause: outer })
   outer.cause = inner
   expect(message(outer)).toBe('outer <- inner')
+})
+
+// A partial hosted selection must never make a Worker compensate a remote
+// preparation with native filesystem effects after a restart.
+test('hosted workspace maintenance requires preparation and scratch owners as one family', async () => {
+  let disposed = 0
+  const filesystem = () => {
+    throw new Error('not used by selection validation')
+  }
+  const workspace = {
+    filesystem,
+    preparation: {
+      create: () => {
+        throw new Error('not used by selection validation')
+      },
+    },
+    scratch: {
+      prepare: async () => {
+        throw new Error('not used by selection validation')
+      },
+      restore: () => {
+        throw new Error('not used by selection validation')
+      },
+      cleanup: async () => {
+        throw new Error('not used by selection validation')
+      },
+    },
+  }
+  for (const complete of [false, true]) {
+    const scope = openMaintenanceWorkerEffectsScope({
+      descriptor: descriptor(['workspaceMaintenance']),
+      context,
+      importModule: async () => ({
+        createEffects: () => ({
+          workspaceMaintenance: { ...workspace, ...(complete ? {} : { scratch: undefined }) },
+          dispose: () => {
+            disposed += 1
+          },
+        }),
+      }),
+    })
+    if (complete) expect((await scope.ready).workspaceMaintenance?.filesystem).toBe(filesystem)
+    else await expect(scope.ready).rejects.toThrow('workspaceMaintenance-scratch')
+    await scope.dispose()
+  }
+  expect(disposed).toBe(2)
+})
+
+test('backup retention selects pruning and disposes incomplete providers', async () => {
+  let disposed = 0
+  const maintenance = { prune: async () => ({ deleted: 0, kept: 1 }) }
+  for (const complete of [false, true]) {
+    const scope = openMaintenanceWorkerEffectsScope({
+      descriptor: descriptor(['databaseBackups']),
+      context,
+      importModule: async () => ({
+        createEffects: () => ({
+          databaseBackups: { ...maintenance, ...(complete ? {} : { prune: undefined }) },
+          dispose: () => {
+            disposed++
+          },
+        }),
+      }),
+    })
+    if (complete) expect((await scope.ready).databaseBackups?.prune).toBe(maintenance.prune)
+    else await expect(scope.ready).rejects.toThrow('databaseBackups')
+    await scope.dispose()
+  }
+  expect(disposed).toBe(2)
 })

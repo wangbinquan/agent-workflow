@@ -37,6 +37,7 @@ function unused(): never {
 function selectedInvocation(protocol: 'opencode' | 'claude-code' = 'opencode') {
   const calls: string[] = []
   const state = {
+    onSettle: undefined as (() => Promise<void>) | undefined,
     prepareError: undefined as Error | undefined,
     compileError: undefined as Error | undefined,
     bindError: undefined as Error | undefined,
@@ -135,7 +136,9 @@ function selectedInvocation(protocol: 'opencode' | 'claude-code' = 'opencode') {
         ...(result.cleanupFailed === undefined ? {} : { cleanupFailed: result.cleanupFailed }),
         unreapedMessage: unused,
         reportUnreaped: unused,
-        settle: async () => {},
+        settle: async () => {
+          await state.onSettle?.()
+        },
       }
     },
   }
@@ -397,4 +400,26 @@ describe('RFC-370 complete Runtime smoke family', () => {
       'runtime-diagnostic-binding-unavailable',
     )
   })
+})
+
+// Hosted transport settlement must precede deleting the only recovery material.
+test('runtime smoke settles projected output before discarding its workspace', async () => {
+  const selected = selectedFamily('opencode')
+  selected.state.onSettle = async () => {
+    expect(selected.calls).not.toContain('discard')
+    selected.calls.push('settled')
+  }
+  expect((await selected.family.run(selected.request)).conforms).toBe(true)
+  expect(selected.calls.slice(-2)).toEqual(['settled', 'discard'])
+})
+
+test('runtime smoke preserves its workspace when durable settlement needs recovery', async () => {
+  const selected = selectedFamily('opencode')
+  selected.state.onSettle = async () => {
+    throw new Error('lost projection ACK')
+  }
+  const result = await selected.family.run(selected.request)
+  expect(result.conforms).toBe(false)
+  expect(result.detail).toContain('settlement requires recovery')
+  expect(selected.calls).not.toContain('discard')
 })

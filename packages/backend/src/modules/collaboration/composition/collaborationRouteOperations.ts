@@ -1,3 +1,4 @@
+import { requireCommittedReviewArtifactReader } from './commandContext'
 import { createClarifyFollowupOperations } from '../application/clarifyFollowup'
 import { clarifyFollowupActivity } from '../infrastructure/clarifyFollowupActivity'
 import { createClarifyFollowupStore } from '../infrastructure/clarifyFollowupStore'
@@ -69,6 +70,11 @@ export function composeCollaborationRouteOperations(input: {
   const persistence = createCollaborationRouteOperations({
     db: input.db,
     clarifyDraftEvents: events,
+    // Resolved at read time: the committed review content belongs to the
+    // composed command context, which a route surface may be built before.
+    reviewReader: {
+      read: (finalPath) => requireCommittedReviewArtifactReader(input.context).read(finalPath),
+    },
   })
   const followup =
     input.followupGenerator &&

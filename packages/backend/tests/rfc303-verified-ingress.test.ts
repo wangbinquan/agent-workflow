@@ -55,6 +55,12 @@ function fixture(): { raw: Database; db: DbClient } {
     CREATE INDEX idx_webhook_deliveries_repo_time ON webhook_deliveries(repo_path,received_at);
     CREATE INDEX idx_webhook_deliveries_body_retention
       ON webhook_deliveries(received_at) WHERE body_json IS NOT NULL;
+    -- RFC-370 M3: a replay carries its root delivery's CrewStation transport
+    -- receipt (none for a direct delivery), read in the same transaction.
+    CREATE TABLE cs_webhook_verifications (
+      delivery_id text PRIMARY KEY NOT NULL,
+      transport_receipt_ref text NOT NULL
+    );
   `)
   for (const statement of MIGRATION.split('--> statement-breakpoint')) {
     if (statement.trim() !== '') raw.exec(statement)

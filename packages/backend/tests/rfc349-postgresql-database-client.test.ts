@@ -259,3 +259,103 @@ describe('RFC-349 PostgreSQL database client', () => {
     expect(fences.every((execution) => execution.owner === 'reserved')).toBe(true)
   })
 })
+
+// RFC-370 M3: a maintenance worker borrows one exact execution lease. Neither
+// the single-row INSERT optimization nor a raw query may bypass that fence.
+test('deployment write guard shares the reserved transaction, rejects before mutation, and leaves reads available', async () => {
+  const fake = fixture()
+  const guardFailure = new Error('worker lease replaced')
+  const rejectsGuard = async (operation: PromiseLike<unknown>) => {
+    const error = await Promise.resolve(operation).then(
+      () => undefined,
+      (failure: unknown) => failure,
+    )
+    // Drizzle wraps query failures; require the exact original guard error as the cause.
+    expect(error instanceof Error ? (error.cause ?? error) : error).toBe(guardFailure)
+  }
+  let calls = 0
+  const db = createPostgresqlDatabaseClient(fake.runtime, {
+    async beforeWrite(tx) {
+      calls += 1
+      await tx.all(sql`SELECT id FROM hosted_execution_control WHERE id = ${'global'} FOR UPDATE`)
+      throw guardFailure
+    },
+  })
+  await db.all(sql`SELECT 1`)
+  expect(calls).toBe(0)
+  const statements = [
+    () => db.run(sql`INSERT INTO agents (id) VALUES (${'guarded'})`),
+    () => db.all(sql`UPDATE agents SET name = ${'x'} RETURNING id`),
+    () => db.get(sql`DELETE FROM agents RETURNING id`),
+    () => db.values(sql`UPDATE agents SET name = ${'x'} RETURNING id`),
+    () => db.update(agents).set({ name: 'x' }).returning(),
+    () =>
+      db
+        .insert(agents)
+        .values({ id: 'guarded', name: 'guarded', bodyMd: '', createdAt: 1, updatedAt: 1 })
+        .run(),
+  ]
+  for (const statement of statements) {
+    const offset = fake.executions.length
+    await rejectsGuard(statement())
+    const attempted = fake.executions.slice(offset)
+    expect(attempted[0]?.sql).toBe('BEGIN')
+    expect(attempted.at(-1)?.sql).toBe('ROLLBACK')
+    expect(attempted.every((entry) => entry.owner === 'reserved')).toBe(true)
+    expect(attempted.some((entry) => /^(insert|update|delete)/i.test(entry.sql))).toBe(false)
+  }
+  expect(calls).toBe(statements.length)
+  expect(fake.releases).toBe(statements.length)
+  const offset = fake.executions.length
+  await rejectsGuard(
+    db.transaction(async (tx) => {
+      await tx.all(sql`SELECT 1`)
+      await tx.update(agents).set({ name: 'x' }).run()
+    }),
+  )
+  const transaction = fake.executions.slice(offset)
+  expect(transaction.every((entry) => entry.owner === 'reserved')).toBe(true)
+  expect(transaction.filter((entry) => /^begin/i.test(entry.sql))).toHaveLength(1)
+  expect(transaction.filter((entry) => /^rollback/i.test(entry.sql))).toHaveLength(1)
+  expect(fake.releases).toBe(statements.length + 1)
+})
+
+// RFC-370 v3 V7: the deployment write guard used to run before every write
+// statement of a transaction (and took its locks again each time). It runs once
+// per transaction now — its locks are held until the transaction ends — and
+// again for the next transaction.
+test('deployment write guard runs once per transaction and again for the next one', async () => {
+  const fake = fixture()
+  let calls = 0
+  const db = createPostgresqlDatabaseClient(fake.runtime, {
+    async beforeWrite() {
+      calls += 1
+    },
+  })
+  const generation = { objects: [{ generation_id: 'dbg_pg_client_01' }] }
+  fake.queued.push(
+    { count: 0 }, // begin
+    generation, // one-shot marker
+    generation, // fence
+    { count: 1 }, // insert
+    generation, // fence
+    { count: 1 }, // insert
+    { count: 0 }, // commit
+    { count: 0 }, // begin
+    generation, // fence
+    { count: 1 }, // insert
+    { count: 0 }, // commit
+  )
+  await db.transaction(async (tx) => {
+    await tx.insert(agents).values({ id: 'agent-1', name: 'Agent' }).run()
+    await tx.insert(agents).values({ id: 'agent-2', name: 'Agent' }).run()
+  })
+  expect(calls).toBe(1)
+  await db.transaction(async (tx) => {
+    await tx.insert(agents).values({ id: 'agent-3', name: 'Agent' }).run()
+  })
+  expect(calls).toBe(2)
+  expect(fake.executions.filter((execution) => /^insert/i.test(execution.sql.trim()))).toHaveLength(
+    3,
+  )
+})

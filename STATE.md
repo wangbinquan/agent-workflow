@@ -2,9 +2,9 @@
 
 按用户要求全面审视 RFC-294 的实现情况，证据与判断见 [2026-10-16 全面审视](design/RFC-294-backend-layered-target-architecture/review-2026-10-16.md)；基线为已提交 HEAD `879cb0743`（含 RFC-370 M1 三个尚未推送的本地提交），账本投影停在 `96fbcd71b`。物理迁移已基本完成（`modules/` 约占后端源码三分之二，route→DB 与 `AppDeps` 反向依赖为 0，后端值级 SCC 为 1），但腐化转到了模块内部：`composition/` 承载约 2.3 万行业务与机制实现；装配根膨胀到约 12.3k 行，SQLite 与 PostgreSQL 两个根约 55% 逐字重复，同一 SQLite daemon 内重复构造模块（代码注释记录了由此引起的两个缺陷）；context 间出现值级环，`platform/` 反向依赖模块；NodeRun 新旧判定仍按普通 `ulid()` 字典序，同毫秒约半数逆序。三件套据此重写：修订八处已不合理的原设计（R1～R8：总纲不再手写 exact 接口；治理改为少量硬结构门 + 按需报告；执行结构如实分层；部署 profile 成为一等维度；薄入口根共享唯一模块工厂图等），新增对所有新代码立即生效的约束 C1～C9，给出后继队列 S1～S8（NodeRun `seq`、唯一工厂图与生命周期程序、死代码清扫、治理简化、恢复 context DAG、执行机制归位、唯一 AtomicApply、`util/git` 叶子化），各后继均需独立批准。刷新前全文归档为 `archive-20261016-{proposal,design,plan}.md`；design §3.1 / §3.4 的机器解析块逐字保留，并用脚本核对新旧解析结果一致（69 条边、18 个 context）。本次只改文档与索引，未改生产代码、测试、`status.md` 或 `architecture/*`，未运行测试。本文件中 RFC-370 的未提交段落原样保留在工作区，未纳入本提交。
 
-## 2026-10-15 RFC-370 v2 M1：远程执行候选（In Progress）
+## 2026-10-16 RFC-370 v3：接手审视、重设计与完整实现（In Progress）
 
-完整 M1 候选及测试已编写，集中静态检查与架构写点登记中；尚未取得本候选精确 SHA CI 和 CS 实机执行证据。涵盖执行边界、CS 租约／写屏障、持久执行绑定与事件重放、取消／重启接管、单仓 Git 包装器与脚本任务容器、对象产物；SQLite 0259 / PG 0035。正式 M0 服务继续运行。M2 的 CS 配套 RFC-040 为 Draft，等待用户批准；详见 [RFC-370 status](design/RFC-370-crewstation-hosted-deployment/status.md)。本次继续保留原有未提交 RFC-370 执行端口准备与所有并发产出。
+用户 2026-10-16 明令接手 RFC-370 并统一审视 CS RFC-040 / 042，自主重设计后完整实现（免 Codex 门、允许提交推送）。审视结论与裁定 V1～V13 见 [redesign §9](design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md)：执行生命周期（关闭 / 失权 detach、启动恢复不等远程结果、410 才判 unknown）、Source Control 卷内命令日志与结果文件、父任务暂停 / 恢复与粗粒度卷内命令、父任务级两种平台恢复动作、复用单机 PG 逻辑备份的托管备份与 CS RFC-042 空库恢复、一套中立对象发布日志、只增 schema 与每事务一次的执行权共享锁、去掉事件来源切换、bootstrap 唯一装配；未发布迁移收敛为 SQLite 0259 / PG 0035（216 source / 210 active）。M1 三个提交已随 `0a6f5eb4f` 上 main，其 CI 失败项归因 M1 并由 v3 提交修复。CS `61478743`、`516b83a1` 已推送且准确 SHA CI 成功。v2 在制品的旧记录逐字归档在 RFC-370 目录的 `status-archive-m2m3-20261016.md`。集中验证、提交、部署与 M1～M3 实机验收见 [RFC-370 status](design/RFC-370-crewstation-hosted-deployment/status.md)。正式 M0 v0.5.0 保持运行。
 
 ## 2026-10-15 RFC-370 v2 M0：托管控制面（Done，本机 CS 部署验收通过）
 

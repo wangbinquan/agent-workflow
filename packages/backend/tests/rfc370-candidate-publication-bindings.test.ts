@@ -6,7 +6,7 @@ import {
   CandidatePublicationStore,
   MappedCandidateFactory,
 } from './helpers/repositoryCandidatePublication'
-import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/public/types'
+import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 function calls(source: ts.SourceFile, name: string) {

@@ -1,5 +1,10 @@
 import type { BusinessEvent } from '@/platform/crewstation/businessExecution'
-import type { NormalizedEvent } from '@/services/runtime/types'
+import type { NormalizedEvent, NormalizedTokenDelta } from '@/services/runtime/types'
+import {
+  readHostedStartupInventory,
+  hostedStartupObservation,
+  startupInventoryFaces,
+} from '@/platform/crewstation/startupInventory'
 import type {
   RuntimeUsageMeter,
   RuntimeUsageSnapshot,
@@ -8,10 +13,39 @@ import { objectOf } from '@/modules/runtime-management/public/participants'
 
 export const HOSTED_EVENT_FORMAT = 'aw-normalized-execution-v1'
 
-export function hostedEventRecord(event: BusinessEvent): {
+export function hostedEventRecord(
+  event: BusinessEvent,
+  protocol?: 'opencode' | 'claude-code',
+): {
   readonly raw: string
   readonly event: NormalizedEvent
 } {
+  if (event.type === 'startup-inventory') {
+    const report =
+      protocol === undefined
+        ? {
+            version: 1 as const,
+            state: 'unavailable' as const,
+            reason: 'hosted-inventory-protocol-unknown',
+          }
+        : readHostedStartupInventory(event.data, protocol)
+    const observation = hostedStartupObservation(report)
+    const faces = startupInventoryFaces(observation)
+    const raw = JSON.stringify({ format: HOSTED_EVENT_FORMAT, event: { ...event, data: report } })
+    return {
+      raw,
+      event: {
+        rawLine: raw,
+        timestamp: Date.parse(event.occurredAt),
+        kind: 'startup_inventory',
+        persist: false,
+        data: {
+          startupObservation: observation,
+          ...(faces === null ? {} : { inventory: { faces } }),
+        },
+      },
+    }
+  }
   const raw = JSON.stringify({ format: HOSTED_EVENT_FORMAT, event })
   const common = { rawLine: raw, timestamp: Date.parse(event.occurredAt) }
   switch (event.type) {
@@ -29,6 +63,41 @@ export function hostedEventRecord(event: BusinessEvent): {
       }
     default:
       return { raw, event: { ...common, kind: 'step_finish' } }
+  }
+}
+
+/** RFC-370 §9.2 V1 — token deltas for the node's running totals (`tok_*`,
+ * enforced by `max_total_tokens`). Platform usage is a replacement snapshot;
+ * each delta is the growth since the previous snapshot, never negative. */
+export function createHostedTokenDeltas(): (
+  raw: Readonly<Record<string, unknown>>,
+) => NormalizedTokenDelta | undefined {
+  const meter = createHostedUsageMeter()
+  let emitted: NormalizedTokenDelta = { input: 0, output: 0, cacheCreate: 0, cacheRead: 0 }
+  return (raw) => {
+    if (!meter.observe(raw)) return undefined
+    const totals = meter.snapshot().models.reduce(
+      (sum, model) => ({
+        input: sum.input + model.input,
+        output: sum.output + model.output,
+        cacheCreate: sum.cacheCreate + model.cacheWrite,
+        cacheRead: sum.cacheRead + model.cacheRead,
+      }),
+      { input: 0, output: 0, cacheCreate: 0, cacheRead: 0 },
+    )
+    const delta: NormalizedTokenDelta = {
+      input: Math.max(0, totals.input - emitted.input),
+      output: Math.max(0, totals.output - emitted.output),
+      cacheCreate: Math.max(0, totals.cacheCreate - emitted.cacheCreate),
+      cacheRead: Math.max(0, totals.cacheRead - emitted.cacheRead),
+    }
+    emitted = {
+      input: Math.max(emitted.input, totals.input),
+      output: Math.max(emitted.output, totals.output),
+      cacheCreate: Math.max(emitted.cacheCreate, totals.cacheCreate),
+      cacheRead: Math.max(emitted.cacheRead, totals.cacheRead),
+    }
+    return delta.input + delta.output + delta.cacheCreate + delta.cacheRead > 0 ? delta : undefined
   }
 }
 

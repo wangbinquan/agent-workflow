@@ -4,6 +4,14 @@
 
 import { z } from 'zod'
 import {
+  HostedBackupCatalogSchema,
+  HostedBackupVerificationSchema,
+  HostedBackupIdSchema,
+  type HostedBackupCatalog,
+  type HostedBackupVerification,
+  type HostedBackupId,
+} from '@agent-workflow/shared'
+import {
   databaseMigrationArtifactInputSchema,
   databaseMigrationArtifactViewSchema,
   databaseMigrationLegacyChunkInputSchema,
@@ -113,6 +121,16 @@ export const SYSTEM_OPERATION_ALIASES: ReadonlyArray<OperationAlias> = Object.fr
 ])
 
 export interface SystemOperationDescriptors {
+  readonly hostedBackupCatalog?: QueryOperationDescriptor<
+    Record<never, never>,
+    HostedBackupCatalog,
+    QueryContext
+  >
+  readonly verifyHostedBackup?: QueryOperationDescriptor<
+    HostedBackupId,
+    HostedBackupVerification,
+    QueryContext
+  >
   readonly requestBackup: CommandOperationDescriptor<
     RequestBackupInput,
     BackupResultView,
@@ -202,7 +220,53 @@ export function createSystemOperationDescriptors(input: {
     invoke: (context: CommandContext, command: StageRestoreInput) =>
       input.commands.stageRestore.execute(context, command),
   })
-  return Object.freeze({ requestBackup, getRecoveryStatus, cancelStagedRestore, stageRestore })
+  const hostedBackupCatalog: SystemOperationDescriptors['hostedBackupCatalog'] =
+    input.queries.hostedBackupCatalog &&
+    Object.freeze({
+      id: operationId('system-operations.hosted-backup-catalog.v1'),
+      kind: 'query',
+      contextKind: 'authenticated-query',
+      summary: 'List hosted database backups',
+      permissions: BACKUP_PERMISSION,
+      publicErrors: PUBLIC_ERRORS,
+      input: zodOperationCodec(
+        'system-operations.hosted-backup-catalog.input.v1',
+        emptyInputSchema,
+      ),
+      output: zodOperationCodec(
+        'system-operations.hosted-backup-catalog.output.v1',
+        HostedBackupCatalogSchema,
+      ),
+      invoke: (context: QueryContext) => input.queries.hostedBackupCatalog!.execute(context),
+    })
+  const verifyHostedBackup: SystemOperationDescriptors['verifyHostedBackup'] =
+    input.queries.verifyHostedBackup &&
+    Object.freeze({
+      id: operationId('system-operations.verify-hosted-backup.v1'),
+      kind: 'query',
+      contextKind: 'authenticated-query',
+      summary: 'Verify a hosted database backup without modifying the active database',
+      permissions: BACKUP_PERMISSION,
+      publicErrors: ['validation-failed', 'conflict', 'not-found', 'internal-error'] as const,
+      input: zodOperationCodec(
+        'system-operations.verify-hosted-backup.input.v1',
+        HostedBackupIdSchema,
+      ),
+      output: zodOperationCodec(
+        'system-operations.verify-hosted-backup.output.v1',
+        HostedBackupVerificationSchema,
+      ),
+      invoke: (context: QueryContext, command: HostedBackupId) =>
+        input.queries.verifyHostedBackup!.execute(context, command),
+    })
+  return Object.freeze({
+    requestBackup,
+    getRecoveryStatus,
+    cancelStagedRestore,
+    stageRestore,
+    ...(hostedBackupCatalog === undefined ? {} : { hostedBackupCatalog }),
+    ...(verifyHostedBackup === undefined ? {} : { verifyHostedBackup }),
+  })
 }
 
 const DATABASE_MIGRATION_PERMISSIONS = Object.freeze(['settings:write', 'backup:run'] as const)

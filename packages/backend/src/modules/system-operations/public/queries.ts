@@ -1,4 +1,10 @@
-import type { Config, OverviewResponse } from '@agent-workflow/shared'
+import type {
+  Config,
+  OverviewResponse,
+  HostedBackupCatalog,
+  HostedBackupVerification,
+  HostedBackupId,
+} from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type {
   DatabaseMigrationArtifactInput,
@@ -46,6 +52,12 @@ export interface GetRecoveryStatusQuery {
 }
 
 export interface SystemOperationQueries {
+  readonly hostedBackupCatalog?: {
+    execute(context: QueryContext): Promise<HostedBackupCatalog>
+  }
+  readonly verifyHostedBackup?: {
+    execute(context: QueryContext, input: HostedBackupId): Promise<HostedBackupVerification>
+  }
   readonly planLocalRestore: PlanLocalRestoreQuery
   readonly getRecoveryStatus: GetRecoveryStatusQuery
 }

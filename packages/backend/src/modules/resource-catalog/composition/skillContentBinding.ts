@@ -44,42 +44,24 @@ export function selectSkillContentDependencies(
 }
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type {
-  ResourcePackagePluginArtifactOwner,
-  ResourcePackageSkillArtifactOwner,
-} from '../application/package/artifactOwners'
-import type { PluginInstallerPort } from '../application/plugins/ports'
 import type { SkillPackageContentReader } from '../application/skills/packageContentReader'
 import { createDatabaseSkillContent } from '../infrastructure/databaseSkillContent'
-import {
-  createHostedPluginInstaller,
-  createHostedResourcePackageArtifacts,
-} from '../infrastructure/crewstation/hostedResourceCapabilities'
 
-/** RFC-370 M0 — resource content selections of a CrewStation-hosted control plane. */
+/** RFC-370 — skill content selections of a CrewStation-hosted control plane.
+ * Plugin installation and resource-package artifacts are the hosted artifact
+ * owners (`composeCrewStationResourceArtifacts`, M2). */
 export interface CrewStationResourceContentSelections {
   readonly skillContent: SkillContentBinding
   readonly resourcePackageSkillContent: SkillPackageContentReader
-  readonly pluginInstaller: PluginInstallerPort
-  readonly resourcePackageSkillArtifacts: ResourcePackageSkillArtifactOwner
-  readonly resourcePackagePluginArtifacts: ResourcePackagePluginArtifactOwner
 }
 
-/**
- * Skill trees live in the database (the service slot has no persistent disk);
- * plugin installation and resource packages wait for the platform's native
- * configuration overlay and are refused with the reason until then.
- */
+/** Skill trees live in the database (the service slot has no persistent disk). */
 export function composeCrewStationResourceContent(input: {
   readonly db: ProviderNeutralDatabase
 }): CrewStationResourceContentSelections {
   const skills = createDatabaseSkillContent({ db: input.db })
-  const packages = createHostedResourcePackageArtifacts()
   return Object.freeze({
     skillContent: skills,
     resourcePackageSkillContent: skills.packageContent,
-    pluginInstaller: createHostedPluginInstaller(),
-    resourcePackageSkillArtifacts: packages.skills,
-    resourcePackagePluginArtifacts: packages.plugins,
   })
 }

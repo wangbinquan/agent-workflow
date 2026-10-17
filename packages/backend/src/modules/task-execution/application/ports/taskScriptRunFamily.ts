@@ -86,8 +86,8 @@ export interface TaskScriptRunRequest {
   readonly killEscalationGraceMs?: number
   readonly signal?: AbortSignal
   readonly beforeStart?: (projection: TaskScriptStartProjection) => Promise<void> | void
-  readonly onStdoutLine?: (line: string) => Promise<void> | void
-  readonly onStderrLine?: (line: string) => Promise<void> | void
+  readonly onStdoutLine?: (line: string, sourceKey?: string) => Promise<void> | void
+  readonly onStderrLine?: (line: string, sourceKey?: string) => Promise<void> | void
   readonly onStarted?: (receipt: TaskScriptStartReceipt) => Promise<void> | void
   readonly requireStartReceipt?: boolean
   readonly gitUserName?: string | null

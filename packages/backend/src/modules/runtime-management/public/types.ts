@@ -1,6 +1,27 @@
 /** Runtime protocol identity shared by provider-neutral module contracts. */
 export type RuntimeKind = 'opencode' | 'claude-code'
 
+/** RFC-370: the platform's tested capabilities of each Agent profile in the
+ * current CrewStation release (`/v3/business-execution/capabilities`). */
+export interface HostedRuntimeCapabilities {
+  readonly protocolVersion: 3
+  readonly releaseId: string
+  readonly agentProfiles: readonly {
+    readonly agentProfileId: string
+    readonly computeProfileId: string
+    readonly profileRevision: number
+    readonly capabilities: {
+      readonly events: boolean
+      readonly mcp: boolean
+      readonly usage: 'none' | 'final' | 'incremental'
+      readonly startupInventoryVersion?: 1
+      readonly nativeConfigVersion?: 1
+      readonly nativeModelMappingVersion?: 1
+      readonly materialObjectsVersion?: 1
+    }
+  }[]
+}
+
 /** The existing diagnostic wire, independent of the process adapter's options. */
 export interface RuntimeSmokeResult {
   readonly outcome:

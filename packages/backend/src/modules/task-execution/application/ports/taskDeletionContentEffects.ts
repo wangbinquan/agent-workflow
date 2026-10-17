@@ -4,7 +4,9 @@ type Completion<T> = T | Promise<T>
 
 /** Reference interpretation and cleanup owned by one selected content receiver. */
 export interface TaskDeletionContentEffects {
-  directories(taskId: string): readonly [string, string, string]
+  /** Freeze the owning workspace before task rows disappear; inherited
+   * children may share a physical volume while retaining separate content. */
+  directories(taskId: string, workspaceReference?: string): readonly [string, string, string]
   removeIfPresent(reference: string): Completion<void>
 }
 

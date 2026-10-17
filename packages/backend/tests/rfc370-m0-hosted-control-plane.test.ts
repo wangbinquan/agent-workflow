@@ -8,6 +8,7 @@
 // from the served page; the platform probes answer without authority; and the
 // Manifest is rendered from a validated profile.
 import { expect, test } from 'bun:test'
+import { DomainError } from '@/util/errors'
 import { readFileSync } from 'node:fs'
 import { Hono } from 'hono'
 import { parse as parseYaml } from 'yaml'
@@ -23,11 +24,6 @@ import {
   createPluginOperationDescriptors,
   createResourcePackageOperationDescriptors,
 } from '@/modules/resource-catalog/composition/catalogOperationDescriptors'
-import {
-  createHostedPluginInstaller,
-  createHostedResourcePackageArtifacts,
-  HostedCapabilityUnavailableError,
-} from '@/modules/resource-catalog/infrastructure/crewstation/hostedResourceCapabilities'
 import { invokeOperation } from '@/platform/operations/invoke'
 import { runDaemonHostApplication } from '@/modules/system-operations/application/daemonHostApplication'
 import type { ExecutionFence } from '@/modules/system-operations/application/ports/executionAuthority'
@@ -288,29 +284,18 @@ test('an exit request whose drain fails still exits non-zero', async () => {
   expect(warnings).toContain('daemon exit request drain error')
 })
 
-test('plugin installation and resource packages are refused with the reason', async () => {
-  const installer = createHostedPluginInstaller()
-  await expect(installer.install('p1', 'some-npm-plugin')).rejects.toMatchObject({
-    code: 'hosted-capability-unavailable',
-    status: 503,
-    details: { capability: 'plugin-install' },
-  })
-  await expect(installer.checkForUpdate('p1', 'x', '/c')).rejects.toMatchObject({ status: 503 })
-  const packages = createHostedResourcePackageArtifacts()
-  expect(() => packages.skills.planCreate({} as never, {} as never)).toThrow(
-    'Applying resource packages is not available',
-  )
-  expect(() => packages.plugins.planInstall({} as never, {} as never)).toThrow(
-    'Applying resource packages is not available',
-  )
-  await packages.skills.compensate({} as never, {} as never)
-})
-
 // Regression (found by the local hosted smoke): the operation layer rethrows only
 // declared public error categories, so an undeclared 503 surfaced as a 500
 // operation contract violation instead of the hosted reason.
 test('hosted refusals reach the caller as 503 through the operation contracts', async () => {
-  const refusal = new HostedCapabilityUnavailableError('plugin-install')
+  // M2 implements plugin installation on CrewStation; the contract still
+  // carries a declared 503 refusal (e.g. a capability the platform lacks).
+  const refusal = new DomainError(
+    'hosted-capability-unavailable',
+    'not available on this CrewStation-hosted deployment',
+    503,
+    { capability: 'plugin-install' },
+  )
   const plugins = createPluginOperationDescriptors(
     {
       create: async () => {
@@ -416,6 +401,100 @@ test('the Manifest is rendered from a validated deployment profile', () => {
   ).toBe(
     'plan: 01a0bf5d-8f4b-7000-9e4b-b54e91ee9d10\nkey: 01a0bf5d-8f4b-7100-8000-000000000001\nadmins: 01a0bf5d-8f4b-7100-8000-000000000002\n',
   )
+  expect(profile.agentProfiles[0]?.businessConfig.nativeConfig).toEqual({
+    agentDefinitions: true,
+    inlineRemoteMcp: true,
+    inlineLocalMcp: true,
+    plugins: true,
+  })
+  expect(renderCrewStationManifest('{ { AGENT_PROFILES_JSON } }', profile)).toBe(
+    JSON.stringify(profile.agentProfiles),
+  )
+  const eventsProfile = parseDeploymentProfile({
+    ...profile,
+    eventSourcesDefinitionId: '01a0bf5d-8f4b-7100-8000-000000000009',
+    eventTypeIds: ['01a0bf5d-8f4b-7100-8000-000000000010'],
+  })
+  expect(
+    parseYaml(
+      renderCrewStationManifest('subscriptions: {{EVENT_SUBSCRIPTIONS_JSON}}', eventsProfile),
+    ),
+  ).toEqual({
+    subscriptions: [
+      {
+        eventTypeId: eventsProfile.eventTypeIds![0],
+        handlerPath: '/integrations/crewstation/events',
+      },
+    ],
+  })
+  expect(renderCrewStationManifest('{{ENV_JSON}}', eventsProfile)).toContain('AW_EVENT_SOURCES')
+  expect(JSON.parse(renderCrewStationManifest('{{SERVICE_COMMAND_JSON}}', eventsProfile))).toEqual([
+    '/usr/bin/env',
+    `AW_EVENT_TYPE_IDS=${JSON.stringify(eventsProfile.eventTypeIds)}`,
+    'agent-workflow',
+    'start',
+  ])
+  // RFC-370 v3 V5: database restores come from the platform restore operation
+  // (CS_DATABASE_RESTORE_REFERENCE); the release Job takes no AW restore input.
+  expect(() =>
+    parseDeploymentProfile({
+      ...profile,
+      restoreObjectDefinitionId: profile.adminSubjectsDefinitionId,
+    }),
+  ).toThrow('no longer supported')
+  expect(renderCrewStationManifest('{{ENV_JSON}}', profile)).not.toContain('AW_RESTORE_OBJECT')
+  // RFC-370 v3 V4: every hosted service declares the two parent-level recovery
+  // actions; node retry/resume stay AW's own task commands, and a recovery
+  // request acts as its requesting platform user (no service identity).
+  expect(parseYaml(renderCrewStationManifest('{{RECOVERY_DECLARATION}}', profile))).toEqual({
+    recovery: { actions: ['resume-task', 'rebuild-workspace'] },
+  })
+  expect(renderCrewStationManifest('{{ENV_JSON}}', profile)).not.toContain('AW_RECOVERY_IDENTITY')
+  expect(() =>
+    parseDeploymentProfile({
+      ...profile,
+      recoveryIdentityDefinitionId: profile.adminSubjectsDefinitionId,
+    }),
+  ).toThrow('no longer supported')
+  const gitProfile = parseDeploymentProfile({
+    ...profile,
+    gitCredentialsDefinitionId: profile.adminSubjectsDefinitionId,
+  })
+  expect(JSON.parse(renderCrewStationManifest('{{ENV_JSON}}', gitProfile))).toContainEqual({
+    name: 'AW_GIT_CREDENTIAL_BINDINGS',
+    from: 'config',
+    configDefinitionId: profile.adminSubjectsDefinitionId,
+  })
+  expect(gitProfile.agentProfiles[0]!.businessConfig.allowedEnvNames).toContain(
+    'GIT_CONFIG_PARAMETERS',
+  )
+  expect(gitProfile.agentProfiles[0]!.businessConfig.allowedEnvNames).toContain('AW_GIT_AUTH_31')
+  expect(gitProfile.agentProfiles[0]!.businessConfig.allowedEnvNames.length).toBeLessThanOrEqual(
+    128,
+  )
+  expect(profile.agentProfiles[0]!.businessConfig.allowedEnvNames).toEqual([
+    'GIT_CONFIG_PARAMETERS',
+  ])
+  expect(
+    JSON.parse(renderCrewStationManifest('{{COMMAND_BUSINESS_CONFIG_JSON}}', gitProfile)),
+  ).toEqual({
+    allowedEnvNames: [
+      'AW_GIT_CREDENTIAL_BINDINGS',
+      ...Array.from({ length: 32 }, (_, index) => `AW_GIT_AUTH_${index}`),
+    ],
+  })
+  expect(
+    JSON.parse(renderCrewStationManifest('{{COMMAND_BUSINESS_CONFIG_JSON}}', profile)),
+  ).toEqual({ allowedEnvNames: [] })
+  expect(() =>
+    parseDeploymentProfile({ ...profile, gitCredentialsDefinitionId: 'plaintext-token' }),
+  ).toThrow('resource UUID')
+  expect(() =>
+    parseDeploymentProfile({ ...profile, restoreObjectDefinitionId: 'arbitrary-url' }),
+  ).toThrow('restoreObjectDefinitionId')
+  expect(() =>
+    parseDeploymentProfile({ ...profile, eventTypeIds: eventsProfile.eventTypeIds }),
+  ).toThrow('require both')
   expect(() => renderCrewStationManifest('{{UNKNOWN}}', profile)).toThrow(
     'unknown manifest placeholder',
   )

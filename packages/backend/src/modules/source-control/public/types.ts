@@ -1,3 +1,6 @@
+import type { WorkspaceMaintenanceFilesystem } from '../application/ports/workspaceMaintenance'
+import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
+import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
 import type {
   RepositoryCredentialSubject,
   RepositoryPublicationReceipt,
@@ -230,10 +233,7 @@ export interface BoundedWorkspaceContent {
 }
 
 /** The existing Git outcome, reused by neutral baseline effects. */
-export type {
-  RepositoryCandidateEffectsFactory,
-  RepositoryCandidateGitOutcome,
-} from '../application/ports/repositoryCandidateEffects'
+export type { RepositoryCandidateGitOutcome } from '../application/ports/repositoryCandidateEffects'
 
 export type {
   WorkspaceUploadBinding,
@@ -266,3 +266,11 @@ export type {
 } from '../domain/isolationConflict'
 
 export type { ConflictMergeWorkspaceEffects } from '../application/ports/conflictMergeWorkspaceEffects'
+
+/** Complete content family for the maintenance Worker; a hosted worker must
+ * not fall back to the service container's filesystem during cold recovery. */
+export interface WorkspaceMaintenanceEffects {
+  filesystem(isMaterializingTask: (taskId: string) => boolean): WorkspaceMaintenanceFilesystem
+  readonly preparation: RepositoryPreparationEffectFactory
+  readonly scratch: ScratchWorkspaceEffects
+}

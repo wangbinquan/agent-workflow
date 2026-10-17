@@ -162,6 +162,10 @@ export const ENDPOINTS: EndpointSpec[] = [
   // RFC-257 — code-host webhook ingress: public by design (caller is GitLab),
   // authenticated by per-endpoint secret + URL token inside the handler.
   { method: 'POST', path: '/webhooks/:provider/:urlToken', public: true },
+  // RFC-370 M3 — CrewStation event delivery: public at the AW session layer
+  // (the caller is the platform), authenticated inside the handler by the
+  // CrewStation service source token; mounted only in hosted deployments.
+  { method: 'POST', path: '/integrations/crewstation/events', public: true },
   // RFC-257 — management surfaces (T7 endpoints / T8 triggers / T9 deliveries).
   { method: 'GET', path: '/api/webhook-endpoints' },
   { method: 'POST', path: '/api/webhook-endpoints' },
@@ -1041,6 +1045,9 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // ---- backup ----
   { method: 'POST', path: '/api/backup' },
+  // RFC-370 v3 V5 — hosted backup catalog and complete-archive verification.
+  { method: 'GET', path: '/api/backup' },
+  { method: 'POST', path: '/api/backup/:backupId/verify' },
   // ---- RFC-213 disaster recovery ----
   { method: 'POST', path: '/api/restore' },
   // RFC-213 impl-gate P1-5 — staged-restore visibility + cancel (admin-only).

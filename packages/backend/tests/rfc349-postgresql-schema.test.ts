@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 198 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 214 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -25,13 +25,14 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     // RFC-371 v2 retired 81 v1 observation tables and added the three call / model / price tables;
     // RFC-370 v2 retired the host write-context and memory distill receipt tables; RFC-370 M0
     // added the hosted configuration document, external identity and skill content tables; RFC-370
-    // M1 added the hosted execution control, binding and task workspace tables.
-    expect(tables).toHaveLength(198)
+    // M1 added the hosted execution control, binding and task workspace tables; RFC-370 v3 V11
+    // squashed every unreleased hosted table into one 0035 migration.
+    expect(tables).toHaveLength(210)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       false,
     )
     expect(tables.some((table) => table.logicalId === 'observation_calls')).toBe(true)
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(198)
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(210)
     expect(
       tables
         .map((statement) => statement.logicalId)

@@ -174,8 +174,17 @@ describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
       ),
       'utf8',
     )
-    expect(runnerSrc).toContain('await activeProcessEffect.recordSpawnReceipt(receipt)')
-    expect(runnerSrc).toContain('await localExecution.recordTaskReceipt(receipt, opts.nodeRunId)')
+    // RFC-370 M1: the selected agent invocation records the started receipt for
+    // the Task (durable process effect, or the original native task receipt).
+    const invocationSrc = readFileSync(
+      join(import.meta.dir, '../src/modules/task-execution/composition/agentInvocation.ts'),
+      'utf8',
+    )
+    expect(runnerSrc).toContain('await invocation.execute(')
+    expect(invocationSrc).toContain('await processEffect.recordSpawnReceipt(receipt)')
+    expect(invocationSrc).toContain(
+      'await native.recordLegacyTaskReceipt(receipt, taskReceipt.nodeRunId)',
+    )
     expect(nativeExecutionSrc).toContain('receipt: nativeReceipt(identity.receipt)')
     expect(nativeExecutionSrc).toContain('spawnBinaryPath: native.spawnBinaryPath')
     expect(nativeExecutionSrc).toContain('pid: native.pid')

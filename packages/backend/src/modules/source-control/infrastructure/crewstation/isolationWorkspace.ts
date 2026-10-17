@@ -3,8 +3,14 @@ import type {
   IsolationWorkspaceFactory,
   IsolationWorkspaceScope,
   IsolationWorkspaceBinding,
+  IsolationConflict,
 } from '../../application/ports/isolationWorkspace'
 import { hostedWorkspaceReference, parseHostedWorkspaceReference } from './workspaceReference'
+import {
+  MergeAgentChildUnreapedError,
+  type PreparedConflictResolution,
+  type ResolveConflictOutcome,
+} from '@/platform/workspace/local/isolation'
 
 /** Only adapter-owned physical descriptions cross the helper boundary. */
 export function mapHostedWorkspacePaths<T>(
@@ -36,17 +42,21 @@ export function createHostedIsolationWorkspaces(
 ): IsolationWorkspaceFactory {
   return {
     bind(binding) {
+      const volumeTaskId =
+        binding.repositories.length === 0
+          ? binding.taskId
+          : parseHostedWorkspaceReference(binding.repositories[0]!.workspaceRef).taskId
       const nativeBinding: IsolationWorkspaceBinding = {
-        ...mapHostedWorkspacePaths(binding, 'native', binding.taskId),
+        ...mapHostedWorkspacePaths({ ...binding, storageRootRef: '/work' }, 'native', volumeTaskId),
         storageRootRef: '/work',
       }
       const call = async <T>(method: string, args: readonly unknown[]): Promise<T> => {
-        const result = await helper.call<T>(binding.taskId, 'isolation', {
+        const result = await helper.call<T>(volumeTaskId, 'isolation', {
           binding: nativeBinding,
           method,
-          args: mapHostedWorkspacePaths(args, 'native', binding.taskId),
+          args: mapHostedWorkspacePaths(args, 'native', volumeTaskId),
         })
-        return mapHostedWorkspacePaths(result, 'hosted', binding.taskId)
+        return mapHostedWorkspacePaths(result, 'hosted', volumeTaskId)
       }
       return {
         recoverKey: (reference, rowId) => call('recoverKey', [reference, rowId]),
@@ -58,22 +68,71 @@ export function createHostedIsolationWorkspaces(
         changedFiles: (reference, baseline) => call('changedFiles', [reference, baseline]),
         blobHashes: (reference, paths) => call('blobHashes', [reference, paths]),
         snapshot: (workspace, _log, paths) => call('snapshot', [workspace, null, paths]),
-        // M1 preserves conflicts as explicit human decisions. Native-config
-        // Agent resolution is selected in M2; no callback runs on this host.
-        merge: (workspace, trees) => call('merge', [workspace, trees]),
+        async merge(workspace, trees, _log, resolveSubConflict) {
+          if (resolveSubConflict === undefined) return call('merge', [workspace, trees])
+          const answers: [string, boolean][] = []
+          let current = workspace
+          for (;;) {
+            const step = await call<{
+              result: Awaited<ReturnType<IsolationWorkspaceScope['merge']>>
+              pending: { key: string; conflict: IsolationConflict } | null
+            }>('merge-step', [current, trees, answers])
+            current = step.result.workspace
+            if (step.pending === null) return step.result
+            // A thrown/unreaped resolver interrupts the merge. No fabricated
+            // failure answer is published while its writer may still be alive.
+            const outcome = await resolveSubConflict(step.pending.conflict)
+            answers.push([step.pending.key, outcome.resolved])
+          }
+        },
         undoShard: ({ log: _log, ...request }) => call('undoShard', [request]),
         async discard(workspace, _log, writeWindow, onProgress) {
           const discard = async () => {
-            await call('discard', [workspace])
+            const result = await call<void | { readonly retained: true }>('discard', [workspace])
             onProgress?.(0)
+            return result
           }
-          if (writeWindow === undefined) await discard()
-          else await writeWindow.run(discard)
+          if (writeWindow === undefined) return discard()
+          return writeWindow.run(discard)
         },
-        resolveConflict: async () => {
-          throw new Error(
-            'hosted-capability-unavailable: Agent conflict resolution requires RFC-370 M2',
+        async resolveConflict(conflict, request) {
+          const prepared = await helper.call<PreparedConflictResolution>(
+            volumeTaskId,
+            'isolation-conflict-prepare',
+            {
+              conflict: mapHostedWorkspacePaths(conflict, 'native', volumeTaskId),
+              containerRef: mapHostedWorkspacePaths(request.containerRef, 'native', volumeTaskId),
+            },
           )
+          let result: ResolveConflictOutcome
+          if (prepared.kind === 'parked') result = prepared.outcome
+          else {
+            let agentError: string | undefined
+            try {
+              await request.runAgent(
+                prepared.prompt,
+                hostedWorkspaceReference(volumeTaskId, prepared.resolveIso),
+                prepared.manifest,
+              )
+            } catch (error) {
+              // A still-running writer is a hard barrier. Preserve the resolve
+              // workspace and do not publish or start another resolver.
+              if (error instanceof MergeAgentChildUnreapedError) throw error
+              agentError = error instanceof Error ? error.message : String(error)
+            }
+            result = await helper.call(volumeTaskId, 'isolation-conflict-finish', {
+              prepared,
+              agentError,
+            })
+          }
+          return {
+            resolved: result.resolved,
+            unresolved: result.unresolved,
+            resolveWorkspaceRef:
+              result.resolveIsoPath === null
+                ? null
+                : hostedWorkspaceReference(volumeTaskId, result.resolveIsoPath),
+          }
         },
         completeHumanConflict: (workspace, trees) =>
           call('completeHumanConflict', [workspace, trees]),

@@ -103,7 +103,9 @@ export function supersededPendingRows<R extends SchedulerRunRowCandidate>(input:
 export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>(
   input: ResolveSchedulerRunRowInput<R>,
 ): Promise<ResolvedSchedulerRunRow<R>> {
-  const topLevelRows = input.rows.filter((row) => row.parentNodeRunId === null)
+  const topLevelRows = input.rows.filter(
+    (row) => row.parentNodeRunId === null && (row.containerRunId ?? null) === input.containerRunId,
+  )
   const latestExisting = freshest(topLevelRows)
 
   if (input.preResolve !== undefined) {

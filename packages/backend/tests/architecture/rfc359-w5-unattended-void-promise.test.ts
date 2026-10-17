@@ -143,7 +143,8 @@ function scan(): string[] {
  * 退役判据见头注释——在调用点链上补一个拒绝处理器即可，账本随之改小。
  */
 export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
-  'cli/postgresqlDaemonApplication.ts: 3',
+  // RFC-370 v3 V9: the hosted maintenance Worker wiring left the PostgreSQL root (3 → 2).
+  'cli/postgresqlDaemonApplication.ts: 2',
   // RFC-370: all three host shutdown callbacks now report rejection through the selected adapter.
   'cli/start.ts: 3',
   'mcp/server.ts: 1',

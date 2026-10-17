@@ -33,11 +33,12 @@ function AccountPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   // RFC-370 M0: behind the CrewStation gateway the platform owns sign-in, so the
-  // local password / session and personal-token sections do not apply.
+  // local password / session section does not apply. RFC-370 v3 V10: personal
+  // access tokens stay — API and MCP automation present one together with the
+  // platform session (docs/crewstation-automation.md).
   const gateway = isGatewayIdentity()
   const requested = parseAccountSection(search.section)
-  const section =
-    gateway && (requested === 'security' || requested === 'tokens') ? 'overview' : requested
+  const section = gateway && requested === 'security' ? 'overview' : requested
   const groups: readonly PageSectionGroup<AccountSection>[] = [
     {
       key: 'account',
@@ -56,12 +57,12 @@ function AccountPage() {
                 label: t('account.sections.security'),
                 description: t('account.sectionDescriptions.security'),
               },
-              {
-                key: 'tokens' as const,
-                label: t('account.sections.tokens'),
-                description: t('account.sectionDescriptions.tokens'),
-              },
             ]),
+        {
+          key: 'tokens',
+          label: t('account.sections.tokens'),
+          description: t('account.sectionDescriptions.tokens'),
+        },
         {
           key: 'codePush',
           label: t('account.sections.codePush'),

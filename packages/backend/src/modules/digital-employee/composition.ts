@@ -100,6 +100,8 @@ export const createPostgresqlDigitalEmployeeIntegrationTriggerParticipant =
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
 export { runDigitalEmployeeOsCycle, startDigitalEmployeeOsWorker } from './application/osWorker'
 export { composeDigitalEmployeeAgentTemplateCatalogParticipant } from './composition/agentTemplateCatalog'
+// RFC-370 M2: hosted employee program / input content (CrewStation objects).
+export { composeCrewStationEmployeeContent } from './composition/crewstationContent'
 export type {
   DigitalEmployeeMigrationStatus,
   DigitalEmployeeWriterCutoverOperations,

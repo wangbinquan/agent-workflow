@@ -297,7 +297,9 @@ export const NAME_BLIND_CAPABILITY_PAIRS: readonly string[] = [
   // 且两侧不同目录——按名字配对的账本永远看不到它们。
   // RFC-359 W8 已补上行为对拍（备份收据形状 / 暂存往返 / 409 冲突 / 暂存中途失败 /
   // 标记损坏 / 隔离清单），并据此把 SQLite 侧抬齐到 PostgreSQL 侧。
-  'modules/system-operations/application/ports/adminBackupCoordinator.ts:AdminBackupCoordinatorPort: modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts + modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts — verified by rfc359-w8-system-operations-recovery-conformance.test.ts',
+  // RFC-370 v3 V5: the hosted backup coordinator is a third implementation of
+  // the same port (CS object archives), selected only by the hosted root.
+  'modules/system-operations/application/ports/adminBackupCoordinator.ts:AdminBackupCoordinatorPort: modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts + modules/system-operations/infrastructure/crewstation/databaseBackups.ts modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts — verified by rfc359-w8-system-operations-recovery-conformance.test.ts',
   'modules/system-operations/application/ports/adminRestoreCoordinator.ts:AdminRestoreCoordinatorPort: modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts + modules/system-operations/infrastructure/postgresqlAdminRestoreCoordinator.ts — verified by rfc359-w8-system-operations-recovery-conformance.test.ts',
 ]
 

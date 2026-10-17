@@ -169,6 +169,7 @@ export * from './platformEnv'
 // 模板封套 / 投递与触发 closed enum，以及模板变量的纯函数面（保存期静态校验
 // 与运行期渲染同源）。零 DB / 零 fs 依赖，前后端共用。
 export * from './schemas/webhook'
+export * from './schemas/hostedBackup'
 export * from './schemas/codeHost' // RFC-269
 export * from './schemas/repositoryTransport' // RFC-321
 export * from './repository-transport' // RFC-321 — pure managed Git transport resolution

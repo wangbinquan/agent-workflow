@@ -40,7 +40,11 @@ import {
   resolveEmployeeWorkspaceBaseline,
   restoreEmployeeCaseWorkspace,
 } from './application/employeeCaseWorkspace'
-import type { EmployeeCaseWorkspaceEffectsFactory } from './application/ports/employeeCaseWorkspaceEffects'
+import {
+  EMPLOYEE_CASE_WORKSPACE_OPERATIONS,
+  isEmployeeCaseWorkspaceOperationHost,
+  type EmployeeCaseWorkspaceEffectsFactory,
+} from './application/ports/employeeCaseWorkspaceOperations'
 import { createFileEmployeeCaseWorkspaceEffectsFactory } from './infrastructure/local/fileEmployeeCaseWorkspaceEffects'
 import type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
@@ -67,6 +71,18 @@ export {
 
 export type { RepositoryTransportCredentialRepository } from './ports/repositoryTransportCredentialRepository'
 export type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'
+/** The deployment's candidate selection (RFC-370 §9.2 V3): in-process step
+ * effects, or a host running each whole use case in a remote volume. Only
+ * daemon roots pass it through, so it stays off the public contract. */
+export type {
+  RepositoryCandidateEffectsFactory,
+  RepositoryCandidateOperationHost,
+} from './application/ports/repositoryCandidateOperations'
+/** RFC-370: the deployment's preparation, scratch and maintenance filesystem
+ * selections (local files or a hosted volume), passed through daemon roots. */
+export type { RepositoryPreparationEffectFactory } from './application/ports/repositoryPreparationEffects'
+export type { ScratchWorkspaceEffects } from './application/ports/scratchWorkspaceEffects'
+export type { WorkspaceMaintenanceFilesystem } from './application/ports/workspaceMaintenance'
 
 export interface RepositoryWorkspaceOperations {
   readonly backupPreparation: RepositoryBackupPreparationParticipant
@@ -204,15 +220,32 @@ export function bindRepositoryCommitParticipant(input: {
     workspace === undefined
       ? (input.previewIndex ?? createFileRepositoryPreviewIndexPort(common))
       : { withIndex: (operation) => workspace.withPreviewIndex(operation, common.gitOptions) }
+  // RFC-370 §9.2 V3: a scope whose repository lives in a remote volume runs
+  // each commit use case there as one operation.
+  const operations = workspace?.commitOperations
+  const portableOptions = (() => {
+    if (input.gitOptions === undefined) return {}
+    const { signal: _signal, ...gitOptions } = input.gitOptions
+    return { gitOptions }
+  })()
   return {
-    prepare: () => prepareRepositoryCommit(common),
+    prepare: () =>
+      operations !== undefined
+        ? operations.prepare({ configuredPatterns: common.configuredPatterns, ...portableOptions })
+        : prepareRepositoryCommit(common),
     commitPrepared: (request: {
       message: string
       verification: 'normal' | 'artifact'
       authorName?: string | null
       authorEmail?: string | null
-    }) => commitPreparedRepository({ ...common, ...request }),
-    preview: () => readRepositoryCommitPreview({ ...common, previewIndex }),
+    }) =>
+      operations !== undefined
+        ? operations.commitPrepared({ ...request, ...portableOptions })
+        : commitPreparedRepository({ ...common, ...request }),
+    preview: () =>
+      operations !== undefined
+        ? operations.preview({ configuredPatterns: common.configuredPatterns, ...portableOptions })
+        : readRepositoryCommitPreview({ ...common, previewIndex }),
     publish: (request: { baseSha: string; tipSha: string; mode: RepositoryPublishMode }) =>
       publishRepositoryCommit({
         ...common,
@@ -294,7 +327,20 @@ export function bindEmployeeCaseWorkspaceParticipant(
   resolveBaseline: BoundEmployeeCaseOperation<typeof resolveEmployeeWorkspaceBaseline>
   importCommit: BoundEmployeeCaseOperation<typeof importEmployeeWorkspaceCommit>
 } {
-  const effects = input.effects ?? createFileEmployeeCaseWorkspaceEffectsFactory()
+  const selected = input.effects ?? createFileEmployeeCaseWorkspaceEffectsFactory()
+  // RFC-370 §9.2 V3: a hosted scene runs each whole use case in its volume,
+  // fetching with the volume's own platform Git credentials.
+  if (isEmployeeCaseWorkspaceOperationHost(selected)) {
+    const operations = selected.operations as Partial<typeof selected.operations> | null
+    if (
+      operations === null ||
+      typeof operations !== 'object' ||
+      EMPLOYEE_CASE_WORKSPACE_OPERATIONS.some((name) => typeof operations[name] !== 'function')
+    )
+      throw new Error('employee-case-workspace-effects-incomplete')
+    return selected.operations
+  }
+  const effects = selected
   return {
     materialize: (request) => materializeEmployeeCaseWorkspace(request, effects),
     rematerialize: (request) => rematerializeEmployeeCaseWorkspace(request, effects),
@@ -316,7 +362,10 @@ export function bindEmployeeCaseWorkspaceParticipant(
   }
 }
 
-export type { EmployeeCaseWorkspaceEffectsFactory } from './application/ports/employeeCaseWorkspaceEffects'
+export type {
+  EmployeeCaseWorkspaceEffectsFactory,
+  EmployeeCaseWorkspaceOperationHost,
+} from './application/ports/employeeCaseWorkspaceOperations'
 
 export { createWorkspaceContentScope } from './infrastructure/workspaceContent'
 export type {

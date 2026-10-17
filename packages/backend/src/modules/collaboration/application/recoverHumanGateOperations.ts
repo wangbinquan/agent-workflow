@@ -11,7 +11,7 @@ export type PreparedHumanGateRecoveryDisposition = 'retain-for-owner-retry' | 'c
 export interface PreparedHumanGateRecoveryInspector {
   inspectPreparedOperation(
     operation: HumanGateOperationSnapshot,
-  ): PreparedHumanGateRecoveryDisposition
+  ): PreparedHumanGateRecoveryDisposition | Promise<PreparedHumanGateRecoveryDisposition>
 }
 
 export interface HumanGateRecoveryReport {
@@ -21,6 +21,10 @@ export interface HumanGateRecoveryReport {
   readonly cleaned: number
   readonly failed: number
   readonly errors: readonly string[]
+}
+
+export interface HumanGateArtifactRecovery {
+  runOnce(): Promise<HumanGateRecoveryReport>
 }
 
 export interface HumanGateOperationRecoveryOptions {
@@ -72,7 +76,7 @@ export class HumanGateOperationRecovery {
             break
           case 'prepared':
             if (
-              this.options.preparedInspector.inspectPreparedOperation(operation) ===
+              (await this.options.preparedInspector.inspectPreparedOperation(operation)) ===
               'retain-for-owner-retry'
             ) {
               report.retained++

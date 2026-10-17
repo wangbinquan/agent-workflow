@@ -40,13 +40,15 @@ export interface McpDiagnosticsEffects {
   supportsSession(protocol: McpRuntimeTestSessionRecord['runtimeProtocol']): boolean
   createNativeSessionId(runtime: ResolvedTestRuntime): string | null
   workspaceReference(sessionId: string): string
-  workspaceExists(reference: string): boolean
+  workspaceExists(reference: string): boolean | Promise<boolean>
   cleanupWorkspace(
     candidate: McpRuntimeTestCleanupCandidate,
-  ): Pick<McpRuntimeTestCleanupCandidate, 'cleanupState' | 'cleanupErrorCode'>
+  ):
+    | Pick<McpRuntimeTestCleanupCandidate, 'cleanupState' | 'cleanupErrorCode'>
+    | Promise<Pick<McpRuntimeTestCleanupCandidate, 'cleanupState' | 'cleanupErrorCode'>>
   currentMcpHash(mcp: Mcp): Promise<string>
   broadcast(sessionId: string, snapshot: McpRuntimeTestBroadcastSnapshot): void
-  hasExecution(turn: McpRuntimeTestTurnRecord): boolean
+  hasExecution(turn: McpRuntimeTestTurnRecord): boolean | Promise<boolean>
   /** Read the clock only after the selected execution's original receipt fields. */
   reapTurn(turn: McpRuntimeTestTurnRecord, readNow: () => number): Promise<McpDiagnosticReapOutcome>
   recoverReapedTurn(input: {

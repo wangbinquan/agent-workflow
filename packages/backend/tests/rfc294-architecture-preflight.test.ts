@@ -182,6 +182,11 @@ const DEFAULT_SHAPE_BUDGET: ShapeBudget = {
 const GOD_SURFACE_ALLOWLIST: Readonly<
   Record<string, { readonly why: string; readonly removeAfterWave: string }>
 > = {
+  'modules/task-execution/application/ports/systemAgentRun.ts#PreparedSystemAgentRunResult': {
+    why: 'RFC-370 hosted System Agent runs carry the typed startup observation (verified / unavailable / malformed) next to the native startup inventory; settle-time verification needs both shapes until they converge.',
+    removeAfterWave:
+      'RFC-370 follow-up folds startupInventory and startupObservation into one startup result field.',
+  },
   'modules/task-execution/application/ports/taskExecutionTopology.ts#InheritableRunConfig': {
     why: 'RFC-339 keeps the child-resume configuration explicit and field-complete so inheritance cannot silently widen or drop a runtime setting.',
     removeAfterWave:

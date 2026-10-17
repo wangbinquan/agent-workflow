@@ -32,14 +32,16 @@ type InterpreterSpec =
   (typeof INTERPRETER_SPEC)[CustomObserverProgramInput['draft']['program']['language']]
 interface LocalWorkspace {
   readonly directory: string
+  unsafeWriter?: boolean
   inputFile?: string
   runDir?: string
   scriptPath?: string
   spec?: InterpreterSpec
 }
 
-function createLocalCustomObserverProgram(
+export function createLocalCustomObserverProgram(
   input: CustomObserverProgramInput,
+  selected?: { readonly directory: string; readonly signal?: AbortSignal },
 ): CustomObserverProgramEffects {
   const programs = new WeakMap<CustomObserverProgramRef, ResolvedInterpreter>()
   const workspaces = new WeakMap<CustomObserverWorkspaceRef, LocalWorkspace>()
@@ -57,7 +59,7 @@ function createLocalCustomObserverProgram(
       return ref
     },
     allocateWorkspace() {
-      const directory = mkdtempSync(join(tmpdir(), 'aw-event-observer-'))
+      const directory = selected?.directory ?? mkdtempSync(join(tmpdir(), 'aw-event-observer-'))
       const ref = {}
       workspaces.set(ref, { directory })
       return ref
@@ -92,17 +94,21 @@ function createLocalCustomObserverProgram(
       const scriptPath = workspace.scriptPath!
       const runDir = workspace.runDir!
       const inputFile = workspace.inputFile!
-      return await runManagedProcess({
+      workspace.unsafeWriter = true
+      const result = await runManagedProcess({
         argv: spec.argv(interpreter.path, scriptPath),
         cwd: runDir,
         env: cleanProcessEnv(inputFile),
         timeoutMs: input.draft.program.timeoutMs,
         captureRawStdout: true,
+        ...(selected?.signal === undefined ? {} : { signal: selected.signal }),
       })
+      workspace.unsafeWriter = result.outcome === 'child-unkillable'
+      return result
     },
     disposeWorkspace(ref) {
-      const directory = workspaceFor(ref).directory
-      rmSync(directory, { recursive: true, force: true })
+      const workspace = workspaceFor(ref)
+      if (!workspace.unsafeWriter) rmSync(workspace.directory, { recursive: true, force: true })
     },
   }
 }

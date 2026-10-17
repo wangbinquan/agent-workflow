@@ -455,6 +455,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
       case 'developmentUploadGc':
       case 'developmentRetentionSweep':
       case 'employeeInputGc':
+      case 'hostedObjectRecovery':
       case 'humanGateRecovery':
       case 'walCheckpoint':
         return {}

@@ -179,11 +179,11 @@ export async function discardIsolatedWorkspace(
   ...args: Parameters<typeof discardIsolationWorkspace> extends [IsoHandle, ...infer Rest]
     ? Rest
     : never
-): Promise<void> {
+): Promise<void | { readonly retained: true }> {
   const record = workspaces.get(handle)
   if (record === undefined) return discardIsolationWorkspace(handle, ...args)
   passTopology(handle, record)
-  await record.scope.discard(record.workspace, ...args)
+  return record.scope.discard(record.workspace, ...args)
 }
 
 export async function resolveIsolatedConflict(

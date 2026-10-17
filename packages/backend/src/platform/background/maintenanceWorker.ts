@@ -603,7 +603,9 @@ async function initialise(
         generationId: parsed.generationId,
       })
       postgresqlRuntime = runtime
-      const client = createPostgresqlDatabaseClient(runtime)
+      const client = createPostgresqlDatabaseClient(runtime, {
+        beforeWrite: workerEffects?.databaseWrites?.assertHeld,
+      })
       store = createMaintenanceRunStore(client)
       integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
         composeWebhookDeliveryPersistenceFor(client),
@@ -618,8 +620,14 @@ async function initialise(
         composeWorkspacePreparationMaintenance({
           db: client,
           appHome,
-          repositoryPreparation: composeRepositoryPreparation({ db: client, appHome }),
+          repositoryPreparation: composeRepositoryPreparation({
+            db: client,
+            appHome,
+            preparationEffects: workerEffects?.workspaceMaintenance?.preparation,
+            scratchEffects: workerEffects?.workspaceMaintenance?.scratch,
+          }),
           maintenance: composeWorkspaceMaintenanceCommand({
+            filesystem: workerEffects?.workspaceMaintenance?.filesystem(isMaterializingTask),
             db: client,
             appHome,
             terminalMaintenance: taskExecution.terminalMaintenance,
@@ -642,7 +650,10 @@ async function initialise(
         contract: buildLogicalSchemaContract(),
       })
       systemOperations = Object.freeze({
+        databaseBackups: workerEffects?.databaseBackups,
+        objectPublications: workerEffects?.objectPublications,
         eventsArchive: createEventsArchiveMaintenanceCommand({
+          content: workerEffects?.eventsArchive,
           store: createPostgresqlEventsArchiveStore(client),
           logsDir: join(appHome, 'logs'),
         }),
@@ -695,6 +706,8 @@ async function initialise(
       const intentMaintenanceLog = createLogger('intentMaintenance')
       intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
         db: client,
+        content: workerEffects?.intentArtifactContent,
+        scratch: workerEffects?.intentScratch,
         appHome,
         scratchDirectoryName: INTENT_SCRATCH_DIRNAME,
         pluginsDir: join(appHome, 'plugins'),
@@ -738,8 +751,14 @@ async function initialise(
         composeWorkspacePreparationMaintenance({
           db: sqliteDb,
           appHome,
-          repositoryPreparation: composeRepositoryPreparation({ db: sqliteDb, appHome }),
+          repositoryPreparation: composeRepositoryPreparation({
+            db: sqliteDb,
+            appHome,
+            preparationEffects: workerEffects?.workspaceMaintenance?.preparation,
+            scratchEffects: workerEffects?.workspaceMaintenance?.scratch,
+          }),
           maintenance: composeWorkspaceMaintenanceCommand({
+            filesystem: workerEffects?.workspaceMaintenance?.filesystem(isMaterializingTask),
             db: sqliteDb,
             appHome,
             terminalMaintenance: taskExecution.terminalMaintenance,
@@ -749,7 +768,9 @@ async function initialise(
         }),
       )
       systemOperations = Object.freeze({
+        databaseBackups: workerEffects?.databaseBackups,
         eventsArchive: createEventsArchiveMaintenanceCommand({
+          content: workerEffects?.eventsArchive,
           store: createEventsArchiveStore(sqliteDb),
           logsDir: join(appHome, 'logs'),
         }),
@@ -801,6 +822,8 @@ async function initialise(
         resourcePackageMaintenance.command
       intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
         db: sqliteDb,
+        content: workerEffects?.intentArtifactContent,
+        scratch: workerEffects?.intentScratch,
         appHome,
         scratchDirectoryName: INTENT_SCRATCH_DIRNAME,
         pluginsDir: join(appHome, 'plugins'),

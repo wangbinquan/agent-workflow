@@ -7,6 +7,7 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   webhookDeliveries,
+  csEventTargets,
   webhookEndpoints,
   webhookMrControlEffects,
   webhookMrLaunchGuards,
@@ -152,6 +153,17 @@ export function createWebhookDeliveryPersistence(
                   lt(webhookDeliveries.receivedAt, cursor.bodyCutoff),
                   isNotNull(webhookDeliveries.bodyJson),
                   notInArray(webhookDeliveries.status, ['received', 'processing']),
+                  notExists(
+                    tx
+                      .select({ id: csEventTargets.id })
+                      .from(csEventTargets)
+                      .where(
+                        and(
+                          eq(csEventTargets.deliveryId, webhookDeliveries.id),
+                          eq(csEventTargets.stage, 'admitted'),
+                        ),
+                      ),
+                  ),
                 ),
               )
               .limit(input.batchSize)
@@ -181,6 +193,17 @@ export function createWebhookDeliveryPersistence(
               and(
                 lt(webhookDeliveries.receivedAt, cursor.rowCutoff),
                 notInArray(webhookDeliveries.status, ['received', 'processing']),
+                notExists(
+                  tx
+                    .select({ id: csEventTargets.id })
+                    .from(csEventTargets)
+                    .where(
+                      and(
+                        eq(csEventTargets.deliveryId, webhookDeliveries.id),
+                        eq(csEventTargets.stage, 'admitted'),
+                      ),
+                    ),
+                ),
                 notExists(
                   tx
                     .select({ id: webhookMrControlEffects.id })

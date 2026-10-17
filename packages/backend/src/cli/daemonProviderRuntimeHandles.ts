@@ -324,3 +324,44 @@ export function createLazyPausableDaemonRuntimeServiceBindings(
 
   return Object.freeze({ runtimeFactory, closeParticipant })
 }
+
+/** RFC-370 §9.2 V1 — a deployment-contributed background owner. Stopping it
+ * aborts its signal with the daemon-shutdown reason: an owner observing remote
+ * executions detaches from them instead of cancelling them. */
+export interface SignalledDaemonRuntimeOwner {
+  readonly id: string
+  readonly run: (signal: AbortSignal) => Promise<void>
+}
+
+export function createSignalledDaemonRuntimeHandleFactory(
+  owner: SignalledDaemonRuntimeOwner,
+  stopReason: string,
+): DaemonProviderRuntimeHandleFactory {
+  return Object.freeze({
+    id: owner.id,
+    start() {
+      const controller = new AbortController()
+      const done = owner.run(controller.signal).catch(() => undefined)
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (!stopped) {
+            stopped = true
+            controller.abort(stopReason)
+          }
+        },
+        drain() {
+          if (!stopped) {
+            return Promise.reject(
+              new DaemonProviderRuntimeHandleAdapterError(
+                'daemon-provider-runtime-handle-drain-before-stop',
+                `daemon provider runtime handle ${owner.id} cannot drain before stop`,
+              ),
+            )
+          }
+          return done
+        },
+      } satisfies DaemonProviderRuntimeHandle)
+    },
+  })
+}

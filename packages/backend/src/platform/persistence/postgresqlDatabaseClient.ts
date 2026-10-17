@@ -12,6 +12,7 @@ import {
   type SqliteRemoteResult,
 } from 'drizzle-orm/sqlite-proxy'
 import * as schema from '@/db/schema'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type {
   PostgresqlDatabaseRuntime,
@@ -35,6 +36,28 @@ export class PostgresqlGenerationFenceError extends Error {
 export type PostgresqlDatabaseClient = SqliteRemoteDatabase<typeof schema> & {
   readonly $provider: 'postgresql'
   readonly $generationId: string
+}
+
+/** Optional deployment-specific write authority. Runs once per transaction, on
+ * that transaction, before its first write — including the implicit transaction
+ * of an otherwise standalone write. Locks it takes are held until the
+ * transaction ends. A worker can therefore borrow a fixed execution lease
+ * without changing any business persistence. */
+export interface PostgresqlDatabaseClientOptions {
+  readonly beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
+}
+type TransactionWriteGuard = (
+  connection: PostgresqlPool | PostgresqlReservedConnection,
+) => Promise<void>
+
+/** RFC-370 v3 V7 — one guard per transaction: every later write of the same
+ * transaction (and every concurrent one on it) reuses the first outcome. */
+function oncePerTransaction(
+  guard: TransactionWriteGuard | undefined,
+): TransactionWriteGuard | undefined {
+  if (guard === undefined) return undefined
+  let checked: Promise<void> | undefined
+  return (connection) => (checked ??= guard(connection))
 }
 
 interface CountedRows extends ReadonlyArray<Record<string, unknown>> {
@@ -190,11 +213,13 @@ async function withWriteFence<T>(input: {
   readonly client: PostgresqlPool | PostgresqlReservedConnection
   readonly transactional: boolean
   readonly sql: string
+  readonly beforeWrite?: TransactionWriteGuard
   readonly execute: (client: PostgresqlPool | PostgresqlReservedConnection) => Promise<T>
 }): Promise<T> {
   const operation = assertPostgresqlBusinessStatement(input.sql)
   if (operation !== 'write') return await input.execute(input.client)
   if (input.transactional) {
+    await input.beforeWrite?.(input.client)
     await markFirstGenerationWrite(input.client, input.runtime)
     await assertActiveGeneration(input.client, input.runtime)
     return await input.execute(input.client)
@@ -202,6 +227,7 @@ async function withWriteFence<T>(input: {
   const connection = await input.runtime.providerPool().reserve()
   try {
     await connection.unsafe('BEGIN')
+    await input.beforeWrite?.(connection)
     await markFirstGenerationWrite(connection, input.runtime)
     await assertActiveGeneration(connection, input.runtime)
     const result = await input.execute(connection)
@@ -222,6 +248,7 @@ async function executeArrays(
   sql: string,
   parameters: readonly unknown[],
   method: 'run' | 'all' | 'values' | 'get',
+  beforeWrite?: TransactionWriteGuard,
 ): Promise<{ rows: unknown[]; changes?: number }> {
   const compiled = compilePostgresqlSql(sql)
   // RFC-359 AC-11 —— 围栏内联的快路径。四个前置条件缺一不可：
@@ -229,7 +256,12 @@ async function executeArrays(
   // ② `run`（只要 `changes`；带 `returning` 的形状根本进不了 `foldGenerationFenceIntoInsert`）；
   // ③ 本进程已经给这一代记过首次写——否则 `markFirstGenerationWrite` 还得与写同事务，省不掉；
   // ④ SQL 命中最窄的单行 INSERT。
-  if (!transactional && method === 'run' && markedGenerations.has(runtime)) {
+  if (
+    beforeWrite === undefined &&
+    !transactional &&
+    method === 'run' &&
+    markedGenerations.has(runtime)
+  ) {
     if (assertPostgresqlBusinessStatement(compiled) === 'write') {
       const folded = foldGenerationFenceIntoInsert(compiled, parameters.length)
       if (folded !== null) {
@@ -250,6 +282,7 @@ async function executeArrays(
     client,
     transactional,
     sql: compiled,
+    beforeWrite,
     async execute(executor) {
       const pending: SqlRows = executor.unsafe(compiled, parameters)
       if (method === 'run') {
@@ -271,9 +304,10 @@ function callbackFor(
   runtime: PostgresqlDatabaseRuntime,
   client: PostgresqlPool | PostgresqlReservedConnection,
   transactional: boolean,
+  beforeWrite?: TransactionWriteGuard,
 ): AsyncRemoteCallback {
   return (sql, parameters, method) =>
-    executeArrays(runtime, client, transactional, sql, parameters, method)
+    executeArrays(runtime, client, transactional, sql, parameters, method, beforeWrite)
 }
 
 const rawDialect = new SQLiteAsyncDialect()
@@ -288,6 +322,7 @@ async function rawRows(
   client: PostgresqlPool | PostgresqlReservedConnection,
   transactional: boolean,
   query: SQLWrapper,
+  beforeWrite?: TransactionWriteGuard,
 ): Promise<readonly Record<string, unknown>[]> {
   const compiled = compileRaw(query)
   return await withWriteFence({
@@ -295,6 +330,7 @@ async function rawRows(
     client,
     transactional,
     sql: compiled.sql,
+    beforeWrite,
     execute: async (executor) => await executor.unsafe(compiled.sql, compiled.params),
   })
 }
@@ -309,6 +345,7 @@ function decorateDatabase<TDatabase extends object>(
     readonly runtime: PostgresqlDatabaseRuntime
     readonly rawClient: PostgresqlPool | PostgresqlReservedConnection
     readonly transactional: boolean
+    readonly beforeWrite?: TransactionWriteGuard
   },
 ): TDatabase {
   return new Proxy(base, {
@@ -317,13 +354,25 @@ function decorateDatabase<TDatabase extends object>(
       if (property === '$generationId') return input.runtime.generationId
       if (property === 'all') {
         return async <T>(query: SQLWrapper): Promise<T[]> =>
-          (await rawRows(input.runtime, input.rawClient, input.transactional, query)) as T[]
+          (await rawRows(
+            input.runtime,
+            input.rawClient,
+            input.transactional,
+            query,
+            input.beforeWrite,
+          )) as T[]
       }
       if (property === 'get') {
         return async <T>(query: SQLWrapper): Promise<T | undefined> =>
-          (await rawRows(input.runtime, input.rawClient, input.transactional, query))[0] as
-            | T
-            | undefined
+          (
+            await rawRows(
+              input.runtime,
+              input.rawClient,
+              input.transactional,
+              query,
+              input.beforeWrite,
+            )
+          )[0] as T | undefined
       }
       if (property === 'values') {
         return async (query: SQLWrapper): Promise<readonly (readonly unknown[])[]> => {
@@ -333,6 +382,7 @@ function decorateDatabase<TDatabase extends object>(
             client: input.rawClient,
             transactional: input.transactional,
             sql: compiled.sql,
+            beforeWrite: input.beforeWrite,
             execute: async (executor) =>
               await executor.unsafe(compiled.sql, compiled.params).values(),
           })
@@ -340,7 +390,13 @@ function decorateDatabase<TDatabase extends object>(
       }
       if (property === 'run') {
         return async (query: SQL | SQLWrapper): Promise<DatabaseMutationResult> => {
-          const rows = await rawRows(input.runtime, input.rawClient, input.transactional, query)
+          const rows = await rawRows(
+            input.runtime,
+            input.rawClient,
+            input.transactional,
+            query,
+            input.beforeWrite,
+          )
           return { rows: [], changes: mutationCount(rows) }
         }
       }
@@ -349,8 +405,9 @@ function decorateDatabase<TDatabase extends object>(
           operation: (transaction: PostgresqlTransaction) => Promise<T> | T,
         ): Promise<T> => {
           const connection = await input.runtime.providerPool().reserve()
+          const beforeWrite = oncePerTransaction(input.beforeWrite)
           const transactionBase = createRemoteDatabase(
-            callbackFor(input.runtime, connection, true),
+            callbackFor(input.runtime, connection, true, beforeWrite),
             { schema },
           )
           try {
@@ -361,6 +418,7 @@ function decorateDatabase<TDatabase extends object>(
                     runtime: input.runtime,
                     rawClient: connection,
                     transactional: true,
+                    beforeWrite,
                   }),
                 ),
             )
@@ -376,13 +434,31 @@ function decorateDatabase<TDatabase extends object>(
 
 export function createPostgresqlDatabaseClient(
   runtime: PostgresqlDatabaseRuntime,
+  options: PostgresqlDatabaseClientOptions = {},
 ): PostgresqlDatabaseClient {
   selectDatabaseSchemaProvider('postgresql')
   const pool = runtime.providerPool()
-  const base = createRemoteDatabase(callbackFor(runtime, pool, false), { schema })
+  const beforeWrite: TransactionWriteGuard | undefined =
+    options.beforeWrite === undefined
+      ? undefined
+      : async (connection) => {
+          // The guard's own read/lock must not recursively invoke itself. This view
+          // stays on the exact reserved transaction and cannot reserve another pool slot.
+          const guardTx = decorateDatabase(
+            createRemoteDatabase(callbackFor(runtime, connection, true), { schema }),
+            {
+              runtime,
+              rawClient: connection,
+              transactional: true,
+            },
+          )
+          await options.beforeWrite!(guardTx)
+        }
+  const base = createRemoteDatabase(callbackFor(runtime, pool, false, beforeWrite), { schema })
   return decorateDatabase(base, {
     runtime,
     rawClient: pool,
     transactional: false,
+    beforeWrite,
   }) as PostgresqlDatabaseClient
 }

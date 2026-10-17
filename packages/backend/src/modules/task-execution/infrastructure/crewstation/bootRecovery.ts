@@ -15,17 +15,21 @@ import {
   finalizeTaskExecutionRecovery,
 } from '../../application/recoverTaskExecutions'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
-import type { HostedExecution } from './execution'
 import type { HostedExecutionStore } from './executionStore'
-import type { BusinessResult } from '@/platform/crewstation/businessExecution'
 
-/** No host process probes or signals. The platform result proves that every
- * retained remote writer has finished; only then can a successor release its
- * effect holds and run the existing workflow continuation over the journal. */
+/** RFC-370 §9.2 V1 — boot recovery never waits on the platform.
+ *
+ * A remote execution outlives the service process that started it. On boot:
+ * - every open hosted process effect attempt is handed off (its writer is the
+ *   remote subtask, which the successor run re-registers when it adopts it);
+ * - orphan tasks and runs are interrupted exactly as standalone does;
+ * - a run whose execution is still unsettled (and not restored from a
+ *   snapshot) goes back to `pending` with its ORIGINAL id, so the scheduler
+ *   adopts the same platform subtask instead of starting a second model call;
+ * - everything no run will adopt is settled by the background settler. */
 export function createHostedBootRecovery(input: {
   readonly db: ProviderNeutralDatabase
   readonly fence: CrewStationMutationFence
-  readonly executions: HostedExecution
   readonly store: HostedExecutionStore
   readonly proof: () => ExclusiveDaemonLockProof
 }): {
@@ -43,7 +47,7 @@ export function createHostedBootRecovery(input: {
         let repaired = 0
         const counts = { tasks: 0, runs: 0 }
         const adoptableRuns = new Set<string>()
-        const completedEffects: string[] = []
+        const handedOffEffects: string[] = []
         return {
           prepare: () =>
             prepareTaskExecutionRecovery({
@@ -52,22 +56,10 @@ export function createHostedBootRecovery(input: {
             }),
           async reap() {
             const bindings = await input.store.unsettled()
-            const results = new Map<string, BusinessResult>()
-            // Concurrent subtasks continue in their task containers while the
-            // HTTP service is ready. Acquiring the next workflow owner waits
-            // for their authoritative results, never for a local PID timeout.
-            await Promise.all(
-              bindings.map(async (binding) => {
-                const adopted = await input.executions.adopt(binding.executionId, {
-                  started: async () => undefined,
-                  event: async () => undefined,
-                  checkpoint: async () => undefined,
-                })
-                results.set(binding.executionId, adopted.result)
-                if (binding.nodeRunId !== undefined) adoptableRuns.add(binding.nodeRunId)
-                recovered.add(binding.taskId)
-              }),
-            )
+            for (const binding of bindings) {
+              if (binding.nodeRunId === undefined || binding.cancelReason === 'restored') continue
+              adoptableRuns.add(binding.nodeRunId)
+            }
             const lease = input.fence.current()
             await databaseSessionFor(input.db).transaction(async (tx) => {
               await input.fence.assertHeld(tx, lease)
@@ -95,20 +87,13 @@ export function createHostedBootRecovery(input: {
                     attempt.candidateId ===
                       `${candidate.request.kind === 'agent' ? 'agent' : 'script'}:${candidate.nodeRunId}`,
                 )
-                // The binding is committed before the first platform submit.
-                // With the previous instance fenced, its absence proves this
-                // prepared effect never reached the platform.
-                const result = binding === undefined ? undefined : results.get(binding.executionId)
-                if (binding !== undefined && result === undefined)
-                  throw new Error('hosted-recovery-result-missing')
+                // The binding is committed before the first platform submit,
+                // so its absence proves the attempt never reached the platform.
                 const receiptJson = JSON.stringify({
-                  v: 1,
+                  v: 2,
                   phase:
-                    binding === undefined
-                      ? 'crewstation-not-submitted'
-                      : 'crewstation-recovered-result',
+                    binding === undefined ? 'crewstation-not-submitted' : 'crewstation-handed-off',
                   executionId: binding?.executionId,
-                  result,
                 })
                 await tx
                   .update(taskExecutionEffectAttempts)
@@ -141,16 +126,10 @@ export function createHostedBootRecovery(input: {
                       isNull(taskExecutionEffectFences.releasedAt),
                     ),
                   )
-                completedEffects.push(effect.id)
+                handedOffEffects.push(effect.id)
               }
             })
             const snapshot = await boot.persistence.recoveryAdministration.loadBootOrphanSnapshot()
-            for (const run of snapshot.heldLeaseRuns) {
-              if (run.pid !== null) throw new Error('hosted-recovery-unexpected-local-process')
-              const retained = bindings.filter((binding) => binding.nodeRunId === run.id)
-              if (retained.some((binding) => !results.has(binding.executionId)))
-                throw new Error('hosted-recovery-session-writer-unresolved')
-            }
             for (const task of snapshot.tasks) {
               if (
                 await boot.persistence.recoveryAdministration.interruptBootOrphanTask({
@@ -158,7 +137,7 @@ export function createHostedBootRecovery(input: {
                   from: task.status,
                   now: Date.now(),
                   failureCode: 'daemon-restart',
-                  errorMessage: 'remote execution retained; resuming from its durable result',
+                  errorMessage: 'remote execution retained; the next owner adopts it',
                 })
               )
                 counts.tasks += 1
@@ -175,7 +154,9 @@ export function createHostedBootRecovery(input: {
           },
           async repair(reference) {
             if (reference !== reapRef) throw new Error('hosted-recovery-reference-mismatch')
-            repaired = await repairRuntimeSessionLeasesAfterOrphanReap(
+            // Interrupted runs are terminal: their session leases are released
+            // and an adopting run claims them again with its own nonce.
+            repaired += await repairRuntimeSessionLeasesAfterOrphanReap(
               boot.runtimeSessionLeases,
               true,
             )
@@ -188,42 +169,45 @@ export function createHostedBootRecovery(input: {
               lockProof: proof,
               processEvidence: {
                 orphanReaperCompleted: true,
-                transport: 'crewstation-v3-result',
+                transport: 'crewstation-v3-handoff',
                 ...counts,
                 repairedRuntimeLeases: repaired,
               },
               ...(boot.codeHostProbe === undefined ? {} : { codeHostProbe: boot.codeHostProbe }),
             })
-            // Keep the original run identity so the scheduler adopts it and
-            // the selected execution replays the original result, not a new
-            // model call. Terminal runs are never reset.
+            // Keep the original run identity so the scheduler adopts the same
+            // platform subtask. Terminal runs are never reset.
             const lease = input.fence.current()
             await databaseSessionFor(input.db).transaction(async (tx) => {
               await input.fence.assertHeld(tx, lease)
-              for (const nodeRunId of adoptableRuns) {
-                await tx
-                  .update(nodeRuns)
-                  .set({
-                    status: 'pending',
-                    finishedAt: null,
-                    pid: null,
-                    spawnBinaryPath: null,
-                    spawnLaunchNonce: null,
-                  })
-                  .where(
-                    and(
-                      eq(nodeRuns.id, nodeRunId),
-                      eq(nodeRuns.status, 'interrupted'),
-                      inArray(nodeRuns.taskId, [...finalized.releasedTaskIds]),
-                    ),
-                  )
-              }
+              if (adoptableRuns.size === 0 || finalized.releasedTaskIds.length === 0) return
+              const adoptable = and(
+                inArray(nodeRuns.id, [...adoptableRuns]),
+                eq(nodeRuns.status, 'interrupted'),
+                inArray(nodeRuns.taskId, [...finalized.releasedTaskIds]),
+              )
+              const reset = await tx
+                .select({ taskId: nodeRuns.taskId })
+                .from(nodeRuns)
+                .where(adoptable)
+              await tx
+                .update(nodeRuns)
+                .set({
+                  status: 'pending',
+                  finishedAt: null,
+                  pid: null,
+                  spawnBinaryPath: null,
+                  spawnLaunchNonce: null,
+                })
+                .where(adoptable)
+              // Only tasks that really kept remote work are resumed at boot.
+              for (const row of reset) recovered.add(row.taskId)
             })
             return {
               ...finalized,
               recoveredProcessEffectIds: [
                 ...finalized.recoveredProcessEffectIds,
-                ...completedEffects,
+                ...handedOffEffects,
               ],
             }
           },

@@ -6,15 +6,10 @@
 // `DatabaseSession.transaction` 体内传 `tx`；同任务的并发准入由 CAS（active intent 检查 +
 // lineage 复核）与调用方的聚合根行锁共同保证。
 
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import {
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionMaintenanceMembers,
-  tasks,
-} from '@/db/schema'
+import { taskExecutionIntents, taskExecutionLineageOperationRecords, tasks } from '@/db/schema'
 import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type {
   SubmittedTaskExecutionIntent,
@@ -22,6 +17,7 @@ import type {
   SubmitTaskExecutionIntentInput,
 } from '../application/ports/taskExecutionIntentPersistence'
 import { TaskExecutionError } from '../application/taskExecutionError'
+import { assertTaskOutsideTerminalMaintenance } from './terminalMaintenanceClaim'
 import { sha256Hex } from '../domain/digest'
 import {
   canonicalJson,
@@ -110,23 +106,7 @@ export async function submitCanonicalTaskExecutionIntent(
       },
     )
   }
-  const maintenance = await tx
-    .select({ claimId: taskExecutionMaintenanceMembers.claimId })
-    .from(taskExecutionMaintenanceMembers)
-    .where(
-      and(
-        eq(taskExecutionMaintenanceMembers.taskId, request.taskId),
-        isNull(taskExecutionMaintenanceMembers.releasedAt),
-      ),
-    )
-    .get()
-  if (maintenance !== undefined) {
-    throw new TaskExecutionError(
-      'task-terminal-maintenance-conflict',
-      `task '${request.taskId}' is claimed by terminal maintenance`,
-      { claimRef: maintenance.claimId },
-    )
-  }
+  await assertTaskOutsideTerminalMaintenance(tx, request.taskId)
 
   const hash = continuationRequestHash(request)
   const active = await tx

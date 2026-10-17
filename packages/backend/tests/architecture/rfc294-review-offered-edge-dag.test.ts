@@ -623,6 +623,108 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
+  {
+    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewArtifacts.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/development-automation/composition/crewstationEvidence.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/digital-employee/composition/crewstationContent.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/materialObjectUploads.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/nodeEventArchive.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/portArtifactContent.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArchiveContent.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskArtifacts.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/taskInputFiles.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V5：托管数据库恢复在导入事务内调用各 owner 的恢复后归一参与者（HostedRestoreNormalizationParticipant 由 system-operations public participants 声明）；task-execution 实现该参与者的 offered 边尚未进入目标 DAG，精确登记，随 RestoreParticipant 物理恢复协议（W9-E）收敛。',
+    removeAfterWave: 'W9-E（物理恢复协议）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationNativePlugin.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
 ]
 
 const PAIRS = offeredPairs(TARGET_CONTEXT_EDGES)

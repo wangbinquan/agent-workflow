@@ -13,15 +13,17 @@ export interface McpRuntimeTestProviderPersistence {
 /** 一份装配，两个 provider 共用（RFC-359 W4-D16）。 */
 export function composeMcpRuntimeTestPersistence(
   db: ProviderNeutralDatabase,
+  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
 ): McpRuntimeTestPersistence {
-  return createMcpRuntimeTestPersistence(db)
+  return createMcpRuntimeTestPersistence(db, beforeWrite)
 }
 
 export function composeMcpRuntimeTestProvider(
   db: ProviderNeutralDatabase,
+  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
 ): McpRuntimeTestProviderPersistence {
   return Object.freeze({
-    persistence: composeMcpRuntimeTestPersistence(db),
-    leaseOperations: createMcpRuntimeTestLeaseOperations(db),
+    persistence: composeMcpRuntimeTestPersistence(db, beforeWrite),
+    leaseOperations: createMcpRuntimeTestLeaseOperations(db, beforeWrite),
   })
 }

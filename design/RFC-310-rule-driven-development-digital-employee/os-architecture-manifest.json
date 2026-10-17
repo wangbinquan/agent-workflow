@@ -13,6 +13,7 @@
       ],
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
+        "bootstrap/crewstation.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> public/events",
         "cli/start.ts -> composition",
@@ -52,6 +53,8 @@
       ],
       "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
+        "bootstrap/crewstation.ts -> composition",
+        "bootstrap/workspaceTaskImage.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
         "cli/start.ts -> composition",
         "modules/digital-employee/application/adapters/event-automation-adapter.ts -> composition/required-ports",
@@ -62,8 +65,11 @@
         "modules/digital-employee/public/events.ts -> public/types",
         "modules/identity-access/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/integration/application/adapters/event-center-adapter.ts -> composition/required-ports",
+        "modules/integration/application/crewStationEventIngress.ts -> public/types",
+        "modules/integration/application/ports/crewStationEventInbox.ts -> public/types",
         "modules/integration/application/ports/verifiedWebhookIngress.ts -> public/types",
         "modules/integration/composition/webhookIngress.ts -> composition",
+        "modules/integration/infrastructure/crewstation/eventInbox.ts -> public/types",
         "modules/integration/public/events.ts -> public/types",
         "modules/task-execution/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/taskLifecycleConsumers.ts -> public/participants",

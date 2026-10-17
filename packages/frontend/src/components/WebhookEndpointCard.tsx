@@ -26,6 +26,7 @@ import { StatusChip } from '@/components/StatusChip'
 import { hasPermissionAtRequest, useAuthSessionRevision, usePermission } from '@/hooks/useActor'
 import { copyText } from '@/lib/clipboard'
 import { getAuthSessionRevision } from '@/stores/auth'
+import { isGatewayIdentity } from '@/stores/deployment'
 
 type EndpointWire = WebhookEndpoint & { ingressUrl: string | null }
 type EndpointWithSecret = EndpointWire & { secret: string }
@@ -56,6 +57,7 @@ export function WebhookEndpointCard({
   const liveCanManage = usePermission('webhook-endpoints:manage')
   const authRevision = useAuthSessionRevision()
   const canManage = requestedCanManage && liveCanManage
+  const hosted = isGatewayIdentity()
   const [error, setError] = useState<unknown>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [name, setName] = useState('')
@@ -402,7 +404,22 @@ export function WebhookEndpointCard({
                   </div>
                 </dl>
 
-                {row.urlToken === null ? (
+                {hosted ? (
+                  // RFC-370 v3 V8：托管部署只经 CrewStation 事件投递，没有直连地址可展示；
+                  // 运维把仓库绑定到这里给出的端点 ID 上（AW_EVENT_SOURCES）。
+                  <NoticeBanner
+                    tone="info"
+                    size="compact"
+                    title={t('hostedEvents.endpointTitle')}
+                    testid={`webhook-endpoint-hosted-${row.id}`}
+                  >
+                    <p>{t('hostedEvents.endpoint')}</p>
+                    <p>
+                      <span>{t('hostedEvents.endpointId')}</span>{' '}
+                      <code data-testid={`webhook-endpoint-id-${row.id}`}>{row.id}</code>
+                    </p>
+                  </NoticeBanner>
+                ) : row.urlToken === null ? (
                   // RFC-260：脱敏 viewer——后端响应里就没有明文，这里只渲染掩码。
                   <div className="webhook-endpoint__url">
                     <div>

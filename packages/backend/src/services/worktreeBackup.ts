@@ -89,7 +89,12 @@ function dirSizeExclGit(dir: string): number {
 export async function captureWorktreeRows(
   rows: readonly WorktreeCaptureRow[],
   stagingDir: string,
-  opts?: { maxBytes?: number },
+  opts?: {
+    maxBytes?: number
+    archive?: typeof tarGz
+    /** A hosted child with unknown liveness must keep its files and receipt. */
+    canDiscardFailedCapture?: () => boolean
+  },
 ): Promise<WorktreeCaptureResult> {
   const maxBytes = opts?.maxBytes ?? DEFAULT_MAX_WORKTREE_BYTES
   const wtDir = join(stagingDir, 'worktrees')
@@ -124,8 +129,11 @@ export async function captureWorktreeRows(
     // size cap above. Drop the meta json so reconstruct never sees a
     // meta-without-tar orphan.
     try {
-      await tarGz(t.worktreePath, join(wtDir, `${t.id}.tar.gz`), { exclude: ['.git'] })
+      await (opts?.archive ?? tarGz)(t.worktreePath, join(wtDir, `${t.id}.tar.gz`), {
+        exclude: ['.git'],
+      })
     } catch (err) {
+      if (opts?.canDiscardFailedCapture?.() === false) throw err
       // Drop BOTH halves: the meta json (reconstruct is json-driven) AND the
       // partial tar the failed run already flushed (a torn archive in the
       // backup would read as a capture that never happened).

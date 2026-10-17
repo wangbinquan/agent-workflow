@@ -6,27 +6,19 @@ apiVersion: crewstation/v3
 kind: DigitalWorker
 spec:
   service:
-    command: [agent-workflow, start]
+    command: { { SERVICE_COMMAND_JSON } }
     port: 3000
     servicePlanId: '{{SERVICE_PLAN_ID}}'
     replicas: 1
+    databaseRestore:
+      command: [agent-workflow, migrate]
+      verifyCommand: [agent-workflow, verify-database-restore]
     probes:
       startup: { path: /ready, periodSeconds: 3, timeoutSeconds: 3, failureThreshold: 100 }
       readiness: { path: /ready, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 }
       liveness: { path: /live, periodSeconds: 10, timeoutSeconds: 3, failureThreshold: 3 }
-  env:
-    - name: AW_AGENT_PROFILES
-      from: config
-      configDefinitionId: '{{AGENT_PROFILES_DEFINITION_ID}}'
-    # 32 random bytes as base64 (`openssl rand -base64 32`); seals stored secrets.
-    - name: AW_SECRET_KEY
-      from: secret
-      configDefinitionId: '{{SECRET_KEY_DEFINITION_ID}}'
-    # CrewStation user subjects (`user:<uuid>`) that start as administrators.
-    - name: AW_ADMIN_SUBJECTS
-      from: config
-      configDefinitionId: '{{ADMIN_SUBJECTS_DEFINITION_ID}}'
-      default: ''
+  env: { { ENV_JSON } }
+  subscriptions: { { EVENT_SUBSCRIPTIONS_JSON } }
   tasks:
     taskProfileId: '{{TASK_PROFILE_ID}}'
     runtimeImageVersionId: '{{TASK_RUNTIME_IMAGE_VERSION_ID}}'
@@ -34,6 +26,8 @@ spec:
     executionControl: fenced
     acceptedTaskContractVersions: [aw-task-v1]
     agentProfiles: { { AGENT_PROFILES_JSON } }
+    commandBusinessConfig: { { COMMAND_BUSINESS_CONFIG_JSON } }
+    {{RECOVERY_DECLARATION}}
   data:
     objects: { planId: '{{OBJECT_STORAGE_PLAN_ID}}' }
   release:

@@ -392,7 +392,11 @@ function physicalLayer(unit: SourceUnit): string {
 // 的按符号分波是唯一例外，那是 W2-B/W2-D/W3/W5 之间的**波**切分，不是 context 归属）。
 const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/bootstrap/crewstation.ts': 'bootstrap',
+  'packages/backend/src/bootstrap/crewstationMaintenance.ts': 'bootstrap',
   'packages/backend/src/bootstrap/executionInitialization.ts': 'bootstrap',
+  // RFC-370 §9.2 V9: the maintenance Worker's process entry; bootstrap registers
+  // its effect modules so the platform layer imports no bootstrap or module code.
+  'packages/backend/src/bootstrap/maintenanceWorkerEntry.ts': 'bootstrap',
   'packages/backend/src/bootstrap/workspaceTaskImage.ts': 'bootstrap',
   'packages/backend/src/auth/actor.ts': 'identity-access',
   'packages/backend/src/auth/application/authPersistence.ts': 'identity-access',
@@ -919,6 +923,25 @@ const RFC_332_COMPATIBILITY_BRIDGE_FILES = new Set([
   'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
 ])
+
+// RFC-370 §9.2 V9 — the CrewStation hosted deployment adds its adapters next to
+// the standalone ones (`infrastructure/crewstation/`, `composition/crewstation*`,
+// the task-image entry points and the hosted bootstrap). Their exceptions are
+// labelled with the RFC that introduced them instead of reading as pre-RFC-294
+// debt; each still carries the wave that removes it.
+const RFC_370_HOSTED_FILE =
+  /\/crewstation\/|\/crewstation(?:[A-Z][^/]*)?\.ts$|\/(?:workspace)?[tT]askImage[A-Za-z]*\.ts$|\/hosted[A-Z][^/]*\.ts$|\/bootstrap\/executionInitialization\.ts$/
+const RFC_370_HOSTED_SYMBOL = /^(?:hosted|Hosted|crewStation|CrewStation|composeCrewStation)/
+
+function isRfc370HostedEdge(
+  edge: Pick<ObservedContextEdge, 'fromFile' | 'toFile' | 'targetSymbol'>,
+): boolean {
+  return (
+    RFC_370_HOSTED_FILE.test(edge.fromFile) ||
+    RFC_370_HOSTED_FILE.test(edge.toFile) ||
+    RFC_370_HOSTED_SYMBOL.test(edge.targetSymbol)
+  )
+}
 
 function isRfc332CompatibilityEdge(
   edge: Pick<ObservedContextEdge, 'fromFile' | 'toFile'>,
@@ -2923,6 +2946,23 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
+    input.file ===
+      `${MODULE_PREFIX}task-execution/infrastructure/crewstation/nodeEventArchive.ts` &&
+    // RFC-370 v3 V6: the range removal commits inside the neutral object
+    // publication's ready transaction (`commit`), as `finish` did before.
+    (input.callable === 'finish' || input.callable === 'commit')
+  ) {
+    // The archive worker borrows the active CS epoch. Its exact immutable
+    // range and verified object receipt commit with source-row removal.
+    return {
+      authorityKind: 'worker-epoch',
+      controlSubtype: null,
+      revisionPredicate:
+        'active-CS-epoch-lease-and-original-archive-range-content-in-same-transaction',
+      requiredBrandedProof: 'CrewStationMutationFence',
+    }
+  }
+  if (
     /sqliteTerminalMaintenance|terminalMaintenanceClaim|terminalMaintenancePersistence|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
       value,
     )
@@ -2932,6 +2972,19 @@ function classifyTaskExecutionAuthority(input: {
       controlSubtype: null,
       revisionPredicate: 'exact-claim-revision-and-member-set-digest',
       requiredBrandedProof: 'TerminalMaintenanceClaim',
+    }
+  }
+  // RFC-370 v3 V5: hosted restore normalization runs once, inside the restore
+  // migration Job's import transaction, on a database no service slot has
+  // activated yet (the standalone RFC-213 restore semantics).
+  if (
+    input.file === `${MODULE_PREFIX}task-execution/infrastructure/hostedRestoreNormalization.ts`
+  ) {
+    return {
+      authorityKind: 'recovery-proof',
+      controlSubtype: null,
+      revisionPredicate: 'restored-generation-before-activation-in-the-restore-job-transaction',
+      requiredBrandedProof: 'DatabaseRestoreInstallation',
     }
   }
   if (/recoverTaskExecutions|releaseRecovered|closeRecovered/.test(value)) {
@@ -3968,14 +4021,24 @@ function buildArchitectureExceptions(
       owner: edge.owner,
       why: isRfc332CompatibilityEdge(edge)
         ? 'RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover.'
-        : edge.role === 'legacy-inbound'
-          ? 'Legacy inbound caller reaches a module boundary before its W4 public use-case cutover.'
-          : edge.role === 'legacy-outbound'
-            ? 'A module still reaches a legacy implementation before its owner adapter cutover.'
-            : edge.role === 'off-dag-offered'
-              ? 'A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover.'
-              : 'Current module edge reaches a non-public internal entrypoint and must not become precedent.',
-      introducedByRFC: isRfc332CompatibilityEdge(edge) ? 'RFC-332' : 'pre-RFC-294-current-debt',
+        : isRfc370HostedEdge(edge)
+          ? edge.role === 'legacy-inbound'
+            ? 'RFC-370 hosted assembly reaches a module entry point from a legacy root before the W4 public use-case cutover.'
+            : edge.role === 'legacy-outbound'
+              ? 'RFC-370 hosted adapter reuses a shared legacy implementation (schema, transactions, services) until it moves into its owner context.'
+              : 'RFC-370 hosted adapter consumes a module surface outside its declared ports until the owner cutover.'
+          : edge.role === 'legacy-inbound'
+            ? 'Legacy inbound caller reaches a module boundary before its W4 public use-case cutover.'
+            : edge.role === 'legacy-outbound'
+              ? 'A module still reaches a legacy implementation before its owner adapter cutover.'
+              : edge.role === 'off-dag-offered'
+                ? 'A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover.'
+                : 'Current module edge reaches a non-public internal entrypoint and must not become precedent.',
+      introducedByRFC: isRfc332CompatibilityEdge(edge)
+        ? 'RFC-332'
+        : isRfc370HostedEdge(edge)
+          ? 'RFC-370'
+          : 'pre-RFC-294-current-debt',
       removeAfterWave: edge.removeAfterWave!,
       expiresOn: '2027-12-31',
       mutationTest: 'rfc294-canonical-manifests: exact exception stale/unknown mutation',

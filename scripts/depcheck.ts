@@ -100,15 +100,6 @@ export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
   {
     rule: 'no-circular',
     from: `${B}/services/gitRepoCache.ts`,
-    to: `${B}/services/gitSubmodule.ts`,
-    why: '同一环族的另一支（gitSubmodule → util/git → gitRepoCache）。',
-    removeWhen:
-      '与上一条同批：util/git.ts 恢复成零 services 依赖的叶子后整族消失。属独立切片（未编号）。',
-    removeWave: 'W5',
-  },
-  {
-    rule: 'no-circular',
-    from: `${B}/services/gitRepoCache.ts`,
     to: `${B}/services/gitVersion.ts`,
     why: '同一环族（gitVersion → util/git → gitRepoCache）。',
     removeWhen: '与 util/git 叶子化同批消失。属独立切片（未编号）。',

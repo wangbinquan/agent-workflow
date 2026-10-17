@@ -1,14 +1,9 @@
-import { and, asc, eq, inArray, ne, or } from 'drizzle-orm'
+import { and, asc, eq, ne } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  hostedExecutionBindings,
-  hostedExecutionEvents,
-  runtimeSessionLeases,
-  taskExecutionEffects,
-  tasks,
-} from '@/db/schema'
+import { hostedExecutionBindings, hostedExecutionEvents } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
+import { freezeHostedAgentContext, type HostedAgentContext } from './agentContext'
 import type {
   BusinessResult,
   BusinessEvent,
@@ -28,7 +23,12 @@ export interface HostedExecutionIntent {
   readonly requestKey: string
   readonly request: HostedSubtaskRequest
   readonly timeoutMs?: number
+  readonly agentContext?: HostedAgentContext
 }
+
+/** Why a platform cancel was requested. `restored`: the binding came from a
+ * restored database snapshot; it is stopped and settled, never resumed (§9.2 V5). */
+export type HostedCancelReason = 'user' | 'timeout' | 'restored'
 
 export interface HostedExecutionBinding extends HostedExecutionIntent {
   readonly subtaskId: string | null
@@ -38,31 +38,45 @@ export interface HostedExecutionBinding extends HostedExecutionIntent {
   readonly result: BusinessResult | null
   readonly state: 'submitting' | 'running' | 'settled'
   readonly cancelRequested: boolean
-  readonly cancelReason: 'user' | 'timeout' | null
+  readonly cancelReason: HostedCancelReason | null
+  /** Execution-authority epoch of the last writer. */
+  readonly epoch: number
   readonly createdAt: number
 }
 
 export interface HostedExecutionStore {
   prepare(intent: HostedExecutionIntent): Promise<HostedExecutionBinding>
   get(executionId: string): Promise<HostedExecutionBinding | null>
+  /** Every binding whose owner has not yet committed a settled projection. */
   unsettled(): Promise<readonly HostedExecutionBinding[]>
-  journal(executionId: string, event: BusinessEvent): Promise<void>
   replay(executionId: string): Promise<readonly BusinessEvent[]>
   accepted(executionId: string, subtask: BusinessSubtask): Promise<HostedExecutionBinding>
-  checkpoint(executionId: string, cursor: string, result?: BusinessResult): Promise<void>
-  requestCancel(executionId: string, reason?: 'user' | 'timeout'): Promise<void>
+  /** One transaction: the event is journaled and the cursor (and the result,
+   * when this event carries it) advance together. */
+  record(executionId: string, event: BusinessEvent): Promise<void>
+  requestCancel(executionId: string, reason?: HostedCancelReason): Promise<void>
   settle(executionId: string): Promise<void>
+  /** Ends a binding whose remote outcome can no longer be observed (expired
+   * history, rejected request): the synthetic result never reads as success. */
+  abandon(executionId: string, reason: string): Promise<void>
 }
 
 function decode(row: typeof hostedExecutionBindings.$inferSelect): HostedExecutionBinding {
-  const frozen = JSON.parse(row.requestJson) as Pick<HostedExecutionIntent, 'request' | 'timeoutMs'>
+  const frozen = JSON.parse(row.requestJson) as Pick<
+    HostedExecutionIntent,
+    'request' | 'timeoutMs' | 'agentContext'
+  >
   return {
     executionId: row.executionId,
     taskId: row.taskId,
     ...(row.nodeRunId === null ? {} : { nodeRunId: row.nodeRunId }),
     businessTaskId: row.businessTaskId,
     requestKey: row.requestKey,
-    ...frozen,
+    request: frozen.request,
+    ...(frozen.timeoutMs === undefined ? {} : { timeoutMs: frozen.timeoutMs }),
+    ...(frozen.agentContext === undefined
+      ? {}
+      : { agentContext: freezeHostedAgentContext(frozen.agentContext) }),
     subtaskId: row.subtaskId,
     attempt: row.attempt,
     materialDigest: row.materialDigest,
@@ -71,12 +85,13 @@ function decode(row: typeof hostedExecutionBindings.$inferSelect): HostedExecuti
     state: row.state,
     cancelRequested: row.cancelRequested,
     cancelReason: row.cancelReason,
+    epoch: row.epoch,
     createdAt: row.createdAt,
   }
 }
 
-/** Every mutation is fenced, including ACK/cursor/settlement. A late response
- * received by an old service slot cannot overwrite its successor's progress. */
+/** Mutations run under the execution fence, so a late response observed by an
+ * old service slot cannot overwrite its successor's progress. */
 export function createHostedExecutionStore(input: {
   readonly db: ProviderNeutralDatabase
   readonly fence: CrewStationMutationFence
@@ -103,29 +118,13 @@ export function createHostedExecutionStore(input: {
       return operation(tx, lease.epoch)
     })
   }
-  const patch = async (
-    executionId: string,
-    values: Partial<typeof hostedExecutionBindings.$inferInsert>,
-  ) => {
-    await write(async (tx, epoch) => {
-      if ((await getIn(tx, executionId)) === null)
-        throw new Error('hosted-execution-binding-missing')
-      await tx
-        .update(hostedExecutionBindings)
-        .set({ ...values, epoch, updatedAt: now() })
-        .where(eq(hostedExecutionBindings.executionId, executionId))
-    })
+  const existing = async (tx: ProviderNeutralDatabase, executionId: string) => {
+    const binding = await getIn(tx, executionId)
+    if (binding === null) throw new Error('hosted-execution-binding-missing')
+    return binding
   }
   return {
     get: (executionId) => getIn(input.db, executionId),
-    async journal(executionId, event) {
-      await write(async (tx) => {
-        await tx
-          .insert(hostedExecutionEvents)
-          .values({ executionId, cursor: event.cursor, eventJson: JSON.stringify(event) })
-          .onConflictDoNothing()
-      })
-    },
     async replay(executionId) {
       const rows = await input.db
         .select({ eventJson: hostedExecutionEvents.eventJson })
@@ -135,33 +134,27 @@ export function createHostedExecutionStore(input: {
       return rows.map((row) => JSON.parse(row.eventJson) as BusinessEvent)
     },
     async unsettled() {
-      const activeTasks = input.db
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(inArray(tasks.status, ['pending', 'running']))
-      const heldRuns = input.db
-        .select({ id: runtimeSessionLeases.leaseNodeRunId })
-        .from(runtimeSessionLeases)
-      const unresolvedEffects = input.db
-        .select({ id: taskExecutionEffects.taskId })
-        .from(taskExecutionEffects)
-        .where(inArray(taskExecutionEffects.state, ['open', 'outcome-unknown']))
       const rows = await input.db
         .select()
         .from(hostedExecutionBindings)
-        .where(
-          or(
-            ne(hostedExecutionBindings.state, 'settled'),
-            inArray(hostedExecutionBindings.nodeRunId, heldRuns),
-            inArray(hostedExecutionBindings.taskId, unresolvedEffects),
-            inArray(hostedExecutionBindings.taskId, activeTasks),
-          ),
-        )
+        .where(ne(hostedExecutionBindings.state, 'settled'))
       return rows.map(decode)
     },
     async prepare(intent) {
+      const agentContext =
+        intent.agentContext === undefined
+          ? undefined
+          : freezeHostedAgentContext(intent.agentContext)
+      if (agentContext !== undefined && intent.request.kind !== 'agent')
+        throw new Error('hosted-command-agent-context-invalid')
+      if (agentContext?.node !== undefined && agentContext.node.id !== intent.nodeRunId)
+        throw new Error('hosted-agent-context-node-mismatch')
       return write(async (tx, epoch) => {
-        const requestJson = JSON.stringify({ request: intent.request, timeoutMs: intent.timeoutMs })
+        const requestJson = JSON.stringify({
+          request: intent.request,
+          timeoutMs: intent.timeoutMs,
+          agentContext,
+        })
         await tx
           .insert(hostedExecutionBindings)
           .values({
@@ -178,29 +171,31 @@ export function createHostedExecutionStore(input: {
             updatedAt: now(),
           })
           .onConflictDoNothing()
-        const existing = await getIn(tx, intent.executionId)
-        if (existing === null) throw new Error('hosted-execution-binding-missing')
+        const binding = await existing(tx, intent.executionId)
         if (
-          existing.taskId !== intent.taskId ||
-          existing.businessTaskId !== intent.businessTaskId ||
-          existing.requestKey !== intent.requestKey ||
-          JSON.stringify({ request: existing.request, timeoutMs: existing.timeoutMs }) !==
-            requestJson
+          binding.taskId !== intent.taskId ||
+          binding.nodeRunId !== intent.nodeRunId ||
+          binding.businessTaskId !== intent.businessTaskId ||
+          binding.requestKey !== intent.requestKey ||
+          JSON.stringify({
+            request: binding.request,
+            timeoutMs: binding.timeoutMs,
+            agentContext: binding.agentContext,
+          }) !== requestJson
         ) {
           throw new Error('hosted-execution-intent-mismatch')
         }
-        return existing
+        return binding
       })
     },
     async accepted(executionId, subtask) {
       return write(async (tx, epoch) => {
-        const existing = await getIn(tx, executionId)
-        if (existing === null) throw new Error('hosted-execution-binding-missing')
+        const binding = await existing(tx, executionId)
         if (
-          existing.businessTaskId !== subtask.taskId ||
-          existing.request.kind !== subtask.kind ||
-          (existing.subtaskId !== null &&
-            (existing.subtaskId !== subtask.id || existing.attempt !== subtask.attempt))
+          binding.businessTaskId !== subtask.taskId ||
+          binding.request.kind !== subtask.kind ||
+          (binding.subtaskId !== null &&
+            (binding.subtaskId !== subtask.id || binding.attempt !== subtask.attempt))
         ) {
           throw new Error('hosted-execution-receipt-mismatch')
         }
@@ -210,7 +205,7 @@ export function createHostedExecutionStore(input: {
             subtaskId: subtask.id,
             attempt: subtask.attempt,
             materialDigest: subtask.materialDigest ?? null,
-            state: existing.state === 'settled' ? 'settled' : 'running',
+            state: binding.state === 'settled' ? 'settled' : 'running',
             epoch,
             updatedAt: now(),
           })
@@ -218,20 +213,31 @@ export function createHostedExecutionStore(input: {
         return (await getIn(tx, executionId))!
       })
     },
-    checkpoint: (executionId, cursor, result) =>
-      patch(executionId, {
-        lastCursor: cursor,
-        ...(result === undefined ? {} : { resultJson: JSON.stringify(result) }),
-      }),
+    async record(executionId, event) {
+      await write(async (tx, epoch) => {
+        await tx
+          .insert(hostedExecutionEvents)
+          .values({ executionId, cursor: event.cursor, eventJson: JSON.stringify(event) })
+          .onConflictDoNothing()
+        await tx
+          .update(hostedExecutionBindings)
+          .set({
+            lastCursor: event.cursor,
+            ...(event.type === 'result' ? { resultJson: JSON.stringify(event.data) } : {}),
+            epoch,
+            updatedAt: now(),
+          })
+          .where(eq(hostedExecutionBindings.executionId, executionId))
+      })
+    },
     async requestCancel(executionId, reason = 'user') {
       await write(async (tx, epoch) => {
-        const existing = await getIn(tx, executionId)
-        if (existing === null) throw new Error('hosted-execution-binding-missing')
+        const binding = await existing(tx, executionId)
         await tx
           .update(hostedExecutionBindings)
           .set({
             cancelRequested: true,
-            cancelReason: existing.cancelReason ?? reason,
+            cancelReason: binding.cancelReason ?? reason,
             epoch,
             updatedAt: now(),
           })
@@ -240,8 +246,8 @@ export function createHostedExecutionStore(input: {
     },
     async settle(executionId) {
       await write(async (tx, epoch) => {
-        const existing = await getIn(tx, executionId)
-        if (existing?.result === null || existing === null)
+        const binding = await getIn(tx, executionId)
+        if (binding === null || binding.result === null)
           throw new Error('hosted-execution-result-missing')
         await tx
           .update(hostedExecutionBindings)
@@ -252,6 +258,24 @@ export function createHostedExecutionStore(input: {
               ne(hostedExecutionBindings.state, 'settled'),
             ),
           )
+      })
+    },
+    async abandon(executionId, reason) {
+      await write(async (tx, epoch) => {
+        const binding = await existing(tx, executionId)
+        if (binding.state === 'settled') return
+        const result: BusinessResult = binding.result ?? {
+          exitCode: null,
+          reason: `abandoned: ${reason}`,
+          stdout: '',
+          stderr: reason,
+          truncated: true,
+          finalCursor: binding.lastCursor ?? '',
+        }
+        await tx
+          .update(hostedExecutionBindings)
+          .set({ resultJson: JSON.stringify(result), state: 'settled', epoch, updatedAt: now() })
+          .where(eq(hostedExecutionBindings.executionId, executionId))
       })
     },
   }

@@ -77,6 +77,10 @@ export const BOOTSTRAP_FILES = [
   // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.
   'packages/backend/src/cli/deployment.ts',
   'packages/backend/src/bootstrap/crewstation.ts',
+  // RFC-370 §9.2 V9: the hosted maintenance Worker's effect registration and
+  // its process entry are bootstrap too (the platform layer imports neither).
+  'packages/backend/src/bootstrap/crewstationMaintenance.ts',
+  'packages/backend/src/bootstrap/maintenanceWorkerEntry.ts',
   'packages/backend/src/bootstrap/executionInitialization.ts',
   'packages/backend/src/bootstrap/workspaceTaskImage.ts',
   // Development reload assembles the same daemon host and retains its lifetime.

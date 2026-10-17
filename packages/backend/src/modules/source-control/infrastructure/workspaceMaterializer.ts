@@ -594,7 +594,7 @@ function ensureExplicitDirectoryNodes(groupRoot: string, nodePaths: readonly str
  * ——git 会把内层注册标 `prunable` 并在后续 remove 时自愈——但倒序不依赖那条
  * 自愈行为，且让「删除失败」仍可归因到具体某个仓。
  */
-async function materializeGroupSpace(opts: {
+export async function materializeGroupSpace(opts: {
   planned: readonly PlannedRepo[]
   nodePaths: readonly string[]
   resolvedSources: ResolvedRepoSource[]

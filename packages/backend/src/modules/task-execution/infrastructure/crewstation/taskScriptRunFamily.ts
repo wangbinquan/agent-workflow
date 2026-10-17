@@ -1,9 +1,13 @@
-import { createHash } from 'node:crypto'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
+import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
+import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
 import {
-  WORKSPACE_RESULT_PREFIX,
-  WorkspaceCommandStoppedError,
+  parseWorkspaceHelperOutcome,
+  WORKSPACE_RESULT_MAX_BYTES,
+  workspaceHelperArguments,
+  workspaceHelperValue,
+  workspaceResultPath,
   type WorkspaceHelper,
 } from '@/platform/crewstation/workspaceProtocol'
 import type {
@@ -18,13 +22,35 @@ import {
   createHostedProcessEffectProjection,
   type HostedProcessReceipt,
 } from './processEffectProjection'
-import { HostedExecutionUnknownError } from './execution'
+import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
+import {
+  HostedExecutionDetachedError,
+  HostedExecutionUnknownError,
+  untilDaemonShutdown,
+  type HostedExecution,
+} from './execution'
+import { sha256Hex } from '@/util/hash'
 
+/** Same bound as the native runner's retained stdout (envelope parsing). */
+const RETAINED_STDOUT_LIMIT_BYTES = 32 * 1024 * 1024
+/** CS commands accept at most one day; a script without a node timeout gets it. */
+const UNBOUNDED_SCRIPT_TIMEOUT_MS = 86_400_000
+
+type HostedScriptOutcome = Omit<ScriptRunOutcome, 'result'> & {
+  readonly result: Omit<ScriptRunOutcome['result'], 'rawStdout'>
+}
+
+/** RFC-370 §9.2 V1/V2 — a script node is a task execution: it is journaled
+ * with the node run and adopted after a restart like an agent. Interpreter
+ * resolution and dependency preparation are ordinary workspace commands. */
 export function createHostedTaskScriptRunFamily(input: {
   readonly taskId: string
   readonly db: ProviderNeutralDatabase
   readonly fence: CrewStationMutationFence
   readonly helper: WorkspaceHelper
+  readonly executions: HostedExecution
+  readonly api: Pick<CrewStationBusinessExecution, 'readFile'>
+  readonly workspaces: { ensure(taskId: string): Promise<{ readonly businessTaskId: string }> }
   readonly path: (reference: string) => string
 }): TaskScriptRunFamily {
   const interpreters = new WeakMap<object, ResolvedInterpreter>()
@@ -39,6 +65,25 @@ export function createHostedTaskScriptRunFamily(input: {
   const interpreter = (value: TaskScriptInterpreter) => get(interpreters, value.reference)
   const dependencies = (value: TaskScriptDependencyEnvironment | null) =>
     value === null ? null : get(environments, value.reference)
+  const readOutcome = async (
+    businessTaskId: string,
+    resultPath: string,
+  ): Promise<HostedScriptOutcome | null> => {
+    try {
+      const page = await input.api.readFile(businessTaskId, {
+        path: resultPath.replace(/^\/work\/?/, ''),
+        offset: 0,
+        limit: WORKSPACE_RESULT_MAX_BYTES,
+      })
+      if (page.nextOffset !== null) throw new Error('hosted-script-result-too-large')
+      return workspaceHelperValue<HostedScriptOutcome>(
+        parseWorkspaceHelperOutcome(Buffer.from(page.contentBase64, 'base64').toString('utf8')),
+      )
+    } catch (error) {
+      if (isCrewStationApiError(error) && error.status === 404) return null
+      throw error
+    }
+  }
   return {
     async resolveInterpreter(language, overrides) {
       const resolved = await input.helper.call<ResolvedInterpreter | null>(
@@ -69,24 +114,36 @@ export function createHostedTaskScriptRunFamily(input: {
     },
     async ensureDependencies(request) {
       const target = get(interpreters, request.interpreter.reference)
-      const spec = {
-        appHome: '/work',
-        language: request.language,
-        interpreterPath: target.path,
-        interpreterVersion: target.version,
-        specs: request.specs,
-        timeoutMs: request.timeoutMs,
-      }
+      // Every preparation is its own command: the native environment cache
+      // makes a repeat cheap, and one failed install never poisons a retry.
+      const buffers = { stdout: '', stderr: '' }
       const resolved = await input.helper.call<ScriptDepsEnv | null>(
         input.taskId,
         'script-dependencies',
-        spec,
         {
-          operationId: `script-deps:${createHash('sha256').update(JSON.stringify(spec)).digest('hex')}`,
-          signal: request.signal,
+          appHome: '/work',
+          language: request.language,
+          interpreterPath: target.path,
+          interpreterVersion: target.version,
+          specs: request.specs,
           timeoutMs: request.timeoutMs,
         },
+        {
+          ...(request.signal === undefined ? {} : { signal: request.signal }),
+          timeoutMs: request.timeoutMs,
+          async onOutput(stream, text) {
+            buffers[stream] += text
+            let newline: number
+            while ((newline = buffers[stream].indexOf('\n')) >= 0) {
+              const line = buffers[stream].slice(0, newline).replace(/\r$/, '')
+              buffers[stream] = buffers[stream].slice(newline + 1)
+              await request.onLine?.(stream, line)
+            }
+          },
+        },
       )
+      for (const stream of ['stdout', 'stderr'] as const)
+        if (buffers[stream]) await request.onLine?.(stream, buffers[stream])
       if (resolved === null) return null
       const reference = {}
       environments.set(reference, resolved)
@@ -137,73 +194,145 @@ export function createHostedTaskScriptRunFamily(input: {
           }
         },
       })
+      const executionId = `script:${request.taskId}:${request.nodeRunId}`
+      const resultPath = workspaceResultPath(sha256Hex(executionId))
+      const timeoutMs =
+        (request.timeoutMs ?? UNBOUNDED_SCRIPT_TIMEOUT_MS - 60_000) +
+        (request.killEscalationGraceMs ?? 5_000) +
+        30_000
+      const { businessTaskId } = await input.workspaces.ensure(request.taskId)
       const buffers = { stdout: '', stderr: '' }
+      const lineNumbers = { stdout: 0, stderr: 0 }
+      let rawStdout = ''
+      let stdoutTruncated = false
+      let outputGap = false
       const line = async (stream: 'stdout' | 'stderr', value: string) => {
-        if (value.startsWith(WORKSPACE_RESULT_PREFIX)) return
-        await (stream === 'stdout' ? request.onStdoutLine?.(value) : request.onStderrLine?.(value))
+        const sourceKey = `${executionId}:${stream}:${lineNumbers[stream]++}`
+        await (stream === 'stdout'
+          ? request.onStdoutLine?.(value, sourceKey)
+          : request.onStderrLine?.(value, sourceKey))
       }
-      let outcome: Pick<ScriptRunOutcome, 'failureCode'> & {
-        result: Omit<TaskScriptResult, 'settlement'>
+      const sink = {
+        async started(binding: {
+          businessTaskId: string
+          subtaskId: string | null
+          attempt: number | null
+        }) {
+          const reference = {}
+          receipts.set(reference, {
+            executionId,
+            businessTaskId: binding.businessTaskId,
+            subtaskId: binding.subtaskId!,
+            attempt: binding.attempt!,
+          })
+          await request.onStarted?.({ kind: 'task-script-start', reference })
+        },
+        async event(event: { type: string; data: unknown }) {
+          if (event.type === 'gap') {
+            outputGap = true
+            return
+          }
+          if (event.type !== 'output') return
+          const { stream, text } = event.data as { stream: 'stdout' | 'stderr'; text: string }
+          if (stream === 'stdout') {
+            if (
+              Buffer.byteLength(rawStdout) + Buffer.byteLength(text) <=
+              RETAINED_STDOUT_LIMIT_BYTES
+            )
+              rawStdout += text
+            else stdoutTruncated = true
+          }
+          buffers[stream] += text
+          let newline: number
+          while ((newline = buffers[stream].indexOf('\n')) >= 0) {
+            const value = buffers[stream].slice(0, newline).replace(/\r$/, '')
+            buffers[stream] = buffers[stream].slice(newline + 1)
+            await line(stream, value)
+          }
+        },
+        checkpoint: async () => undefined,
       }
+      let result: Omit<TaskScriptResult, 'settlement'>
+      let failureCode: HostedScriptOutcome['failureCode'] = null
       try {
-        outcome = await input.helper.call<ScriptRunOutcome>(request.taskId, 'run-script', frozen, {
-          operationId: `script:${request.nodeRunId}`,
+        const intent = {
+          executionId,
+          taskId: request.taskId,
           nodeRunId: request.nodeRunId,
-          signal: request.signal,
-          timeoutMs:
-            (request.timeoutMs ?? 1_800_000) + (request.killEscalationGraceMs ?? 5_000) + 30_000,
-          async onStarted(receipt) {
-            const reference = {}
-            receipts.set(reference, receipt)
-            await request.onStarted?.({ kind: 'task-script-start', reference })
+          businessTaskId,
+          requestKey: `aw-script:${sha256Hex(executionId)}`,
+          request: {
+            kind: 'command' as const,
+            name: `aw run-script ${request.nodeId}`,
+            cwd: '/work',
+            argv: workspaceHelperArguments('run-script', frozen, resultPath),
+            timeoutSeconds: Math.min(86_400, Math.ceil(timeoutMs / 1_000)),
           },
-          async onOutput(stream, text) {
-            buffers[stream] += text
-            let newline: number
-            while ((newline = buffers[stream].indexOf('\n')) >= 0) {
-              const value = buffers[stream].slice(0, newline).replace(/\r$/, '')
-              buffers[stream] = buffers[stream].slice(newline + 1)
-              await line(stream, value)
-            }
-          },
-        })
-      } catch (error) {
-        if (error instanceof WorkspaceCommandStoppedError) {
-          outcome = {
-            failureCode: null,
-            result: {
-              outcome: error.outcome,
-              exitCode: error.exitCode,
-              rawStdout: error.stdout,
-              stderrTail: error.stderr,
-              truncated: { stdout: error.truncated, stderr: error.truncated },
+          timeoutMs,
+        }
+        const outcome =
+          (await input.executions.find(executionId)) === null
+            ? await input.executions.run(intent, sink, request.signal)
+            : await input.executions.adopt(executionId, sink, request.signal)
+        for (const stream of ['stdout', 'stderr'] as const)
+          if (buffers[stream]) {
+            await line(stream, buffers[stream])
+            buffers[stream] = ''
+          }
+        const helper = await readOutcome(businessTaskId, resultPath)
+        await outcome.settle()
+        if (helper !== null) {
+          failureCode = helper.failureCode
+          result = {
+            ...helper.result,
+            rawStdout,
+            truncated: {
+              stdout: helper.result.truncated.stdout || stdoutTruncated || outputGap,
+              stderr: helper.result.truncated.stderr || outputGap,
             },
           }
-        } else if (error instanceof HostedExecutionUnknownError) {
-          outcome = {
-            failureCode: null,
-            result: {
-              outcome: 'unreaped',
-              exitCode: null,
-              rawStdout: '',
-              stderrTail: error.message,
-              truncated: { stdout: false, stderr: false },
+        } else {
+          result = {
+            outcome: outcome.timedOut ? 'timeout' : outcome.cancelled ? 'aborted' : 'exited',
+            exitCode: outcome.result.exitCode,
+            rawStdout,
+            stderrTail: outcome.result.stderr,
+            truncated: {
+              stdout: stdoutTruncated || outcome.result.truncated,
+              stderr: outcome.result.truncated,
             },
+          }
+        }
+      } catch (error) {
+        if (error instanceof HostedExecutionDetachedError) {
+          // The remote script continues for the next execution owner; the run
+          // ends interrupted with the daemon (a user cancel ends at once).
+          if (
+            request.signal?.aborted !== true ||
+            request.signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+          )
+            await untilDaemonShutdown(request.signal)
+          result = {
+            outcome: 'aborted',
+            exitCode: null,
+            rawStdout,
+            stderrTail: error.message,
+            truncated: { stdout: true, stderr: true },
+          }
+        } else if (error instanceof HostedExecutionUnknownError) {
+          result = {
+            outcome: 'exited',
+            exitCode: null,
+            rawStdout,
+            stderrTail: error.message,
+            truncated: { stdout: true, stderr: true },
           }
         } else throw error
       }
-      for (const stream of ['stdout', 'stderr'] as const)
-        if (buffers[stream]) await line(stream, buffers[stream])
-      const result: TaskScriptResult = {
-        outcome: outcome.result.outcome,
-        exitCode: outcome.result.exitCode,
-        rawStdout: outcome.result.rawStdout,
-        stderrTail: outcome.result.stderrTail,
-        truncated: outcome.result.truncated,
-        spawnError: outcome.result.spawnError,
-        settlement: { kind: 'task-script-result', reference: {} },
+      return {
+        result: { ...result, settlement: { kind: 'task-script-result', reference: {} } },
+        failureCode,
       }
-      return { result, failureCode: outcome.failureCode }
     },
     runtimeParameters(request) {
       const target = interpreter(request.interpreter)

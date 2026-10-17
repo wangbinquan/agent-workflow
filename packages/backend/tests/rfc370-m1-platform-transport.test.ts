@@ -2,15 +2,24 @@
 import { expect, test } from 'bun:test'
 import { createCrewStationPlatformApi } from '@/platform/crewstation/platformApi'
 import {
+  createHostedTokenDeltas,
   createHostedUsageMeter,
   hostedEventRecord,
 } from '@/modules/task-execution/infrastructure/crewstation/runtimeEvents'
 import {
   workspaceHelperArguments,
   decodeWorkspaceHelperArguments,
-  workspaceHelperResult,
-  WORKSPACE_RESULT_PREFIX,
+  parseWorkspaceHelperOutcome,
+  workspaceHelperFailureOf,
+  workspaceHelperValue,
+  workspaceResultPath,
+  WORKSPACE_ARGUMENT_BUDGET_BYTES,
+  WORKSPACE_CHUNK_BYTES,
+  WORKSPACE_TRANSFER_CHUNK_BYTES,
+  WorkspaceCommandFailedError,
+  WorkspaceCommandInputTooLargeError,
 } from '@/platform/crewstation/workspaceProtocol'
+import { DomainError } from '@/util/errors'
 import {
   hostedWorkspaceReference,
   joinHostedWorkspaceReference,
@@ -112,23 +121,74 @@ test('real SSE failures and caller aborts still propagate instead of being hidde
   }
 })
 
-test('workspace JSON is argument-safe, chunked and bounded before dispatch', () => {
+test('workspace JSON is argument-safe, chunked and bounded by the container argument budget', () => {
+  // RFC-370 §9.2 V2: CS execs argv directly, so argv + env must stay below the
+  // task container ARG_MAX (2 MiB, measured in the CS task image).
   const input = { script: 'echo "hello"; $(do-not-execute) `literal`\n中文' + 'a'.repeat(40_000) }
-  const argv = workspaceHelperArguments('run-script', input)
+  const resultPath = workspaceResultPath('key')
+  expect(resultPath).toBe('/work/.aw/command-results/key.json')
+  const argv = workspaceHelperArguments('run-script', input, resultPath)
   expect(argv.slice(0, 2)).toEqual(['agent-workflow', 'workspace'])
   expect(argv.length).toBeGreaterThan(3)
+  expect(argv.slice(2).every((chunk) => chunk.length <= WORKSPACE_CHUNK_BYTES)).toBe(true)
   expect(decodeWorkspaceHelperArguments(argv.slice(2))).toEqual({
-    version: 1,
+    version: 2,
     operation: 'run-script',
     input,
+    resultPath,
   })
-  expect(() => workspaceHelperArguments('large', 'x'.repeat(24_000 * 1020))).toThrow(
+  // The largest transfer chunk still fits the argument budget.
+  const transfer = Buffer.alloc(WORKSPACE_TRANSFER_CHUNK_BYTES, 0xff).toString('base64')
+  const encoded = workspaceHelperArguments('write-chunk', { bytesBase64: transfer }, resultPath)
+    .slice(2)
+    .join('')
+  expect(encoded.length).toBeLessThanOrEqual(WORKSPACE_ARGUMENT_BUDGET_BYTES)
+  let refused: unknown
+  try {
+    workspaceHelperArguments('large', 'x'.repeat(WORKSPACE_ARGUMENT_BUDGET_BYTES), resultPath)
+  } catch (error) {
+    refused = error
+  }
+  expect(refused).toBeInstanceOf(WorkspaceCommandInputTooLargeError)
+  expect(refused).toMatchObject({ code: 'hosted-command-input-too-large', status: 413 })
+  expect(() => decodeWorkspaceHelperArguments([])).toThrow('command-limit')
+  expect(() => decodeWorkspaceHelperArguments(['x'.repeat(WORKSPACE_CHUNK_BYTES + 1)])).toThrow(
     'command-limit',
   )
-  expect(
-    workspaceHelperResult('script output\n' + WORKSPACE_RESULT_PREFIX + '{"ok":true,"value":7}\n'),
-  ).toBe(7)
-  expect(() => workspaceHelperResult('partial output')).toThrow('result-missing')
+  const v1 = Buffer.from(JSON.stringify({ version: 1, operation: 'x', input: {} })).toString(
+    'base64',
+  )
+  expect(() => decodeWorkspaceHelperArguments([v1])).toThrow('protocol-invalid')
+})
+
+test('workspace outcomes carry the native error code, status and details back', () => {
+  expect(workspaceHelperValue(parseWorkspaceHelperOutcome('{"ok":true,"value":7}'))).toBe(7)
+  const conflict = workspaceHelperFailureOf(
+    new DomainError('git-conflict', 'merge conflict', 409, { paths: ['a'] }),
+  )
+  expect(conflict).toEqual({
+    code: 'git-conflict',
+    message: 'merge conflict',
+    status: 409,
+    details: { paths: ['a'] },
+  })
+  let thrown: unknown
+  try {
+    workspaceHelperValue(
+      parseWorkspaceHelperOutcome(JSON.stringify({ ok: false, error: conflict })),
+    )
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown).toBeInstanceOf(DomainError)
+  expect(thrown).toMatchObject({ code: 'git-conflict', status: 409, details: { paths: ['a'] } })
+  const native = workspaceHelperFailureOf(Object.assign(new Error('gone'), { code: 'ENOENT' }))
+  expect(native).toEqual({ code: 'ENOENT', message: 'gone' })
+  expect(() => workspaceHelperValue({ ok: false, error: native })).toThrow(
+    WorkspaceCommandFailedError,
+  )
+  expect(() => parseWorkspaceHelperOutcome('{"ok":false}')).toThrow('result-invalid')
+  expect(() => parseWorkspaceHelperOutcome('null')).toThrow('result-invalid')
 })
 
 test('workspace references retain the task-volume owner and reject traversal', () => {
@@ -185,6 +245,69 @@ test('normalized usage replaces per-model snapshots and never counts a replay tw
   expect(meter.snapshot().models).toEqual([
     { model: 'actual', input: 12, output: 4, reasoning: 1, cacheRead: 0, cacheWrite: 0 },
   ])
+})
+
+test('platform usage snapshots become non-negative token deltas, a replay counts once', () => {
+  // RFC-370 §9.2 V1: hosted usage feeds the node's tok_* totals and
+  // max_total_tokens; a replacement snapshot that shrinks never subtracts.
+  const deltas = createHostedTokenDeltas()
+  const usage = (id: string, models: { model: string; input: number; output: number }[]) =>
+    JSON.parse(
+      hostedEventRecord({
+        type: 'usage',
+        taskId: 'task',
+        subtaskId: 'subtask',
+        attempt: 1,
+        cursor: id,
+        sourceEventId: id,
+        occurredAt: new Date(0).toISOString(),
+        data: {
+          measurementId: id,
+          scope: 'main',
+          mode: 'cumulative',
+          inputTokens: null,
+          outputTokens: null,
+          cacheReadTokens: null,
+          cacheWriteTokens: null,
+          complete: false,
+          snapshot: {
+            state: 'partial',
+            models: models.map((model) => ({
+              ...model,
+              reasoning: 0,
+              cacheRead: 2,
+              cacheWrite: 1,
+            })),
+          },
+        },
+      }).raw,
+    ) as Record<string, unknown>
+  expect(deltas(usage('u1', [{ model: 'a', input: 10, output: 3 }]))).toEqual({
+    input: 10,
+    output: 3,
+    cacheCreate: 1,
+    cacheRead: 2,
+  })
+  // Two models in the next snapshot: the delta is the growth of the totals.
+  expect(
+    deltas(
+      usage('u2', [
+        { model: 'a', input: 12, output: 3 },
+        { model: 'b', input: 5, output: 1 },
+      ]),
+    ),
+  ).toEqual({ input: 7, output: 1, cacheCreate: 1, cacheRead: 2 })
+  // The same measurement replayed is not counted again.
+  expect(deltas(usage('u2', [{ model: 'a', input: 99, output: 99 }]))).toBeUndefined()
+  // A shrinking snapshot never produces negative growth.
+  expect(deltas(usage('u3', [{ model: 'a', input: 1, output: 1 }]))).toBeUndefined()
+  // Growth after the shrink is measured from the highest totals seen.
+  expect(deltas(usage('u4', [{ model: 'a', input: 20, output: 5 }]))).toEqual({
+    input: 3,
+    output: 1,
+    cacheCreate: 0,
+    cacheRead: 0,
+  })
 })
 
 test('object bytes are committed and digest-checked before pinning their durable reference', async () => {

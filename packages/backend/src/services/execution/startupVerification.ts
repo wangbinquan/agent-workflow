@@ -145,6 +145,8 @@ export async function observationForVerification(
   sources: {
     /** claude：流内 init 事件累积出的观测。 */
     claudeInit: ClaudeInitObservation | null
+    /** Typed stream report from the selected execution adapter. */
+    streamObservation?: StartupObservation | null
     /**
      * opencode：退出后读 dump 快照。**惰性**——由本函数按表态决定要不要取，
      * 调用方因此不必自己判「这个运行时需要读文件吗」。取数时机归调用方（它持有
@@ -157,7 +159,7 @@ export async function observationForVerification(
     case 'inventory-file':
       return observationFromInventory(await sources.loadSnapshot())
     case 'init-event':
-      return observationFromClaudeInit(sources.claudeInit)
+      return sources.streamObservation ?? observationFromClaudeInit(sources.claudeInit)
     case 'none':
       return { state: 'unavailable', reason: 'runtime-has-no-observation' }
   }

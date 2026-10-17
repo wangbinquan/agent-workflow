@@ -68,11 +68,12 @@ export const humanGateComposition = {
   encodeReviewDecisionManifest,
   encodeReviewDecisionReceipt,
   prepareWorkspaceRollbackPlan(
-    input: Omit<Parameters<typeof prepareWorkspaceRollbackPlanInternal>[0], 'inspector'>,
+    input: Omit<Parameters<typeof prepareWorkspaceRollbackPlanInternal>[0], 'inspector'> &
+      Partial<Pick<Parameters<typeof prepareWorkspaceRollbackPlanInternal>[0], 'inspector'>>,
   ) {
     return prepareWorkspaceRollbackPlanInternal({
       ...input,
-      inspector: new GitWorkspaceRollbackSnapshotInspector(),
+      inspector: input.inspector ?? new GitWorkspaceRollbackSnapshotInspector(),
     })
   },
   parkPreparedHumanGate(

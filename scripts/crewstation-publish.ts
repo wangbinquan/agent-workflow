@@ -178,7 +178,8 @@ const commitSha = await publisher.commit({
   branch: profile.branch,
   expectedHead: remoteHead.id,
   actions,
-  message: `agent-workflow ${head}\n\nCo-Authored-By: Codex <noreply@openai.com>`,
+  // The first line is the provenance the next publication parses.
+  message: `agent-workflow ${head}`,
   authorName: run(['git', 'config', 'user.name'], repoRoot).trim(),
   authorEmail: run(['git', 'config', 'user.email'], repoRoot).trim(),
 })

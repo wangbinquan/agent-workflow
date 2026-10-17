@@ -60,6 +60,16 @@ export const FIXED_MAINTENANCE_JOB_SPECS = [
     // Existing semantics: no boot pass; first scan after one full interval.
     phaseOffsetMs: DAEMON_CADENCE.stuckTaskScan,
   },
+  {
+    // RFC-370 v3 V6: the one hosted object recovery/GC job. A standalone
+    // Worker has no hosted object effects and settles the run as skipped.
+    key: 'hostedObjectRecovery',
+    class: 'recovery',
+    schedule: 'fixed',
+    intervalMs: DAEMON_CADENCE.hostedObjectRecovery,
+    phaseOffsetMs: 7 * 60_000,
+    bootDelayMs: 60_000,
+  },
 ] as const satisfies readonly MaintenanceJobSpec[]
 
 export const MAINTENANCE_JOB_CATALOG: readonly MaintenanceJobSpec[] = [

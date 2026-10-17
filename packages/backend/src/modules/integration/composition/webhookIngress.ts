@@ -1,3 +1,4 @@
+import type { CrewStationEventIngress } from './crewstationEvents'
 import type { SecretBox } from '@/auth/secretBox'
 import type { EventCenterModule } from '@/modules/event-center/composition'
 import type { MrTerminalControl } from '../public/mrTerminalControl'
@@ -58,9 +59,15 @@ export function composeWebhookDeliveryRuntimeFor(
   })
 }
 
-/** Bootstrap binds the existing transport availability gate and downstream workers. */
+/**
+ * Bootstrap binds the existing transport availability gate and downstream
+ * workers. RFC-370 v3 V8: a hosted deployment (one that supplies the
+ * CrewStation event ingress) receives code-host events only through
+ * CrewStation, so it has no direct webhook ingress at all.
+ */
 export function composeWebhookIngressTransport(input: {
   readonly webhookIngressPersistence: WebhookIngressPersistence
+  readonly crewStationEvents?: CrewStationEventIngress
   readonly secretBox?: SecretBox
   readonly digitalEmployeeEventCenter?: EventCenterModule
   readonly webhookDispatcher?: WebhookDispatcher
@@ -68,12 +75,14 @@ export function composeWebhookIngressTransport(input: {
 }) {
   const eventCenter = input.digitalEmployeeEventCenter
   const enabled =
+    input.crewStationEvents === undefined &&
     !!input.secretBox &&
     !!input.webhookDispatcher &&
     supportsEventCenterCodeHostDelivery(input.webhookDispatcher) &&
     eventCenter !== undefined
   return Object.freeze({
     webhookIngressPersistence: input.webhookIngressPersistence,
+    crewStationEvents: input.crewStationEvents,
     secretBox: input.secretBox,
     verifiedIngress:
       !enabled || eventCenter === undefined

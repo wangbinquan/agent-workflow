@@ -1,4 +1,12 @@
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/public/types'
+import type { IntentArtifactContentPort, IntentScratchStore } from '@/modules/intent/public/types'
+import type { WorkspaceMaintenanceEffects } from '@/modules/source-control/public/types'
+import type { PostgresqlDatabaseClientOptions } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { EventsArchiveContent } from './eventsArchiveContent'
+import type {
+  DatabaseBackupMaintenance,
+  HostedObjectPublicationMaintenance,
+} from '@/modules/system-operations/public/commands'
 import type {
   PluginGenerationFilesystemGcPort,
   ResourcePackageApplyArtifactRecoveryPort,
@@ -6,10 +14,20 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 
 export interface MaintenanceWorkerEffectsSelections {
+  /** RFC-370 v3 V6: the single hosted object recovery/GC job body. */
+  readonly objectPublications?: HostedObjectPublicationMaintenance
+  readonly databaseBackups?: DatabaseBackupMaintenance
+  readonly eventsArchive?: EventsArchiveContent
+  readonly databaseWrites?: {
+    readonly assertHeld: NonNullable<PostgresqlDatabaseClientOptions['beforeWrite']>
+  }
   readonly taskArchive?: TaskArchiveContentBinding
   readonly resourcePackageRecovery?: ResourcePackageApplyArtifactRecoveryPort
   readonly resourcePackageRecoveryContent?: ResourcePackageRecoveryEffectsFactory
   readonly pluginGenerationGc?: PluginGenerationFilesystemGcPort
+  readonly intentArtifactContent?: IntentArtifactContentPort
+  readonly intentScratch?: IntentScratchStore
+  readonly workspaceMaintenance?: WorkspaceMaintenanceEffects
 }
 
 export type MaintenanceWorkerEffectsCapability = keyof MaintenanceWorkerEffectsSelections
@@ -20,6 +38,28 @@ export interface MaintenanceWorkerEffectsDescriptor {
   readonly exportName: string
   readonly configurationJson: string
   readonly capabilities: readonly MaintenanceWorkerEffectsCapability[]
+  /** RFC-370 §9.2 V9 — the deployment's Worker entry that registers
+   * `moduleSpecifier`; absent, the ordinary platform Worker entry runs. */
+  readonly workerEntry?: string
+}
+
+const effectModules = new Map<string, () => Promise<Record<string, unknown>>>()
+
+/** RFC-370 §9.2 V9 — a deployment's Worker entry registers its effect module
+ * under a symbolic name before any init message arrives, so the platform
+ * Worker never imports a deployment or business module itself. */
+export function registerMaintenanceWorkerEffectModule(
+  specifier: string,
+  load: () => Promise<Record<string, unknown>>,
+): void {
+  effectModules.set(specifier, load)
+}
+
+export function importMaintenanceWorkerEffectModule(
+  specifier: string,
+): Promise<Record<string, unknown>> {
+  const load = effectModules.get(specifier)
+  return load === undefined ? import(specifier) : load()
 }
 
 export interface MaintenanceWorkerEffectsContext {
@@ -68,13 +108,64 @@ function selectEffects(
   )
     throw new Error('maintenance-worker-effects-invalid-selection')
   const selection: {
+    objectPublications?: HostedObjectPublicationMaintenance
+    databaseBackups?: DatabaseBackupMaintenance
+    eventsArchive?: EventsArchiveContent
+    databaseWrites?: MaintenanceWorkerEffectsSelections['databaseWrites']
     taskArchive?: TaskArchiveContentBinding
     resourcePackageRecovery?: ResourcePackageApplyArtifactRecoveryPort
     resourcePackageRecoveryContent?: ResourcePackageRecoveryEffectsFactory
     pluginGenerationGc?: PluginGenerationFilesystemGcPort
+    intentArtifactContent?: IntentArtifactContentPort
+    intentScratch?: IntentScratchStore
+    workspaceMaintenance?: WorkspaceMaintenanceEffects
   } = {}
   for (const family of capabilities) {
     switch (family) {
+      case 'objectPublications': {
+        completeMethods(environment.objectPublications, ['run'], family)
+        selection.objectPublications = environment.objectPublications
+        break
+      }
+      case 'databaseBackups': {
+        completeMethods(environment.databaseBackups, ['prune'], family)
+        selection.databaseBackups = environment.databaseBackups
+        break
+      }
+      case 'eventsArchive': {
+        completeMethods(environment.eventsArchive, ['recover', 'archive'], family)
+        selection.eventsArchive = environment.eventsArchive
+        break
+      }
+      case 'databaseWrites': {
+        completeMethods(environment.databaseWrites, ['assertHeld'], family)
+        selection.databaseWrites = environment.databaseWrites
+        break
+      }
+      case 'workspaceMaintenance': {
+        const workspace = environment.workspaceMaintenance
+        completeMethods(workspace, ['filesystem'], family)
+        completeMethods(workspace?.preparation, ['create'], `${family}-preparation`)
+        completeMethods(workspace?.scratch, ['prepare', 'restore', 'cleanup'], `${family}-scratch`)
+        selection.workspaceMaintenance = workspace
+        break
+      }
+      case 'intentScratch': {
+        const scratch = environment.intentScratch
+        completeMethods(scratch, ['staleTurnIds', 'remove'], family)
+        selection.intentScratch = scratch
+        break
+      }
+      case 'intentArtifactContent': {
+        const content = environment.intentArtifactContent
+        completeMethods(
+          content,
+          ['pluginExists', 'discardPlugin', 'publishSkill', 'discardSkill', 'discardLegacy'],
+          family,
+        )
+        selection.intentArtifactContent = content
+        break
+      }
       case 'taskArchive': {
         const binding = environment.taskArchive
         completeMethods(
@@ -160,7 +251,7 @@ export function openMaintenanceWorkerEffectsScope(input: {
     instanceRef: input.context.instanceRef,
     configurationJson: descriptor.configurationJson,
   })
-  const importer = input.importModule ?? ((specifier: string) => import(specifier))
+  const importer = input.importModule ?? importMaintenanceWorkerEffectModule
   let environment: MaintenanceWorkerEffectsEnvironment | undefined
   let disposal: Promise<void> | undefined
   let closing = false

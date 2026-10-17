@@ -129,6 +129,21 @@ export interface EngineCapabilities {
   ): Promise<void>
 
   /**
+   * RFC-370 v3 — hold an aggregate root against **transitions** for the rest of the
+   * caller's transaction while it relies on the root's current state. PG renders
+   * `SELECT … FOR KEY SHARE`: holders never wait for each other, and an in-place update
+   * of non-key columns (a lease renewal) never waits for them either; only a writer that
+   * first calls `lockAggregateRoot` (FOR UPDATE) waits until every holder has committed.
+   * SQLite: no-op (BEGIN IMMEDIATE is already exclusive).
+   */
+  holdAggregateRoot(
+    tx: DatabaseTransaction,
+    table: SQLiteTable,
+    idColumn: SQLiteColumn,
+    id: string,
+  ): Promise<void>
+
+  /**
    * 队列式认领的锁子句，追加在 SELECT 末尾。PG：`for update skip locked`（多 worker 各拿各的、
    * 不互相等）；SQLite：空（独占事务下没有第二个认领者）。
    */
@@ -136,6 +151,13 @@ export interface EngineCapabilities {
 
   /** 事务级 advisory lock，跨进程协调用。PG：`pg_advisory_xact_lock`；SQLite no-op。 */
   advisoryLock(tx: DatabaseTransaction, key: string): Promise<void>
+  /**
+   * RFC-370 v3 — the shared twin of `advisoryLock` on the same key. Shared holders never
+   * wait for each other; an exclusive `advisoryLock` waits until every shared holder has
+   * committed, and later shared requests queue behind a waiting exclusive one (FIFO, so
+   * the exclusive side cannot starve). PG: `pg_advisory_xact_lock_shared`; SQLite no-op.
+   */
+  advisoryLockShared(tx: DatabaseTransaction, key: string): Promise<void>
   /** A live original report snapshot fences recovery without blocking another process. */
   tryAdvisoryLock(tx: DatabaseTransaction, key: string): Promise<boolean>
 
@@ -345,9 +367,15 @@ export function createSqliteCapabilities(): EngineCapabilities {
     async lockAggregateRoot() {
       // BEGIN IMMEDIATE 已独占整个库；行锁没有对应物，也不需要。
     },
+    async holdAggregateRoot() {
+      // 同上：独占事务里没有并发的转移者可挡。
+    },
     claimLockClause: () => sql``,
     async advisoryLock() {
       // 单进程单写者；跨进程协调由 daemon 级 flock 承担。
+    },
+    async advisoryLockShared() {
+      // 同 advisoryLock。
     },
     async tryAdvisoryLock() {
       return true
@@ -454,9 +482,15 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     async lockAggregateRoot(tx, table, idColumn, id) {
       await tx.run(sql`select 1 from ${table} where ${idColumn} = ${id} for update`)
     },
+    async holdAggregateRoot(tx, table, idColumn, id) {
+      await tx.run(sql`select 1 from ${table} where ${idColumn} = ${id} for key share`)
+    },
     claimLockClause: () => sql`for update skip locked`,
     async advisoryLock(tx, key) {
       await tx.run(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`)
+    },
+    async advisoryLockShared(tx, key) {
+      await tx.run(sql`select pg_advisory_xact_lock_shared(hashtextextended(${key}, 0))`)
     },
     async tryAdvisoryLock(tx, key) {
       const row = (await tx.get(

@@ -8,8 +8,12 @@ import { runObservabilityEn } from './runObservability'
 import { mindmapEn } from './mindmap'
 import { markdownEditorEn } from './markdownEditor'
 import { executionEn } from './execution'
+import { hostedEventsEn } from './hostedEvents'
+import { hostedBackupEn } from './hostedBackup'
 
 export const enUS: Resources = {
+  hostedEvents: hostedEventsEn,
+  hostedBackup: hostedBackupEn,
   execution: executionEn,
   markdownEditor: markdownEditorEn,
   mindmap: mindmapEn,
@@ -2068,6 +2072,9 @@ export const enUS: Resources = {
     token: {
       create: 'Create token',
       docsLink: 'API docs',
+      hostedUsageTitle: 'Using tokens on a CrewStation-hosted deployment',
+      hostedUsage:
+        'Automation sends the same user’s CrewStation platform session together with a token created here (Authorization: Bearer <token>): the platform gateway admits the session, and Agent Workflow scopes the request to the token. Either one alone is refused; when the session expires, sign in to the platform again — a token never extends it.',
       createTitle: 'Create an access token',
       createdTitle: 'Token created',
       nameHint: 'Name it after what will use it — a machine, a pipeline. Only you see this.',
@@ -2648,6 +2655,8 @@ export const enUS: Resources = {
       git: 'Control platform commit exclusions, submodules, and background refresh.',
       codeHosts: 'Outbound credentials for GitLab / GitHub',
       network: 'Set the daemon bind address and listening port.',
+      networkHosted:
+        'Turn the external surface (API token minting and the MCP endpoint) on or off. CrewStation manages the listener.',
       appearance: 'Choose the theme and interface language.',
       rendering: 'Configure external diagram rendering.',
       authentication: 'Manage OIDC sign-in providers.',
@@ -2859,6 +2868,7 @@ export const enUS: Resources = {
         intentRecovery: 'Intent recovery',
         lifecycleInvariants: 'Lifecycle invariant check',
         stuckTaskDetector: 'Stuck-task detection',
+        hostedObjectRecovery: 'Hosted object recovery and cleanup',
         humanGateRecovery: 'Human-gate recovery',
         walCheckpoint: 'WAL checkpoint',
       },
@@ -4994,7 +5004,21 @@ export const enUS: Resources = {
       uuid: 'Event UUID',
       stream: 'Event stream',
       payload: 'Event payload',
+      verification: 'Verification method',
+      bodySource: 'Body source',
     },
+    verification: {
+      'direct-signature': 'Direct signature validation',
+      'cs-delegated': 'CrewStation delegated verification',
+      unknown: 'Not recorded',
+    },
+    bodySources: {
+      'http-bytes': 'Upstream HTTP body',
+      'reserialized-json': 'JSON reserialized by the platform',
+      unknown: 'Not recorded',
+    },
+    delegatedExplanation:
+      'CrewStation verified and forwarded this event. Its body comes from the platform event envelope. Use the platform receipt to trace delivery; the displayed JSON cannot be used to recompute the upstream signature.',
     terminalControl: {
       title: 'MR / PR terminal control',
       kind: 'Control fact',
@@ -7945,6 +7969,23 @@ export const enUS: Resources = {
       'This instance is not executing work right now; tasks and automatic runs are unavailable.',
     'setting-managed-by-deployment':
       'This setting is provided by the deployment and cannot be changed here.',
+    'hosted-database-write-unavailable':
+      'CrewStation is migrating or restoring this service database: you can browse, but changes cannot be saved right now.',
+    'hosted-database-write-unavailable__hint':
+      'Writes resume automatically once the platform finishes the migration or restore. Retry this action in a moment.',
+    'hosted-backup-worktrees-unsupported':
+      'Hosted backups contain the database only and cannot include task workspaces.',
+    'hosted-backup-worktrees-unsupported__hint':
+      'Task workspaces live on CrewStation persistent volumes; a lost volume is recovered with the platform actions (rebuild or restart). Create the backup without workspaces.',
+    'backup-invalid': 'The backup request is invalid.',
+    'backup-in-progress': 'A database backup is already running.',
+    'backup-in-progress__hint': 'Wait for it to finish, then refresh the backup list.',
+    'backup-not-found': 'This backup no longer exists.',
+    'backup-not-ready': 'Only a completed backup can be verified.',
+    'backup-archive-unavailable':
+      'The archive of this backup is no longer available in CrewStation object storage.',
+    'backup-archive-unavailable__hint':
+      'Do not use its restore reference. Create a new backup and verify that one instead.',
     'network-unreachable__hint':
       'Make sure the daemon is running and the network is reachable, then retry.',
     'request-timeout': 'The request timed out and we stopped waiting.',
@@ -7987,6 +8028,8 @@ export const enUS: Resources = {
       'The owning task has ended; this item is sealed and the submission was not saved.',
     'task-not-resumable': 'Task is still running or has not failed; cannot resume.',
     'task-still-running': 'Task is still running; cancel it first.',
+    'task-recovery-in-progress':
+      'This task or its shared workspace is being recovered. Wait for the current recovery to finish before continuing.',
     'task-not-syncable': 'Task is actively running; cannot sync its workflow definition.',
     'task-not-syncable__hint': 'Wait for the task to finish or cancel it, then sync.',
     'task-host-sync-unsupported': 'Agent / workgroup tasks have no workflow to sync from.',

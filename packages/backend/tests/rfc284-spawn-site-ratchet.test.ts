@@ -128,6 +128,14 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 2,
     why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）；T17 已换树杀（stub 无 pid 走原 kill 缝）。',
   },
+  'modules/source-control/infrastructure/crewstation/taskImageGitCredentials.ts': {
+    governance: 'short-lived',
+    count: 1,
+    why:
+      'RFC-370 V3/C13：任务镜像内的 GIT_SSH 包装器——git 调它、它以继承的 stdio 起一个 ssh，' +
+      '寿命恰为那条 git 网络命令，且留在 git 的进程组里（不 detached）：卷内助手对 git 的' +
+      '超时 / 树杀按组进行，同时回收本包装器与 ssh。临时私钥只在 ssh 退出后删除。',
+  },
   'modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts': {
     governance: 'short-lived',
     count: 1,

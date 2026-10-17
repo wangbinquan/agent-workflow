@@ -1,8 +1,7 @@
 import { eq } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { hostedTaskArtifacts } from '@/db/schema'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { CrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
@@ -14,20 +13,24 @@ import type {
 } from '../../application/ports/portArtifactContent'
 import { portArchiveRootRel } from '../../application/portArtifacts'
 import { encodePortSegment } from '../../domain/portArtifacts'
+import { HOSTED_TASK_ARTIFACT_OWNER, retainHostedTaskArtifactInTx } from './taskArtifacts'
+import { sha256Hex } from '@/util/hash'
 
 export function createHostedPortArtifactContent(input: {
   readonly db: ProviderNeutralDatabase
   readonly fence: CrewStationMutationFence
   readonly api: CrewStationBusinessExecution
   readonly objects: CrewStationObjectStorage
+  /** Port bytes are `task-artifact` publications (scope = task id). */
+  readonly publications: HostedObjectPublications
   readonly helper: WorkspaceHelper
   readonly locate: (
     reference: string,
     relative?: string,
   ) => { readonly taskId: string; readonly path: string; readonly relative: string }
-  readonly workspace: { find(taskId: string): Promise<{ readonly businessTaskId: string } | null> }
+  /** `open` resumes a paused parent: platform file reads need it running. */
+  readonly workspace: { open(taskId: string): Promise<{ readonly businessTaskId: string } | null> }
 }): PortArtifactContentEffects {
-  const session = databaseSessionFor(input.db)
   const find = async (reference: string) =>
     (
       await input.db
@@ -41,7 +44,7 @@ export function createHostedPortArtifactContent(input: {
     limit?: number,
   ): Promise<Uint8Array> => {
     const location = input.locate(source.workspaceRef, source.relativePath)
-    const workspace = await input.workspace.find(location.taskId)
+    const workspace = await input.workspace.open(location.taskId)
     if (workspace === null) throw new Error('hosted-workspace-not-found')
     const chunks: Buffer[] = []
     let offset = 0
@@ -70,37 +73,20 @@ export function createHostedPortArtifactContent(input: {
   const write = async (reference: string, bytes: Uint8Array): Promise<void> => {
     const match = /^runs\/([^/]+)\/ports\//.exec(reference)
     if (match === null) throw new Error('hosted-port-artifact-reference-invalid')
-    const digest = createHash('sha256').update(bytes).digest('hex')
+    const digest = sha256Hex(bytes)
     const existing = await find(reference)
     if (existing !== undefined) {
       if (existing.digest !== digest) throw new Error('hosted-port-artifact-content-changed')
       return
     }
-    const object = await input.objects.put(reference, bytes)
-    const lease = input.fence.current()
-    await session.transaction(async (tx) => {
-      await input.fence.assertHeld(tx, lease)
-      await tx
-        .insert(hostedTaskArtifacts)
-        .values({
-          reference,
-          taskId: match[1]!,
-          objectId: object.id,
-          revision: object.revision,
-          digest,
-          size: bytes.byteLength,
-          createdAt: Date.now(),
-        })
-        .onConflictDoNothing()
-      const saved = (
-        await tx
-          .select()
-          .from(hostedTaskArtifacts)
-          .where(eq(hostedTaskArtifacts.reference, reference))
-          .limit(1)
-      )[0]
-      if (saved?.digest !== digest) throw new Error('hosted-port-artifact-content-changed')
-    })
+    await input.publications.publish(
+      [{ owner: HOSTED_TASK_ARTIFACT_OWNER, key: reference, scope: match[1]!, bytes }],
+      {
+        async commit(tx, [object]) {
+          await retainHostedTaskArtifactInTx(tx, { reference, taskId: match[1]!, object: object! })
+        },
+      },
+    )
   }
   const info = (source: PortArtifactWorkspaceFile) => {
     const location = input.locate(source.workspaceRef)
@@ -126,10 +112,7 @@ export function createHostedPortArtifactContent(input: {
       const row = await find(reference)
       if (row === undefined || row.taskId !== taskId) return null
       const bytes = await input.objects.read(row.objectId)
-      if (
-        bytes.byteLength !== row.size ||
-        createHash('sha256').update(bytes).digest('hex') !== row.digest
-      )
+      if (bytes.byteLength !== row.size || sha256Hex(bytes) !== row.digest)
         throw new Error('hosted-port-artifact-digest-mismatch')
       return bytes
     },

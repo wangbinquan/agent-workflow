@@ -6,9 +6,18 @@
 // email); a disabled account is refused; HTTP and WebSocket admit identically.
 import { beforeAll, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
+import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
+import { Hono } from 'hono'
+import { DEFAULT_CONFIG, resolveTokenPermissions } from '@agent-workflow/shared'
+import { mountMcpTransport } from '@/mcp/server'
+import { errorHandler } from '@/util/errors'
+import { composeHttpAuthenticationMiddleware } from '@/modules/identity-access/composition/authentication'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTVerifyGetKey } from 'jose'
 import { externalIdentities, userPermissionGrants, users } from '@/db/schema'
-import { composeCrewStationCredentialAdapters } from '@/modules/identity-access/composition/authentication'
+import {
+  composeCrewStationCredentialAdapters,
+  composeCrewStationRecoveryRequester,
+} from '@/modules/identity-access/composition/authentication'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {
   createCrewStationIdentityTokenVerifier,
@@ -91,7 +100,7 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
       keys,
     })({
       db: harness.db,
-      auth: undefined as never,
+      auth: createAuthRuntimeFor({ db: harness.db }),
       daemonToken: 'unused',
       identityAccess: createIdentityAccessRuntime({ db: harness.db }),
     })
@@ -100,6 +109,120 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
     method: 'GET',
     path: '/api/agents',
     header: (name: string) => (name === 'x-cs-identity-token' ? value : null),
+  })
+
+  test('automation requires both the platform identity and a same-account scoped PAT on every request', async () => {
+    const http = adapters().http
+    const signed = await token({ subject: ADMIN })
+    const admitted = await http.authenticate(request(signed))
+    if (admitted.kind !== 'authenticated') throw new Error('fixture identity missing')
+    const auth = createAuthRuntimeFor({ db: harness.db })
+    const own = await auth.createPat({
+      userId: admitted.identity.actor.user.id,
+      name: 'automation',
+      purpose: 'general',
+      scopes: ['agents:read'],
+    })
+    const automated = (identity: string | null, authorization: string) => ({
+      ...request(identity),
+      header: (name: string) =>
+        name.toLowerCase() === 'authorization'
+          ? authorization
+          : name === 'x-cs-identity-token'
+            ? identity
+            : null,
+    })
+    const result = await http.authenticate(automated(signed, `Bearer ${own.token}`))
+    if (result.kind !== 'authenticated') throw new Error('PAT not admitted')
+    expect(result.identity.actor).toMatchObject({
+      source: 'pat',
+      purpose: 'general',
+      patId: own.meta.id,
+    })
+    expect(result.identity.actor.permissions).toEqual(
+      resolveTokenPermissions({
+        accountPermissions: admitted.identity.actor.permissions,
+        matrix: ['agents:read'],
+      }),
+    )
+    expect(result.identity.actor.permissions.has('agents:create')).toBe(false)
+    await expect(http.authenticate(automated(null, `Bearer ${own.token}`))).rejects.toMatchObject({
+      status: 401,
+    })
+    await expect(
+      http.authenticate(automated(await token(), `Bearer ${own.token}`)),
+    ).rejects.toMatchObject({ status: 401 })
+    for (const value of ['Bearer aw_sess_invalid', 'Basic invalid', '', 'Bearer aw_pat_invalid'])
+      await expect(http.authenticate(automated(signed, value))).rejects.toMatchObject({
+        status: 401,
+      })
+    await auth.revokePat(own.meta.id)
+    await expect(http.authenticate(automated(signed, `Bearer ${own.token}`))).rejects.toMatchObject(
+      { status: 401 },
+    )
+    // A revoked PAT is not cached and cannot silently broaden to browser authority.
+    const browser = await http.authenticate(request(signed))
+    if (browser.kind !== 'authenticated') throw new Error('browser identity missing')
+    expect(browser.identity.actor.source).toBe('session')
+  })
+
+  test('hosted MCP keeps the PAT gate and scoped tools behind the signed platform user', async () => {
+    const http = adapters().http
+    const signed = await token({ subject: ADMIN })
+    const admitted = await http.authenticate(request(signed))
+    if (admitted.kind !== 'authenticated') throw new Error('fixture identity missing')
+    const auth = createAuthRuntimeFor({ db: harness.db })
+    const pat = await auth.createPat({
+      userId: admitted.identity.actor.user.id,
+      name: 'mcp',
+      purpose: 'mcp_only',
+      scopes: ['agents:read'],
+    })
+    const app = new Hono()
+    app.use('/api/*', composeHttpAuthenticationMiddleware(http))
+    mountMcpTransport(app, {
+      tokenCallAudit: createTokenCallAudit(harness.db),
+      configuration: { read: () => ({ ...DEFAULT_CONFIG, mcpSurfaceEnabled: true }) },
+      operationInvokerFor: () => async () => {
+        throw new Error('tools/list must not execute a tool')
+      },
+    })
+    app.onError(errorHandler)
+    const call = (headers: Record<string, string>, method = 'initialize') =>
+      app.request('/api/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          ...headers,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method,
+          params:
+            method === 'initialize'
+              ? {
+                  protocolVersion: '2025-06-18',
+                  capabilities: {},
+                  clientInfo: { name: 'hosted-test', version: '1' },
+                }
+              : {},
+        }),
+      })
+    expect((await call({ 'x-cs-identity-token': signed })).status).toBe(401)
+    expect((await call({ authorization: `Bearer ${pat.token}` })).status).toBe(401)
+    const headers = { 'x-cs-identity-token': signed, authorization: `Bearer ${pat.token}` }
+    const handshake = await call(headers)
+    expect(handshake.status).toBe(200)
+    expect(await handshake.text()).toContain('agent-workflow')
+    const listing = await call(headers, 'tools/list')
+    expect(listing.status).toBe(200)
+    const body = await listing.text()
+    expect(body).toContain('"name":"resource_read"')
+    expect(body).not.toContain('"name":"launch_task"')
+    await auth.revokePat(pat.meta.id)
+    expect((await call(headers)).status).toBe(401)
   })
 
   test('first access creates one least-privileged account; later access reuses it', async () => {
@@ -138,6 +261,35 @@ describeEachProvider('RFC-370 M0 CrewStation credential adapters', (harness) => 
         .from(userPermissionGrants)
         .where(eq(userPermissionGrants.userId, admitted.identity.actor.user.id)),
     ).toEqual([])
+  })
+
+  test('recovery resolves only an existing platform link and rechecks the current account', async () => {
+    const requester = composeCrewStationRecoveryRequester({
+      db: harness.db,
+      identityAccess: createIdentityAccessRuntime({ db: harness.db }),
+    })
+    const id = SUBJECT.slice('user:'.length)
+    const before = await harness.db.select({ id: users.id }).from(users)
+    for (const unknown of [id, ADMIN.slice(5), SUBJECT, '__system__', '', 'invalid'])
+      expect(await requester.resolve(unknown)).toBeNull()
+    expect(await harness.db.select({ id: users.id }).from(users)).toEqual(before)
+    expect(await harness.db.select().from(externalIdentities)).toEqual([])
+
+    const admitted = await adapters().http.authenticate(request(await token()))
+    if (admitted.kind !== 'authenticated') throw new Error('fixture identity missing')
+    const accountId = admitted.identity.actor.user.id
+    expect((await requester.resolve(id))?.actor.user).toMatchObject({
+      id: accountId,
+      role: 'guest',
+    })
+    await harness.db.update(users).set({ role: 'user' }).where(eq(users.id, accountId))
+    expect((await requester.resolve(id))?.actor.user.role).toBe('user')
+    await harness.db.update(users).set({ status: 'disabled' }).where(eq(users.id, accountId))
+    expect(await requester.resolve(id)).toBeNull()
+    await harness.db.update(users).set({ status: 'active' }).where(eq(users.id, accountId))
+    await harness.db.delete(externalIdentities).where(eq(externalIdentities.userId, accountId))
+    // A matching username/email is not a platform identity link.
+    expect(await requester.resolve(id)).toBeNull()
   })
 
   test('an email already owned by another account is not merged or copied', async () => {

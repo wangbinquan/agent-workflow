@@ -76,7 +76,9 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
     'const factory = selectedAutomationWorkspaceEffects(\n    deps.automationWorkspaceEffects === undefined\n      ? actionWorkspaceEffects.contents\n      : deps.automationWorkspaceEffects,\n  )',
   )
   for (const [path, expression, count] of [
-    ['application/actionWorkspace.ts', 'deps.evidence.materializeBundle', 2],
+    // RFC-370 §9.2 V3: one bundle overlay serves materialize and adopt on
+    // both local directories and hosted volumes.
+    ['application/actionWorkspace.ts', 'deps.evidence.materializeBundle', 1],
     ['infrastructure/uploadPlacement.ts', 'deps.evidence.materializeBlob', 1],
     ['application/agentActionOrchestrator.ts', 'ports.actionWorkspace!.adopt', 1],
     ['composition/digitalEmployeePlatformWorkItems.ts', 'evidenceStore().materializeBundle', 1],

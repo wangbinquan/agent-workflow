@@ -70,9 +70,11 @@ describe('RFC-364 production bindings', () => {
           expect(compact(call, source)).toStartWith(
             '(unstarted?.createMcpRuntimeTests??composeLocalMcpDiagnostics)(',
           )
+        // RFC-370 M2: a hosted daemon selects the CrewStation diagnostics through
+        // bootstrap; every other daemon keeps the original local composition.
         if (path === 'cli/postgresqlDaemonApplication.ts')
           expect(compact(call, source)).toStartWith(
-            "(phase.kind==='daemon'?composeLocalMcpDiagnostics:phase.scope.createMcpRuntimeTests)(",
+            "(phase.kind==='daemon'?(input.mcpDiagnostics??composeLocalMcpDiagnostics):phase.scope.createMcpRuntimeTests)(",
           )
       },
     )

@@ -544,6 +544,11 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // opener/读前串行化档随 RFC-365 的 crash/replay 用例实测，本条归 RFC-365 记账。
   'modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts: 1',
   'modules/event-center/infrastructure/eventStore.ts: 2',
+  // RFC-370 M3/V8: the CrewStation event inbox reads and then inserts its
+  // delivery and route rows inside the receive transaction that already holds
+  // the source lock (读前已串行化); a redelivery with changed content is a 409
+  // after comparing the stored row, never a second entity.
+  'modules/integration/infrastructure/crewstation/eventInbox.ts: 2',
   'modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts: 2',
   'modules/intent/infrastructure/intentApplyEngine.ts: 1',
   'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 7',

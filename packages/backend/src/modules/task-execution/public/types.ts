@@ -16,6 +16,7 @@ export type {
   PromptStorage,
 } from '../application/ports/nodeRunPromptContent'
 export type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
+export type { TaskRuntimeInventoryContent } from '../application/ports/taskRuntimeInventoryContent'
 export type { TaskArchiveContentBinding } from '../composition/taskArchiveMaintenance'
 
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these
@@ -194,8 +195,8 @@ export interface TaskExecutionOutcomeReadModel {
 
 /**
  * Provider-neutral source row for the runtime inventory presenter. The
- * application service owns JSON decoding and the in-flight filesystem
- * fallback; adapters only freeze the task/run relationship and stored
+ * application service owns JSON decoding and consumes selected live evidence;
+ * adapters only freeze the task/run relationship and stored
  * observation columns.
  */
 export interface TaskRuntimeInventorySource {
@@ -326,3 +327,5 @@ export type {
   WorkspaceUploadPlan,
   WorkspaceUploadResult,
 } from '../application/ports/workspaceUploads'
+
+export type { ArchivedEventsReader as TaskArchivedEventsReader } from '@/platform/background/eventsArchiveContent'

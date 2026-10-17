@@ -195,3 +195,22 @@ export type {
   AgentWorkspaceGitControlSnapshot,
   AgentWorkspaceGitControlObservation,
 } from '../application/ports/agentWorkspaceGitControl'
+export {
+  readHostedWorkspaceOwnerForBusinessTask,
+  hostedWorkspaceOwnerFromReference,
+} from '../infrastructure/crewstation/workspaceOwnership'
+/**
+ * RFC-370 §9.2 V3 — volume-use facts Source Control's hosted parent lifecycle
+ * needs but does not own. Implemented by task-execution and injected by the
+ * hosted bootstrap: the physical volume owners (hosted workspace task ids,
+ * i.e. the owner encoded in `cs-workspace:<owner>/…` references) that an AW
+ * task in `pending`/`running` or an unsettled execution binding still uses.
+ * A parent whose owner is in this set is never paused.
+ */
+export interface HostedVolumeActivity {
+  activeVolumeOwners(): Promise<ReadonlySet<string>>
+}
+
+/** RFC-370 §9.2 V2 — every non-node task-image helper command on a hosted
+ * volume runs through Source Control's journaled command client. */
+export type { HostedWorkspaceCommands } from '../infrastructure/crewstation/workspaceCommands'

@@ -1,5 +1,6 @@
 // RFC-341 — continuous owner of already-admitted RFC-333 gate continuations.
 
+import type { HumanGateArtifactRecovery } from './recoverHumanGateOperations'
 import {
   defineManagedWorker,
   type ManagedWorkerDefinition,
@@ -18,6 +19,7 @@ export interface HumanGateContinuationWorkerCycle {
 }
 
 export function createHumanGateContinuationWorkerDefinition(input: {
+  readonly artifacts?: HumanGateArtifactRecovery
   readonly listPending: () => Promise<readonly PendingHumanGateContinuation[]>
   readonly drive: (continuation: PendingHumanGateContinuation) => Promise<void>
   readonly reconcileMs?: number
@@ -38,8 +40,16 @@ export function createHumanGateContinuationWorkerDefinition(input: {
   let completed = 0
   let failed = 0
   let lastError: string | null = null
+  let artifactRecoveryAt = Number.NEGATIVE_INFINITY
+  let artifactFailures = 0
 
   const runCycle = async (): Promise<HumanGateContinuationWorkerCycle> => {
+    if (input.artifacts !== undefined && now() - artifactRecoveryAt >= 60_000) {
+      const report = await input.artifacts.runOnce()
+      artifactRecoveryAt = now()
+      artifactFailures += report.failed
+      if (report.failed > 0) lastError = report.errors.join('; ')
+    }
     const pending = await input.listPending()
     let cycleCompleted = 0
     let cycleFailed = 0
@@ -67,7 +77,7 @@ export function createHumanGateContinuationWorkerDefinition(input: {
     phase: 'after-ready',
     dependencies: ['task-execution'],
     readiness: () => readiness,
-    state: () => ({ running, cycles, attempted, completed, failed, lastError }),
+    state: () => ({ running, cycles, attempted, completed, failed, artifactFailures, lastError }),
     start() {
       readiness = 'starting'
     },

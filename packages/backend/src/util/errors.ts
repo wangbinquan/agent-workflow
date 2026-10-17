@@ -6,6 +6,7 @@
 // a 500 with code='internal-error' and gets logged.
 
 import type { ErrorHandler } from 'hono'
+import { DrizzleQueryError } from 'drizzle-orm'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { createLogger } from './log'
 
@@ -140,6 +141,14 @@ export class GoneError extends DomainError {
 
 /** Hono error handler. Mounted via `app.onError(errorHandler)`. */
 export const errorHandler: ErrorHandler = (err, c) => {
+  // A database write-admission error is thrown on the statement's own
+  // transaction. Drizzle wraps builder callbacks; keep the original typed
+  // response without exposing SQL/parameters from its query-error message.
+  const seen = new Set<Error>()
+  while (err instanceof DrizzleQueryError && err.cause instanceof Error && !seen.has(err)) {
+    seen.add(err)
+    err = err.cause
+  }
   if (err instanceof DomainError) {
     return c.json(err.toPayload(), err.status)
   }

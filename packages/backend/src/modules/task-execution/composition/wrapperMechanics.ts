@@ -771,7 +771,11 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       },
       beforeSpawn: async () => {
         const iso = shardIso as IsoHandle
-        if (priorShardUndo !== null && !iso.passthrough) {
+        if (
+          priorShardUndo !== null &&
+          !iso.passthrough &&
+          !workspaceRecord(iso).workspace.adoptedExecution
+        ) {
           for (const r of iso.repos) {
             try {
               await workspaceRecord(iso).scope.undoShard({

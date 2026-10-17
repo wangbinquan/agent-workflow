@@ -40,6 +40,8 @@ export interface IsolationWorkspace {
   readonly isolationRef: string
   readonly workspaceRef: string
   readonly passthrough: boolean
+  /** An already-started execution owns this retained scene; preparation must not rewind it. */
+  readonly adoptedExecution?: boolean
   readonly repositories: IsolationRepository[]
 }
 
@@ -134,7 +136,7 @@ export interface IsolationWorkspaceScope {
     log?: Logger,
     writeWindow?: IsolationCanonicalWriteWindow,
     onProgress?: (partialFailures: number) => void,
-  ): Effect<void>
+  ): Effect<void | { readonly retained: true }>
   resolveConflict(
     conflict: IsolationConflict,
     input: {

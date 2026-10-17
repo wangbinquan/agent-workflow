@@ -1,4 +1,5 @@
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
+import type { TaskInputFiles } from '../application/ports/taskInputFiles'
 import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
 import { resolveTaskUploadLimits } from '../application/launchConfiguration'
 import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
@@ -286,6 +287,7 @@ export interface WorkgroupRouteLaunchResources {
 }
 
 export interface RootTaskLaunchDependencies {
+  readonly inputFiles?: TaskInputFiles
   readonly launchConfiguration?: TaskLaunchConfigurationQueries
   readonly workspaceUploads?: WorkspaceUploadContentFactory
   readonly db: ProviderNeutralDatabase
@@ -803,6 +805,7 @@ function createRootLaunch(
           db: dependencies.db,
           taskId,
           workspaceUploads: dependencies.workspaceUploads,
+          inputFiles: dependencies.inputFiles,
           plan: {
             worktreePath: preparedWorkspace.worktreePath,
             ...(preparedWorkspace.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),

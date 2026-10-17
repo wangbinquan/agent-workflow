@@ -8,6 +8,8 @@
 // safe to retry (rate limits and unavailability, always with the caller's
 // unchanged requestKey).
 
+import { timeoutSignal } from '@/util/timeoutSignal'
+
 export const CREWSTATION_PLATFORM_API_URL_ENV = 'CS_PLATFORM_API_URL'
 
 /** The platform's error body: `{ error: kind, message, details }`. */
@@ -36,8 +38,9 @@ export function isCrewStationApiError(error: unknown): error is CrewStationApiEr
 export interface CrewStationPlatformApi {
   get<T>(path: string, query?: Readonly<Record<string, string | number | undefined>>): Promise<T>
   /** POST with retries on 429 / 503 / transport failure; safe only for
-   * requests the platform deduplicates (requestKey) or that are read-only. */
-  post<T>(path: string, body: unknown): Promise<T>
+   * requests the platform deduplicates (requestKey) or that are read-only.
+   * Non-idempotent claim-next and rejection calls explicitly disable retries. */
+  post<T>(path: string, body: unknown, options?: { readonly retry: false }): Promise<T>
   /** One bounded SSE connection. The caller owns durable cursors and reconnects. */
   stream<T>(
     path: string,
@@ -99,10 +102,17 @@ export function createCrewStationPlatformApi(
   const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms))
   const base = options.baseUrl.replace(/\/+$/, '')
 
-  const request = async <T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> => {
+  const request = async <T>(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+    retry = true,
+  ): Promise<T> => {
+    const totalAttempts = retry ? attempts : 1
     let lastError: unknown
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
+    for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
       let response: Response
+      const deadline = timeoutSignal(timeoutMs)
       try {
         response = await fetcher(`${base}${path}`, {
           method,
@@ -111,20 +121,26 @@ export function createCrewStationPlatformApi(
             ...(body === undefined ? {} : { 'content-type': 'application/json' }),
           },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-          signal: AbortSignal.timeout(timeoutMs),
+          signal: deadline.signal,
         })
       } catch (error) {
+        deadline.cancel()
         // Transport failures leave the outcome unknown; the unchanged
         // requestKey makes the retry a lookup of the original operation.
         lastError = error
-        if (attempt + 1 < attempts) await sleep(Math.min(500 * 2 ** attempt, 5_000))
+        if (attempt + 1 < totalAttempts) await sleep(Math.min(500 * 2 ** attempt, 5_000))
         continue
       }
       if (response.ok) {
-        const text = await response.text()
-        return (text.length === 0 ? undefined : JSON.parse(text)) as T
+        try {
+          const text = await response.text()
+          return (text.length === 0 ? undefined : JSON.parse(text)) as T
+        } finally {
+          deadline.cancel()
+        }
       }
-      if ((response.status === 429 || response.status === 503) && attempt + 1 < attempts) {
+      deadline.cancel()
+      if ((response.status === 429 || response.status === 503) && attempt + 1 < totalAttempts) {
         lastError = await errorOf(response)
         await sleep(retryAfterMs(response, attempt))
         continue
@@ -143,8 +159,8 @@ export function createCrewStationPlatformApi(
       const suffix = search.size === 0 ? '' : `?${search.toString()}`
       return request<T>('GET', `${path}${suffix}`)
     },
-    post<T>(path: string, body: unknown) {
-      return request<T>('POST', path, body)
+    post<T>(path: string, body: unknown, options?: { readonly retry: false }) {
+      return request<T>('POST', path, body, options?.retry !== false)
     },
     async *stream<T>(
       path: string,
@@ -155,13 +171,26 @@ export function createCrewStationPlatformApi(
       for (const [key, value] of Object.entries(query)) {
         if (value !== undefined) search.set(key, String(value))
       }
-      const timeout = AbortSignal.timeout(options.streamWindowMs ?? Math.max(timeoutMs, 35_000))
-      const response = await fetcher(`${base}${path}?${search}`, {
-        headers: { accept: 'text/event-stream' },
-        signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
-      })
-      if (!response.ok) throw await errorOf(response)
-      if (response.body === null) throw new Error('CrewStation returned an empty event stream')
+      const streamWindow = timeoutSignal(options.streamWindowMs ?? Math.max(timeoutMs, 35_000))
+      const timeout = streamWindow.signal
+      let response: Response
+      try {
+        response = await fetcher(`${base}${path}?${search}`, {
+          headers: { accept: 'text/event-stream' },
+          signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]),
+        })
+      } catch (error) {
+        streamWindow.cancel()
+        throw error
+      }
+      if (!response.ok) {
+        streamWindow.cancel()
+        throw await errorOf(response)
+      }
+      if (response.body === null) {
+        streamWindow.cancel()
+        throw new Error('CrewStation returned an empty event stream')
+      }
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -198,6 +227,7 @@ export function createCrewStationPlatformApi(
         // cancellation still propagates so it can perform the cancel protocol.
         if (!timeout.aborted || signal?.aborted) throw error
       } finally {
+        streamWindow.cancel()
         await reader.cancel().catch(() => undefined)
         reader.releaseLock()
       }

@@ -22,7 +22,10 @@ import type { CapabilityWorkspaceMode } from '../domain/capabilityDefinition'
 import {
   diffProtectedRoots,
   readProtectedRootSnapshot,
+  reviveProtectedRootSnapshot,
+  serializeProtectedRootSnapshot,
   type ProtectedRootSnapshot,
+  type SerializedProtectedRootSnapshot,
   type SnapshotViolation,
 } from './protectedSnapshot'
 
@@ -268,19 +271,58 @@ export async function validateWorkspaceOutcomeInScope(
     : { ok: true, kind: 'changed', changedPaths: delta }
 }
 
-export function businessTreeSnapshot(
+export async function businessTreeSnapshot(
   root: string,
   factory?: AutomationWorkspaceEffectsFactory,
 ): Promise<Map<string, string>> {
+  // RFC-370 §9.2 V3: a remote volume walks its own tree in one operation.
+  const tree = factory?.treeOperations
+  if (tree !== undefined)
+    return new Map((await tree.run('business-tree-snapshot', { root })) as [string, string][])
   return withAutomationWorkspaceEffects(factory, (effects, selected) =>
     readBusinessTreeSnapshot(root, selected, effects),
   )
 }
 
-export function validateWorkspaceOutcome(
+/** JSON form of a validation request (remote tree operations carry it). */
+export type SerializedWorkspaceValidationInput = Omit<
+  WorkspaceValidationInput,
+  'preProtected' | 'preBusinessTree'
+> & {
+  readonly preProtected: SerializedProtectedRootSnapshot
+  readonly preBusinessTree: readonly (readonly [string, string])[]
+}
+
+export function serializeWorkspaceValidationInput(
+  input: WorkspaceValidationInput,
+): SerializedWorkspaceValidationInput {
+  return {
+    ...input,
+    preProtected: serializeProtectedRootSnapshot(input.preProtected),
+    preBusinessTree: [...input.preBusinessTree.entries()],
+  }
+}
+
+export function reviveWorkspaceValidationInput(
+  input: SerializedWorkspaceValidationInput,
+): WorkspaceValidationInput {
+  return {
+    ...input,
+    preProtected: reviveProtectedRootSnapshot(input.preProtected),
+    preBusinessTree: new Map(input.preBusinessTree),
+  }
+}
+
+export async function validateWorkspaceOutcome(
   input: WorkspaceValidationInput,
   factory?: AutomationWorkspaceEffectsFactory,
 ): Promise<WorkspaceValidationOutcome> {
+  const tree = factory?.treeOperations
+  if (tree !== undefined)
+    return (await tree.run(
+      'validate-workspace-outcome',
+      serializeWorkspaceValidationInput(input),
+    )) as WorkspaceValidationOutcome
   return withAutomationWorkspaceEffects(factory, (effects, selected) =>
     validateWorkspaceOutcomeInScope(input, selected, effects),
   )

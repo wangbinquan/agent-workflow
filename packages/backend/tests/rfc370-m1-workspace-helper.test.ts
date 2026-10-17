@@ -137,10 +137,23 @@ test('remote clone/fetch, worktree, Git diff and script all share the task volum
       depsEnv: null,
       timeoutMs: 10_000,
     }
-    const script = await call<ScriptRunOutcome>('run-script', request)
+    // Stdout streams as the command's output (the control plane rebuilds the
+    // retained copy from those events); the result file carries no second copy.
+    const streamed: string[] = []
+    const log = console.log
+    console.log = (...args: unknown[]) => {
+      streamed.push(args.join(' '))
+    }
+    let script: ScriptRunOutcome
+    try {
+      script = await call<ScriptRunOutcome>('run-script', request)
+    } finally {
+      console.log = log
+    }
     expect(script.result.outcome).toBe('exited')
     expect(script.result.exitCode).toBe(0)
-    expect(script.result.rawStdout).toContain('after')
+    expect(streamed.join('\n')).toContain('after')
+    expect(script.result).not.toHaveProperty('rawStdout')
     expect(script.result).not.toHaveProperty('pid')
     expect(readFileSync(join(space.worktreePath, 'new.txt'), 'utf8')).toBe('new\n')
     await call('isolation', { binding, method: 'discard', args: [merged.workspace] })

@@ -20,7 +20,22 @@ export interface WebhookDeliveryRecord {
   readonly statusReason: string | null
   readonly replayedFromDeliveryId: string | null
   readonly receivedAt: number
+  readonly verificationMethod?: 'direct-signature' | 'cs-delegated'
+  readonly bodyRepresentation?: 'http-bytes' | 'reserialized-json'
+  /** RFC-370 v3 — the CrewStation event a delegated delivery came from (detail only). */
+  readonly platformEvent?: WebhookPlatformEventProvenance | null
   readonly bodyJson: string | null
+}
+
+/** The platform identities an operator can trace in CrewStation's event center. */
+export interface WebhookPlatformEventProvenance {
+  readonly eventId: string
+  readonly eventType: string | null
+  readonly deliveries: readonly Readonly<{
+    deliveryId: string
+    attempt: number
+    receivedAt: number
+  }>[]
 }
 
 export type WebhookDeliveryListRecord = Omit<

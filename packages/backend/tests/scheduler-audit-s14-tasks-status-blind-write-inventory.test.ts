@@ -89,6 +89,9 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 与上面那条 ResourceLimitPersistence 的 writeLimitReason 完全同形（两者都已是
   // 双 provider 共用的一份中立实现）。
   'modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts': 1,
+  // RFC-370 v3 V5：托管恢复后的 RFC-213 归一——只写 `auto_recovery_suspended`，不翻状态
+  //（运行中任务的 interrupted 走共享的 writeTaskRuntimeLifecycleInTx 内核）。
+  'modules/task-execution/infrastructure/hostedRestoreNormalization.ts': 1,
   // RFC-359 AC-1（第 11 刀）：`cancel` 合一，`services/task.ts` 的 `cancelTask` 只剩薄壳
   //（3 → 2），它那处「父级联撞上一个**已经 canceled** 的子任务时补盖级联来源」的写点
   // 随实现搬到共用那份。RFC-243 §4.3：父任务崩溃后恢复要靠这个标记分清「我自己级联取消的」

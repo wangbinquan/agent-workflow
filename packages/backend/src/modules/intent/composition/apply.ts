@@ -75,6 +75,13 @@ export interface IntentApplyCompositionDependencies {
   readonly now?: () => number
 }
 
+/** Select the complete write and recovery family together at the bootstrap root. */
+export interface IntentArtifactSelection {
+  readonly pluginArtifacts: IntentPluginArtifactOwner
+  readonly skillArtifacts: IntentSkillArtifactOwner
+  readonly artifactContent: IntentArtifactContentPort
+}
+
 /**
  * RFC-355 T6：技能工件的补偿原语归 resource-catalog 所有，intent 只消费端口。
  * 装配发生在 composition 层——engine / application / 兼容门面都不再自己拼 provider。

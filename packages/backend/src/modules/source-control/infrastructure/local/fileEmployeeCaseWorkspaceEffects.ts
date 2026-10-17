@@ -14,11 +14,11 @@ import { join } from 'node:path'
 import { runGit } from '@/util/git'
 import type {
   EmployeeCaseWorkspaceEffects,
-  EmployeeCaseWorkspaceEffectsFactory,
+  EmployeeCaseWorkspaceStepEffectsFactory,
 } from '../../application/ports/employeeCaseWorkspaceEffects'
 
 /** The original file and raw Git mechanisms; no Case policy or staging decisions. */
-export function createFileEmployeeCaseWorkspaceEffectsFactory(): EmployeeCaseWorkspaceEffectsFactory {
+export function createFileEmployeeCaseWorkspaceEffectsFactory(): EmployeeCaseWorkspaceStepEffectsFactory {
   return {
     acquire(): EmployeeCaseWorkspaceEffects {
       return {

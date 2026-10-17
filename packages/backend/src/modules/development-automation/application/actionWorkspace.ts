@@ -92,35 +92,107 @@ async function copySeedTree(
   if (await contents.exists(source)) await walk('')
 }
 
+interface ActionSceneInput {
+  readonly storageRoot?: string
+  readonly baselineRepoPath: string
+  readonly baselineSha: string
+  /** Resolved seed tree; null = no upload seed. */
+  readonly seedRoot: string | null
+}
+
+async function prepareActionSceneInScope(
+  input: ActionSceneInput,
+  selected: ActionWorkspaceEffects,
+  contents: AutomationWorkspaceEffects,
+): Promise<string> {
+  const ws = await selected.allocate(input.storageRoot, input.baselineRepoPath)
+  const clone = await selected.cloneBaseline(ws, input.baselineRepoPath)
+  if (clone.exitCode !== 0) {
+    await selected.discard(ws)
+    throw new Error(`workspace clone failed: ${clone.stderr.slice(0, 300)}`)
+  }
+  const checkout = await selected.run(ws, ['checkout', '--quiet', '--detach', input.baselineSha])
+  if (checkout.exitCode !== 0) {
+    await selected.discard(ws)
+    throw new Error(`workspace checkout failed: ${checkout.stderr.slice(0, 300)}`)
+  }
+  const removeOrigin = await selected.run(ws, ['remote', 'remove', 'origin'])
+  if (removeOrigin.exitCode !== 0) {
+    await selected.discard(ws)
+    throw new Error(`workspace remote removal failed: ${removeOrigin.stderr.slice(0, 300)}`)
+  }
+  await selected.installPlatformExclude(ws)
+  if (input.seedRoot !== null) await copySeedTree(input.seedRoot, ws, selected, contents)
+  return ws
+}
+
+/** RFC-370 §9.2 V3 — the scene before evidence (a detached clone of the
+ * baseline without origin, the platform exclude and the upload seed) as one
+ * phase, run by a hosted task image against its volume. */
+export async function prepareActionScene(
+  input: ActionSceneInput,
+  selected: ActionWorkspaceEffects,
+): Promise<string> {
+  return withSelectedAutomationWorkspaceEffects(selected.contents, (contents) =>
+    prepareActionSceneInScope(input, selected, contents),
+  )
+}
+
+/** RFC-370 §9.2 V3 — business tree digest of one scene as one phase. */
+export async function actionTreeDigest(
+  root: string,
+  selected: ActionWorkspaceEffects,
+): Promise<string> {
+  return withSelectedAutomationWorkspaceEffects(selected.contents, (contents) =>
+    businessTreeDigest(root, selected, contents),
+  )
+}
+
+/** Evidence bundles are object content their owner materializes into the
+ * scene, on either a local directory or a hosted volume. */
+async function overlayEvidenceBundles(
+  deps: Pick<WorkspaceDeps, 'evidence'>,
+  workspacePath: string,
+  bundles: readonly { readonly bundleId: string; readonly mountPath: string }[],
+  factory: Pick<AutomationWorkspaceEffectsFactory, 'resolve'>,
+): Promise<void> {
+  for (const bundle of bundles)
+    await deps.evidence.materializeBundle(
+      bundle.bundleId,
+      factory.resolve(workspacePath, bundle.mountPath),
+    )
+}
+
 export async function materializeActionWorkspace(
   deps: WorkspaceDeps,
   input: MaterializeInput,
   selected: ActionWorkspaceEffects,
 ): Promise<MaterializedWorkspace> {
+  const scene = (factory: AutomationWorkspaceEffectsFactory): ActionSceneInput => ({
+    ...(deps.workspacesRoot === undefined ? {} : { storageRoot: deps.workspacesRoot }),
+    baselineRepoPath: input.baselineRepoPath,
+    baselineSha: input.baselineSha,
+    seedRoot: input.seedRef === null ? null : factory.resolve(deps.seedsRoot, input.seedRef),
+  })
+  const tree = selected.contents.treeOperations
+  if (tree !== undefined) {
+    // A remote volume prepares and digests the scene itself, one operation per
+    // phase; evidence bundles are object content materialized by their owner.
+    const factory = selected.contents
+    const ws = (
+      (await tree.run('action-scene-prepare', scene(factory))) as {
+        readonly workspacePath: string
+      }
+    ).workspacePath
+    await overlayEvidenceBundles(deps, ws, input.bundles, factory)
+    return {
+      workspacePath: ws,
+      businessTreeDigest: (await tree.run('action-tree-digest', { root: ws })) as string,
+    }
+  }
   return withSelectedAutomationWorkspaceEffects(selected.contents, async (contents, factory) => {
-    const ws = await selected.allocate(deps.workspacesRoot)
-    const clone = await selected.cloneBaseline(ws, input.baselineRepoPath)
-    if (clone.exitCode !== 0) {
-      await selected.discard(ws)
-      throw new Error(`workspace clone failed: ${clone.stderr.slice(0, 300)}`)
-    }
-    const checkout = await selected.run(ws, ['checkout', '--quiet', '--detach', input.baselineSha])
-    if (checkout.exitCode !== 0) {
-      await selected.discard(ws)
-      throw new Error(`workspace checkout failed: ${checkout.stderr.slice(0, 300)}`)
-    }
-    const removeOrigin = await selected.run(ws, ['remote', 'remove', 'origin'])
-    if (removeOrigin.exitCode !== 0) {
-      await selected.discard(ws)
-      throw new Error(`workspace remote removal failed: ${removeOrigin.stderr.slice(0, 300)}`)
-    }
-    await selected.installPlatformExclude(ws)
-    if (input.seedRef !== null) {
-      await copySeedTree(factory.resolve(deps.seedsRoot, input.seedRef), ws, selected, contents)
-    }
-    for (const bundle of input.bundles) {
-      await deps.evidence.materializeBundle(bundle.bundleId, factory.resolve(ws, bundle.mountPath))
-    }
+    const ws = await prepareActionSceneInScope(scene(factory), selected, contents)
+    await overlayEvidenceBundles(deps, ws, input.bundles, factory)
     return {
       workspacePath: ws,
       businessTreeDigest: await businessTreeDigest(ws, selected, contents),
@@ -137,13 +209,18 @@ export async function adoptActionWorkspace(
   },
   selected: ActionWorkspaceEffects,
 ): Promise<MaterializedWorkspace> {
-  return withSelectedAutomationWorkspaceEffects(selected.contents, async (contents, factory) => {
-    for (const bundle of input.bundles) {
-      await deps.evidence.materializeBundle(
-        bundle.bundleId,
-        factory.resolve(input.workspacePath, bundle.mountPath),
-      )
+  const tree = selected.contents.treeOperations
+  if (tree !== undefined) {
+    await overlayEvidenceBundles(deps, input.workspacePath, input.bundles, selected.contents)
+    return {
+      workspacePath: input.workspacePath,
+      businessTreeDigest: (await tree.run('action-tree-digest', {
+        root: input.workspacePath,
+      })) as string,
     }
+  }
+  return withSelectedAutomationWorkspaceEffects(selected.contents, async (contents, factory) => {
+    await overlayEvidenceBundles(deps, input.workspacePath, input.bundles, factory)
     return {
       workspacePath: input.workspacePath,
       businessTreeDigest: await businessTreeDigest(input.workspacePath, selected, contents),

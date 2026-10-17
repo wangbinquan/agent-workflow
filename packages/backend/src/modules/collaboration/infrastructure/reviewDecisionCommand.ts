@@ -1,3 +1,6 @@
+import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
+import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
+import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifactReader'
 // RFC-359 W1-T2c（F-H2-1 之三）—— collaboration 的评审决定命令端口：一份实现，两个引擎。
 //
 // 此前只有 `createSqliteReviewDecisionCommand`（`legacySqliteReviewDecisionComposition.ts`），
@@ -20,6 +23,8 @@ import { createCollaborationCommandContext } from '../composition/commandContext
 
 export function createReviewDecisionCommand(input: {
   readonly db: ProviderNeutralDatabase
+  readonly reviewArtifacts?: ReviewArtifactSelection
+  readonly rollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   readonly appHome: string
 }): ReviewDecisionCommandPort {
   return {
@@ -27,6 +32,10 @@ export function createReviewDecisionCommand(input: {
       const { submitReviewDecision } = await import('./review')
       const decided = await submitReviewDecision({
         db: input.db,
+        reviewReader:
+          input.reviewArtifacts &&
+          new DatabaseCommittedReviewArtifactReader(input.db, input.reviewArtifacts.content),
+        rollbackSnapshots: input.rollbackSnapshots,
         appHome: input.appHome,
         nodeRunId: command.nodeRunId,
         decision: command.decision,

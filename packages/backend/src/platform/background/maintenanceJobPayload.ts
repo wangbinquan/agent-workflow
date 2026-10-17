@@ -76,6 +76,7 @@ export const MAINTENANCE_JOB_PAYLOAD_SCHEMAS = {
       pendingThresholdMs: z.number().int().positive().optional(),
     })
     .strict(),
+  hostedObjectRecovery: EmptySchema,
   humanGateRecovery: EmptySchema,
   walCheckpoint: EmptySchema,
 } as const satisfies Record<MaintenanceJobKey, ZodTypeAny>

@@ -31,6 +31,8 @@ export interface EmployeeCaseWorkspaceEffects {
   close(): Completion<void>
 }
 
-export interface EmployeeCaseWorkspaceEffectsFactory {
+/** Per-step effects of one in-process Case scope (the native selection, also
+ * used inside a hosted task image against its volume). */
+export interface EmployeeCaseWorkspaceStepEffectsFactory {
   acquire(): Completion<EmployeeCaseWorkspaceEffects>
 }

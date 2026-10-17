@@ -48,6 +48,7 @@ export interface McpDiagnosticsEffectDependencies {
     readonly session: SessionRow
     readonly turn: McpRuntimeTestTurnRecord
     readonly runtime: ResolvedTestRuntime
+    readonly callId?: string
   }) => SystemAgentRunOptions['observe']
   readonly configuration: {
     read():

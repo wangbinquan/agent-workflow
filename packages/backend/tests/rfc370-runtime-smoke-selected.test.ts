@@ -274,7 +274,7 @@ describe('RFC-370 selected runtime smoke', () => {
     })
   }
 
-  test('spawn failure uses the selected discard and preserves its own failure identity', async () => {
+  test('spawn failure uses the selected discard and reports incomplete cleanup safely', async () => {
     const selected = selectedSmoke(),
       marker = new Error('selected discard failed')
     selected.state.result = {
@@ -284,7 +284,14 @@ describe('RFC-370 selected runtime smoke', () => {
       exitCode: null,
     }
     selected.state.discardError = marker
-    await expect(runPreparedRuntimeSmoke(selected.options)).rejects.toBe(marker)
+    expect(await runPreparedRuntimeSmoke(selected.options)).toMatchObject({
+      outcome: 'spawn-failed',
+      conforms: false,
+      detail: 'runtime process cleanup did not complete safely',
+      sawNonce: false,
+      sawEnvelope: false,
+      exitCode: null,
+    })
     expect(selected.calls.at(-1)).toBe('discard')
   })
 

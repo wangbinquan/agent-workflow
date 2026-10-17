@@ -59,6 +59,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // 它们没有 PG 服务容器）；选了 postgresql 却缺 URL 时仍然**判红不 skip**。
   // 这条性质有人依赖：audit-backlog 里「每文件一库」那条隔离路线整个建立在它上面。
   'packages/backend/tests/rfc359-w8-migration-lock-scope.test.ts#skip': 1,
+  // RFC-370 M2：托管验证命令在任务卷里用 POSIX shell 跑真实脚本（任务镜像只有 Linux）；
+  // Windows 原生 lane 没有这套 shell 语义，三条真实执行用例按平台显式跳过。
+  'packages/backend/tests/rfc370-m2-verification.test.ts#skipIf': 3,
   'packages/backend/tests/architecture/rfc319-endpoint-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/architecture/rfc319-route-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,

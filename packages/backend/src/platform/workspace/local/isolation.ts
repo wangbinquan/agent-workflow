@@ -62,6 +62,7 @@ import {
   worktreeRefName,
 } from '@/services/gitSubmodule'
 import type { Logger } from '@/util/log'
+import { sha256Hex } from '@/util/hash'
 
 /** One canonical repo + its isolated mirror for a single node run. */
 export interface IsoRepo {
@@ -701,6 +702,12 @@ export async function snapshotNodeIsoFinal(
  * Bottom-up: a nested submodule's result changes ITS parent's gitlink, and that
  * parent must be rewritten before it is itself folded into the level above.
  */
+/** Optional durable continuation used when the resolver lives in another process. */
+export interface SubmoduleMergeResolutions {
+  readonly commits: Record<string, string>
+  retain(): Promise<void>
+}
+
 async function mergeSubmodulesIntoTheirs(
   r: IsoRepo,
   theirsCommit: string,
@@ -708,6 +715,7 @@ async function mergeSubmodulesIntoTheirs(
   agent?: {
     containerPath: string
     resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
+    resolutions?: SubmoduleMergeResolutions
   },
 ): Promise<{ theirs: string; conflicts: string[] }> {
   const paths = Object.keys(r.subBases)
@@ -733,7 +741,22 @@ async function mergeSubmodulesIntoTheirs(
     const ours = oursHead.stdout.trim()
     const sub = theirsHead.stdout.trim()
 
-    let res = await mergeSubmoduleTrees(pool, { base, ours, theirs: sub })
+    const resolutionKey = sha256Hex(JSON.stringify([r.canonWorktreePath, subPath, base, sub]))
+    let retained = agent?.resolutions?.commits[resolutionKey]
+    if (retained !== undefined && retained !== ours) {
+      // A later canonical writer superseded this receipt. Its changes must be
+      // reconciled from the current HEAD instead of restoring an old result.
+      delete agent!.resolutions!.commits[resolutionKey]
+      await agent!.resolutions!.retain()
+      retained = undefined
+    }
+    // An earlier step already published this resolution. Canonical HEAD has
+    // advanced since then; merging the original three sides again could invoke
+    // the Agent twice or reopen the conflict while another submodule settles.
+    let res =
+      retained === undefined
+        ? await mergeSubmoduleTrees(pool, { base, ours, theirs: sub })
+        : { merged: retained, trivial: false, error: null }
     if (res.merged === null) {
       // RFC-210 T25: give the merge agent a shot inside the submodule before
       // withholding the whole repo. A submodule IS an ordinary git work tree, so
@@ -743,7 +766,6 @@ async function mergeSubmodulesIntoTheirs(
         base,
         ours,
         theirs: sub,
-        raw: res.error ?? '',
         ...(agent ?? { containerPath: '' }),
         ...(log !== undefined ? { log } : {}),
       })
@@ -753,6 +775,10 @@ async function mergeSubmodulesIntoTheirs(
         continue
       }
       res = { merged: settled, trivial: false, error: null }
+      if (agent?.resolutions !== undefined) {
+        agent.resolutions.commits[resolutionKey] = settled
+        await agent.resolutions.retain()
+      }
     }
     // Every branch above either produced a commit or `continue`d, but TS cannot
     // see that through the reassignment — assert it once instead of sprinkling
@@ -891,7 +917,6 @@ async function tryAgentResolveSubmodule(
     base: string
     ours: string
     theirs: string
-    raw: string
     containerPath?: string
     resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
     log?: Logger
@@ -903,22 +928,28 @@ async function tryAgentResolveSubmodule(
   const subAbs = join(r.canonWorktreePath, subPath)
   // The conflicted tree the agent has to fix — recomputed here because
   // mergeSubmoduleTrees only reports that it failed, not the tree it produced.
-  const mt = await runGit(pool, [
-    'merge-tree',
-    '--write-tree',
-    `--merge-base=${ctx.base}`,
-    ctx.ours,
-    ctx.theirs,
-  ])
-  const mergedTree = mt.stdout.split('\n')[0]?.trim()
-  if (mergedTree === undefined || mergedTree === '') return null
+  // A hard merge-tree error (exit > 1, e.g. an unreadable base) is not a
+  // conflict an agent can fix: withhold the repo exactly as before.
+  let mt: Awaited<ReturnType<typeof mergeTreeInMemory>>
+  try {
+    mt = await mergeTreeInMemory(pool, { base: ctx.base, ours: ctx.ours, theirs: ctx.theirs })
+  } catch (err) {
+    ctx.log?.warn('submodule merge-tree failed — withholding repo', {
+      subPath,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
+  if (mt.conflicts.length === 0) return null
 
   const conflict: MergeBackConflict = {
     // Names the resolve-iso directory; slugged because subPath has slashes.
     worktreeDirName: `sub/${subSlug(subPath)}`,
-    paths: [subPath],
-    mergedTree,
-    rawConflictOutput: ctx.raw,
+    // These paths are relative to the submodule worktree. The parent gitlink
+    // name is not a conflicted file and would always fail the manifest guard.
+    paths: mt.conflicts,
+    mergedTree: mt.mergedTree,
+    rawConflictOutput: mt.rawConflictOutput,
     base: ctx.base,
     canonWorktreePath: subAbs,
     taskBaseHead: ctx.ours,
@@ -929,6 +960,7 @@ async function tryAgentResolveSubmodule(
   try {
     outcome = await ctx.resolveSubConflict(conflict)
   } catch (err) {
+    if (err instanceof MergeAgentChildUnreapedError) throw err
     ctx.log?.warn('submodule merge agent threw — withholding repo', {
       subPath,
       error: err instanceof Error ? err.message : String(err),
@@ -1155,6 +1187,7 @@ export async function mergeBackNodeIso(
    * repo and park for a human.
    */
   resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>,
+  submoduleResolutions?: SubmoduleMergeResolutions,
 ): Promise<MergeBackResult> {
   if (handle.passthrough) return { clean: true, conflicts: [] }
   const conflicts: MergeBackResult['conflicts'] = []
@@ -1169,6 +1202,7 @@ export async function mergeBackNodeIso(
     const subMerge = await mergeSubmodulesIntoTheirs(r, theirs, log, {
       containerPath: handle.containerPath,
       ...(resolveSubConflict !== undefined ? { resolveSubConflict } : {}),
+      ...(submoduleResolutions !== undefined ? { resolutions: submoduleResolutions } : {}),
     })
     // Record on the handle either way: a resolved round must CLEAR a stale set
     // left by a previous attempt, otherwise resume stays failed forever.
@@ -1599,7 +1633,38 @@ export async function resolveConflictWithAgent(
     log?: Logger
   },
 ): Promise<ResolveConflictOutcome> {
-  const { containerPath, runAgent, log } = opts
+  const prepared = await prepareConflictResolution(conflict, opts)
+  if (prepared.kind === 'parked') return prepared.outcome
+  let agentError: string | undefined
+  try {
+    await opts.runAgent(prepared.prompt, prepared.resolveIso, prepared.manifest)
+  } catch (error) {
+    if (error instanceof MergeAgentChildUnreapedError) throw error
+    agentError = error instanceof Error ? error.message : String(error)
+  }
+  return finishConflictResolution(prepared, { agentError, log: opts.log })
+}
+
+/** Serializable preparation shared by in-process and remote Agent orchestration. */
+export type PreparedConflictResolution =
+  | { readonly kind: 'parked'; readonly outcome: ResolveConflictOutcome }
+  | {
+      readonly kind: 'agent'
+      readonly conflict: MergeBackConflict
+      readonly resolveIso: string
+      readonly manifest: MergeConflictManifest
+      readonly unhandled: MergeConflictEntry[]
+      readonly prompt: string
+    }
+
+export async function prepareConflictResolution(
+  conflict: MergeBackConflict,
+  opts: {
+    containerPath: string
+    log?: Logger
+  },
+): Promise<PreparedConflictResolution> {
+  const { containerPath, log } = opts
   // RFC-210: a submodule-only conflict carries NO parent-level merged tree — the
   // gitlink is a single tree entry and the disagreement lives inside it, so there
   // is nothing a parent-level resolve-iso could show the agent. Passing '' to
@@ -1616,13 +1681,16 @@ export async function resolveConflictWithAgent(
       paths: conflict.paths.join(', '),
     })
     return {
-      resolved: false,
-      unresolved: conflict.paths.map((p) => ({
-        worktreeDirName: conflict.worktreeDirName,
-        path: p,
-        type: 'submodule' as const,
-      })),
-      resolveIsoPath: null,
+      kind: 'parked',
+      outcome: {
+        resolved: false,
+        unresolved: conflict.paths.map((p) => ({
+          worktreeDirName: conflict.worktreeDirName,
+          path: p,
+          type: 'submodule' as const,
+        })),
+        resolveIsoPath: null,
+      },
     }
   }
   const repoGit = conflict.canonWorktreePath // shared-ODB git dir for worktree/commit ops
@@ -1669,11 +1737,28 @@ export async function resolveConflictWithAgent(
   const unhandled: MergeConflictEntry[] = conflict.paths
     .filter((p) => !manifestPaths.has(p))
     .map((p) => ({ worktreeDirName: conflict.worktreeDirName, path: p, type: 'content' }))
+  return {
+    kind: 'agent',
+    conflict,
+    resolveIso,
+    manifest,
+    unhandled,
+    prompt: buildMergeResolvePrompt({ manifest }),
+  }
+}
+
+/** Judge the observed tree and publish only after the remote Agent has stopped. */
+export async function finishConflictResolution(
+  prepared: Extract<PreparedConflictResolution, { kind: 'agent' }>,
+  opts: { readonly agentError?: string; readonly log?: Logger } = {},
+): Promise<ResolveConflictOutcome> {
+  const { conflict, resolveIso, manifest, unhandled } = prepared
+  const { log } = opts
+  const repoGit = conflict.canonWorktreePath
   let resolved = false
   let unresolved: MergeConflictEntry[] = [...manifest, ...unhandled]
   try {
-    // §6.2②: run the merge agent in the resolve-iso (scheduler bypasses the node pool).
-    await runAgent(buildMergeResolvePrompt({ manifest }), resolveIso, manifest)
+    if (opts.agentError !== undefined) throw new Error(opts.agentError)
     // §6.2③: framework self-check from observed worktree state.
     const states = gatherResolvedStates(resolveIso, manifest)
     const verdict = evaluateResolution(manifest, states)

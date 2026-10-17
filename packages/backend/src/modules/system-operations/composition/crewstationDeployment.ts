@@ -1,4 +1,11 @@
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import {
+  createHostedDatabaseWriteBarrier,
+  type HostedDatabaseWriteBarrier,
+} from '../infrastructure/crewstation/databaseWriteBarrier'
+import { restoreCrewStationDatabaseFromEnvironment } from './crewstationDatabaseRestore'
+import type { BusinessExecutionFence } from '@/platform/crewstation/businessExecution'
 // RFC-370 M0 — system-operations selections of a CrewStation-hosted instance.
 // The platform injects every input through environment variables; a missing
 // input refuses to start and names all of them at once. Bootstrap passes the
@@ -20,12 +27,12 @@ import { createDatabaseApplicationConfiguration } from '../infrastructure/databa
 import { createHostedDatabaseInstallation } from '../infrastructure/crewstation/hostedDatabaseInstallation'
 import {
   createCrewStationExecutionAuthority,
-  type CrewStationExecutionAuthority,
+  type CrewStationExecutionAuthorityPort,
 } from '../infrastructure/crewstation/crewStationExecutionAuthority'
 import {
   createDatabaseHostedExecutionControl,
   hostedLeaseOf,
-  type HostedExecutionWriteBarrier,
+  HostedExecutionLeaseLostError,
 } from '../infrastructure/hostedExecutionControl'
 import {
   CREWSTATION_PLATFORM_API_URL_ENV,
@@ -40,9 +47,29 @@ import {
 
 export const CREWSTATION_DATABASE_URL_ENV = 'CS_DATABASE_URL'
 
+/** A worker's write window: it starts after its owner serves, so it enforces from the start. */
+export function composeCrewStationDatabaseWriteBarrier(): HostedDatabaseWriteBarrier {
+  return createHostedDatabaseWriteBarrier()
+}
+
+/** A worker borrows its launching owner's exact fence. It never acquires or
+ * follows a newer lease merely because the control row has changed. */
+export function composeCrewStationWorkerFence(
+  db: ProviderNeutralDatabase,
+  lease: BusinessExecutionFence,
+): CrewStationMutationFence {
+  const frozen = Object.freeze({
+    epoch: lease.epoch,
+    leaseId: lease.leaseId,
+    instanceId: lease.instanceId,
+  })
+  const control = createDatabaseHostedExecutionControl({ db })
+  return { current: () => frozen, assertHeld: (tx, expected) => control.assertHeld(tx, expected) }
+}
+
 /** aw's task execution contract (Manifest `tasks.acceptedTaskContractVersions`).
  * Bump when a release can no longer take over another release's running tasks. */
-export const AW_TASK_CONTRACT_VERSION = 'aw-task-v1'
+export const HOSTED_TASK_CONTRACT_VERSION = 'aw-task-v1'
 
 export interface CrewStationDeploymentEnvironment {
   readonly project: string
@@ -171,6 +198,7 @@ export async function prepareCrewStationDatabase(input: {
       project: input.environment.project,
       service: input.environment.service,
       schemaDigest: contract.digest,
+      env: input.env ?? process.env,
     }),
     history: await loadPostgresqlMigrationHistory(),
     schema: input.schema,
@@ -185,11 +213,19 @@ export async function prepareCrewStationDatabase(input: {
 export function composeCrewStationMigrationInstallation(
   environment: Pick<CrewStationDeploymentEnvironment, 'project' | 'service'>,
   env?: Readonly<Record<string, string | undefined>>,
+  /** Restore normalization participants of the owning modules (bootstrap). */
+  normalization?: Parameters<typeof restoreCrewStationDatabaseFromEnvironment>[0]['normalization'],
 ): DatabaseInstallationPort<PreparedPostgresqlProviderSchema> {
   return createHostedDatabaseInstallation({
     project: environment.project,
     service: environment.service,
+    env: env ?? process.env,
     async prepare() {
+      await restoreCrewStationDatabaseFromEnvironment({
+        environment,
+        env: env ?? process.env,
+        ...(normalization === undefined ? {} : { normalization }),
+      })
       const prepared = await prepareCrewStationDatabase({
         environment,
         schema: 'apply',
@@ -219,12 +255,12 @@ export function composeCrewStationMigrationInstallation(
 }
 
 export interface CrewStationSystemSelections {
+  readonly database: ProviderNeutralDatabase
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly databaseInstallation: DatabaseInstallationPort<PreparedPostgresqlProviderSchema>
-  readonly executionAuthority: CrewStationExecutionAuthority
+  readonly executionAuthority: CrewStationExecutionAuthorityPort
   /** The application side of the execution fence, checked by hosted effect writes. */
   readonly mutationFence: CrewStationMutationFence
-  readonly executionWriteBarrier: HostedExecutionWriteBarrier
   readonly platform: CrewStationPlatformApi
   readonly secretBox: SecretBox
 }
@@ -233,21 +269,46 @@ export interface CrewStationSystemSelections {
  * A serving instance verifies the database before anything else so Settings
  * can be read from it at the start of the shared boot sequence; the
  * installation then hands that same verified runtime to the boot.
+ *
+ * Nothing here waits for the platform: during a migration or restore freeze
+ * the instance boots into read-only standby (its boot convergence precedes the
+ * write window, see the barrier) and its execution authority reports the
+ * freeze ready from the first tick.
  */
-export function composeCrewStationSystemSelections(input: {
+export async function composeCrewStationSystemSelections(input: {
   readonly environment: CrewStationDeploymentEnvironment
   readonly prepared: PreparedPostgresqlProviderSchema
-}): CrewStationSystemSelections {
-  const db: ProviderNeutralDatabase = input.prepared.openBootstrapClient()
+}): Promise<CrewStationSystemSelections> {
+  const barrier = createHostedDatabaseWriteBarrier({ enforcing: false })
+  const raw = input.prepared.openBootstrapClient()
+  const db = createPostgresqlDatabaseClient(input.prepared.runtime.runtime, {
+    beforeWrite: barrier.beforeWrite,
+  })
+  const prepared: PreparedPostgresqlProviderSchema = {
+    ...input.prepared,
+    runtime: { ...input.prepared.runtime, openClient: () => db },
+    openBootstrapClient: () => db,
+  }
   const platform = createCrewStationPlatformApi({ baseUrl: input.environment.platformApiUrl })
-  const control = createDatabaseHostedExecutionControl({ db })
-  const executionAuthority = createCrewStationExecutionAuthority({
+  // The control row is written outside the window it governs.
+  const control = createDatabaseHostedExecutionControl({ db: raw })
+  const authority = createCrewStationExecutionAuthority({
     platform,
     control,
-    acceptedTaskContractVersions: [AW_TASK_CONTRACT_VERSION],
+    acceptedTaskContractVersions: [HOSTED_TASK_CONTRACT_VERSION],
     log: createLogger('crewstation-execution-authority'),
   })
+  const executionAuthority: CrewStationExecutionAuthorityPort = {
+    ...authority,
+    // Competing for execution is where this instance starts serving: from here
+    // on the write window governs every write transaction.
+    start() {
+      barrier.enforce()
+      authority.start()
+    },
+  }
   return Object.freeze<CrewStationSystemSelections>({
+    database: db,
     applicationConfiguration: composeApplicationConfigurationBinding({
       kind: 'selected',
       persistence: createDatabaseApplicationConfiguration({
@@ -259,18 +320,17 @@ export function composeCrewStationSystemSelections(input: {
     databaseInstallation: createHostedDatabaseInstallation({
       project: input.environment.project,
       service: input.environment.service,
-      prepare: async () => input.prepared,
+      prepare: async () => prepared,
     }),
     executionAuthority,
     mutationFence: {
       current() {
         const state = executionAuthority.current()
-        if (state.kind !== 'active') throw new Error(`hosted-execution-not-active: ${state.kind}`)
+        if (state.kind !== 'active') throw new HostedExecutionLeaseLostError(`${state.kind}`)
         return hostedLeaseOf(state.fence)
       },
       assertHeld: (tx, lease) => control.assertHeld(tx, lease),
     },
-    executionWriteBarrier: control,
     platform,
     secretBox: createSecretBoxFromKey(input.environment.secretKey),
   })

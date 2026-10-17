@@ -24,6 +24,7 @@ import {
   type LogicalIndexContract,
   type LogicalSchemaContract,
   type LogicalTableContract,
+  type OwnerContext,
 } from './schemaContract'
 
 export interface PostgresqlSchemaIdentity {
@@ -55,6 +56,15 @@ interface LogicalIndexAddition {
   readonly tableId: string
   readonly position: number
   readonly index: LogicalIndexContract
+}
+
+/** A full unique index may be restricted to an explicit subset, preserving its
+ * columns and every original row. The immutable ledger retains both predicates. */
+export interface LogicalIndexPredicateReplacement {
+  readonly tableId: string
+  readonly name: string
+  readonly fromExpression: null
+  readonly toExpression: string
 }
 
 interface LogicalTableAddition {
@@ -112,13 +122,17 @@ export interface PostgresqlCheckReplacement {
 export interface PostgresqlIndexUpgrade {
   /** V4 explicitly retires obsolete whole tables; existing migration artifacts stay immutable. */
   readonly retiredTables?: readonly string[]
-  readonly version: 1 | 2 | 3 | 4 | 5
+  readonly version: 1 | 2 | 3 | 4 | 5 | 6 | 7
+  /** V6 is metadata-only: ownership changes cannot alter any physical row or DDL. */
+  readonly logicalOwners?: readonly LogicalOwnerReplacement[]
   /** V5 only: the exact legacy -> committed-row-journal clock transition. */
   readonly logicalSourceRevision?: LogicalSourceRevisionReplacement
   readonly sourceRevisionReplacements?: readonly PostgresqlSourceRevisionReplacement[]
   /** V2 adds whole new active tables; V1 artifacts remain byte-for-byte unchanged. */
   readonly logicalTables?: readonly LogicalTableAddition[]
   /** V3 replaces named CHECK expressions; V1/V2 artifacts never carry this key. */
+  readonly logicalIndexPredicates?: readonly LogicalIndexPredicateReplacement[]
+  readonly indexPredicateReplacements?: readonly PostgresqlCheckReplacement[]
   readonly logicalChecks?: readonly LogicalCheckReplacement[]
   readonly checkReplacements?: readonly PostgresqlCheckReplacement[]
   /** V3 only, and only when the same domain is also declared on the column. */
@@ -146,6 +160,59 @@ export interface PostgresqlIndexUpgrade {
   readonly executableStatements: readonly PostgresqlSchemaStatement[]
   readonly sqlFile: string
   readonly sqlDigest: string
+}
+
+export interface LogicalOwnerReplacement {
+  readonly tableId: string
+  readonly before: OwnerContext
+  readonly after: OwnerContext
+}
+
+export function logicalOwnerReplacements(
+  from: LogicalSchemaContract,
+  to: LogicalSchemaContract,
+): LogicalOwnerReplacement[] {
+  return from.tables.flatMap((table) => {
+    const next = to.tables.find((candidate) => candidate.id === table.id)
+    return next && table.ownerContext !== next.ownerContext
+      ? [{ tableId: table.id, before: table.ownerContext, after: next.ownerContext }]
+      : []
+  })
+}
+
+function applyLogicalOwners(
+  contract: LogicalSchemaContract,
+  replacements: readonly LogicalOwnerReplacement[],
+): LogicalSchemaContract {
+  if (replacements.length === 0) return contract
+  requireSequence(
+    new Set(replacements.map((item) => item.tableId)).size === replacements.length,
+    'duplicate table ownership correction',
+  )
+  for (const replacement of replacements) {
+    const table = contract.tables.find((candidate) => candidate.id === replacement.tableId)
+    requireSequence(
+      table !== undefined &&
+        table.ownerContext === replacement.before &&
+        table.retention.owner === replacement.before &&
+        replacement.before !== replacement.after,
+      'table ownership source differs',
+    )
+  }
+  const payload = {
+    ...contractPayload(contract),
+    tables: contract.tables.map((table) => {
+      const replacement = replacements.find((candidate) => candidate.tableId === table.id)
+      return replacement
+        ? {
+            ...table,
+            ownerContext: replacement.after,
+            retention: { ...table.retention, owner: replacement.after },
+          }
+        : table
+    }),
+  }
+  return { ...payload, digest: digestSchemaContract(payload) }
 }
 
 export interface LogicalSourceRevisionReplacement {
@@ -641,6 +708,102 @@ function checkReplacementStatements(
   })
 }
 
+export function logicalIndexPredicateReplacements(
+  from: LogicalSchemaContract,
+  to: LogicalSchemaContract,
+): LogicalIndexPredicateReplacement[] {
+  return to.tables.flatMap((table) => {
+    const original = from.tables.find((value) => value.id === table.id)
+    if (!original) return []
+    return table.indexes.flatMap((index) => {
+      const before = original.indexes.find((value) => value.name === index.name)
+      if (!before || before.where === index.where) return []
+      requireSequence(
+        before.unique && index.unique && before.where === null && index.where !== null,
+        'index predicate upgrade must restrict an existing full unique index',
+      )
+      exact(before.columns, index.columns, 'index predicate upgrade changed key columns')
+      return [
+        { tableId: table.id, name: index.name, fromExpression: null, toExpression: index.where! },
+      ]
+    })
+  })
+}
+
+function applyLogicalIndexPredicates(
+  contract: LogicalSchemaContract,
+  replacements: readonly LogicalIndexPredicateReplacement[],
+): LogicalSchemaContract {
+  if (!replacements.length) return contract
+  const pending = new Map(replacements.map((value) => [`${value.tableId}:${value.name}`, value]))
+  requireSequence(pending.size === replacements.length, 'duplicate index predicate replacement')
+  const tables = contract.tables.map((table) => {
+    const indexes = table.indexes.map((index) => {
+      const key = `${table.id}:${index.name}`,
+        change = pending.get(key)
+      if (!change) return index
+      requireSequence(
+        table.disposition !== 'ARCHIVE_THEN_OMIT' &&
+          index.unique &&
+          index.where === null &&
+          change.fromExpression === null &&
+          change.toExpression.length > 0,
+        'index predicate source is not a full unique index',
+      )
+      const constraint = table.unique.find((value) => value.name === index.name)
+      requireSequence(
+        constraint !== undefined && constraint.expression === null,
+        'index predicate unique contract missing',
+      )
+      exact(constraint.columns, index.columns, 'index predicate unique columns differ')
+      pending.delete(key)
+      return { ...index, where: change.toExpression }
+    })
+    const unique = table.unique.map((constraint) => {
+      const change = replacements.find(
+        (value) => value.tableId === table.id && value.name === constraint.name,
+      )
+      return change ? { ...constraint, expression: change.toExpression } : constraint
+    })
+    return { ...table, indexes, unique }
+  })
+  requireSequence(pending.size === 0, 'index predicate replacement names an unknown index')
+  const payload = { ...contractPayload(contract), tables }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
+function indexPredicateStatements(
+  from: PostgresqlSchemaPlan,
+  to: PostgresqlSchemaPlan,
+  replacements: readonly LogicalIndexPredicateReplacement[],
+): PostgresqlCheckReplacement[] {
+  return replacements.map((change) => {
+    const logicalId = `${change.tableId}:index:${change.name}`
+    const before = from.statements.find(
+      (value) => value.kind === 'index' && value.logicalId === logicalId,
+    )
+    const after = to.statements.find(
+      (value) => value.kind === 'index' && value.logicalId === logicalId,
+    )
+    requireSequence(
+      before !== undefined && after !== undefined && before.sql !== after.sql,
+      'index predicate projected pair missing',
+    )
+    const name = change.name.replaceAll('"', '""'),
+      schema = POSTGRESQL_APPLICATION_SCHEMA.replaceAll('"', '""')
+    return {
+      logicalId,
+      before,
+      after,
+      drop: {
+        kind: 'index',
+        logicalId: `${logicalId}:drop`,
+        sql: `DROP INDEX "${schema}"."${name}"`,
+      },
+    }
+  })
+}
+
 function logicalIndexAdditions(
   from: LogicalSchemaContract,
   to: LogicalSchemaContract,
@@ -890,6 +1053,20 @@ export function createPostgresqlIndexUpgrade(
   return createPostgresqlUpgrade(input, false, false)
 }
 
+/** Append a reviewed subset predicate; old rows, keys and history are retained. */
+export function createPostgresqlIndexPredicateUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  return createPostgresqlUpgrade(input, false, false, [], false, false, true)
+}
+
+/** Append a reviewed ownership correction while preserving all historic bytes. */
+export function createPostgresqlOwnershipUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  return createPostgresqlUpgrade(input, false, false, [], false, true)
+}
+
 /** Only the named clock protocol changes; every historical version is retained. */
 export function createPostgresqlSourceRevisionUpgrade(
   input: PostgresqlUpgradeInput,
@@ -931,6 +1108,8 @@ function createPostgresqlUpgrade(
   allowCheckReplacement: boolean,
   retiredTables: readonly string[] = [],
   allowSourceRevisionReplacement = false,
+  allowOwnershipReplacement = false,
+  allowIndexPredicateReplacement = false,
 ): PostgresqlIndexUpgrade {
   const { from, to } = input
   validateVersion(from)
@@ -941,7 +1120,17 @@ function createPostgresqlUpgrade(
         oldTableIds.has(table.id) ? [] : [{ position, table }],
       )
     : []
-  const retained = retireLogicalTables(from.contract, retiredTables)
+  const logicalOwners = allowOwnershipReplacement
+    ? logicalOwnerReplacements(from.contract, to.contract)
+    : []
+  requireSequence(
+    !allowOwnershipReplacement || logicalOwners.length > 0,
+    'ownership upgrade has no correction',
+  )
+  const retained = applyLogicalOwners(
+    retireLogicalTables(from.contract, retiredTables),
+    logicalOwners,
+  )
   const oldStatements = retainedStatements(from, retiredTables)
   const logicalSourceRevision = allowSourceRevisionReplacement
     ? logicalSourceRevisionReplacement(retained, to.contract)
@@ -960,16 +1149,25 @@ function createPostgresqlUpgrade(
   const logicalEnums = allowCheckReplacement
     ? logicalColumnEnumReplacements(withTables, to.contract)
     : []
-  const expanded = applyLogicalColumnEnums(
-    applyLogicalCheckReplacements(withTables, logicalChecks),
-    logicalEnums,
+  const logicalIndexPredicates = allowIndexPredicateReplacement
+    ? logicalIndexPredicateReplacements(withTables, to.contract)
+    : []
+  requireSequence(
+    !allowIndexPredicateReplacement || logicalIndexPredicates.length > 0,
+    'index predicate upgrade has no change',
+  )
+  const expanded = applyLogicalIndexPredicates(
+    applyLogicalColumnEnums(applyLogicalCheckReplacements(withTables, logicalChecks), logicalEnums),
+    logicalIndexPredicates,
   )
   const logicalIndexes = logicalIndexAdditions(expanded, to.contract)
   requireSequence(
     logicalTables.length +
       logicalIndexes.length +
       logicalChecks.length +
+      logicalIndexPredicates.length +
       retiredTables.length +
+      logicalOwners.length +
       (logicalSourceRevision ? 1 : 0) >
       0,
     'schema upgrade has no new indexes or tables',
@@ -990,6 +1188,11 @@ function createPostgresqlUpgrade(
   )
   const old = new Map(oldStatements.map((statement) => [statementKey(statement), statement]))
   const next = new Map(to.plan.statements.map((statement) => [statementKey(statement), statement]))
+  const indexPredicateReplacements = indexPredicateStatements(
+    from.plan,
+    to.plan,
+    logicalIndexPredicates,
+  )
   const checkReplacements = checkReplacementStatements(from.plan, to.plan, logicalChecks)
   const sourceRevisionReplacements = sourceRevisionFunctionReplacements(
     from.plan,
@@ -998,6 +1201,7 @@ function createPostgresqlUpgrade(
   )
   const replacedKeys = new Set<string>([
     ...checkReplacements.map((item) => `constraint:${item.logicalId}`),
+    ...indexPredicateReplacements.map((item) => `index:${item.logicalId}`),
     ...sourceRevisionReplacements.map((item) => `function:${item.logicalId}`),
   ])
   for (const statement of oldStatements) {
@@ -1028,21 +1232,30 @@ function createPostgresqlUpgrade(
     ...retiredProjectionStatements(from, retiredTables),
     ...retirementStatements(from.contract, retiredTables),
     ...checkReplacements.flatMap((item) => [item.drop, item.after]),
+    ...indexPredicateReplacements.flatMap((item) => [item.drop, item.after]),
     ...sourceRevisionReplacements.map(sourceRevisionExecutable),
     ...indexAdditions.map((addition) => addition.statement),
     contractUpdate(from.plan, to.plan),
   ]
   const payload = {
     ...(retiredTables.length ? { retiredTables } : {}),
-    version: logicalSourceRevision
-      ? (5 as const)
-      : retiredTables.length
-        ? (4 as const)
-        : logicalChecks.length > 0
-          ? (3 as const)
-          : logicalTables.length === 0
-            ? (1 as const)
-            : (2 as const),
+    ...(logicalOwners.length ? { logicalOwners } : {}),
+    version: logicalIndexPredicates.length
+      ? (7 as const)
+      : logicalOwners.length
+        ? (6 as const)
+        : logicalSourceRevision
+          ? (5 as const)
+          : retiredTables.length
+            ? (4 as const)
+            : logicalChecks.length > 0
+              ? (3 as const)
+              : logicalTables.length === 0
+                ? (1 as const)
+                : (2 as const),
+    ...(logicalIndexPredicates.length
+      ? { logicalIndexPredicates, indexPredicateReplacements }
+      : {}),
     ...(logicalTables.length === 0 ? {} : { logicalTables }),
     ...(logicalChecks.length === 0 ? {} : { logicalChecks, checkReplacements }),
     ...(logicalEnums.length === 0 ? {} : { logicalEnums }),
@@ -1085,7 +1298,9 @@ function applyPostgresqlIndexUpgrade(
       step.version === 2 ||
       step.version === 3 ||
       step.version === 4 ||
-      step.version === 5) &&
+      step.version === 5 ||
+      step.version === 6 ||
+      step.version === 7) &&
       digest === postgresqlMigrationDigest(payload),
     'upgrade entry digest differs',
   )
@@ -1104,11 +1319,31 @@ function applyPostgresqlIndexUpgrade(
     'upgrade baseline identity changed',
   )
   const retiredTables = step.retiredTables ?? []
+  const logicalOwners = step.logicalOwners ?? []
+  requireSequence(
+    step.version === 6
+      ? logicalOwners.length > 0 &&
+          step.logicalIndexes.length === 0 &&
+          step.indexAdditions.length === 0
+      : step.logicalOwners === undefined,
+    'ownership correction does not match upgrade version',
+  )
   requireSequence(
     step.version === 4 ? retiredTables.length > 0 : step.retiredTables === undefined,
     'retirement does not match upgrade version',
   )
   const logicalTables = step.logicalTables ?? []
+  const logicalIndexPredicates = step.logicalIndexPredicates ?? []
+  const indexPredicateReplacements = step.indexPredicateReplacements ?? []
+  requireSequence(
+    step.version === 7
+      ? logicalIndexPredicates.length > 0 &&
+          logicalIndexPredicates.length === indexPredicateReplacements.length &&
+          step.logicalIndexes.length === 0 &&
+          step.indexAdditions.length === 0
+      : step.logicalIndexPredicates === undefined && step.indexPredicateReplacements === undefined,
+    'index predicate delta does not match upgrade version',
+  )
   const logicalChecks = step.logicalChecks ?? []
   const checkReplacements = step.checkReplacements ?? []
   const logicalEnums = step.logicalEnums ?? []
@@ -1130,7 +1365,7 @@ function applyPostgresqlIndexUpgrade(
         ? logicalTables.length > 0 && step.logicalChecks === undefined
         : step.version === 4
           ? logicalChecks.length === 0
-          : step.version === 5
+          : step.version === 5 || step.version === 6 || step.version === 7
             ? logicalChecks.length === 0 && logicalTables.length === 0
             : logicalChecks.length > 0,
     'upgrade table additions do not match its version',
@@ -1151,18 +1386,23 @@ function applyPostgresqlIndexUpgrade(
     step.logicalIndexes.length +
       logicalTables.length +
       logicalChecks.length +
+      logicalIndexPredicates.length +
       retiredTables.length +
+      logicalOwners.length +
       (logicalSourceRevision ? 1 : 0) >
       0,
     'schema upgrade has no new indexes or tables',
   )
   const withTables = applyLogicalSourceRevision(
-    appendLogicalTables(retireLogicalTables(previous.contract, retiredTables), logicalTables),
+    appendLogicalTables(
+      applyLogicalOwners(retireLogicalTables(previous.contract, retiredTables), logicalOwners),
+      logicalTables,
+    ),
     logicalSourceRevision,
   )
-  const expanded = applyLogicalColumnEnums(
-    applyLogicalCheckReplacements(withTables, logicalChecks),
-    logicalEnums,
+  const expanded = applyLogicalIndexPredicates(
+    applyLogicalColumnEnums(applyLogicalCheckReplacements(withTables, logicalChecks), logicalEnums),
+    logicalIndexPredicates,
   )
   const contract = appendLogicalIndexes(expanded, step.logicalIndexes)
   requireSequence(
@@ -1184,12 +1424,26 @@ function applyPostgresqlIndexUpgrade(
   const replacedByKey = new Map<string, PostgresqlCheckReplacement>(
     checkReplacements.map((item) => [`constraint:${item.logicalId}`, item]),
   )
+  const predicateReplacedByKey = new Map(
+    indexPredicateReplacements.map((item) => [`index:${item.logicalId}`, item]),
+  )
+  exact(
+    indexPredicateReplacements,
+    indexPredicateStatements(
+      previous.plan,
+      buildPostgresqlSchemaPlan(contract),
+      logicalIndexPredicates,
+    ),
+    'index predicate statements differ from their exact projection',
+  )
   const sourceReplacedByKey = new Map(
     sourceRevisionReplacements.map((item) => [`function:${item.logicalId}`, item]),
   )
   const original = retainedStatements(previous, retiredTables).map((statement) => {
     const key = statementKey(statement)
     if (key === 'metadata:contract-row') return step.contractRow.after
+    const predicateReplacement = predicateReplacedByKey.get(key)
+    if (predicateReplacement) return predicateReplacement.after
     const sourceReplacement = sourceReplacedByKey.get(key)
     if (sourceReplacement) {
       exact(sourceReplacement.before, statement, 'source clock previous function differs')
@@ -1241,7 +1495,8 @@ function applyPostgresqlIndexUpgrade(
       prior !== undefined &&
       key !== 'metadata:contract-row' &&
       !replacedByKey.has(key) &&
-      !sourceReplacedByKey.has(key)
+      !sourceReplacedByKey.has(key) &&
+      !predicateReplacedByKey.has(key)
     )
       exact(statement, prior, 'schema upgrade changed an existing statement')
   }
@@ -1277,6 +1532,7 @@ function applyPostgresqlIndexUpgrade(
       ...retiredProjectionStatements(previous, retiredTables),
       ...retirementStatements(previous.contract, retiredTables),
       ...checkReplacements.flatMap((item) => [item.drop, item.after]),
+      ...indexPredicateReplacements.flatMap((item) => [item.drop, item.after]),
       ...sourceRevisionReplacements.map(sourceRevisionExecutable),
       ...step.indexAdditions.map((addition) => addition.statement),
       contractUpdate(previous.plan, plan),
@@ -1467,18 +1723,24 @@ function resolvePostgresqlRowBridge(
             .slice(from, to)
             .reduce(
               (contract, step) =>
-                applyLogicalSourceRevision(
-                  applyLogicalColumnEnums(
-                    applyLogicalCheckReplacements(
-                      appendLogicalTables(
-                        retireLogicalTables(contract, step.retiredTables ?? []),
-                        step.logicalTables ?? [],
+                applyLogicalOwners(
+                  applyLogicalIndexPredicates(
+                    applyLogicalSourceRevision(
+                      applyLogicalColumnEnums(
+                        applyLogicalCheckReplacements(
+                          appendLogicalTables(
+                            retireLogicalTables(contract, step.retiredTables ?? []),
+                            step.logicalTables ?? [],
+                          ),
+                          step.logicalChecks ?? [],
+                        ),
+                        step.logicalEnums ?? [],
                       ),
-                      step.logicalChecks ?? [],
+                      step.logicalSourceRevision,
                     ),
-                    step.logicalEnums ?? [],
+                    step.logicalIndexPredicates ?? [],
                   ),
-                  step.logicalSourceRevision,
+                  step.logicalOwners ?? [],
                 ),
               source,
             )
@@ -1486,10 +1748,13 @@ function resolvePostgresqlRowBridge(
             .slice(from, to)
             .reduce(
               (contract, step) =>
-                applyLogicalSourceRevision(
-                  contract,
-                  step.logicalSourceRevision,
-                  'historical row, codec, key or disposition changed',
+                applyLogicalOwners(
+                  applyLogicalSourceRevision(
+                    contract,
+                    step.logicalSourceRevision,
+                    'historical row, codec, key or disposition changed',
+                  ),
+                  step.logicalOwners ?? [],
                 ),
               source,
             ),

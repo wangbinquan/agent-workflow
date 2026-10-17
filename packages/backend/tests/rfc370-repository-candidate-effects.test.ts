@@ -7,7 +7,7 @@ import {
   bindChangeCandidateParticipant,
 } from '../src/modules/source-control/composition/repositoryCandidate'
 import type {
-  RepositoryCandidateEffectsFactory,
+  RepositoryCandidateStepEffectsFactory,
   RepositoryCandidateFileFacts,
   RepositoryCandidateGitOptions,
   RepositoryCandidateGitOutcome,
@@ -104,7 +104,7 @@ class CandidateFixture {
   }
 }
 
-class SelectedFactory implements RepositoryCandidateEffectsFactory {
+class SelectedFactory implements RepositoryCandidateStepEffectsFactory {
   constructor(readonly fixture: CandidateFixture) {}
   async acquire(input: { readonly baselineReference: string; readonly overlayReference?: string }) {
     expect<SelectedFactory>(this).toBe(this.fixture.factory)

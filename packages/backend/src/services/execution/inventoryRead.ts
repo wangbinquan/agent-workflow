@@ -37,16 +37,11 @@ import {
 import type {
   TaskRuntimeInventoryReadModel,
   TaskRuntimeInventorySource,
+  TaskRuntimeInventoryContent,
 } from '@/modules/task-execution/public/types'
 // RFC-282 §4.2：per-runtime 模块只能经 `@/services/runtime` 索引访问——本读端
 // 是运行时无关层，直接 import opencode 内部会把它重新钉死在一个运行时上。
-import {
-  getRuntimeDriver,
-  isKnownRuntimeKind,
-  readSnapshotFromRunDir,
-  runRootFor,
-  type RuntimeKind,
-} from '@/services/runtime'
+import { getRuntimeDriver, isKnownRuntimeKind, type RuntimeKind } from '@/services/runtime'
 import { DomainError, NotFoundError } from '@/util/errors'
 
 /** RFC-029 快照 → 统一观测形状。字段 1:1 搬运，一个都不许丢（AC-2）。 */
@@ -128,6 +123,7 @@ export async function getRuntimeInventory(
   reads: TaskRuntimeInventoryReadModel,
   taskId: string,
   nodeRunId: string,
+  content: TaskRuntimeInventoryContent,
 ): Promise<RuntimeInventoryResponse> {
   const source = await reads.find(taskId, nodeRunId)
   const run = source.nodeRun
@@ -163,7 +159,7 @@ export async function getRuntimeInventory(
       // 复用 RFC-029 既有读端：它承载了 RFC-062 的「运行中从 runRoot 实时读」、
       // reason 分类、非 agent kind 的 410 等一整套行为。在这里重写一遍就等于
       // 悄悄丢掉其中几条（本 RFC 实现期实测：重写版本第一稿就丢了 RFC-062）。
-      const snapshot = await legacyInventorySnapshot(source, run, taskId, nodeRunId)
+      const snapshot = await legacyInventorySnapshot(source, run, taskId, nodeRunId, content)
       if (snapshot.captured) {
         return {
           observation: {
@@ -195,7 +191,7 @@ export async function getRuntimeInventory(
       }
       // 非 agent kind 在这条路上同样要给 410——判据借既有读端（它读 workflow
       // 快照解析 nodeKind）；claude 行的 inventory 列恒 NULL 不影响该判定。
-      await legacyInventorySnapshot(source, run, taskId, nodeRunId)
+      await legacyInventorySnapshot(source, run, taskId, nodeRunId, content)
       if (verification === null) {
         return {
           observation: { state: 'unavailable', reason: 'no-observation-recorded' },
@@ -251,6 +247,7 @@ async function legacyInventorySnapshot(
   run: NonNullable<TaskRuntimeInventorySource['nodeRun']>,
   taskId: string,
   nodeRunId: string,
+  content: TaskRuntimeInventoryContent,
 ) {
   const nodeKind = resolveNodeKindFromSnapshot(source.workflowSnapshot, run.nodeId)
   if (nodeKind !== null && !isAgentNodeKind(nodeKind)) {
@@ -263,12 +260,8 @@ async function legacyInventorySnapshot(
 
   if (run.inventorySnapshotJson === null || run.inventorySnapshotJson === '') {
     if (run.status === 'running') {
-      const snapshot = await readSnapshotFromRunDir({
-        runDir: runRootFor(taskId, nodeRunId),
-        nodeKind: 'agent-single',
-        pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
-      })
-      if (!snapshot.captured && snapshot.reason === 'file-missing') {
+      const snapshot = await content.readLive({ taskId, nodeRunId })
+      if (snapshot === null || (!snapshot.captured && snapshot.reason === 'file-missing')) {
         return { captured: false, reason: 'in-flight', message: null } as const
       }
       return snapshot

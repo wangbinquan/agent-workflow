@@ -1,0 +1,203 @@
+// RFC-370 §9.2 V3 — hosted parent lifecycle reconciler.
+//
+// A persistent CS parent holds a Pod and quota while it runs, and the platform's
+// migration barrier requires parents to be paused. Source Control therefore
+// pauses every parent whose volume is not in use and lets the next use resume
+// it (`HostedTaskWorkspaces.ensure` / `open`). It also completes a close whose
+// platform receipt was lost (`closing` rows) and records parents the platform
+// already released.
+//
+// "In use" (any one keeps the parent running):
+//   - task execution reports the owner active: an AW task bound to the volume
+//     is pending/running, or an execution binding on it has not settled
+//     (`HostedVolumeActivity`, implemented by task-execution);
+//   - a workspace command on it has not settled (Source Control's journal);
+//   - an in-process hold (`retainWorkspace`, e.g. a verification writer);
+//   - it was used recently: every ensure/open refreshes `updatedAt`. AW task
+//     owners get a short grace (the window between a ready check and the
+//     submit it guards); shared owners (`system:…`, `development:shared`, …)
+//     are paused only after an idle period, since their consecutive operations
+//     are not covered by a task status.
+// Only parents the platform reports `running` are paused.
+import { and, eq, inArray, isNotNull } from 'drizzle-orm'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { hostedTaskWorkspaces } from '@/db/schema'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
+import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
+import type { Logger } from '@/util/log'
+import type { HostedVolumeActivity } from '../../public/participants'
+import {
+  hostedLifecycleRequestKey,
+  isLifecycleRace,
+  type HostedTaskWorkspaces,
+} from './taskWorkspace'
+import { hostedWorkspaceOwnerKind } from './workspaceOwnership'
+
+/** Short grace after the last use of an AW task's volume. */
+export const HOSTED_TASK_VOLUME_GRACE_MS = 120_000
+/** Idle period before a shared (non-task) volume is paused. */
+export const HOSTED_SHARED_VOLUME_IDLE_MS = 600_000
+/** Background pass period. */
+export const HOSTED_WORKSPACE_LIFECYCLE_INTERVAL_MS = 60_000
+
+export interface HostedWorkspaceLifecyclePass {
+  readonly paused: readonly string[]
+  readonly closed: readonly string[]
+  readonly failed: readonly string[]
+}
+
+export interface HostedWorkspaceLifecycle {
+  pass(signal: AbortSignal): Promise<HostedWorkspaceLifecyclePass>
+}
+
+export function createHostedWorkspaceLifecycle(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly api: CrewStationBusinessExecution
+  readonly fence: CrewStationMutationFence
+  readonly workspaces: Pick<HostedTaskWorkspaces, 'close'>
+  readonly commands: { hasUnsettledCommands(businessTaskId: string): Promise<boolean> }
+  readonly activity: HostedVolumeActivity
+  /** In-process holds by volume owner. */
+  readonly held: (owner: string) => boolean
+  readonly taskGraceMs?: number
+  readonly sharedIdleMs?: number
+  readonly now?: () => number
+  readonly log?: Pick<Logger, 'warn'>
+}): HostedWorkspaceLifecycle {
+  const session = databaseSessionFor(input.db)
+  const now = input.now ?? Date.now
+  const taskGraceMs = input.taskGraceMs ?? HOSTED_TASK_VOLUME_GRACE_MS
+  const sharedIdleMs = input.sharedIdleMs ?? HOSTED_SHARED_VOLUME_IDLE_MS
+  const rows = () =>
+    input.db
+      .select()
+      .from(hostedTaskWorkspaces)
+      .where(
+        and(
+          inArray(hostedTaskWorkspaces.state, ['creating', 'ready', 'closing']),
+          isNotNull(hostedTaskWorkspaces.businessTaskId),
+        ),
+      )
+  const lastUse = async (taskId: string) =>
+    (
+      await input.db
+        .select({ updatedAt: hostedTaskWorkspaces.updatedAt, state: hostedTaskWorkspaces.state })
+        .from(hostedTaskWorkspaces)
+        .where(eq(hostedTaskWorkspaces.taskId, taskId))
+        .limit(1)
+    )[0]
+  const idleFor = (owner: string) =>
+    hostedWorkspaceOwnerKind(owner) === 'task' ? taskGraceMs : sharedIdleMs
+  const recordClosed = async (taskId: string) => {
+    const fence = input.fence.current()
+    await session.transaction(async (tx) => {
+      await input.fence.assertHeld(tx, fence)
+      await tx
+        .update(hostedTaskWorkspaces)
+        .set({ state: 'closed', updatedAt: now() })
+        .where(eq(hostedTaskWorkspaces.taskId, taskId))
+    })
+  }
+
+  return {
+    async pass(signal) {
+      const paused: string[] = []
+      const closed: string[] = []
+      const failed: string[] = []
+      const candidates = await rows()
+      if (candidates.length === 0) return { paused, closed, failed }
+      let active = await input.activity.activeVolumeOwners()
+      for (const row of candidates) {
+        if (signal.aborted) break
+        const owner = row.taskId
+        try {
+          if (row.state === 'closing') {
+            // A close whose platform receipt was lost converges here.
+            if (await input.workspaces.close(owner)) closed.push(owner)
+            continue
+          }
+          if (active.has(owner) || input.held(owner)) continue
+          if (now() - row.updatedAt < idleFor(owner)) continue
+          if (await input.commands.hasUnsettledCommands(row.businessTaskId!)) continue
+          const task = await input.api.getTask(row.businessTaskId!)
+          if (task.id !== row.businessTaskId) throw new Error('hosted-workspace-receipt-mismatch')
+          if (task.state === 'closed' && task.resourceState === 'released') {
+            // Released by the platform: the registration no longer names a volume.
+            await recordClosed(owner)
+            closed.push(owner)
+            continue
+          }
+          if (task.state !== 'running') continue
+          // Re-check use right before the effect: a use that started during this
+          // pass refreshed `updatedAt` or made the owner active meanwhile.
+          active = await input.activity.activeVolumeOwners()
+          const current = await lastUse(owner)
+          if (
+            active.has(owner) ||
+            input.held(owner) ||
+            current === undefined ||
+            current.state === 'closing' ||
+            current.state === 'closed' ||
+            now() - current.updatedAt < idleFor(owner)
+          )
+            continue
+          try {
+            await input.api.pauseTask(task.id, {
+              requestKey: hostedLifecycleRequestKey(row.requestKey, 'pause', task.generation),
+              fence: input.fence.current(),
+              expectedGeneration: task.generation,
+            })
+            paused.push(owner)
+          } catch (error) {
+            // A subtask the platform still counts as active, or another lifecycle
+            // operation in flight: the next pass decides again.
+            if (!isLifecycleRace(error)) throw error
+          }
+        } catch (error) {
+          failed.push(owner)
+          input.log?.warn('hosted workspace lifecycle step failed', {
+            owner,
+            reason: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+      return { paused, closed, failed }
+    },
+  }
+}
+
+/** The background owner shape the hosted daemon runs while it holds execution
+ * authority: one pass per interval until the signal aborts. */
+export function hostedWorkspaceLifecycleOwner(
+  lifecycle: HostedWorkspaceLifecycle,
+  options: {
+    readonly intervalMs?: number
+    readonly log?: Pick<Logger, 'warn'>
+  } = {},
+) {
+  const intervalMs = options.intervalMs ?? HOSTED_WORKSPACE_LIFECYCLE_INTERVAL_MS
+  return {
+    id: 'hosted-workspace-lifecycle',
+    async run(signal: AbortSignal) {
+      while (!signal.aborted) {
+        try {
+          await lifecycle.pass(signal)
+        } catch (error) {
+          options.log?.warn('hosted workspace lifecycle pass failed', {
+            reason: error instanceof Error ? error.message : String(error),
+          })
+        }
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(done, intervalMs)
+          function done(): void {
+            clearTimeout(timer)
+            signal.removeEventListener('abort', done)
+            resolve()
+          }
+          signal.addEventListener('abort', done, { once: true })
+        })
+      }
+    },
+  }
+}

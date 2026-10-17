@@ -31,6 +31,9 @@ const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(
 const RUNTIME_DRIVER_MATERIAL_FILES = new Set([
   'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
   'modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
+  // RFC-370 M2: the hosted counterpart of the two files above — it compiles the
+  // same frozen material into each protocol's CrewStation nativeConfig shape.
+  'modules/task-execution/infrastructure/crewstation/nativeMaterial.ts',
 ])
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'

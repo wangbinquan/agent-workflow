@@ -64,6 +64,8 @@ export interface McpDiagnosticsDependencies {
   readonly loadMcp: (mcpId: string) => Promise<Mcp | null>
   readonly effects: McpDiagnosticsEffects
   readonly capacity?: number
+  /** Roots with an explicit background lifecycle keep queries side-effect free. */
+  readonly maintainOnRead?: boolean
 }
 interface QueueItem {
   sessionId: string
@@ -470,8 +472,10 @@ export class McpDiagnosticsApplication {
     actor: McpDiagnosticsCaller,
     mcpId: string,
   ): Promise<McpRuntimeTestSessionDto | null> {
-    await this.start()
-    await this.reconcile()
+    if (this.deps.maintainOnRead !== false) {
+      await this.start()
+      await this.reconcile()
+    }
     const row = await this.deps.persistence.findLatestSession(mcpId, actor.user.id)
     return row === null ? null : this.project(row)
   }
@@ -481,8 +485,10 @@ export class McpDiagnosticsApplication {
     mcpId: string,
     sessionId: string,
   ): Promise<McpRuntimeTestSessionDto> {
-    await this.start()
-    await this.reconcile()
+    if (this.deps.maintainOnRead !== false) {
+      await this.start()
+      await this.reconcile()
+    }
     const row = await this.requireSession(sessionId, mcpId)
     assertSessionActor(
       row,
@@ -497,7 +503,7 @@ export class McpDiagnosticsApplication {
     mcpId: string,
     sessionId: string,
   ): Promise<SessionViewResponse> {
-    await this.start()
+    if (this.deps.maintainOnRead !== false) await this.start()
     const session = await this.requireSession(sessionId, mcpId)
     assertSessionActor(
       session,
@@ -656,7 +662,7 @@ export class McpDiagnosticsApplication {
   private async reconcileQuarantinedSessions(): Promise<void> {
     const candidates = await this.deps.persistence.listQuarantinedCandidates()
     for (const { session, turn } of candidates) {
-      if (turn === null || !this.deps.effects.hasExecution(turn)) continue
+      if (turn === null || !(await this.deps.effects.hasExecution(turn))) continue
       const outcome = await this.reapTurn(turn, () => this.now())
       if (!['not-alive', 'killed'].includes(outcome)) continue
       const recovered = await this.deps.effects.recoverReapedTurn({
@@ -763,11 +769,12 @@ export class McpDiagnosticsApplication {
       let reapOutcome: McpDiagnosticReapOutcome | 'missing-turn' = 'no-pid'
       if (turn === null) {
         reapOutcome = 'missing-turn'
-      } else if (turn.status === 'running' || this.deps.effects.hasExecution(turn)) {
+      } else if (turn.status === 'running' || (await this.deps.effects.hasExecution(turn))) {
         reapOutcome = await this.reapTurn(turn, () => this.now())
       }
       const childReapProven = ['not-alive', 'killed'].includes(reapOutcome)
-      const queuedWithoutChild = turn?.status === 'queued' && !this.deps.effects.hasExecution(turn)
+      const queuedWithoutChild =
+        turn?.status === 'queued' && !(await this.deps.effects.hasExecution(turn))
       const quarantine =
         reapOutcome === 'missing-turn' ||
         (reapOutcome === 'no-pid' && !queuedWithoutChild) ||
@@ -783,7 +790,7 @@ export class McpDiagnosticsApplication {
         session.status === 'active' &&
         canResumeNativeSession(session) &&
         captureComplete &&
-        this.deps.effects.workspaceExists(session.scratchRoot)
+        (await this.deps.effects.workspaceExists(session.scratchRoot))
       const now = this.now()
       await this.deps.persistence.recoverBootSession({
         sessionId: session.id,
@@ -1134,7 +1141,7 @@ export class McpDiagnosticsApplication {
   private async finishEndingSession(sessionId: string): Promise<void> {
     const row = await this.deps.persistence.prepareCleanup(sessionId, this.now())
     if (row === null) return
-    const { cleanupState, cleanupErrorCode } = this.deps.effects.cleanupWorkspace(row)
+    const { cleanupState, cleanupErrorCode } = await this.deps.effects.cleanupWorkspace(row)
     const endedAt = this.now()
     await this.deps.persistence.finishCleanup({
       sessionId,

@@ -18,6 +18,7 @@
 // 剩下的四处 `dbTxSync`（reassign ×3、saveDraft ×1）。
 // RFC-359 W12：这些正典文件与消费路径已统一使用中立名称。
 
+import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   CollaborationClarifyDraftEventPublisher,
@@ -32,6 +33,7 @@ const loadClarifyOperations = () => import('./clarifyRounds')
 const loadClarifySeal = () => import('./clarify/seal')
 
 export interface CreateCollaborationRouteOperationsInput {
+  readonly reviewReader?: CommittedReviewArtifactReader
   readonly db: ProviderNeutralDatabase
   /** 草稿提交后的实时投影：装配点注入，持久化实现不直接够全局广播器。 */
   readonly clarifyDraftEvents: CollaborationClarifyDraftEventPublisher
@@ -46,15 +48,25 @@ export function createCollaborationRouteOperations(
     countPending: async (actor) =>
       await (await loadReviewOperations()).countPendingReviews(db, actor),
     detail: async (request) =>
-      await (await loadReviewOperations()).getReviewDetail(db, request.appHome, request.nodeRunId),
+      await (
+        await loadReviewOperations()
+      ).getReviewDetail(db, request.appHome, request.nodeRunId, input.reviewReader),
     listVersions: async (nodeRunId) =>
       await (await loadReviewOperations()).listDocVersionsForReview(db, nodeRunId),
     versionDetail: async (request) =>
       await (
         await loadReviewOperations()
-      ).getDocVersionDetail(db, request.appHome, request.nodeRunId, request.versionId),
+      ).getDocVersionDetail(
+        db,
+        request.appHome,
+        request.nodeRunId,
+        request.versionId,
+        input.reviewReader,
+      ),
     listRounds: async (request) =>
-      await (await loadReviewOperations()).listReviewRounds(db, request.appHome, request.nodeRunId),
+      await (
+        await loadReviewOperations()
+      ).listReviewRounds(db, request.appHome, request.nodeRunId, input.reviewReader),
     setSelection: async (request) =>
       await (await loadReviewOperations()).setDocumentSelection({ db, ...request }),
     addComment: async (request) =>
@@ -63,6 +75,7 @@ export function createCollaborationRouteOperations(
       ).addReviewComment({
         db,
         appHome: request.appHome,
+        reviewReader: input.reviewReader,
         nodeRunId: request.nodeRunId,
         commentText: request.commentText,
         author: request.author,

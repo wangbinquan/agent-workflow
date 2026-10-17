@@ -389,3 +389,6 @@ export type {
   RuntimeSmokeRunFamily,
   RuntimeSmokeRunRequest,
 } from '../application/ports/runtimeSmoke'
+
+/** RFC-370 v3 V5: Task Execution's hosted restore normalization participant. */
+export { createHostedRestoreTaskNormalization } from '../infrastructure/hostedRestoreNormalization'

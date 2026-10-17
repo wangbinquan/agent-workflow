@@ -341,6 +341,7 @@ export function composePostgresqlSystemOperations(deps: {
    * ——逻辑快照 / 逻辑还原目标与 advisory lock。
    */
   readonly db: ProviderNeutralDatabase
+  readonly backup?: AdminBackupCoordinatorPort
   readonly databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
   readonly repositoryBackupPreparation: RepositoryBackupPreparationParticipant
   readonly appHome?: string
@@ -374,12 +375,14 @@ export function composePostgresqlSystemOperations(deps: {
   const module = composeSystemOperationsWithArtifacts({
     artifacts,
     adapter: {
-      backup: createPostgresqlAdminBackupCoordinator({
-        runtime: deps.runtime,
-        db: deps.db,
-        appHome,
-        prepare: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
-      }),
+      backup:
+        deps.backup ??
+        createPostgresqlAdminBackupCoordinator({
+          runtime: deps.runtime,
+          db: deps.db,
+          appHome,
+          prepare: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
+        }),
       restore,
     },
   })

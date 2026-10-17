@@ -207,6 +207,13 @@ export function plannedGenerationDir(
   return join(pluginsDir ?? Paths.pluginsDir, pluginId, 'generations', generationId)
 }
 
+/** A selected task-image receiver may retain writer receipts around the exact
+ * same native npm invocation. Catalog policy and package interpretation stay here. */
+export type PluginInstallCommand = (input: {
+  readonly argv: readonly string[]
+  readonly timeoutMs: number
+}) => Promise<{ stdout: string; stderr: string; exitCode: number }>
+
 export async function installPlugin(
   pluginId: string,
   spec: string,
@@ -214,6 +221,7 @@ export async function installPlugin(
     pluginsDir?: string
     npmBin?: string
     timeoutMs?: number
+    command?: PluginInstallCommand
     /** RFC-271 T11：由调用方**预铸**，好让精确路径先落 journal 再安装。
      *  缺席时内部铸一个——单条路径（路由 / intent）的既有行为逐字不变。 */
     generationId?: string
@@ -229,7 +237,12 @@ async function installPluginGeneration(
   opId: string,
   spec: string,
   sourceKind: 'npm' | 'git',
-  opts: { pluginsDir?: string; npmBin?: string; timeoutMs?: number },
+  opts: {
+    pluginsDir?: string
+    npmBin?: string
+    timeoutMs?: number
+    command?: PluginInstallCommand
+  },
 ): Promise<InstallResult> {
   // npm + git both go through `npm install` — npm-package-arg handles git URLs
   // and github shorthand natively (see opencode plugin/shared.ts:resolvePluginTarget).
@@ -285,7 +298,7 @@ async function installPluginGeneration(
       '--silent',
       spec,
     ],
-    { timeoutMs },
+    { timeoutMs, command: opts.command },
   )
   if (exitCode !== 0) {
     const tail = redactSensitiveString(stderr || stdout).slice(0, STDERR_CAPTURE_BYTES)
@@ -775,8 +788,9 @@ export function resolveNpmCommand(
 async function runCommand(
   bin: string,
   args: string[],
-  opts: { timeoutMs: number },
+  opts: { timeoutMs: number; command?: PluginInstallCommand },
 ): Promise<CommandResult> {
+  if (opts.command) return opts.command({ argv: [bin, ...args], timeoutMs: opts.timeoutMs })
   const r = await runManagedProcess({
     argv: [bin, ...args],
     cwd: process.cwd(),

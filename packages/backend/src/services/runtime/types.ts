@@ -39,6 +39,7 @@ import type {
   Mcp,
   RuntimeConfigDirProfile,
   RuntimeInventoryPayload,
+  StartupObservation,
 } from '@agent-workflow/shared'
 import type { LivePollOptions, LivePollerHandle } from './opencode/subagentLiveCapture'
 // Type-only (erased at runtime): runtimeRegistry value-imports runtime/index,
@@ -205,6 +206,9 @@ export interface NormalizedEvent {
 export interface NormalizedEventData {
   /** The runtime's own startup inventory, already normalized by the driver. */
   inventory?: RuntimeInventoryPayload
+  /** A selected execution adapter may transport the runtime's own typed
+   * observation, including absence or corruption, in the event stream. */
+  startupObservation?: StartupObservation
 }
 
 export interface SystemEventObservation {

@@ -74,6 +74,11 @@ export const DAEMON_CADENCE = {
   developmentRetentionSweep: HOUR_MS,
   /** RFC-310 Digital Employee OS durable Event → Reaction driver. */
   digitalEmployeeOs: 1_000,
+  /**
+   * RFC-370 v3 V6 —— 托管对象发布日志的恢复 / 回收（maintenanceJobRunner `hostedObjectRecovery`）。
+   * 非 hourly：被放弃的上传与 owner 释放的固定引用要在分钟级收敛，不进 MAINTENANCE_PHASE。
+   */
+  hostedObjectRecovery: 10 * MINUTE_MS,
 } as const satisfies Record<string, number>
 
 /**

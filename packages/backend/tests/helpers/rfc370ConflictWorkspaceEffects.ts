@@ -12,7 +12,7 @@ import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/pub
 import { createFileConflictMergeWorkspaceEffects } from '@/modules/source-control/infrastructure/local/fileConflictMergeWorkspaceEffects'
 import type {
   EmployeeCaseWorkspaceEffects,
-  EmployeeCaseWorkspaceEffectsFactory,
+  EmployeeCaseWorkspaceStepEffectsFactory,
 } from '@/modules/source-control/application/ports/employeeCaseWorkspaceEffects'
 import { createFileEmployeeCaseWorkspaceEffectsFactory } from '@/modules/source-control/infrastructure/local/fileEmployeeCaseWorkspaceEffects'
 import { GatedEvidenceArtifacts, type EvidenceEffect } from './rfc370EvidenceArtifacts'
@@ -338,7 +338,7 @@ class OpaqueEmployeeCaseScope implements EmployeeCaseWorkspaceEffects {
 }
 
 /** Existing complete Case owner remains selected for actual DE checkpoint/restore. */
-export class OpaqueEmployeeCaseFactory implements EmployeeCaseWorkspaceEffectsFactory {
+export class OpaqueEmployeeCaseFactory implements EmployeeCaseWorkspaceStepEffectsFactory {
   readonly #native = createFileEmployeeCaseWorkspaceEffectsFactory()
   constructor(readonly codec: WorkspaceReferenceCodec) {
     Object.freeze(this)

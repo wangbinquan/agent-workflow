@@ -117,6 +117,13 @@ function parseReceipt(journal: ResourcePackageApplyJournalSnapshot): ApplyReceip
   return ApplyReceiptSchema.parse(JSON.parse(assertCommittedApplyReceipt(journal)))
 }
 
+// Both native and hosted content owners decode the same durable AW journal.
+export {
+  parseArtifacts as decodeResourcePackageArtifacts,
+  parseReceipt as decodeResourcePackageReceipt,
+  assertOperationInReceipt as assertResourcePackageArtifactReceipt,
+}
+
 function assertOperationInReceipt(receipt: ApplyReceipt, artifact: PostgresqlArtifact): void {
   if (
     receipt.applied.some(

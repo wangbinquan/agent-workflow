@@ -14,8 +14,17 @@ import {
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import type { WorkspaceValidationPort } from '../application/ports/reconcilerPorts'
-import { readProtectedRootSnapshot, type ProtectedRootSnapshot } from './protectedSnapshot'
-import { readBusinessTreeSnapshot, validateWorkspaceOutcomeInScope } from './workspaceValidator'
+import {
+  readProtectedRootSnapshot,
+  snapshotProtectedRoots,
+  type ProtectedRootSnapshot,
+} from './protectedSnapshot'
+import {
+  businessTreeSnapshot,
+  readBusinessTreeSnapshot,
+  validateWorkspaceOutcome,
+  validateWorkspaceOutcomeInScope,
+} from './workspaceValidator'
 import type { CapabilityWorkspaceMode } from '../domain/capabilityDefinition'
 
 export { createAttemptContextStore } from './local/fileAttemptContextStore'
@@ -85,8 +94,23 @@ export function createWorkspaceValidationAdapter(
   chosen?: AutomationWorkspaceEffectsFactory,
 ): WorkspaceValidationPort {
   const factory = selectedAutomationWorkspaceEffects(chosen)
+  const tree = factory.treeOperations
   return {
-    capturePreState(workspacePath) {
+    async capturePreState(workspacePath) {
+      if (tree !== undefined) {
+        // RFC-370 §9.2 V3: a remote volume snapshots both trees itself.
+        const pre: SerializedPreState = {
+          protected: serializeProtected(
+            await snapshotProtectedRoots(
+              protectedRootsOf(workspacePath, factory),
+              { skipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT },
+              factory,
+            ),
+          ),
+          business: [...(await businessTreeSnapshot(workspacePath, factory)).entries()],
+        }
+        return JSON.stringify(pre)
+      }
       return withAutomationWorkspaceEffects(factory, async (effects) => {
         const pre: SerializedPreState = {
           protected: serializeProtected(
@@ -108,24 +132,22 @@ export function createWorkspaceValidationAdapter(
     },
     validate(input) {
       const pre = JSON.parse(input.preStateJson) as SerializedPreState
+      const request = {
+        workspacePath: input.workspacePath,
+        preProtected: reviveProtected(pre.protected),
+        protectedRoots: protectedRootsOf(input.workspacePath, factory),
+        protectedSkipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
+        preBusinessTree: new Map(pre.business),
+        outcome: input.outcome,
+        workspaceMode: input.workspaceMode as CapabilityWorkspaceMode,
+        writablePrefixes: input.writablePrefixes,
+        preservePaths: input.preservePaths,
+        editablePaths: input.editablePaths,
+        budget: input.budget,
+      }
+      if (tree !== undefined) return validateWorkspaceOutcome(request, factory)
       return withAutomationWorkspaceEffects(factory, (effects) =>
-        validateWorkspaceOutcomeInScope(
-          {
-            workspacePath: input.workspacePath,
-            preProtected: reviveProtected(pre.protected),
-            protectedRoots: protectedRootsOf(input.workspacePath, factory),
-            protectedSkipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
-            preBusinessTree: new Map(pre.business),
-            outcome: input.outcome,
-            workspaceMode: input.workspaceMode as CapabilityWorkspaceMode,
-            writablePrefixes: input.writablePrefixes,
-            preservePaths: input.preservePaths,
-            editablePaths: input.editablePaths,
-            budget: input.budget,
-          },
-          factory,
-          effects,
-        ),
+        validateWorkspaceOutcomeInScope(request, factory, effects),
       )
     },
   }

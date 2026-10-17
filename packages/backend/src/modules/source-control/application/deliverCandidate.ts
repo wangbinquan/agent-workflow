@@ -22,7 +22,7 @@ import {
 } from '../domain/deliveryPolicy'
 import { stageCandidateTreeInSession } from './changeCandidate'
 import type {
-  RepositoryCandidateEffectsFactory,
+  RepositoryCandidateStepEffectsFactory,
   RepositoryCandidateSession,
 } from './ports/repositoryCandidateEffects'
 import type { RepositoryGit } from './repositoryCommit'
@@ -92,7 +92,7 @@ export type CommitCandidateResult =
 
 export async function commitCandidate(
   input: CommitCandidateInput,
-  factory: RepositoryCandidateEffectsFactory,
+  factory: RepositoryCandidateStepEffectsFactory,
 ): Promise<CommitCandidateResult> {
   const localRef = missionCandidateRef(input.missionId)
   const session = await factory.acquire({
@@ -242,7 +242,7 @@ async function remoteHeadOf(
 
 export async function pushCandidate(
   input: PushCandidateInput,
-  factory: RepositoryCandidateEffectsFactory,
+  factory: RepositoryCandidateStepEffectsFactory,
   publication: {
     readonly transport?: CandidatePublicationTransport
     readonly localFixtureSession?: (remoteUrl: string) => CandidatePublicationSession | null

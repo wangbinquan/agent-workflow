@@ -4,12 +4,17 @@
 // whichever platform variables happen to be present); standalone is the
 // default. A CrewStation-hosted instance runs the same start and migrate
 // sequences with the hosted adapters selected here.
-import { composeCrewStationStartOptions } from '@/bootstrap/crewstation'
+import {
+  composeCrewStationRestoreNormalization,
+  composeCrewStationStartOptions,
+} from '@/bootstrap/crewstation'
 import {
   composeCrewStationMigrationInstallation,
   crewStationDatabaseConfig,
   readCrewStationDatabaseEnvironment,
+  prepareCrewStationDatabase,
 } from '@/modules/system-operations/composition/crewstationDeployment'
+import { verifyCrewStationDatabaseRestore } from '@/modules/system-operations/composition/crewstationDatabaseRestore'
 import { prepareManualDatabaseMigration } from '@/modules/system-operations/composition/manualDatabaseMigration'
 import type { StartOptions } from './start'
 
@@ -60,11 +65,27 @@ export async function migrateForDeployment(
         throw new Error('the CrewStation database connection is provided by the platform')
       },
     },
-    installation: composeCrewStationMigrationInstallation(environment, env),
+    installation: composeCrewStationMigrationInstallation(
+      environment,
+      env,
+      composeCrewStationRestoreNormalization(),
+    ),
   })
   try {
     return { output: prepared.describeSchemaOutcome() }
   } finally {
     await prepared.runtime.close()
   }
+}
+
+export async function verifyDatabaseRestoreForDeployment(
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<string> {
+  if (readDeploymentMode(env) !== 'crewstation')
+    throw new Error('database restore verification requires CrewStation deployment')
+  const environment = readCrewStationDatabaseEnvironment(env)
+  const prepared = await prepareCrewStationDatabase({ environment, env, schema: 'verify' })
+  await prepared.runtime.close()
+  const receipt = await verifyCrewStationDatabaseRestore({ environment, env })
+  return `CS_DATABASE_RESTORE_RECEIPT=${JSON.stringify(receipt)}\n`
 }

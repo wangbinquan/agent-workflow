@@ -68,6 +68,7 @@ export const RFC349_SOURCE_TABLES = [
   'development_mission_sources',
   'development_missions',
   'development_mr_claims',
+  'development_object_artifacts',
   'development_repository_upload_plan_entries',
   'development_repository_upload_plans',
   'development_repository_upload_receipts',
@@ -121,10 +122,15 @@ export const RFC349_SOURCE_TABLES = [
   'external_identities',
   'fusions',
   'hosted_execution_bindings',
+  'hosted_database_backups',
   'hosted_execution_control',
   'hosted_execution_events',
   'hosted_task_artifacts',
+  'hosted_task_archive_entries',
+  'hosted_node_event_archives',
+  'hosted_object_publications',
   'hosted_task_workspaces',
+  'hosted_workspace_commands',
   'intent_apply_journal',
   'intent_draft_resolutions',
   'intent_drafts',
@@ -159,6 +165,12 @@ export const RFC349_SOURCE_TABLES = [
   'observation_prices',
   'observer_activations',
   'oidc_providers',
+  'plugin_artifact_generations',
+  'hosted_recovery_requests',
+  'cs_event_inbox',
+  'cs_event_routes',
+  'cs_event_targets',
+  'cs_webhook_verifications',
   'plugins',
   'reaction_execution_admissions',
   'recovery_events',
@@ -424,6 +436,8 @@ function ownerFor(table: string): OwnerContext {
   if (
     table.startsWith('code_') ||
     table.startsWith('webhook_') ||
+    table.startsWith('cs_event_') ||
+    table === 'cs_webhook_verifications' ||
     table === 'legacy_code_work_item_links'
   ) {
     return 'integration'
@@ -433,7 +447,8 @@ function ownerFor(table: string): OwnerContext {
     table.startsWith('sc_') ||
     table.startsWith('repo_') ||
     table.startsWith('repository_transport_') ||
-    table === 'hosted_task_workspaces'
+    table === 'hosted_task_workspaces' ||
+    table === 'hosted_workspace_commands'
   ) {
     return 'source-control'
   }
@@ -442,7 +457,9 @@ function ownerFor(table: string): OwnerContext {
     table.startsWith('lifecycle_') ||
     table === 'recovery_events' ||
     table === 'application_configuration' ||
-    table === 'hosted_execution_control'
+    table === 'hosted_execution_control' ||
+    table === 'hosted_database_backups' ||
+    table === 'hosted_object_publications'
   ) {
     return 'system-operations'
   }
@@ -466,7 +483,10 @@ function ownerFor(table: string): OwnerContext {
     table === 'runtime_session_leases' ||
     table === 'hosted_execution_bindings' ||
     table === 'hosted_execution_events' ||
-    table === 'hosted_task_artifacts'
+    table === 'hosted_recovery_requests' ||
+    table === 'hosted_task_artifacts' ||
+    table === 'hosted_task_archive_entries' ||
+    table === 'hosted_node_event_archives'
   ) {
     return 'task-execution'
   }

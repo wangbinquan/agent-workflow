@@ -53,6 +53,8 @@ const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.t
 const WORKER_ENTRIES = [
   join(backendSrc, 'services', 'backupVacuumWorker.ts'),
   join(backendSrc, 'platform', 'background', 'maintenanceWorker.ts'),
+  // RFC-370 §9.2 V9: the hosted deployment's Worker entry (registers its effects).
+  join(backendSrc, 'bootstrap', 'maintenanceWorkerEntry.ts'),
   join(backendSrc, 'platform', 'persistence', 'sqliteLogicalSourceWorker.ts'),
 ]
 // Test-only external executables are owned by the unified system mock package.

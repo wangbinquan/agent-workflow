@@ -193,3 +193,32 @@ describe('RFC-341 human-gate continuation worker', () => {
     expect(worker.definition.readiness()).toBe('stopped')
   })
 })
+
+// RFC-370: the existing continuous owner also completes selected hosted
+// artifact receipts, with a bounded cadence independent of continuation wakes.
+test('artifact recovery completes before continuation discovery and does not run on every wake', async () => {
+  let now = 0
+  const calls: string[] = []
+  const worker = createHumanGateContinuationWorkerDefinition({
+    now: () => now,
+    artifacts: {
+      async runOnce() {
+        calls.push('artifacts')
+        return { claimed: 1, retained: 0, finalized: 1, cleaned: 0, failed: 0, errors: [] }
+      },
+    },
+    listPending: async () => {
+      calls.push('pending')
+      return [{ taskId: 't', continuationRef: 'c' }]
+    },
+    drive: async () => {
+      calls.push('drive')
+    },
+  })
+  await worker.runCycle()
+  await worker.runCycle()
+  expect(calls).toEqual(['artifacts', 'pending', 'drive', 'pending', 'drive'])
+  now = 60_000
+  await worker.runCycle()
+  expect(calls.slice(-3)).toEqual(['artifacts', 'pending', 'drive'])
+})

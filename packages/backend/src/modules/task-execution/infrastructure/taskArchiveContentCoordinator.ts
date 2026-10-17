@@ -42,6 +42,10 @@ import {
   collaborationGateArtifacts,
   collaborationGateOperations,
   docVersions,
+  hostedTaskArtifacts,
+  hostedExecutionBindings,
+  hostedExecutionEvents,
+  nodeExecutionEventSources,
   lifecycleAlerts,
   nodeRunEvents,
   nodeRunOutputs,
@@ -242,6 +246,14 @@ async function loadArchiveRows(
     async (ids) => await db.select().from(nodeRuns).where(inArray(nodeRuns.taskId, ids)),
   )
   const runIds = runRows.map((row) => row.id)
+  const hostedBindings = await byTask(
+    async (ids) =>
+      await db
+        .select()
+        .from(hostedExecutionBindings)
+        .where(inArray(hostedExecutionBindings.taskId, ids)),
+  )
+  const hostedExecutionIds = hostedBindings.map((row) => row.executionId)
   const effectRows = await byTask(
     async (ids) =>
       await db.select().from(taskExecutionEffects).where(inArray(taskExecutionEffects.taskId, ids)),
@@ -399,6 +411,27 @@ async function loadArchiveRows(
     task_execution_lineage_operation_records: [...lineage.values()].sort((left, right) =>
       left.id.localeCompare(right.id),
     ),
+    hosted_task_artifacts: await byTask(
+      async (ids) =>
+        await db.select().from(hostedTaskArtifacts).where(inArray(hostedTaskArtifacts.taskId, ids)),
+    ),
+    hosted_execution_bindings: hostedBindings,
+    hosted_execution_events: await chunkedAll(
+      hostedExecutionIds,
+      async (ids) =>
+        await db
+          .select()
+          .from(hostedExecutionEvents)
+          .where(inArray(hostedExecutionEvents.executionId, ids)),
+    ),
+    node_execution_event_sources: await chunkedAll(
+      runIds,
+      async (ids) =>
+        await db
+          .select()
+          .from(nodeExecutionEventSources)
+          .where(inArray(nodeExecutionEventSources.nodeRunId, ids)),
+    ),
   }
 }
 
@@ -432,6 +465,10 @@ export const ARCHIVED_TABLES: readonly string[] = [
   'task_execution_effect_attempts',
   'task_execution_effect_fences',
   'task_execution_lineage_operation_records',
+  'hosted_task_artifacts',
+  'hosted_execution_bindings',
+  'hosted_execution_events',
+  'node_execution_event_sources',
 ]
 
 /** 会随删库级联消失、但**故意**不归档的表。

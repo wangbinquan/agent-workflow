@@ -14,9 +14,12 @@ import {
   joinHostedWorkspaceReference,
 } from './workspaceReference'
 
+/** Task-image operation running one whole repository commit use case. */
+export const REPOSITORY_COMMIT_OPERATION = 'repository-commit'
+
 export function createHostedWorkspaceEffects(input: {
   readonly helper: WorkspaceHelper
-  readonly workspaces: HostedTaskWorkspaces
+  readonly workspaces: Pick<HostedTaskWorkspaces, 'open'>
   readonly api: CrewStationBusinessExecution
 }) {
   const call = <T>(reference: string, operation: string, extra: object = {}) => {
@@ -68,6 +71,27 @@ export function createHostedWorkspaceEffects(input: {
           ...binding,
           workspaceRef: joinHostedWorkspaceReference(binding.workspaceRef, relative),
         }),
+      // RFC-370 §9.2 V3: each commit use case is one command in the volume.
+      commitOperations: {
+        prepare: (request) =>
+          input.helper.call(workspace.taskId, REPOSITORY_COMMIT_OPERATION, {
+            method: 'prepare',
+            path: workspace.path,
+            input: request,
+          }),
+        commitPrepared: (request) =>
+          input.helper.call(workspace.taskId, REPOSITORY_COMMIT_OPERATION, {
+            method: 'commitPrepared',
+            path: workspace.path,
+            input: request,
+          }),
+        preview: (request) =>
+          input.helper.call(workspace.taskId, REPOSITORY_COMMIT_OPERATION, {
+            method: 'preview',
+            path: workspace.path,
+            input: request,
+          }),
+      },
     }
   }
   const workspaceReads: RepositoryWorkspaceReadQueries = {
@@ -86,7 +110,8 @@ export function createHostedWorkspaceEffects(input: {
         parseHostedWorkspaceReference(joinHostedWorkspaceReference(reference, relative)).relative
       return {
         async list(request) {
-          const workspace = await input.workspaces.find(root.taskId)
+          // File reads need a running parent: a paused one is resumed first.
+          const workspace = await input.workspaces.open(root.taskId)
           if (workspace === null) throw new Error('hosted-workspace-not-found')
           let after: string | undefined
           const entries: Array<{ name: string; kind: 'file' | 'directory'; size: number | null }> =
@@ -123,7 +148,7 @@ export function createHostedWorkspaceEffects(input: {
           }
         },
         async read(request) {
-          const workspace = await input.workspaces.find(root.taskId)
+          const workspace = await input.workspaces.open(root.taskId)
           if (workspace === null) throw new Error('hosted-workspace-not-found')
           const path = pathFor(request.relativeFile)
           // Acquire a version before resuming a bounded read: CS rejects a

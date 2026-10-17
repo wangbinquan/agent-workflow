@@ -30,6 +30,7 @@ export interface HostedDatabasePreparation {
 export function createHostedDatabaseInstallation(input: {
   readonly project: string
   readonly service: string
+  readonly env?: Readonly<Record<string, string | undefined>>
   readonly prepare: (
     request: HostedDatabasePreparation,
   ) => Promise<PreparedPostgresqlProviderSchema>
@@ -44,6 +45,7 @@ export function createHostedDatabaseInstallation(input: {
         project: input.project,
         service: input.service,
         schemaDigest: contract.digest,
+        ...(input.env ? { env: input.env } : {}),
       }),
     }),
     resolveRecoverySource: () => unsupported('migration recovery source'),

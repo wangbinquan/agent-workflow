@@ -138,8 +138,10 @@ describe('createBackup', () => {
       schemaDigest: manifest.database.schemaDigest,
       // RFC-371 v2 retired 81 v1 observation tables and added three; RFC-370 v2
       // retired the host write-context and memory distill receipt tables; RFC-370 M0
-      // added the hosted configuration document, external identity and skill content tables.
-      activeTableCount: 192,
+      // added the hosted configuration document, external identity and skill content tables;
+      // RFC-370 v3 V11's single hosted-deployment migration adds the remote execution,
+      // workspace command, object publication, backup, recovery and event inbox tables.
+      activeTableCount: 210,
       archiveOnlyTableCount: 6,
     })
   })

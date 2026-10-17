@@ -21,6 +21,7 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 import {
   nodeRuns,
   runtimeSessionLeases as runtimeSessionLeaseRows,
+  taskExecutionIntents,
   taskExecutionOwners,
   tasks,
 } from '@/db/schema'
@@ -47,7 +48,6 @@ import type { ChildTaskLifecycleParticipant } from '../application/ports/taskExe
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { ProviderTaskExecutionModule } from '../composition'
-import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { taskStopProjection, type ResourceReapStopCause } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { submitTaskContinuation } from './taskContinuationAdmission'
@@ -60,7 +60,11 @@ import { resolveTerminalWorkspacePruneDecision } from '@/platform/persistence/te
 import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
-import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
+import type {
+  TaskDriveContext,
+  TaskDriverLifecyclePort,
+  RepositoryPreparationStepOutcome,
+} from '../application/drive/taskDriveCoordinator'
 
 const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
@@ -197,6 +201,53 @@ export interface TaskResumeDependencies {
   readonly lifecycle: TaskDriverLifecyclePort
 }
 
+/** Internal command identity supplied by a durable business owner. The guard
+ * must verify that owner's actor, reservation and immutable request in this
+ * transaction, on both first admission and replay. A browser id is not proof.
+ * It must perform database work only; serializable transactions can retry. */
+export interface DurableTaskResumeCommand {
+  readonly intentId: string
+  assertCurrent(tx: ProviderNeutralDatabase): Promise<void>
+  admitted(tx: ProviderNeutralDatabase, intentId: string): Promise<void>
+}
+
+export interface PreparedTaskResume {
+  readonly taskId: string
+  readonly intentId: string
+  readonly state: typeof taskExecutionIntents.$inferSelect.state
+}
+
+async function readResumeIntent(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  intentId: string,
+): Promise<PreparedTaskResume | null> {
+  const [row] = await db
+    .select()
+    .from(taskExecutionIntents)
+    .where(eq(taskExecutionIntents.id, intentId))
+    .limit(1)
+  if (!row) return null
+  let payload: unknown
+  try {
+    payload = JSON.parse(row.payloadJson)
+  } catch {
+    throw new ConflictError('resume-command-conflict', 'resume command payload is invalid')
+  }
+  if (
+    row.taskId !== taskId ||
+    row.kind !== 'resume' ||
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload) ||
+    Object.keys(payload).sort().join(',') !== 'event,v' ||
+    (payload as { v?: unknown }).v !== 1 ||
+    (payload as { event?: unknown }).event !== 'resume'
+  )
+    throw new ConflictError('resume-command-conflict', 'command identity belongs to another action')
+  return { taskId, intentId, state: row.state }
+}
+
 function validateFrozenTrigger(task: ResumeTask): void {
   const source = parseTriggerContextJson(task.triggerContextJson)
   try {
@@ -236,8 +287,8 @@ async function loadResumeTask(db: ProviderNeutralDatabase, taskId: string): Prom
   return { ...row, status: row.status as TaskStatus }
 }
 
-async function assertResumeAdmission(
-  dependencies: TaskResumeDependencies,
+async function assertResumeBusinessAdmission(
+  dependencies: Pick<TaskResumeDependencies, 'db' | 'activity'>,
   task: ResumeTask,
 ): Promise<void> {
   if (dependencies.activity.isActive(task.id)) {
@@ -271,6 +322,23 @@ async function assertResumeAdmission(
     }
   }
   validateFrozenTrigger(task)
+}
+
+/** Recovery can check the same business rules before a paused platform volume
+ * is made runnable. This read-only preflight deliberately does not probe files;
+ * ordinary resume still verifies real workspace presence before admission. */
+export async function assertResumeTaskBusinessAdmission(
+  dependencies: Pick<TaskResumeDependencies, 'db' | 'activity'>,
+  taskId: string,
+): Promise<void> {
+  await assertResumeBusinessAdmission(dependencies, await loadResumeTask(dependencies.db, taskId))
+}
+
+async function assertResumeAdmission(
+  dependencies: TaskResumeDependencies,
+  task: ResumeTask,
+): Promise<void> {
+  await assertResumeBusinessAdmission(dependencies, task)
 
   const hasRepoPrepRow =
     (
@@ -344,13 +412,16 @@ async function admitResume(
   dependencies: TaskResumeDependencies,
   task: ResumeTask,
   actorUserId: string | undefined,
-): Promise<{
-  readonly intentId: string
-  readonly eventRefs: readonly TaskExecutionPostCommitEventRef[]
-}> {
-  const intentId = ulid()
+  command?: DurableTaskResumeCommand,
+): Promise<PreparedTaskResume> {
+  const intentId = command?.intentId ?? ulid()
   const now = Date.now()
-  const eventRefs = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+  const result = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    if (command) {
+      await command.assertCurrent(tx)
+      const previous = await readResumeIntent(tx, task.id, intentId)
+      if (previous) return { prepared: previous, eventRefs: [] }
+    }
     await assertTaskOwnerlessTx(tx, task.id)
     const changed = await tx
       .update(tasks)
@@ -380,7 +451,7 @@ async function admitResume(
         `task '${task.id}' changed state while admitting resume`,
       )
     }
-    await submitTaskContinuation(tx, {
+    const submitted = await submitTaskContinuation(tx, {
       taskId: task.id,
       intentId,
       kind: 'resume',
@@ -390,6 +461,9 @@ async function admitResume(
       now,
       advanceOperationGeneration: true,
     })
+    if (submitted.intentId !== intentId)
+      throw new ConflictError('resume-command-conflict', 'another continuation won admission')
+    await command?.admitted(tx, intentId)
     const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: task.id,
       lifecycleRevision: row.lifecycleEventRevision,
@@ -398,10 +472,13 @@ async function admitResume(
       errorSummary: null,
       occurredAt: now,
     })
-    return eventRef === null ? [] : [eventRef]
+    return {
+      prepared: { taskId: task.id, intentId, state: submitted.state },
+      eventRefs: eventRef === null ? [] : [eventRef],
+    }
   })
-  await publishCommittedEventsAfterCommit(eventRefs)
-  return { intentId, eventRefs }
+  await publishCommittedEventsAfterCommit(result.eventRefs)
+  return result.prepared
 }
 
 async function markUnsafeResume(
@@ -957,19 +1034,41 @@ export function createChildTaskLifecycleParticipant(
  * 第九格是「工作区回收中」的归因差异，合并收敛到本实现这一侧——它说得出「正在被 GC 回收」，
  * 退役那份只能给一个听起来像永久性的 `task-not-resumable`）。
  */
-export async function resumeTaskProjection(
+export interface TaskResumeProjectionOptions {
+  readonly completionMode?: TaskDriveCompletionMode
+  readonly command?: DurableTaskResumeCommand
+  /** A durable recovery owner can checkpoint the existing rollback before a
+   * platform operation. Reentry must consult that checkpoint before invoking
+   * rollback again; it must never rewind a workspace with a successor writer. */
+  readonly continuation?: {
+    prepare(
+      context: TaskDriveContext,
+      rollback: () => Promise<void>,
+    ): Promise<RepositoryPreparationStepOutcome>
+    /** Runs in the background drive body, after the admission response. This
+     * lets a recovery consumer obtain the platform receipt without deadlocking
+     * on the engine waiting for that same receipt. */
+    ready(context: TaskDriveContext): Promise<RepositoryPreparationStepOutcome>
+  }
+}
+
+/** The normal command and hosted recovery use the same admission CAS and
+ * continuation intent. Admission can be projected with a remote receipt, then
+ * driven after commit; a lost notification can use the same saved intent id. */
+export async function prepareResumeTaskProjection(
   dependencies: TaskResumeDependencies,
   input: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
-  topology: Parameters<ChildTaskLifecycleParticipant['resume']>[1],
-  /**
-   * 收尾模式。**生产一律不传**（`background`：复活是 fire-and-forget，路由立刻把任务行还给调用方）。
-   * 只有需要「等引擎跑完再断言」的判据传 `await-settle`——退役那份实现里这件事由
-   * `StartTaskDeps.awaitScheduler` 表达，那是 legacy 启动依赖上的一格，共用实现不该认识它，
-   * 所以它在这里变成一个显式参数。
-   */
-  options: { readonly completionMode?: TaskDriveCompletionMode } = {},
-): Promise<void> {
-  const lifecycle = dependencies.lifecycle
+  command?: DurableTaskResumeCommand,
+): Promise<PreparedTaskResume> {
+  if (command) {
+    if (command.intentId.length === 0 || command.intentId.length > 256)
+      throw new ConflictError('resume-command-conflict', 'resume command identity is invalid')
+    const previous = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+      await command.assertCurrent(tx)
+      return readResumeIntent(tx, input.taskId, command.intentId)
+    })
+    if (previous) return previous
+  }
   // RFC-359 AC-1（第 10 刀漏掉、第 11 刀补回）——**两阶段停机：先等上一任 driver settle**。
   //
   // 上一任 driver 的运行时已经停了，但库里的 owner 行 / intent 还在转移中时，直接准入会撞
@@ -982,8 +1081,50 @@ export async function resumeTaskProjection(
   // `activity.awaitReleasedSettled` 是端口，两个组合根各交各的真实现，不许再交空桩。
   await dependencies.activity.awaitReleasedSettled(input.taskId)
   const task = await loadResumeTask(dependencies.db, input.taskId)
-  await assertResumeAdmission(dependencies, task)
-  const admitted = await admitResume(dependencies, task, input.runtime.actorUserId)
+  try {
+    await assertResumeAdmission(dependencies, task)
+  } catch (error) {
+    // Another delivery can commit this exact command between the initial
+    // lookup and the preflight read. It is a replay, not a fresh resume of a
+    // task that has already become pending/running.
+    if (command) {
+      const previous = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+        await command.assertCurrent(tx)
+        return readResumeIntent(tx, input.taskId, command.intentId)
+      })
+      if (previous) return previous
+    }
+    throw error
+  }
+  return admitResume(dependencies, task, input.runtime.actorUserId, command)
+}
+
+export async function drivePreparedTaskResume(
+  dependencies: TaskResumeDependencies,
+  input: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
+  topology: Parameters<ChildTaskLifecycleParticipant['resume']>[1],
+  prepared: PreparedTaskResume,
+  options: TaskResumeProjectionOptions = {},
+): Promise<void> {
+  if (
+    prepared.taskId !== input.taskId ||
+    (options.command && options.command.intentId !== prepared.intentId)
+  )
+    throw new ConflictError(
+      'resume-command-conflict',
+      'resume command identity changed before drive',
+    )
+  const admitted = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    await options.command?.assertCurrent(tx)
+    return readResumeIntent(tx, input.taskId, prepared.intentId)
+  })
+  if (!admitted)
+    throw new ConflictError('resume-command-conflict', 'resume command was not admitted')
+  if (!['pending', 'claimed'].includes(admitted.state)) return
+  // A duplicate notification must not wait on the very driver whose platform
+  // receipt the recovery consumer is about to publish.
+  if (dependencies.activity.isActive(input.taskId)) return
+  const lifecycle = dependencies.lifecycle
   const runtime = resolveTaskDriveConfig({
     ...input.runtime.runConfig,
     ensureWorkspaceProfiles: true,
@@ -993,16 +1134,23 @@ export async function resumeTaskProjection(
     lifecycle,
     admittedContinuation: {
       async run(context) {
-        await rollbackForResume(dependencies, {
-          taskId: input.taskId,
-          executionContext: context.execution,
-        })
+        const rollback = () =>
+          rollbackForResume(dependencies, {
+            taskId: input.taskId,
+            executionContext: context.execution,
+          })
+        if (options.continuation) return options.continuation.prepare(context, rollback)
+        await rollback()
         return { kind: 'ready' as const }
       },
     },
     repositoryPreparation: skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {
+        if (options.continuation) {
+          const readiness = await options.continuation.ready(context)
+          if (readiness.kind !== 'ready' || context.signal.aborted) return
+        }
         await topology.schedulerDriver.drive({
           taskId: context.taskId,
           appHome: context.runtime.appHome,
@@ -1044,4 +1192,14 @@ export async function resumeTaskProjection(
     intentId: admitted.intentId,
     completionMode: options.completionMode ?? 'background',
   })
+}
+
+export async function resumeTaskProjection(
+  dependencies: TaskResumeDependencies,
+  input: Parameters<ChildTaskLifecycleParticipant['resume']>[0],
+  topology: Parameters<ChildTaskLifecycleParticipant['resume']>[1],
+  options: TaskResumeProjectionOptions = {},
+): Promise<void> {
+  const prepared = await prepareResumeTaskProjection(dependencies, input, options.command)
+  await drivePreparedTaskResume(dependencies, input, topology, prepared, options)
 }

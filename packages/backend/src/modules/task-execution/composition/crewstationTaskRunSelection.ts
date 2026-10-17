@@ -15,7 +15,7 @@ import type { TaskRunFamilyBinding } from '../application/ports/taskRunSelection
 import { createTaskAgentMaterialPreparation } from './taskAgentMaterialPreparation'
 import {
   createHostedAgentInvocationPreparation,
-  bindHostedAgentExecutionParticipants,
+  createHostedAgentParticipants,
   type HostedAgentProfile,
 } from './crewstationAgentInvocation'
 import { createHostedTaskScriptRunFamily } from '../infrastructure/crewstation/taskScriptRunFamily'
@@ -28,6 +28,17 @@ export function composeCrewStationTaskRunSelection(input: {
   readonly executions: HostedExecution
   readonly helper: WorkspaceHelper
   readonly profiles: readonly HostedAgentProfile[]
+  readonly materialEnvironment?: Parameters<
+    typeof createHostedAgentInvocationPreparation
+  >[0]['materialEnvironment']
+  readonly pluginFiles?: Parameters<typeof createHostedAgentInvocationPreparation>[0]['pluginFiles']
+  readonly materialFiles?: Parameters<
+    typeof createHostedAgentInvocationPreparation
+  >[0]['materialFiles']
+  readonly materialObjectsAvailable?: (agentProfileId: string) => Promise<boolean>
+  readonly nativeConfigAvailable?: (agentProfileId: string) => Promise<boolean>
+  readonly nativeModelMappingAvailable?: (agentProfileId: string) => Promise<boolean>
+  readonly startupInventoryAvailable?: (agentProfileId: string) => Promise<boolean>
   readonly skills: SkillPackageContentReader
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
@@ -38,40 +49,8 @@ export function composeCrewStationTaskRunSelection(input: {
     binding: Pick<TaskRunFamilyBinding, 'nodeRunRuntime' | 'runtimeRegistry'>,
   ) => TaskAgentRuntimeBindings
 }): TaskRunRootSelection {
-  const materialReferences: TaskAgentMaterialReferences = {
-    references(snapshot) {
-      return {
-        skills: snapshot.skills.map((skill) => ({
-          name: skill.name,
-          sourceKind: skill.kind,
-          ...(skill.kind === 'managed'
-            ? { skillId: skill.skillId, contentVersion: skill.contentVersion }
-            : {}),
-          content: {
-            owner: 'resource-catalog',
-            reference:
-              skill.kind === 'managed'
-                ? `hosted-skill:${skill.skillId}`
-                : `project-skill:${skill.name}`,
-            version: skill.kind === 'managed' ? skill.contentVersion : null,
-          },
-        })),
-        plugins: snapshot.plugins.map((plugin) => ({
-          declaration: {
-            id: plugin.id,
-            name: plugin.name,
-            options: plugin.options,
-            enabled: plugin.enabled,
-          },
-          content: {
-            owner: 'resource-catalog',
-            reference: `hosted-plugin:${plugin.id}`,
-            version: plugin.resolvedVersion ?? null,
-          },
-        })),
-      }
-    },
-  }
+  const materialReferences = composeHostedTaskMaterialReferences()
+  const participants = createHostedAgentParticipants()
   return {
     configurationFor: () => ({ kind: 'task-run-configuration', reference: Object.freeze({}) }),
     runs: {
@@ -90,10 +69,10 @@ export function composeCrewStationTaskRunSelection(input: {
               workspace: { owner: 'source-control', reference: scope.workspaceRef, version: null },
               runContent: {
                 owner: 'runtime-management',
-                reference: input.reference(scope.taskId, runPath),
+                reference: input.reference(location.taskId, runPath),
                 version: null,
               },
-              retainedRef: input.reference(scope.taskId, runPath),
+              retainedRef: input.reference(location.taskId, runPath),
               async prepare(seeds = []) {
                 await input.helper.call(
                   scope.taskId,
@@ -128,6 +107,7 @@ export function composeCrewStationTaskRunSelection(input: {
               selectMaterial() {
                 const preparation = createHostedAgentInvocationPreparation({
                   ...input,
+                  participants,
                   taskId: scope.taskId,
                   businessTaskId: physical.businessTaskId,
                   cwd: location.path,
@@ -143,10 +123,10 @@ export function composeCrewStationTaskRunSelection(input: {
                       name: skill.name,
                       contentVersion: skill.contentVersion,
                     })
-                    return files.map((file) => {
-                      const content = new TextDecoder('utf-8', { fatal: true }).decode(file.bytes)
-                      return { path: `${skill.name}/${file.path}`, content }
-                    })
+                    return files.map((file) => ({
+                      path: `${skill.name}/${file.path}`,
+                      bytes: file.bytes,
+                    }))
                   },
                 })
                 return createTaskAgentMaterialPreparation({
@@ -162,7 +142,7 @@ export function composeCrewStationTaskRunSelection(input: {
                       })),
                   },
                   diagnostics: {
-                    readDeclaredMcpServers: () => [],
+                    readDeclaredMcpServers: (compiled) => compiled.declared.mcpServers,
                     reportSpawn: (_compiled, log, details) => {
                       log.info('crewstation agent execution', {
                         ...details,
@@ -173,7 +153,7 @@ export function composeCrewStationTaskRunSelection(input: {
                   },
                 })
               },
-              bindExecutionParticipants: bindHostedAgentExecutionParticipants,
+              bindExecutionParticipants: participants.bind,
             }
           },
         }
@@ -184,6 +164,46 @@ export function composeCrewStationTaskRunSelection(input: {
           taskId: binding.taskId,
           path: (reference) => input.locate(reference).path,
         }),
+    },
+  }
+}
+
+/** Preserve frozen content generations when a resource is updated during a run. */
+export function composeHostedTaskMaterialReferences(): TaskAgentMaterialReferences {
+  return {
+    references(snapshot) {
+      return {
+        skills: snapshot.skills.map((skill) => ({
+          name: skill.name,
+          sourceKind: skill.kind,
+          ...(skill.kind === 'managed'
+            ? { skillId: skill.skillId, contentVersion: skill.contentVersion }
+            : {}),
+          content: {
+            owner: 'resource-catalog',
+            reference:
+              skill.kind === 'managed'
+                ? `hosted-skill:${skill.skillId}`
+                : `project-skill:${skill.name}`,
+            version: skill.kind === 'managed' ? skill.contentVersion : null,
+          },
+        })),
+        plugins: snapshot.plugins.map((plugin) => ({
+          declaration: {
+            id: plugin.id,
+            name: plugin.name,
+            options: plugin.options,
+            enabled: plugin.enabled,
+          },
+          content: {
+            owner: 'resource-catalog',
+            reference: plugin.runtimeSpecifier.startsWith('file://')
+              ? plugin.runtimeSpecifier.slice(7)
+              : plugin.runtimeSpecifier,
+            version: plugin.resolvedVersion ?? null,
+          },
+        })),
+      }
     },
   }
 }

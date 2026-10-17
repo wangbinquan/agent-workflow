@@ -32,6 +32,11 @@ export async function runBootExecutionRecovery(
   }
 
   const finalization = await effects.finalize(finalizationRef)
+  if (finalization.deferredTaskIds?.length) {
+    input.log.warn('remote executions require reconciliation; their task holds remain retained', {
+      tasks: finalization.deferredTaskIds.length,
+    })
+  }
   if (finalization.releasedTaskIds.length > 0 || finalization.outcomeUnknownTaskIds.length > 0) {
     input.log.info('durable task execution recovery finalized', {
       released: finalization.releasedTaskIds.length,

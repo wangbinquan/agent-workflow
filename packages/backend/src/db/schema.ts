@@ -3982,8 +3982,11 @@ export const applicationConfiguration = sqliteTable(
 // RFC-370 v2 §3.2 / §5.2 — the CrewStation execution lease mirrored in the
 // application database (system-operations owns it; standalone never writes).
 // One row whose epoch never decreases. Every transaction that records a
-// hosted execution effect locks it and checks this instance still holds an
+// hosted execution effect holds it and checks this instance still holds an
 // unexpired active lease — the application side of the platform's fence.
+// RFC-370 v3 V7 — `migration_operation_id` is the database write window: set
+// while the platform freezes the service for a migration or a database
+// restore (every hosted write is refused), cleared by the next lease claim.
 // -----------------------------------------------------------------------------
 export const hostedExecutionControl = sqliteTable(
   'hosted_execution_control',
@@ -3994,6 +3997,7 @@ export const hostedExecutionControl = sqliteTable(
     phase: text('phase', { enum: ['frozen', 'preparing', 'active'] }).notNull(),
     leaseId: text('lease_id'),
     expiresAt: integer('expires_at'),
+    migrationOperationId: text('migration_operation_id'),
     updatedAt: integer('updated_at').notNull(),
   },
   (t) => ({
@@ -4001,6 +4005,10 @@ export const hostedExecutionControl = sqliteTable(
     phaseKnown: check(
       'hosted_execution_control_phase_known',
       sql`${t.phase} IN ('frozen', 'preparing', 'active')`,
+    ),
+    windowFrozen: check(
+      'hosted_execution_control_window_frozen',
+      sql`${t.migrationOperationId} IS NULL OR ${t.phase} = 'frozen'`,
     ),
   }),
 )
@@ -4028,6 +4036,43 @@ export const hostedTaskWorkspaces = sqliteTable(
   }),
 )
 
+// RFC-370 §9.2 V2 — one durable task-image helper command (workspace, Git,
+// content or maintenance operation) on a task volume; source-control owns it,
+// standalone never writes. The request is frozen before submit so a lost
+// receipt repeats the same requestKey; the outcome is read from the volume.
+export const hostedWorkspaceCommands = sqliteTable(
+  'hosted_workspace_commands',
+  {
+    executionId: text('execution_id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    businessTaskId: text('business_task_id').notNull(),
+    operation: text('operation').notNull(),
+    requestKey: text('request_key').notNull(),
+    requestJson: text('request_json').notNull(),
+    subtaskId: text('subtask_id'),
+    attempt: integer('attempt'),
+    lastCursor: text('last_cursor'),
+    outcomeJson: text('outcome_json'),
+    state: text('state', {
+      enum: ['submitting', 'running', 'settled', 'abandoned'],
+    }).notNull(),
+    epoch: integer('epoch').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    stateIdx: index('idx_hosted_workspace_commands_state').on(t.state),
+    businessTaskIdx: index('idx_hosted_workspace_commands_business_task').on(
+      t.businessTaskId,
+      t.state,
+    ),
+    stateKnown: check(
+      'hosted_workspace_commands_state_known',
+      sql`${t.state} IN ('submitting', 'running', 'settled', 'abandoned')`,
+    ),
+  }),
+)
+
 // RFC-370 v2 §3.3 — one hosted execution (an agent or command subtask) bound to
 // the aw execution id; task-execution owns it, standalone never writes. The
 // intent row is written under the execution fence before the submit, the
@@ -4051,7 +4096,7 @@ export const hostedExecutionBindings = sqliteTable(
     lastCursor: text('last_cursor'),
     resultJson: text('result_json'),
     cancelRequested: integer('cancel_requested', { mode: 'boolean' }).notNull().default(false),
-    cancelReason: text('cancel_reason', { enum: ['user', 'timeout'] }),
+    cancelReason: text('cancel_reason', { enum: ['user', 'timeout', 'restored'] }),
     state: text('state', { enum: ['submitting', 'running', 'settled'] }).notNull(),
     epoch: integer('epoch').notNull(),
     createdAt: integer('created_at').notNull(),
@@ -4067,6 +4112,57 @@ export const hostedExecutionBindings = sqliteTable(
     stateKnown: check(
       'hosted_execution_bindings_state_known',
       sql`${t.state} IN ('submitting', 'running', 'settled')`,
+    ),
+  }),
+)
+
+/** RFC-370 §9.2 V4 — one CrewStation recovery request consumed by AW. Every
+ * request reaches a terminal state (succeeded / failed / rejected); claims are
+ * short-lived platform credentials and never belong in this journal. */
+export const hostedRecoveryRequests = sqliteTable(
+  'hosted_recovery_requests',
+  {
+    requestId: text('request_id').primaryKey(),
+    requestJson: text('request_json').notNull(),
+    businessTaskId: text('business_task_id').notNull(),
+    taskId: text('task_id'),
+    actorUserId: text('actor_user_id'),
+    state: text('state', {
+      enum: ['admitted', 'executing', 'succeeded', 'failed', 'rejected'],
+    }).notNull(),
+    receiptJson: text('receipt_json'),
+    reason: text('reason'),
+    epoch: integer('epoch').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    stateIndex: index('hosted_recovery_requests_state').on(t.state, t.createdAt),
+    taskIndex: index('hosted_recovery_requests_task').on(t.taskId, t.createdAt),
+    stateKnown: check(
+      'hosted_recovery_requests_state_known',
+      sql`${t.state} IN ('admitted', 'executing', 'succeeded', 'failed', 'rejected')`,
+    ),
+  }),
+)
+
+/** RFC-370 v3 V6: the hosted task archive index (task-execution owns it). Each
+ * archived file lists its immutable object parts; the parts are publications of
+ * the neutral object journal, linked (never copied) when the bytes already
+ * exist. No FK to tasks: archives outlive them. */
+export const hostedTaskArchiveEntries = sqliteTable(
+  'hosted_task_archive_entries',
+  {
+    path: text('path').primaryKey(),
+    kind: text('kind', { enum: ['directory', 'file'] }).notNull(),
+    partsJson: text('parts_json').notNull().default('[]'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    kindKnown: check(
+      'hosted_task_archive_entries_kind_known',
+      sql`${t.kind} IN ('directory', 'file')`,
     ),
   }),
 )
@@ -4097,15 +4193,190 @@ export const nodeExecutionEventSources = sqliteTable('node_execution_event_sourc
 })
 
 // RFC-370: Task-owned immutable object pointers; bytes live in CS object storage.
+// Each row is the owner reference of one `task-artifact` publication (key =
+// reference, scope = task id), committed in the publication's ready transaction.
 export const hostedTaskArtifacts = sqliteTable('hosted_task_artifacts', {
   reference: text('reference').primaryKey(),
   taskId: text('task_id').notNull(),
   objectId: text('object_id').notNull(),
-  revision: integer('revision').notNull(),
   digest: text('digest').notNull(),
   size: integer('size').notNull(),
   createdAt: integer('created_at').notNull(),
 })
+
+// RFC-370 M3: Task Execution retains event chunks across service slots. A
+// prepared row names an exact source event range; its bytes are re-encoded from
+// those rows (never stored here). Publication of the chunk and deletion of
+// exactly that range commit in one transaction.
+export const hostedNodeEventArchives = sqliteTable(
+  'hosted_node_event_archives',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    nodeRunId: text('node_run_id').notNull(),
+    firstId: integer('first_id').notNull(),
+    lastId: integer('last_id').notNull(),
+    rowCount: integer('row_count').notNull(),
+    digest: text('digest').notNull(),
+    size: integer('size').notNull(),
+    state: text('state', { enum: ['prepared', 'ready'] }).notNull(),
+    objectId: text('object_id'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    runIndex: index('hosted_node_event_archives_run').on(t.taskId, t.nodeRunId, t.lastId),
+    pendingIndex: index('hosted_node_event_archives_pending').on(t.state, t.createdAt),
+    stateKnown: check(
+      'hosted_node_event_archives_state_known',
+      sql`${t.state} IN ('prepared', 'ready')`,
+    ),
+    objectKnown: check(
+      'hosted_node_event_archives_object_known',
+      sql`(${t.state} = 'prepared' AND ${t.objectId} IS NULL) OR (${t.state} = 'ready' AND ${t.objectId} IS NOT NULL)`,
+    ),
+    positiveRange: check(
+      'hosted_node_event_archives_range',
+      sql`${t.firstId} > 0 AND ${t.lastId} >= ${t.firstId} AND ${t.rowCount} > 0`,
+    ),
+  }),
+)
+
+// RFC-370 M2: DA owns the durable mapping from its existing blob/bundle refs
+// to immutable CS objects. File bodies never enter the application database.
+// Rows commit together with the ready transition of their publication.
+export const developmentObjectArtifacts = sqliteTable('development_object_artifacts', {
+  reference: text('reference').primaryKey(),
+  objectId: text('object_id').notNull(),
+  digest: text('digest').notNull(),
+  size: integer('size').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+// RFC-370 M2 / v3 V6: Resource Catalog generation pointer. The installation
+// receipt precedes every upload; the manifest object is published only after
+// every generation file is a ready publication (scope = reference). Retirement
+// releases the scope in the same transaction that marks the row retired.
+export const pluginArtifactGenerations = sqliteTable(
+  'plugin_artifact_generations',
+  {
+    reference: text('reference').primaryKey(),
+    pluginId: text('plugin_id').notNull(),
+    generationId: text('generation_id').notNull(),
+    spec: text('spec').notNull(),
+    state: text('state', { enum: ['installing', 'ready', 'releasing', 'retired'] }).notNull(),
+    epoch: integer('epoch').notNull(),
+    installedJson: text('installed_json'),
+    objectId: text('object_id'),
+    digest: text('digest'),
+    size: integer('size'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    stateKnown: check(
+      'plugin_artifact_generations_state_known',
+      sql`${t.state} IN ('installing', 'ready', 'releasing', 'retired')`,
+    ),
+    readyShape: check(
+      'plugin_artifact_generations_ready_shape',
+      sql`${t.state} != 'ready' OR (${t.objectId} IS NOT NULL AND ${t.digest} IS NOT NULL AND ${t.size} IS NOT NULL)`,
+    ),
+  }),
+)
+
+// RFC-370 v3 V5: the hosted backup catalog. A backup is one portable logical
+// archive (the standalone PostgreSQL backup format) stored as a CS object; the
+// archive is the only object a backup pins. Objects referenced by the backed-up
+// rows are retained by the release horizon: an owner-released publication is
+// unpinned only when no building/ready backup's [created_at, snapshot_at]
+// window overlaps its lifetime. One building slot bounds the snapshot budget.
+export const hostedDatabaseBackups = sqliteTable(
+  'hosted_database_backups',
+  {
+    id: text('id').primaryKey(),
+    epoch: integer('epoch').notNull(),
+    kind: text('kind', { enum: ['manual', 'scheduled'] })
+      .notNull()
+      .default('manual'),
+    state: text('state', {
+      enum: ['building', 'ready', 'failed', 'released'],
+    }).notNull(),
+    activeSlot: text('active_slot').unique(),
+    objectId: text('object_id'),
+    sha256: text('sha256'),
+    sizeBytes: integer('size_bytes'),
+    schemaDigest: text('schema_digest'),
+    sourceGenerationId: text('source_generation_id'),
+    contentsJson: text('contents_json'),
+    snapshotAt: integer('snapshot_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    kindKnown: check(
+      'hosted_database_backups_kind_known',
+      sql`${t.kind} IN ('manual','scheduled')`,
+    ),
+    stateKnown: check(
+      'hosted_database_backups_state_known',
+      sql`${t.state} IN ('building','ready','failed','released')`,
+    ),
+    slotShape: check(
+      'hosted_database_backups_slot_shape',
+      sql`(${t.state} = 'building' AND ${t.activeSlot} IS NOT NULL AND ${t.activeSlot} = 'global') OR (${t.state} != 'building' AND ${t.activeSlot} IS NULL)`,
+    ),
+    readyShape: check(
+      'hosted_database_backups_ready_shape',
+      sql`${t.state} != 'ready' OR (${t.objectId} IS NOT NULL AND ${t.sha256} IS NOT NULL AND ${t.sizeBytes} IS NOT NULL AND ${t.schemaDigest} IS NOT NULL AND ${t.sourceGenerationId} IS NOT NULL AND ${t.contentsJson} IS NOT NULL AND ${t.snapshotAt} IS NOT NULL)`,
+    ),
+    stateIndex: index('hosted_database_backups_state_idx').on(t.state, t.createdAt),
+  }),
+)
+
+// RFC-370 v3 V6: the one platform-neutral object publication journal (system-
+// operations owns it). Each row is one application reference (pin) of one
+// immutable CS object, identified by (owner, logical_key). Owners bind rows in
+// their own transactions and keep their own reference rows; the hosted object
+// maintenance job resolves abandoned uploads, unpins owner-released objects
+// behind the backup release horizon and purges settled rows. Bytes are never
+// stored here except an optional sealed source of a not-yet-uploaded object,
+// which is cleared once the object is ready.
+export const hostedObjectPublications = sqliteTable(
+  'hosted_object_publications',
+  {
+    /** sha256(owner NUL logical_key): a single-column aggregate root to lock. */
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull(),
+    logicalKey: text('logical_key').notNull(),
+    scope: text('scope'),
+    attempt: text('attempt').notNull(),
+    state: text('state', { enum: ['pending', 'ready', 'releasing', 'released'] }).notNull(),
+    sha256: text('sha256').notNull(),
+    size: integer('size').notNull(),
+    objectId: text('object_id'),
+    epoch: integer('epoch').notNull(),
+    sourceSealed: text('source_sealed'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: integer('next_attempt_at').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    releasedAt: integer('released_at'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    identity: uniqueIndex('hosted_object_publications_identity').on(t.owner, t.logicalKey),
+    workIndex: index('hosted_object_publications_work_idx').on(t.state, t.nextAttemptAt),
+    scopeIndex: index('hosted_object_publications_scope_idx').on(t.owner, t.scope, t.state),
+    stateKnown: check(
+      'hosted_object_publications_state_known',
+      sql`${t.state} IN ('pending', 'ready', 'releasing', 'released')`,
+    ),
+    shapeKnown: check(
+      'hosted_object_publications_shape_known',
+      sql`(${t.state} = 'pending' AND ${t.releasedAt} IS NULL) OR (${t.state} = 'ready' AND ${t.objectId} IS NOT NULL AND ${t.releasedAt} IS NULL AND ${t.sourceSealed} IS NULL) OR (${t.state} IN ('releasing', 'released') AND ${t.releasedAt} IS NOT NULL AND ${t.sourceSealed} IS NULL)`,
+    ),
+    sizeValid: check('hosted_object_publications_size_valid', sql`${t.size} >= 0`),
+  }),
+)
 
 // -----------------------------------------------------------------------------
 // RFC-036 task_collaborators — owner + collaborators ("任务用户"). RFC-099
@@ -8591,3 +8862,77 @@ export const maintenanceRuns = sqliteTable(
     ),
   }),
 )
+
+// RFC-370 H8: transport receipts outlive logical endpoints and business failures.
+export const csEventInbox = sqliteTable(
+  'cs_event_inbox',
+  {
+    installationId: text('installation_id').notNull(),
+    deliveryId: text('delivery_id').notNull(),
+    logicalId: text('logical_id').notNull(),
+    eventId: text('event_id').notNull(),
+    producerId: text('producer_id').notNull(),
+    eventTypeId: text('event_type_id').notNull(),
+    payloadDigest: text('payload_digest').notNull(),
+    payloadJson: text('payload_json').notNull(),
+    receivedAt: integer('received_at').notNull(),
+    lastAttempt: integer('last_attempt').notNull(),
+    conflicts: integer('conflicts').notNull().default(0),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.installationId, t.deliveryId] }) }),
+)
+export const csEventRoutes = sqliteTable(
+  'cs_event_routes',
+  {
+    id: text('id').primaryKey(),
+    installationId: text('installation_id').notNull(),
+    producerId: text('producer_id').notNull(),
+    eventId: text('event_id').notNull(),
+    payloadDigest: text('payload_digest').notNull(),
+    envelopeJson: text('envelope_json').notNull(),
+    sourceJson: text('source_json').notNull(),
+    sourceRevision: integer('source_revision').notNull(),
+    result: text('result', { enum: ['routed', 'ignored'] }).notNull(),
+    createdAt: integer('created_at').notNull(),
+    conflicts: integer('conflicts').notNull().default(0),
+  },
+  (t) => ({
+    identity: uniqueIndex('idx_cs_event_routes_identity').on(
+      t.installationId,
+      t.producerId,
+      t.eventId,
+    ),
+  }),
+)
+export const csEventTargets = sqliteTable(
+  'cs_event_targets',
+  {
+    id: text('id').primaryKey(),
+    logicalId: text('logical_id').notNull(),
+    endpointId: text('endpoint_id').notNull(),
+    bindingRevision: integer('binding_revision').notNull(),
+    mode: text('mode', { enum: ['shadow', 'crewstation'] }).notNull(),
+    stage: text('stage', {
+      enum: ['pending', 'admitted', 'completed', 'ignored', 'rejected', 'source-deleted', 'shadow'],
+    }).notNull(),
+    deliveryId: text('delivery_id'),
+    effectId: text('effect_id'),
+    observationsJson: text('observations_json'),
+    publishedJson: text('published_json').notNull().default('{}'),
+    lastError: text('last_error'),
+    nextAttemptAt: integer('next_attempt_at').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    identity: uniqueIndex('idx_cs_event_targets_identity').on(t.logicalId, t.endpointId),
+    pending: index('idx_cs_event_targets_pending').on(t.stage, t.nextAttemptAt),
+  }),
+)
+
+// Extension receipt keeps the existing direct-delivery row contract unchanged.
+export const csWebhookVerifications = sqliteTable('cs_webhook_verifications', {
+  deliveryId: text('delivery_id').primaryKey(),
+  transportReceiptRef: text('transport_receipt_ref').notNull(),
+})

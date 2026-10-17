@@ -7,16 +7,13 @@
 //
 // 运行时依赖是单向的：本文件 import 各 adapter 实现组注册表；实现文件只做
 // type-only import 本文件（编译期擦除，无 ESM 循环）。
-import type { CodeHostEvent, CodeHostProvider } from '@agent-workflow/shared'
+import type { CodeHostProvider } from '@agent-workflow/shared'
 
 import { githubAdapter } from '@/services/webhook/githubAdapter'
 import { gitlabAdapter } from '@/services/webhook/gitlabAdapter'
 
-export type HeaderBag = Readonly<Record<string, string | undefined>>
-
-export type NormalizeResult =
-  | { ok: true; event: CodeHostEvent }
-  | { ok: false; reason: 'unsupported-event' | 'parse-failed'; detail: string }
+import type { HeaderBag, NormalizeResult } from '@/modules/integration/domain/codeHostNormalization'
+export type { HeaderBag, NormalizeResult } from '@/modules/integration/domain/codeHostNormalization'
 
 export interface CodeHostAdapter {
   readonly provider: CodeHostProvider

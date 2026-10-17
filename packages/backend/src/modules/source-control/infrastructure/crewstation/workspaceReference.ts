@@ -37,6 +37,24 @@ export function parseHostedWorkspaceReference(reference: string): {
   return { taskId, relative, path: relative === '' ? '/work' : `/work/${relative}` }
 }
 
+/** Translates the named references of one whole-volume operation to volume
+ * paths. Every reference must name the same volume owner. */
+export function hostedVolumePaths<const K extends string>(
+  references: Readonly<Record<K, string>>,
+): { readonly owner: string; readonly paths: Record<K, string> } {
+  let owner: string | undefined
+  const paths = {} as Record<K, string>
+  for (const [key, reference] of Object.entries(references) as [K, string][]) {
+    const location = parseHostedWorkspaceReference(reference)
+    if (owner !== undefined && location.taskId !== owner)
+      throw new Error('hosted-workspace-volume-mismatch')
+    owner = location.taskId
+    paths[key] = location.path
+  }
+  if (owner === undefined) throw new Error('hosted-workspace-reference-required')
+  return { owner, paths }
+}
+
 export function joinHostedWorkspaceReference(reference: string, relative: string): string {
   const workspace = parseHostedWorkspaceReference(reference)
   return hostedWorkspaceReference(workspace.taskId, `${workspace.path}/${relative}`)

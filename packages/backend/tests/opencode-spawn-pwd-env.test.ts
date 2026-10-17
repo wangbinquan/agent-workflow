@@ -76,8 +76,9 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
   test('runner.ts hands opts.worktreePath + the driver env straight to the executor', () => {
     const src = readTaskAgentSources()
     // RFC-370: the selected native binding keeps cwd = the task worktree and
-    // env = the original early snapshot of the driver-assembled plan env.
-    expect(src).toContain('await localExecution.effect.submit({')
+    // env = the original early snapshot of the driver-assembled plan env; M1
+    // reaches local and hosted execution through one agent invocation.
+    expect(src).toContain('await invocation.execute(')
     expect(src).toContain('workingDirectory: () => opts.worktreePath,')
     expect(src).toContain('taskSnapshot: { command: cmd, environment: env },')
     expect(src).toContain('cwd: opts.worktreePath,')
@@ -171,7 +172,7 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
       'utf-8',
     )
     expect(src).toContain('runSystemAgentCore(opts, {')
-    expect(core).toContain('await localExecution.effect.submit({')
+    expect(core).toContain('const run = await invocation.execute(')
     expect(src).toContain('workingDirectory: () => worktreeDir,')
     expect(src).toContain('return bindNativeAgentInvocation({\n              plan: prepared,')
     expect(src).toContain('environment: () => prepared.env,')

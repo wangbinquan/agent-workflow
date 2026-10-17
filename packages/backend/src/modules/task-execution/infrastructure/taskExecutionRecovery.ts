@@ -132,7 +132,11 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
     const recoveredProcessEffectIds: string[] = []
     const recoveredCodeHostEffectIds: string[] = []
     const retryAuthorizedCodeHostEffectIds: string[] = []
+    const deferred = new Set(input.deferredTaskIds ?? [])
     for (const owner of candidates) {
+      // No process-quiescence proof exists for these tasks. In particular an
+      // unknown remote writer must not become a manual-replay authorization.
+      if (deferred.has(owner.taskId)) continue
       const oldOwner = tuple(owner)
       const preResolutionEffectIds = await readUnresolvedEffectIds(this.db, owner.taskId)
       const processEvidenceDigest = sha256Hex(
@@ -226,6 +230,7 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
     }
     return {
       releasedTaskIds,
+      ...(deferred.size === 0 ? {} : { deferredTaskIds: [...deferred].sort() }),
       outcomeUnknownTaskIds,
       recoveredProcessEffectIds: [...new Set(recoveredProcessEffectIds)].sort(),
       recoveredCodeHostEffectIds: [...new Set(recoveredCodeHostEffectIds)].sort(),

@@ -95,8 +95,8 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
     expect(countNonCommentMatches(mpSrc, /killProcessTree\(pid, signal\)/g)).toBe(1)
     expect(mpSrc).toContain("child.kill(signal === 'SIGKILL' ? 9 : 15)")
     // The runner no longer spawns or kills directly — it hands the child to the
-    // unified executor.
-    expect(runnerSrc).toContain('await localExecution.effect.submit({')
+    // unified executor through the selected agent invocation (RFC-370 M1).
+    expect(runnerSrc).toContain('await invocation.execute(')
     expect(countNonCommentMatches(runnerSrc, /Bun\.spawn\(/g)).toBe(0)
   })
 
@@ -131,9 +131,10 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
     expect(countNonCommentMatches(nativeExecutionSrc, /child-unkillable/g)).toBeGreaterThanOrEqual(
       1,
     )
-    expect(runnerSrc).toContain('localExecution.reportUnreaped(runResult, {')
-    expect(runnerSrc).toContain('localExecution.unreapedMessage(runResult,')
-    expect(runnerSrc).toContain("runResult.outcome === 'unreaped'")
+    // RFC-370 M1: the invocation's outcome carries the report and message.
+    expect(runnerSrc).toContain('runResult.reportUnreaped({')
+    expect(runnerSrc).toContain('runResult.unreapedMessage(graceMs + FINAL_REAP_MARGIN_MS)')
+    expect(runnerSrc).toContain("runResult.result === 'unreaped'")
   })
 })
 

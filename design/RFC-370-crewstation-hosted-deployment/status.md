@@ -1,15 +1,35 @@
 # RFC-370 当前状态
 
-> 唯一的进度记录。设计见 [v2 重设计](./redesign-v2-20261014.md)；本目录其余文档是 v1 历史。
+> 唯一的进度记录。设计见 [v2 重设计](./redesign-v2-20261014.md)，其中 §9 是 2026-10-16 接手审视与 v3 修订（取代 §5.2 及旧 status 中与之冲突的实现细节）；v2 M2/M3 在制品的旧记录逐字归档在 [status-archive-m2m3-20261016.md](./status-archive-m2m3-20261016.md)；本目录其余文档是 v1 历史。
 
-| 步骤                                     | 状态        | 证据                                                       |
-| ---------------------------------------- | ----------- | ---------------------------------------------------------- |
-| P1 单机统一                              | Done        | 见下方「P1」                                               |
-| M0 控制面上线                            | Done        | 见下方「M0」                                               |
-| M1 远程执行闭环                          | In Progress | M1 候选实现与用例已齐；集中静态检查中，CI 与实机验收待执行 |
-| M2 能力等价                              | 未开始      | —                                                          |
-| M3 事件与运维                            | 未开始      | —                                                          |
-| CS 侧 RFC（业务 Agent 原生配置叠加材料） | Draft       | CrewStation RFC-040 三件套已写，按 CS §5.3 等待用户批准    |
+| 步骤                         | 状态                       | 证据                                                               |
+| ---------------------------- | -------------------------- | ------------------------------------------------------------------ |
+| P1 单机统一                  | Done                       | 见下方「P1」                                                       |
+| M0 控制面上线                | Done                       | 见下方「M0」                                                       |
+| v3 修订实现（§9.2 V1～V13）  | 实现与用例完成，集中验证中 | 见下方「v3 修订实施」                                              |
+| M1 远程执行闭环              | In Progress                | 源码已上 main；实机验收待执行                                      |
+| M2 能力等价                  | In Progress                | 实机验收待执行                                                     |
+| M3 事件与运维                | In Progress                | 实机验收待执行                                                     |
+| CS RFC-040 / RFC-042（附属） | In Progress                | CS `61478743`、`516b83a1` 已推送且准确 SHA CI 成功；实机验收待执行 |
+
+## 2026-10-16 v3 修订实施（接手）
+
+用户 2026-10-16 明令接手 RFC-370，统一审视 RFC-370 与 CS RFC-040 / 042，自主重设计并完整实现；免 Codex 门，允许提交推送。审视结论与裁定见 redesign §9。按裁定完成的实现：
+
+- **V1 执行生命周期**（task-execution `infrastructure/crewstation/execution.ts` 等）：优雅关闭与失权一律 detach，不发 CS cancel；只有用户取消与节点超时发 cancel 并等 CS 结果收敛，ACK 被拒也取消远程执行。启动恢复不再等远程结果：节点绑定的运行按原 ID 交还调度器接管（`compile()` 命中原绑定即 adopt），其余绑定由后台结算器处理（并发上限 8，单个绑定不阻塞其他）。`gap` 记截断继续读，410 `cursor_expired` 才判 unknown（节点以明确原因失败、绑定结算为 abandoned，可正常重试）；持有执行权期间平台 5xx / 网络错误无限退避重连（上限 30 秒）。usage 写入 tokens；每个事件同一事务落 journal 与游标后再投影。
+- **V2 命令通道**（source-control `infrastructure/crewstation/workspaceCommands.ts`，平台中立循环 `platform/crewstation/subtaskStream.ts`）：卷内非节点命令的日志 `hosted_workspace_commands` 归 Source Control（`submitting → running → settled`，失主未回执记 `abandoned`）；助手把结果原子写入卷内结果文件，控制面经 CS 文件 API 读回并原样还原原生错误；参数总量上限 1.5 MiB、卷写入分块 768 KiB；operationId 只在一次逻辑尝试内复用；只读查询不落日志。
+- **V3 工作区**：AW 任务离开运行态即暂停 CS 父任务、继续前恢复，删除时关闭；对账器补齐失回执，`close` 在 CS 受理后才落 closing。候选、员工 Case、开发场景与发布改为卷内粗粒度命令（原生实现在卷内运行）；托管 GC 只删工作树目录；仓库准备在卷内复用 `gitRepoCache` 原语。托管发布、候选推送与 Case 远端读取在任务卷内用部署级 Git 凭据执行（能力影响 C13）。容器 / 卷不可用时节点以明确原因失败并提示可由平台重建后续跑。
+- **V4 平台恢复请求**：只声明父任务级 `resume-task` / `rebuild-workspace`；信封宽松解析；删除 `hosted-recovery-required` 门控与界面隐藏，托管下续跑 / 重试与单机一致。消费器日志 `admitted → executing → succeeded | failed | rejected`，以请求人关联的 AW 账号调用原「续跑任务」命令，瞬时错误在 2 小时内顺延；删除旧恢复检查点、保留卷、hold 等全部机制。
+- **V5 备份与恢复**（system-operations）：托管备份复用单机 PostgreSQL 逻辑备份格式，归档存 CS 对象，对象按释放水位保留；托管不捕获工作树（C10，`includeWorktrees` 明确拒绝）。恢复由 CS RFC-042 的空目标与 `CS_DATABASE_RESTORE_REFERENCE` 驱动 `agent-workflow migrate`：下载校验 → 单机 PG 导入 → 各 owner 恢复后归一（非终态任务 `auto_recovery_suspended`，未结算执行绑定按 `restored` 取消结算，进行中的恢复请求以失败结束）→ 校验回执。删除 `AW_RESTORE_OBJECT` 与恢复保留 / 检查卷 / 工作卷捕获。
+- **V6 内容对象**：一套中立发布日志 `hosted_object_publications`（`pending → ready → releasing → released`）由 system-operations 提供，各 owner 在自己的事务里登记与保留引用；源字节 ready 后清除；任务删除 / 归档释放产物；完成行按保留期清理；未结算发布不阻塞备份。取代六套 owner 日志。
+- **V7 执行权与迁移就绪**：删除逐写 schema digest 校验，托管 verify 接受只增的较新 schema；排他写窗口锁只在冻结 / 解冻时取，`assertHeld` 每事务一次共享锁；冻结期间只读待命而不崩溃循环；启动不依赖 capabilities 端点。
+- **V8 事件入站**：删除事件来源切换（状态、历史、暂停 / 回退直连与管理 Dialog）；通道由配置给定；单个 endpoint 不可投递不影响同一事件的其他目标；CS 线格式移到 `integration/infrastructure/crewstation/`。
+- **V9 装配与账本**：托管装配只在 `bootstrap/`；维护 Worker 入口与效果注册由 bootstrap 注入，平台层不再 import bootstrap / 业务模块；SQLite 根拒绝托管专用选择；本 RFC 新增的跨 context 边逐条标 `RFC-370` 并说明（能消除的已消除：托管能力快照类型改走 runtime-management public types，候选 / 评审 / 工作区选择类型改经各模块 composition 入口，零 consumer 的 public 导出删除）。
+- **V10 前端**：托管恢复提示用 `NoticeBanner`；新拒绝码中英文案；托管保留个人访问令牌与外部 API 开关；轮询按权限门控。
+- **V11 迁移收敛**：全部未发布迁移收敛为 SQLite `0259_rfc370_hosted_deployment` / PostgreSQL `0035_rfc370_hosted_deployment`（只增，紧随已发布的 0258 / 0034）；schema **216 source / 210 active / 6 archive-only**，逻辑摘要 `sha256:be5ad8b0edbc7bad31d4b3005824aef9c662efa8fb86747702f24f69ff640203`。已推送但未发布的旧 M1 0259 / 0035 被替换：应用过旧 0259 / 0035 的开发库须重建（正式 M0 库停在 0034，不受影响）。
+- **V12 / V13（CS）**：CS `61478743`（RFC-040 材料固定引用释放与 native 探针 v2；RFC-042 放弃动作、第二次恢复槽位校验、verify 可重试与应用层预检）与 `516b83a1`（能力探针对模型偶发未按指令回显重试 3 次，每次全新 Agent 身份）均已推送，准确 SHA CI `38974772647`、`38980577018` 全部成功。
+
+集中验证（进行中，见下节更新）。
 
 ## P1 单机统一
 
@@ -61,15 +81,10 @@ CI（`a5ae4b5b7`）：主 CI `38670196680`、windows-platform `38670196656`、po
 
 ## M1 远程执行闭环
 
-候选包括：Agent 执行边界与单机全部调用方接线；CS 租约、失权退出、数据库写屏障；提交前意图、ACK 绑定、逐事件持久 journal 与稳定 sourceKey、断线补页、取消原因保留、重启 adopt；持久任务卷、单仓准备、git 包装器隔离工作树、脚本、对象产物。启动恢复先取得平台执行权，证明远程结果后再释放旧 effect／会话持有，保持原节点运行 ID 并恢复业务投影。系统 Agent 等 M2 执行组仍明确不可用。任务镜像继承平台按摘要提供的 `CS_BASE_IMAGE` 并保留 Runner 入口。
-
-SQLite `0259` / PostgreSQL `0035` 同步加入控制、工作区、执行绑定、事件 journal、产物与事件去重表。共享 schema 当前为 204 source / 198 active，逻辑摘要 `sha256:2e545a671736461b3e01ce77c0563fa5c2ea991a342212a3acf063990bf2c54b`。发布脚本改为 GitLab 原子文件提交接口，从当前主 checkout 的已提交对象读取源码，保留镜像仓库非 AW 管理的文件；不创建 clone、分支或 worktree。
-
-集中验证：三包类型首轮与本轮 87 个 TypeScript 文件 lint 通过；追加边界用例后继续静态复查。测试用例已覆盖 ACK 丢失、SSE 重连、终态游标、陈旧世代、取消竞态、接管投影、双引擎工作区与调用幂等、真实 Git 助手及脚本。**尚无本候选的 GitHub CI 或 CS 实机执行通过证据，不能记为 Done。** M0 正式服务保持运行；本轮没有停用或删除它。
-
-CS 配套 RFC-040 已在 `CrewStation/proposal/rfc/RFC-040-business-native-materials/` 建立 proposal / design / plan，生产变更等待该仓 §5.3 所需用户确认；不影响本轮 M1 的提交与验证。
+M1 三个提交 `962dd1e5c` / `2b92ec1b1` / `879cb0743` 已随并发 session 的 `0a6f5eb4f`（RFC-294 文档）一起推上 main。`0a6f5eb4f` 的主 CI `38930520068`（含 windows `38930520088`）失败 20 余项，逐项归因为 M1 本身（格式、`AbortSignal.timeout` / `createHash` 守卫、env 登记、架构账本、迁移计数、源码锁锚点等），由 v3 提交一并修复。M1 的执行核心已按 §9.2 V1 / V2 重做，以上节为准。
 
 ## 环境
 
-- 本机 CS：docker-desktop kind 集群，命名空间 `crewstation-system` 运行中；本机 GitLab `aw-local-gitlab`（127.0.0.1:8929）运行中（2026-10-14 只读核对）。
-- 已知限制：本机 CS 的 Claude Code 停在登录态；OpenCode 有可用算力档位。
+- 本机 CS：docker-desktop kind 集群，命名空间 `crewstation-system`；本机 GitLab `aw-local-gitlab`（127.0.0.1:8929）。CS 已部署 `61478743`。
+- AW 项目 `01a13e6d-3e00-7000-9e3c-6a69d77164b3`、服务 `01a13e6d-3e01-7000-ab4c-e0f049700850`（命名空间 `cs-agent-workflow`，`agent-workflow.cs.localhost`）；正式 M0 v0.5.0 蓝绿两槽保持运行，验收不停止、不删除它。
+- 单节点 CPU 请求接近上限（约 0.3 核余量），磁盘约 9.8 GB 可用；任务档位用 100m 的 `rfc003-integration-qa`。

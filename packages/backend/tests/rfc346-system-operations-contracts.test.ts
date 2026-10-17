@@ -403,6 +403,8 @@ describe('RFC-346 System Operations contracts', () => {
       expect(port?.providerAdapters.map((entry) => entry.file)).toEqual(
         id === 'required:system-operations:AdminBackupCoordinatorPort'
           ? [
+              // RFC-370 v3 V5: the hosted (CS object archive) backup coordinator.
+              'packages/backend/src/modules/system-operations/infrastructure/crewstation/databaseBackups.ts',
               'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
               'packages/backend/src/modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts',
             ]

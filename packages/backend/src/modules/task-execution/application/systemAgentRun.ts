@@ -1,5 +1,10 @@
-import { maskDiagnosticsText, type DeclaredInjectionManifest } from '@agent-workflow/shared'
+import {
+  maskDiagnosticsText,
+  type DeclaredInjectionManifest,
+  type StartupObservation,
+} from '@agent-workflow/shared'
 import type { AgentInvocationBinding } from './ports/agentInvocation'
+import type { AgentExecutionOutcome } from './ports/agentExecution'
 import type {
   PreparedSystemAgentRunResult,
   SessionCaptureIncompleteReason,
@@ -102,6 +107,7 @@ export async function runSystemAgentCore(
 
   let preparedMaterial: SystemAgentCompiledInvocation | null = null
   let invocation: AgentInvocationBinding | undefined
+  let executionOutcome: AgentExecutionOutcome | undefined
   // RFC-282 B1b — declared manifest from the unified assembly (absent on
   // testPlanOverride fixtures); threaded onto the result for settle-time
   // verification so no consumer re-renders it (§2.1b-2).
@@ -235,6 +241,7 @@ export async function runSystemAgentCore(
       // stdout line (claude `result` is_error). Last one wins.
       let resultError: string | undefined
       let capturedStartupInventory: StartupInventory | null = null
+      let capturedStartupObservation: StartupObservation | null = null
 
       // Historical contract: a failed start acknowledgement is a SPAWN failure
       // (mcp playground admission fence); the execution aborts the child and
@@ -268,6 +275,8 @@ export async function runSystemAgentCore(
             }
             if (record.terminalError !== undefined) resultError = record.terminalError
             const ev = record.event
+            if (capturedStartupObservation === null && ev?.data?.startupObservation !== undefined)
+              capturedStartupObservation = ev.data.startupObservation
             // RFC-280 T6 / RFC-297 T14 —— 一次性启动报告。改为消费 driver 在
             // **同一次解析**里挂上的事件载荷，不再对同一行二次 JSON.parse。
             if (capturedStartupInventory === null && ev !== null) {
@@ -292,6 +301,7 @@ export async function runSystemAgentCore(
               await usageCapture?.line(record.raw)
               outputEvidence.unparsedStdoutSeen = true
               await appendSink({
+                ...(record.sourceKey === undefined ? {} : { externalEventId: record.sourceKey }),
                 ts: Date.now(),
                 kind: 'text',
                 payload: record.raw,
@@ -366,7 +376,9 @@ export async function runSystemAgentCore(
                 outputEvidence.eventTextCapHit = true
               }
             }
+            if (ev.persist === false) return
             await appendSink({
+              ...(record.sourceKey === undefined ? {} : { externalEventId: record.sourceKey }),
               ts: ev.timestamp ?? Date.now(),
               kind: ev.kind,
               payload: ev.rawLine,
@@ -375,12 +387,13 @@ export async function runSystemAgentCore(
               source: 'stream',
             })
           },
-          diagnostic: async (line) => {
+          diagnostic: async (line, sourceKey) => {
             const remaining = STDERR_TAIL_CAP - Buffer.byteLength(stderrText, 'utf8')
             if (remaining > 0) {
               stderrText += Buffer.from(`${line}\n`, 'utf8').subarray(0, remaining).toString('utf8')
             }
             await appendSink({
+              ...(sourceKey === undefined ? {} : { externalEventId: sourceKey }),
               ts: Date.now(),
               kind: 'stderr',
               payload: maskDiagnosticsText(line),
@@ -402,6 +415,7 @@ export async function runSystemAgentCore(
             ),
         },
       )
+      executionOutcome = run
 
       const receiptError = run.acknowledgeError
       if (run.result === 'spawn-failed' || receiptError !== undefined) {
@@ -482,6 +496,9 @@ export async function runSystemAgentCore(
         ...(capturedStartupInventory === null
           ? {}
           : { startupInventory: capturedStartupInventory }),
+        ...(capturedStartupObservation === null
+          ? {}
+          : { startupObservation: capturedStartupObservation }),
         ...(declaredForResult === undefined ? {} : { declared: declaredForResult }),
       }
       if (run.result === 'aborted') return { status: 'aborted', ...base }
@@ -514,6 +531,20 @@ export async function runSystemAgentCore(
             ? 'post-exit-flush-timeout'
             : undefined,
       )
+    }
+    try {
+      // The event/session and observation projection precedes the durable
+      // transport settlement. Native execution keeps its existing no-op.
+      await executionOutcome?.settle()
+    } catch (error) {
+      result = {
+        ...(result ?? fail('unreaped')),
+        status: 'unreaped',
+        scratchRetained: true,
+        stderrTail: maskDiagnosticsText(
+          `execution settlement requires recovery: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      }
     }
     // RFC-280 T4: the child's kill/reap lifecycle lives in the unified
     // executor; what remains here are the two ordered barriers that must run

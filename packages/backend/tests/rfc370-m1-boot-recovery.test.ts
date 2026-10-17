@@ -1,10 +1,20 @@
+// RFC-370 §9.2 V1 — hosted boot recovery never waits on the platform. A remote
+// execution outlives the service process that started it: boot hands its open
+// process effect off, interrupts orphans exactly as standalone does, and puts
+// the unsettled run back to `pending` under its ORIGINAL id so the scheduler
+// adopts the same platform subtask instead of paying for a second model call.
+// The earlier shape (adopt-and-wait inside `reap`) blocked activation on a
+// running model call and crash-looped on a 410/gap; these cases lock that out.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import {
+  hostedExecutionBindings,
   nodeRuns,
   nodeRunEvents,
+  runtimeSessionLeases,
   taskExecutionEffectAttempts,
   taskExecutionEffectFences,
+  taskExecutionEffects,
   tasks,
   workflows,
 } from '@/db/schema'
@@ -18,7 +28,6 @@ import { createProcessEffectAttemptObserver } from '@/modules/task-execution/app
 import { createHostedProcessEffectProjection } from '@/modules/task-execution/infrastructure/crewstation/processEffectProjection'
 import { createHostedBootRecovery } from '@/modules/task-execution/infrastructure/crewstation/bootRecovery'
 import { createHostedExecutionStore } from '@/modules/task-execution/infrastructure/crewstation/executionStore'
-import type { HostedExecution } from '@/modules/task-execution/infrastructure/crewstation/execution'
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
 import { createExclusiveDaemonLockProof } from '@/modules/task-execution/domain/ownership'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
@@ -32,17 +41,9 @@ const proof = createExclusiveDaemonLockProof({
   acquiredAt: Date.now(),
   lockReceiptDigest: 'a'.repeat(64),
 })
-const terminal = {
-  exitCode: 0,
-  reason: 'completed',
-  stdout: '',
-  stderr: '',
-  truncated: false,
-  finalCursor: 'terminal',
-}
 
-describeEachProvider('RFC-370 hosted successor recovery', (harness) => {
-  async function fixture(withBinding = true) {
+describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harness) => {
+  async function fixture(options: { binding?: boolean; runStatus?: 'running' | 'done' } = {}) {
     const db = harness.db
     await db.insert(workflows).values({
       id: 'workflow',
@@ -82,12 +83,24 @@ describeEachProvider('RFC-370 hosted successor recovery', (harness) => {
         id: 'run',
         taskId: 'task',
         nodeId: 'agent',
-        status: 'running',
+        status: options.runStatus ?? 'running',
         containerRunId: 'wrapper',
         startedAt: Date.now(),
         envelopeNonce: 'original-nonce',
+        opencodeSessionId: 'session',
+        ...(options.runStatus === 'done' ? { finishedAt: Date.now() } : {}),
       },
     ])
+    await db.insert(runtimeSessionLeases).values({
+      protocol: 'opencode',
+      sessionId: 'session',
+      taskId: 'task',
+      nodeId: 'agent',
+      createdNodeRunId: 'run',
+      leaseNodeRunId: 'run',
+      leaseNonceDigest: 'b'.repeat(64),
+      leasedAt: 1,
+    })
     const persistence = createTaskExecutionPersistence(db)
     await persistence.intents.submit({
       intentId: 'intent',
@@ -120,20 +133,14 @@ describeEachProvider('RFC-370 hosted successor recovery', (harness) => {
       persistence,
     })
     const control = createDatabaseHostedExecutionControl({ db })
-    await control.write({
-      epoch: lease.epoch,
-      owner: lease.instanceId,
-      leaseId: lease.leaseId,
-      phase: 'preparing',
-      expiresAt: Date.now() + 60_000,
-    })
-    await control.write({
-      epoch: lease.epoch,
-      owner: lease.instanceId,
-      leaseId: lease.leaseId,
-      phase: 'active',
-      expiresAt: Date.now() + 60_000,
-    })
+    for (const phase of ['preparing', 'active'] as const)
+      await control.write({
+        epoch: lease.epoch,
+        owner: lease.instanceId,
+        leaseId: lease.leaseId,
+        phase,
+        expiresAt: Date.now() + 60_000,
+      })
     const fence: CrewStationMutationFence = {
       current: () => lease,
       assertHeld: (tx, value) => control.assertHeld(tx, value),
@@ -153,7 +160,7 @@ describeEachProvider('RFC-370 hosted successor recovery', (harness) => {
       }),
     })!
     await observer.beforeSpawn()
-    if (withBinding)
+    if (options.binding !== false)
       await store.prepare({
         executionId: 'agent:task:run',
         taskId: 'task',
@@ -162,71 +169,41 @@ describeEachProvider('RFC-370 hosted successor recovery', (harness) => {
         requestKey: 'stable',
         request: { kind: 'agent', name: 'agent', agentProfileId: 'profile', prompt: 'original' },
       })
-    const adopting = Promise.withResolvers<void>(),
-      finish = Promise.withResolvers<void>()
-    let adopted = 0
-    const executions: HostedExecution = {
-      find: store.get,
-      run: async () => {
-        throw new Error('recovery must adopt the existing execution')
-      },
-      cancel: async () => {
-        throw new Error('recovery must retain the execution')
-      },
-      async adopt(executionId, sink) {
-        adopted += 1
-        adopting.resolve()
-        const binding = await store.accepted(executionId, {
-          id: 'subtask',
-          taskId: 'parent',
-          kind: 'agent',
-          attempt: 1,
-          state: 'running',
-          executionId: 'remote',
-        })
-        await sink.started(binding)
-        await finish.promise
-        await store.checkpoint(executionId, terminal.finalCursor, terminal)
-        return {
-          binding,
-          result: terminal,
-          timedOut: false,
-          settle: () => store.settle(executionId),
-        }
-      },
-    }
-    const recovery = createHostedBootRecovery({ db, fence, executions, store, proof: () => proof })
+    const recovery = createHostedBootRecovery({ db, fence, store, proof: () => proof })
     const family = recovery.factory.create({
       persistence,
       lockProof: proof,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
       log: createLogger('hosted-recovery-test'),
     })
-    return { family, recovery, persistence, context, adopting, finish, adopted: () => adopted }
+    const run = async () => {
+      const prepared = await family.prepare()
+      const reaped = await family.reap()
+      const repaired = await family.repair(reaped.reapRef)
+      const finalized = await family.finalize(repaired.finalizationRef)
+      return { prepared, reaped, repaired, finalized }
+    }
+    return { family, recovery, persistence, context, store, run }
   }
+  const nodeRun = async (id: string) =>
+    (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
 
-  test('a running remote writer is retained until its result, then original node and wrapper resume', async () => {
+  test('an unsettled remote execution is handed off without any platform call and keeps its original run', async () => {
     const f = await fixture()
-    expect((await f.family.prepare()).revokedTaskIds).toEqual(['task'])
-    const reaping = f.family.reap()
-    await f.adopting.promise
-    expect(
-      (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'run')))[0]?.status,
-    ).toBe('running')
-    f.finish.resolve()
-    const reaped = await reaping
-    const repaired = await f.family.repair(reaped.reapRef)
-    const finalized = await f.family.finalize(repaired.finalizationRef)
+    // No execution client is wired at all: boot cannot wait on the platform.
+    const { prepared, reaped, repaired, finalized } = await f.run()
+    expect(prepared.revokedTaskIds).toEqual(['task'])
+    expect(reaped.counts).toEqual({ tasks: 1, runs: 2 })
+    expect(repaired.leases).toBe(1)
     expect(finalized.releasedTaskIds).toEqual(['task'])
-    expect(f.adopted()).toBe(1)
     expect(f.recovery.recoveredTaskIds()).toEqual(['task'])
-    const run = (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'run')))[0]!
-    expect(run).toMatchObject({
+    expect(await nodeRun('run')).toMatchObject({
       id: 'run',
       status: 'pending',
       containerRunId: 'wrapper',
       envelopeNonce: 'original-nonce',
       pid: null,
+      finishedAt: null,
     })
     expect(
       await f.persistence.wrapperRuns.findResumable({
@@ -236,33 +213,91 @@ describeEachProvider('RFC-370 hosted successor recovery', (harness) => {
         iteration: 0,
       }),
     ).toMatchObject({ id: 'wrapper' })
-    expect((await harness.db.select().from(taskExecutionEffectAttempts))[0]).toMatchObject({
-      state: 'succeeded',
-      applicationEvidence: 'applied',
+    const [attempt] = await harness.db.select().from(taskExecutionEffectAttempts)
+    expect(attempt).toMatchObject({ state: 'succeeded', applicationEvidence: 'applied' })
+    expect(JSON.parse(attempt!.receiptJson!)).toEqual({
+      v: 2,
+      phase: 'crewstation-handed-off',
+      executionId: 'agent:task:run',
     })
+    const [effect] = await harness.db.select().from(taskExecutionEffects)
+    expect(effect!.state).toBe('succeeded')
+    expect(finalized.recoveredProcessEffectIds).toContain(effect!.id)
     expect(
       (await harness.db.select().from(taskExecutionEffectFences)).every(
         (row) => row.releasedAt !== null,
       ),
     ).toBe(true)
+    // The binding itself is untouched: the adopting run observes it.
+    expect(await f.store.get('agent:task:run')).toMatchObject({
+      state: 'submitting',
+      cancelRequested: false,
+    })
+    const [sessionLease] = await harness.db.select().from(runtimeSessionLeases)
+    expect(sessionLease!.leaseNodeRunId).toBeNull()
   })
 
-  test('crash before binding commit proves no remote effect was submitted', async () => {
-    const f = await fixture(false)
-    await f.family.prepare()
-    const reaped = await f.family.reap()
-    const repaired = await f.family.repair(reaped.reapRef)
-    const finalized = await f.family.finalize(repaired.finalizationRef)
+  test('a crash before the binding commit proves the remote effect was never submitted', async () => {
+    const f = await fixture({ binding: false })
+    const { finalized } = await f.run()
     expect(finalized.releasedTaskIds).toEqual(['task'])
-    expect(f.adopted()).toBe(0)
-    expect((await harness.db.select().from(taskExecutionEffectAttempts))[0]).toMatchObject({
+    expect(f.recovery.recoveredTaskIds()).toEqual([])
+    const [attempt] = await harness.db.select().from(taskExecutionEffectAttempts)
+    expect(attempt).toMatchObject({
       state: 'failed-not-applied',
       applicationEvidence: 'definitely-not-applied',
     })
+    expect(JSON.parse(attempt!.receiptJson!).phase).toBe('crewstation-not-submitted')
+    expect((await harness.db.select().from(taskExecutionEffects))[0]!.state).toBe('failed')
+    // Ordinary standalone semantics: the run stays interrupted for resume/retry.
+    expect((await nodeRun('run')).status).toBe('interrupted')
+  })
+
+  test('a binding restored from a database snapshot is never adopted', async () => {
+    const f = await fixture()
+    await f.store.requestCancel('agent:task:run', 'restored')
+    await f.run()
+    expect(f.recovery.recoveredTaskIds()).toEqual([])
+    expect((await nodeRun('run')).status).toBe('interrupted')
+    expect(await f.store.get('agent:task:run')).toMatchObject({
+      cancelRequested: true,
+      cancelReason: 'restored',
+    })
+  })
+
+  test('a terminal run is never reset even while its binding is still unsettled', async () => {
+    const f = await fixture({ runStatus: 'done' })
+    const { reaped } = await f.run()
+    expect(reaped.counts.runs).toBe(1)
+    expect((await nodeRun('run')).status).toBe('done')
+    // Nothing remote is retained for this task, so boot does not auto-resume it.
+    expect(f.recovery.recoveredTaskIds()).toEqual([])
+    expect((await nodeRun('wrapper')).status).toBe('interrupted')
+  })
+
+  test('a hosted orphan with a local process id is a contract violation, not a silent kill', async () => {
+    const f = await fixture()
+    await harness.db.update(nodeRuns).set({ pid: 4242 }).where(eq(nodeRuns.id, 'run'))
+    await f.family.prepare()
+    await expect(Promise.resolve(f.family.reap())).rejects.toThrow(
+      'hosted-recovery-unexpected-local-process',
+    )
+  })
+
+  test('recovery references from another family are rejected', async () => {
+    const f = await fixture()
+    await f.family.prepare()
+    await f.family.reap()
+    await expect(Promise.resolve(f.family.repair({}))).rejects.toThrow(
+      'hosted-recovery-reference-mismatch',
+    )
+    await expect(Promise.resolve(f.family.finalize({}))).rejects.toThrow(
+      'hosted-recovery-reference-mismatch',
+    )
   })
 
   test('replayed node events are committed once and ordinary native events retain their semantics', async () => {
-    const f = await fixture(false)
+    const f = await fixture({ binding: false })
     const event = {
       ts: Date.now(),
       kind: 'text' as const,
@@ -286,5 +321,6 @@ describeEachProvider('RFC-370 hosted successor recovery', (harness) => {
       event.payload,
       'native',
     ])
+    expect(await harness.db.select().from(hostedExecutionBindings)).toEqual([])
   })
 })

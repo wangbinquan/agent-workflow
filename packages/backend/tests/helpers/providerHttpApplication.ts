@@ -39,6 +39,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'pluginInstaller'
   | 'evidenceRead'
   | 'portArtifactContentEffects'
+  | 'runtimeInventoryContent'
   | 'taskRunSelection'
   | 'developmentPurposes'
   | 'workspaceExcludeProfiles'

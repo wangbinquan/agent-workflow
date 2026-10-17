@@ -16,7 +16,10 @@ import { createPostgresqlCapabilities } from '@/platform/persistence/capabilitie
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { createScheduledTaskPersistence } from '@/modules/integration/infrastructure/scheduledTaskPersistence'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
-import { createVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
+import {
+  acceptVerifiedWebhookDeliveryInTransaction,
+  createVerifiedWebhookDeliveryPersistence,
+} from '@/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence'
 import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -330,7 +333,9 @@ describeEachProvider('RFC-349 Integration provider adapters', (harness) => {
     // RFC-359 W4-B4 / D2：启动预留与已验证投递接收都只有一份中立实现，PG 侧的事务级 advisory lock 经引擎
     // 能力矩阵表达；锁语句本身钉在能力矩阵上，两侧共用同一把 `${endpointId}:${streamKey}` 键。
     const reserveSource = createMrLaunchGuardPersistence.toString()
-    const ingressSource = createVerifiedWebhookDeliveryPersistence.toString()
+    // RFC-370 M3/V8: the accepting transaction body is shared by direct webhook
+    // ingress and the CrewStation event inbox, so the lock lives in it.
+    const ingressSource = acceptVerifiedWebhookDeliveryInTransaction.toString()
     expect(reserveSource).toContain('advisoryLock(tx, `${input.endpointId}:${input.streamKey}`)')
     expect(createPostgresqlCapabilities().advisoryLock.toString()).toContain(
       'pg_advisory_xact_lock',

@@ -31,6 +31,7 @@ import type {
 import { ResourceOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
 
 const actor = buildActor({
   user: {
@@ -384,6 +385,145 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
       )
     },
   )
+  for (const mode of ['quarantine', 'fence'] as const) {
+    applicationTest(
+      `hosted diagnostic ${mode} uses durable receipts without inventing a PID`,
+      async () => {
+        const h = await fixture(harness.db)
+        const now = Date.now()
+        const lease = { epoch: 1, leaseId: 'lease', instanceId: 'holder' }
+        const control = createDatabaseHostedExecutionControl({ db: harness.db })
+        for (const phase of ['preparing', 'active'] as const)
+          await control.write({ ...lease, owner: lease.instanceId, phase, expiresAt: now + 60_000 })
+        const provider = composeMcpRuntimeTestProvider(harness.db, (tx) =>
+          control.assertHeld(tx, lease),
+        )
+        const receipt = await provider.persistence.create({
+          mcpId: h.mcp.id,
+          ownerUserId: actor.user.id,
+          clientCreateId: 'hosted-create',
+          requestDigest: createHash('sha256').update(mode).digest('hex'),
+          sessionId: 'hosted-session',
+          turnId: 'hosted-turn',
+          mcpConfigHash: mcpOperationConfigHashOf(h.mcp),
+          runtimeRowId: h.row.id,
+          runtimeName: h.row.name,
+          runtimeProtocol: h.row.protocol,
+          runtimeSnapshotJson: h.effects.runtime.snapshotJson,
+          runtimeBinaryPath: 'cs-agent:opencode',
+          runtimeSessionId: null,
+          scratchRoot: 'cs-workspace:mcp-test/diagnostic',
+          message: 'diagnose',
+          clientMessageId: 'hosted-message',
+          now,
+          hardDeadlineAt: now + 30_000,
+          receiptExpiresAt: now + 60_000,
+        })
+        const ref = { sessionId: receipt.sessionId, turnId: receipt.acceptedTurnId }
+        await provider.persistence.admitTurn({ ...ref, now, idleDeadlineAt: now + 30_000 })
+        expect(
+          await provider.persistence.recordSpawn({
+            ...ref,
+            pid: null,
+            spawnedAt: now,
+            spawnBinaryPath: null,
+            fenceAt: now,
+          }),
+        ).toBe(true)
+        if (mode === 'quarantine') {
+          await provider.persistence.recoverBootSession({
+            sessionId: ref.sessionId,
+            expectedTurnId: ref.turnId,
+            resumable: false,
+            quarantine: true,
+            reapOutcome: 'kill-failed',
+            now,
+            idleDeadlineAt: now + 30_000,
+          })
+          expect(await provider.persistence.prepareCleanup(ref.sessionId, now)).toMatchObject({
+            cleanupState: 'quarantined',
+          })
+          expect(
+            await provider.persistence.finishCleanup({
+              sessionId: ref.sessionId,
+              now,
+              cleanupState: 'quarantined',
+              cleanupErrorCode: 'mcp-test-boot-reap-kill-failed',
+            }),
+          ).toBe(true)
+          const [candidate] = await provider.persistence.listQuarantinedCandidates()
+          expect(candidate?.turn?.id).toBe(ref.turnId)
+          expect(candidate?.turn?.pid).toBeNull()
+          expect(
+            await provider.persistence.recoverQuarantined({
+              ...ref,
+              expectedPid: null,
+              expectedSpawnedAt: now + 1,
+              now,
+            }),
+          ).toBe(false)
+          expect(
+            await provider.persistence.recoverQuarantined({
+              ...ref,
+              expectedPid: null,
+              expectedSpawnedAt: now,
+              now,
+            }),
+          ).toBe(true)
+          expect((await provider.persistence.loadSession(ref.sessionId))?.cleanupState).toBe(
+            'pending',
+          )
+        } else {
+          const token = await provider.leaseOperations.claimNew({
+            protocol: 'opencode',
+            runtimeSessionId: 'hosted-native',
+            testSessionId: ref.sessionId,
+            turnId: ref.turnId,
+            leaseNonceDigest: createHash('sha256').update('nonce').digest('hex'),
+            leasedAt: now,
+          })
+          const before = await provider.persistence.loadTurn(ref.turnId)
+          await control.write({
+            epoch: 2,
+            leaseId: 'new-lease',
+            owner: 'new-holder',
+            phase: 'preparing',
+            expiresAt: now + 60_000,
+          })
+          await expect(
+            provider.persistence.recordSpawn({
+              ...ref,
+              pid: null,
+              spawnedAt: now + 1,
+              spawnBinaryPath: null,
+              fenceAt: now + 1,
+            }),
+          ).rejects.toThrow('no longer holds')
+          await expect(
+            provider.persistence.requestRunningTurnCancel(ref.turnId, now + 1),
+          ).rejects.toThrow('no longer holds')
+          await expect(
+            provider.persistence.markCaptureTerminal({ ...ref, state: 'complete', reason: null }),
+          ).rejects.toThrow('no longer holds')
+          await expect(provider.leaseOperations.release(token)).rejects.toThrow('no longer holds')
+          expect(await provider.persistence.loadTurn(ref.turnId)).toEqual(before)
+          expect(await provider.persistence.loadSession(ref.sessionId)).not.toBeNull()
+          const reader = createMcpDiagnosticsApplication({
+            ...provider,
+            effects: h.effects,
+            loadMcp: async () => h.mcp,
+            maintainOnRead: false,
+          })
+          applications.push(reader)
+          expect((await reader.get(actor, h.mcp.id, ref.sessionId)).id).toBe(ref.sessionId)
+          expect((await reader.latest(actor, h.mcp.id))?.id).toBe(ref.sessionId)
+          await reader.sessionView(actor, h.mcp.id, ref.sessionId)
+          expect(await provider.persistence.loadTurn(ref.turnId)).toEqual(before)
+          expect(h.effects.reaped).toEqual([])
+        }
+      },
+    )
+  }
   applicationTest(
     'native now callback still receives the actual cold application snapshot',
     async () => {

@@ -1,3 +1,9 @@
+import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
+import type { TaskArchivedEventsReader } from '@/modules/task-execution/public/types'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
+import type { ReviewArtifactSelection } from '@/modules/collaboration/composition'
+import type { WorkspaceRollbackSnapshotInspector } from '@/modules/collaboration/composition'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import { runtimeConfigOpts } from '@/services/task'
@@ -33,8 +39,8 @@ import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
-  RepositoryCandidateEffectsFactory,
 } from '@/modules/source-control/public/types'
+import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
@@ -48,7 +54,9 @@ import {
 import type {
   PortArtifactContentEffects,
   PortArtifactOperations,
+  TaskRuntimeInventoryContent,
 } from '@/modules/task-execution/public/types'
+import { composeTaskRuntimeInventoryContent } from '@/modules/task-execution/composition/taskRuntimeInventoryContent'
 import {
   selectDevelopmentWorkspaceEffectBinding,
   type ActionWorkspaceEffects,
@@ -531,6 +539,7 @@ import { composeWorkgroupTaskRoomContinuationDriver } from '@/services/task'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { createResourcePackagePluginInstaller } from '@/services/resourcePackage/pluginInstallerAdapter'
+import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
 import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
@@ -707,6 +716,7 @@ export interface ComposeSqliteDaemonProviderCoreInput extends DaemonProviderCore
 }
 
 export interface ComposePostgresqlDaemonProviderCoreInput extends DaemonProviderCoreCommonInput {
+  readonly databaseBackup?: DatabaseBackupEffects
   readonly db: PostgresqlDatabaseClient
   readonly runtime: PostgresqlDatabaseRuntime
   readonly databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
@@ -862,6 +872,7 @@ export function composePostgresqlDaemonProviderCore(
       policy: input.realtimePolicy,
     }),
     systemOperations: composePostgresqlSystemOperations({
+      backup: input.databaseBackup,
       runtime: input.runtime,
       db: input.db,
       databaseConfig: input.databaseConfig,
@@ -882,6 +893,10 @@ export interface AppDeps {
   employeeInputArtifacts?: EmployeeInputArtifactPort
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
+  beforeEventObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>
+  archivedNodeEvents?: TaskArchivedEventsReader
+  crewStationEvents?: CrewStationEventIngress
+  intentArtifacts?: IntentArtifactSelection
   evidenceArtifacts?: EvidenceArtifactPort
   resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
@@ -902,9 +917,16 @@ export interface AppDeps {
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   nodeRunPrompts?: NodeRunPromptOperations
   portArtifactContentEffects?: PortArtifactContentEffects
+  runtimeInventoryContent?: TaskRuntimeInventoryContent
   portArtifacts?: PortArtifactOperations
   taskRunSelection?: TaskRunRootSelection
   developmentPurposes?: DevelopmentPurposeSelection
+  runtimeManagement?: typeof composeLocalRuntimeManagement
+  readonly reviewArtifacts?: ReviewArtifactSelection
+  readonly reviewRollbackSnapshots?: WorkspaceRollbackSnapshotInspector
+  developmentWorkspaceRepositoryPreparation?: ReturnType<
+    typeof createDevelopmentWorkspaceRepositoryPreparation
+  >
   developmentPurposeRoot?: SelectedDevelopmentPurposeRoot
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   evidenceRead?: EvidenceReadBinding
@@ -1218,6 +1240,8 @@ export interface AppPublicRouteMounts {
   readonly health: AppRouteMount
   readonly wellKnown: AppRouteMount
   readonly webhookIngress: AppRouteMount
+  /** RFC-370 v3 V8 — hosted only: CrewStation's event delivery route. */
+  readonly crewStationEvents?: AppRouteMount
 }
 
 /**
@@ -1378,7 +1402,7 @@ export interface ProviderPublicRouteComposition {
     readonly database: Parameters<typeof mountHealthRoutes>[3]
   }>
   readonly documentation: Parameters<typeof mountWellKnownRoutes>[1]
-  readonly webhookIngress: Parameters<typeof mountWebhookIngressRoutes>[1]
+  readonly webhookIngress: ReturnType<typeof composeWebhookIngressTransport>
 }
 
 export interface ProviderPlatformRouteComposition {
@@ -1591,6 +1615,7 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
       ),
     wellKnown: (app: Hono) => mountWellKnownRoutes(app, input.public.documentation),
     webhookIngress: (app: Hono) => mountWebhookIngressRoutes(app, input.public.webhookIngress),
+    crewStationEvents: (app: Hono) => input.public.webhookIngress.crewStationEvents?.mount(app),
   } satisfies AppPublicRouteMounts)
 
   const apiRoutes = Object.freeze({
@@ -1860,6 +1885,7 @@ function composeApplicationEventCenter(
       ? deps.webhookDispatcher
       : null
   const initialization = composeEventCenter({
+    beforeObservationWrite: deps.beforeEventObservationWrite,
     db: deps.db,
     customObserverPrograms: selectLocalCustomObserverProgramFactory(deps.customObserverPrograms),
     typePackageDescriptorJsons: [
@@ -2338,6 +2364,7 @@ export function composeSqliteApplicationDeps(
             ),
             memoryInjectionQueries,
             collaborationRuntime: createCollaborationRuntimeMechanics(deps.db, {
+              reviewArtifacts: deps.reviewArtifacts,
               portArtifactReaderFor: () => portArtifacts,
             }),
             persistence: taskExecutionPersistence,
@@ -2444,10 +2471,16 @@ export function composeSqliteApplicationDeps(
   const collaborationContext: CollaborationRouteContext =
     deps.collaborationContext ??
     createCollaborationCommandContext({
+      reviewArtifacts: deps.reviewArtifacts,
       db: deps.db,
       appHome,
       taskExecutionReadModels,
-      reviewDecisions: createReviewDecisionCommand({ db: deps.db, appHome }),
+      reviewDecisions: createReviewDecisionCommand({
+        db: deps.db,
+        appHome,
+        reviewArtifacts: deps.reviewArtifacts,
+        rollbackSnapshots: deps.reviewRollbackSnapshots,
+      }),
       questionDispatches: createQuestionDispatchCommand(deps.db),
       clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
     })
@@ -2590,9 +2623,10 @@ export function composeSqliteApplicationDeps(
     effectiveDeps.mcpRuntimeTests ??
     (unstarted?.createMcpRuntimeTests ?? composeLocalMcpDiagnostics)({
       observe:
-        ({ session, turn, runtime }) =>
+        ({ session, turn, runtime, callId }) =>
         (startedAt) =>
           systemAgentObservations.open({
+            ...(callId === undefined ? {} : { callId }),
             feature: 'mcp-runtime-test',
             agentName: 'aw-mcp-runtime-test',
             protocol: session.runtimeProtocol,
@@ -2745,6 +2779,7 @@ export function composeSqliteApplicationDeps(
   const intentApply = composeIntentApplyOperations({
     db: effectiveDeps.db,
     appHome,
+    ...effectiveDeps.intentArtifacts,
     aclIdentities: providerResourceCatalog.persistence.identities,
     // RFC-358 §7（AC-6）—— 提交期的图校验。draft 期那道门挡的是模型；这道挡的是
     // draft 与 apply 之间的漂移（别人改了被引用 agent 的端口、上线前的存量草稿）。
@@ -3051,6 +3086,7 @@ function composeSqliteApiRouteMounts(
     appHome: systemAgentAppHome,
   })
   const taskRouteOperations = createTaskRouteOperations({
+    archivedEvents: deps.archivedNodeEvents,
     workspaceReads: deps.workspaceReads,
     effects: deps.taskDeletionEffects,
     nodeRunPrompts: deps.nodeRunPrompts,
@@ -3175,6 +3211,7 @@ function composeSqliteApiRouteMounts(
     }),
     repair: {
       collaborationRuntime: createCollaborationRuntimeMechanics(deps.db, {
+        reviewArtifacts: deps.reviewArtifacts,
         portArtifactReaderFor: () => selectPortArtifactReader(deps.portArtifacts, appHome),
       }),
       clarify: createClarifyRepairParticipant(deps.db),
@@ -3195,6 +3232,7 @@ function composeSqliteApiRouteMounts(
         createWorkspaceContentScope(workspaceRef, deps.workspaceContent),
     }),
     taskExecutionReadModels: deps.taskExecutionReadModels,
+    runtimeInventoryContent: composeTaskRuntimeInventoryContent(deps.runtimeInventoryContent),
     taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
     codeWorkspace,
     repositoryWorkspace: repositoryWorkspaceStore,
@@ -3238,11 +3276,13 @@ function composeSqliteApiRouteMounts(
     appHome,
     reactionRounds: createEmployeeReactionRoundQueries(deps.db),
     inputArtifacts,
-    repositoryPreparation: createDevelopmentWorkspaceRepositoryPreparation({
-      store: repositoryWorkspaceStore,
-      appHome,
-      secretBox: deps.secretBox,
-    }),
+    repositoryPreparation:
+      deps.developmentWorkspaceRepositoryPreparation ??
+      createDevelopmentWorkspaceRepositoryPreparation({
+        store: repositoryWorkspaceStore,
+        appHome,
+        secretBox: deps.secretBox,
+      }),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
       effects: deps.employeeCaseWorkspaceEffects,
@@ -3922,7 +3962,7 @@ function composeSqliteApiRouteMounts(
             },
     }),
   })
-  const runtimeManagement = composeLocalRuntimeManagement({
+  const runtimeManagement = (deps.runtimeManagement ?? composeLocalRuntimeManagement)({
     observations: () => systemAgentObservations,
     configuration: {
       current: () => configuration.read(),
@@ -4312,6 +4352,7 @@ export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
   deps.publicRoutes.health(app)
   deps.publicRoutes.wellKnown(app)
   deps.publicRoutes.webhookIngress(app)
+  deps.publicRoutes.crewStationEvents?.(app)
 
   app.use('/api/*', composeHttpAuthenticationMiddleware(deps.authentication))
   app.use('/api/*', async (c, next) => {

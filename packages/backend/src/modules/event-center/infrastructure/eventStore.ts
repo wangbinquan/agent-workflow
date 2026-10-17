@@ -272,7 +272,10 @@ function rotatingSubjectBatch(
   )
 }
 
-export function createEventStore(db: ProviderNeutralDatabase): EventStorePort {
+export function createEventStore(
+  db: ProviderNeutralDatabase,
+  beforeObservationWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
+): EventStorePort {
   return {
     async registerSource(descriptor, digest, now) {
       const existing = await db
@@ -729,6 +732,7 @@ export function createEventStore(db: ProviderNeutralDatabase): EventStorePort {
 
       return await databaseSessionFor(db).transaction(
         async (tx): Promise<ObservationStoreReceipt> => {
+          await beforeObservationWrite?.(tx)
           const inserted = await tx
             .insert(eventRecords)
             .values({

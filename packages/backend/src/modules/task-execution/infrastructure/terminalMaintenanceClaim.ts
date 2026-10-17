@@ -7,6 +7,7 @@
 
 import { and, eq, isNull } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } from '@/db/schema'
 import { affectedRows, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { TaskExecutionError } from '../application/taskExecutionError'
@@ -19,6 +20,32 @@ import {
   assertMaintenanceTransition,
   type TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
+
+/** Read during preflight and again inside admission's serializable transaction.
+ * The matching maintenance admission reads recovery reservations in that same
+ * transaction, so neither operation can slip between the other's read and write. */
+export async function assertTaskOutsideTerminalMaintenance(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<void> {
+  const maintenance = await db
+    .select({ claimId: taskExecutionMaintenanceMembers.claimId })
+    .from(taskExecutionMaintenanceMembers)
+    .where(
+      and(
+        eq(taskExecutionMaintenanceMembers.taskId, taskId),
+        isNull(taskExecutionMaintenanceMembers.releasedAt),
+      ),
+    )
+    .get()
+  if (maintenance !== undefined) {
+    throw new TaskExecutionError(
+      'task-terminal-maintenance-conflict',
+      `task '${taskId}' is claimed by terminal maintenance`,
+      { claimRef: maintenance.claimId },
+    )
+  }
+}
 
 /** 认领行必须仍是这把 capability 描述的那一行，且处在调用方预期的状态。 */
 export async function assertTerminalMaintenanceClaimTx(

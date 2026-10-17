@@ -10,7 +10,7 @@ import {
   bindChangeCandidateParticipant,
 } from '@/modules/source-control/composition/repositoryCandidate'
 import { createFileRepositoryCandidateEffectsFactory } from '@/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects'
-import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/application/ports/repositoryCandidateEffects'
+import type { RepositoryCandidateStepEffectsFactory } from '@/modules/source-control/application/ports/repositoryCandidateEffects'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import { bindEmployeeCaseWorkspaceParticipant } from '@/modules/source-control/composition'
 import {
@@ -262,12 +262,12 @@ describe('RFC-370 selected candidate publication', () => {
     for (const incomplete of [null, {}]) {
       expect(() =>
         bindCandidateDeliveryParticipant({
-          candidateEffects: incomplete as unknown as RepositoryCandidateEffectsFactory,
+          candidateEffects: incomplete as unknown as RepositoryCandidateStepEffectsFactory,
         }),
       ).toThrow('repository-candidate-effects-incomplete')
       expect(() =>
         bindChangeCandidateParticipant({
-          candidateEffects: incomplete as unknown as RepositoryCandidateEffectsFactory,
+          candidateEffects: incomplete as unknown as RepositoryCandidateStepEffectsFactory,
         }),
       ).toThrow('repository-candidate-effects-incomplete')
     }

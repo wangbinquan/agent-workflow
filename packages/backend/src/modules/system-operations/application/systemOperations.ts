@@ -59,6 +59,14 @@ export function createSystemOperationsApplication(deps: {
     },
   }
   const queries: SystemOperationQueries = {
+    ...(deps.backup.catalog === undefined
+      ? {}
+      : ({
+          hostedBackupCatalog: { execute: () => deps.backup.catalog!.list() },
+          verifyHostedBackup: {
+            execute: (_context, input) => deps.backup.catalog!.verify(input.backupId),
+          },
+        } satisfies Pick<SystemOperationQueries, 'hostedBackupCatalog' | 'verifyHostedBackup'>)),
     planLocalRestore: {
       async execute(_context, input) {
         return restorePlanViewSchema.parse(

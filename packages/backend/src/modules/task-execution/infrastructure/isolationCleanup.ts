@@ -44,10 +44,14 @@ export async function discardNodeIso(
   await effect?.beforeAct()
   let partialFailures = 0
   try {
-    await discardIsolatedWorkspace(handle, log, writeSem, (count) => {
+    const disposition = await discardIsolatedWorkspace(handle, log, writeSem, (count) => {
       partialFailures = count
     })
-    await effect?.succeed({ repoCount: handle.repos.length, partialFailures })
+    await effect?.succeed({
+      repoCount: handle.repos.length,
+      partialFailures,
+      retained: disposition?.retained === true,
+    })
   } catch (error) {
     await effect?.fail(error, { repoCount: handle.repos.length, partialFailures })
     throw error

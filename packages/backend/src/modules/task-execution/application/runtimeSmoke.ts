@@ -183,21 +183,51 @@ export async function runRuntimeSmokeCore(
       },
     },
   )
-  const settleSmoke = async (result: SmokeResult): Promise<SmokeResult> => {
+  const settleSmoke = async (result: SmokeResult, discard = false): Promise<SmokeResult> => {
     await usageCapture?.finish(result.outcome === 'conforms' ? 'done' : 'failed')
+    try {
+      await run.settle()
+    } catch (error) {
+      return {
+        outcome: 'spawn-failed',
+        conforms: false,
+        detail: maskDiagnosticsText(
+          `runtime settlement requires recovery: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+        sawNonce,
+        sawEnvelope,
+        exitCode: run.exitCode,
+      }
+    }
+    if (discard) {
+      try {
+        await invocation.workspace.discard()
+      } catch {
+        return {
+          outcome: 'spawn-failed',
+          conforms: false,
+          detail: 'runtime process cleanup did not complete safely',
+          sawNonce: false,
+          sawEnvelope: false,
+          exitCode: null,
+        }
+      }
+    }
     return result
   }
 
   if (run.result === 'spawn-failed') {
-    await invocation.workspace.discard()
-    return settleSmoke({
-      outcome: 'spawn-failed',
-      conforms: false,
-      detail: `binary failed to start: ${run.spawnError ?? 'unknown spawn failure'}`,
-      sawNonce: false,
-      sawEnvelope: false,
-      exitCode: null,
-    })
+    return settleSmoke(
+      {
+        outcome: 'spawn-failed',
+        conforms: false,
+        detail: `binary failed to start: ${run.spawnError ?? 'unknown spawn failure'}`,
+        sawNonce: false,
+        sawEnvelope: false,
+        exitCode: null,
+      },
+      true,
+    )
   }
   if (run.result === 'unreaped') {
     // Child may still own the attempt dir — retain it (reap-then-cleanup barrier).
@@ -307,30 +337,20 @@ export async function runRuntimeSmokeCore(
       ' [no --model was passed (runtime model field is empty) — the binary used its own default model; set the runtime model and re-probe]'
   }
 
-  try {
-    await invocation.workspace.discard()
-  } catch {
-    return settleSmoke({
-      outcome: 'spawn-failed',
-      conforms: false,
-      detail: 'runtime process cleanup did not complete safely',
-      sawNonce: false,
-      sawEnvelope: false,
-      exitCode: null,
-    })
-  }
-
-  return settleSmoke({
-    outcome,
-    conforms: outcome === 'conforms',
-    detail,
-    ...(sessionId !== undefined &&
-    pendingConversationReset === undefined &&
-    !nativeSessionProtocolInvalid
-      ? { capturedSessionId: sessionId }
-      : {}),
-    sawNonce,
-    sawEnvelope,
-    exitCode,
-  })
+  return settleSmoke(
+    {
+      outcome,
+      conforms: outcome === 'conforms',
+      detail,
+      ...(sessionId !== undefined &&
+      pendingConversationReset === undefined &&
+      !nativeSessionProtocolInvalid
+        ? { capturedSessionId: sessionId }
+        : {}),
+      sawNonce,
+      sawEnvelope,
+      exitCode,
+    },
+    true,
+  )
 }

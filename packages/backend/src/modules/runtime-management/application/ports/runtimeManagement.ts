@@ -43,7 +43,7 @@ export interface RuntimeSmokeRequest {
 
 export interface RuntimeDriverManagementPort {
   resolveTarget(
-    row: Pick<RuntimeRow, 'protocol' | 'binaryPath'>,
+    row: Pick<RuntimeRow, 'protocol' | 'binaryPath'> & Partial<Pick<RuntimeRow, 'model'>>,
     config: RuntimeManagementConfig,
   ): RuntimeDiagnosticTarget
   capture(input: {

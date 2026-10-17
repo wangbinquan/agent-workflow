@@ -3,6 +3,7 @@
 // and mixed database/filesystem archive journal shared by SQLite/PostgreSQL.
 
 import type { EventsArchiveStore } from './eventsArchiveStorePort'
+import type { EventsArchiveContent } from './eventsArchiveContent'
 import type { MaintenanceJobExecutionResult } from './maintenanceJobRunner'
 import { archiveEventsWithStore } from '@/platform/persistence/sqlite/systemEventsArchive'
 
@@ -59,6 +60,7 @@ function cursor(value: unknown): EventArchiveCursorV1 | null {
 export function createEventsArchiveMaintenanceCommand(input: {
   readonly store: EventsArchiveStore
   readonly logsDir: string
+  readonly content?: EventsArchiveContent
 }): {
   runSlice(request: {
     readonly thresholds: {
@@ -107,7 +109,7 @@ export function createEventsArchiveMaintenanceCommand(input: {
         input.store,
         { eventsArchiveThresholds: request.thresholds },
         input.logsDir,
-        { rowBudgetRows: EVENT_ARCHIVE_SLICE_ROWS, knownGlobalRows },
+        { rowBudgetRows: EVENT_ARCHIVE_SLICE_ROWS, knownGlobalRows, content: input.content },
       )
       const archived = result.perGroupArchived + result.globalArchived
       return {

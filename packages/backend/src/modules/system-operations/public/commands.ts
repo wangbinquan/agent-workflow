@@ -1,4 +1,18 @@
 import type { Config } from '@agent-workflow/shared'
+export type { AdminBackupCoordinatorPort as DatabaseBackupEffects } from '../application/ports/adminBackupCoordinator'
+
+export type { HostedObjectPublicationMaintenance } from '../infrastructure/crewstation/objectPublicationContract'
+
+/** Catalog retention. Stale building backups are failed first; physical unpin
+ * of released archives belongs to the hosted object maintenance job. */
+export interface DatabaseBackupMaintenance {
+  prune(input: {
+    readonly retentionCount: number
+    readonly retentionDays: number
+    readonly maxTotalBytes?: number
+    readonly protectedKeepCount?: number
+  }): Promise<{ deleted: number; kept: number }>
+}
 import type {
   ActivateLocalRestoreInput,
   CancelStagedRestoreResult,

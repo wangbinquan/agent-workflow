@@ -125,11 +125,46 @@ export function diffProtectedRoots(
   return violations
 }
 
-export function snapshotProtectedRoots(
+/** JSON form of a snapshot (pre-states and remote tree operations carry it). */
+export interface SerializedProtectedRootSnapshot {
+  readonly digest: string
+  readonly entries: readonly (readonly [string, readonly (readonly [string, string])[]])[]
+}
+
+export function serializeProtectedRootSnapshot(
+  snapshot: ProtectedRootSnapshot,
+): SerializedProtectedRootSnapshot {
+  return {
+    digest: snapshot.digest,
+    entries: [...snapshot.entries.entries()].map(
+      ([root, files]) => [root, [...files.entries()]] as const,
+    ),
+  }
+}
+
+export function reviveProtectedRootSnapshot(
+  value: SerializedProtectedRootSnapshot,
+): ProtectedRootSnapshot {
+  return {
+    digest: value.digest,
+    entries: new Map(value.entries.map(([root, files]) => [root, new Map(files)])),
+  }
+}
+
+export async function snapshotProtectedRoots(
   roots: Record<string, string>,
   opts: Parameters<typeof readProtectedRootSnapshot>[1] = {},
   factory?: AutomationWorkspaceEffectsFactory,
 ): Promise<ProtectedRootSnapshot> {
+  // RFC-370 §9.2 V3: a remote volume snapshots its own tree in one operation.
+  const tree = factory?.treeOperations
+  if (tree !== undefined)
+    return reviveProtectedRootSnapshot(
+      (await tree.run('protected-root-snapshot', {
+        roots,
+        opts,
+      })) as SerializedProtectedRootSnapshot,
+    )
   return withAutomationWorkspaceEffects(factory, (effects, selected) =>
     readProtectedRootSnapshot(roots, opts, selected, effects),
   )

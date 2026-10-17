@@ -3,10 +3,15 @@
 // The platform gateway authenticates every user-domain request and forwards a
 // signed identity token; this adapter verifies it, maps the platform subject
 // to its aw account (creating it on first sight) and admits that account
-// exactly like a standalone login session. Local passwords, OIDC, PATs and the
-// daemon bootstrap token do not exist behind the gateway.
+// exactly like a standalone login session. Automation additionally presents a
+// PAT belonging to that same account; local sessions/passwords and the daemon
+// bootstrap token cannot replace the platform identity.
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 import { createInFlightCoalescer } from '@/util/inFlight'
+import { PAT_TOKEN_PREFIX } from '@agent-workflow/shared'
+import type { AuthRuntime } from '@/auth/application/authRuntime'
+import type { AdmittedPatCredential } from '../../public/participants'
+import { parseLocalBearerHeader } from '../local/httpAuthentication'
 import type {
   AdmittedSessionCredential,
   DirectAuthorityIdentity,
@@ -46,6 +51,7 @@ function sessionCredential(userId: string): AdmittedSessionCredential {
 }
 
 export function createCrewStationCredentialAdapters(input: {
+  readonly auth: Pick<AuthRuntime, 'lookupActivePat'>
   readonly verifier: CrewStationIdentityTokenVerifier
   readonly provisioning: ExternalIdentityProvisioning
   readonly identityAccess: DirectAuthorityAdmissionRuntime
@@ -80,6 +86,31 @@ export function createCrewStationCredentialAdapters(input: {
     async authenticate(request) {
       const admission = await admit(request.header(CREWSTATION_IDENTITY_HEADER))
       if (admission.kind === 'admitted') {
+        // The gateway admits the CS user; an optional AW PAT narrows that
+        // same user's authority for automation. Never fall back to a full
+        // browser session after an invalid, revoked or foreign PAT.
+        const authorization = request.header('Authorization')
+        if (authorization !== null && authorization !== undefined) {
+          const raw = parseLocalBearerHeader(authorization)
+          if (raw === null || !raw.startsWith(PAT_TOKEN_PREFIX))
+            throw new UnauthorizedError(
+              'a CrewStation session and an AW personal access token are required',
+            )
+          const resolved = await input.auth.lookupActivePat(raw, now())
+          if (resolved === null || resolved.user.id !== admission.userId)
+            throw new UnauthorizedError(
+              'the personal access token does not belong to the authenticated CrewStation user',
+            )
+          const credential = Object.freeze({
+            userId: resolved.user.id,
+            scopes: resolved.scopes,
+            purpose: resolved.purpose,
+            patId: resolved.patId,
+          }) as AdmittedPatCredential
+          const identity = await input.identityAccess.directAuthority.fromPat(credential)
+          if (identity === null) throw new UnauthorizedError()
+          return { kind: 'authenticated', identity } as const
+        }
         return { kind: 'authenticated', identity: admission.identity } as const
       }
       if (admission.kind === 'disabled') {

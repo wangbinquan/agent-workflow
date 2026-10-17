@@ -1,4 +1,4 @@
-import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
+import type { DeclaredInjectionManifest, StartupObservation } from '@agent-workflow/shared'
 import type {
   AgentMaterialIntent,
   AgentMaterialWorkspace,
@@ -54,6 +54,8 @@ export interface PreparedSystemAgentRunResult {
    * observation rides the RFC-029 inventory file instead).
    */
   startupInventory?: StartupInventory
+  /** Selected adapters can transport the original typed observation in-stream. */
+  startupObservation?: StartupObservation
   /** RFC-282 B1b (§2.1b-2) — the declared manifest from THIS run's unified
    *  assembly. Absent on testPlanOverride fixture runs. Settle-time
    *  verification consumes this instead of re-rendering (same computation). */

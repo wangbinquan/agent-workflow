@@ -8,6 +8,10 @@ export {
   createCollaborationTaskAccessPort as createPostgresqlCollaborationTaskAccessPort,
 } from './infrastructure/collaborationTaskAccess'
 export { planMembersReplacement } from './infrastructure/taskCollab'
+/** RFC-370: the deployment's review journal content and rollback snapshot
+ * selections, passed through the daemon roots unopened. */
+export type { ReviewArtifactSelection } from './application/ports/reviewArtifactSelection'
+export type { WorkspaceRollbackSnapshotInspector } from './application/prepareWorkspaceRollbackPlan'
 // RFC-359 W7：RFC-057 修复的两个协作侧端口也各只剩一份实现；provider 具名导出只做绑定。
 export {
   createClarifyRepairParticipant,

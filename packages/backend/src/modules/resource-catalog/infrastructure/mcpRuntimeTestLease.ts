@@ -257,14 +257,22 @@ async function repairAfterReap(
 
 export function createMcpRuntimeTestLeaseOperations(
   db: ProviderNeutralDatabase,
+  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
 ): McpRuntimeTestLeaseOperations {
+  const write = <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>): Promise<T> =>
+    beforeWrite === undefined
+      ? body(db)
+      : runResourceCatalogTransaction(db, async (tx) => {
+          await beforeWrite(tx)
+          return body(tx)
+        })
   return Object.freeze({
-    claimNew: (input: McpRuntimeTestLeaseInput) => claimNew(db, input),
-    preclaim: (input: McpRuntimeTestLeaseInput) => preclaim(db, input),
+    claimNew: (input: McpRuntimeTestLeaseInput) => write((tx) => claimNew(tx, input)),
+    preclaim: (input: McpRuntimeTestLeaseInput) => write((tx) => preclaim(tx, input)),
     rotate: (token: McpRuntimeTestLeaseToken, nextRuntimeSessionId: string) =>
-      rotate(db, token, nextRuntimeSessionId),
-    release: (token: McpRuntimeTestLeaseToken) => release(db, token),
+      write((tx) => rotate(tx, token, nextRuntimeSessionId)),
+    release: (token: McpRuntimeTestLeaseToken) => write((tx) => release(tx, token)),
     repairAfterReap: (testSessionId: string, turnId: string, childReaped: true) =>
-      repairAfterReap(db, testSessionId, turnId, childReaped),
+      write((tx) => repairAfterReap(tx, testSessionId, turnId, childReaped)),
   })
 }

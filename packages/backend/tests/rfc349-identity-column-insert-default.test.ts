@@ -86,6 +86,9 @@ describe('RFC-349 identity columns render DEFAULT on PostgreSQL', () => {
       tables.map((entry) => entry.table).sort(),
       'identity 列的清单变了 ⇒ 先确认新表/删表是有意的，再更新这条断言',
     ).toEqual([
+      // RFC-370 M1: the hosted execution event journal keeps a per-row identity
+      // sequence like node_run_events (replay order within one execution).
+      'hosted_execution_events',
       'intent_turn_events',
       'mcp_runtime_test_events',
       'memory_distill_events',

@@ -106,6 +106,13 @@ type NativeAdapterConfiguration = Pick<
 export function createLocalDevelopmentAdapterEffects(deps: {
   readonly namespace: EvidenceStagingNamespace
   resolveStaging(reference: EvidenceStagingReference): string
+  /** Task-image selection shares argv/env policy with the native owner. */
+  readonly execute?: (input: {
+    readonly argv: readonly string[]
+    readonly env: Readonly<Record<string, string>>
+    readonly cwd: string
+    readonly timeoutMs: number
+  }) => Promise<AdapterProcessObservation>
 }): {
   readonly requirement: RequirementAdapterEffects
   readonly pipeline: PipelineAdapterEffects
@@ -268,6 +275,14 @@ export function createLocalDevelopmentAdapterEffects(deps: {
       ...(op.kind === 'approval.observe' ? { AW_APPROVAL_CORRELATION_REF: op.correlationRef } : {}),
       ...projectedSecrets,
     }
+
+    if (deps.execute !== undefined)
+      return deps.execute({
+        argv,
+        env,
+        cwd: input.stagedRoot,
+        timeoutMs: input.adapterContent.timeoutMs,
+      })
 
     let proc: Subprocess<'ignore', 'pipe', 'pipe'>
     try {

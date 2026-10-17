@@ -88,7 +88,18 @@ async function runCatalogTransactionRetryingUniqueViolations<T>(
 
 export function createMcpRuntimeTestPersistence(
   db: ProviderNeutralDatabase,
+  beforeWrite?: (tx: ProviderNeutralDatabase) => Promise<void>,
 ): McpRuntimeTestPersistence {
+  const guarded =
+    <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>) =>
+    async (tx: ProviderNeutralDatabase): Promise<T> => {
+      await beforeWrite?.(tx)
+      return body(tx)
+    }
+  const write = <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>) =>
+    runResourceCatalogTransaction(db, guarded(body))
+  const retryUnique = <T>(body: (tx: ProviderNeutralDatabase) => Promise<T>) =>
+    runCatalogTransactionRetryingUniqueViolations(db, guarded(body))
   const persistence: McpRuntimeTestPersistence = {
     identity: db,
 
@@ -97,7 +108,7 @@ export function createMcpRuntimeTestPersistence(
       // 换一笔事务重来（见 `runCatalogTransactionRetryingUniqueViolations` 的注释：这里行锁无效，因为快照不会刷新）。
       // 抛出去的话这条事件就丢了，抓取被判失败、整个测试台会话被标成 unusable——而 SQLite 上两条
       // 都好端端落库。
-      return runCatalogTransactionRetryingUniqueViolations(db, async (tx) => {
+      return retryUnique(async (tx) => {
         const turn = await tx
           .select({
             captureState: mcpRuntimeTestTurns.captureState,
@@ -222,7 +233,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async setRootSession(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const row = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -299,7 +310,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async markRootSessionResetPending(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const row = await tx
           .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
           .from(mcpRuntimeTestSessions)
@@ -329,7 +340,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async markCaptureTerminal(input) {
-      await runResourceCatalogTransaction(db, async (tx) => {
+      await write(async (tx) => {
         const turn = await tx
           .select({ captureState: mcpRuntimeTestTurns.captureState })
           .from(mcpRuntimeTestTurns)
@@ -362,7 +373,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async shutdown(now, idleDeadlineAt) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const sessions = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -481,7 +492,7 @@ export function createMcpRuntimeTestPersistence(
       // 抛 23505 冒成 500，而 SQLite 上永远是干净的 `mcp-test-session-exists` 409。
       // 换一笔事务重来即可：新快照读得到对方刚提交的活会话，走回上面那条 409（还带着会话 id）。
       // 幂等键相同的两笔并发同理——重跑时读得到对方的 receipt，按重放返回同一个会话。
-      return runCatalogTransactionRetryingUniqueViolations(db, async (tx) => {
+      return retryUnique(async (tx) => {
         const replay = await tx
           .select()
           .from(mcpRuntimeTestCreateReceipts)
@@ -635,7 +646,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async acceptMessage(input: McpRuntimeTestAcceptMessageInput) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         // RFC-359 W8-T28 —— 会话聚合根行锁，先锁再读（design §10.1）。
         // 这一笔的写值全部由读到的会话行算出来：新轮次的 `seq = turnSeq + 1` 落在
         // `uniq_mcp_runtime_test_turns_session_seq` 上，会话的 `sessionVersion` 自增落在会话行上。
@@ -759,7 +770,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async cancel(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -837,7 +848,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async end(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1032,7 +1043,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async invalidateMcp(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1064,7 +1075,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async invalidateOwner(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1093,7 +1104,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async markMcpConfigChanged(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1143,7 +1154,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async markRuntimeProfileChanged(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1193,7 +1204,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async invalidateRuntime(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1244,7 +1255,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async expireIdle(now) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const rows = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1302,17 +1313,19 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async deleteExpiredReceipt(receipt, now) {
-      await db
-        .delete(mcpRuntimeTestCreateReceipts)
-        .where(
-          and(
-            eq(mcpRuntimeTestCreateReceipts.mcpId, receipt.mcpId),
-            eq(mcpRuntimeTestCreateReceipts.ownerUserId, receipt.ownerUserId),
-            eq(mcpRuntimeTestCreateReceipts.clientCreateId, receipt.clientCreateId),
-            lte(mcpRuntimeTestCreateReceipts.expiresAt, now),
-          ),
-        )
-        .run()
+      await write(async (tx) => {
+        await tx
+          .delete(mcpRuntimeTestCreateReceipts)
+          .where(
+            and(
+              eq(mcpRuntimeTestCreateReceipts.mcpId, receipt.mcpId),
+              eq(mcpRuntimeTestCreateReceipts.ownerUserId, receipt.ownerUserId),
+              eq(mcpRuntimeTestCreateReceipts.clientCreateId, receipt.clientCreateId),
+              lte(mcpRuntimeTestCreateReceipts.expiresAt, now),
+            ),
+          )
+          .run()
+      })
     },
 
     async listQuarantinedCandidates() {
@@ -1331,12 +1344,10 @@ export function createMcpRuntimeTestPersistence(
           const turn = await db
             .select()
             .from(mcpRuntimeTestTurns)
-            .where(
-              and(
-                eq(mcpRuntimeTestTurns.sessionId, session.id),
-                isNotNull(mcpRuntimeTestTurns.pid),
-              ),
-            )
+            // Quarantine prevents a subsequent turn. Its latest turn may own a
+            // durable remote receipt instead of a local PID; the selected
+            // effects decide whether that execution can be proven settled.
+            .where(eq(mcpRuntimeTestTurns.sessionId, session.id))
             .orderBy(desc(mcpRuntimeTestTurns.seq))
             .limit(1)
             .get()
@@ -1346,21 +1357,27 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async recoverQuarantined(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
           .where(eq(mcpRuntimeTestSessions.id, input.sessionId))
           .get()
         const turn = await tx
-          .select({ pid: mcpRuntimeTestTurns.pid })
+          .select({
+            pid: mcpRuntimeTestTurns.pid,
+            spawnedAt: mcpRuntimeTestTurns.spawnedAt,
+            sessionId: mcpRuntimeTestTurns.sessionId,
+          })
           .from(mcpRuntimeTestTurns)
           .where(eq(mcpRuntimeTestTurns.id, input.turnId))
           .get()
         if (
           session?.status !== 'ended' ||
           session.cleanupState !== 'quarantined' ||
-          turn?.pid !== input.expectedPid
+          turn?.sessionId !== input.sessionId ||
+          turn.pid !== input.expectedPid ||
+          (input.expectedSpawnedAt !== undefined && turn.spawnedAt !== input.expectedSpawnedAt)
         ) {
           return false
         }
@@ -1384,7 +1401,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async expireTurns(now, idleDeadlineAt): Promise<McpRuntimeTestExpiredTurnResult> {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const turns = await tx
           .select()
           .from(mcpRuntimeTestTurns)
@@ -1474,7 +1491,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async settleQueuedDurableIntent(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1518,17 +1535,19 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async requestRunningTurnCancel(turnId, now) {
-      await db
-        .update(mcpRuntimeTestTurns)
-        .set({
-          cancelRequestedAt: sql`coalesce(${mcpRuntimeTestTurns.cancelRequestedAt}, ${now})`,
-        })
-        .where(and(eq(mcpRuntimeTestTurns.id, turnId), eq(mcpRuntimeTestTurns.status, 'running')))
-        .run()
+      await write(async (tx) => {
+        await tx
+          .update(mcpRuntimeTestTurns)
+          .set({
+            cancelRequestedAt: sql`coalesce(${mcpRuntimeTestTurns.cancelRequestedAt}, ${now})`,
+          })
+          .where(and(eq(mcpRuntimeTestTurns.id, turnId), eq(mcpRuntimeTestTurns.status, 'running')))
+          .run()
+      })
     },
 
     async clearTerminalDurableIntent(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1557,7 +1576,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async recoverBootSession(input: McpRuntimeTestBootRecoveryInput) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1632,7 +1651,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async admitTurn(input): Promise<McpRuntimeTestAdmittedTurn | null> {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1699,7 +1718,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async isSpawnAllowed(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select({
             status: mcpRuntimeTestSessions.status,
@@ -1728,7 +1747,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async recordSpawn(input: McpRuntimeTestSpawnReceiptInput) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1773,7 +1792,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async failBeforeRun(input) {
-      await runResourceCatalogTransaction(db, async (tx) => {
+      await write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1810,7 +1829,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async settleTurn(input: McpRuntimeTestSettlementInput) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1922,7 +1941,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async invalidateSession(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1947,7 +1966,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async prepareCleanup(sessionId, now) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)
@@ -1988,7 +2007,7 @@ export function createMcpRuntimeTestPersistence(
     },
 
     async finishCleanup(input) {
-      return runResourceCatalogTransaction(db, async (tx) => {
+      return write(async (tx) => {
         const session = await tx
           .select()
           .from(mcpRuntimeTestSessions)

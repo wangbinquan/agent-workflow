@@ -1,26 +1,139 @@
-import { eq, inArray } from 'drizzle-orm'
-import { createHash } from 'node:crypto'
+// RFC-370 §9.2 V3 — one persistent CrewStation parent (its `/work` volume) per
+// volume owner. Source Control owns the parent; task execution owns subtasks.
+//
+// Lifecycle of a parent as seen from here:
+//   allocate (first ensure) → running → paused (idle, by the lifecycle
+//   reconciler) → resumed (next ensure / open) → … → closed (owner deleted).
+// Every use goes through `ensure` (may allocate) or `open` (never allocates);
+// both resume a paused parent and wait until the platform reports it running
+// with a ready volume. `find` / `list` are registration reads without platform
+// I/O and must never wake a volume.
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { hostedTaskWorkspaces } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
-import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
+import type {
+  BusinessTask,
+  CrewStationBusinessExecution,
+} from '@/platform/crewstation/businessExecution'
+import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
+import { DomainError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 
 export interface HostedTaskWorkspace {
   readonly taskId: string
   readonly businessTaskId: string
 }
 
+/** A registered parent as the platform reports it, observed without waking it:
+ * `running` (usable now), `dormant` (the volume persists but the parent is
+ * paused, pausing, being resumed or failed), `gone` (closed and released) or
+ * `absent` (no usable registration). */
+export type HostedWorkspaceProbe = 'absent' | 'running' | 'dormant' | 'gone'
+
 export interface HostedTaskWorkspaces {
+  /** First use allocates the parent; every use waits until it runs (a paused
+   * parent is resumed first). Never returns a parent that is closing. */
   ensure(taskId: string): Promise<HostedTaskWorkspace>
+  /** An allocated parent made ready for use (resumed when paused). Null when
+   * none was ever allocated or it is closing. Never allocates. */
+  open(taskId: string): Promise<HostedTaskWorkspace | null>
+  /** Registration lookup without platform I/O; never wakes a volume. */
   find(taskId: string): Promise<HostedTaskWorkspace | null>
+  /** Read-only platform observation of a registered parent. */
+  probe(taskId: string): Promise<HostedWorkspaceProbe>
+  /** Registered parents whose volume may still exist. */
   list(): Promise<readonly HostedTaskWorkspace[]>
+  /** Registered parents the platform currently runs. Read-only: a paused
+   * parent is left paused (maintenance sweeps must not wake volumes). */
+  listRunning(): Promise<readonly HostedTaskWorkspace[]>
+  /** Close the parent once its owner is deleted. CS is asked first; `closing`
+   * is recorded only after CS accepted. True once the platform reports the
+   * volume released, false while the close is still pending. */
   close(taskId: string): Promise<boolean>
 }
 
-/** Source Control owns the parent task/volume. Task execution owns subtasks.
- * Persist the parent request key before network I/O so concurrent preparations
- * and a lost create response all resolve to the same persistent work volume. */
+const READY_TIMEOUT_MS = 300_000
+const POLL_MS = 2_000
+/** Platform states from which the parent becomes ready without our action. */
+const TRANSITIONAL = new Set(['admitting', 'creating', 'running', 'pausing'])
+/** Platform states whose volume is being or has been released for good. */
+const CLOSED = new Set(['finalizing', 'closing', 'closed'])
+/** States still provisioning resources, where `unknown` resources are expected. */
+const PROVISIONING = new Set(['admitting', 'creating'])
+/** CS request keys are at most 128 bytes. */
+const REQUEST_KEY_MAX = 128
+
+type Row = typeof hostedTaskWorkspaces.$inferSelect
+
+/** RFC-370 §9.2 V4 — the parent's container or volume is unusable (failed,
+ * or its resources are failed / unobservable after provisioning). The node
+ * fails with this explicit reason; the platform's recovery page can rebuild
+ * the workspace on its original volume, after which the task is resumed. */
+export class HostedWorkspaceUnavailableError extends DomainError {
+  constructor(businessTaskId: string, task: BusinessTask) {
+    const state =
+      task.state === 'failed' || task.resourceState === 'failed'
+        ? 'failed'
+        : `${task.state} with ${task.resourceState ?? 'unknown'} resources`
+    super(
+      'hosted-workspace-unavailable',
+      `The CrewStation task container is ${state} (${task.message || 'no platform message'}). ` +
+        "Rebuild the workspace from CrewStation's recovery page, then resume this task.",
+      503,
+      {
+        businessTaskId,
+        state: task.state,
+        resourceState: task.resourceState ?? null,
+        platformMessage: task.message ?? null,
+      },
+    )
+  }
+}
+
+/** The parent did not become ready within the provisioning wait. */
+export class HostedWorkspaceProvisioningTimeoutError extends DomainError {
+  constructor(businessTaskId: string, lastObserved: string) {
+    super(
+      'hosted-workspace-provisioning-timeout',
+      `hosted-workspace-provisioning-timeout: the CrewStation task container is still ${lastObserved}`,
+      504,
+      { businessTaskId, lastObserved },
+    )
+  }
+}
+
+/** CS reports `unknown` resources when its own observation fails; a short
+ * outage is waited out, a persistent one means the container is gone. */
+const UNKNOWN_RESOURCE_GRACE_MS = 60_000
+
+const resourcesUnobserved = (task: BusinessTask) =>
+  task.resourceState === 'unknown' && !PROVISIONING.has(task.state) && task.state !== 'paused'
+
+function unavailable(task: BusinessTask, unobservedForMs: number): boolean {
+  if (task.state === 'failed' || task.resourceState === 'failed') return true
+  if (resourcesUnobserved(task)) return unobservedForMs >= UNKNOWN_RESOURCE_GRACE_MS
+  return task.state !== 'paused' && !TRANSITIONAL.has(task.state)
+}
+
+/** Deterministic per-generation lifecycle key: a retried pause/resume/close of
+ * the same generation is a lookup of the original platform operation. */
+export function hostedLifecycleRequestKey(
+  parentRequestKey: string,
+  action: 'pause' | 'resume' | 'close',
+  generation: number,
+): string {
+  const key = `${parentRequestKey}:${action}:${generation}`
+  return key.length <= REQUEST_KEY_MAX ? key : `aw-task-op:${sha256Hex(key)}`
+}
+
+/** A lifecycle refusal that only means "another lifecycle operation or a
+ * concurrent caller got there first"; the next observation decides. */
+export function isLifecycleRace(error: unknown): boolean {
+  return isCrewStationApiError(error) && (error.status === 409 || error.status === 429)
+}
+
 export function createHostedTaskWorkspaces(input: {
   readonly db: ProviderNeutralDatabase
   readonly api: CrewStationBusinessExecution
@@ -28,10 +141,17 @@ export function createHostedTaskWorkspaces(input: {
   readonly installation: string
   readonly taskContractVersion: string
   readonly sleep?: (ms: number) => Promise<void>
+  readonly now?: () => number
+  readonly readyTimeoutMs?: number
 }): HostedTaskWorkspaces {
   const session = databaseSessionFor(input.db)
   const sleep = input.sleep ?? ((ms) => Bun.sleep(ms))
-  const read = async (db: ProviderNeutralDatabase, taskId: string) =>
+  const now = input.now ?? Date.now
+  const readyTimeoutMs = input.readyTimeoutMs ?? READY_TIMEOUT_MS
+  // Hash the installation so request keys remain below the platform's 128
+  // byte limit even when project/service names are long.
+  const installation = sha256Hex(input.installation).slice(0, 20)
+  const read = async (db: ProviderNeutralDatabase, taskId: string): Promise<Row | undefined> =>
     (
       await db
         .select()
@@ -46,38 +166,109 @@ export function createHostedTaskWorkspaces(input: {
       return operation(tx)
     })
   }
-  const ready = async (taskId: string, businessTaskId: string): Promise<HostedTaskWorkspace> => {
-    const deadline = Date.now() + 300_000
-    while (true) {
+  const observe = async (businessTaskId: string): Promise<BusinessTask> => {
+    const task = await input.api.getTask(businessTaskId)
+    if (task.id !== businessTaskId) throw new Error('hosted-workspace-receipt-mismatch')
+    return task
+  }
+  const resume = async (row: Row, task: BusinessTask) => {
+    try {
+      await input.api.resumeTask(task.id, {
+        requestKey: hostedLifecycleRequestKey(row.requestKey, 'resume', task.generation),
+        fence: input.fence.current(),
+        expectedGeneration: task.generation,
+      })
+    } catch (error) {
+      if (!isLifecycleRace(error)) throw error
+    }
+  }
+  /** Wait until the parent runs with a ready volume, resuming it if paused.
+   * The ready write refreshes `updatedAt`, the last-use mark the lifecycle
+   * reconciler honours before pausing an idle volume. */
+  const ready = async (row: Row, businessTaskId: string): Promise<HostedTaskWorkspace> => {
+    const deadline = now() + readyTimeoutMs
+    let last = 'unobserved'
+    let unobservedSince: number | null = null
+    for (;;) {
       input.fence.current()
-      const task = await input.api.getTask(businessTaskId)
+      const task = await observe(businessTaskId)
+      unobservedSince = resourcesUnobserved(task) ? (unobservedSince ?? now()) : null
       if (task.state === 'running' && task.resourceState === 'ready') {
         await write(async (tx) => {
-          const current = await read(tx, taskId)
+          const current = await read(tx, row.taskId)
           if (current === undefined || current.state === 'closing' || current.state === 'closed')
             throw new Error('hosted-workspace-closed')
           await tx
             .update(hostedTaskWorkspaces)
-            .set({ state: 'ready', updatedAt: Date.now() })
-            .where(eq(hostedTaskWorkspaces.taskId, taskId))
+            .set({ state: 'ready', updatedAt: now() })
+            .where(eq(hostedTaskWorkspaces.taskId, row.taskId))
         })
-        return { taskId, businessTaskId }
+        return { taskId: row.taskId, businessTaskId }
       }
-      if (!['admitting', 'creating', 'running'].includes(task.state)) {
-        throw new Error(`hosted-workspace-unavailable: ${task.state}: ${task.message ?? ''}`)
-      }
-      if (Date.now() >= deadline) throw new Error('hosted-workspace-provisioning-timeout')
-      await sleep(2_000)
+      if (CLOSED.has(task.state)) throw new Error(`hosted-workspace-closed: ${task.state}`)
+      if (unavailable(task, unobservedSince === null ? 0 : now() - unobservedSince))
+        throw new HostedWorkspaceUnavailableError(businessTaskId, task)
+      if (task.state === 'paused') await resume(row, task)
+      last = `${task.state}/${task.resourceState ?? 'unknown'}`
+      if (now() >= deadline) throw new HostedWorkspaceProvisioningTimeoutError(businessTaskId, last)
+      await sleep(POLL_MS)
     }
   }
+  /** Replays the persisted create intent. The platform answers a known
+   * requestKey with the original parent, so a lost receipt is recovered
+   * without a second volume. */
+  const allocate = async (row: Row): Promise<string> => {
+    const task = await input.api.createTask({
+      requestKey: row.requestKey,
+      fence: input.fence.current(),
+      taskContractVersion: input.taskContractVersion,
+      labels: { 'aw-task-id': row.taskId, 'aw-installation': input.installation },
+    })
+    await write(async (tx) => {
+      const current = await read(tx, row.taskId)
+      if (
+        current === undefined ||
+        (current.businessTaskId !== null && current.businessTaskId !== task.id)
+      ) {
+        throw new Error('hosted-workspace-receipt-mismatch')
+      }
+      await tx
+        .update(hostedTaskWorkspaces)
+        .set({ businessTaskId: task.id, updatedAt: now() })
+        .where(eq(hostedTaskWorkspaces.taskId, row.taskId))
+    })
+    return task.id
+  }
+  const registered = (row: Row | undefined): HostedTaskWorkspace | null =>
+    row === undefined ||
+    row.businessTaskId === null ||
+    row.state === 'closing' ||
+    row.state === 'closed'
+      ? null
+      : { taskId: row.taskId, businessTaskId: row.businessTaskId }
+  const list = async (): Promise<readonly HostedTaskWorkspace[]> => {
+    const rows = await input.db
+      .select()
+      .from(hostedTaskWorkspaces)
+      .where(inArray(hostedTaskWorkspaces.state, ['creating', 'ready']))
+    return rows.flatMap((row) => {
+      const workspace = registered(row)
+      return workspace === null ? [] : [workspace]
+    })
+  }
+  const probe = async (workspace: HostedTaskWorkspace | null): Promise<HostedWorkspaceProbe> => {
+    if (workspace === null) return 'absent'
+    const task = await observe(workspace.businessTaskId)
+    if (task.state === 'running' && task.resourceState === 'ready') return 'running'
+    // A closing parent is being released by the platform: nothing in it is usable.
+    if (task.state === 'closed' || task.state === 'closing') return 'gone'
+    return 'dormant'
+  }
+
   return {
     async ensure(taskId) {
-      // Hash the installation so request keys remain below the platform's 128
-      // byte limit even when project/service names are long.
-      const installation = createHash('sha256')
-        .update(input.installation)
-        .digest('hex')
-        .slice(0, 20)
+      // Persist the parent request key before network I/O so concurrent
+      // preparations and a lost create response resolve to the same volume.
       const row = await write(async (tx) => {
         await tx
           .insert(hostedTaskWorkspaces)
@@ -85,79 +276,75 @@ export function createHostedTaskWorkspaces(input: {
             taskId,
             requestKey: `aw-task:${installation}:${taskId}`,
             state: 'creating',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+            createdAt: now(),
+            updatedAt: now(),
           })
           .onConflictDoNothing()
         return (await read(tx, taskId))!
       })
       if (row.state === 'closed' || row.state === 'closing')
         throw new Error('hosted-workspace-closed')
-      if (row.businessTaskId !== null) return ready(taskId, row.businessTaskId)
-      const task = await input.api.createTask({
-        requestKey: row.requestKey,
-        fence: input.fence.current(),
-        taskContractVersion: input.taskContractVersion,
-        labels: { 'aw-task-id': taskId, 'aw-installation': input.installation },
-      })
-      await write(async (tx) => {
-        const current = await read(tx, taskId)
-        if (
-          current === undefined ||
-          (current.businessTaskId !== null && current.businessTaskId !== task.id)
-        ) {
-          throw new Error('hosted-workspace-receipt-mismatch')
-        }
-        await tx
-          .update(hostedTaskWorkspaces)
-          .set({ businessTaskId: task.id, updatedAt: Date.now() })
-          .where(eq(hostedTaskWorkspaces.taskId, taskId))
-      })
-      return ready(taskId, task.id)
+      return ready(row, row.businessTaskId ?? (await allocate(row)))
+    },
+    async open(taskId) {
+      const row = await read(input.db, taskId)
+      const workspace = registered(row)
+      return workspace === null ? null : ready(row!, workspace.businessTaskId)
     },
     async find(taskId) {
-      const row = await read(input.db, taskId)
-      return row?.businessTaskId == null || row.state === 'closing' || row.state === 'closed'
-        ? null
-        : { taskId, businessTaskId: row.businessTaskId }
+      return registered(await read(input.db, taskId))
     },
-    async list() {
-      const rows = await input.db
-        .select()
-        .from(hostedTaskWorkspaces)
-        .where(inArray(hostedTaskWorkspaces.state, ['creating', 'ready']))
-      return rows.flatMap((row) =>
-        row.businessTaskId === null
-          ? []
-          : [{ taskId: row.taskId, businessTaskId: row.businessTaskId }],
-      )
+    async probe(taskId) {
+      return probe(registered(await read(input.db, taskId)))
+    },
+    list,
+    async listRunning() {
+      const running: HostedTaskWorkspace[] = []
+      for (const workspace of await list()) {
+        try {
+          if ((await probe(workspace)) === 'running') running.push(workspace)
+        } catch {
+          // An unobservable parent is skipped by this sweep, never woken.
+        }
+      }
+      return running
     },
     async close(taskId) {
       const row = await read(input.db, taskId)
       if (row === undefined || row.state === 'closed') return true
-      if (row.businessTaskId === null) return false
-      await write(async (tx) => {
-        await tx
-          .update(hostedTaskWorkspaces)
-          .set({ state: 'closing', updatedAt: Date.now() })
-          .where(eq(hostedTaskWorkspaces.taskId, taskId))
-      })
-      let task = await input.api.getTask(row.businessTaskId)
-      if (task.state !== 'closed' && task.state !== 'closing') {
-        await input.api.closeTask(task.id, {
-          requestKey: `${row.requestKey}:close:${task.generation}`,
-          fence: input.fence.current(),
-          expectedGeneration: task.generation,
-        })
-        task = await input.api.getTask(task.id)
+      const businessTaskId = row.businessTaskId ?? (await allocate(row))
+      const task = await observe(businessTaskId)
+      if (task.state !== 'closing' && task.state !== 'closed') {
+        try {
+          await input.api.closeTask(task.id, {
+            requestKey: hostedLifecycleRequestKey(row.requestKey, 'close', task.generation),
+            fence: input.fence.current(),
+            expectedGeneration: task.generation,
+          })
+        } catch (error) {
+          // A pause/resume still in flight or a subtask still settling: the
+          // deletion step (or the lifecycle reconciler) retries.
+          if (isLifecycleRace(error)) return false
+          throw error
+        }
       }
-      // Acknowledged close is not physical release. GC retries until the
-      // platform confirms the resources actually disappeared.
-      if (task.state !== 'closed' || task.resourceState !== 'released') return false
+      // CS accepted the close: from here on the parent is never reused.
       await write(async (tx) => {
         await tx
           .update(hostedTaskWorkspaces)
-          .set({ state: 'closed', updatedAt: Date.now() })
+          .set({ state: 'closing', updatedAt: now() })
+          .where(
+            and(eq(hostedTaskWorkspaces.taskId, taskId), ne(hostedTaskWorkspaces.state, 'closed')),
+          )
+      })
+      // Acknowledged close is not physical release. The owner retries until
+      // the platform confirms the resources actually disappeared.
+      const released = await observe(task.id)
+      if (released.state !== 'closed' || released.resourceState !== 'released') return false
+      await write(async (tx) => {
+        await tx
+          .update(hostedTaskWorkspaces)
+          .set({ state: 'closed', updatedAt: now() })
           .where(eq(hostedTaskWorkspaces.taskId, taskId))
       })
       return true

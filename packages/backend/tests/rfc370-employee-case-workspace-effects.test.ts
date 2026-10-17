@@ -7,7 +7,7 @@ import { bindEmployeeCaseWorkspaceParticipant } from '@/modules/source-control/c
 import type {
   EmployeeCaseGitOperand,
   EmployeeCaseWorkspaceEffects,
-  EmployeeCaseWorkspaceEffectsFactory,
+  EmployeeCaseWorkspaceStepEffectsFactory,
 } from '@/modules/source-control/application/ports/employeeCaseWorkspaceEffects'
 import type {
   RepositoryCandidateFileFacts,
@@ -114,7 +114,7 @@ class Fixture {
   }
 }
 
-class SelectedFactory implements EmployeeCaseWorkspaceEffectsFactory {
+class SelectedFactory implements EmployeeCaseWorkspaceStepEffectsFactory {
   readonly #fixture: Fixture
   constructor(fixture: Fixture) {
     this.#fixture = fixture

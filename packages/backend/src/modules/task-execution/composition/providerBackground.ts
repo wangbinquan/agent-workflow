@@ -61,6 +61,7 @@ export interface TaskExecutionProviderBackgroundControl {
 }
 
 interface ProviderBackgroundRuntime {
+  readonly recoveryConsumer?: { tick(): Promise<void> }
   readonly module: TaskExecutionModule
   readonly lifecycleRepair: TaskLifecycleAutoRepairCommand
   readonly autoResume: TaskAutoResumeCommand
@@ -259,7 +260,21 @@ function createProviderLoops(
     },
   })
 
-  return Object.freeze([autoRepair, heartbeatKill, orphanReconcile, scheduled])
+  return Object.freeze([
+    autoRepair,
+    heartbeatKill,
+    orphanReconcile,
+    scheduled,
+    ...(runtime.recoveryConsumer === undefined
+      ? []
+      : [
+          createRestartableLoop({
+            name: 'hosted-recovery',
+            delayMs: () => 5000,
+            run: () => runtime.recoveryConsumer!.tick(),
+          }),
+        ]),
+  ])
 }
 
 /**

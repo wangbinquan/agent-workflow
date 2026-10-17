@@ -10,7 +10,7 @@ export function composeSystemAgentObservations(input: {
 }): SystemAgentObservationFactory {
   return {
     async open(request) {
-      const callId = ulid()
+      const callId = request.callId ?? ulid()
       const demand = request.demand
       const runtime = request.runtimeObservationIdentity
       return {

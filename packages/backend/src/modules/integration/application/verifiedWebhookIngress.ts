@@ -4,6 +4,7 @@ import { createLogger } from '@/util/log'
 import { codeHostEventObservations } from '../public/events'
 import type { VerifiedWebhookIngressCommands } from '../public/commands'
 import type { VerifiedWebhookIngressDependencies } from './ports/verifiedWebhookIngress'
+import { webhookDeliveryOutcome } from './webhookDeliveryOutcome'
 
 const log = createLogger('webhook-ingress')
 
@@ -49,17 +50,13 @@ export function createVerifiedWebhookIngress(
           })
         })
       }
-      if (published.deliveryCount > 0) {
-        await deps.audit.mark({ deliveryId, status: 'matched' })
-      } else if (insert.effectId !== null) {
-        await deps.audit.mark({
-          deliveryId,
-          status: 'matched',
-          reason: 'terminal-control-accepted',
-        })
-      } else {
-        await deps.audit.mark({ deliveryId, status: 'ignored', reason: 'no-trigger-matched' })
-      }
+      await deps.audit.mark({
+        deliveryId,
+        ...webhookDeliveryOutcome({
+          deliveryCount: published.deliveryCount,
+          effectId: insert.effectId,
+        }),
+      })
       if (insert.kind === 'duplicate') {
         return { deliveryId, status: 'duplicate', attemptCount: insert.attemptCount }
       }
