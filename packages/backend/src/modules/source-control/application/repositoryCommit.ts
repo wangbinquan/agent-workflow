@@ -126,22 +126,9 @@ async function filterPreparedIndex(input: {
     }
   }
 
-  const prepared = await input.runGit(input.repoPath, ['write-tree'], input.gitOptions)
-  if (prepared.exitCode !== 0) {
-    return {
-      ok: false,
-      error: describeFailure(
-        'git write-tree failed',
-        prepared.stderr,
-        prepared.stdout,
-        prepared.exitCode,
-      ),
-    }
-  }
   return {
     ok: true,
     receipt: { policyDigest: input.policy.digest, excludedPaths },
-    preparedTree: prepared.stdout.trim(),
   }
 }
 
@@ -150,6 +137,8 @@ export async function prepareRepositoryCommit(input: {
   configuredPatterns?: readonly string[]
   runGit?: RepositoryGit
   gitOptions?: Parameters<RepositoryGit>[2]
+  /** A preview stages into a throwaway index and needs no tree of it. */
+  forPreview?: boolean
 }): Promise<PrepareRepositoryCommitResult> {
   const runGit = input.runGit ?? defaultRunGit
   const staged = await runGit(input.repoPath, ['add', '-A'], input.gitOptions)
@@ -165,12 +154,26 @@ export async function prepareRepositoryCommit(input: {
     runGit,
     ...(input.gitOptions !== undefined ? { gitOptions: input.gitOptions } : {}),
   })
-  return filterPreparedIndex({
+  const filtered = await filterPreparedIndex({
     repoPath: input.repoPath,
     policy,
     runGit,
     ...(input.gitOptions !== undefined ? { gitOptions: input.gitOptions } : {}),
   })
+  if (!filtered.ok || input.forPreview === true) return filtered
+  const prepared = await runGit(input.repoPath, ['write-tree'], input.gitOptions)
+  if (prepared.exitCode !== 0) {
+    return {
+      ok: false,
+      error: describeFailure(
+        'git write-tree failed',
+        prepared.stderr,
+        prepared.stdout,
+        prepared.exitCode,
+      ),
+    }
+  }
+  return { ...filtered, preparedTree: prepared.stdout.trim() }
 }
 
 export async function classifyRepositoryCommitPath(input: {
@@ -364,6 +367,7 @@ export async function readRepositoryCommitPreview(input: {
       repoPath: input.repoPath,
       configuredPatterns: input.configuredPatterns ?? [],
       runGit,
+      forPreview: true,
     })
     if (!prepared.ok) return prepared
     const diff = await runGit(input.repoPath, ['diff', '--cached', '--no-color', '--unified=3'])
