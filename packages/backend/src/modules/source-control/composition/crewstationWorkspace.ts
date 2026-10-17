@@ -5,6 +5,7 @@ import type { Logger } from '@/util/log'
 import { createHostedRepositoryPublicationTransport } from '../infrastructure/crewstation/publicationTransport'
 import type { MaterializedSpace } from '../application/workspaceMaterialization'
 import type { HostedVolumeActivity } from '../public/participants'
+import type { WorkspaceExcludeProfileReceipt } from '../public/types'
 import { createHostedTaskWorkspaces } from '../infrastructure/crewstation/taskWorkspace'
 import { createHostedWorkspaceCommands } from '../infrastructure/crewstation/workspaceCommands'
 import { createHostedWorkspaceEffects } from '../infrastructure/crewstation/workspaceEffects'
@@ -151,6 +152,20 @@ export function composeCrewStationWorkspaceOwner(
       return {
         // §9.2 V3: a task publication's network Git runs in its task volume.
         repositoryPublicationTransport: createHostedRepositoryPublicationTransport({ helper }),
+        // RFC-308 workspace profiles are written where the worktree lives.
+        workspaceExcludeProfiles: {
+          bind: ({ workspaceRef }: { workspaceRef: string }) => {
+            const workspace = parseHostedWorkspaceReference(workspaceRef)
+            return {
+              ensure: (request: { directChildMounts?: readonly string[] } = {}) =>
+                helper.call<WorkspaceExcludeProfileReceipt>(
+                  workspace.taskId,
+                  'workspace-exclude-profile',
+                  { path: workspace.path, directChildMounts: request.directChildMounts ?? [] },
+                ),
+            }
+          },
+        },
         reviewRollbackSnapshots: {
           snapshotExists: ({
             worktreePath,

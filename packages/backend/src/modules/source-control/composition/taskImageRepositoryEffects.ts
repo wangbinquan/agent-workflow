@@ -35,6 +35,7 @@ import { createFileRepositoryCandidateEffectsFactory } from '../infrastructure/l
 import { createFileConflictMergeWorkspaceEffects } from '../infrastructure/local/fileConflictMergeWorkspaceEffects'
 import { createFileEmployeeCaseWorkspaceEffectsFactory } from '../infrastructure/local/fileEmployeeCaseWorkspaceEffects'
 import { createGitTaskDeletionRepositoryEffects } from '../infrastructure/local/gitTaskDeletionRepositoryEffects'
+import { ensureWorkspaceExcludeProfile } from '../infrastructure/workspaceExcludeManager'
 import { HOSTED_CANDIDATE_OPERATIONS } from '../infrastructure/crewstation/repositoryCandidate'
 import { HOSTED_EMPLOYEE_CASE_OPERATION } from '../infrastructure/crewstation/employeeCaseWorkspace'
 import type {
@@ -45,6 +46,7 @@ import type {
 
 export const TASK_IMAGE_REPOSITORY_OPERATIONS = [
   'review-snapshot-exists',
+  'workspace-exclude-profile',
   ...HOSTED_CANDIDATE_OPERATIONS,
   HOSTED_EMPLOYEE_CASE_OPERATION,
   'conflict-allocate',
@@ -120,6 +122,15 @@ export async function executeTaskImageRepositoryOperation(
     ...(input.overlayRoot === undefined ? {} : { overlayRoot: workPath(input.overlayRoot) }),
   })
   switch (operation) {
+    case 'workspace-exclude-profile': {
+      // RFC-308 per-worktree profile, written by the standalone manager on the
+      // task volume's worktree (the service has no Git and no worktrees).
+      const input = value as { path: string; directChildMounts: readonly string[] }
+      return ensureWorkspaceExcludeProfile({
+        worktreePath: workPath(input.path),
+        directChildMounts: input.directChildMounts.map(child),
+      })
+    }
     case 'review-snapshot-exists': {
       const input = value as { path: string; snapshot: string }
       if (!/^[a-f0-9]{40,64}$/.test(input.snapshot))
