@@ -193,7 +193,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     await runGit(repo, ['reset', '--hard', taskBase])
     expect(existsSync(join(repo, 'del.txt'))).toBe(true) // back
 
-    await materializeTree(repo, { mergedTree, canonCurrentTree: canonTree, taskBaseHead: taskBase })
+    await materializeTree(repo, { mergedTree, canonCurrentTree: canonTree })
     expect(readFileSync(join(repo, 'base.txt'), 'utf8')).toBe('merged\n')
     expect(existsSync(join(repo, 'new.txt'))).toBe(true)
     expect(existsSync(join(repo, 'del.txt'))).toBe(false) // deletion materialized
@@ -242,7 +242,6 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     await materializeTree(repo, {
       mergedTree,
       canonCurrentTree,
-      taskBaseHead: source,
     })
     expect(readFileSync(join(repo, 'conflict.txt'), 'utf8')).toBe('source + target\n')
     expect(await head(repo)).toBe(source)
@@ -273,7 +272,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     await runGit(repo, ['reset', '--hard', taskBase]) // worktree back: foo is a file again
     expect(existsSync(join(repo, 'foo'))).toBe(true)
 
-    await materializeTree(repo, { mergedTree, canonCurrentTree: canonTree, taskBaseHead: taskBase })
+    await materializeTree(repo, { mergedTree, canonCurrentTree: canonTree })
     expect(readFileSync(join(repo, 'foo', 'bar'), 'utf8')).toBe('now a dir\n')
     rmSync(repo, { recursive: true, force: true })
   })

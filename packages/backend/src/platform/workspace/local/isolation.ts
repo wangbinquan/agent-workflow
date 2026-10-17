@@ -1317,7 +1317,6 @@ export async function mergeBackNodeIso(
         await materializeTree(r.canonWorktreePath, {
           mergedTree: salvage.tree,
           canonCurrentTree,
-          taskBaseHead: r.taskBaseHead,
         })
         salvagedPaths = salvage.landedPaths
       }
@@ -1338,7 +1337,6 @@ export async function mergeBackNodeIso(
     await materializeTree(r.canonWorktreePath, {
       mergedTree: merge.mergedTree,
       canonCurrentTree,
-      taskBaseHead: r.taskBaseHead,
     })
   }
   return { clean: conflicts.length === 0, conflicts }
@@ -1425,11 +1423,9 @@ export async function undoPriorShardDeltaInIso(
     return false
   }
   const canonCurrentTree = await treeOf(isoWorktreePath, isoCurrent)
-  const taskBaseHead = await headOf(isoWorktreePath)
   await materializeTree(isoWorktreePath, {
     mergedTree: rev.mergedTree,
     canonCurrentTree,
-    taskBaseHead,
     ...(log !== undefined ? { log } : {}),
   })
   return true
@@ -1797,7 +1793,6 @@ export async function finishConflictResolution(
   await materializeTree(conflict.canonWorktreePath, {
     mergedTree: resolvedTree,
     canonCurrentTree,
-    taskBaseHead: conflict.taskBaseHead,
   })
   // §6.2⑤: discard the resolve-iso (resolution now lives in canon).
   const discardedResolveIso = await reclaimWorktreePath({
@@ -1907,7 +1902,6 @@ export async function completeHumanResolvedConflict(
       await materializeTree(r.canonWorktreePath, {
         mergedTree: probe.mergedTree,
         canonCurrentTree,
-        taskBaseHead: r.taskBaseHead,
       })
       continue
     }
@@ -1955,7 +1949,6 @@ export async function completeHumanResolvedConflict(
     await materializeTree(r.canonWorktreePath, {
       mergedTree: merge.mergedTree,
       canonCurrentTree,
-      taskBaseHead: r.taskBaseHead,
     })
     // resolved — discard the resolve-iso.
     const humanResolveDiscard = await reclaimWorktreePath({

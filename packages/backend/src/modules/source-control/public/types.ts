@@ -18,7 +18,12 @@ export interface CommitExclusionReceipt {
 }
 
 export type PrepareRepositoryCommitResult =
-  | { ok: true; receipt: CommitExclusionReceipt }
+  | {
+      ok: true
+      receipt: CommitExclusionReceipt
+      /** The prepared index as a tree; absent from a task image released before it. */
+      preparedTree?: string
+    }
   | { ok: false; error: string }
 
 export type RepositoryCommitPreviewResult =

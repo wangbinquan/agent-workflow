@@ -240,7 +240,6 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     await runGit(host, ['commit', '-q', '-m', 'oops, committed a nested repo at c0'])
     expect(existsSync(join(host, '.gitmodules'))).toBe(false)
     const headTree = (await runGit(host, ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
-    const taskBaseHead = (await runGit(host, ['rev-parse', 'HEAD'])).stdout.trim()
 
     const canonRoot = tmp('aw-rfc210-np-strinit-wt-')
     const canon = join(canonRoot, 'canon')
@@ -262,7 +261,6 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     await materializeTree(canon, {
       mergedTree: headTree,
       canonCurrentTree: headTree,
-      taskBaseHead,
     })
 
     // The stray repo must stay at the USER's HEAD, its work intact — never
@@ -314,12 +312,11 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
       'corrupt .gitmodules',
     ])
     const headTree = (await runGit(canon, ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
-    const taskBaseHead = (await runGit(canon, ['rev-parse', 'HEAD'])).stdout.trim()
 
     // The submodule is MANAGED and initialized; classification must refuse
     // rather than silently treat the corrupt-config path as stray and skip it.
     await expect(
-      materializeTree(canon, { mergedTree: headTree, canonCurrentTree: headTree, taskBaseHead }),
+      materializeTree(canon, { mergedTree: headTree, canonCurrentTree: headTree }),
     ).rejects.toThrow(/could not be parsed to classify ownership/)
   }, 120_000)
 
@@ -341,7 +338,6 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     await runGit(host, ['add', '.gitmodules'])
     await runGit(host, ['commit', '-q', '-m', 'gitlink + empty-name .gitmodules'])
     const headTree = (await runGit(host, ['rev-parse', 'HEAD^{tree}'])).stdout.trim()
-    const taskBaseHead = (await runGit(host, ['rev-parse', 'HEAD'])).stdout.trim()
 
     const canonRoot = tmp('aw-rfc210-np-emptyname-wt-')
     const canon = join(canonRoot, 'canon')
@@ -356,7 +352,6 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     await materializeTree(canon, {
       mergedTree: headTree,
       canonCurrentTree: headTree,
-      taskBaseHead,
     })
 
     // The empty-name entry is ignored → the gitlink stays stray → untouched.

@@ -60,6 +60,8 @@ export interface RepositoryCommitCandidateParticipant {
     verification: 'normal' | 'artifact'
     authorName?: string | null
     authorEmail?: string | null
+    /** `prepare`'s tree; restores the index a sibling merge-back reset meanwhile. */
+    preparedTree?: string
   }): Promise<CommitPreparedResult>
   classifyPath(input: {
     path: string

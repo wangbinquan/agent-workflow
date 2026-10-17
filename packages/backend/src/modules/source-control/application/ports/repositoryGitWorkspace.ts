@@ -65,6 +65,7 @@ export interface RepositoryCommitWorkspaceOperations {
     readonly verification: 'normal' | 'artifact'
     readonly authorName?: string | null
     readonly authorEmail?: string | null
+    readonly preparedTree?: string
     readonly gitOptions?: RepositoryCommitGitOptions
   }): Promise<CommitPreparedResult>
   preview(input: {

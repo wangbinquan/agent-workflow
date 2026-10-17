@@ -3163,17 +3163,21 @@ function restoreGitMergeOperationFiles(files: readonly GitMergeOperationFile[]):
 
 /**
  * RFC-130 §5.3 / D28: make the canonical worktree's working tree equal `mergedTree`
- * while keeping HEAD at `taskBaseHead`, leaving the delta UNSTAGED (I-2 "uncommitted
+ * while keeping HEAD where it is, leaving the delta UNSTAGED (I-2 "uncommitted
  * = product"). Robustly handles deletions and file↔dir replacements (Codex gate
  * 五/六轮): remove D/T paths AND any worktree path blocking an added file BEFORE
  * checkout, then refresh submodule working dirs for changed gitlinks (D20/D22).
+ *
+ * HEAD is the worktree's current one, not the HEAD recorded when the isolated
+ * workspace was created: a commit-and-push may have advanced the branch since,
+ * and resetting to the older commit would take that commit off the branch
+ * (RFC-370 hosted acceptance, 2026-10-17).
  */
 export async function materializeTree(
   worktreePath: string,
   opts: {
     mergedTree: string
     canonCurrentTree: string
-    taskBaseHead: string
     submoduleMode?: 'auto' | 'always' | 'never'
     submoduleJobs?: number
     log?: Logger
@@ -3204,8 +3208,8 @@ export async function materializeTree(
     if (checkout.exitCode !== 0) {
       throw new DomainError('materialize-failed', `checkout-index: ${checkout.stderr.trim()}`, 500)
     }
-    // ④ index → base so the delta is UNSTAGED (worktree unchanged = merged tree).
-    const reset = await runGit(worktreePath, ['reset', '--mixed', opts.taskBaseHead])
+    // ④ index → HEAD so the delta is UNSTAGED (worktree unchanged = merged tree).
+    const reset = await runGit(worktreePath, ['reset', '--mixed', 'HEAD'])
     if (reset.exitCode !== 0) {
       throw new DomainError('materialize-failed', `reset --mixed: ${reset.stderr.trim()}`, 500)
     }
@@ -3231,7 +3235,7 @@ export async function materializeTree(
   // ⑥ RFC-210: re-point each submodule at the gitlink the MERGED tree records.
   //
   // Must come AFTER ⑤, not before: `submodule update` checks out whatever the
-  // INDEX says, and ④ just reset the index back to the task base — so any
+  // INDEX says, and ④ just reset the index back to HEAD — so any
   // gitlink placed here beforehand is immediately undone. (Written the other way
   // round first; only a real-git run surfaced it.)
   //

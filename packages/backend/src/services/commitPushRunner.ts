@@ -347,13 +347,17 @@ export async function runCommitPush(
   // under the write lock (RFC-076 C4) so a sibling writer can't mutate the
   // worktree mid-`add` and split its changes across commits. The lock is held
   // ONLY for this capture; `git diff --cached` reads the now-frozen index, and
-  // the commit below operates on that same index, so we release before the slow
-  // LLM message-gen / push (a writer resuming then lands in its own later
-  // commit). No acquirer (single-writer / tests) → unlocked, byte-identical.
+  // the commit below records that same prepared tree, so we release before the
+  // slow LLM message-gen / push (a writer resuming then lands in its own later
+  // commit). A sibling node's merge-back in that window resets the live index
+  // to HEAD (RFC-130 materialize), which is why the commit restores the tree
+  // captured here instead of trusting the index (RFC-370 hosted acceptance,
+  // 2026-10-17). No acquirer (single-writer / tests) → unlocked, byte-identical.
   const releaseWrite = params.acquireWrite ? await params.acquireWrite() : null
   let numstat: string
   let stat: string
   let diffRaw: string
+  let preparedTree: string | undefined
   try {
     const prepared = await bindRepositoryCommitParticipant({
       repoPath: W,
@@ -368,6 +372,7 @@ export async function runCommitPush(
     }
     exclusionPolicyDigest = prepared.receipt.policyDigest
     for (const path of prepared.receipt.excludedPaths) excludedPaths.add(path)
+    preparedTree = prepared.preparedTree
     const numstatResult = await g(['diff', '--cached', '--numstat'])
     if (numstatResult.exitCode !== 0) {
       return await finalize('commit-local-failed', {
@@ -463,6 +468,7 @@ export async function runCommitPush(
         verification: 'normal',
         authorName: params.gitUserName,
         authorEmail: params.gitUserEmail,
+        ...(preparedTree === undefined ? {} : { preparedTree }),
       })
     } finally {
       releaseCommit?.()

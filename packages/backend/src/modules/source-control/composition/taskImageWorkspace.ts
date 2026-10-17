@@ -363,6 +363,7 @@ export async function executeTaskImageWorkspaceOperation(
             verification: commit.verification,
             ...(commit.authorName === undefined ? {} : { authorName: commit.authorName }),
             ...(commit.authorEmail === undefined ? {} : { authorEmail: commit.authorEmail }),
+            ...(commit.preparedTree === undefined ? {} : { preparedTree: commit.preparedTree }),
             ...gitOptions,
           })
         }

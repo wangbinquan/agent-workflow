@@ -238,6 +238,7 @@ export function bindRepositoryCommitParticipant(input: {
       verification: 'normal' | 'artifact'
       authorName?: string | null
       authorEmail?: string | null
+      preparedTree?: string
     }) =>
       operations !== undefined
         ? operations.commitPrepared({ ...request, ...portableOptions })

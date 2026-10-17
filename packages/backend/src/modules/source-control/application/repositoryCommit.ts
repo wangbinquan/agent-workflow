@@ -126,9 +126,22 @@ async function filterPreparedIndex(input: {
     }
   }
 
+  const prepared = await input.runGit(input.repoPath, ['write-tree'], input.gitOptions)
+  if (prepared.exitCode !== 0) {
+    return {
+      ok: false,
+      error: describeFailure(
+        'git write-tree failed',
+        prepared.stderr,
+        prepared.stdout,
+        prepared.exitCode,
+      ),
+    }
+  }
   return {
     ok: true,
     receipt: { policyDigest: input.policy.digest, excludedPaths },
+    preparedTree: prepared.stdout.trim(),
   }
 }
 
@@ -187,10 +200,38 @@ export async function commitPreparedRepository(input: {
   verification: 'normal' | 'artifact'
   authorName?: string | null
   authorEmail?: string | null
+  /**
+   * The tree `prepare` captured. A caller that released the worktree between
+   * prepare and commit passes it: a sibling merge-back resets the index to
+   * HEAD, and this commit must still record exactly what was prepared.
+   */
+  preparedTree?: string
   runGit?: RepositoryGit
   gitOptions?: Parameters<RepositoryGit>[2]
 }): Promise<CommitPreparedResult> {
   const runGit = input.runGit ?? defaultRunGit
+  if (input.preparedTree !== undefined) {
+    const current = await runGit(input.repoPath, ['write-tree'], input.gitOptions)
+    if (current.exitCode !== 0 || current.stdout.trim() !== input.preparedTree) {
+      const restored = await runGit(
+        input.repoPath,
+        ['read-tree', input.preparedTree],
+        input.gitOptions,
+      )
+      if (restored.exitCode !== 0) {
+        return {
+          ok: false,
+          reason: 'failed',
+          error: describeFailure(
+            'git prepared-index restore failed',
+            restored.stderr,
+            restored.stdout,
+            restored.exitCode,
+          ),
+        }
+      }
+    }
+  }
   const dirty = await runGit(
     input.repoPath,
     ['diff', '--cached', '--quiet', '--exit-code'],

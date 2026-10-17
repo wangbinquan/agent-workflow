@@ -186,6 +186,31 @@ describeEachProvider('提交并推送执行器（双引擎）', (harness) => {
       expect(status).toBe('done')
     })
 
+    test('a sibling merge-back during message generation cannot empty the commit', async () => {
+      // RFC-370 hosted acceptance (2026-10-17): message generation runs without
+      // the write lock, and a sibling node merging back in that window resets
+      // the canonical index (RFC-130 materialize). The commit used to find the
+      // index empty and end as commit-local-failed; it records the prepared tree.
+      f = await build(harness)
+      writeFileSync(join(f.repo, 'b.txt'), 'new file\n')
+      const { meta } = await runCommitPush(
+        baseParams(f, {
+          generateMessage: async () => {
+            await runGit(f.repo, ['reset', '-q', '--mixed', 'HEAD'])
+            return { message: 'feat: add b' }
+          },
+        }),
+        composeSqliteCommitPushDeps(f.db),
+      )
+      expect(meta.pushError ?? null).toBeNull()
+      expect(meta.pushOutcome).toBe('pushed')
+      expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
+      expect(
+        (await runGit(f.repo, ['show', '--name-only', '--format=', 'HEAD'])).stdout.trim(),
+      ).toBe('b.txt')
+      expect(await remoteHasBranch(f.remote, 'feature/x')).toBe(true)
+    })
+
     test('null task identity → fixed platform fallback commits (never ambient config)', async () => {
       // RFC-165 regression lock (CI incident 29104878034): a URL/scratch
       // worktree's cache-clone parent carries no local user.*, and CI hosts
