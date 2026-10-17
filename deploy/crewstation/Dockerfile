@@ -13,8 +13,8 @@ RUN bun install --frozen-lockfile \
  && cp "$(ls dist/agent-workflow-linux-* | grep -v -- '-e2e-' | head -n 1)" /agent-workflow
 
 FROM debian:bookworm-slim
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+RUN apt-get -o Acquire::Retries=5 update \
+ && apt-get -o Acquire::Retries=5 install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 10001 agent-workflow
 COPY --from=build /agent-workflow /usr/local/bin/agent-workflow

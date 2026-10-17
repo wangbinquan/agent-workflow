@@ -10,8 +10,9 @@ RUN bun install --frozen-lockfile \
 
 FROM ${CS_BASE_IMAGE}
 USER root
-RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates openssh-client python3 python3-venv python3-pip nodejs npm bash \
+# Retry transient mirror failures (2026-10-17: ~1 in 50 package fetches failed to connect).
+RUN apt-get -o Acquire::Retries=5 update \
+ && apt-get -o Acquire::Retries=5 install -y --no-install-recommends git ca-certificates openssh-client python3 python3-venv python3-pip nodejs npm bash \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=build /agent-workflow /usr/local/bin/agent-workflow
 ENV AGENT_WORKFLOW_HOME=/work/.agent-workflow
