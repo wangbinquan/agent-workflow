@@ -5270,6 +5270,28 @@ import 与调用一起拿掉（事故前的形状）仍然全绿。它不像假�
 **定式**：文档里的正则**一律包进反引号**。这与本文件既有那条「opencode 源码引用写纯
 文本、不写 GitHub 外链」同源：`design/**/*.md` 里任何长得像链接的东西都会被真的请求。
 
+## 删 / 改名源文件会让别处设计文档里的相对链接变死链（RFC-375 / RFC-376 连撞两次，2026-10-17）
+
+`Markdown link check (design/)` 也检查**指向仓内文件的相对链接**。RFC-375 删 `services/` 门面、
+RFC-376 删 `architecture/*.json` 与旧生成器后，主 CI 两次都只红在这一格：链接它们的是别的
+RFC 的 `evidence.md` 与 dated review，本次 diff 里根本看不到。
+
+**定式**：提交任何删除 / 改名之前，扫一遍全仓 Markdown 中指向这些路径的相对链接（下面以
+「本次暂存的删除」为例），命中的改指现行文件；dated review 是快照，只把死链接改成纯文本路径并
+注明已删除，不改内容。
+
+```bash
+git diff --cached --diff-filter=D --no-renames --name-only > /tmp/deleted.txt
+python3 - <<'PY'
+import os, re, subprocess
+gone = set(open('/tmp/deleted.txt').read().split())
+for f in subprocess.run(['git', 'ls-files', '*.md'], capture_output=True, text=True).stdout.split():
+    for m in re.finditer(r'\]\(([^)\s#]+)', open(f, encoding='utf-8').read()):
+        if os.path.normpath(os.path.join(os.path.dirname(f), m.group(1))) in gone:
+            print(f, m.group(1))
+PY
+```
+
 ## 账本类的数，只信会执行那份数据的程序打印出来的值（RFC-317 T66 实撞）
 
 > 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
