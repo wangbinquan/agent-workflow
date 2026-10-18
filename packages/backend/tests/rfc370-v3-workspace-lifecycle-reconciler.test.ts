@@ -109,6 +109,7 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
     const held = new Set<string>()
     const unsettled = new Set<string>()
     const closed: string[] = []
+    const superseded = new Set<string>()
     let closeResult = true
     let activityCalls = 0
     let onActivity: (() => void | Promise<void>) | null = null
@@ -122,6 +123,7 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
           closed.push(taskId)
           return closeResult
         },
+        superseded: async (taskId) => superseded.has(taskId),
       },
       commands: { hasUnsettledCommands: async (id) => unsettled.has(id) },
       activity: {
@@ -151,6 +153,7 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
       held,
       unsettled,
       closed,
+      superseded,
       row,
       setNow: (value: number) => {
         now = value
@@ -218,13 +221,40 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
   test('shared owners wait for the idle period; AW tasks only for the short grace', async () => {
     const f = await setup()
     expect(hostedWorkspaceOwnerKind('01TASK')).toBe('task')
-    for (const owner of ['system:intent', 'development:shared', 'mcp-test:01SESSION'])
-      expect(hostedWorkspaceOwnerKind(owner)).toBe('shared')
+    expect(hostedWorkspaceOwnerKind('development:shared')).toBe('shared')
+    for (const owner of ['system:intent', 'system:shared', 'mcp-test:01SESSION'])
+      expect(hostedWorkspaceOwnerKind(owner)).toBe('scratch')
     await f.register('development:shared', { updatedAt: NOW - HOSTED_TASK_VOLUME_GRACE_MS - 1 })
+    await f.register('system:shared', { updatedAt: NOW - HOSTED_TASK_VOLUME_GRACE_MS - 1 })
     await f.register('01TASK', { updatedAt: NOW - HOSTED_TASK_VOLUME_GRACE_MS - 1 })
     expect((await pass(f)).paused).toEqual(['01TASK'])
     f.setNow(NOW + HOSTED_SHARED_VOLUME_IDLE_MS)
-    expect((await pass(f)).paused).toEqual(['development:shared'])
+    expect([...(await pass(f)).paused].sort()).toEqual(['development:shared', 'system:shared'])
+  })
+
+  // RFC-370 hosted acceptance (2026-10-17): a parent keeps the task image it was
+  // created with, and the shared system scratch parent created under an earlier
+  // release kept failing every memory distillation of a later one. A scratch
+  // parent of another release is closed once idle, never paused and resumed.
+  test('a scratch parent of another release is closed once idle, running or paused', async () => {
+    const f = await setup()
+    const idle = { updatedAt: NOW - HOSTED_SHARED_VOLUME_IDLE_MS - 1 }
+    await f.register('system:shared', idle)
+    await f.register('system:intent', { ...idle, platform: { state: 'paused' } })
+    await f.register('system:busy', idle)
+    await f.register('system:recent', { updatedAt: NOW - 1 })
+    await f.register('system:current', idle)
+    await f.register('development:shared', idle)
+    for (const owner of ['system:shared', 'system:intent', 'system:busy', 'system:recent'])
+      f.superseded.add(owner)
+    f.active.add('system:busy')
+    const result = await pass(f)
+    expect([...result.closed].sort()).toEqual(['system:intent', 'system:shared'])
+    expect(f.closed.sort()).toEqual(['system:intent', 'system:shared'])
+    // A current scratch parent and a durable shared owner are only paused; one
+    // in use or used recently is left alone.
+    expect([...result.paused].sort()).toEqual(['development:shared', 'system:current'])
+    expect(result.failed).toEqual([])
   })
 
   test('a use that starts during the pass is re-checked right before the pause', async () => {

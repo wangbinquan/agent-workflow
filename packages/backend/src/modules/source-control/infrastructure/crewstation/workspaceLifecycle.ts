@@ -18,7 +18,10 @@
 //     submit it guards); shared owners (`system:…`, `development:shared`, …)
 //     are paused only after an idle period, since their consecutive operations
 //     are not covered by a task status.
-// Only parents the platform reports `running` are paused.
+// Only parents the platform reports `running` are paused. A scratch owner's
+// parent created under another release (`HostedTaskWorkspaces.superseded`) is
+// closed instead once idle, running or not, so its owner's next use gets a
+// parent with the running release's task image.
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { hostedTaskWorkspaces } from '@/db/schema'
@@ -55,7 +58,7 @@ export function createHostedWorkspaceLifecycle(input: {
   readonly db: ProviderNeutralDatabase
   readonly api: CrewStationBusinessExecution
   readonly fence: CrewStationMutationFence
-  readonly workspaces: Pick<HostedTaskWorkspaces, 'close'>
+  readonly workspaces: Pick<HostedTaskWorkspaces, 'close' | 'superseded'>
   readonly commands: { hasUnsettledCommands(businessTaskId: string): Promise<boolean> }
   readonly activity: HostedVolumeActivity
   /** In-process holds by volume owner. */
@@ -128,7 +131,8 @@ export function createHostedWorkspaceLifecycle(input: {
             closed.push(owner)
             continue
           }
-          if (task.state !== 'running') continue
+          const retire = await input.workspaces.superseded(owner)
+          if (task.state !== 'running' && !retire) continue
           // Re-check use right before the effect: a use that started during this
           // pass refreshed `updatedAt` or made the owner active meanwhile.
           active = await input.activity.activeVolumeOwners()
@@ -142,6 +146,10 @@ export function createHostedWorkspaceLifecycle(input: {
             now() - current.updatedAt < idleFor(owner)
           )
             continue
+          if (retire) {
+            if (await input.workspaces.close(owner)) closed.push(owner)
+            continue
+          }
           try {
             await input.api.pauseTask(task.id, {
               requestKey: hostedLifecycleRequestKey(row.requestKey, 'pause', task.generation),

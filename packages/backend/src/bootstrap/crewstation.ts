@@ -116,6 +116,10 @@ export async function composeCrewStationStartOptions(
   })
   const publications = objectPublications.publications
   const resources = composeCrewStationResourceContent({ db })
+  // Scratch owners' parents follow the running release; its id never changes
+  // within a process and is re-read until the platform answers.
+  let releaseId: string | null =
+    initialCapabilities.releaseId === 'unavailable' ? null : initialCapabilities.releaseId
   const workspace = composeCrewStationWorkspaceOwner({
     db,
     api,
@@ -123,6 +127,11 @@ export async function composeCrewStationStartOptions(
     secretBox: system.secretBox,
     installation: `${environment.project}/${environment.service}`,
     taskContractVersion: HOSTED_TASK_CONTRACT_VERSION,
+    release: async () =>
+      (releaseId ??= await capabilities().then(
+        (current) => current.releaseId,
+        () => null,
+      )),
     commandEnvironment: createHostedGitCommandEnvironment(env.AW_GIT_CREDENTIAL_BINDINGS),
   })
   const materialObjects = composeCrewStationMaterialObjects({ api, publications })

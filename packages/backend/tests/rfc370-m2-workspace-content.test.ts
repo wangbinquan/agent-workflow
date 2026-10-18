@@ -108,6 +108,7 @@ function fixture() {
     list: async () => [],
     listRunning: async () => [],
     close: async () => true,
+    superseded: async () => false,
   }
   const uploads = createHostedWorkspaceUploads({ helper, api, workspaces })
   return {

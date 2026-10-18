@@ -20,6 +20,7 @@ import type {
 import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
 import { DomainError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
+import { hostedWorkspaceOwnerKind } from './workspaceOwnership'
 
 export interface HostedTaskWorkspace {
   readonly taskId: string
@@ -52,6 +53,9 @@ export interface HostedTaskWorkspaces {
    * is recorded only after CS accepted. True once the platform reports the
    * volume released, false while the close is still pending. */
   close(taskId: string): Promise<boolean>
+  /** A scratch owner's parent created under another release, due to be
+   * replaced (see `hostedWorkspaceOwnerKind`). Registration read only. */
+  superseded(taskId: string): Promise<boolean>
 }
 
 const READY_TIMEOUT_MS = 300_000
@@ -140,6 +144,9 @@ export function createHostedTaskWorkspaces(input: {
   readonly fence: CrewStationMutationFence
   readonly installation: string
   readonly taskContractVersion: string
+  /** The running release (CrewStation capabilities `releaseId`); null while
+   * unknown. Scratch owners get a parent per release. */
+  readonly release?: () => Promise<string | null>
   readonly sleep?: (ms: number) => Promise<void>
   readonly now?: () => number
   readonly readyTimeoutMs?: number
@@ -151,6 +158,15 @@ export function createHostedTaskWorkspaces(input: {
   // Hash the installation so request keys remain below the platform's 128
   // byte limit even when project/service names are long.
   const installation = sha256Hex(input.installation).slice(0, 20)
+  /** The running release for a scratch owner's parent; null for any other owner. */
+  const releaseFor = async (taskId: string) =>
+    hostedWorkspaceOwnerKind(taskId) === 'scratch' && input.release !== undefined
+      ? await input.release()
+      : null
+  const parentRequestKey = (taskId: string, release: string | null) =>
+    release === null
+      ? `aw-task:${installation}:${taskId}`
+      : `aw-task:${installation}:${taskId}@${sha256Hex(release).slice(0, 16)}`
   const read = async (db: ProviderNeutralDatabase, taskId: string): Promise<Row | undefined> =>
     (
       await db
@@ -265,26 +281,117 @@ export function createHostedTaskWorkspaces(input: {
     return 'dormant'
   }
 
+  const close = async (taskId: string): Promise<boolean> => {
+    const row = await read(input.db, taskId)
+    if (row === undefined || row.state === 'closed') return true
+    const businessTaskId = row.businessTaskId ?? (await allocate(row))
+    const task = await observe(businessTaskId)
+    if (task.state !== 'closing' && task.state !== 'closed') {
+      try {
+        await input.api.closeTask(task.id, {
+          requestKey: hostedLifecycleRequestKey(row.requestKey, 'close', task.generation),
+          fence: input.fence.current(),
+          expectedGeneration: task.generation,
+        })
+      } catch (error) {
+        // A pause/resume still in flight or a subtask still settling: the
+        // deletion step (or the lifecycle reconciler) retries.
+        if (isLifecycleRace(error)) return false
+        throw error
+      }
+    }
+    // CS accepted the close: from here on the parent is never reused.
+    await write(async (tx) => {
+      await tx
+        .update(hostedTaskWorkspaces)
+        .set({ state: 'closing', updatedAt: now() })
+        .where(
+          and(eq(hostedTaskWorkspaces.taskId, taskId), ne(hostedTaskWorkspaces.state, 'closed')),
+        )
+    })
+    // Acknowledged close is not physical release. The owner retries until
+    // the platform confirms the resources actually disappeared.
+    const released = await observe(task.id)
+    if (released.state !== 'closed' || released.resourceState !== 'released') return false
+    await write(async (tx) => {
+      await tx
+        .update(hostedTaskWorkspaces)
+        .set({ state: 'closed', updatedAt: now() })
+        .where(eq(hostedTaskWorkspaces.taskId, taskId))
+    })
+    return true
+  }
+  /** A scratch parent belongs to the running release when its key is that
+   * release's key, or a later replacement of it under the same release. */
+  const isCurrent = (row: Row, requestKey: string) =>
+    row.requestKey === requestKey || row.requestKey.startsWith(`${requestKey}~`)
+  /** Close a scratch owner's parent and re-arm the owner with a new parent of
+   * the running release. Nothing but invocation scratch is lost. */
+  const replace = async (row: Row, requestKey: string): Promise<Row> => {
+    const deadline = now() + readyTimeoutMs
+    while (!(await close(row.taskId))) {
+      if (now() >= deadline)
+        throw new HostedWorkspaceProvisioningTimeoutError(
+          row.businessTaskId ?? row.taskId,
+          'closing',
+        )
+      await sleep(POLL_MS)
+    }
+    // The platform answers a known request key with the original parent, so a
+    // replacement under the same release needs a key of its own; deriving it
+    // from the replaced key keeps a retried replacement on the same parent.
+    const key = isCurrent(row, requestKey)
+      ? `${requestKey}~${sha256Hex(row.requestKey).slice(0, 12)}`
+      : requestKey
+    return write(async (tx) => {
+      await tx
+        .update(hostedTaskWorkspaces)
+        .set({ requestKey: key, businessTaskId: null, state: 'creating', updatedAt: now() })
+        .where(
+          and(
+            eq(hostedTaskWorkspaces.taskId, row.taskId),
+            eq(hostedTaskWorkspaces.state, 'closed'),
+          ),
+        )
+      return (await read(tx, row.taskId))!
+    })
+  }
+
   return {
     async ensure(taskId) {
+      const release = await releaseFor(taskId)
+      const requestKey = parentRequestKey(taskId, release)
       // Persist the parent request key before network I/O so concurrent
       // preparations and a lost create response resolve to the same volume.
-      const row = await write(async (tx) => {
+      let row = await write(async (tx) => {
         await tx
           .insert(hostedTaskWorkspaces)
-          .values({
-            taskId,
-            requestKey: `aw-task:${installation}:${taskId}`,
-            state: 'creating',
-            createdAt: now(),
-            updatedAt: now(),
-          })
+          .values({ taskId, requestKey, state: 'creating', createdAt: now(), updatedAt: now() })
           .onConflictDoNothing()
         return (await read(tx, taskId))!
       })
-      if (row.state === 'closed' || row.state === 'closing')
-        throw new Error('hosted-workspace-closed')
-      return ready(row, row.businessTaskId ?? (await allocate(row)))
+      if (release === null) {
+        if (row.state === 'closed' || row.state === 'closing')
+          throw new Error('hosted-workspace-closed')
+        return ready(row, row.businessTaskId ?? (await allocate(row)))
+      }
+      // A scratch owner. A parent of another release that still runs may serve
+      // an invocation of that release and is used as it is (the lifecycle
+      // reconciler replaces it once idle); any other is replaced now, and so is
+      // a parent the platform closed or can no longer run.
+      if (row.state === 'closing' || row.state === 'closed') row = await replace(row, requestKey)
+      else if (!isCurrent(row, requestKey)) {
+        const task = row.businessTaskId === null ? null : await observe(row.businessTaskId)
+        if (task === null || (task.state !== 'running' && !PROVISIONING.has(task.state)))
+          row = await replace(row, requestKey)
+      }
+      try {
+        return await ready(row, row.businessTaskId ?? (await allocate(row)))
+      } catch (error) {
+        if (!(error instanceof HostedWorkspaceUnavailableError)) throw error
+        row = await replace((await read(input.db, taskId))!, requestKey)
+        return ready(row, row.businessTaskId ?? (await allocate(row)))
+      }
     },
     async open(taskId) {
       const row = await read(input.db, taskId)
@@ -309,45 +416,16 @@ export function createHostedTaskWorkspaces(input: {
       }
       return running
     },
-    async close(taskId) {
+    close,
+    async superseded(taskId) {
+      const release = await releaseFor(taskId)
+      if (release === null) return false
       const row = await read(input.db, taskId)
-      if (row === undefined || row.state === 'closed') return true
-      const businessTaskId = row.businessTaskId ?? (await allocate(row))
-      const task = await observe(businessTaskId)
-      if (task.state !== 'closing' && task.state !== 'closed') {
-        try {
-          await input.api.closeTask(task.id, {
-            requestKey: hostedLifecycleRequestKey(row.requestKey, 'close', task.generation),
-            fence: input.fence.current(),
-            expectedGeneration: task.generation,
-          })
-        } catch (error) {
-          // A pause/resume still in flight or a subtask still settling: the
-          // deletion step (or the lifecycle reconciler) retries.
-          if (isLifecycleRace(error)) return false
-          throw error
-        }
-      }
-      // CS accepted the close: from here on the parent is never reused.
-      await write(async (tx) => {
-        await tx
-          .update(hostedTaskWorkspaces)
-          .set({ state: 'closing', updatedAt: now() })
-          .where(
-            and(eq(hostedTaskWorkspaces.taskId, taskId), ne(hostedTaskWorkspaces.state, 'closed')),
-          )
-      })
-      // Acknowledged close is not physical release. The owner retries until
-      // the platform confirms the resources actually disappeared.
-      const released = await observe(task.id)
-      if (released.state !== 'closed' || released.resourceState !== 'released') return false
-      await write(async (tx) => {
-        await tx
-          .update(hostedTaskWorkspaces)
-          .set({ state: 'closed', updatedAt: now() })
-          .where(eq(hostedTaskWorkspaces.taskId, taskId))
-      })
-      return true
+      return (
+        row !== undefined &&
+        row.state !== 'closed' &&
+        !isCurrent(row, parentRequestKey(taskId, release))
+      )
     },
   }
 }
