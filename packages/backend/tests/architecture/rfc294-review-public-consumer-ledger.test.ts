@@ -263,6 +263,35 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:task-execution:types:TaskReviewNodeDescriptor', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:types:TaskSessionEventSource', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:types:WrapperExecutionScopeSegment', removeAfterWave: 'W4-E1' },
+  // RFC-375：以下 17 个 symbol 的生产 consumer 原是被删除的 services/ 门面（portArtifacts、
+  // nodeRunPrompt、ownerIdentity、scheduler 的 failTask / cancelTaskRow）与 taskWorkspaceCommit，
+  // 现在只剩测试使用；随所属 context 的 public 收口清偿。
+  {
+    id: 'public:identity-access:operations:OWNER_IDENTITY_SQL_BATCH_SIZE',
+    removeAfterWave: 'W4-E0',
+  },
+  {
+    id: 'public:source-control:participants:RepositoryCommitCandidateParticipant',
+    removeAfterWave: 'W5',
+  },
+  {
+    id: 'public:source-control:participants:RepositoryCommitPublicationParticipant',
+    removeAfterWave: 'W5',
+  },
+  { id: 'public:task-execution:commands:archivePortArtifacts', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:commands:nodeRunPromptRelPath', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:commands:storeNodeRunPrompt', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:encodePortSegment', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:forcedPortPathsForTask', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:missingArtifactPlaceholder', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:parseArchiveJson', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:portArchiveRootRel', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:readNodeRunPrompt', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:readPortArtifact', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:repoRelForcedPaths', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:toContainerRelative', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:queries:truncationNotice', removeAfterWave: 'W4-E1' },
+  { id: 'public:task-execution:types:taskStopProjection', removeAfterWave: 'W4-E1' },
 ]
 
 /** provider=0 且 consumer=0 的 required SPI：死声明。 */
