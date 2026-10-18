@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:3d8b25d93c5b057b77b43e787bfa2c0e317cf561d3df31df17006c6ade77c259`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b66298b7f477d8fe32ef1c4408d15122c08c211a3db0808bd438b14f6136bf60`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,18 +10,18 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2374 |
-| `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1779 / 18 |
-| backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
-| `KNOWN_VIOLATIONS` | 7 |
+| backend production TS 文件 | 2310 |
+| `services/` 文件 | 271 |
+| `modules/**` 文件 / 非空 context | 1743 / 18 |
+| backend 值级 SCC / 全仓值级 SCC | 0 / 0 |
+| `KNOWN_VIOLATIONS` | 0 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 512 |
-| background work entries | 392 |
-| direct native `setInterval`（call / files） | 23 / 20 |
-| direct native timers（全部） | 87 |
-| RFC-317 boundary census（inbound / outbound） | 313 / 43 |
+| background work entries | 367 |
+| direct native `setInterval`（call / files） | 15 / 13 |
+| direct native timers（全部） | 78 |
+| RFC-317 boundary census（inbound / outbound） | 295 / 42 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 512 |
-| `architectureExceptions` | 6411 |
-| `backgroundJobs` | 392 |
-| `crossContextImports` | 7284 |
-| `facades` | 295 |
+| `architectureExceptions` | 6288 |
+| `backgroundJobs` | 367 |
+| `crossContextImports` | 7164 |
+| `facades` | 271 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27756 |
-| `mutationEntrypoints` | 2056 |
+| `moduleSymbolOwners` | 27395 |
+| `mutationEntrypoints` | 2004 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1237 |
-| `transactionExternalEffects` | 282 |
+| `publicSurfaces` | 1173 |
+| `transactionExternalEffects` | 281 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -47,66 +47,64 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 153 |
-| task-execution / application | 141 |
-| resource-catalog / infrastructure | 139 |
-| task-execution / composition | 105 |
+| task-execution / infrastructure | 151 |
+| resource-catalog / infrastructure | 137 |
+| task-execution / application | 136 |
+| task-execution / composition | 103 |
 | resource-catalog / application | 78 |
-| development-automation / application | 67 |
-| source-control / infrastructure | 56 |
+| development-automation / application | 62 |
+| source-control / infrastructure | 55 |
 | collaboration / infrastructure | 51 |
 | development-automation / infrastructure | 51 |
 | system-operations / infrastructure | 48 |
-| resource-catalog / composition | 43 |
-| collaboration / application | 40 |
-| task-execution / domain | 36 |
-| development-automation / domain | 34 |
+| resource-catalog / composition | 42 |
+| collaboration / application | 39 |
+| task-execution / domain | 35 |
 | integration / application | 34 |
+| development-automation / domain | 32 |
 | source-control / application | 32 |
 | intent / application | 30 |
 | integration / infrastructure | 28 |
 | system-operations / application | 28 |
-| development-automation / composition | 25 |
 | identity-access / application | 25 |
-| runtime-management / infrastructure | 24 |
-| integration / composition | 22 |
+| development-automation / composition | 23 |
+| runtime-management / infrastructure | 23 |
 | runtime-management / application | 22 |
-| code-capability / application | 20 |
+| integration / composition | 21 |
 | source-control / composition | 20 |
 | task-execution / engine | 20 |
+| code-capability / application | 18 |
 | intent / domain | 18 |
 | system-operations / composition | 18 |
 | identity-access / infrastructure | 17 |
-| code-capability / infrastructure | 15 |
-| collaboration / domain | 14 |
-| digital-employee / application | 14 |
+| collaboration / domain | 15 |
+| digital-employee / application | 15 |
+| code-capability / infrastructure | 13 |
 | runtime-management / composition | 12 |
-| code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
-| intent / infrastructure | 11 |
 | memory / application | 11 |
-| resource-catalog / domain | 11 |
 | source-control / domain | 11 |
-| collaboration / composition | 10 |
 | event-center / application | 10 |
 | intent / composition | 10 |
+| intent / infrastructure | 10 |
+| resource-catalog / domain | 10 |
+| code-capability / domain | 9 |
+| collaboration / composition | 9 |
 | memory / domain | 9 |
 | knowledge-evolution / domain | 8 |
 | run-observability / application | 8 |
-| development-automation / engine | 7 |
 | digital-employee / composition | 7 |
 | event-center / infrastructure | 7 |
 | integration / domain | 7 |
 | memory / infrastructure | 7 |
 | task-execution / public | 7 |
+| development-automation / engine | 6 |
 | digital-employee / domain | 6 |
 | identity-access / composition | 6 |
 | identity-access / public | 6 |
 | memory / public | 6 |
 | collaboration / public | 5 |
-| digital-employee / public | 5 |
 | event-center / composition | 5 |
-| event-center / public | 5 |
 | integration / public | 5 |
 | resource-catalog / public | 5 |
 | source-control / public | 5 |
@@ -114,7 +112,9 @@
 | system-operations / public | 5 |
 | code-capability / composition | 4 |
 | development-automation / public | 4 |
+| digital-employee / public | 4 |
 | event-center / domain | 4 |
+| event-center / public | 4 |
 | knowledge-evolution / application | 4 |
 | runtime-management / public | 4 |
 | execution-contract / application | 3 |
@@ -149,18 +149,18 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| platform | 216 |
-| task-execution | 74 |
+| platform | 208 |
+| task-execution | 70 |
 | resource-catalog | 51 |
 | runtime-management | 45 |
-| identity-access | 38 |
-| collaboration | 31 |
+| identity-access | 36 |
 | workspace-insight | 31 |
 | bootstrap | 30 |
-| integration | 28 |
+| integration | 27 |
 | source-control | 24 |
-| development-automation | 10 |
+| collaboration | 21 |
 | system-operations | 9 |
+| development-automation | 7 |
 | digital-employee | 3 |
 | memory | 2 |
 | event-center | 1 |
@@ -173,33 +173,33 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 69 |
+| task-execution | 65 |
 | runtime-management | 42 |
 | resource-catalog | 41 |
 | workspace-insight | 31 |
-| collaboration | 27 |
-| platform | 25 |
-| integration | 22 |
+| integration | 21 |
+| platform | 21 |
+| collaboration | 17 |
 | source-control | 15 |
-| identity-access | 9 |
-| development-automation | 5 |
+| identity-access | 7 |
 | bootstrap | 4 |
 | system-operations | 3 |
+| development-automation | 2 |
 | digital-employee | 2 |
 
 ### 4.2 按清偿波次
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9-D | 95 |
-| W4-E1 | 68 |
+| W9-D | 93 |
+| W4-E1 | 64 |
 | W4-E5 | 31 |
-| W4 | 27 |
-| W9 | 25 |
-| W4-B | 22 |
+| W4-B | 21 |
+| W9 | 21 |
+| W4 | 17 |
 | W5 | 14 |
-| W4-E8 | 5 |
 | W9-E | 5 |
+| W4-E8 | 2 |
 | W4-E9 | 2 |
 | W2-D/W3/W5 | 1 |
 
@@ -209,43 +209,41 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 4080 |
-| legacy-inbound | 2078 |
-| offered-consumption | 379 |
-| infrastructure-external | 327 |
+| legacy-outbound | 4057 |
+| legacy-inbound | 1987 |
+| offered-consumption | 377 |
+| infrastructure-external | 325 |
 | off-dag-offered | 120 |
-| temporary-internal-debt | 119 |
+| temporary-internal-debt | 118 |
 | required-implementation | 92 |
 | authority-type-only | 80 |
-| external-layer-debt | 7 |
+| external-layer-debt | 6 |
 | provider-mirror | 2 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 4080 |
-| legacy-inbound | 2078 |
+| legacy-outbound | 4057 |
+| legacy-inbound | 1987 |
 | off-dag-offered | 120 |
-| temporary-internal-debt | 119 |
-| external-layer-debt | 7 |
-| no-circular | 5 |
-| no-util-to-upper | 2 |
+| temporary-internal-debt | 118 |
+| external-layer-debt | 6 |
 
 ### 5.3 exact exceptions 按清偿波次
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3440 |
-| W9-D | 1157 |
-| W4-E1 | 858 |
-| W5 | 234 |
-| W4 | 211 |
-| W4-B | 207 |
-| W4-E8 | 185 |
+| W9 | 3416 |
+| W9-D | 1154 |
+| W4-E1 | 793 |
+| W5 | 228 |
+| W4-B | 206 |
+| W4 | 201 |
+| W4-E8 | 176 |
 | W4-E9 | 87 |
-| W2-D/W3/W5 | 12 |
 | W9-E | 8 |
+| W2-D/W3/W5 | 7 |
 | RFC-371 | 6 |
 | W4-E10 | 3 |
 | W4-E5 | 3 |
@@ -258,36 +256,36 @@
 | --- | --- |
 | task-execution | 295 |
 | resource-catalog | 245 |
-| collaboration | 123 |
 | source-control | 108 |
 | system-operations | 83 |
+| collaboration | 77 |
 | identity-access | 65 |
 | runtime-management | 65 |
-| digital-employee | 51 |
 | development-automation | 49 |
+| digital-employee | 35 |
 | integration | 26 |
-| knowledge-evolution | 25 |
+| knowledge-evolution | 24 |
 | execution-contract | 22 |
 | memory | 22 |
-| event-center | 21 |
+| event-center | 20 |
 | code-capability | 19 |
 | intent | 12 |
 | run-observability | 5 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 135 / 1237）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 115 / 1173）
 
 | context | 数量 |
 | --- | --- |
-| collaboration | 44 |
-| digital-employee | 18 |
-| task-execution | 14 |
+| task-execution | 28 |
+| collaboration | 13 |
+| digital-employee | 13 |
 | system-operations | 12 |
 | code-capability | 11 |
-| event-center | 8 |
+| source-control | 8 |
 | development-automation | 7 |
-| identity-access | 6 |
-| source-control | 6 |
+| event-center | 7 |
+| identity-access | 7 |
 | integration | 5 |
 | execution-contract | 3 |
 | task-catalog | 1 |
@@ -299,15 +297,8 @@
 | status | 数量 |
 | --- | --- |
 | active | 21 |
-| declared-debt | 20 |
+| declared-debt | 13 |
 
-### 7.2 provider=0 且 consumer=0 的 required port（合计 8）
+### 7.2 provider=0 且 consumer=0 的 required port（合计 1）
 
-- `required:development-automation:AgentActionExecutionPort`
-- `required:development-automation:DevelopmentCodeHostEffectsPort`
-- `required:development-automation:MergeRequestFactsPort`
-- `required:development-automation:PipelineEvidencePort`
 - `required:development-automation:ReconcilerPorts-legacy-aggregate`
-- `required:development-automation:RepositoryUploadPlacementPort`
-- `required:development-automation:RequirementAcquisitionPort`
-- `required:development-automation:RequirementInteractionPort`

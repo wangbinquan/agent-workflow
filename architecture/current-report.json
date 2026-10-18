@@ -2,35 +2,25 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 512,
-    "architectureExceptions": 6411,
-    "backgroundJobs": 392,
-    "crossContextImports": 7284,
-    "facades": 295,
+    "architectureExceptions": 6288,
+    "backgroundJobs": 367,
+    "crossContextImports": 7164,
+    "facades": 271,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27756,
-    "mutationEntrypoints": 2056,
+    "moduleSymbolOwners": 27395,
+    "mutationEntrypoints": 2004,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1237,
-    "transactionExternalEffects": 282
+    "publicSurfaces": 1173,
+    "transactionExternalEffects": 281
   },
   "metrics": {
     "ambientWiringEntries": 512,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2374,
-    "backendValueSccs": [
-      [
-        "packages/backend/src/services/gitRepoCache.ts",
-        "packages/backend/src/services/gitSubmodule.ts",
-        "packages/backend/src/services/gitVersion.ts",
-        "packages/backend/src/util/git.ts"
-      ]
-    ],
-    "backgroundEntries": 392,
+    "backendProductionFiles": 2310,
+    "backendValueSccs": [],
+    "backgroundEntries": 367,
     "directNativeIntervalFiles": [
-      "packages/backend/src/modules/digital-employee/application/osWorker.ts",
-      "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
       "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
-      "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
       "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts",
       "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
@@ -39,31 +29,27 @@
       "packages/backend/src/platform/background/maintenanceService.ts",
       "packages/backend/src/platform/background/maintenanceWorker.ts",
       "packages/backend/src/platform/background/providerBackupScheduler.ts",
-      "packages/backend/src/services/autoKill.ts",
-      "packages/backend/src/services/autoRepair.ts",
       "packages/backend/src/services/execution/childBudget.ts",
       "packages/backend/src/services/execution/executionWatch.ts",
       "packages/backend/src/services/maintenanceTicker.ts",
-      "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
-      "packages/backend/src/services/scheduledTaskScheduler.ts",
-      "packages/backend/src/services/stuckTaskDetector.ts"
+      "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts"
     ],
-    "directNativeIntervals": 23,
-    "directNativeTimers": 87,
-    "inboundBoundaryEdges": 313,
-    "knownViolations": 7,
+    "directNativeIntervals": 15,
+    "directNativeTimers": 78,
+    "inboundBoundaryEdges": 295,
+    "knownViolations": 0,
     "moduleContexts": [
       {
         "context": "code-capability",
-        "files": 51
+        "files": 45
       },
       {
         "context": "collaboration",
-        "files": 120
+        "files": 119
       },
       {
         "context": "development-automation",
-        "files": 188
+        "files": 178
       },
       {
         "context": "digital-employee",
@@ -71,7 +57,7 @@
       },
       {
         "context": "event-center",
-        "files": 31
+        "files": 30
       },
       {
         "context": "execution-contract",
@@ -83,11 +69,11 @@
       },
       {
         "context": "integration",
-        "files": 97
+        "files": 96
       },
       {
         "context": "intent",
-        "files": 75
+        "files": 74
       },
       {
         "context": "knowledge-evolution",
@@ -99,7 +85,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 276
+        "files": 272
       },
       {
         "context": "run-observability",
@@ -107,11 +93,11 @@
       },
       {
         "context": "runtime-management",
-        "files": 64
+        "files": 63
       },
       {
         "context": "source-control",
-        "files": 126
+        "files": 125
       },
       {
         "context": "system-operations",
@@ -123,10 +109,10 @@
       },
       {
         "context": "task-execution",
-        "files": 463
+        "files": 453
       }
     ],
-    "moduleFiles": 1779,
+    "moduleFiles": 1743,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -139,28 +125,13 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 43,
-    "repoValueSccs": [
-      [
-        "packages/backend/src/services/gitRepoCache.ts",
-        "packages/backend/src/services/gitSubmodule.ts",
-        "packages/backend/src/services/gitVersion.ts",
-        "packages/backend/src/util/git.ts"
-      ],
-      [
-        "packages/frontend/src/components/node-session/ConversationFlow.tsx",
-        "packages/frontend/src/components/node-session/SubagentBlock.tsx"
-      ],
-      [
-        "packages/shared/src/outputKinds/list.ts",
-        "packages/shared/src/outputKinds/registry.ts"
-      ]
-    ],
+    "outboundBoundaryEdges": 42,
+    "repoValueSccs": [],
     "routeToDbEdges": 0,
-    "serviceFiles": 295,
+    "serviceFiles": 271,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3d8b25d93c5b057b77b43e787bfa2c0e317cf561d3df31df17006c6ade77c259"
+  "sourceDigest": "sha256:b66298b7f477d8fe32ef1c4408d15122c08c211a3db0808bd438b14f6136bf60"
 }

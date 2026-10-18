@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 28,
-    "transactionCallbacks": 282
+    "transactionCallbacks": 281
   },
   "entries": [
     {
@@ -343,8 +343,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2585",
-      "line": 2585,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2583",
+      "line": 2583,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#addReviewCommentUnlocked",
       "status": "clear",
       "symbol": "addReviewCommentUnlocked",
@@ -355,8 +355,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2733",
-      "line": 2733,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2731",
+      "line": 2731,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#updateReviewCommentTextUnlocked",
       "status": "clear",
       "symbol": "updateReviewCommentTextUnlocked",
@@ -367,8 +367,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2818",
-      "line": 2818,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:2816",
+      "line": 2816,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#deleteReviewCommentUnlocked",
       "status": "clear",
       "symbol": "deleteReviewCommentUnlocked",
@@ -382,8 +382,8 @@
       ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:3551",
-      "line": 3551,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:3549",
+      "line": 3549,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecisionUnlocked",
       "status": "co-located-risk",
       "symbol": "submitReviewDecisionUnlocked",
@@ -394,8 +394,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:4312",
-      "line": 4312,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/review.ts#transaction:4310",
+      "line": 4310,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#setDocumentSelectionUnlocked",
       "status": "clear",
       "symbol": "setDocumentSelectionUnlocked",
@@ -458,8 +458,8 @@
       ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#transaction:1239",
-      "line": 1239,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#transaction:1237",
+      "line": 1237,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#commitDispatchPlan",
       "status": "co-located-risk",
       "symbol": "commitDispatchPlan",
@@ -3402,8 +3402,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#transaction:271",
-      "line": 271,
+      "id": "tx:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#transaction:269",
+      "line": 269,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts#resumeWorkspaceGcClaim",
       "status": "clear",
       "symbol": "resumeWorkspaceGcClaim",
@@ -3424,18 +3424,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/services/taskArchive.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/services/taskArchive.ts#transaction:688",
-      "line": 688,
-      "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#deleteTreeRows",
-      "status": "clear",
-      "symbol": "deleteTreeRows",
-      "targetContext": "task-execution",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/services/taskDelete.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/services/taskDelete.ts#transaction:266",
@@ -3450,7 +3438,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3d8b25d93c5b057b77b43e787bfa2c0e317cf561d3df31df17006c6ade77c259",
+  "sourceDigest": "sha256:b66298b7f477d8fe32ef1c4408d15122c08c211a3db0808bd438b14f6136bf60",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

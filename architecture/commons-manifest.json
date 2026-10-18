@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:3d8b25d93c5b057b77b43e787bfa2c0e317cf561d3df31df17006c6ade77c259",
+    "sourceDigest": "sha256:b66298b7f477d8fe32ef1c4408d15122c08c211a3db0808bd438b14f6136bf60",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "kernels": [
@@ -228,7 +228,7 @@
     {
       "auditedBy": "execution-kernel",
       "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/services/execution/agentProcess.ts#$file"
+        "owner:packages/backend/src/platform/execution/local/agentProcess.ts#$file"
       ],
       "claimAudit": "Claims it copies no timers and only adapts agent semantics. Verified true \u2014 it owns no setTimeout and delegates every reliability concern. mapOutcome (agentProcess.ts:120-134) is a clean exhaustive switch over ManagedProcessOutcome. RFC-375 deleted the services/execution/agentProcess.ts re-export facade; the kernel now points at the implementation it re-exported.",
       "core": true,
@@ -606,7 +606,7 @@
     {
       "auditedBy": "critic",
       "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/services/taskArchive.ts#$file"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts#$file"
       ],
       "claimAudit": "Claims (comment at :223, and the guard's own preamble at packages/backend/tests/rfc311-task-archive.test.ts:479-485) that every table that vanishes with the archive is either exported or explicitly exempt. DOES NOT HOLD: the guard walks exactly one FK hop, and review_comments (a transitive cascade descendant) is in neither list. AUDITED BY NOBODY. RFC-375 deleted the superseded services/taskArchive.ts; ARCHIVED_TABLES / ARCHIVE_EXEMPT_TABLES now live in the task-execution archive content coordinator.",
       "core": false,
@@ -1384,8 +1384,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "ebad918a43f65fb054f66d2dc954af14dc396f97",
-    "contentDigest": "sha256:2f766b7dc01c41074bbc5738a2b872b7d7c66d510a2c450ec2172679b2aa5e62",
+    "currentSnapshotSha": "0360e116dd9d52ffd95e0353eb98d1d7fa40e4c1",
+    "contentDigest": "sha256:4f558caab3a289408d996c05e60ff2ac607f30663288ef575a83a065d8e71e02",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
