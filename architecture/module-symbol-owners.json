@@ -6,7 +6,7 @@
     "moduleFiles": 1743,
     "productionFiles": 3140,
     "sharedFiles": 162,
-    "symbolsIncludingFileRoots": 27395
+    "symbolsIncludingFileRoots": 27399
   },
   "entries": [
     {
@@ -143972,6 +143972,42 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#completeFrameMerges",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "completeFrameMerges",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#completeInterruptedMerge",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "completeInterruptedMerge",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#completeInterruptedRun",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "completeInterruptedRun",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#composeExecutionMergeRecovery",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
@@ -143996,10 +144032,10 @@
       "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#replayPendingMerges",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#replayPendingMerge",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
-      "symbol": "replayPendingMerges",
+      "symbol": "replayPendingMerge",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -144012,6 +144048,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "replaySubmodulesMissing",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#scopeBaseHeads",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "scopeBaseHeads",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -329456,5 +329504,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b66298b7f477d8fe32ef1c4408d15122c08c211a3db0808bd438b14f6136bf60"
+  "sourceDigest": "sha256:3ed769dd2612aa5c9f496f3ea1ac7dc017e4975378495d3069ba51910ccba750"
 }
