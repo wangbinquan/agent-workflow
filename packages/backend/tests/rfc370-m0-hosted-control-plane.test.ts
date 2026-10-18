@@ -81,6 +81,7 @@ test('hosted inputs are validated at once and parsed', () => {
     ...HOSTED_ENV,
     AW_ADMIN_SUBJECTS: ' user:a, b  user:a ',
     CS_OBJECTS_URL: 'http://objects/v3/objects',
+    CS_SERVICE_DOMAIN: ' svc.cs.internal ',
   })
   expect(environment).toMatchObject({
     project: 'agent-workflow',
@@ -88,10 +89,12 @@ test('hosted inputs are validated at once and parsed', () => {
     port: 3000,
     objectsUrl: 'http://objects/v3/objects',
     objectSpaceId: null,
+    serviceDomain: 'svc.cs.internal',
     adminSubjects: ['user:a', 'user:b'],
   })
   expect(environment.secretKey.equals(Buffer.alloc(32, 7))).toBe(true)
   expect(readCrewStationEnvironment(HOSTED_ENV).objectsUrl).toBeNull()
+  expect(readCrewStationEnvironment(HOSTED_ENV).serviceDomain).toBeNull()
 
   let error: unknown
   try {

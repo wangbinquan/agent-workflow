@@ -81,6 +81,8 @@ export interface CrewStationDeploymentEnvironment {
   /** Present once the Manifest declares `spec.data.objects` (not needed by M0). */
   readonly objectsUrl: string | null
   readonly objectSpaceId: string | null
+  /** The service domain (`CS_SERVICE_DOMAIN`): names this service as a platform caller's target. */
+  readonly serviceDomain: string | null
   readonly secretKey: Buffer
   /** CrewStation user subjects (`user:<uuid>`) that become administrators on first access. */
   readonly adminSubjects: readonly string[]
@@ -161,6 +163,7 @@ export function readCrewStationEnvironment(
   }
   if (problems.length > 0) throw new CrewStationEnvironmentError(problems)
   const objectSpaceId = env.CS_OBJECT_SPACE_ID?.trim() ?? ''
+  const serviceDomain = env.CS_SERVICE_DOMAIN?.trim() ?? ''
   return Object.freeze({
     project,
     service,
@@ -169,6 +172,7 @@ export function readCrewStationEnvironment(
     platformApiUrl,
     objectsUrl: objectsUrl.length > 0 ? objectsUrl : null,
     objectSpaceId: objectSpaceId.length > 0 ? objectSpaceId : null,
+    serviceDomain: serviceDomain.length > 0 ? serviceDomain : null,
     secretKey,
     adminSubjects: Object.freeze(parseAdminSubjects(env.AW_ADMIN_SUBJECTS)),
   })

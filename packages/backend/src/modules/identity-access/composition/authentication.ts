@@ -1,7 +1,10 @@
 // RFC-370: bootstrap selects credential adapters; inbound middleware only
 // consumes the public authentication query. Compatibility exports keep legacy
 // local credential consumers on the same implementation during their cutover.
-export { createCrewStationSourceTokenVerifier as composeCrewStationSourceTokenVerifier } from '../infrastructure/crewstation/crewStationSourceToken'
+export {
+  createCrewStationSourceTokenVerifier as composeCrewStationSourceTokenVerifier,
+  crewStationPlatformSourceAudiences,
+} from '../infrastructure/crewstation/crewStationSourceToken'
 export { createCrewStationRecoveryRequester as composeCrewStationRecoveryRequester } from '../infrastructure/crewstation/crewStationRecoveryRequester'
 export {
   createLocalHttpAuthentication as composeLocalHttpAuthentication,

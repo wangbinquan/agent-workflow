@@ -5,6 +5,7 @@ import {
   composeCrewStationCredentialAdapters,
   composeCrewStationRecoveryRequester,
   composeCrewStationSourceTokenVerifier,
+  crewStationPlatformSourceAudiences,
 } from '@/modules/identity-access/composition/authentication'
 import { composeCrewStationTaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
@@ -224,7 +225,7 @@ export async function composeCrewStationStartOptions(
       sources: eventSources,
       verifySource: composeCrewStationSourceTokenVerifier({
         jwksUrl: environment.jwksUrl,
-        audience: `service:${environment.project}/${environment.service}`,
+        audience: crewStationPlatformSourceAudiences(environment),
         source: { project: 'platform', service: 'cs-events' },
       }).verify,
     }),
