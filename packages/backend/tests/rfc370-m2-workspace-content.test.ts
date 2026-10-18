@@ -242,7 +242,9 @@ test('remote conflict scenes preserve markers and the shared finish policy rejec
       { baselineRepoPath: 'cs-workspace:task/baseline', sourceSha, targetSha },
       effects,
     )
-    expect(scene.ok).toBe(true)
+    // The whole result, so a CI failure names its code and Git detail (this
+    // step failed once on ubuntu, CI 39110401954, and never locally).
+    expect(scene).toMatchObject({ ok: true })
     if (!scene.ok) return
     expect(scene.conflictPaths).toEqual(['file.txt'])
     expect(await effects.mergeHeadExists(scene.workspacePath)).toBe(true)

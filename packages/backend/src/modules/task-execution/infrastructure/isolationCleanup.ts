@@ -1,6 +1,15 @@
 // Task-owned cleanup receipt; physical Git/worktree/ref operations remain native.
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
-import { currentTaskExecutionContext } from '../application/taskExecutionContext'
+// The cleanup receipt is taken for the SQLite daemon's contexts only. Its
+// `workspace:` fence is acquired before the discard waits for the task's write
+// window, the reverse of every merge-back and isolation create (write window,
+// then fence — RFC-356 L4). On CrewStation each discard step is a multi-second
+// volume command, and enabling the receipt for PostgreSQL contexts deadlocked
+// the task: a merge-back held the window waiting for the fence while the
+// discard held the fence waiting for the window (RFC-370 hosted acceptance,
+// 2026-10-18). Moving the fence inside the window first needs the discard to
+// own its window on both workspace implementations.
+import { currentTaskExecutionContext } from '../composition/sqliteTaskExecutionContext'
 import { type DiscardLock, type IsoHandle } from '@/platform/workspace/local/isolation'
 import { discardIsolatedWorkspace } from './isolationWorkspaceView'
 import { sha256Hex } from '@/util/hash'
