@@ -31,6 +31,7 @@ import {
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
 import { discardNodeIso } from '@/modules/task-execution/infrastructure/isolationCleanup'
+import type { IsoHandle } from '@/platform/workspace/local/isolation'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const ROOT = mkdtempSync(join(tmpdir(), 'aw-rfc370-iso-cleanup-'))
@@ -109,7 +110,14 @@ async function seedClaimedTask(db: ProviderNeutralDatabase) {
     intentId,
     token: claimed.token,
     persistence,
-    handle: { taskId, nodeRunId: runId, dbNodeRunId: runId, containerPath, repos: [] },
+    handle: {
+      taskId,
+      nodeRunId: runId,
+      dbNodeRunId: runId,
+      containerPath,
+      repos: [],
+      passthrough: false,
+    } satisfies IsoHandle,
   }
 }
 
