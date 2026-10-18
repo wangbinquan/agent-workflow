@@ -99,7 +99,10 @@ CS_TOKEN=<平台会话> CS_GITLAB_TOKEN=<项目仓库令牌> \
 
 ## 平台恢复动作
 
-CS 可对 AW 父任务发起 `resume-task` 与 `rebuild-workspace`。AW 以发起人关联的 AW 账号调用原「续跑任务」命令：卷不可用时节点以明确原因失败，平台重建工作区后可续跑。
+CS 可对 AW 父任务发起 `resume-task` 与 `rebuild-workspace`。AW 以发起人关联的 AW 账号受理，平台完成动作后对可续跑的任务（interrupted / failed / canceled）调用原「续跑任务」命令。
+
+- `resume-task`（父任务暂停）：只受理可续跑的任务；等待人工、排队或已完成任务的父任务由 AW 在下次使用时自行恢复。
+- `rebuild-workspace`（父任务容器失效、卷完好）：不论任务状态都受理。容器失效时节点与查看任务文件都以 `hosted-workspace-unavailable`（503）明确失败；重建后文件重新可读，未完成的任务随续跑继续，已完成或等待中的任务不被续跑，空闲父任务照常再暂停。
 
 ## 已知限制
 
