@@ -1,6 +1,6 @@
 # RFC-376 架构治理简化：少量硬结构门 + 按需报告（RFC-294 S4）
 
-- **状态**：In Progress（2026-10-17 立项；用户授权设计完成后直接交 Codex 执行，免设计门与实现门，由本会话审核执行正确性）
+- **状态**：Done（2026-10-17）——阶段 A + B 合入 `3a81b7551`，CI 遗留两处（托管 PG 证据测试的 fetch-depth 断言、快照文档死链）由 `19ad368d1` 修复；主 CI 在 `19ad368d1`（run `39103876967`）success。AC-2：其下的 `3f43b91ee`（RFC-370 只改生产代码与测试、无 architecture/ 改动、无投影提交）随该 tip 全绿。实现由 Codex 分两阶段完成，本会话审核：G8 改为只计值导入、G14 与 RFC-375 图规则对齐。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S4（W0-R 模型修订）；proposal R2、R6、C9、D9；
   design §13、§14
 - **基线**：HEAD `b76a88e70`（行号仅作定位提示）

@@ -1,6 +1,6 @@
 # RFC-377 util/git 叶子化与 `KNOWN_VIOLATIONS` 清零（RFC-294 S8）
 
-- **状态**：In Progress（2026-10-17 立项；用户授权设计完成后直接交 Codex 执行，免设计门与实现门，由本会话审核执行正确性）
+- **状态**：Done（2026-10-17）——内容 `8e09ca089`，投影 `139337094`；主 CI 在 tip `19ad368d1`（run `39103876967`）success。实现由 Codex 完成（免设计门 / 实现门），本会话审核：14 个下沉声明与 HEAD 逐字节相同；KNOWN_VIOLATIONS 7 → 0、后端 / 全仓值级 SCC 0 / 0。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S8（W5 的一部分）
 - **基线**：HEAD `b76a88e70`（文中行号均按该提交，实施时以当时源码为准）
 - **落位**：source-control 目标 context 的 git 原语层（`util/git` 只做叶子化，物理迁入 `modules/source-control/infrastructure` 属 W5 余项）；shared `outputKinds`；frontend `node-session`

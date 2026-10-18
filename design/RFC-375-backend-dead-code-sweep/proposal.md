@@ -1,6 +1,6 @@
 # RFC-375 后端死代码清扫（RFC-294 S3）
 
-- **状态**：In Progress（2026-10-17 立项；用户授权设计完成后直接交 Codex 执行，免设计门与实现门，由本会话审核执行正确性）
+- **状态**：Done（2026-10-17）——内容 `0360e116d`，投影 `139337094`，审核后补入 `e5abc3508` / `d336c5f05`（门面删除后只剩测试使用的 17 个 public symbol 入账）与 `1fd8a131c`（两处指向已删文件的设计文档链接）；主 CI 在 tip `19ad368d1`（run `39103876967`）success。实现由 Codex 完成，本会话审核发现并经两轮 Codex 修复：6 个覆盖现行行为的用例改经现行 API 恢复、3 处仍描述已删代码的测试 / 清单；删除 66 个生产文件，剩余不可达文件与 design §4 保留清单一致。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S3；review-2026-10-16 F8
 - **基线**：HEAD `b76a88e70`（行号仅作定位提示）
 - **落位**：跨 context 的删除批：development-automation、digital-employee、collaboration、code-capability、task-execution、

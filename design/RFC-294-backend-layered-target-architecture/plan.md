@@ -5,7 +5,7 @@
 > 各波任务清单、历次 SHA 与 hosted 证据、账本重分桶记录）见 `archive-20261016-plan.md`。当前指标见 dated review 或按需报告；命令见 [status.md](./status.md)。
 
 - 目标架构状态：Approved（D1～D8 沿用；D9 修订、D10～D13 新增，见 proposal §9）。本文刷新不授权任何未立项的后继。
-- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；其余见 §1.1。
+- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭；其余见 §1.1。
 - 规划单位：已关闭波次（保留结论）+ 立即整改后继 S1～S8 + 余下波次（W4 余项、W5、W7 余项、W9-C/D/E，W8 可选）。
 
 ## 0. 批准边界与实施纪律
@@ -76,6 +76,9 @@
 | W4-E9（Event target） | [RFC-365](../RFC-365-event-automation-target-providers/proposal.md)                 | Event target providers                                       |
 | W4-E9（Reaction）     | [RFC-368](../RFC-368-reaction-execution-cutover/proposal.md)                        | Reaction 执行切换                                            |
 | （W7 前置）           | [RFC-369](../RFC-369-node-run-supersession-derived/proposal.md)                     | supersession 推导与唯一铸造的语义改善；不抵扣 W7 身份        |
+| S3 | [RFC-375](../RFC-375-backend-dead-code-sweep/proposal.md) | 后端死代码清扫（66 个生产文件） |
+| S4（W0-R 模型修订） | [RFC-376](../RFC-376-architecture-hard-gates/proposal.md) | 硬结构门 + 按需报告 + counts.json；全量账本与投影提交退役 |
+| S8（W5 一部分） | [RFC-377](../RFC-377-util-git-leaf/proposal.md) | util/git 叶子化；KNOWN_VIOLATIONS 7 → 0 |
 
 各后继的 exact-SHA 与 hosted 证据以其自身三件套为准；本总纲的历史汇总见 `archive-20261016-plan.md` §1、§3.2。
 
@@ -134,7 +137,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S3 死代码清扫
 
-> 后继：[RFC-375](../RFC-375-backend-dead-code-sweep/proposal.md)（In Progress，2026-10-17 立项）。
+> 后继：[RFC-375](../RFC-375-backend-dead-code-sweep/proposal.md)（Done，2026-10-17，`0360e116d`）。仍不可达的生产文件只剩 RFC-375 design §4 保留清单（27 个，由 RFC-376 的 G14 入口可达性门锁定）。
 
 - **范围**（逐项以 HEAD 复核后删除，改指相关测试）：development-automation 的 `composition/required-ports.ts` 与
   `ReconcilerPorts.effectExecutor`；digital-employee 的投机 command / query 端口与仅被它们引用的 DTO；collaboration 无人使用的
@@ -146,7 +149,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S4 治理简化（W0-R 模型修订）
 
-> 后继：[RFC-376](../RFC-376-architecture-hard-gates/proposal.md)（In Progress，2026-10-17 立项，分两阶段交付）。
+> 后继：[RFC-376](../RFC-376-architecture-hard-gates/proposal.md)（Done，2026-10-17，`3a81b7551` + `19ad368d1`）。G12（两 provider 生命周期清单一致）按设计留 S2a。
 
 - **范围**：落 design §13.1 的硬结构门（新增 context 值级无环、`platform` 不 import `modules`、application 直接 effect、
   composition 禁 drizzle / schema / `node:fs` / `child_process` 的值依赖与 SQL、业务层零部署分支；生命周期清单一致 G12 留给 S2a。
@@ -187,7 +190,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S8 `util/git` 叶子化与剩余 KNOWN（W5 一部分）
 
-> 后继：[RFC-377](../RFC-377-util-git-leaf/proposal.md)（In Progress，2026-10-17 立项）。`util/git` 物理迁入 source-control infrastructure 不在 S8，归 §4.3 W5 余项。
+> 后继：[RFC-377](../RFC-377-util-git-leaf/proposal.md)（Done，2026-10-17，`8e09ca089`）：KNOWN_VIOLATIONS 7 → 0，后端 / 全仓值级 SCC 0 / 0。`util/git` 物理迁入 source-control infrastructure 不在 S8，归 §4.3 W5 余项。
 
 - **范围**：把 `util/git.ts` 对 `services/git*` 的动态反向 import 改为参数注入，销 git 环族与两条 util→upper；shared
   `outputKinds` 注册改为注入、frontend 递归渲染改 children / render callback，可作为同批或独立小批。

@@ -1,4 +1,8 @@
-## 2026-10-17 RFC-294 后继 S3 / S4 / S8 立项并交 Codex 执行（In Progress）
+## 2026-10-17 RFC-294 后继 S3 / S4 / S8：RFC-375 / 376 / 377 Done
+
+由 Codex 实施、本会话审核后提交（免设计门与实现门）。**RFC-377**（`8e09ca089`）：子模块原语下沉 util/git、只注入设置解析策略，shared / frontend 两条环改注入，KNOWN_VIOLATIONS 7 → 0、后端 / 全仓值级 SCC 0 / 0。**RFC-375**（`0360e116d`，审核补入 `e5abc3508` / `d336c5f05` / `1fd8a131c`）：删除 66 个无生产 consumer 的生产文件与 8 个只测死代码的测试，169 个测试改指现行实现；审核发现 6 个覆盖现行行为的用例被误删（改经现行 API 恢复）、3 处测试 / 清单仍描述已删代码、commons-manifest 三个 kernel 指向已删文件，以及门面删除后 17 个 public symbol 只剩测试使用（入账）。**RFC-376**（`3a81b7551`，CI 遗留由 `19ad368d1` 修）：删除全局 sourceDigest / provenance / N1 计数 / T17 许可、9 份库存 JSON（约 35 MB）与旧 census，改为 RFC-294 §13.1 硬结构门 + `bun run architecture:report` 按需报告 + `architecture/counts.json` 减速带——**此后普通生产改动不再需要「pin the projection」提交**（`architecture:write` 已改为退出提示）。主 CI 在 tip `19ad368d1`（run `39103876967`）success；其下 `3f43b91ee`（RFC-370 只改生产代码、无投影提交）作为 RFC-376 AC-2 证据随之全绿。夜跑（postgresql-evidence、e2e-full、backend-macos）尚待下一轮。观察到的既有行为（未改）：上游能力模板只改 ACL 也会推进 updatedAt，使副本显示 update-available（正文摘要不变）。S1 已落档为 RFC-374（Draft），等 RFC-370 冻结 0259 / 0035 后再定执行时机。
+
+### 立项记录（2026-10-17）
 
 用户要求把可并行开工的 RFC-294 后继设计成 RFC、交 Codex 执行、由本会话审核执行正确性，免设计门与实现门。四路只读研究（S1 / S3 / S4 / S8，基线 `b76a88e70`）后立项：[RFC-375](design/RFC-375-backend-dead-code-sweep/proposal.md)（S3 死代码清扫）、[RFC-376](design/RFC-376-architecture-hard-gates/proposal.md)（S4 治理简化；阶段 A 与其他后继并行，阶段 B 在 RFC-375 / RFC-377 提交后的安静窗口内一次切换）、[RFC-377](design/RFC-377-util-git-leaf/proposal.md)（S8 util/git 叶子化）。S1（NodeRun 每任务 `seq`）研究发现：PostgreSQL 迁移链今天不能给已有表加列（需新增升级种类），且其迁移只能接在 RFC-370 尚未发布、仍可能整体重生成的 0259 / 0035 之后，故暂不派发，设计已落档为 [RFC-374](design/RFC-374-node-run-sequence/proposal.md)（Draft）。共享工作树纪律：实施方不提交、不跑 census，不改 `scripts/depcheck.ts` 的 `KNOWN_VIOLATIONS`、`tests/architecture/rfc294Canonical.ts` 与根目录 `architecture/`（RFC-294 生成器从工作树读取前两者，其他会话的投影会被污染），这些改动由审核方在提交时应用并立即生成投影。
 
