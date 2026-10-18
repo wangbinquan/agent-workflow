@@ -25,7 +25,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlPreflight :: preflightPostgresqlTarget',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/postgresqlRuntime :: PostgresqlDatabaseRuntime',
   'packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts -> @/platform/persistence/sqliteLogicalSource :: SqliteLogicalSource,SqliteLogicalSourceSnapshot',
-  'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteTaskExecutionContext :: assertTaskExecutionContext,createTaskExecutionContext,currentTaskExecutionContext,runWithTaskExecutionContext',
+  'packages/backend/src/modules/task-execution/public/participants.ts -> ../composition/sqliteTaskExecutionContext :: assertTaskExecutionContext,createTaskExecutionContext,runWithTaskExecutionContext',
   // 2026-09-03：同一个 worker 现在也承担 `PRAGMA quick_check`（RFC-311 §6.6 当年只把
   // VACUUM INTO 挪出主线程，校验留在了上面，一次大迁移因此把 daemon 冻住 18.1 秒）。
   // 债的形状不变——还是这一个 worker 入口依赖同一个 provider 机制模块，只是多一个符号。

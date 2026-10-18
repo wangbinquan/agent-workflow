@@ -25,9 +25,14 @@ import {
 import {
   assertTaskExecutionContext as assertTaskExecutionContextInternal,
   createTaskExecutionContext as createTaskExecutionContextInternal,
-  currentTaskExecutionContext as currentTaskExecutionContextInternal,
   runWithTaskExecutionContext as runWithTaskExecutionContextInternal,
 } from '../composition/sqliteTaskExecutionContext'
+// RFC-370 hosted acceptance: the ambient lookup is the provider-neutral one.
+// The SQLite compatibility wrapper hides every context without its legacy
+// connection — that is every PostgreSQL daemon context — so a gate opened from
+// the ambient context fenced as an ownerless write and the task's own claimed
+// owner refused it.
+import { currentTaskExecutionContext as currentTaskExecutionContextInternal } from '../application/taskExecutionContext'
 import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
 import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
 import type {
@@ -53,6 +58,7 @@ import {
   assertWorktreePresentForResume as assertWorktreePresentForResumeInternal,
   composeWorktreeResumePreflight as composeWorktreeResumePreflightInternal,
 } from '../application/worktreeResumePreflight'
+import { createGateContinuationDriver as createGateContinuationDriverInternal } from '../application/drive/gateContinuationDriver'
 import {
   canonicalJson as canonicalTaskExecutionJsonInternal,
   decodeLineageSlotPath as decodeLineageSlotPathInternal,
@@ -274,6 +280,8 @@ export const workflowSyncGateReason = workflowSyncGateReasonInternal
  */
 export const assertWorktreePresentForResume = assertWorktreePresentForResumeInternal
 export const composeWorktreeResumePreflight = composeWorktreeResumePreflightInternal
+/** RFC-370 — the daemon worker's entry into an admitted human-gate continuation. */
+export const createGateContinuationDriver = createGateContinuationDriverInternal
 export const appendTaskCreatedCommittedEvent = appendTaskCreatedCommittedEventInternal
 export const setNodeRunStatusInTransaction = setNodeRunStatusInTransactionInternal
 export const revokeExactOwnerInTransaction = revokeExactOwnerInTransactionInternal

@@ -147,6 +147,7 @@ import {
   type PortArtifactReader,
 } from '@/modules/task-execution/public/queries'
 import { selectPortArtifactReader } from '@/modules/task-execution/public/participants'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import { chunkedAll } from '@/util/sqlChunk'
 import { pickFreshestRun, pickLatestRunInFrame } from '@/services/freshness'
 import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
@@ -574,6 +575,13 @@ export interface DispatchReviewArgs {
    * 省略默认 ''——S1 修复等无 repos 上下文的调用方保持现状语义。
    */
   repoDirName?: string
+  /**
+   * The driving owner's exact execution context. Every write of the dispatch
+   * fences with it first and only falls back to the ambient context
+   * (explicit > ambient > ownerless, as `fenceTaskWrite`); the scheduler
+   * always passes it, the S1 repair (ownerless control plane) does not.
+   */
+  executionContext?: TaskExecutionContextRef
 }
 
 export interface DispatchReviewResult {
@@ -610,6 +618,11 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // (repair dispatch, direct callers) — normalize once; a v6 document is a no-op.
   const definition = migrateWorkflowDefinitionToLatest(args.definition)
   const containerRunId = args.containerRunId ?? null
+  // RFC-370 hosted acceptance: the review gate of a continuation drive was
+  // refused as an ownerless write ("ownerless task mutation refused durable
+  // owner") and failed the task — the scheduler's explicit context never
+  // reached this module, so it depended on the ambient one alone.
+  const executionContext = args.executionContext ?? currentTaskExecutionContext(taskId)
 
   // Re-read only after acquiring the coordinator. A cancel that linearized
   // first must make dispatch a zero-write loser; S1 repair legitimately calls
@@ -939,7 +952,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         auto: 'empty-list',
       })
       await withTaskExecutionWrite(db, async (tx) => {
-        await fenceTaskWrite(tx, { taskId, now: decidedAt })
+        await fenceTaskWrite(tx, { taskId, context: executionContext, now: decidedAt })
         if (refreshAwaitingReview) {
           const current = await tx
             .select({
@@ -1116,7 +1129,6 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       documents: drafts,
     })
     if (prepared.kind === 'prepared') {
-      const executionContext = currentTaskExecutionContext(taskId)
       await humanGateComposition.parkPreparedHumanGate({
         db,
         prepared: prepared.prepared,
@@ -1173,7 +1185,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // bun:sqlite 独有）逐条同判据——同一条围栏（显式上下文 > 环境上下文 > 无主）+ 同一个
     // 事务内 CAS，只是跑在两引擎共用的写事务上；顺带与紧随其后的 consumed 写并成一笔。
     await withTaskExecutionWrite(db, async (tx) => {
-      await fenceTaskWrite(tx, { taskId })
+      await fenceTaskWrite(tx, { taskId, context: executionContext })
       await transitionNodeRunStatusTx({
         tx,
         nodeRunId: reviewNodeRunId,
@@ -1199,6 +1211,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       containerRunId,
       iteration,
       overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
+      ...(executionContext === undefined ? {} : { executionContext }),
     })
   }
 
@@ -1320,7 +1333,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         auto: 'empty-list',
       })
       await withTaskExecutionWrite(db, async (tx) => {
-        await fenceTaskWrite(tx, { taskId })
+        await fenceTaskWrite(tx, { taskId, context: executionContext })
         await tx
           .insert(nodeRunOutputs)
           .values({

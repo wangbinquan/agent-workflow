@@ -1,6 +1,6 @@
 // Task-owned cleanup receipt; physical Git/worktree/ref operations remain native.
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
-import { currentTaskExecutionContext } from '../composition/sqliteTaskExecutionContext'
+import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import { type DiscardLock, type IsoHandle } from '@/platform/workspace/local/isolation'
 import { discardIsolatedWorkspace } from './isolationWorkspaceView'
 import { sha256Hex } from '@/util/hash'

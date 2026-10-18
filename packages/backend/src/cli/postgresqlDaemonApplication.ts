@@ -203,7 +203,10 @@ import {
   type TaskExecutionBackgroundStartDependencies,
 } from '@/modules/task-execution/composition/providerRuntime'
 import { createDatabaseTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
-import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/participants'
+import {
+  composeWorktreeResumePreflight,
+  createGateContinuationDriver,
+} from '@/modules/task-execution/public/participants'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import {
   selectRepositoryWorkspaceReadQueries,
@@ -2861,17 +2864,14 @@ export async function composePostgresqlApplication(
         sessionIds,
       )
     },
-    async driveHumanGateContinuation(input: {
-      readonly taskId: string
-      readonly continuationRef: string
-    }) {
-      const { taskId, continuationRef } = input
-      await taskDriveCoordinator.submit({
-        taskId,
-        intentId: continuationRef,
-        completionMode: 'background',
-      })
-    },
+    // RFC-370 hosted acceptance: claiming while this process's parked driver
+    // still drained its admitted work was an owner conflict that the worker
+    // retried (and warned about) every second for as long as that work ran.
+    // SQLite defers behind `awaitTaskDriverIdle` the same way.
+    driveHumanGateContinuation: createGateContinuationDriver({
+      isDriving: (taskId) => taskExecutionProvider.executionModule.runtimeRegistry.hasTask(taskId),
+      coordinator: taskDriveCoordinator,
+    }),
   })
   return Object.freeze({ core, app, webSocket, runtime })
 }
