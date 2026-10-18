@@ -533,7 +533,7 @@ test('the Manifest is rendered from a validated deployment profile', () => {
   expect(() => parseDeploymentProfile({ ...profile, databasePoolMaxDefinitionId: '2' })).toThrow(
     'resource UUID',
   )
-  expect(crewStationDatabaseConfig({ AW_DATABASE_POOL_MAX: '' }).poolMax).toBe(8)
+  expect(crewStationDatabaseConfig({ AW_DATABASE_POOL_MAX: '' })).toMatchObject({ poolMax: 8 })
   expect(() =>
     parseDeploymentProfile({ ...profile, restoreObjectDefinitionId: 'arbitrary-url' }),
   ).toThrow('restoreObjectDefinitionId')
