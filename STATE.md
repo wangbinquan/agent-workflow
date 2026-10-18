@@ -1,6 +1,6 @@
 ## 2026-10-17 RFC-294 后继 S3 / S4 / S8 立项并交 Codex 执行（In Progress）
 
-用户要求把可并行开工的 RFC-294 后继设计成 RFC、交 Codex 执行、由本会话审核执行正确性，免设计门与实现门。四路只读研究（S1 / S3 / S4 / S8，基线 `b76a88e70`）后立项：[RFC-375](design/RFC-375-backend-dead-code-sweep/proposal.md)（S3 死代码清扫）、[RFC-376](design/RFC-376-architecture-hard-gates/proposal.md)（S4 治理简化；阶段 A 与其他后继并行，阶段 B 在 RFC-375 / RFC-377 提交后的安静窗口内一次切换）、[RFC-377](design/RFC-377-util-git-leaf/proposal.md)（S8 util/git 叶子化）。S1（NodeRun 每任务 `seq`）研究发现：PostgreSQL 迁移链今天不能给已有表加列（需新增升级种类），且其迁移只能接在 RFC-370 尚未发布、仍可能整体重生成的 0259 / 0035 之后，故暂不派发。共享工作树纪律：实施方不提交、不跑 census，不改 `scripts/depcheck.ts` 的 `KNOWN_VIOLATIONS`、`tests/architecture/rfc294Canonical.ts` 与根目录 `architecture/`（RFC-294 生成器从工作树读取前两者，其他会话的投影会被污染），这些改动由审核方在提交时应用并立即生成投影。
+用户要求把可并行开工的 RFC-294 后继设计成 RFC、交 Codex 执行、由本会话审核执行正确性，免设计门与实现门。四路只读研究（S1 / S3 / S4 / S8，基线 `b76a88e70`）后立项：[RFC-375](design/RFC-375-backend-dead-code-sweep/proposal.md)（S3 死代码清扫）、[RFC-376](design/RFC-376-architecture-hard-gates/proposal.md)（S4 治理简化；阶段 A 与其他后继并行，阶段 B 在 RFC-375 / RFC-377 提交后的安静窗口内一次切换）、[RFC-377](design/RFC-377-util-git-leaf/proposal.md)（S8 util/git 叶子化）。S1（NodeRun 每任务 `seq`）研究发现：PostgreSQL 迁移链今天不能给已有表加列（需新增升级种类），且其迁移只能接在 RFC-370 尚未发布、仍可能整体重生成的 0259 / 0035 之后，故暂不派发，设计已落档为 [RFC-374](design/RFC-374-node-run-sequence/proposal.md)（Draft）。共享工作树纪律：实施方不提交、不跑 census，不改 `scripts/depcheck.ts` 的 `KNOWN_VIOLATIONS`、`tests/architecture/rfc294Canonical.ts` 与根目录 `architecture/`（RFC-294 生成器从工作树读取前两者，其他会话的投影会被污染），这些改动由审核方在提交时应用并立即生成投影。
 
 ## 2026-10-16 RFC-294：全面审视与三件套刷新（文档）
 
