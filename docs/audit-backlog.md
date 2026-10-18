@@ -4439,6 +4439,8 @@ CI 把 backend 分成四片、跑在干净 checkout 上，所以这个顺序在 
 
 ## 守卫目录**之外**的账本仍在棘轮网外（RFC-359 W7 收口时实测，13 处）
 
+> 历史（RFC-376 起不再适用）：T72 与 ledger-baselines 已退役；各主题测试保留自己的双向精确清单。
+
 `rfc317-ledger-highwater.test.ts` 的 T72（「新账本必须入网」）本轮把收网口径从**判据 A（名字命中
 账本词汇）** 扩成 **A ∪ B**，B 是结构判据：`tests/architecture/` 里被 `toEqual` / `toStrictEqual`
 等值断言、且声明后不再被就地改动的顶层集合常量，**与名字无关**。理由是判据 A 是一张词汇表，

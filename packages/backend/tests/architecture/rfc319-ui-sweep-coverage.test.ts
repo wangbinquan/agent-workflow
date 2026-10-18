@@ -19,8 +19,8 @@
 //
 // 判据的分母全部来自活的来源：路由表用 R2 那套 `deriveFrontendRoutes`（router.tsx
 // 路由树 + 各 route 文件的 `createRoute({ path })`），基线用磁盘上的实际文件，
-// 触发条件用 workflow 原文。下面两张「未扫描」清单是**棘轮**，在
-// `architecture/ledger-baselines.json` 里登记，只许缩不许涨：新增一页要么进扫描，
+// 触发条件用 workflow 原文。下面两张「未扫描」清单在本文件双向精确维护；
+// RFC-376 已撤销全局计数钉。新增一页要么进扫描，
 // 要么显式写进清单——两条路都会在 diff 里看得见，这正是此前缺的那一环。
 
 import { describe, expect, test } from 'bun:test'

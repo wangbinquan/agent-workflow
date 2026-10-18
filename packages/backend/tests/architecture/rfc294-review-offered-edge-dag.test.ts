@@ -1,7 +1,7 @@
 // RFC-294 review 2026-08-30 §B1 —— observed offered-consumption 边必须落在 design.md §3.1 的 DAG 里。
 //
 // 为什么存在（design/RFC-294-backend-layered-target-architecture/review-2026-08-30.md §B1）：
-// `architecture/cross-context-imports.json` 把 TE→collaboration、TE→digital-employee、DE→TE、
+// 历史的 cross-context 库存曾把 TE→collaboration、TE→digital-employee、DE→TE、
 // DA→TE 这些 design §3.1 明确不画的 offered 边记成 `role=offered-consumption`、
 // `removeAfterWave=null`——即“目标态”；而 `rfc294-canonical-manifests.test.ts` 只做
 // `targetEdges === TARGET_CONTEXT_EDGES`（常量对常量），从不检查 observed ⊆ target。
@@ -13,7 +13,7 @@
 // DAG 外的存量边逐条入 `OFF_DAG_OFFERED_EDGE_DEBT`，只降不升，每条点名清偿波次；
 // 边被删掉后必须同批销账（stale ⇒ 红）。
 //
-// 判据是 census.ts 的 AST import 边，与 canonical 生成器同一份实现。
+// 判据是 census.ts 的 AST import 边，与按需报告使用相同的边语法。
 
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -30,7 +30,7 @@ import {
   targetModule,
   type SourceUnit,
 } from './census'
-import { TARGET_CONTEXT_EDGES } from './rfc294Canonical'
+import { TARGET_CONTEXT_EDGES } from './rfc294Target'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
@@ -341,15 +341,70 @@ export function offDagOfferedEdges(
 }
 
 /**
- * 存量 DAG 外 offered 边（committed HEAD `625017c08`，review 2026-08-30 采样）。
+ * 存量 DAG 外 offered 边（RFC-376 阶段 B，committed HEAD `2a70c9328` 重算）。
  * 每条一个 `(from 文件, to context)`；只降不升。
  */
+// Recomputed from committed HEAD 2a70c93285000d9413dfb7c2c835714a99701e2d; individual successor reasons retained.
 export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
+  {
+    from: 'packages/backend/src/modules/collaboration/application/taskFeedback.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewArtifacts.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/collaboration/public/commands.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/development-automation/composition/crewstationEvidence.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
   {
     from: 'packages/backend/src/modules/development-automation/composition/pipelineEvidence.ts',
     to: 'integration',
     why: 'RFC-370 Purpose 完整效果家族的 DA 装配消费 Integration exact public 的所选 pipeline 执行合同。现有收集/触发/重跑语义仍由原 owner 负责；精确登记实际 offered type 边，在 A-T7 收敛 required SPI 归属，不改变目标 DAG、分类器或集合断言。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
     from: 'packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts',
@@ -364,96 +419,10 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {
-    from: 'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts',
-    to: 'runtime-management',
-    why: 'RFC-370 Task family 的资源材料合同使用 runtime-management public 的逻辑内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
-  {
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts',
-    to: 'runtime-management',
-    why: 'RFC-370 Task family 的 native 资源适配从 runtime-management public 读取逻辑内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
-  {
-    from: 'packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts',
-    to: 'runtime-management',
-    why: 'RFC-370 Task family 的 native 工作内容适配使用 runtime-management public 的逻辑运行内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
-  {
-    from: 'packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
-    to: 'runtime-management',
-    why: 'RFC-367 把蒸馏会话记录从「事后按 protocol 取 driver 走查 opencode SQLite」改成「实时事件 sink」，于是 memory 不再需要 runtime driver，只剩下一个常量依赖：capture-failed marker 行的 kind（`DISTILL_CAPTURE_FAILED_KIND`）。该常量的中立定义点在 runtime-management 的 public types，会话页投影 `distillQueries.ts` 一直从那里取，本文件写 marker 行时取同一个值以免两处字面量漂移。memory→runtime-management 不在 design §3.1 的 offered DAG 上，但这是一条纯常量的 public 依赖，比退回自带字面量更不容易坏。',
-    removeAfterWave:
-      'W4-C（system-agent 会话记录归位：marker kind 随会话捕获契约一并落到共用位置）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts',
-    to: 'memory',
-    why: 'RFC-366 给 task-execution 加了「agent 运行结束」这个中性事实的对外通知口（application/ports/agentRunSettledObserver），本文件是把它接到 memory exact public participant `MemoryDistillEnqueuer` 上的 adapter。TE→memory 不在 design §3.1 的 offered DAG 上，但同一对已有先例在账（taskRouteOperations.ts|memory、collaboration/application/taskFeedback.ts|memory）——本刀只是同一条未收敛的 context 对上多一个精确文件，形态没变。目标形态是 task-execution 经自己的 port 拿这份入队能力，属 TE 侧 adapter 收口。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：执行结束通知改经 TE 侧 memory port）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
-    to: 'knowledge-evolution',
-    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts',
-    to: 'knowledge-evolution',
-    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
-    to: 'knowledge-evolution',
-    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
-    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
-  },
-  {
-    from: 'packages/backend/src/modules/system-operations/composition.ts',
-    to: 'knowledge-evolution',
-    why: "RFC-353 T5：`repairFusionProvenance` 随 fusion 编排迁进 knowledge-evolution，system-operations 的备份恢复序列改经 KE `public/operations` 消费（此前是 legacy→legacy，不计跨域）。目标形态是 system-operations 经 RestoreParticipant<'knowledge-evolution'> 拿这一步，属 W9-E 物理恢复协议那一刀。",
-    removeAfterWave: 'W9-E（物理恢复生成协议独立 RFC）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
-    to: 'memory',
-    why: 'RFC-352 T2 把 `node_runs.injected_memories_json` 的解码器从 legacy `services/memoryInject.ts` 迁进 memory 并经 public/types 提供，于是这条本来就存在的依赖第一次以 offered 边出现在图里（此前是 legacy→legacy，不计跨域）。目标形态是 task-execution 经自己的 TaskMemoryInjectionPort 拿这份编解码，属 TE 侧 adapter 收口。',
-    removeAfterWave:
-      'W4-E1（task-execution vertical slice：REST 投影改经 TaskMemoryInjectionPort）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/application/taskFeedback.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/clarify/autoDispatch.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/clarifyContinuationConvergence.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/public/commands.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+    from: 'packages/backend/src/modules/digital-employee/composition/crewstationContent.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
     from: 'packages/backend/src/modules/intent/composition/platformInventory.ts',
@@ -480,16 +449,59 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
+    from: 'packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
+    to: 'runtime-management',
+    why: 'RFC-367 把蒸馏会话记录从「事后按 protocol 取 driver 走查 opencode SQLite」改成「实时事件 sink」，于是 memory 不再需要 runtime driver，只剩下一个常量依赖：capture-failed marker 行的 kind（`DISTILL_CAPTURE_FAILED_KIND`）。该常量的中立定义点在 runtime-management 的 public types，会话页投影 `distillQueries.ts` 一直从那里取，本文件写 marker 行时取同一个值以免两处字面量漂移。memory→runtime-management 不在 design §3.1 的 offered DAG 上，但这是一条纯常量的 public 依赖，比退回自带字面量更不容易坏。',
+    removeAfterWave:
+      'W4-C（system-agent 会话记录归位：marker kind 随会话捕获契约一并落到共用位置）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 Task family 的资源材料合同使用 runtime-management public 的逻辑内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationNativePlugin.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
     from: 'packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts',
     to: 'execution-contract',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 Task family 的 native 资源适配从 runtime-management public 读取逻辑内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
     from: 'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts',
     to: 'task-execution',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 Task family 的 native 工作内容适配使用 runtime-management public 的逻辑运行内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
   {
     from: 'packages/backend/src/modules/system-operations/application/overview.ts',
@@ -510,15 +522,21 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/system-operations/composition.ts',
-    to: 'source-control',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
     from: 'packages/backend/src/modules/system-operations/application/overview.ts',
     to: 'task-execution',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。 RFC-359 W57：这条边此前挂在 `public/queries.ts` 上——它把 task-execution 的 `TaskOverviewQuery` 再导出一手，唯一的跨模块消费者是 `services/overview.ts`。`/api/overview` 两侧收成一份后那个 facade 整份删除，再导出的跨模块消费者归零（`rfc294-review-public-consumer-ledger` 判红），于是退役；聚合体改从真正的 owner（task-execution public）取合同，边随之从 public 层挪到 application 层。同一个 bounded-context 对、同一个清偿波次，条目数不变。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/system-operations/composition.ts',
+    to: 'knowledge-evolution',
+    why: "RFC-353 T5：`repairFusionProvenance` 随 fusion 编排迁进 knowledge-evolution，system-operations 的备份恢复序列改经 KE `public/operations` 消费（此前是 legacy→legacy，不计跨域）。目标形态是 system-operations 经 RestoreParticipant<'knowledge-evolution'> 拿这一步，属 W9-E 物理恢复协议那一刀。",
+    removeAfterWave: 'W9-E（物理恢复生成协议独立 RFC）',
+  },
+  {
+    from: 'packages/backend/src/modules/system-operations/composition.ts',
+    to: 'source-control',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
@@ -534,10 +552,40 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
+    from: 'packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts',
+    to: 'memory',
+    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
+    to: 'memory',
+    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts',
+    to: 'memory',
+    why: 'RFC-366 给 task-execution 加了「agent 运行结束」这个中性事实的对外通知口（application/ports/agentRunSettledObserver），本文件是把它接到 memory exact public participant `MemoryDistillEnqueuer` 上的 adapter。TE→memory 不在 design §3.1 的 offered DAG 上，但同一对已有先例在账（taskRouteOperations.ts|memory、collaboration/application/taskFeedback.ts|memory）——本刀只是同一条未收敛的 context 对上多一个精确文件，形态没变。目标形态是 task-execution 经自己的 port 拿这份入队能力，属 TE 侧 adapter 收口。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：执行结束通知改经 TE 侧 memory port）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts',
+    to: 'system-operations',
+    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
+    removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
     from: 'packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts',
     to: 'digital-employee',
     why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
     removeAfterWave: 'W4-E9',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/composition/humanGate.ts',
@@ -558,10 +606,10 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+    from: 'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
+    to: 'knowledge-evolution',
+    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/composition/taskClarifyDirectiveRoutes.ts',
@@ -580,90 +628,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'memory',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
-    to: 'collaboration',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
-    to: 'collaboration',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
-    to: 'collaboration',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts',
-    to: 'memory',
-    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
-    to: 'memory',
-    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
-    to: 'memory',
-    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewArtifacts.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/collaboration/infrastructure/crewstation/reviewObjectSweep.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/development-automation/composition/crewstationEvidence.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/development-automation/infrastructure/crewstation/evidenceArtifacts.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/digital-employee/composition/crewstationContent.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts',
-    to: 'system-operations',
-    why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
-    removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedObjectSweep.ts',
@@ -708,22 +672,59 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W9-E（托管内容端口归位）',
   },
   {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts',
+    to: 'knowledge-evolution',
+    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
+  },
+  {
     from: 'packages/backend/src/modules/task-execution/infrastructure/hostedRestoreNormalization.ts',
     to: 'system-operations',
     why: 'RFC-370 v3 V5：托管数据库恢复在导入事务内调用各 owner 的恢复后归一参与者（HostedRestoreNormalizationParticipant 由 system-operations public participants 声明）；task-execution 实现该参与者的 offered 边尚未进入目标 DAG，精确登记，随 RestoreParticipant 物理恢复协议（W9-E）收敛。',
     removeAfterWave: 'W9-E（物理恢复协议）',
   },
   {
-    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts',
-    to: 'runtime-management',
-    why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+    from: 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
+    to: 'memory',
+    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/resource-catalog/composition/crewstationNativePlugin.ts',
-    to: 'runtime-management',
-    why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
-    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
+    to: 'knowledge-evolution',
+    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
+    to: 'memory',
+    why: 'RFC-352 T2 把 `node_runs.injected_memories_json` 的解码器从 legacy `services/memoryInject.ts` 迁进 memory 并经 public/types 提供，于是这条本来就存在的依赖第一次以 offered 边出现在图里（此前是 legacy→legacy，不计跨域）。目标形态是 task-execution 经自己的 TaskMemoryInjectionPort 拿这份编解码，属 TE 侧 adapter 收口。',
+    removeAfterWave:
+      'W4-E1（task-execution vertical slice：REST 投影改经 TaskMemoryInjectionPort）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
 ]
 

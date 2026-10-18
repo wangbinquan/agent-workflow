@@ -305,3 +305,241 @@ describe('depcheck — 接线与反悔防护', () => {
     expect(rule.slice(0, rule.indexOf('},\n  ],'))).not.toContain('pathNot')
   })
 })
+
+// RFC-376 T8: retained T20 assertions copied before the old ledger guard is removed.
+// T20 —— cruiser 规则里「已入账」的散文声明必须是真的
+// ---------------------------------------------------------------------------
+//
+// `.dependency-cruiser.cjs` 里有四条规则在注释里写着「存量违例逐条记在
+// scripts/depcheck.ts → KNOWN_VIOLATIONS」「Ledgered in scripts/depcheck.ts」。
+// 这些是**散文**：账本里那几条被清空后，注释仍然这么写，而读代码的人会以为
+// 「这条规则的存量债是有账的」。反过来，账本里引用了一条**已删除**的规则名时，
+// 那些条目永远不会被触发、也永远不会被 stale 检测抓到（depcheck 只对比触发到的
+// 违规），于是变成一堆谁也不敢删的僵尸。
+//
+// 两个方向都钉住。cruiser 配置只能按**文本**读——它在没有 DEPCRUISE_TSCONFIG 时
+// 会主动抛错拒绝加载（那是它自己的失明棘轮），所以这里不 import。
+
+describe('RFC-317 T20 —— cruiser 规则与 KNOWN_VIOLATIONS 双向一致', () => {
+  const CONFIG = readFileSync(resolve(REPO_ROOT, '.dependency-cruiser.cjs'), 'utf8')
+  /**
+   * 机器标记，不是散文。
+   *
+   * 初版拿正则找「已入账 / Ledgered / KNOWN_VIOLATIONS」这类措辞，立刻撞上一个
+   * 无解的情况：把一条过期声明**改正**成「T24 已落地，KNOWN_VIOLATIONS 里不再有
+   * 本规则的条目」之后，那段话仍然命中同一个正则——**一句断言和它的否定，在正则
+   * 眼里长得一模一样**。散文分类不出来，这正是本 RFC 反复讲的那件事：
+   * 要判定的东西必须是机器可读的，不能是写给人看的话。
+   */
+  const LEDGER_MARKER = /@ledger\s+KNOWN_VIOLATIONS/
+
+  const ruleNames = (): string[] =>
+    [...CONFIG.matchAll(/^\s*name: '([a-z0-9-]+)',$/gm)].map((m) => m[1]!)
+
+  /**
+   * 本规则块内、`from:` 之前的全部文字（注释 + comment 字段）。
+   *
+   * 初版取的是「name 行上下固定行数」的窗口，会**串到隔壁规则**去：
+   * `no-shared-to-app` 因此被误判成「声称入账却没条目」。窗口式取文本在配置文件里
+   * 几乎必然串味——按块边界取才对。这条误报是自己在跑之前抓到的，fixture 见文末。
+   */
+  const commentaryFor = (rule: string): string => {
+    const lines = CONFIG.split('\n')
+    const at = lines.findIndex((line) => line.includes(`name: '${rule}'`))
+    if (at < 0) return ''
+    let start = at
+    while (start > 0 && lines[start]!.trim() !== '{') start -= 1
+    let end = at
+    while (end < lines.length && !/^\s*from: /.test(lines[end]!)) end += 1
+    return lines.slice(start, end).join('\n')
+  }
+
+  test('语料非空：确实解析出了一批规则名（解析失效时本 describe 零预言力）', () => {
+    expect(ruleNames().length).toBeGreaterThanOrEqual(8)
+  })
+
+  test('打了 @ledger 标记的规则，账本里必须真有它的条目', async () => {
+    const { KNOWN_VIOLATIONS } = (await import('../../../scripts/depcheck')) as {
+      KNOWN_VIOLATIONS: readonly { rule: string }[]
+    }
+    const ledgered = new Set(KNOWN_VIOLATIONS.map((violation) => violation.rule))
+    const liars = ruleNames()
+      .filter((rule) => LEDGER_MARKER.test(commentaryFor(rule)))
+      .filter((rule) => !ledgered.has(rule))
+    expect(
+      liars,
+      '这些 cruiser 规则打了 @ledger 标记，而 KNOWN_VIOLATIONS 里一条都没有。' +
+        '要么债已经还完了——把标记删掉；要么账本条目被误删了——补回来。' +
+        '标记与账本不一致时，读代码的人会以为债是有人管的（实测 no-auth-to-services ' +
+        '就这样过期挂了一段时间：T24 把 authLoginPolicy 迁进 auth/ 之后，注释仍宣称有账）',
+    ).toEqual([])
+  })
+
+  test('账本里有条目的规则，必须打上 @ledger 标记（否则读规则的人看不出它有债）', async () => {
+    const { KNOWN_VIOLATIONS } = (await import('../../../scripts/depcheck')) as {
+      KNOWN_VIOLATIONS: readonly { rule: string }[]
+    }
+    const unmarked = [...new Set(KNOWN_VIOLATIONS.map((violation) => violation.rule))]
+      .filter((rule) => ruleNames().includes(rule))
+      .filter((rule) => !LEDGER_MARKER.test(commentaryFor(rule)))
+    expect(
+      unmarked,
+      '这些规则在 KNOWN_VIOLATIONS 里有存量债，但规则本身没有 @ledger 标记——' +
+        '读 cruiser 配置的人会以为这条规则是干净的零违规规则',
+    ).toEqual([])
+  })
+
+  test('账本引用的规则名必须仍然存在于 cruiser 配置里（否则是永不触发的僵尸条目）', async () => {
+    const { KNOWN_VIOLATIONS } = (await import('../../../scripts/depcheck')) as {
+      KNOWN_VIOLATIONS: readonly { rule: string }[]
+    }
+    const declared = new Set(ruleNames())
+    const zombies = [...new Set(KNOWN_VIOLATIONS.map((violation) => violation.rule))].filter(
+      (rule) => !declared.has(rule),
+    )
+    expect(
+      zombies,
+      '这些账本条目引用了 cruiser 配置里不存在的规则名。规则被删 / 改名后它们永远不会被' +
+        '触发，depcheck 的 stale 检测（只比对触发到的违规）也看不见它们——谁都不敢删的僵尸',
+    ).toEqual([])
+  })
+
+  test('自证：标记判据认得出标记，且**不**被散文（含它的否定式）满足', () => {
+    expect(LEDGER_MARKER.test('// @ledger KNOWN_VIOLATIONS —— 本规则有存量债。')).toBe(true)
+    // 下面三句都是散文。初版的正则判据把前两句判成「声称入账」——而第二句恰恰在说
+    // **没有**条目。一句断言和它的否定在正则眼里同形，这就是不能用散文当判据的实证。
+    expect(LEDGER_MARKER.test('Existing debt is ledgered in scripts/depcheck.ts.')).toBe(false)
+    expect(LEDGER_MARKER.test('T24 已落地，KNOWN_VIOLATIONS 里不再有本规则的条目。')).toBe(false)
+    expect(LEDGER_MARKER.test('Routes are HTTP transport adapters.')).toBe(false)
+  })
+})
+
+// RFC-317 T20 自变异 —— 注释块提取必须按**块边界**取，不能取固定窗口。
+//
+// 初版按「name 行上下固定行数」取窗口，直接串到隔壁规则：`no-shared-to-app` 被判成
+// 「声称入账却没条目」，而那句「已入账」根本是上一条规则的注释。配置文件里规则挨着
+// 排，窗口式取文本几乎必然串味。
+describe('RFC-317 T20 自变异 —— 注释归属', () => {
+  const FABRICATED = [
+    '    {',
+    '      // 这条规则的存量违例逐条记在 scripts/depcheck.ts → KNOWN_VIOLATIONS。',
+    "      name: 'rule-with-ledger',",
+    "      severity: 'error',",
+    '      from: { path: "^a/" },',
+    '      to: { path: "^b/" },',
+    '    },',
+    '    {',
+    '      // 这条规则是纯禁止，没有任何存量债。',
+    "      name: 'rule-without-ledger',",
+    "      severity: 'error',",
+    '      from: { path: "^c/" },',
+    '      to: { path: "^d/" },',
+    '    },',
+  ].join('\n')
+
+  const blockFor = (config: string, rule: string): string => {
+    const lines = config.split('\n')
+    const at = lines.findIndex((line) => line.includes(`name: '${rule}'`))
+    if (at < 0) return ''
+    let start = at
+    while (start > 0 && lines[start]!.trim() !== '{') start -= 1
+    let end = at
+    while (end < lines.length && !/^\s*from: /.test(lines[end]!)) end += 1
+    return lines.slice(start, end).join('\n')
+  }
+
+  test('相邻规则的注释不会串味（初版固定窗口正是栽在这里）', () => {
+    const claim = /KNOWN_VIOLATIONS|[Ll]edgered|入账/
+    expect(claim.test(blockFor(FABRICATED, 'rule-with-ledger'))).toBe(true)
+    expect(
+      claim.test(blockFor(FABRICATED, 'rule-without-ledger')),
+      '隔壁规则的「已入账」串进来了——按块边界取才对',
+    ).toBe(false)
+  })
+
+  test('取不到规则时返回空串而不是抛（规则被删时上层断言自己会报）', () => {
+    expect(blockFor(FABRICATED, 'no-such-rule')).toBe('')
+  })
+})
+
+// RFC-376 G1: exercise the actual path expressions, including erased type exemptions.
+describe('RFC-376 G1 dependency rule paths', () => {
+  const config = read('.dependency-cruiser.cjs')
+  const cases = [
+    [
+      'no-production-to-system-mocks',
+      'packages/backend/src/probe.ts',
+      'packages/system-mocks/src/tool.ts',
+    ],
+    ['no-frontend-to-backend', 'packages/frontend/src/probe.ts', 'packages/backend/src/probe.ts'],
+    [
+      'no-services-to-routes',
+      'packages/backend/src/services/probe.ts',
+      'packages/backend/src/routes/probe.ts',
+    ],
+    ['no-shared-to-app', 'packages/shared/src/probe.ts', 'packages/frontend/src/probe.ts'],
+    [
+      'no-routes-to-db',
+      'packages/backend/src/routes/probe.ts',
+      'packages/backend/src/db/schema.ts',
+    ],
+    ['no-transport-to-db', 'packages/backend/src/ws/probe.ts', 'packages/backend/src/db/schema.ts'],
+    [
+      'no-transport-to-db',
+      'packages/backend/src/mcp/probe.ts',
+      'packages/backend/src/db/schema.ts',
+    ],
+    [
+      'no-util-to-upper',
+      'packages/backend/src/util/probe.ts',
+      'packages/backend/src/services/probe.ts',
+    ],
+    [
+      'no-auth-to-services',
+      'packages/backend/src/auth/probe.ts',
+      'packages/backend/src/services/probe.ts',
+    ],
+  ] as const
+  const block = (name: string): string => {
+    const start = config.indexOf(`name: '${name}'`)
+    if (start < 0) throw new Error(`missing dependency rule ${name}`)
+    const tail = config.slice(start),
+      next = tail.slice(1).search(/name: '[a-z0-9-]+'/)
+    return next < 0 ? tail : tail.slice(0, next + 1)
+  }
+  test.each(cases)(
+    '%s catches a violating file pair and rejects adjacent directories',
+    (name, from, to) => {
+      const text = block(name)
+      const fromPattern = /from:\s*\{\s*path:\s*'([^']+)'/.exec(text)?.[1]
+      const toPattern = /to:\s*\{\s*path:\s*'([^']+)'/.exec(text)?.[1]
+      expect(fromPattern).toBeDefined()
+      expect(toPattern).toBeDefined()
+      expect(new RegExp(fromPattern!).test(from)).toBe(true)
+      expect(new RegExp(toPattern!).test(to)).toBe(true)
+      expect(new RegExp(fromPattern!).test('fabricated/not-production/probe.ts')).toBe(false)
+      expect(new RegExp(toPattern!).test('fabricated/not-production/probe.ts')).toBe(false)
+      if (
+        [
+          'no-routes-to-db',
+          'no-transport-to-db',
+          'no-util-to-upper',
+          'no-auth-to-services',
+        ].includes(name)
+      )
+        expect(text).toContain("dependencyTypesNot: ['type-only']")
+    },
+  )
+  test('cycle gate excludes erased type-only closure', () => {
+    expect(block('no-circular')).toContain(
+      "circular: true, viaOnly: { dependencyTypesNot: ['type-only'] }",
+    )
+  })
+  test('route and transport DB edges have no known exceptions', () => {
+    expect(
+      KNOWN_VIOLATIONS.filter((entry) =>
+        ['no-routes-to-db', 'no-transport-to-db'].includes(entry.rule),
+      ),
+    ).toEqual([])
+  })
+})

@@ -51,3 +51,15 @@ bun.lockb
 # atomic-write scratch from saveConfigRaw (config/index.ts) — `.tmp-<pid>-<ts>`
 # files get orphaned when a backend test aborts between writeFileSync + rename.
 .config.json.tmp-*
+
+# RFC-376: on-demand reports and retired generated inventories.
+.architecture-report/
+/architecture/mutation-entrypoints.json
+/architecture/transaction-external-effects.json
+/architecture/background-jobs.json
+/architecture/cross-context-imports.json
+/architecture/facades.json
+/architecture/public-surfaces.json
+/architecture/module-symbol-owners.json
+/architecture/current-report.json
+/architecture/ledger-baselines.json

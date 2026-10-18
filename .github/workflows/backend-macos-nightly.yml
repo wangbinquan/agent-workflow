@@ -40,11 +40,6 @@ jobs:
       AW_TEST_PROVIDERS: sqlite
     steps:
       - uses: actions/checkout@v5
-        with:
-          # RFC-294 N1 provenance guards replay pinned snapshots; keep the full
-          # commit graph, fetch blobs on demand (same as ci.yml).
-          fetch-depth: 0
-          filter: blob:none
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

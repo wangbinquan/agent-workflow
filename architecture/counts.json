@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "note": "RFC-294 design §13.1 减速带，不是门。measured <= max 即通过；下降不需要改；抬高 max 必须在同一提交，且 reason 含 max=<N>。无 provenance、无过期、无历史比较。",
+  "counts": {
+    "application-direct-effect-files": {
+      "max": 3,
+      "reason": "max=3: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "backend-value-scc": {
+      "max": 0,
+      "reason": "max=0: RFC-377 清零"
+    },
+    "composition-forbidden-import-files": {
+      "max": 21,
+      "reason": "max=21: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "context-value-pairs-off-dag": {
+      "max": 15,
+      "reason": "max=15: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "context-value-sccs": {
+      "max": 2,
+      "reason": "max=2: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "cross-context-internal-file-pairs": {
+      "max": 99,
+      "reason": "max=99: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "depcheck-known-violations": {
+      "max": 0,
+      "reason": "max=0: RFC-377 清零"
+    },
+    "deployment-mode-branch-sites": {
+      "max": 8,
+      "reason": "max=8: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "direct-setinterval-sites": {
+      "max": 15,
+      "reason": "max=15: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "export-star-barrels": {
+      "max": 25,
+      "reason": "max=25: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "legacy-horizontal-files": {
+      "max": 397,
+      "reason": "max=397: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "legacy-service-implementations": {
+      "max": 224,
+      "reason": "max=224: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "legacy-thin-facades": {
+      "max": 48,
+      "reason": "max=48: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "module-layer-violations": {
+      "max": 2,
+      "reason": "max=2: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "node-runs-insert-sites": {
+      "max": 1,
+      "reason": "max=1: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "off-dag-offered-file-context-pairs": {
+      "max": 63,
+      "reason": "max=63: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "platform-to-modules-file-pairs": {
+      "max": 49,
+      "reason": "max=49: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "repo-value-scc": {
+      "max": 0,
+      "reason": "max=0: RFC-377 清零"
+    },
+    "route-to-db": {
+      "max": 0,
+      "reason": "max=0: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "transport-to-db": {
+      "max": 0,
+      "reason": "max=0: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    },
+    "unreachable-production-files": {
+      "max": 27,
+      "reason": "max=27: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+    }
+  }
+}

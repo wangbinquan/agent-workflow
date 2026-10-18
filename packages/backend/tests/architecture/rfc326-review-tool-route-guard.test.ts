@@ -8,7 +8,7 @@
 // sides from the code — the routes from the registry `mountReviewRoutes` fills,
 // the tool paths from what each tool actually dispatches — and pins them equal
 // in both directions. Deliberate exceptions are listed in `EXEMPT_REVIEW_ROUTES`
-// (a ledger: baseline in architecture/ledger-baselines.json, high-water only).
+// (an exact in-file list; RFC-376 retires its former global count pin).
 //
 // Mutation evidence (design §13 ④): delete one review tool → the route it
 // dispatched to shows up in `uncovered` → red.

@@ -769,6 +769,8 @@ Playwright e2e 六个分片同时红。此前没暴露，只是因为走那台�
 
 ## `allowGrowth` 是**一次性**的：改动再小，动了被清点的东西就要重跑 census（2026-09-16 又撞）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `architecture/ledger-baselines.json` 里的 `allowGrowth` 只对**声明它的那个 commit**有效——
 下一个「没让该账本继续涨」的 commit 会判它过期并红在
 `RFC-317 T17 > allowGrowth 无过期条目`。
@@ -812,6 +814,8 @@ allowGrowth，结果 hotfix 自己又推红两条（`T16` 的登记数 vs 基线
 
 ### `allowGrowth` 的退役时机是「下一笔**不涨**的提交」，不是「下一笔提交」（2026-09-19 一天撞两次）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 上面那条说的是 `allowGrowth` 一次性、必须退役。**踩的点不在「要退役」，在「哪一笔退役」**：
 守卫（`rfc317-ledger-highwater` 的「allowGrowth 无过期条目」）判的是**本次提交有没有涨**——
 声明的那一笔涨了所以绿，之后任何一笔**没涨**的提交都会因为条目还挂着而红。
@@ -827,6 +831,8 @@ allowGrowth，结果 hotfix 自己又推红两条（`T16` 的登记数 vs 基线
 一个只动 e2e spec / 只动文档的提交同样会让它过期。
 
 ### `prettier --write` 也是一次「最后的编辑」——它跑在 census 之后就把产物作废了（2026-09-18 实撞，推红一次）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 census 的 `sourceDigest` 是**整棵源码树的内容摘要**（backend + shared + frontend 每个文件的
 文本摘要，外加 `.dependency-cruiser.cjs` / `scripts/depcheck.ts`）。`RFC-294 N1b` 拿它做逐字对账：
@@ -852,6 +858,8 @@ lint / format 一律排在 census 前面。已经跑完 census 又忍不住动�
 就重跑一次 census，代价只有几十秒。
 
 ### census 的产物是**一组**，不是「你改过的那几个文件」（2026-09-17 实撞，推红一次）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `bun run scripts/architecture-census.ts --write` 一次写出 **8 份 `architecture/*.json`
 加上 `design/RFC-294-backend-layered-target-architecture/status.md`**，它们互相之间有
@@ -941,6 +949,8 @@ const codeOnly = (src: string): string =>
 
 ### 同一条顺序律的第三种形态：**源码派生的数字 / 摘要，连「只改了个注释」也要重跑**
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 除了 census 的产物，仓里还有两类判据是**直接从源码文本算出来的**：
 
 - **文本计数型棘轮**（例：成对适配器覆盖对等账本的 `ref` 数）——它数的是「提到这个模块名或
@@ -958,6 +968,8 @@ const codeOnly = (src: string): string =>
 
 ### 顺序是硬的：**手改 `architecture/**` 一律在 census 之前**（2026-09-18 实撞）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `ledger-baselines.json` 的 `canonicalProjection.contentDigest` 覆盖它自己。于是
 「跑完 census 再手动加一条 `allowGrowth` / 改一个 baseline」会让 `RFC-294 N1a` 当场红
 （`contentDigest` 与文件内容对不上），而红的文案只说 digest 不符，不会告诉你是顺序错了。
@@ -966,6 +978,8 @@ const codeOnly = (src: string): string =>
 先做完，**census 跑在最后一个编辑之后**；census 会原样保留这些手工格并重算 digest。
 
 ### `bun run architecture:write` **不重钉 provenance**——要传 `--snapshot-sha`（2026-09-22 实撞两次）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 上一条的定式（手改在 census 之前）照做了还是会红 `RFC-294 N1a`，因为漏了一件事：
 `scripts/architecture-census.ts` 里**重钉 provenance 的那整段挂在 `if (requestedSnapshot !== undefined)` 下**
@@ -994,6 +1008,8 @@ bun run scripts/architecture-census.ts --write --snapshot-sha HEAD
 > （反复跑 census 不自愈）确实一样，别再顺着「是不是没写文件」去查。
 
 ### 指向**测试文件**的 baseline，census 不重算（2026-09-18 实撞）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `ledger-baselines.json` 的条目分两类，看 `file` 字段：
 - `file` 指向 `architecture/*.json`（census 自己的产物）⇒ **census 重算** `baseline`；
@@ -1523,6 +1539,8 @@ bun-v<ver>/bun-darwin-aarch64.zip`），不必动本机工具链。
 
 ## 临时探针在工作树里时不要跑 census（RFC-349 实测，2026-09-02）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `scripts/architecture-census.ts` 扫的是**工作树**，不是 HEAD。带着临时 `console.log` 探针
 跑一次 census，写出的 `sourceDigest` 就绑在探针版源码上；把探针删掉再提交，committed 的
 `architecture/*.json` 与 committed 源码对不上，RFC-294 N1b「seven canonical manifests are
@@ -1538,6 +1556,8 @@ prettier 换行或删一个未用 import），N1b 的「生成投影逐字相等
 源码提交 → 重采 → 账本提交 → 推；中途若被 CI 逼着补一笔源码修复，**补完要再重采一次**。
 
 ## `git checkout -- architecture/` 会静默吃掉别人手写的账本条目（2026-09-03 实撞）
+
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
 
 `architecture/ledger-baselines.json` 里**手写条目与生成产物混在同一份 JSON**：`rfc294-*` 那批由
 `architecture:write` 投影出来，但新账本入网的条目（`id` / `file` / `symbol` / `baseline` / `why`）
@@ -1678,6 +1698,8 @@ constraint:'…', detail, table, … }`——**SQLSTATE 在 `errno`，`code` 恒
 
 ## `allowGrowth` 是**一次性**的：加它的下一个 commit 必须删掉它（RFC-359 实撞，2026-09-16）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `architecture/ledger-baselines.json` 的条目可以带 `allowGrowth: { why }`，授权**这一次**上涨。
 它的失效条件不是「过一段时间」，而是：**下一个没让这份账本继续上涨的 commit**，
 `rfc317-ledger-highwater` 就判它过期并红——原话「留着等于给这份账本发了长期上涨许可」。
@@ -1699,6 +1721,8 @@ push 之前想一句：「上一个 commit 有没有留 allowGrowth？」——�
 
 ## 架构账本的联动点：动一次代码要同步 8 处（RFC-329 实测，2026-08-26 连推红六轮）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 一次 PR 里加了**一个守卫文件 + 一条账本条目**，主干连红四轮，每轮暴露一个此前不知道的
 联动点。四轮全部是同一类失败：**改了 X 就必须同步 Y，而 Y 只有 CI 会告诉你**。
 
@@ -1716,6 +1740,8 @@ push 之前想一句：「上一个 commit 有没有留 allowGrowth？」——�
 | 8   | **任何让文件行数变化的改动**（含**纯加注释**）                                           | `architecture/background-jobs.json` 的 `ambientWiringEntries`                     | N1b 红。ambient wiring 把每个 `registerRoute` 记成 `...#registerRoute:<line>`，行号进 id。RFC-329 PR-B 实撞：给一条路由加 7 行注释，后面每条的行号全挪                                                                                                                                                                                                                                            |
 
 ### `bun run architecture:write` 在多人共享工作树上**不能跑**
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 它读**磁盘**，不是 HEAD。本仓常态是工作树里躺着别人未提交的生产代码，于是跑一次它就会：
 
@@ -1825,6 +1851,8 @@ git status --porcelain -- packages/backend/src packages/shared/src packages/fron
 
 ### 改 artifact 的 `entries` 别忘了同文件的 `denominator`
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `module-symbol-owners.json` 与 `background-jobs.json` 各自带一个 `denominator` 块，里面的
 `symbolsIncludingFileRoots` / `ambientWiring` 必须等于对应数组的长度。只改数组不改它，N1b 会
 红在一个**看起来与你的改动无关的地方**（diff 里只显示 denominator 那一行差 1）。
@@ -1833,6 +1861,8 @@ git status --porcelain -- packages/backend/src packages/shared/src packages/fron
 要同时改：entries 数组、该文件的 denominator、ledger baseline（若上涨还要写 `allowGrowth`）。
 
 ### `sourceDigest` 的算-提-推竞态：必须在 `merge --ff-only` **之后**算
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 这是本仓直推 main 工作流下的结构性竞态，和算法对不对无关：
 
@@ -1852,6 +1882,8 @@ commit → repin provenance → **立刻 push**。推之前再 `git fetch` 确�
 窗口越短越好。
 
 ### 拷回生成产物：`git status` 回答的不是你要问的那个问题（2026-09-04 两人各踩一面）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 导出树跑完 census 之后要把 `architecture/*.json` 拷回真实仓库。这一步同一天被两个 session
 各踩了一种失败模式，**症状完全一样**——`git status` 显示一堆文件 modified、看上去很正常：
@@ -2217,6 +2249,8 @@ git status --porcelain | grep -vE '^ ?D' | awk '{print $NF}' | grep -E '\.(ts|ts
 
 ## 重跑普查前先 `prettier --write`，顺序反了当场红（RFC-359 实撞，2026-09-11）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `architecture-census.ts` 把 `packages/*/src/**` 的内容摘成 `sourceDigest`。先跑普查、再格式化源文件，
 digest 就停在**格式化前**的内容上，`rfc294-canonical-manifests` 的「七份清单是精确投影」当场红，
 而报错只显示一对 sha256，看不出是格式化造成的。**固定顺序：改代码 → `prettier --write` → 跑普查 →
@@ -2272,6 +2306,8 @@ digest 就停在**格式化前**的内容上，`rfc294-canonical-manifests` 的�
 `rfc349-*-parity` / `rfc349-postgresql-numeric-projection`。
 
 ## 重采 `architecture/` 别在共享工作树上跑——在 HEAD 的只读导出上跑（RFC-357 实践，2026-09-04）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `census.ts` 走 `readdirSync` 读**工作树**，这是刻意的（`git ls-files` 看不见未跟踪的新文件，
 会让新模块整个逃出账本）。但本仓多个 session 共用一棵树，于是这条设计有个直接后果：
@@ -2933,6 +2969,8 @@ SQLite 会话是进程内单写者租约 + `BEGIN IMMEDIATE`，它串的是**事
 
 ## `allowGrowth` 是**一次性**的，而「落产物 → CI 报红 → 跟进修复」这个节奏**必然**让它过期（2026-09-07 连撞四次）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 棘轮的设计是：许可授权**这一个 commit** 的上涨，**下一个 commit 没涨就必须删掉它**。设计是对的。
 但它与一个很常见的工作节奏正面冲突：
 
@@ -3037,6 +3075,8 @@ git 操作都会写错仓库**——不报错、不告警，只是悄悄打到�
 （`GIT_DIR=… git rev-parse …`），永远不要 `export` 给一段会跑测试的 shell。
 
 ## 普查产物钉的是**源码摘要**：删掉一行 import 也会让 N1b 红（2026-09-10 实撞）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 上一条讲的是「账本涨了要重采」，这一条讲的是更常被漏掉的那半：**任何触及
 `packages/*/src/**` 的提交都要在同一提里重采普查**，与改动大小无关。
@@ -3451,6 +3491,8 @@ W8 把 `setNodeRunStatusTx` 改名成 `setNodeRunStatusInTransaction`，而
 
 ## 普查账本会造成「滚动红」：每笔红都被下一笔顺手修掉，同时开出新的红（2026-09-08 实撞，main 连红四提交）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `6075eb93e` / `6d098349f` / `26af7203f` / `1b5e74339` 连续四笔 CI 红，**三个不同成因**：
 T17 `allowGrowth` 过期 → N1b 投影不一致 → RFC-345 门面守卫 → T17 `allowGrowth` 过期。
 
@@ -3473,6 +3515,8 @@ T17 `allowGrowth` 过期 → N1b 投影不一致 → RFC-345 门面守卫 → T1
   要在 HEAD 只读导出上跑**全量 `tests/architecture/`**，看到 0 fail 才算数。
 
 ## `allowGrowth` 一次性授权：这是第五次踩（同上，累计）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `allowGrowth` 授权的那次上涨一落地，它**当场就该删**——下一个不涨的 commit 上即判过期转红。
 本仓已因此红过五次。**开豁免和删豁免必须是同一次提交的两半**，不存在「先留着，回头清」。
@@ -5228,6 +5272,8 @@ import 与调用一起拿掉（事故前的形状）仍然全绿。它不像假�
 
 ## 账本类的数，只信会执行那份数据的程序打印出来的值（RFC-317 T66 实撞）
 
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
+
 写 2026-08-12 审计报告的勘误时，我用 `grep -c "rule: '"` 数 `KNOWN_VIOLATIONS`，得到 22，
 差点写进文档——真值是 **37**。差额来自两处 `...(ARRAY).map(…)` 展开：**数语法元素只会
 数到模板本身**，展开出来的条数在源码里根本不作为字面量出现。`bun run depcheck` 自己会
@@ -5541,6 +5587,8 @@ CI 跑的是 `gitleaks detect --source . --no-banner --redact --verbose`，即**
 
 ## RFC-319 有三份账本，其中两份**只在夜跑对账**——补完 e2e 只改能力账本会把主干推红（2026-08-25 实撞）
 
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
+
 `architecture/` 下三份机器账本问的是三个不同的问题：
 
 | 账本                               | 分子从哪来                                             | 什么时候对账         |
@@ -5717,6 +5765,8 @@ hook 里还是 test 体里，再决定是 `test.describe.configure({ timeout })`
 `test.setTimeout()`。**不要**因为这个现象去删别人文件里本来正确的文件级设置。
 
 ## `git diff --cached --stat` 只给行数、不给归属——共享账本文件必须逐 hunk 认领（2026-08-25 实撞，主干红）
+
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
 
 CLAUDE.md §提交纪律 要求「推之前 `git diff --cached --stat` 看一眼暂存区，出现任何你
 没打算提的路径就停下」。这条挡得住**多出来的文件**，挡不住**同一个文件里多出来的行**。
@@ -5897,6 +5947,8 @@ mirror: git fetch --all --prune          # 不带 --tags
 
 ## 共享工作树上「改完账本再去跑测试」有一个窗口，别人会在窗口里覆写你的文件
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 2026-08-26 实撞，把 `main` 推红一次（RFC-317 T16「条目数与基线逐字相等」）：
 
 1. 我改了 `architecture/e2e-endpoint-coverage.json`（来源 164 → 147）**并同批改了**
@@ -5925,6 +5977,8 @@ mirror: git fetch --all --prune          # 不带 --tags
 从根上绕开这个窗口。账本类因为要跟着测试结果走，绕不开，只能靠「立刻提交 + 回读复核」。
 
 ## `architecture/ledger-baselines.json` 同时被两套机制盯着：改它之前先知道会踩到谁
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 2026-08-26 起，这个文件有**两个互相不知道对方存在**的看门人：
 
@@ -6076,6 +6130,8 @@ test('…', () => {
 
 ## 往 `ledger-baselines.json` 加条目要插在 **RFC-294 N1 spec 段之前**（2026-08-26 实撞）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `rfc294Canonical.ts` 的 `projectGovernanceArtifacts` 会把所有 N1 spec 条目**重排到队尾**
 （非 spec 条目保持原相对顺序），然后 N1b 断言「投影 === 磁盘」逐字节相等。所以顺手 `append`
 到数组末尾会红在 N1b 上，而报错看起来像「你加的条目内容不对」，其实只是**位置**不对。
@@ -6145,6 +6201,8 @@ tracked = {x.split('/')[1] for x in git('ls-files','design').split() if x.starts
 
 ## N1 账本（`rfc294-*`）涨了要**两笔**提交（2026-08-30 review §A3 起；此前是三笔）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `ledger-baselines.json` 里 `rfc294-*` 这几条是 canonical 投影（`n1LedgerSpecs`）逐字生成的；
 `projectGovernanceArtifacts` 现在会把 current 文件里同 id 条目上的 `allowGrowth` 原样带进投影，所以
 涨账那笔可以同时让 N1b「subset ledgers project into canonical truth」与 RFC-317 T17「只降不升」都绿：
@@ -6188,6 +6246,8 @@ refresh/pin，是 review §A3 改协议的直接理由。
 sed -n 'a,bp'` 取，并在文档头写明基线 sha；复核也用同一条命令。
 
 ## 删掉一条 legacy import，会有**别处的账本**当场变 stale 而红（2026-09-03 主干实撞）
+
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
 
 本仓有一批「**live consumer 精确账本**」型守卫：测试里手写一张 `A.ts → B.ts` 的边表，再从源码实测
 一张同形的表，断言**两张表逐条相等**——多一条是「没登记」，少一条是「stale」。典型的是
@@ -6253,6 +6313,8 @@ instead of importing another SQLite/PostgreSQL factory.」
 
 ## `git archive` 导出树只隔离「按路径读的源码」，**不隔离 workspace 包**（2026-09-04 实撞）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 共享工作树上要把普查 / 门禁跑在「只含自己改动」的树上时，`git archive <commit> | tar -x` 到临时目录、
 再软链 `.git` 与 `node_modules` 是个好办法——**但只对按路径读文件的工具成立**（`architecture:write`
 这类普查是的）。
@@ -6266,6 +6328,8 @@ instead of importing another SQLite/PostgreSQL factory.」
 本地只用来复现已经确认存在的红。
 
 ## 改前端也会让架构账本变 stale（2026-09-03 实撞）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `architecture:write` 的普查输入面是 `packages/{backend,shared,frontend,system-mocks}/src`。
 只改了一个前端组件 + 加一条前端测试，同样要重采，否则 `rfc294-canonical-manifests` 当场红。
@@ -6490,6 +6554,8 @@ B2 批 b/c 推上 main 后两个 OS 的 backend 分片 2 同一条红：`rfc349-
 
 ### 改文件名的刀：本地批次要按「谁引用了这个路径」选，不能按 RFC 号选
 
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
+
 RFC-359 的合一每刀都在删 / 改 provider 命名的文件，而本仓有一批**逐文件对账**的账本散落在与该 RFC
 毫无关系的测试里——写点白名单（`scheduler-audit-s14-…` 的 tasks.status、`lifecycle-grep-guard` 的
 node_runs.status）、架构锁（`rfc217-architecture-locks` 的房间表写点）、能力债清单
@@ -6507,6 +6573,8 @@ node_runs.status）、架构锁（`rfc217-architecture-locks` 的房间表写点
 `(postgresql|sqlite)` 前缀白名单认文件，中立化后的名字要补进它已有的中立名尾巴，否则 census 直接失败。
 
 ### `allowGrowth` 是一次性的：加了它，紧接着的下一个提交必须重采账本
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `architecture/ledger-baselines.json` 的 `allowGrowth` 只为「这一个 commit」放行；守卫
 （rfc317 T17「allowGrowth 无过期条目」）要求**下一个 commit 如果没再涨，就必须把这条删掉**。
@@ -6610,6 +6678,8 @@ macOS runner 跑 3800+ 后端用例时负载很重，`pumpUntil exhausted` / 60s
 后转绿。反过来说：**如果 ubuntu 那边也红，就不许当 flaky 处理**。
 
 ## `architecture/guard-manifest.json` 是**手工维护的种子**，不是普查产物（2026-09-07 实撞，四个 agent 同时判错）
+
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
 
 新增架构守卫后 `rfc317-guard-corpus-floor` / `rfc317-guard-negative-fixture` /「守卫清单两向钉死」会红，
 提示「不在账本里」。很自然的推论是「跑一次 `bun run architecture:write` 就会自动收录」——**错的**。
@@ -6968,6 +7038,8 @@ const u = sourceUnit(relPath, readFileSync(abs, 'utf8'))
 
 ## 守卫按「文本里提到谁」计数时，你的**注释**就是它的输入（第三次实撞，2026-09-10）
 
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
+
 同一个坑今年已经踩到第三次，前两次是 `rfc311-perf-guards`（文本匹配 `isPostgresql` 命中我新写的
 头注释）与 `rfc349-resource-catalog-provider-contributions`（`toContain('compose…')` 被散文满足）。
 第三次换了个方向：
@@ -7001,6 +7073,8 @@ architecture-correct 的落位要 +6 边 / +5 例外 / +2 符号主，外加一�
 哪个、为什么不能用（点名那条守卫）、这些边随哪一波消失、单一性由谁把守。
 
 ## 挑「哪些测试会被源码改动波及」不能按**文件名关键词**挑（2026-09-10 因此推红一次）
+
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
 
 已有一条老教训写着「落盘前只跑 `tests/architecture/` 不够，源码锁守卫散在 `tests/` 根下」。本轮
 照做了——按 `GUARD_FILE_NAME_PATTERN` 的关键词
@@ -7052,6 +7126,8 @@ bun run scripts/source-guard-sweep.ts --run    # 分批 + --isolate 跑
 `rfc331-preexisting-deep-imports`（**这条藏在 `tests/` 根下**）。
 
 ## `ledger-baselines.json` 里只有 N1 系账本是 census 复算的，其余是**手维护种子**（2026-09-10 实撞）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `projectGovernanceArtifacts`（`rfc294Canonical.ts`）只对 `n1LedgerSpecs(artifacts)` 里的条目重算
 `baseline`；不在那张表里的条目（例如 `rfc331-preexisting-deep-imports`）原样穿过。
@@ -7177,6 +7253,8 @@ const suite = postgresqlSelected ? describe : describe.skip
 CI 的冷容器与共享 runner 就是慢那一档。
 
 ## **新增一个测试文件**要跑的是「枚举测试文件」的政策 / 清单型守卫（2026-09-11 连撞两条）
+
+> 历史（RFC-376 起不再适用）：仅本节涉及 ledger-baselines、census 或 provenance 的部分；其余主题守卫与协作规则继续适用。
 
 本文件已有两条相邻的挑法：改 `src/` 按「谁扫源码语料」挑、改 `tests/helpers/**` 按「谁断言
 harness」挑。**新增测试文件**是第三种，波及的又是另一批守卫——它们枚举的是 `tests/` 而不是 `src/`：
@@ -8020,6 +8098,8 @@ git diff --name-only HEAD -- packages/backend/src | sed 's|^packages/backend/||'
 
 ## `allowGrowth` 是**一次性**的：下一个 commit 不涨就必须删——**纯文档提交也算那个 commit**（2026-09-15 实撞）
 
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
+
 `architecture/ledger-baselines.json` 的 `allowGrowth` 由 `rfc317-ledger-highwater` 的两条判据夹住：
 
 - 「基线比上一个 commit 高、又没声明 allowGrowth」→ 红（挡住悄悄涨）；
@@ -8189,6 +8269,8 @@ gh run rerun <id> --failed
 两条一起红才说明装配图真的变了，那时才要停下来查。
 
 ### `git commit --amend` 会把 census 的 provenance SHA 变成**孤儿**，两条守卫当场红
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 2026-09-15 实撞。顺序是这样的：
 
@@ -8380,6 +8462,8 @@ bun test tests/rfc359-w29-unstarted-application-composition.test.ts
 ——这份文件的体例就是每次改摘要都留一段署名理由。
 
 ## census 产物要在**最后一次源码编辑之后**重跑（2026-09-17 与上一条同一次事故）
+
+> 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。
 
 `architecture/*.json` 是 `scripts/architecture-census.ts` 从源码生成的投影，
 `rfc294-canonical-manifests` 会重新生成一遍并逐字比对。所以**census 跑完之后再改一行源码，

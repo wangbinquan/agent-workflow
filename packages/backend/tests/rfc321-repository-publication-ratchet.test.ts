@@ -221,18 +221,6 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       encoding: 'utf8',
     })
     expect(reachable.status === 0 || shallow.stdout.trim() === 'true').toBe(true)
-
-    const baselines = JSON.parse(read('architecture/ledger-baselines.json')) as {
-      ledgers: Array<{ id: string; baseline: number; file: string; symbol: string }>
-    }
-    expect(
-      baselines.ledgers.find((entry) => entry.id === 'rfc321-repository-publication-call-sites'),
-    ).toMatchObject({
-      id: 'rfc321-repository-publication-call-sites',
-      file: 'architecture/repository-publication-call-sites.json',
-      symbol: 'callSites',
-      baseline: LEDGER.callSites.length,
-    })
   })
 
   test('the backend corpus scanner accounts for every literal Git network command', () => {

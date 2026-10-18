@@ -313,7 +313,7 @@ describe('RFC-329 AC-12 — the ledger is a ledger, not a wildcard', () => {
   })
 
   test('the count the high-water ledger pins is the LEAF count, not a group count', () => {
-    // architecture/ledger-baselines.json pins MCP_SURFACE_EXEMPTION_LEAVES.
+    // RFC-376 retires the global count pin; this test keeps the exact exemption leaves.
     // If this ever became a grouped structure again, adding a leaf to an
     // existing group would leave the baseline untouched — the same hole a
     // prefix ledger has (proposal D9 / 设计门 P1-4).

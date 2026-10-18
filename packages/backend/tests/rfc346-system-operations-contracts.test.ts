@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import ts from 'typescript'
 import { createSystemOperationsApplication } from '../src/modules/system-operations/application/systemOperations'
 import type { AdminBackupCoordinatorPort } from '../src/modules/system-operations/application/ports/adminBackupCoordinator'
 import type { AdminRestoreCoordinatorPort } from '../src/modules/system-operations/application/ports/adminRestoreCoordinator'
@@ -22,11 +23,8 @@ import {
   createSystemOperationDescriptors,
   SYSTEM_OPERATION_ALIASES,
 } from '../src/modules/system-operations/public/operations'
-import {
-  buildCanonicalArtifacts,
-  targetContextFor,
-  targetRemoveAfterWaveFor,
-} from './architecture/rfc294Canonical'
+import { backendUnits, sourceUnit, type SourceUnit } from './architecture/census'
+import { createGateCorpus } from './architecture/rfc294Gates'
 
 const SOURCE_ROOT = join(import.meta.dirname, '../src')
 const REPO_ROOT = join(import.meta.dirname, '../../..')
@@ -321,114 +319,90 @@ describe('RFC-346 System Operations contracts', () => {
     expect(server).toContain('for (const alias of SYSTEM_OPERATION_ALIASES)')
   })
 
-  test('canonical ownership is exact and does not swallow maintenance, doctor or migrate', () => {
-    for (const path of [
-      'packages/backend/src/cli/backup.ts',
-      'packages/backend/src/cli/restore.ts',
-      'packages/backend/src/routes/backup.ts',
-      'packages/backend/src/routes/restore.ts',
-    ]) {
-      expect(targetContextFor(path)).toBe('system-operations')
-      // 归属仍是 system-operations，但清偿波不再写 W4-E7：RFC-346 已于 2026-08-30 关闭 W4-E7，
-      // 而这四个文件至今还在 `cli/` / `routes/` 下、没有搬进 `modules/system-operations`。
-      // 2026-09-22 的账本治理（用户裁决其二）规定已关闭的波不再承接债，这类「消费者尚未迁位」
-      // 一律重定到 W9-D（`plan.md §13` 的 facade / cross-context import 清仓）。
-      expect(targetRemoveAfterWaveFor(path, '$file')).toBe('W9-D')
-    }
-
-    for (const path of [
-      'packages/backend/src/routes/maintenance.ts',
-      'packages/backend/src/services/backupScheduler.ts',
-      'packages/backend/src/services/maintenanceTicker.ts',
-      'packages/backend/src/services/pendingRestore.ts',
-      'packages/backend/src/services/restore.ts',
-    ]) {
-      expect(targetContextFor(path)).toBe('platform')
-    }
-    for (const path of [
-      'packages/backend/src/cli/dbCompact.ts',
-      'packages/backend/src/cli/doctor.ts',
-      'packages/backend/src/cli/migrate.ts',
-      'packages/backend/src/cli/rfc295-downgrade-audit.ts',
-    ]) {
-      expect(targetContextFor(path)).toBe('bootstrap')
-    }
-
-    expect(
-      targetRemoveAfterWaveFor(
-        'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
-        '$file',
-      ),
-    ).toBe('W9-E')
-    expect(targetRemoveAfterWaveFor('packages/backend/src/services/restore.ts', '$file')).toBe(
-      'W9-E',
-    )
-    expect(
-      targetRemoveAfterWaveFor('packages/backend/src/services/backupScheduler.ts', '$file'),
-    ).toBe('W9')
-
-    // 原三条锁的是「符号名里的 `restore` 不得把别人的文件吸进 system-operations」。
-    // 2026-09-22 的账本治理把 owner 改成逐文件登记（`rfc294Canonical.ts` 的
-    // LEGACY_BACKEND_FILE_OWNERS），symbol 彻底不参与归属判定，这条风险在结构上消失。
-    // 保留仍存在的两个文件作为回归锚，改成断言它们的登记归属（`skillVersion.ts` 已随 RFC-353
-    // 迁进 `modules/knowledge-evolution`，legacy 侧已无同域文件可锚）；第三条换成
-    // `routes/memories.ts`——RFC-352 T10 那次「复数名字漏网、纯 memory 路由记成 W4-E1」的
-    // 原始现场，登记制之后它不再依赖任何正则是否写了复数。
-    expect(targetContextFor('packages/backend/src/services/taskDelete.ts')).toBe('task-execution')
-    expect(targetContextFor('packages/backend/src/util/git.ts')).toBe('source-control')
-    expect(targetContextFor('packages/backend/src/routes/memories.ts')).toBe('memory')
-  })
-
-  test('canonical registers both coordinator ports and the authority edge as live', () => {
-    const canonical = buildCanonicalArtifacts(REPO_ROOT)
-    const requiredPorts = canonical.crossContextImports.requiredPorts as Array<{
-      id: string
-      status: string
-      consumerOwnerEntryIds: string[]
-      compositionFiles: string[]
-      providerAdapters: Array<{ file: string }>
-    }>
-    for (const id of [
-      'required:system-operations:AdminBackupCoordinatorPort',
-      'required:system-operations:AdminRestoreCoordinatorPort',
-    ]) {
-      const port = requiredPorts.find((entry) => entry.id === id)
-      expect(port?.status).toBe('active')
-      expect(port?.consumerOwnerEntryIds).toContain(
-        'owner:packages/backend/src/modules/system-operations/application/systemOperations.ts#$file',
+  test('both coordinator ports have production consumers, composition and provider adapters', () => {
+    const units = backendUnits(REPO_ROOT)
+    expect(units.length).toBeGreaterThan(800)
+    const root = 'packages/backend/src/modules/system-operations/'
+    for (const [port, adapters] of [
+      [
+        'adminBackupCoordinator',
+        [
+          'infrastructure/crewstation/databaseBackups.ts',
+          'infrastructure/legacyPlatformRecoveryAdapter.ts',
+          'infrastructure/postgresqlAdminBackupCoordinator.ts',
+        ],
+      ],
+      [
+        'adminRestoreCoordinator',
+        [
+          'infrastructure/legacyPlatformRecoveryAdapter.ts',
+          'infrastructure/postgresqlAdminRestoreCoordinator.ts',
+        ],
+      ],
+    ] as const) {
+      const consumers = requiredPortImporters(
+        units,
+        `${root}application/ports/${port}.ts`,
+        port === 'adminBackupCoordinator'
+          ? 'AdminBackupCoordinatorPort'
+          : 'AdminRestoreCoordinatorPort',
       )
-      expect(port?.compositionFiles).toEqual([
-        'packages/backend/src/modules/system-operations/composition.ts',
+      expect(consumers).toContain(root + 'application/systemOperations.ts')
+      expect(consumers.filter((file) => file === root + 'composition.ts')).toEqual([
+        root + 'composition.ts',
       ])
-      expect(port?.providerAdapters.map((entry) => entry.file)).toEqual(
-        id === 'required:system-operations:AdminBackupCoordinatorPort'
-          ? [
-              // RFC-370 v3 V5: the hosted (CS object archive) backup coordinator.
-              'packages/backend/src/modules/system-operations/infrastructure/crewstation/databaseBackups.ts',
-              'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
-              'packages/backend/src/modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts',
-            ]
-          : [
-              'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
-              'packages/backend/src/modules/system-operations/infrastructure/postgresqlAdminRestoreCoordinator.ts',
-            ],
+      expect(consumers.filter((file) => file.startsWith(root + 'infrastructure/'))).toEqual(
+        adapters.map((file) => root + file),
       )
     }
-
-    const observedEdges = canonical.crossContextImports.observedEdges as Array<{
-      fromContext: string
-      toContext: string
-      role: string
-    }>
     expect(
-      observedEdges.some(
+      createGateCorpus(units).edges.some(
         (edge) =>
-          edge.fromContext === 'system-operations' &&
-          edge.toContext === 'identity-access' &&
-          edge.role === 'authority-type-only',
+          edge.from.path.startsWith(root) &&
+          edge.kind === 'type' &&
+          /\/identity-access\/public\/(?:types|participants)\.ts$/.test(edge.target),
       ),
     ).toBe(true)
-  }, 60_000)
+  })
+
+  test('required-port import scanning detects a missing consumer and resolves type-only relative edges', () => {
+    const target = 'packages/backend/src/modules/probe/application/ports/port.ts'
+    const consumer = 'packages/backend/src/modules/probe/composition.ts'
+    const units = [
+      sourceUnit(target, 'export interface Port {}'),
+      sourceUnit(consumer, "import type { Port } from './application/ports/port'"),
+    ]
+    expect(requiredPortImporters(units, target, 'Port')).toEqual([consumer])
+    expect(requiredPortImporters(units.slice(0, 1), target, 'Port')).toEqual([])
+    expect(
+      requiredPortImporters(
+        [
+          sourceUnit(target, 'export interface Port {}; export interface Dto {}'),
+          sourceUnit(consumer, "import type { Dto } from './application/ports/port'"),
+        ],
+        target,
+        'Port',
+      ),
+    ).toEqual([])
+    expect(
+      requiredPortImporters(
+        [
+          sourceUnit(target, 'export interface Port {}'),
+          sourceUnit(consumer, "import type { Port as Alias } from './application/ports/port'"),
+        ],
+        target,
+        'Port',
+      ),
+    ).toEqual([consumer])
+
+    expect(
+      requiredPortImporters(
+        [sourceUnit(consumer, "// import type { Port } from './application/ports/port'")],
+        target,
+        'Port',
+      ),
+    ).toEqual([])
+  })
 })
 
 function walk(dir: string): string[] {
@@ -439,4 +413,38 @@ function walk(dir: string): string[] {
     else if (path.endsWith('.ts')) out.push(path)
   }
   return out
+}
+
+function requiredPortImporters(
+  units: readonly SourceUnit[],
+  target: string,
+  symbol: string,
+): string[] {
+  const corpus = createGateCorpus(units)
+  return [
+    ...new Set(
+      corpus.edges
+        .filter(
+          (edge) =>
+            edge.target === target &&
+            edge.from.source.statements.some((node) => {
+              if (
+                !ts.isImportDeclaration(node) ||
+                !ts.isStringLiteralLike(node.moduleSpecifier) ||
+                node.moduleSpecifier.text !== edge.specifier
+              )
+                return false
+              const bindings = node.importClause?.namedBindings
+              return (
+                bindings !== undefined &&
+                ts.isNamedImports(bindings) &&
+                bindings.elements.some(
+                  (binding) => (binding.propertyName ?? binding.name).text === symbol,
+                )
+              )
+            }),
+        )
+        .map((edge) => edge.from.path),
+    ),
+  ].sort()
 }

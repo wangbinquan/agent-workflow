@@ -54,9 +54,6 @@ const DEBT = JSON.parse(
   readFileSync(resolve(REPO_ROOT, 'architecture', 'commons-debt.json'), 'utf8'),
 ) as {
   readonly entries: readonly DebtEntry[]
-  // 具名字段而非 Record<string, number>：本仓开了 noUncheckedIndexedAccess，
-  // Record 索引出来是 number | undefined，直接喂给 toBe 编译不过。
-  readonly baseline: { readonly inboundEdges: number; readonly outboundEdges: number }
 }
 
 const UNITS = backendUnits(REPO_ROOT)
@@ -98,10 +95,6 @@ describe('RFC-317 T22 —— R1：legacy 层不得 import 模块内部 / composi
     ).toEqual(ledgerKeys('R1-inbound-module-internals'))
   })
 
-  test('账本条数与 baseline 记的数字一致（账本自己不能撒谎）', () => {
-    expect(ledgerKeys('R1-inbound-module-internals').length).toBe(DEBT.baseline.inboundEdges)
-  })
-
   test('每条 R1 债务都写清了 why 与**具名**清偿波次', () => {
     const bad = DEBT.entries
       .filter((entry) => entry.rule === 'R1-inbound-module-internals')
@@ -123,10 +116,6 @@ describe('RFC-317 T23 —— R2：模块内部不得反向 import legacy 层', (
       '模块反向依赖 legacy 层的边发生了变化。方向与 R1 相反，危害相同：' +
         '模块声称自己是 bounded context，实际仍长在旧的横向平铺层上',
     ).toEqual(ledgerKeys('R2-outbound-module-to-legacy'))
-  })
-
-  test('账本条数与 baseline 一致', () => {
-    expect(ledgerKeys('R2-outbound-module-to-legacy').length).toBe(DEBT.baseline.outboundEdges)
   })
 
   test('R2 债务**全部**落在 application 层（B0 实测口径；换层说明形态变了，要重新审）', () => {

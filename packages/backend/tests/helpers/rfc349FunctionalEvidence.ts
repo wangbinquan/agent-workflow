@@ -16,7 +16,7 @@ export type Rfc349FunctionalEvidenceRequirementId =
   | 'doctor'
   | 'maintenance'
   | 'architecture-cutover'
-  | 'schema-canonical-and-provenance'
+  | 'schema-and-architecture-hard-gates'
 
 export interface Rfc349FunctionalEvidenceOracle {
   readonly lane: Rfc349FunctionalEvidenceLane
@@ -248,7 +248,7 @@ export const RFC349_T10_FUNCTIONAL_EVIDENCE = Object.freeze([
     ],
   },
   {
-    id: 'schema-canonical-and-provenance',
+    id: 'schema-and-architecture-hard-gates',
     oracles: [
       {
         lane: 'backend-main',
@@ -267,14 +267,13 @@ export const RFC349_T10_FUNCTIONAL_EVIDENCE = Object.freeze([
       },
       {
         lane: 'backend-main',
-        testFile: 'packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts',
-        testName: 'the seven canonical manifests and report are exact generated projections',
+        testFile: 'packages/backend/tests/architecture/rfc294-design-parity.test.ts',
+        testName: 'design DAG and public contexts equal the independent target constants',
       },
       {
         lane: 'backend-main',
-        testFile: 'packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts',
-        testName:
-          'mutation: payload tampering changes the digest even when provenance metadata is untouched',
+        testFile: 'packages/backend/tests/architecture/rfc376-structural-guards.test.ts',
+        testName: 'allowlist mutation reports an unregistered item and a stale item',
       },
     ],
   },

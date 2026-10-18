@@ -9,15 +9,16 @@
   本次按用户授权的整体刷新修订 D9、新增 D10～D13（§9）。总纲批准不授权任何未立项的生产迁移。
 - 迁移状态：**In Progress（长期推进）**。P0、W2、W3 与 W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已由 successor 关闭；
   RFC-363/364/365/368 按各自范围抵扣 E1/W5、E6、E9 的纵切。其余开放项与下一批后继见 [plan](./plan.md) §3。
-- 当前机器指标只在生成的 [status.md](./status.md) 维护；带日期的 review 保存当次快照。三件套不手抄指标。
-- 架构重采触发器不变：只有 production context owner、public / required 合同、schema / 单写、装配根、跨 context 边或
-  worker / lifecycle owner 变化时才刷新基线；纯测试、文档、视觉原语与边角功能不给任何波次计 credit。
+- 当前指标以最近一次 dated review 或按需生成的报告为准；[status.md](./status.md) 只说明生成命令。三件套不手抄指标。
+- RFC-376 起普通生产改动无需重采或投影伴随提交；结构变化由硬门、文件内精确例外与 `architecture/counts.json` 检查。
+  纯测试、文档、视觉原语与边角功能仍不给任何波次计 credit。
 
 ## 0. 长期维护方式
 
 1. `proposal.md` 维护定位、目标、修订记录、立即生效约束与决策；`design.md` 维护目标合同；`plan.md` 维护波次判定、
    后继队列、依赖与退出门。
-2. `status.md` 与 `architecture/*.json` 是生成事实源；带日期的 `review-YYYY-MM-DD.md` 保存一次审视的基线、判断与证据边界，
+2. 已提交源码是事实源；`bun run architecture:report --source-ref <rev>` 按需生成库存。保留的主题清单与 `counts.json` 手维护；
+   带日期的 `review-YYYY-MM-DD.md` 保存一次审视的基线、判断与证据边界，
    不被后续快照改写。
 3. successor 完成时同步其实际抵扣范围与剩余责任；合同批准、源码接线、功能验收、exact-SHA CI 与整波退出分别记账。
    后继 RFC 中已批准的功能取舍优先于总纲旧文字，不能以长期重构为由恢复已被用户否决的要求。
@@ -106,27 +107,27 @@ bootstrap 只负责把两侧接起来，不承载业务判断；platform 只提�
 
 ### G2：按领域模块获得唯一 owner
 
-| 模块 | 唯一拥有的能力 |
-| --- | --- |
-| `identity-access` | user / OIDC / session / token、profile / email、Git commit identity、role / permission、request authority 与认证审计 |
-| `task-execution` | Task / NodeRun 生命周期、三类任务引擎（DAG、workgroup 轮次、动态工作流）、scope / wrapper、节点执行器、执行机制库、运行态 ownership、恢复、执行身份与 catalog membership |
-| `task-catalog` | 多来源只读目录：来源注册、actor-filtered 合并列表 / cursor / facets；不拥有任何写模型 |
-| `digital-employee` | 员工类型 / 岗位 / 员工、EmployeeCase、Context / Attention / Reaction、冻结 adapter binding 与确定性职责执行 |
-| `event-center` | Event / Source catalog、Subscription、Observer、EventRecord / Delivery 与来源中性的 `EventResponseRule` |
-| `execution-contract` | 执行器中立的输入输出指南、兼容校验、fixture、exact 输出规则与验证回执 |
-| `development-automation` | Mission / ActionRun / AgentAttempt、策略与配置资源、evidence / effect intent、MR 生命周期；目标上吸收 capability template |
-| `resource-catalog` | agent / skill / MCP / plugin / workflow / workgroup 六个聚合与共享的 ACL / ref / revision / catalog 小内核；**不拥有执行** |
-| `collaboration` | review / clarify / question 等人工门、锚点 / 决定、park / release / rerun 命令 |
-| `knowledge-evolution` | memory→skill 融合、融合决策 / provenance、skill restore 的成员关系不变量 |
-| `integration` | webhook endpoint / secret、`WebhookTrigger`、schedule、code-host 出入口、外部 adapter definition / connection |
-| `intent` | Intent 会话、working set、turn / draft / checkpoint；资源提交只经共享 apply 端口 |
-| `memory` | memory 生命周期、scope policy、注入快照与 distill |
-| `source-control` | repo / repo-group / cache / worktree / submodule、Git transport credential、publication 与 Git 操作语义、工作区 GC 策略 |
-| `runtime-management` | runtime inventory / profile / status / probe / diagnostic |
-| `run-observability` | 运行时调用观测、用量与按运行时 × 模型的价格（RFC-371 v2 形态） |
-| `workspace-insight` | structural diff、code intelligence、change narrative 与只读内容分析 |
-| `system-operations` | 备份 / 恢复 / 诊断编排、执行权（standby / active / frozen）端口；不拥有业务策略 |
-| `platform`（非业务 context） | 持久化 / 事务、进程 / runtime 机制、事件 outbox、配置、后台生命周期机制、错误 / 观测、厂商协议客户端 |
+| 模块                         | 唯一拥有的能力                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `identity-access`            | user / OIDC / session / token、profile / email、Git commit identity、role / permission、request authority 与认证审计                                                     |
+| `task-execution`             | Task / NodeRun 生命周期、三类任务引擎（DAG、workgroup 轮次、动态工作流）、scope / wrapper、节点执行器、执行机制库、运行态 ownership、恢复、执行身份与 catalog membership |
+| `task-catalog`               | 多来源只读目录：来源注册、actor-filtered 合并列表 / cursor / facets；不拥有任何写模型                                                                                    |
+| `digital-employee`           | 员工类型 / 岗位 / 员工、EmployeeCase、Context / Attention / Reaction、冻结 adapter binding 与确定性职责执行                                                              |
+| `event-center`               | Event / Source catalog、Subscription、Observer、EventRecord / Delivery 与来源中性的 `EventResponseRule`                                                                  |
+| `execution-contract`         | 执行器中立的输入输出指南、兼容校验、fixture、exact 输出规则与验证回执                                                                                                    |
+| `development-automation`     | Mission / ActionRun / AgentAttempt、策略与配置资源、evidence / effect intent、MR 生命周期；目标上吸收 capability template                                                |
+| `resource-catalog`           | agent / skill / MCP / plugin / workflow / workgroup 六个聚合与共享的 ACL / ref / revision / catalog 小内核；**不拥有执行**                                               |
+| `collaboration`              | review / clarify / question 等人工门、锚点 / 决定、park / release / rerun 命令                                                                                           |
+| `knowledge-evolution`        | memory→skill 融合、融合决策 / provenance、skill restore 的成员关系不变量                                                                                                 |
+| `integration`                | webhook endpoint / secret、`WebhookTrigger`、schedule、code-host 出入口、外部 adapter definition / connection                                                            |
+| `intent`                     | Intent 会话、working set、turn / draft / checkpoint；资源提交只经共享 apply 端口                                                                                         |
+| `memory`                     | memory 生命周期、scope policy、注入快照与 distill                                                                                                                        |
+| `source-control`             | repo / repo-group / cache / worktree / submodule、Git transport credential、publication 与 Git 操作语义、工作区 GC 策略                                                  |
+| `runtime-management`         | runtime inventory / profile / status / probe / diagnostic                                                                                                                |
+| `run-observability`          | 运行时调用观测、用量与按运行时 × 模型的价格（RFC-371 v2 形态）                                                                                                           |
+| `workspace-insight`          | structural diff、code intelligence、change narrative 与只读内容分析                                                                                                      |
+| `system-operations`          | 备份 / 恢复 / 诊断编排、执行权（standby / active / frozen）端口；不拥有业务策略                                                                                          |
+| `platform`（非业务 context） | 持久化 / 事务、进程 / runtime 机制、事件 outbox、配置、后台生命周期机制、错误 / 观测、厂商协议客户端                                                                     |
 
 `code-capability` 不是目标 context：它的历史查询与 capability template 写入是待吸收的兼容岛（目标 owner 为
 development-automation），不得在其中新增能力。跨域共享只能是稳定值对象、port 或领域事件。
@@ -191,16 +192,16 @@ standalone-only，要么改为持久 claim。
 
 ## 5. 原设计修订记录（2026-10-16）
 
-| 编号 | 原设计 | 已不合理的原因（证据见 review §4） | 修订 |
-| --- | --- | --- | --- |
-| R1 | 总纲手写 exact 接口与字段级账本 schema | design.md 定义的 327 个类型名中 76% 从未出现在代码；外迁裁决六周未执行；后继普遍改名改形 | 总纲只定方向与边界，接口以代码和后继 design 为准（D13） |
-| R2 | 逐 symbol / 逐边 / 逐字段全量账本治理 | 约六分之一的提交只为维护账本、常驻约 34 MB JSON；“只降不升”的库存靠自助增长许可照样上升，96% 的 exception 是簿记；持久改善全部来自少数 depcheck 式规则 | 少量硬结构门 + 按需报告（D9 修订） |
-| R3 | 四级线性链，ExecutionKernel 为最底层 | 只有 WrapperRuntime 是真实层；kernel 无落位；执行是递归 scope 解释而非链 | 如实分层，机制库归引擎（G3、D12） |
-| R4 | 非目标“单 daemon”，无部署维度 | 托管已有服务槽、迁移作业、任务镜像助手与执行权租约；接入靠 55 槽 `StartOptions` 覆盖 | 部署 profile 成为一等维度（G7、D10） |
-| R5 | 唯一 bootstrap 根，W9 最后再收 | 根在 W9 前已膨胀 4.6 倍并三份重复、同进程重复构造 | 薄入口根 + 唯一模块工厂图，提前到下一批（D11） |
-| R6 | 按“指向 legacy 文件的边”计债，W9/W9-D 兜底 | 70% 的条目落在兜底桶；平台原语边被当作债 | 按具体结构规则记债，删除兜底桶 |
-| R7 | 若干依赖与退出门 | W4-B / W4-D 的计数早已归零；W7 依赖 W5 无技术理由；code-capability 并非“只剩一个写点”；加固类退出项与 2026-08-26 硬规则冲突 | 重写波次依赖与退出门（plan） |
-| R8 | 目标 context 表 | 缺 run-observability；workspace-insight 无模块；workgroup 引擎住在 resource-catalog；public 入口多出 `operations` | 更新 G2 与 design §3 |
+| 编号 | 原设计                                     | 已不合理的原因（证据见 review §4）                                                                                                                     | 修订                                                    |
+| ---- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| R1   | 总纲手写 exact 接口与字段级账本 schema     | design.md 定义的 327 个类型名中 76% 从未出现在代码；外迁裁决六周未执行；后继普遍改名改形                                                               | 总纲只定方向与边界，接口以代码和后继 design 为准（D13） |
+| R2   | 逐 symbol / 逐边 / 逐字段全量账本治理      | 约六分之一的提交只为维护账本、常驻约 34 MB JSON；“只降不升”的库存靠自助增长许可照样上升，96% 的 exception 是簿记；持久改善全部来自少数 depcheck 式规则 | 少量硬结构门 + 按需报告（D9 修订）                      |
+| R3   | 四级线性链，ExecutionKernel 为最底层       | 只有 WrapperRuntime 是真实层；kernel 无落位；执行是递归 scope 解释而非链                                                                               | 如实分层，机制库归引擎（G3、D12）                       |
+| R4   | 非目标“单 daemon”，无部署维度              | 托管已有服务槽、迁移作业、任务镜像助手与执行权租约；接入靠 55 槽 `StartOptions` 覆盖                                                                   | 部署 profile 成为一等维度（G7、D10）                    |
+| R5   | 唯一 bootstrap 根，W9 最后再收             | 根在 W9 前已膨胀 4.6 倍并三份重复、同进程重复构造                                                                                                      | 薄入口根 + 唯一模块工厂图，提前到下一批（D11）          |
+| R6   | 按“指向 legacy 文件的边”计债，W9/W9-D 兜底 | 70% 的条目落在兜底桶；平台原语边被当作债                                                                                                               | 按具体结构规则记债，删除兜底桶                          |
+| R7   | 若干依赖与退出门                           | W4-B / W4-D 的计数早已归零；W7 依赖 W5 无技术理由；code-capability 并非“只剩一个写点”；加固类退出项与 2026-08-26 硬规则冲突                            | 重写波次依赖与退出门（plan）                            |
+| R8   | 目标 context 表                            | 缺 run-observability；workspace-insight 无模块；workgroup 引擎住在 resource-catalog；public 入口多出 `operations`                                      | 更新 G2 与 design §3                                    |
 
 ## 6. 立即生效的架构约束
 
@@ -240,15 +241,15 @@ standalone-only，要么改为持久 claim。
 
 本次刷新**零产品行为变化**。后续后继的能力影响按以下规则处理：
 
-| 类别 | 处理 |
-| --- | --- |
-| 纯依赖 / 目录 / 接口迁移、装配合并 | 行为对拍，允许一跳 facade，禁止 API / 错误码 / 事件顺序变化 |
-| 统一两套写入栈后错误码收敛 | 属用户可见变化：后继 RFC 列出受影响入口与错误码，呈用户确认 |
-| NodeRun schema / seq | 新旧 oracle + 存量任务 resume 兼容 + 删除回退判据的明确时点 |
-| fanout 内链 | 作为能力扩张独立批准；失败 / 复用 / 恢复矩阵必须齐全 |
-| lifecycle / outbox | critical 事件至少一次；consumer 幂等；WS payload 保持兼容 |
-| AtomicApply | journal replay / duplicate / compensation 语义不弱于当前合同 |
-| 治理门改造 | 只改测试与生成器，不改产品行为 |
+| 类别                               | 处理                                                         |
+| ---------------------------------- | ------------------------------------------------------------ |
+| 纯依赖 / 目录 / 接口迁移、装配合并 | 行为对拍，允许一跳 facade，禁止 API / 错误码 / 事件顺序变化  |
+| 统一两套写入栈后错误码收敛         | 属用户可见变化：后继 RFC 列出受影响入口与错误码，呈用户确认  |
+| NodeRun schema / seq               | 新旧 oracle + 存量任务 resume 兼容 + 删除回退判据的明确时点  |
+| fanout 内链                        | 作为能力扩张独立批准；失败 / 复用 / 恢复矩阵必须齐全         |
+| lifecycle / outbox                 | critical 事件至少一次；consumer 幂等；WS payload 保持兼容    |
+| AtomicApply                        | journal replay / duplicate / compensation 语义不弱于当前合同 |
+| 治理门改造                         | 只改测试与生成器，不改产品行为                               |
 
 ## 9. 架构决策
 
@@ -277,7 +278,7 @@ standalone-only，要么改为持久 claim。
 
 ## 10. 验收标准（整体迁移）
 
-- **AC-1**：design 给出依赖规范、层次矩阵、context DAG 与 IA type-only 矩阵；三者与生成器常量一致（现有守卫保持）。
+- **AC-1**：design 给出依赖规范、层次矩阵、context DAG 与 IA type-only 矩阵；三者与 `rfc294Target.ts` 常量一致（design-parity 守卫保持）。
 - **AC-2**：每个现存能力都有唯一目标 owner；没有“公共 service 待定”桶。
 - **AC-3**：任务控制面 / scope 解释器 / 节点执行器 / 执行机制库四层各自拥有决策，`composition/` 不承载实现。
 - **AC-4**：command / query、事务 / outbox、错误、后台生命周期、装配根合同在代码中各只有一份实现。

@@ -1,3 +1,4 @@
+// RFC-376 T8: retain executable RFC-349 evidence after retiring canonical projections.
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -35,7 +36,7 @@ describe('RFC-349 T10-A functional evidence contract', () => {
       'doctor',
       'maintenance',
       'architecture-cutover',
-      'schema-canonical-and-provenance',
+      'schema-and-architecture-hard-gates',
     ])
 
     const seen = new Set<string>()

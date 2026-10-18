@@ -29,17 +29,17 @@
 
 这些用例只锁定重构必须保留的正确行为，不把 RFC 已点名的错误语义变成兼容合同。
 
-| 层级                     | 文件                                                                  | 保护合同                                                                                                        |
-| ------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 静态架构                 | `packages/backend/tests/rfc294-architecture-preflight.test.ts`        | cross-context edge、public entrypoint/type taint、capability forge、god-port；每条规则有会红的 mutation fixture |
-| transport/application/DB | `packages/backend/tests/rfc294-route-gate-compat.test.ts`             | 协作者写入、隐藏资源 404 等价、403/409 零写入；不锁 decision 后 route resume saga                               |
-| apply/recovery           | `packages/backend/tests/rfc294-apply-replay-recovery-parity.test.ts`  | fresh/aged journal、terminal replay、receipt owner isolation；重放使用相同请求 hash                             |
-| execution/concurrency    | `packages/backend/tests/rfc294-task-execution-compat-oracles.test.ts` | duplicate kick、resume/retry race、shutdown/resume generation、pre-materialized handoff                         |
-| background               | `packages/backend/tests/rfc294-background-worker-boundary.test.ts`    | durable retry takeover、stop fence、schedule claim、窄 participant information budget                           |
-| real E2E                 | `e2e/rfc294-human-gate-restart.spec.ts`                               | Clarify 与 Review 分别跨硬崩溃恢复，identity 不变并续跑到 done                                                  |
-| real Webhook/runtime E2E | `e2e/rfc294-webhook-runtime-failures.spec.ts`                         | GitLab 入口去重后的两 runtime 崩溃/超时/空响应/错 nonce，区分 launch 成功与执行失败，锁 retry/reap/零迟到输出   |
-| real MR terminal E2E     | `e2e/webhook-mr-runtime-races.spec.ts`                                | 坏 JSON 零启动、同 stream 并发/终态矩阵、runtime crash 竞态、leased effect 跨 daemon SIGKILL 恢复               |
-| coverage ledger          | `packages/backend/tests/execution-capability-coverage.test.ts`        | human-gate、webhook runtime failure 与 MR terminal recovery 三条命名 orchestration spine 不能静默消失           |
+| 层级                     | 文件                                                                  | 保护合同                                                                                                                |
+| ------------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 静态架构                 | `packages/backend/tests/rfc294-architecture-preflight.test.ts`        | G3 文件内精确跨 context 文件对与 public 偏离清单；保留 contract mutation fixture 与语料下限，RFC-376 删除 god-port 预算 |
+| transport/application/DB | `packages/backend/tests/rfc294-route-gate-compat.test.ts`             | 协作者写入、隐藏资源 404 等价、403/409 零写入；不锁 decision 后 route resume saga                                       |
+| apply/recovery           | `packages/backend/tests/rfc294-apply-replay-recovery-parity.test.ts`  | fresh/aged journal、terminal replay、receipt owner isolation；重放使用相同请求 hash                                     |
+| execution/concurrency    | `packages/backend/tests/rfc294-task-execution-compat-oracles.test.ts` | duplicate kick、resume/retry race、shutdown/resume generation、pre-materialized handoff                                 |
+| background               | `packages/backend/tests/rfc294-background-worker-boundary.test.ts`    | durable retry takeover、stop fence、schedule claim、窄 participant information budget                                   |
+| real E2E                 | `e2e/rfc294-human-gate-restart.spec.ts`                               | Clarify 与 Review 分别跨硬崩溃恢复，identity 不变并续跑到 done                                                          |
+| real Webhook/runtime E2E | `e2e/rfc294-webhook-runtime-failures.spec.ts`                         | GitLab 入口去重后的两 runtime 崩溃/超时/空响应/错 nonce，区分 launch 成功与执行失败，锁 retry/reap/零迟到输出           |
+| real MR terminal E2E     | `e2e/webhook-mr-runtime-races.spec.ts`                                | 坏 JSON 零启动、同 stream 并发/终态矩阵、runtime crash 竞态、leased effect 跨 daemon SIGKILL 恢复                       |
+| coverage ledger          | `packages/backend/tests/execution-capability-coverage.test.ts`        | human-gate、webhook runtime failure 与 MR terminal recovery 三条命名 orchestration spine 不能静默消失                   |
 
 ## 3. 不允许提前写成绿色的 P0 红测
 

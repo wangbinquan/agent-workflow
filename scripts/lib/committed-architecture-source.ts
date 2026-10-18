@@ -33,7 +33,6 @@ export function readCommittedArchitectureSource(repoRoot: string, ref: string) {
   const extras = [
     '.dependency-cruiser.cjs',
     'scripts/depcheck.ts',
-    'packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts',
     'packages/backend/tests/rfc370-committed-architecture-source.test.ts',
   ]
   const all = [...paths, ...extras]

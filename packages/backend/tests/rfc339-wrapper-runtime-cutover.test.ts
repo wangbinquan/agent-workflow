@@ -372,38 +372,6 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(startDeps).not.toContain('taskEngineApplication')
   })
 
-  test('canonical architecture has retired every W2-D exception', () => {
-    const canonical = JSON.parse(read('architecture/cross-context-imports.json')) as {
-      readonly architectureExceptions: readonly {
-        readonly fromPath: string
-        readonly toPath: string
-        readonly removeAfterWave: string
-      }[]
-    }
-    expect(
-      canonical.architectureExceptions.filter((entry) => entry.removeAfterWave === 'W2-D'),
-    ).toEqual([])
-
-    const mutations = JSON.parse(read('architecture/mutation-entrypoints.json')) as {
-      readonly taskExecutionAuthorityLedger: {
-        readonly unknown: readonly unknown[]
-        readonly entries: readonly {
-          readonly file: string
-          readonly consumer: string
-          readonly authorityKind: string
-        }[]
-      }
-    }
-    expect(mutations.taskExecutionAuthorityLedger.unknown).toEqual([])
-    expect(
-      mutations.taskExecutionAuthorityLedger.entries.filter((entry) =>
-        /modules\/task-execution\/composition\/wrapper(?:Mechanics|RunLifecycle)\.ts$/.test(
-          entry.file,
-        ),
-      ),
-    ).toEqual([])
-  })
-
   test('bootstrap is the only runtime composer and every continuation caller receives a public driver', () => {
     const server = read('packages/backend/src/server.ts')
     const cli = read('packages/backend/src/cli/start.ts')

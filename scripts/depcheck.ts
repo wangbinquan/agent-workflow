@@ -28,21 +28,16 @@
 //   ③ KNOWN_VIOLATIONS 里没有**过期**条目 —— 某条不再触发说明环已被拆掉，
 //      必须同步删除。
 //
-// RFC-317 T66 —— ③ 原本还跟着一句「这让允许列表只能缩、不能涨」，那是**只做了
-// 一半的判据**：stale 检测只管「缩」的方向（不再触发的条目必须删），对「涨」
-// 完全无话可说——在同一个 PR 里新加一处违规、同时在这里加一行豁免，本脚本全绿。
-// 「不能涨」这一半今天由**另一处**兑现：`architecture/ledger-baselines.json` 给
-// KNOWN_VIOLATIONS 钉了条目数，`rfc317-ledger-highwater.test.ts` 要求它与源码逐字
-// 相等且相对上一个 commit 只降不升（要升必须显式写 `allowGrowth` 并点名 RFC，
-// 且在下一笔不涨的提交上被判过期、强制清理）。
-// 留下原来那句的坏处不是措辞不准，而是**它让人以为这里已经防住了**，于是没人
-// 会去建真正防住它的那道门——这个洞就是这么活了很久的。
+// RFC-376: 双向精确清单仍检查新增违规与过期豁免；计数减速带在
+// architecture/counts.json。measured <= max 通过，下降可不改；抬高 max
+// 必须在同一提交写 reason（含 max=<N>），且新增例外由对应 RFC 明列并经用户确认。
+// 不再比较 HEAD~1，也没有一次性 allowGrowth 或投影伴随提交。
 //
 // RFC-377 已清除 util/git、shared outputKinds 与 frontend node-session 的 7 条存量违规。
 // KNOWN_VIOLATIONS 自 RFC-377 起为空；新增条目必须写明 why / removeWhen / removeWave，
 // removeWhen 指向具体 RFC / 工作包，removeWave 指向明确的清偿波次。
 // 对应 cruiser 规则必须带 @ledger KNOWN_VIOLATIONS 标记，并提供显式增长理由；
-// 旧账本制度仍在时同步 ledger-baselines.json 的 allowGrowth，后继提交按规则退役。
+// 同时更新 counts.json 的对应 max 与 reason。
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

@@ -4,11 +4,11 @@
 > 执行结构、身份模型、部署与存储维度、装配与生命周期、治理模型和终局不变量。精确接口以代码
 > （各模块 `public/*.ts`、`application/ports/*.ts`）与后继 RFC 的 design 为准（proposal D13）。
 > 刷新理由与源码证据见 [2026-10-16 全面审视](./review-2026-10-16.md)；刷新前全文（含旧 §3.5 的 exact 接口草图、
-> 旧 §5～§14 的领域细则与历次 SHA 证据）见 `archive-20261016-design.md`。当前机器指标只在 [status.md](./status.md)。
+> 旧 §5～§14 的领域细则与历次 SHA 证据）见 `archive-20261016-design.md`。当前指标见最近一次 dated review 或按需报告；[status.md](./status.md) 为生成说明。
 >
-> 机器解析约定：`tests/architecture/rfc294-canonical-manifests.test.ts` 读取本文 §3.1 的第一个
-> `flowchart LR` mermaid（context DAG）、以 `| IA \`public/types\` type-only` 开头的矩阵行，以及 §3.4 表的首列，
-> 与生成器常量 `TARGET_CONTEXT_EDGES` / `TARGET_PUBLIC_CONTEXTS` 对拍。三处内容的增删必须与生成器同批修改；
+> 机器解析约定：`tests/architecture/rfc294-design-parity.test.ts` 读取本文 §3.1 的第一个
+> `flowchart LR` mermaid（context DAG）、以 `| IA \`public/types\` type-only`开头的矩阵行，以及 §3.4 表的首列，
+与`rfc294Target.ts`的`TARGET_CONTEXT_EDGES`/`TARGET_PUBLIC_CONTEXTS` 对拍。三处内容的增删必须与目标常量同批修改；
 > 本次刷新未改动目标边集与 context 集。
 
 ## 1. 设计原则
@@ -96,17 +96,17 @@ packages/backend/src/
 
 ## 3. 层次与禁止依赖矩阵
 
-| 层 | 可以依赖 | 禁止依赖 |
-| --- | --- | --- |
-| module `domain` | shared 中性值对象、本模块 domain | Hono、Drizzle / schema、DB client、FS / Git / Runtime / WS、路径与配置、部署平台、其他模块任何文件 |
-| module `application` | 本模块 domain / ports、`platform/contracts`、其他模块受控 public 精确入口 | Hono、route / server、具体 DB table、直接 FS / 进程 / 网络 effect、WS broadcaster、platform 实现、本模块或他模块 infrastructure / composition |
-| module `engine` | 本模块 domain、application ports、本模块机制库 | route / server / Hono、具体 DB、WS、ambient config、其他模块 internal |
-| module `infrastructure` | 本模块 ports、platform 机制与 vendor 库（含 `platform/<vendor>/` 的厂商协议客户端） | route、业务 command 调度、他模块 schema / internal、composition |
-| module `application/adapters` | 本模块 domain / internal ports + 一个指定的 consumer required SPI | 其他 SPI、外域 command / query、DB / schema |
-| module `composition.ts` | 本模块各层、他模块 public 与 required-ports | DB 查询、业务 if / switch、DTO 翻译、实现代码 |
-| inbound adapter | 模块 public command / query / operations、transport codec | DB / schema、模块 internal、领域算法、手写授权 / OCC / saga |
-| platform | 中性 contract、vendor 库 | **任何 `modules/`**、任何资源 / 任务 / 协作策略 |
-| bootstrap | 所有 public 合同与模块 `composition.ts`、platform 实现 | 模块 infrastructure 深引用、业务 if / switch、DB 查询、状态迁移 |
+| 层                            | 可以依赖                                                                            | 禁止依赖                                                                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| module `domain`               | shared 中性值对象、本模块 domain                                                    | Hono、Drizzle / schema、DB client、FS / Git / Runtime / WS、路径与配置、部署平台、其他模块任何文件                                            |
+| module `application`          | 本模块 domain / ports、`platform/contracts`、其他模块受控 public 精确入口           | Hono、route / server、具体 DB table、直接 FS / 进程 / 网络 effect、WS broadcaster、platform 实现、本模块或他模块 infrastructure / composition |
+| module `engine`               | 本模块 domain、application ports、本模块机制库                                      | route / server / Hono、具体 DB、WS、ambient config、其他模块 internal                                                                         |
+| module `infrastructure`       | 本模块 ports、platform 机制与 vendor 库（含 `platform/<vendor>/` 的厂商协议客户端） | route、业务 command 调度、他模块 schema / internal、composition                                                                               |
+| module `application/adapters` | 本模块 domain / internal ports + 一个指定的 consumer required SPI                   | 其他 SPI、外域 command / query、DB / schema                                                                                                   |
+| module `composition.ts`       | 本模块各层、他模块 public 与 required-ports                                         | DB 查询、业务 if / switch、DTO 翻译、实现代码                                                                                                 |
+| inbound adapter               | 模块 public command / query / operations、transport codec                           | DB / schema、模块 internal、领域算法、手写授权 / OCC / saga                                                                                   |
+| platform                      | 中性 contract、vendor 库                                                            | **任何 `modules/`**、任何资源 / 任务 / 协作策略                                                                                               |
+| bootstrap                     | 所有 public 合同与模块 `composition.ts`、platform 实现                              | 模块 infrastructure 深引用、业务 if / switch、DB 查询、状态迁移                                                                               |
 
 常驻规则：
 
@@ -222,14 +222,14 @@ table / row、repository 实现、内部 aggregate、Hono 类型、模块单例�
 模块边界以**已知 consumer 完成一个业务目的所需的最小信息**为准，而不是“这个模块目前有哪些函数”。没有生产 consumer 的
 symbol / field 不公开；“无 commands / events”是合法且更好的 public surface。
 
-| 出口类型 | 最小合同 | 禁止 |
-| --- | --- | --- |
-| command | context 与业务 input 分离；只收目标 id、实际决策、必要 expected revision / 幂等键 | DB client、body 里的 Actor、deps / callback、为未来预留的 optional 袋 |
-| result | 完成当前交互所需的 actor-filtered view 或 opaque receipt | events、continuation、worker / lease id、DB row、stack / cause |
-| query | 一个 projection 一个 DTO；filter / page / sort 显式且下推 | `Record<string, unknown>`、全表后 JS 过滤、万能 view、以 JSON 字符串作为返回值 |
-| port | required SPI 由 consumer 拥有；offered participant 由不变量 owner 拥有；跨事务能力显式 `...InTx` | generic repository / UoW / service locator、让调用者自己拼授权或状态迁移 |
-| event | id / version / revision / 最小事实；正文用 ref 再经 actor-filtered query 读取 | 完整 before / after row、private error、把事件当 DTO 总线 |
-| type | branded id、版本化 tagged union、JSON-safe value | Drizzle / Hono / vendor 类型、`any`、字符串哨兵代替 tagged union |
+| 出口类型 | 最小合同                                                                                         | 禁止                                                                           |
+| -------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| command  | context 与业务 input 分离；只收目标 id、实际决策、必要 expected revision / 幂等键                | DB client、body 里的 Actor、deps / callback、为未来预留的 optional 袋          |
+| result   | 完成当前交互所需的 actor-filtered view 或 opaque receipt                                         | events、continuation、worker / lease id、DB row、stack / cause                 |
+| query    | 一个 projection 一个 DTO；filter / page / sort 显式且下推                                        | `Record<string, unknown>`、全表后 JS 过滤、万能 view、以 JSON 字符串作为返回值 |
+| port     | required SPI 由 consumer 拥有；offered participant 由不变量 owner 拥有；跨事务能力显式 `...InTx` | generic repository / UoW / service locator、让调用者自己拼授权或状态迁移       |
+| event    | id / version / revision / 最小事实；正文用 ref 再经 actor-filtered query 读取                    | 完整 before / after row、private error、把事件当 DTO 总线                      |
+| type     | branded id、版本化 tagged union、JSON-safe value                                                 | Drizzle / Hono / vendor 类型、`any`、字符串哨兵代替 tagged union               |
 
 评审经验值（不是账本门）：跨 context port 超过 5 个方法、DTO 顶层超过 12 个字段、多个 consumer 只用到互不相交的方法子集时，
 默认应拆分；确有同一状态机 / 协议理由的，在后继 design 中说明。
@@ -326,12 +326,12 @@ workgroup 轮次引擎的主体在 `modules/resource-catalog/composition/workgro
 
 ### 5.2 目标结构
 
-| 层 | 职责 | 目标位置 | 不得拥有 |
-| --- | --- | --- | --- |
-| 任务控制面 | 协调器（唯一构造点在 bootstrap）、三类任务引擎（DAG、workgroup 轮次、动态工作流）：任务级推进、暂停 / 恢复 / 取消、终态 | `application/drive/`、`engine/task/` | 节点执行细节、WS 发布 |
-| scope 解释器 | DAG scope、frontier、loop / git / fanout 策略；wrapper 回到 scope 的递归是正式语义 | `engine/scope/`、`engine/wrapper/` | 进程与工作区机制 |
-| 节点执行器 | 每种 kind 的执行主体：agent、script、call-workflow / call-workgroup、code-host、review / clarify 的 task 侧请求与 park 结果、workgroup host | `engine/node/<kind>/` | 人工门策略（归 collaboration）、资源授权、fanout 拓扑 |
-| 执行机制库 | assembly 顺序（许可获取 → 隔离创建 / 持久 → run-row 解析 → spawn → merge → settle → 清理）、隔离与合并、许可与限流、NodeRun 铸造、进程监管接口 | `engine/kernel/`（机制库，供上面三层调用） | task 状态、WS payload、资源授权、人工门、领域判断 |
+| 层           | 职责                                                                                                                                           | 目标位置                                   | 不得拥有                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------- |
+| 任务控制面   | 协调器（唯一构造点在 bootstrap）、三类任务引擎（DAG、workgroup 轮次、动态工作流）：任务级推进、暂停 / 恢复 / 取消、终态                        | `application/drive/`、`engine/task/`       | 节点执行细节、WS 发布                                 |
+| scope 解释器 | DAG scope、frontier、loop / git / fanout 策略；wrapper 回到 scope 的递归是正式语义                                                             | `engine/scope/`、`engine/wrapper/`         | 进程与工作区机制                                      |
+| 节点执行器   | 每种 kind 的执行主体：agent、script、call-workflow / call-workgroup、code-host、review / clarify 的 task 侧请求与 park 结果、workgroup host    | `engine/node/<kind>/`                      | 人工门策略（归 collaboration）、资源授权、fanout 拓扑 |
+| 执行机制库   | assembly 顺序（许可获取 → 隔离创建 / 持久 → run-row 解析 → spawn → merge → settle → 清理）、隔离与合并、许可与限流、NodeRun 铸造、进程监管接口 | `engine/kernel/`（机制库，供上面三层调用） | task 状态、WS payload、资源授权、人工门、领域判断     |
 
 规则：
 
@@ -546,8 +546,8 @@ RFC-370 v2 的原则（同一业务路径、端口按语义、崩溃即退出的
 - 值级环：depcheck `no-circular` 与 `KNOWN_VIOLATIONS`（双向：新增违规红、过期条目红）；
 - route / transport→DB、services→routes、util→upper、auth→services；
 - 模块内分层（§3 常驻规则 1～3、8），其中 application 的直接 FS / 进程 / 网络 effect 也在门内；
-- 跨 context 只经 public 精确入口：一条依赖规则 + 一份只能减少的文件对 allowlist（初始为 2026-10-16 时的跨 context
-  内部引用 112 条与逆 DAG 的 offered 边 97 条；另 12 条可行动债分别由 depcheck 与分层门承载）；context 级值依赖无环；
+- 跨 context 只经 public 精确入口：一条依赖规则 + 一份只能减少的文件对 allowlist（初值由 RFC-376 阶段 B 从当时已提交 HEAD 重算；
+  其他可行动债分别由 depcheck 与分层门承载）；context 级值依赖无环；
   observed offered 边 ⊆ §3.1 DAG；
 - `platform/**` 不 import `modules/**`（存量以只能减少的 allowlist 过渡）；
 - `node_runs` 唯一 INSERT 站点；
@@ -566,58 +566,62 @@ RFC-370 v2 的原则（同一业务路径、端口按语义、崩溃即退出的
 
 ### 13.3 过渡
 
-治理简化由后继 S4 实施。在 S4 落地前，现有账本与守卫继续运行并按现有流程维护，但不再扩张新的账本类别与增长许可
-类别（proposal C9）；S4 负责把 §13.1 中尚无机器门的条目落地，并把现有账本降为 §13.2 的按需报告。
+RFC-376 阶段 B 将治理切换为硬结构门、文件内双向精确例外与 `architecture/counts.json` 减速带。
+普通生产改动不再需要 census、provenance pin、增长许可或投影伴随提交。报告命令为
+`bun run architecture:report --source-ref HEAD`，默认输出到忽略的 `.architecture-report/`；加 `--gates` 可重算清单与计数。
+`architecture:write` 暂留为非零退出墓碑；旧库存与生成器已删除，保留的主题清单仅在主题变化时手维护。
+生命周期清单一致门 G12 留给 S2a；C7 零 consumer public 符号只进报告。新增例外须在后继 RFC 中列明、经用户确认，
+同一提交提高对应 max 并写含 `max=<N>` 的 reason；下降自动通过，无历史比较。
 
 ## 14. 架构不变量与终局判据
 
-当前值见 [status.md](./status.md) 与最近一次 review；本表只保留“不变量 → 终局”。
+当前值见最近一次 dated review 或按需报告（命令见 [status.md](./status.md)）；本表只保留“不变量 → 终局”。
 
-| 不变量 | 终局 |
-| --- | --- |
-| 后端 / 全仓值级 SCC | 0 / 0 |
-| `KNOWN_VIOLATIONS` | 0 |
-| route→DB、transport→DB | 0 |
-| context 级值依赖 | 无环，且 ⊆ §3.1 DAG |
-| 跨 context 内部 import（infrastructure / application / composition） | 0 |
-| `platform/` → `modules/` | 0 |
-| composition 内实现（除装配） | 0 |
-| 业务层部署模式分支 | 0 |
-| 装配 | 唯一模块工厂图；每模块每进程构造一次 |
-| 后台作业 | 全部经唯一生命周期程序，均有 stop；无私设 timer |
-| 模块级可变单例（生产态，bootstrap 外） | 0 |
-| NodeRun 先后判据 | 只用 `seq`；生产路径无 id 顺序比较 |
-| `node_runs INSERT` 站点 | 1 |
-| AtomicApply lifecycle / 资源写入栈 | 1 / 1 |
-| task ownership authority | 1（持久 epoch / lease） |
-| 事务内外发事件 | 0 |
-| services/ 下的业务实现 | 0（只允许到期删除的一跳 facade） |
+| 不变量                                                               | 终局                                            |
+| -------------------------------------------------------------------- | ----------------------------------------------- |
+| 后端 / 全仓值级 SCC                                                  | 0 / 0                                           |
+| `KNOWN_VIOLATIONS`                                                   | 0                                               |
+| route→DB、transport→DB                                               | 0                                               |
+| context 级值依赖                                                     | 无环，且 ⊆ §3.1 DAG                             |
+| 跨 context 内部 import（infrastructure / application / composition） | 0                                               |
+| `platform/` → `modules/`                                             | 0                                               |
+| composition 内实现（除装配）                                         | 0                                               |
+| 业务层部署模式分支                                                   | 0                                               |
+| 装配                                                                 | 唯一模块工厂图；每模块每进程构造一次            |
+| 后台作业                                                             | 全部经唯一生命周期程序，均有 stop；无私设 timer |
+| 模块级可变单例（生产态，bootstrap 外）                               | 0                                               |
+| NodeRun 先后判据                                                     | 只用 `seq`；生产路径无 id 顺序比较              |
+| `node_runs INSERT` 站点                                              | 1                                               |
+| AtomicApply lifecycle / 资源写入栈                                   | 1 / 1                                           |
+| task ownership authority                                             | 1（持久 epoch / lease）                         |
+| 事务内外发事件                                                       | 0                                               |
+| services/ 下的业务实现                                               | 0（只允许到期删除的一跳 facade）                |
 
 ## 15. 现有能力到目标 owner 的映射
 
-| 现有能力 / 散点 | 目标唯一 owner | 后继 |
-| --- | --- | --- |
-| frontier / scope / drive、任务引擎编排 | task-execution 任务控制面与 scope 解释器 | S6 |
-| `nodeMechanics.ts` / `wrapperMechanics.ts` 中各 kind 与 fanout 主体 | task-execution 节点执行器与 wrapper 策略 | S6 |
-| `runAssembly`、隔离 / 合并、许可、铸造 | task-execution 执行机制库 | S6 |
-| workgroup 轮次引擎（现在 resource-catalog composition） | task-execution 任务控制面 | S6 |
-| 动态工作流（现在 services） | task-execution 任务控制面 | S6 |
-| NodeRun 新旧判据（ULID） | task-execution run identity（`seq`） | S1 |
-| 装配根、provider 专属装配、`StartOptions` 覆盖 | bootstrap 工厂图与 profile | S2 |
-| 后台作业的六套机制 | bootstrap 生命周期程序 + platform 机制 | S2 |
-| 任务生命周期写入序列（现在 platform/persistence/sqlite） | task-execution infrastructure | S2 / S5 |
-| 工作区 GC 策略（现在 platform） | source-control / task-execution | S5 |
-| human gate 组合（现在 services） | collaboration 装配 | S5 |
-| Intent 与 ResourcePackage 两套 apply、两套资源写入栈 | platform/atomic-apply + 各资源 participant | S7 |
-| `util/git` 及 git cache / submodule / version | source-control infrastructure | S8（RFC-377）叶子化；物理迁入归 W5 余项（plan §4.3） |
-| structuralDiff / codeIntel / changeNarrative | workspace-insight | W4 余项 |
-| capability template 写入与历史查询（code-capability） | development-automation | W4-E8 |
-| `ReconcilerPorts` 可选袋、`developmentDeliveryDeps` | development-automation required 端口 + integration provider adapter | W4-E8 |
-| Task Catalog 的 full Actor / JSON 字符串接口 | task-catalog typed query | W4-E10 |
-| 死代码与投机合同（review F8） | 删除 | S3 |
-| 全量账本与 provenance 协议 | 硬结构门 + 按需报告 | S4 |
-| HTTP 耦合错误、散点 log / audit | platform/errors、platform 观测 | W9-C |
-| 物理恢复 generation | platform/persistence + system-operations 编排 | W9-E |
+| 现有能力 / 散点                                                     | 目标唯一 owner                                                      | 后继                                                 |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
+| frontier / scope / drive、任务引擎编排                              | task-execution 任务控制面与 scope 解释器                            | S6                                                   |
+| `nodeMechanics.ts` / `wrapperMechanics.ts` 中各 kind 与 fanout 主体 | task-execution 节点执行器与 wrapper 策略                            | S6                                                   |
+| `runAssembly`、隔离 / 合并、许可、铸造                              | task-execution 执行机制库                                           | S6                                                   |
+| workgroup 轮次引擎（现在 resource-catalog composition）             | task-execution 任务控制面                                           | S6                                                   |
+| 动态工作流（现在 services）                                         | task-execution 任务控制面                                           | S6                                                   |
+| NodeRun 新旧判据（ULID）                                            | task-execution run identity（`seq`）                                | S1                                                   |
+| 装配根、provider 专属装配、`StartOptions` 覆盖                      | bootstrap 工厂图与 profile                                          | S2                                                   |
+| 后台作业的六套机制                                                  | bootstrap 生命周期程序 + platform 机制                              | S2                                                   |
+| 任务生命周期写入序列（现在 platform/persistence/sqlite）            | task-execution infrastructure                                       | S2 / S5                                              |
+| 工作区 GC 策略（现在 platform）                                     | source-control / task-execution                                     | S5                                                   |
+| human gate 组合（现在 services）                                    | collaboration 装配                                                  | S5                                                   |
+| Intent 与 ResourcePackage 两套 apply、两套资源写入栈                | platform/atomic-apply + 各资源 participant                          | S7                                                   |
+| `util/git` 及 git cache / submodule / version                       | source-control infrastructure                                       | S8（RFC-377）叶子化；物理迁入归 W5 余项（plan §4.3） |
+| structuralDiff / codeIntel / changeNarrative                        | workspace-insight                                                   | W4 余项                                              |
+| capability template 写入与历史查询（code-capability）               | development-automation                                              | W4-E8                                                |
+| `ReconcilerPorts` 可选袋、`developmentDeliveryDeps`                 | development-automation required 端口 + integration provider adapter | W4-E8                                                |
+| Task Catalog 的 full Actor / JSON 字符串接口                        | task-catalog typed query                                            | W4-E10                                               |
+| 死代码与投机合同（review F8）                                       | 删除                                                                | S3                                                   |
+| 全量账本与 provenance 协议                                          | 硬结构门 + 按需报告                                                 | S4                                                   |
+| HTTP 耦合错误、散点 log / audit                                     | platform/errors、platform 观测                                      | W9-C                                                 |
+| 物理恢复 generation                                                 | platform/persistence + system-operations 编排                       | W9-E                                                 |
 
 新增能力如果无法落到某一行的 owner，必须先补设计；不得暂存到 `services/` 或 `composition/`。
 
@@ -636,15 +640,15 @@ RFC-370 v2 的原则（同一业务路径、端口按语义、崩溃即退出的
 
 ## 附录 A. 旧版章节去向
 
-| 旧版位置 | 去向 |
-| --- | --- |
-| §2 的 current module 表、历次 SHA / digest | 历史证据，见归档；当前值见 status.md |
-| §3.3 public-surface 账本 schema、§3.5 exact 接口 | 归档；接口事实源见本文 §3.5 |
-| §4 的类型桩（OperationContext、Command / Query / Tx / Error） | 原则保留于本文 §4，类型以代码为准 |
-| §5.1～§5.5 四级执行结构与 ownership 伪代码 | 本文 §5（如实重写）；伪代码归档 |
-| §6 NodeRun 身份 | 本文 §6（新增 W7-A） |
-| §7～§14 各领域细则 | 本文 §7、§8 要点；细则归档 |
-| §15 Platform 合同 | 本文 §10、§12 |
-| §16 RFC-287/288/289 承接 | proposal §11 |
-| §17 不变量表、§18 owner 映射 | 本文 §14、§15 |
-| §19 兼容与回滚 | 本文 §16 |
+| 旧版位置                                                      | 去向                                               |
+| ------------------------------------------------------------- | -------------------------------------------------- |
+| §2 的 current module 表、历次 SHA / digest                    | 历史证据，见归档；当前值见 dated review 或按需报告 |
+| §3.3 public-surface 账本 schema、§3.5 exact 接口              | 归档；接口事实源见本文 §3.5                        |
+| §4 的类型桩（OperationContext、Command / Query / Tx / Error） | 原则保留于本文 §4，类型以代码为准                  |
+| §5.1～§5.5 四级执行结构与 ownership 伪代码                    | 本文 §5（如实重写）；伪代码归档                    |
+| §6 NodeRun 身份                                               | 本文 §6（新增 W7-A）                               |
+| §7～§14 各领域细则                                            | 本文 §7、§8 要点；细则归档                         |
+| §15 Platform 合同                                             | 本文 §10、§12                                      |
+| §16 RFC-287/288/289 承接                                      | proposal §11                                       |
+| §17 不变量表、§18 owner 映射                                  | 本文 §14、§15                                      |
+| §19 兼容与回滚                                                | 本文 §16                                           |

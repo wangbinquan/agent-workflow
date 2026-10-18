@@ -5,8 +5,15 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import ts from 'typescript'
-import { backendUnits, type SourceUnit } from './architecture/census'
-import { buildCanonicalArtifacts, validateCanonicalArtifacts } from './architecture/rfc294Canonical'
+import { backendUnits, packageSrcUnits, type SourceUnit } from './architecture/census'
+import {
+  buildTaskExecutionAuthorityEntries,
+  buildTaskExecutionControlGateways,
+  buildTaskOwnedEffectEntries,
+  buildCodeHostRecoveryBindingManifest,
+  validateCodeHostRecoveryBindingManifest,
+  validateTaskExecutionContracts,
+} from './architecture/rfc328TaskExecutionLedger'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -604,19 +611,122 @@ describe('RFC-328 architecture guards', () => {
       [...CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT].sort(),
     )
     expect(rfc328GuardViolations(corpus)).toEqual([])
-    const generated = buildCanonicalArtifacts(REPO_ROOT)
-    expect(validateCanonicalArtifacts(generated)).toEqual([])
-    const authority = generated.mutationEntrypoints.taskExecutionAuthorityLedger as Record<
-      string,
-      unknown
-    >
-    const effects = generated.transactionExternalEffects.taskExecutionEffectLedger as Record<
-      string,
-      unknown
-    >
-    expect((authority.entries as unknown[]).length).toBeGreaterThan(30)
-    expect((effects.entries as unknown[]).length).toBeGreaterThan(8)
   }, 60_000)
+
+  const contracts = {
+    authority: buildTaskExecutionAuthorityEntries(corpus),
+    gateways: buildTaskExecutionControlGateways(corpus),
+    effects: buildTaskOwnedEffectEntries(corpus),
+  }
+  const bindingUnits = [...corpus, ...packageSrcUnits(REPO_ROOT, 'shared')]
+  const bindings = buildCodeHostRecoveryBindingManifest(bindingUnits)
+
+  test('direct authority and effect closure retains four authorities, six controls and all binding fields', () => {
+    expect(contracts.authority.entries.length).toBeGreaterThan(30)
+    expect(contracts.effects.entries.length).toBeGreaterThan(8)
+    expect(contracts.authority.unknown).toEqual([])
+    expect(contracts.gateways.unknown).toEqual([])
+    expect(contracts.effects.unknown).toEqual([])
+    expect(validateTaskExecutionContracts(contracts)).toEqual([])
+    expect(
+      [...new Set(contracts.authority.entries.map((entry) => entry.authorityKind))].sort(),
+    ).toEqual(['control-revision', 'recovery-proof', 'terminal-maintenance', 'worker-epoch'])
+    expect([...new Set(contracts.gateways.entries.map((entry) => entry.subtype))].sort()).toEqual([
+      'continuation-admission',
+      'daemon-shutdown',
+      'gate-control',
+      'membership-control',
+      'recovery-candidate-revoke',
+      'terminal-control',
+    ])
+    const sourceFences = contracts.authority.entries.filter(
+      (entry) =>
+        entry.file ===
+        'packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts',
+    )
+    expect(sourceFences).toHaveLength(1)
+    expect(sourceFences[0]).toMatchObject({
+      consumer: 'writeFence',
+      dataClass: 'tasks',
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'task-lifecycle-revision-and-provider-transaction-cas',
+    })
+    expect(bindings.length).toBeGreaterThan(50)
+    expect(
+      bindings
+        .filter((entry) => entry.action === 'mr.approve')
+        .every((entry) => entry.recoveryClass === 'R-ACTOR'),
+    ).toBe(true)
+    expect(validateCodeHostRecoveryBindingManifest(bindings, bindingUnits)).toEqual([])
+  })
+
+  test('direct closure mutations reject missing fields, controls and code-host bindings', () => {
+    for (const [group, fields] of [
+      [
+        'authority',
+        [
+          'consumer',
+          'dataClass',
+          'authorityKind',
+          'revisionPredicate',
+          'requiredBrandedProof',
+          'allowedTables',
+        ],
+      ],
+      ['gateways', ['allowedTables', 'allowedTransitions']],
+      [
+        'effects',
+        [
+          'effectKind',
+          'operationFamily',
+          'generationPolicy',
+          'journaledBy',
+          'attemptPolicy',
+          'resourceKeySetResolver',
+          'recoveryClass',
+          'responseClassifier',
+          'transportRetryPolicy',
+          'recoveryProbeOrActorReplay',
+          'auditRetention',
+        ],
+      ],
+    ] as const) {
+      for (const field of fields) {
+        const fixture = structuredClone(contracts)
+        const entry = fixture[group].entries[0] as unknown as Record<string, unknown>
+        delete entry[field]
+        expect(
+          validateTaskExecutionContracts(fixture).some((error) => error.includes(`lacks ${field}`)),
+        ).toBe(true)
+      }
+    }
+    const missingSubtype = structuredClone(contracts)
+    missingSubtype.gateways.entries = missingSubtype.gateways.entries.filter(
+      (entry) => entry.subtype !== 'daemon-shutdown',
+    )
+    expect(validateTaskExecutionContracts(missingSubtype)).toContain(
+      'task-execution control subtype is empty: daemon-shutdown',
+    )
+    expect(
+      validateTaskExecutionContracts({
+        authority: { entries: [], unknown: [] },
+        gateways: { entries: [], unknown: ['fixture'] },
+        effects: { entries: [], unknown: [] },
+      }).length,
+    ).toBeGreaterThan(0)
+    const missingBinding = bindings.slice(1)
+    expect(validateCodeHostRecoveryBindingManifest(missingBinding, bindingUnits)).toContain(
+      `missing code-host recovery binding '${bindings[0]!.id}'`,
+    )
+    const drifted = bindings.map((entry) =>
+      entry.action === 'mr.approve' ? { ...entry, recoveryClass: 'R-READ' as const } : entry,
+    )
+    expect(validateCodeHostRecoveryBindingManifest(drifted, bindingUnits).length).toBeGreaterThan(0)
+    expect(
+      validateCodeHostRecoveryBindingManifest([...bindings, bindings[0]!], bindingUnits),
+    ).toContain('duplicate code-host recovery binding id')
+  })
 
   test('negative fixtures prove every RFC-328 source guard can bite', () => {
     const fixture = (path: string, sourceText: string): GuardUnit[] => [

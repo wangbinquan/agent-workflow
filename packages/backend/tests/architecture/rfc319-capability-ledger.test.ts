@@ -9,8 +9,8 @@
 //   ② 状态与字段互斥：covered 必须有可校验证据；gap 必须点名 gapSince；
 //      covered-unverified 必须留着散文证据（否则它凭什么算覆盖）。
 //   ③ 两个只降不升的数字：`gap`（还欠多少条防护）与 `covered-unverified`
-//      （还有多少条「覆盖」只是散文）。两者都进 `architecture/ledger-baselines.json`，
-//      由 RFC-317 的高水位守卫管。
+//      （还有多少条「覆盖」只是散文）。RFC-376 已撤销全局高水位计数钉；
+//      本文件继续执行主题合同与 LEGACY_UNVERIFIED_AT_START 上限。
 //
 // `covered-unverified` **是存量专用状态**。新能力只能是 covered（带可校验证据）或
 // gap（带 gapSince）。不设这条禁令的话，它会变成一个「宣称覆盖但不必证明」的永久后门，
@@ -161,7 +161,7 @@ describe('RFC-319 R3 —— 两个只降不升的数字', () => {
     expect(
       countByStatus(LEDGER, 'gap'),
       'gap 又长出来了。它可以涨——新审计发现新缺口是正常的——但涨之前请把这条断言' +
-        '连同 ledger-baselines 的 rfc319-capability-gaps 一起改，让「欠了新账」这件事' +
+        '在同一 diff 中说明新增缺口，让「欠了新账」这件事' +
         '在 diff 里看得见，而不是悄悄回到从前',
     ).toBe(0)
     expect(

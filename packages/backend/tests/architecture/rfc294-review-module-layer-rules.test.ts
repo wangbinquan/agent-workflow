@@ -17,28 +17,17 @@
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
-import {
-  backendUnits,
-  importEdges,
-  isModuleUnit,
-  layerOf,
-  sourceUnit,
-  type SourceUnit,
-} from './census'
+import { backendUnits, isModuleUnit, sourceUnit, type SourceUnit } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 
-export type ModuleLayerRule =
-  | 'domain-adapter-import'
-  | 'schema-table-import'
-  | 'infrastructure-import'
-
-export interface ModuleLayerViolation {
-  readonly rule: ModuleLayerRule
-  readonly file: string
-  readonly specifier: string
-  readonly edgeKind: 'type' | 'value'
-}
+import {
+  createGateCorpus,
+  moduleLayerViolations as detectModuleLayers,
+  exactAllowlist,
+  type ModuleLayerRule,
+  type ModuleLayerViolation,
+} from './rfc294Gates'
 
 interface ModuleLayerDebt {
   readonly rule: ModuleLayerRule
@@ -47,50 +36,30 @@ interface ModuleLayerDebt {
   readonly why: string
   readonly removeAfterWave: string
 }
-
-const DOMAIN_FORBIDDEN =
-  /^(?:@\/db(?:\/|$)|drizzle-orm(?:\/|$)|hono(?:\/|$)|node:fs(?:\/|$)|@\/ws(?:\/|$)|@\/routes(?:\/|$)|@\/server(?:\/|$))/
-const INFRASTRUCTURE_IMPORT =
-  /^(?:(?:\.\.\/)+|\.\/)infrastructure\/|^@\/modules\/[a-z0-9-]+\/infrastructure\//
-const FENCED_LAYERS = new Set(['domain', 'application', 'engine'])
-
 export function moduleLayerViolations(units: readonly SourceUnit[]): ModuleLayerViolation[] {
-  const seen = new Set<string>()
-  const out: ModuleLayerViolation[] = []
-  const push = (violation: ModuleLayerViolation): void => {
-    const key = `${violation.rule}|${violation.file}|${violation.specifier}`
-    if (seen.has(key)) return
-    seen.add(key)
-    out.push(violation)
-  }
-  for (const unit of units) {
-    const place = layerOf(unit)
-    if (place === null || !FENCED_LAYERS.has(place.layer)) continue
-    for (const edge of importEdges(unit)) {
-      const specifier = edge.specifier
-      if (place.layer === 'domain' && DOMAIN_FORBIDDEN.test(specifier)) {
-        push({ rule: 'domain-adapter-import', file: unit.path, specifier, edgeKind: edge.kind })
-      }
-      if (place.layer !== 'domain' && specifier === '@/db/schema') {
-        push({ rule: 'schema-table-import', file: unit.path, specifier, edgeKind: edge.kind })
-      }
-      if (INFRASTRUCTURE_IMPORT.test(specifier)) {
-        push({ rule: 'infrastructure-import', file: unit.path, specifier, edgeKind: edge.kind })
-      }
-    }
-  }
-  return out.sort((left, right) =>
-    `${left.rule}|${left.file}|${left.specifier}`.localeCompare(
-      `${right.rule}|${right.file}|${right.specifier}`,
-    ),
-  )
+  return detectModuleLayers(createGateCorpus(units))
 }
 
 /**
- * 存量分层违规（committed HEAD `625017c08`，review 2026-08-30 采样）。
+ * 存量分层违规（RFC-376 阶段 B，committed HEAD `2a70c9328` 重算）。
  * 每条一个 `rule|file|specifier`；只降不升。
  */
-export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = []
+export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = [
+  {
+    rule: 'application-composition-import',
+    file: 'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
+    specifier: '@/modules/source-control/composition',
+    why: 'RFC-376 Phase B committed baseline; move cross-context assembly and inbound calls behind exact public contracts.',
+    removeAfterWave: 'RFC-294 S5/S6',
+  },
+  {
+    rule: 'inbound-context-internal-import',
+    file: 'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts',
+    specifier: '@/modules/task-execution/inbound/directTaskInitiator',
+    why: 'RFC-376 Phase B committed baseline; move cross-context assembly and inbound calls behind exact public contracts.',
+    removeAfterWave: 'RFC-294 S5/S6',
+  },
+]
 
 const UNITS = backendUnits(REPO_ROOT).filter(isModuleUnit)
 
@@ -118,7 +87,7 @@ describe('RFC-294 review §B2 —— 模块内分层规则（design §3 常驻�
 
   test('每条债务都点名清偿波次与理由', () => {
     const bad = MODULE_LAYER_RULE_DEBT.filter(
-      (entry) => !/^W\d/.test(entry.removeAfterWave) || entry.why.trim().length < 20,
+      (entry) => !/(?:W\d|RFC-\d)/.test(entry.removeAfterWave) || entry.why.trim().length < 20,
     ).map(key)
     expect(bad).toEqual([])
   })
@@ -175,5 +144,68 @@ describe('RFC-294 review §B2 —— 负 fixture：三条规则各自咬得动',
         ),
       ]),
     ).toEqual([])
+  })
+})
+
+// RFC-376 G7 extends the original domain/schema/infrastructure rules without changing their scope.
+describe('RFC-376 G7 added layer rules', () => {
+  const file = 'packages/backend/src/modules/probe/application/probe.ts'
+  test('application composition values fail, but required-port types are erased', () => {
+    expect(
+      moduleLayerViolations([
+        sourceUnit(file, "import { x } from '@/modules/other/composition'"),
+      ]).map(key),
+    ).toHaveLength(1)
+    expect(
+      moduleLayerViolations([
+        sourceUnit(file, "import type { X } from '@/modules/other/composition/required-ports'"),
+      ]),
+    ).toEqual([])
+    expect(
+      moduleLayerViolations([
+        sourceUnit(file, "import type { X } from '@/modules/other/composition/other'"),
+      ]),
+    ).toHaveLength(1)
+  })
+  test('inbound cannot reach DB or another context internals, but can reach public', () => {
+    const path = 'packages/backend/src/modules/probe/inbound/route.ts'
+    expect(
+      moduleLayerViolations([
+        sourceUnit(path, "import '@/db'; import '@/modules/other/inbound/handler'"),
+      ]).map((item) => item.rule),
+    ).toEqual(['inbound-context-internal-import', 'inbound-db-import'])
+    expect(
+      moduleLayerViolations([
+        sourceUnit(
+          path,
+          "import '@/modules/other/public/commands'; import '../application/handler'",
+        ),
+      ]),
+    ).toEqual([])
+  })
+  test('domain fs and process variants, including type/import/export/require syntax, fail', () => {
+    const path = 'packages/backend/src/modules/probe/domain/model.ts'
+    for (const code of [
+      "import 'fs'",
+      "import type { X } from 'node:fs/promises'",
+      "export * from 'child_process'",
+      "const x = require('node:child_process')",
+      "const x = import('fs/promises')",
+      "type X = import('node:fs').X",
+      "import x = require('fs')",
+    ])
+      expect(moduleLayerViolations([sourceUnit(path, code)])).toHaveLength(1)
+    expect(
+      moduleLayerViolations([sourceUnit(path, "import type { X } from '../ports/neutral'")]),
+    ).toEqual([])
+  })
+  test('allowlist mutations expose missing and stale layer exceptions', () => {
+    const observed = moduleLayerViolations([
+      sourceUnit(file, "import '@/modules/other/composition'"),
+    ]).map(key)
+    expect(exactAllowlist(observed, []).unregistered).toEqual(observed)
+    expect(exactAllowlist(observed, [...observed, 'fabricated/expired.ts']).stale).toEqual([
+      'fabricated/expired.ts',
+    ])
   })
 })

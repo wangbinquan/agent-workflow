@@ -2072,10 +2072,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/resource-catalog/infrastructure/catalogQuery.ts'),
       'utf8',
     )
-    const ledger = readFileSync(
-      resolve(import.meta.dir, 'architecture/rfc294-review-public-consumer-ledger.test.ts'),
-      'utf8',
-    )
     const maintenanceWorker = readFileSync(
       resolve(sourceRoot, 'platform/background/maintenanceWorker.ts'),
       'utf8',
@@ -2242,7 +2238,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(maintenanceWorker).toContain('resourcePackageMaintenance.command')
     expect(daemonStart).toContain('SkillCatalogBootParticipant')
     expect(daemonStart).toContain('skillCatalogBoot')
-    expect(ledger).not.toContain('public:resource-catalog:')
+    // RFC-376: zero-consumer public symbols are report-only; the C7 ledger is retired.
     expect(existsSync(resolve(sourceRoot, 'services/resourceAccessPolicy.ts'))).toBe(false)
     expect(moduleSources).not.toContain("from '@/services/resourceAcl'")
   })

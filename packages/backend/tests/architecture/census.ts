@@ -3,7 +3,7 @@
 // 为什么单独一个模块：R1（inbound）、R2（outbound）、R3（模块形状）三条规则的
 // 判据必须与「生成债务账本时的判据」逐字相同，否则账本与守卫会各算各的，
 // 出现「账本说 66、守卫扫出 71」这种无法归因的差。这里是唯一实现，守卫与
-// `scripts/architecture-census.ts` 都从这里取。
+// 按需 `scripts/architecture-report.ts` 都从这里取。
 //
 // 边的解析口径直接沿用 `rfc294-architecture-preflight.test.ts` 的 `importEdges`：
 // static import / `import type` / `export … from` / `import()` / `require()` 五种
@@ -1234,8 +1234,8 @@ export function assertsAbsence(unit: SourceUnit): boolean {
 // `new Map([...])`、`Record<string, …>`。它们各自都有精确相等或 stale 检测，但
 // **没有任何地方看得见账本整体在长**——每加一条只是 diff 里多两行，没有一个数字会变。
 //
-// 这里只做清点：从**源码文本**按符号名数出条目数。取文本而非 import，是因为高水位
-// 棘轮要拿 `git show HEAD~1:<file>` 的历史版本用同一把尺子量。
+// 这里只做清点：从**源码文本**按符号名数出条目数，不执行被扫描的模块。
+// RFC-376 后这些纯函数仍可供报告与主题守卫使用；不再读取 HEAD~1 做高水位比较。
 
 /**
  * 一个展开元素静态贡献多少条目。
@@ -1290,7 +1290,7 @@ function ledgerElementCount(node: ts.Node): number | null {
     const argument = node.arguments?.[0]
     if (argument !== undefined) return ledgerElementCount(argument)
     // RFC-317 T72 —— `new Set<string>()` 是**空账本**，条目数 0，不是「数不出来」。
-    // 之前一律返回 null，于是空账本无法进 ledger-baselines.json——而空恰恰是最该被
+    // 历史上它用于 ledger-baselines（RFC-376 已退役）；之前一律返回 null——而空恰恰是最该被
     // 钉住的状态：钉成 0 之后，任何人往里加第一条豁免都会红。实测仓内两处
     // （`rfc284-safejson-convergence` / `shared-no-any`）就卡在这上面。
     // 只在**确实没有参数**时算 0；`new Set(someVariable)` 仍然是 null（数不出来），

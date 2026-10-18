@@ -11,7 +11,7 @@
 // `databaseSessionFor` / `withTaskExecutionWrite` / `withTaskExecutionSerializable`），pair 合并会随之落地。
 //
 // 这条账本把「还剩多少」变成可计数、可防守的量：
-//   - **只降不升**（RFC-317 T17 的高水位机制，已在 `architecture/ledger-baselines.json` 注册）：
+//   - **文件内双向精确清单**（RFC-376 起不再登记全局计数钉）：
 //     新增一个同步调用点就红，逼你要么用中立原语，要么把新增写进账本并说明为什么；
 //   - **逐字相等**：收敛了也要红——把账本一起改小，让每一次减少都留下一次提交记录。
 // 计数方式与 `docs/dev-gotchas.md` 里那条一致：按 `dbTxSync(` 与 `withOwnedTaskTx(` 的调用点数，

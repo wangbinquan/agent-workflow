@@ -2,7 +2,7 @@
 
 > **当前入口（2026-10-16 刷新）**：本 RFC 按用户要求作为长期架构重构总纲维护，整体迁移仍为 In Progress。
 > 本次全面审视见 [review-2026-10-16](./review-2026-10-16.md)；下一批后继见 §3。刷新前的完整实施记录（N1～N25 执行队列、
-> 各波任务清单、历次 SHA 与 hosted 证据、账本重分桶记录）见 `archive-20261016-plan.md`。当前机器数据见 [status.md](./status.md)。
+> 各波任务清单、历次 SHA 与 hosted 证据、账本重分桶记录）见 `archive-20261016-plan.md`。当前指标见 dated review 或按需报告；命令见 [status.md](./status.md)。
 
 - 目标架构状态：Approved（D1～D8 沿用；D9 修订、D10～D13 新增，见 proposal §9）。本文刷新不授权任何未立项的后继。
 - 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；其余见 §1.1。
@@ -21,61 +21,61 @@
 
 ## 1. 当前基线与量化口径
 
-当前指标只在生成的 [status.md](./status.md) 维护（`bun run architecture:status` 从已提交 `architecture/*.json` 渲染）；
-带日期的 review 保存当次快照。截至本次刷新，已提交账本的投影停在 `96fbcd71b`，尚未包含 RFC-370 M1 的代码。
+当前指标以最近一次 dated review 或 `bun run architecture:report --source-ref <rev>` 的按需报告为准；
+[status.md](./status.md) 只保留生成说明。RFC-376 阶段 B 起不再提交全量库存或 provenance 投影。
 
 **architecture-significance filter**：只在 production context owner、public / required 合同、schema / 单写、装配根、
-跨 context 边或 worker / lifecycle owner 发生变化时重采架构基线。纯测试 / e2e / fixture、文档、视觉原语和边角功能只更新
-质量与行为证据，不触发全量重采，也不给任何波次计 credit。
+跨 context 边或 worker / lifecycle owner 发生变化时按需审视架构报告；普通提交不要求运行生成器。纯测试 / e2e / fixture、文档、
+视觉原语和边角功能只更新质量与行为证据，不给任何波次计 credit。
 
 **退出门的口径（D9 修订后）**：后继的退出门写成“某条结构规则成立”（例如“context 值级依赖无环”“`platform` 不 import
-`modules`”“每模块每进程构造一次”），而不是“某份账本的 exact id 计数降到某个数”。在治理后继 S4 落地前，现有账本与守卫
-继续运行；任何指标上升仍须说明原因，但不再以增长许可的方式常态化放行。
+`modules`”“每模块每进程构造一次”），而不是“某份账本的 exact id 计数降到某个数”。RFC-376 阶段 B 后由硬门与文件内精确清单执行；
+`counts.json` 允许 measured <= max，抬高 max 须同一提交写明原因，不设增长许可与下一笔退役。
 
 ### 1.1 逐波判定（2026-10-16）
 
-| 区域 | 判定 | 已落 / 剩余 |
-| --- | --- | --- |
-| P0-A～E | Done | RFC-342（memory scope move）、RFC-343（Intent apply 恢复）、RFC-333（人工门原子性）、RFC-328（持久 ownership）；RFC-287 Done、RFC-288/289 CLOSED |
-| W0-R | 治理基线 Done；**模型修订** | N1 账本与守卫已落；按 D9 改为硬结构门 + 按需报告，由 S4 实施 |
-| W1 | 行为基线保持 | RFC-287 的 assembly 与 G4～G7 行为；assembly 物理归位并入 S6 |
-| W2 | Done（协调器、三路引擎注册、14 类节点注册、WrapperRuntime） | 引擎与执行器层的实现仍在 composition，由 S6 让各层成为真实层 |
-| W3 | Done（RFC-341） | 无 |
-| W4 | A/C/E0/E2/E3/E4a/E4b/E6/E7 Done；E1/E9 部分；B/D/E5/E8/E10 开放 | 见 §4.1；B/D 的原计数已归零，退出门改为入站适配器不再深引 legacy 与模块内部 |
-| W5 | 部分纵切 | RFC-308/310/321/363 已落 source-control 纵切；`util/git` 环族与 7 条 KNOWN（RFC-370 `166e918bd` 改变环形状时已删一条）由 S8（[RFC-377](../RFC-377-util-git-leaf/proposal.md)）处理；repo / cache / worktree owner 余项见 §4.3 |
-| W6 | 开放 | S7：唯一 AtomicApply 引擎 + 唯一资源写入栈 + 持久收敛 claim |
-| W7 | 开放；**第一刀提为正确性修复** | S1：每任务单调 `seq`；身份轴余项见 §4.5；不再依赖 W5 |
-| W8 | 可选、延后 | 仅 W7 后新号 RFC 获批才进入 |
-| W9 | 开放；**A/B 提前** | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6 |
+| 区域    | 判定                                                            | 已落 / 剩余                                                                                                                                                                                                                   |
+| ------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0-A～E | Done                                                            | RFC-342（memory scope move）、RFC-343（Intent apply 恢复）、RFC-333（人工门原子性）、RFC-328（持久 ownership）；RFC-287 Done、RFC-288/289 CLOSED                                                                              |
+| W0-R    | 治理基线 Done；**模型修订**                                     | N1 账本与守卫已落；按 D9 改为硬结构门 + 按需报告，由 S4 实施                                                                                                                                                                  |
+| W1      | 行为基线保持                                                    | RFC-287 的 assembly 与 G4～G7 行为；assembly 物理归位并入 S6                                                                                                                                                                  |
+| W2      | Done（协调器、三路引擎注册、14 类节点注册、WrapperRuntime）     | 引擎与执行器层的实现仍在 composition，由 S6 让各层成为真实层                                                                                                                                                                  |
+| W3      | Done（RFC-341）                                                 | 无                                                                                                                                                                                                                            |
+| W4      | A/C/E0/E2/E3/E4a/E4b/E6/E7 Done；E1/E9 部分；B/D/E5/E8/E10 开放 | 见 §4.1；B/D 的原计数已归零，退出门改为入站适配器不再深引 legacy 与模块内部                                                                                                                                                   |
+| W5      | 部分纵切                                                        | RFC-308/310/321/363 已落 source-control 纵切；`util/git` 环族与 7 条 KNOWN（RFC-370 `166e918bd` 改变环形状时已删一条）由 S8（[RFC-377](../RFC-377-util-git-leaf/proposal.md)）处理；repo / cache / worktree owner 余项见 §4.3 |
+| W6      | 开放                                                            | S7：唯一 AtomicApply 引擎 + 唯一资源写入栈 + 持久收敛 claim                                                                                                                                                                   |
+| W7      | 开放；**第一刀提为正确性修复**                                  | S1：每任务单调 `seq`；身份轴余项见 §4.5；不再依赖 W5                                                                                                                                                                          |
+| W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                   |
+| W9      | 开放；**A/B 提前**                                              | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6                                                                                                                                                              |
 
 ### 1.2 已关闭后继索引
 
-| 波次 | 后继 | 范围 |
-| --- | --- | --- |
-| P0-D | [RFC-328](../RFC-328-durable-task-execution-ownership-fence/proposal.md) | 持久 owner / intent / effect / fence 与 exact-token registry |
-| W2-A | [RFC-331](../RFC-331-task-execution-topology-cut/proposal.md) | task↔scheduler 拓扑与 task SCC 族 |
-| W2-B | [RFC-332](../RFC-332-task-engine-decomposition/proposal.md) | 唯一协调器、仓库准备第 0 步、三路引擎 |
-| P0-C | [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md) | 人工门原子停驻与持久续跑 |
-| W2-C | [RFC-334](../RFC-334-node-executor-registry/proposal.md) | 14 类节点执行器注册表 |
-| W2-D | [RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) | WrapperRuntime 与 Loop / Git / Fanout 策略 |
-| W3 | [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) | 生命周期已提交事件与协作命令 |
-| P0-A | [RFC-342](../RFC-342-memory-scope-move-correctness/proposal.md) | memory scope move 事务正确性 |
-| P0-B | [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md) | Intent apply 恢复正确性 |
-| W4-A | [RFC-344](../RFC-344-operation-catalog-transport-cutover/proposal.md) | OperationCatalog 与 transport |
-| W4-C | [RFC-345](../RFC-345-resource-catalog-contract-cutover/proposal.md) | Resource Catalog 与 ResourcePackage 合同 |
-| W4-E7 | [RFC-346](../RFC-346-system-operations-adapter-cutover/proposal.md) | System Operations 管理编排 |
-| W4-E0 | [RFC-347](../RFC-347-identity-access-authority-presence-cutover/proposal.md) | identity-access authority / presence |
-| W4-E2 | [RFC-352](../RFC-352-memory-context-cutover/proposal.md) | memory context |
-| W4-E3 | [RFC-353](../RFC-353-knowledge-evolution-context-cutover/proposal.md) | knowledge-evolution context |
-| W4-E4a | [RFC-355](../RFC-355-intent-context-cutover/proposal.md) | intent context |
-| W4-E4b | [RFC-360](../RFC-360-runtime-management-context-cutover/proposal.md) | runtime-management |
-| W4-E9（EC provider） | [RFC-361](../RFC-361-execution-contract-provider-cutover/proposal.md) | Execution Contract provider |
-| W4-E1（合同准备） | [RFC-362](../RFC-362-task-source-control-launch-contracts/proposal.md) | Task / SC 启动合同 |
-| W4-E1 / W5（纵切） | [RFC-363](../RFC-363-task-source-control-launch-cutover/proposal.md) | Task / SC 启动与工作区生产切换 |
-| W4-E6 | [RFC-364](../RFC-364-mcp-runtime-diagnostics-cutover/proposal.md) | MCP runtime diagnostics |
-| W4-E9（Event target） | [RFC-365](../RFC-365-event-automation-target-providers/proposal.md) | Event target providers |
-| W4-E9（Reaction） | [RFC-368](../RFC-368-reaction-execution-cutover/proposal.md) | Reaction 执行切换 |
-| （W7 前置） | [RFC-369](../RFC-369-node-run-supersession-derived/proposal.md) | supersession 推导与唯一铸造的语义改善；不抵扣 W7 身份 |
+| 波次                  | 后继                                                                                | 范围                                                         |
+| --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| P0-D                  | [RFC-328](../RFC-328-durable-task-execution-ownership-fence/proposal.md)            | 持久 owner / intent / effect / fence 与 exact-token registry |
+| W2-A                  | [RFC-331](../RFC-331-task-execution-topology-cut/proposal.md)                       | task↔scheduler 拓扑与 task SCC 族                            |
+| W2-B                  | [RFC-332](../RFC-332-task-engine-decomposition/proposal.md)                         | 唯一协调器、仓库准备第 0 步、三路引擎                        |
+| P0-C                  | [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md)           | 人工门原子停驻与持久续跑                                     |
+| W2-C                  | [RFC-334](../RFC-334-node-executor-registry/proposal.md)                            | 14 类节点执行器注册表                                        |
+| W2-D                  | [RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md)                           | WrapperRuntime 与 Loop / Git / Fanout 策略                   |
+| W3                    | [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) | 生命周期已提交事件与协作命令                                 |
+| P0-A                  | [RFC-342](../RFC-342-memory-scope-move-correctness/proposal.md)                     | memory scope move 事务正确性                                 |
+| P0-B                  | [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md)                 | Intent apply 恢复正确性                                      |
+| W4-A                  | [RFC-344](../RFC-344-operation-catalog-transport-cutover/proposal.md)               | OperationCatalog 与 transport                                |
+| W4-C                  | [RFC-345](../RFC-345-resource-catalog-contract-cutover/proposal.md)                 | Resource Catalog 与 ResourcePackage 合同                     |
+| W4-E7                 | [RFC-346](../RFC-346-system-operations-adapter-cutover/proposal.md)                 | System Operations 管理编排                                   |
+| W4-E0                 | [RFC-347](../RFC-347-identity-access-authority-presence-cutover/proposal.md)        | identity-access authority / presence                         |
+| W4-E2                 | [RFC-352](../RFC-352-memory-context-cutover/proposal.md)                            | memory context                                               |
+| W4-E3                 | [RFC-353](../RFC-353-knowledge-evolution-context-cutover/proposal.md)               | knowledge-evolution context                                  |
+| W4-E4a                | [RFC-355](../RFC-355-intent-context-cutover/proposal.md)                            | intent context                                               |
+| W4-E4b                | [RFC-360](../RFC-360-runtime-management-context-cutover/proposal.md)                | runtime-management                                           |
+| W4-E9（EC provider）  | [RFC-361](../RFC-361-execution-contract-provider-cutover/proposal.md)               | Execution Contract provider                                  |
+| W4-E1（合同准备）     | [RFC-362](../RFC-362-task-source-control-launch-contracts/proposal.md)              | Task / SC 启动合同                                           |
+| W4-E1 / W5（纵切）    | [RFC-363](../RFC-363-task-source-control-launch-cutover/proposal.md)                | Task / SC 启动与工作区生产切换                               |
+| W4-E6                 | [RFC-364](../RFC-364-mcp-runtime-diagnostics-cutover/proposal.md)                   | MCP runtime diagnostics                                      |
+| W4-E9（Event target） | [RFC-365](../RFC-365-event-automation-target-providers/proposal.md)                 | Event target providers                                       |
+| W4-E9（Reaction）     | [RFC-368](../RFC-368-reaction-execution-cutover/proposal.md)                        | Reaction 执行切换                                            |
+| （W7 前置）           | [RFC-369](../RFC-369-node-run-supersession-derived/proposal.md)                     | supersession 推导与唯一铸造的语义改善；不抵扣 W7 身份        |
 
 各后继的 exact-SHA 与 hosted 证据以其自身三件套为准；本总纲的历史汇总见 `archive-20261016-plan.md` §1、§3.2。
 
@@ -149,15 +149,15 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 > 后继：[RFC-376](../RFC-376-architecture-hard-gates/proposal.md)（In Progress，2026-10-17 立项，分两阶段交付）。
 
 - **范围**：落 design §13.1 的硬结构门（新增 context 值级无环、`platform` 不 import `modules`、application 直接 effect、
-  composition 禁 drizzle / schema / `node:fs` / `child_process` / SQL、业务层零部署分支、生命周期清单一致；跨 context 规则以
-  2026-10-16 时的 209 条跨 context 内部引用与逆 DAG offered 边为只能减少的初始 allowlist）；把全量库存账本（owner、跨 context 边与 exception、public surface、mutation、
-  background / ambient、事务外效、facade、commons、status 投影）降为按需生成的报告或 CI artifact 并停止提交；撤销 provenance
+  composition 禁 drizzle / schema / `node:fs` / `child_process` 的值依赖与 SQL、业务层零部署分支；生命周期清单一致 G12 留给 S2a。
+  全部门的初始 allowlist 在 RFC-376 阶段 B 从当时已提交 HEAD 重算，以文件对或符号根计）；把全量库存账本（owner、跨 context 边与 exception、public surface、mutation、
+  background / ambient、事务外效、facade、commons、status 投影）降为本地按需报告并停止提交（不新增 CI workflow）；撤销 provenance
   两笔提交协议与 CI 的全历史 checkout 需求；删除增长许可（T17）与按行号编号的条目；修正模块级可变单例与后台作业的计数口径；
   引入 design §13.1 所述的小计数文件。
 - **退出门**：普通生产改动不再需要账本伴随提交；每条硬门都有会红的变异测试；报告可从任意已提交源码按需重新生成；
   `docs/dev-gotchas.md` 中只为旧账本机制存在的条目标为历史。
-- **前置 / 冲突**：改 `tests/architecture/*`、生成器与 CI；`rfc294Canonical.ts` 当前有并发在制改动，须串行。
-  design §3.1 DAG 与生成器常量同批维护。**能力影响**：无（只改测试与 CI）。
+- **前置 / 冲突**：阶段 B 以 RFC-375 / RFC-377 已提交为前置，按 RFC-376 design §9 避让他人 WIP；不再运行旧 census。
+  design §3.1 DAG 与 `rfc294Target.ts` 常量同批维护。**能力影响**：无（只改测试与 CI）。
 
 ### S5 恢复 context DAG 与 platform 单向依赖
 
@@ -285,16 +285,16 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 ## 6. 并发与冲突矩阵
 
-| 高冲突面 | 必须串行的后继 | 备注 |
-| --- | --- | --- |
-| 装配根（`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts`、`main.ts`、`bootstrap/`） | RFC-370 在制品 → S2 → S5 / S6 中涉及装配的部分 | RFC-370 当前大量改动这些文件 |
-| 迁移目录与 `db/schema.ts` | RFC-370 在制迁移 → S1 → W7 余项 | 迁移编号单 owner 分配 |
-| `nodeRunMint` / freshness / supersession | S1 ↔ S6 | 同一批只允许一个 |
-| `tests/architecture/*` 与生成器 | S4 与任何改账本的批次 | 生成器当前有并发在制改动 |
-| `scheduler` / `task` / `nodeMechanics` / `wrapperMechanics` | S6 内部逐 kind 串行 | — |
-| intent apply / 资源包 apply / 资源 participant | S7 独占 | — |
-| `util/git` / `services/git*` | S8 独占 | — |
-| `design/plan.md` 索引与 `STATE.md` | 每次收尾单 owner | 只追加本批条目，保留他人内容 |
+| 高冲突面                                                                                             | 必须串行的后继                                 | 备注                                           |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| 装配根（`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts`、`main.ts`、`bootstrap/`） | RFC-370 在制品 → S2 → S5 / S6 中涉及装配的部分 | RFC-370 当前大量改动这些文件                   |
+| 迁移目录与 `db/schema.ts`                                                                            | RFC-370 在制迁移 → S1 → W7 余项                | 迁移编号单 owner 分配                          |
+| `nodeRunMint` / freshness / supersession                                                             | S1 ↔ S6                                        | 同一批只允许一个                               |
+| `tests/architecture/*` 与报告脚本                                                                    | S4 与修改同一守卫的批次                        | 按路径避让；RFC-376 后无 census / 投影发布冲突 |
+| `scheduler` / `task` / `nodeMechanics` / `wrapperMechanics`                                          | S6 内部逐 kind 串行                            | —                                              |
+| intent apply / 资源包 apply / 资源 participant                                                       | S7 独占                                        | —                                              |
+| `util/git` / `services/git*`                                                                         | S8 独占                                        | —                                              |
+| `design/plan.md` 索引与 `STATE.md`                                                                   | 每次收尾单 owner                               | 只追加本批条目，保留他人内容                   |
 
 发现同文件并发在制改动时停止该切片，在当前会话说明，不 stash / reset / checkout 他人改动，也不向其他 session 发消息。
 
@@ -325,14 +325,14 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 ## 附录 A. 旧版章节去向
 
-| 旧版位置 | 去向 |
-| --- | --- |
-| §0.1 2026-10-14 对账 | 被本次刷新取代；原文见归档 |
-| §1 measurement seed、§1.1～§1.3 已落事实与 RFC-304～337 对账、账本治理批 | 本文 §1.1、§1.2；明细见归档 |
-| §3 P0 各节、§3.1 DAG、§3.2 N1～N25 执行队列 | 本文 §1.2 索引；明细见归档 |
-| §4 W0-R、§5 W1、§6 W2、§7 W3 | 已关闭；明细见归档 |
-| §8 W4 | 本文 §4.1 与 W4-A / W4-C 两节；明细见归档 |
-| §9 W5、§10 W6、§11 W7、§12 W8、§13 W9 | 本文 §3（S1～S8）与 §4 |
-| §14 量化里程碑、§15 冲突矩阵、§16 验证栈、§17 完成判据 | 本文 §1、§6、§7、§8 |
+| 旧版位置                                                                 | 去向                                      |
+| ------------------------------------------------------------------------ | ----------------------------------------- |
+| §0.1 2026-10-14 对账                                                     | 被本次刷新取代；原文见归档                |
+| §1 measurement seed、§1.1～§1.3 已落事实与 RFC-304～337 对账、账本治理批 | 本文 §1.1、§1.2；明细见归档               |
+| §3 P0 各节、§3.1 DAG、§3.2 N1～N25 执行队列                              | 本文 §1.2 索引；明细见归档                |
+| §4 W0-R、§5 W1、§6 W2、§7 W3                                             | 已关闭；明细见归档                        |
+| §8 W4                                                                    | 本文 §4.1 与 W4-A / W4-C 两节；明细见归档 |
+| §9 W5、§10 W6、§11 W7、§12 W8、§13 W9                                    | 本文 §3（S1～S8）与 §4                    |
+| §14 量化里程碑、§15 冲突矩阵、§16 验证栈、§17 完成判据                   | 本文 §1、§6、§7、§8                       |
 
 源码与测试注释中引用的旧章节号（如“plan.md §8 E8”“§13 W9-D”）均指归档版本。

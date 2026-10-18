@@ -101,9 +101,8 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
  * （形如 `modules/intent/infrastructure/intentApplyArtifactLifecycle.ts:82-99`）之后
  * 把对应行改成 `accepts`，不要删掉整条守卫——矩阵本身还要继续防守新增的不可移植格式。
  *
- * 它**不是** RFC-317 T72 意义上的债务账本，所以不带 `_DEBT` 后缀、也不进
- * `architecture/ledger-baselines.json`：账本记的是「还欠多少」，而这里记的是**全矩阵的实测
- * 裁决**——十二格里有六格是「本来就该 accepts」的正向断言，给它钉一个「只降不升的条数」没有
+ * 这是结果矩阵而非债务账本，不带 `_DEBT` 后缀。RFC-376 已撤销 T72 与全局计数钉；
+ * 本文件继续记录**全矩阵的实测裁决**——十二格里有六格是「本来就该 accepts」的正向断言，给它钉一个「只降不升的条数」没有
  * 意义（条数恒等于 `写出引擎 × kind × 读回引擎`）。真正的债是那六格 `rejects`，它们由上面那条
  * 逐字相等断言直接钉住，收敛时必须改这份文本，一样留痕。
  */
