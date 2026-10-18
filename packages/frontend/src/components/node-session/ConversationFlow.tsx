@@ -1,12 +1,13 @@
 // RFC-027: renders a SessionTree (one level) as a vertical list of
 // conversation blocks. Subagent calls embed a nested ConversationFlow
-// via SubagentBlock; nesting depth is unbounded and expressed purely
+// through SubagentBlock children; nesting depth is unbounded and expressed purely
 // through DOM structure (no `depth` prop) so the component tree
 // faithfully mirrors the data tree.
 
 import { useTranslation } from 'react-i18next'
 import type { SessionMessage, SessionTree } from '@agent-workflow/shared'
 import { SubagentBlock } from './SubagentBlock'
+import { RoleBadge } from './RoleBadge'
 import { toolStatusKind, toolStatusLabel } from './toolStatus'
 import { StatusChip } from '../StatusChip'
 
@@ -104,34 +105,12 @@ function MessageBlock({ message }: { message: SessionMessage }) {
         </article>
       )
     case 'subagent-call':
-      return <SubagentBlock call={message} />
+      return (
+        <SubagentBlock call={message}>
+          {message.child !== null ? <ConversationFlow tree={message.child} nested /> : null}
+        </SubagentBlock>
+      )
   }
-}
-
-export type RoleVariant = 'user' | 'assistant' | 'reasoning' | 'tool' | 'subagent'
-
-/**
- * Visually distinct role chip rendered in the top-left of every session
- * block. Colored pill + icon + uppercase label so users can scan the
- * conversation by role at a glance — RFC-027 §UX revision.
- */
-export function RoleBadge({
-  variant,
-  icon,
-  label,
-}: {
-  variant: RoleVariant
-  icon: string
-  label: string
-}) {
-  return (
-    <span className={`session-role-badge session-role-badge--${variant}`}>
-      <span className="session-role-badge__icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="session-role-badge__label">{label}</span>
-    </span>
-  )
 }
 
 function Ts({ ts }: { ts: number }) {

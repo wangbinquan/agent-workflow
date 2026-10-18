@@ -118,18 +118,13 @@ module.exports = {
     {
       // RFC-284 T2（审计 A8-4）— util 是叶子层，不得反向依赖上层。此前唯一
       // 防线是 no-circular（只有恰好成环才被看见）；非环形态的单向 util→上层
-      // 依赖会静默通过。util/git.ts 族的存量反向边（惰性 import）逐条入账。
-      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
-      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
-      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
-      // 眼里长得一模一样）。
+      // 依赖会静默通过。RFC-377 已清除 util/git.ts 的存量反向边，策略由调用方注入。
       name: 'no-util-to-upper',
       severity: 'error',
       comment:
         'util/ is the leaf layer. A util module importing services/routes/db/' +
-        'ws/mcp/auth/cli inverts the layering (util/git.ts grew 9 lazy imports ' +
-        'this way and started copying code to avoid more). Ledgered in ' +
-        'scripts/depcheck.ts.',
+        'ws/mcp/auth/cli inverts the layering. RFC-377 removed the legacy ' +
+        'util/git.ts reverse edges; callers now inject submodule policy.',
       from: { path: '^packages/backend/src/util/' },
       to: {
         path: '^packages/backend/src/(services|routes|db|ws|mcp|auth|cli)/',
@@ -162,18 +157,10 @@ module.exports = {
       // `import type` edges — those vanish at emit and cannot produce the
       // RFC-079 "undefined top-level const under unlucky init order" class.
       //
-      // NOTE (WP-0): the pre-existing cycles used to be excused here with a
-      // `from.pathNot` allowlist. That is too coarse — excluding a FILE hides
-      // every future cycle through it, and `scheduler.ts` / `task.ts` are
-      // exactly the files new cycles keep growing through. The known cycles
-      // now live in `scripts/depcheck.ts` → KNOWN_VIOLATIONS, matched
-      // EXACTLY by (rule, from, to) and each annotated with why / removeWhen.
-      // A known entry that stops firing fails the gate, so the list can only
-      // shrink.
-      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
-      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
-      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
-      // 眼里长得一模一样）。
+      // RFC-377 removed the remaining git, output-kind and conversation cycles.
+      // KNOWN_VIOLATIONS has no no-circular entries. Future exceptions require
+      // an exact (rule, from, to) entry with why / removeWhen / removeWave,
+      // a matching ledger marker here, and an explicit growth justification.
       name: 'no-circular',
       severity: 'error',
       from: {},

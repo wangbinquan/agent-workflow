@@ -10,6 +10,7 @@
 //     delta UNSTAGED (§5.3, Codex gate 五/六轮 deletion + blocking-dir handling)
 //   - residualConflictMarkers pure oracle; isoRefName distinct base/node refs (D26)
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -83,6 +84,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
 
     const iso = freshIsoPath()
     await createIsolatedWorktree({
+      resolveSubmoduleParams,
       repoPath: repo,
       isoPath: iso,
       baseSnapshotCommit: snap,
@@ -193,7 +195,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     await runGit(repo, ['reset', '--hard', taskBase])
     expect(existsSync(join(repo, 'del.txt'))).toBe(true) // back
 
-    await materializeTree(repo, { mergedTree, canonCurrentTree: canonTree })
+    await materializeTree(repo, { resolveSubmoduleParams, mergedTree, canonCurrentTree: canonTree })
     expect(readFileSync(join(repo, 'base.txt'), 'utf8')).toBe('merged\n')
     expect(existsSync(join(repo, 'new.txt'))).toBe(true)
     expect(existsSync(join(repo, 'del.txt'))).toBe(false) // deletion materialized
@@ -240,6 +242,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     writeFileSync(join(repo, 'conflict.txt'), markerBody)
 
     await materializeTree(repo, {
+      resolveSubmoduleParams,
       mergedTree,
       canonCurrentTree,
     })
@@ -272,7 +275,7 @@ describe('RFC-130 T1 iso worktree primitives', () => {
     await runGit(repo, ['reset', '--hard', taskBase]) // worktree back: foo is a file again
     expect(existsSync(join(repo, 'foo'))).toBe(true)
 
-    await materializeTree(repo, { mergedTree, canonCurrentTree: canonTree })
+    await materializeTree(repo, { resolveSubmoduleParams, mergedTree, canonCurrentTree: canonTree })
     expect(readFileSync(join(repo, 'foo', 'bar'), 'utf8')).toBe('now a dir\n')
     rmSync(repo, { recursive: true, force: true })
   })

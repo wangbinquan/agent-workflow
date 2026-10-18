@@ -38,14 +38,11 @@
 // 留下原来那句的坏处不是措辞不准，而是**它让人以为这里已经防住了**，于是没人
 // 会去建真正防住它的那道门——这个洞就是这么活了很久的。
 //
-// 每条 known 违规都要写明 why + removeWhen（测试强制非空），removeWhen 指向
-// `design/task-execution-architecture-audit-2026-08-03.md` 的工作包编号。
-//
-// RFC-294 review-2026-08-30 §B4：`removeWhen` 是给人读的散文，`removeWave` 才是账本口径——
-// 前者写「属独立切片（未编号）」时，`rfc294Canonical.ts` 只能把这条边兜进 `RFC-owner-cutover`，
-// 于是它在任何一个 wave 的退出门里都不出现。当前 8 条全部是 W5 的活（`design/RFC-294-…/plan.md §9`
-// 逐条列了：util/git 叶子化销 git 环族 5 + util→upper 2、shared outputKinds handler DI 销 1、
-// frontend 递归渲染改 children 销 1），因此逐条钉 `removeWave: 'W5'`。新增条目也必须带上它。
+// RFC-377 已清除 util/git、shared outputKinds 与 frontend node-session 的 7 条存量违规。
+// KNOWN_VIOLATIONS 自 RFC-377 起为空；新增条目必须写明 why / removeWhen / removeWave，
+// removeWhen 指向具体 RFC / 工作包，removeWave 指向明确的清偿波次。
+// 对应 cruiser 规则必须带 @ledger KNOWN_VIOLATIONS 标记，并提供显式增长理由；
+// 旧账本制度仍在时同步 ledger-baselines.json 的 allowGrowth，后继提交按规则退役。
 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -77,74 +74,12 @@ export type KnownViolation = {
   removeWave?: string
 }
 
-const B = 'packages/backend/src'
-const F = 'packages/frontend/src'
-const S = 'packages/shared/src'
-
 /**
- * 门禁复明（WP-0）当天的真实存量：19 条。其中 16 条是此前被 tsconfig 盲区
- * 藏住的，3 条原本写在 `.dependency-cruiser.cjs` 的 `from.pathNot` 里（那种
- * 按文件排除的写法会连带放过未来经过同一文件的新环，故迁到这里逐条精确匹配）。
+ * RFC-377 起存量清单为空；违规仍按 (rule, from, to) 精确匹配。
+ * 新增条目须带 why / removeWhen / removeWave、对应 cruiser 的
+ * @ledger KNOWN_VIOLATIONS 标记与显式增长理由；不再触发的条目必须删除。
  */
-export const KNOWN_VIOLATIONS: readonly KnownViolation[] = [
-  // ── util/git ↔ services/git*（分层倒置：util 应是叶子，架构审视 RC-4）──
-  {
-    rule: 'no-circular',
-    from: `${B}/services/gitRepoCache.ts`,
-    to: `${B}/util/git.ts`,
-    why: 'util/git.ts 用 11 处 `await import("@/services/git*")` 反向取子模块参数解析与 gitignore 块生成——util 层反过来依赖 services 层。惰性 import 使其没有 RFC-079 的「顶层 const 初始化顺序」风险，但方向是错的。',
-    removeWhen:
-      '把 resolveSubmoduleParams / syncSubmodules / buildGitignoreBlock 需要的纯数据下沉成参数（由 services 侧注入），util/git.ts 恢复成零 services 依赖的叶子。属独立切片（未编号）。',
-    removeWave: 'W5',
-  },
-  {
-    rule: 'no-circular',
-    from: `${B}/services/gitRepoCache.ts`,
-    to: `${B}/services/gitVersion.ts`,
-    why: '同一环族（gitVersion → util/git → gitRepoCache）。',
-    removeWhen: '与 util/git 叶子化同批消失。属独立切片（未编号）。',
-    removeWave: 'W5',
-  },
-  {
-    rule: 'no-circular',
-    from: `${B}/services/gitSubmodule.ts`,
-    to: `${B}/util/git.ts`,
-    why: '同一环族，从 gitSubmodule 侧被报告的那条。',
-    removeWhen: '与 util/git 叶子化同批消失。属独立切片（未编号）。',
-    removeWave: 'W5',
-  },
-
-  // ── 其余存量环 ────────────────────────────────────────────────────────
-  {
-    rule: 'no-circular',
-    from: `${S}/outputKinds/list.ts`,
-    to: `${S}/outputKinds/registry.ts`,
-    why: '递归 list-kind handler 查找。原本写在 .dependency-cruiser.cjs 的 pathNot 里。',
-    removeWhen: '把 handler 查找 DI 进 list-handler 工厂。属独立切片（未编号）。',
-    removeWave: 'W5',
-  },
-  {
-    rule: 'no-circular',
-    from: `${F}/components/node-session/ConversationFlow.tsx`,
-    to: `${F}/components/node-session/SubagentBlock.tsx`,
-    why: '子代理递归渲染。原本写在 .dependency-cruiser.cjs 的 pathNot 里。',
-    removeWhen: 'RFC-217 F 线（递归渲染改为 children 传递）。',
-    removeWave: 'W5',
-  },
-
-  // ── 分层违规 ──────────────────────────────────────────────────────────
-  // no-util-to-upper：util/git.ts 的三条反向值边（惰性 import 民俗）。与上面
-  // no-circular 的 git 环族同一批边、同一个 removeWhen——规则维度不同故各记一次。
-  ...(['gitRepoCache', 'gitSubmodule'] as const).map((svc) => ({
-    rule: 'no-util-to-upper' as const,
-    from: `${B}/util/git.ts`,
-    to: `${B}/services/${svc}.ts`,
-    why: `util 叶子层经 await import 反向依赖 services/${svc}（util/git.ts 内注释自认成环，还催生过「复制代码避 import」的二阶腐化）。`,
-    removeWhen:
-      '把 resolveSubmoduleParams/syncSubmodules/buildGitignoreBlock 以参数注入下沉（no-circular git 环族账目的同一方案）；RFC-284 后续批次或独立切片执行。',
-    removeWave: 'W5',
-  })),
-]
+export const KNOWN_VIOLATIONS: readonly KnownViolation[] = []
 
 // ---------------------------------------------------------------------------
 // 纯判定（可测，不碰 IO）

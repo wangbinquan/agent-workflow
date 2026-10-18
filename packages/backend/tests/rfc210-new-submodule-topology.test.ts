@@ -32,13 +32,8 @@ import {
   snapshotNodeIsoFinal,
   type CanonRepo,
 } from '@/services/nodeIsolation'
-import {
-  attachSubmoduleFromPool,
-  listEffectiveSubmodules,
-  subSlug,
-  worktreeRefName,
-} from '@/services/gitSubmodule'
-import { runGit, snapshotFullState } from '@/util/git'
+import { listEffectiveSubmodules, subSlug, worktreeRefName } from '@/services/gitSubmodule'
+import { attachSubmoduleFromPool, runGit, snapshotFullState } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-ns-home-'))
 const created: string[] = []

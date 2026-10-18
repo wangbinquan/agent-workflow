@@ -1,5 +1,6 @@
 // P-4-09: worktree GC scan.
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -42,6 +43,7 @@ async function seedDoneTask(
   const workflowId = ulid()
   const taskId = ulid()
   const wt = await createWorktree({
+    resolveSubmoduleParams,
     repoPath: h.repoPath,
     taskId,
     appHome: h.appHome,

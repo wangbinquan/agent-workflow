@@ -1,20 +1,21 @@
 // RFC-027: collapsible card representing a single `task` tool
-// invocation. Wraps a recursive ConversationFlow render of the child
-// session. Default state is collapsed so a parent with many subagents
+// invocation. Wraps caller-provided children for the nested session.
+// Default state is collapsed so a parent with many subagents
 // doesn't visually explode; the user opts in per card.
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SessionSubagentCall } from '@agent-workflow/shared'
-import { ConversationFlow, RoleBadge } from './ConversationFlow'
+import { RoleBadge } from './RoleBadge'
 import { toolStatusKind, toolStatusLabel } from './toolStatus'
 import { StatusChip } from '../StatusChip'
 
 interface Props {
   call: SessionSubagentCall
+  children?: ReactNode
 }
 
-export function SubagentBlock({ call }: Props) {
+export function SubagentBlock({ call, children }: Props) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 
@@ -51,7 +52,7 @@ export function SubagentBlock({ call }: Props) {
               <pre className="session-block__body">{call.childOutputFallback}</pre>
             </div>
           )}
-          {child !== null && <ConversationFlow tree={child} nested />}
+          {children}
         </div>
       )}
     </article>

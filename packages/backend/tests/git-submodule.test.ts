@@ -11,7 +11,7 @@ import {
   detectSubmodules,
   readDeclaredSubmodulePaths,
   submoduleNameForPath,
-} from '../src/services/gitSubmodule'
+} from '@/util/git'
 
 let tmp: string
 

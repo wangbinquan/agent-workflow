@@ -53,9 +53,9 @@ import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'
 import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services/gitSubmodule'
-// RFC-210 G9: config/index.ts only depends on shared + fs + errors + log, so this
-// adds no cycle. util/git.ts still never imports config directly — it reaches
-// resolveSubmoduleParams through the existing dynamic import.
+// RFC-210 G9 / RFC-377: settings and capability policy remain in this service.
+// util/git.ts imports neither config nor this module; callers inject
+// resolveSubmoduleParams into its submodule-aware entry points.
 import { loadConfig } from '@/config'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'

@@ -21,7 +21,11 @@ import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { materializingSpaces } from '@/services/gc'
-import { listAvailableRefs, resolveCachedRepo } from '@/services/gitRepoCache'
+import {
+  listAvailableRefs,
+  resolveCachedRepo,
+  resolveSubmoduleParams,
+} from '@/services/gitRepoCache'
 import {
   findTrackedPathUnderMounts,
   cleanupCreatedWorktree,
@@ -139,6 +143,7 @@ export async function materializeWorktree(opts: {
 }> {
   try {
     const wt = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: opts.repoPath,
       taskId: opts.taskId,
       ...(opts.baseBranch !== undefined ? { baseBranch: opts.baseBranch } : {}),

@@ -2193,6 +2193,18 @@
     {
       "assertsAbsence": true,
       "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/rfc377-util-git-leaf-lock.test.ts",
+      "id": "rfc377-util-git-leaf-lock",
+      "lines": 104,
+      "mechanism": "ast",
+      "minCorpusFiles": null,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
       "corpusScanner": true,
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "id": "runtime-parameter-ratchet",

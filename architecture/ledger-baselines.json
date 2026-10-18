@@ -27,11 +27,11 @@
       "why": "routes/ 下只读消费 canViewResource、无 owner 写门的文件。每一条都是「这个路由确实只读」的断言，新增一条等于新增一处需要人复核的写门缺口（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
     },
     {
-      "baseline": 7,
+      "baseline": 0,
       "file": "scripts/depcheck.ts",
       "id": "depcheck-known-violations",
       "symbol": "KNOWN_VIOLATIONS",
-      "why": "依赖分层门禁的存量违规表（2026-08-12 审计后的收口面）。条目数只许降——每条都是一处待拆的跨层依赖。注意两处 `...ARRAY.map()` 展开：静态清点已按源数组长度展开计数。RFC-331 W2-A 删除 task SCC family 的六条 exact 债，37 → 31。 RFC-359 W7 上涨 +9（31 → 17 的口径变更后基线为 17）：合掉 CollaborationRoute/RuntimeMechanics 两对后新出现的一族环，闭合点是 `nodeRunLifecycleTransition.ts` → `@/services/lifecycle`（三处 legacy 站点从同步 `setNodeRunStatus` 切到中立 `setNodeRunStatusTx` 所致）。已改成经 `@/services/taskExecutionParticipants` 的 exact public 合同取用（RFC-294 方向），但 re-export 只挪边不消环；根治是把那两个中立异步孪生下沉到 `platform/persistence/`，已记为 W8，九条各自的 why + removeWhen 都指向该工作包。"
+      "why": "RFC-377 完成 util/git 叶子化、shared list handler 注入和 frontend 递归 children 注入，删除 5 条 no-circular 与 2 条 no-util-to-upper 存量项，基线由 7 降为 0。新增债务必须带 why / removeWhen / removeWave、对应 cruiser 标记与显式增长理由。"
     },
     {
       "baseline": 1,

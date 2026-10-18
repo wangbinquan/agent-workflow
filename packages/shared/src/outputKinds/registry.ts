@@ -148,14 +148,14 @@ export interface ParametricOutputKindHandler {
 import stringHandler from './stringParametric'
 import markdownHandler from './markdownParametric'
 import pathHandler from './path'
-import listHandler from './list'
+import { createListHandler } from './list'
 import signalHandler from './signal'
 
 export const PARAMETRIC_HANDLERS: readonly ParametricOutputKindHandler[] = Object.freeze([
   stringHandler,
   markdownHandler,
   pathHandler,
-  listHandler,
+  createListHandler({ getHandlerForParsedKind, splitPortItems, joinPortItems }),
   signalHandler,
 ])
 

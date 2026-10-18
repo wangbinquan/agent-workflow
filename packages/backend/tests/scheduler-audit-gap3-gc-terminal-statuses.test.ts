@@ -27,6 +27,7 @@
 // worktree"的另一半由 setTaskStatus 的 revival 门保护（pruned→410 / pruning→409 /
 // 目录缺失→补墓碑+410，services/lifecycle.ts），专项锁见 rfc165-workspace-gc.test.ts。
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -135,7 +136,12 @@ describeEachProvider(
       const seeded: Array<{ taskId: string; worktreePath: string }> = []
       for (const status of ['interrupted', 'failed'] as const) {
         const taskId = ulid()
-        const wt = await createWorktree({ repoPath: h.repoPath, taskId, appHome: h.appHome })
+        const wt = await createWorktree({
+          resolveSubmoduleParams,
+          repoPath: h.repoPath,
+          taskId,
+          appHome: h.appHome,
+        })
         const workflowId = ulid()
         await h.db.insert(workflows).values({
           id: workflowId,

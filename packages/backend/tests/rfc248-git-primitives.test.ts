@@ -2,6 +2,7 @@
 // was deleted: platform exclusions now live in the RFC-308 profile test and
 // never edit business .gitignore.
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -65,7 +66,13 @@ describe('applySparseSubdir（D17）', () => {
       'README.md': 'root',
     })
     const wt = join(tmp, 'wt')
-    await createWorktree({ repoPath: repo, taskId: ulid(), appHome: tmp, overrideWorktreePath: wt })
+    await createWorktree({
+      resolveSubmoduleParams,
+      repoPath: repo,
+      taskId: ulid(),
+      appHome: tmp,
+      overrideWorktreePath: wt,
+    })
     await applySparseSubdir(wt, 'guides')
     expect(existsSync(join(wt, 'guides/a.md'))).toBe(true)
     expect(existsSync(join(wt, 'api'))).toBe(false)
@@ -80,6 +87,7 @@ describe('branchName 覆盖（D14）', () => {
     const wt1 = join(tmp, 'wt1')
     const wt2 = join(tmp, 'wt2')
     await createWorktree({
+      resolveSubmoduleParams,
       repoPath: repo,
       taskId,
       appHome: tmp,
@@ -87,6 +95,7 @@ describe('branchName 覆盖（D14）', () => {
       branchName: `agent-workflow/${taskId}`,
     })
     await createWorktree({
+      resolveSubmoduleParams,
       repoPath: repo,
       taskId,
       appHome: tmp,
@@ -111,6 +120,7 @@ describe('findTrackedPathUnderMounts（设计门二轮 H8）', () => {
 
     const wt = join(tmp, 'sparse-wt')
     await createWorktree({
+      resolveSubmoduleParams,
       repoPath: repo,
       taskId: ulid(),
       appHome: tmp,

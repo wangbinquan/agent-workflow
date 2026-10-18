@@ -5,6 +5,7 @@
 // submodule working directories must be initialized separately. Without this,
 // agents running inside the worktree see empty submodule directories.
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -91,6 +92,7 @@ describe.skipIf(!RUN_GIT_NETWORK)('createWorktree RFC-034 submodule init', () =>
 
   test('worktree on parent w/ .gitmodules populates submodule dir (mode=auto)', async () => {
     const wt = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: parentRepo,
       taskId: '01TASKAUTO',
       appHome,
@@ -104,6 +106,7 @@ describe.skipIf(!RUN_GIT_NETWORK)('createWorktree RFC-034 submodule init', () =>
 
   test('mode=never skips init even with .gitmodules', async () => {
     const wt = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: parentRepo,
       taskId: '01TASKNEVER',
       appHome,
@@ -120,6 +123,7 @@ describe.skipIf(!RUN_GIT_NETWORK)('createWorktree RFC-034 submodule init', () =>
     // Use the child repo (no submodules of its own).
     const childWorking = join(root, 'child-src')
     const wt = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: childWorking,
       taskId: '01TASKNOMOD',
       appHome,

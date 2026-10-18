@@ -8,7 +8,7 @@
 //  - SignalHandler swallows non-empty content (ok: true, body: '').
 //  - subReason short-codes are unique within the registry.
 
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { parseKind } from '../src/kindParser'
 import {
   PARAMETRIC_HANDLERS,
@@ -16,6 +16,7 @@ import {
   tryHandlerForParsedKind,
 } from '../src/outputKinds/registry'
 import type { ValidateIO } from '../src/outputKinds/types'
+import { createListHandler } from '../src/outputKinds/list'
 
 // Minimal in-memory ValidateIO for handler validate tests.
 function makeIO(fs: Record<string, string>): ValidateIO {
@@ -50,6 +51,108 @@ describe('PARAMETRIC_HANDLERS registry', () => {
         claimedBy.set(sub, h.displayName)
       }
     }
+  })
+})
+
+describe('RFC-377 list handler registry injection', () => {
+  test('delegates splitting, every item validation and joining to the injected registry', () => {
+    const kind = parseKind('list<string>')
+    const itemKind = parseKind('string')
+    const itemHandler = getHandlerForParsedKind(itemKind)
+    const validated: string[] = []
+    const registry = {
+      getHandlerForParsedKind: mock(() => ({
+        ...itemHandler,
+        *validationPolicy(...args: Parameters<typeof itemHandler.validationPolicy>) {
+          validated.push(args[0])
+          return yield* itemHandler.validationPolicy(...args)
+        },
+      })),
+      splitPortItems: mock(() => ['first', 'second']),
+      joinPortItems: mock(() => 'joined:first|second'),
+    }
+    const handler = createListHandler(registry)
+    expect(registry.getHandlerForParsedKind).not.toHaveBeenCalled()
+    expect(registry.splitPortItems).not.toHaveBeenCalled()
+    expect(registry.joinPortItems).not.toHaveBeenCalled()
+    const result = handler.validate(
+      'injected wire',
+      { port: 'p', kind, worktreePath: '/tmp/wt' },
+      makeIO({}),
+    )
+    expect(registry.splitPortItems).toHaveBeenCalledWith(kind, 'injected wire')
+    expect(registry.getHandlerForParsedKind).toHaveBeenCalledWith(itemKind)
+    expect(validated).toEqual(['first', 'second'])
+    expect(registry.joinPortItems).toHaveBeenCalledWith(kind, ['first', 'second'])
+    expect(result).toEqual({
+      ok: true,
+      body: 'joined:first|second',
+      items: [{ body: 'first' }, { body: 'second' }],
+    })
+  })
+
+  test('empty injected items need no item lookup or join', () => {
+    const registry = {
+      getHandlerForParsedKind: mock(getHandlerForParsedKind),
+      splitPortItems: mock(() => []),
+      joinPortItems: mock(() => 'unused'),
+    }
+    const result = createListHandler(registry).validate(
+      'empty wire',
+      { port: 'p', kind: parseKind('list<string>'), worktreePath: '/tmp/wt' },
+      makeIO({}),
+    )
+    expect(result).toEqual({ ok: true, body: '' })
+    expect(registry.getHandlerForParsedKind).not.toHaveBeenCalled()
+    expect(registry.joinPortItems).not.toHaveBeenCalled()
+  })
+
+  test('item failures aggregate without joining invalid content', () => {
+    const registry = {
+      getHandlerForParsedKind: mock(getHandlerForParsedKind),
+      splitPortItems: mock(() => ['wrong.txt', 'missing.md']),
+      joinPortItems: mock(() => 'unused'),
+    }
+    const result = createListHandler(registry).validate(
+      'invalid wire',
+      { port: 'p', kind: parseKind('list<path<md>>'), worktreePath: '/tmp/wt' },
+      makeIO({}),
+    )
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected item validation failure')
+    expect(result.subReason).toBe('list-item-validate-failed')
+    expect(result.detail).toContain('[0]')
+    expect(result.detail).toContain('[1]')
+    expect(registry.joinPortItems).not.toHaveBeenCalled()
+  })
+
+  test('non-list kinds fail before consulting the injected registry', () => {
+    const registry = {
+      getHandlerForParsedKind: mock(getHandlerForParsedKind),
+      splitPortItems: mock(() => ['unused']),
+      joinPortItems: mock(() => 'unused'),
+    }
+    expect(
+      createListHandler(registry).validate(
+        'value',
+        { port: 'p', kind: parseKind('string'), worktreePath: '/tmp/wt' },
+        makeIO({}),
+      ),
+    ).toMatchObject({ ok: false, subReason: 'list-item-validate-failed' })
+    expect(registry.splitPortItems).not.toHaveBeenCalled()
+    expect(registry.getHandlerForParsedKind).not.toHaveBeenCalled()
+    expect(registry.joinPortItems).not.toHaveBeenCalled()
+  })
+
+  test('registry keeps the list factory result at the original dispatch position', () => {
+    expect(PARAMETRIC_HANDLERS[3]).toBe(getHandlerForParsedKind(parseKind('list<string>')))
+    expect(PARAMETRIC_HANDLERS.map((handler) => handler.displayName)).toEqual([
+      'string',
+      'markdown',
+      'path',
+      'list',
+      'signal',
+    ])
   })
 })
 

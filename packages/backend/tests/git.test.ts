@@ -1,6 +1,7 @@
 // Tests for the git util (P-1-12 helpers + parsers shared with P-1-10).
 // Builds a real fixture repo per test via `git init` + a few commits/branches.
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -136,6 +137,7 @@ describe('repoSlug', () => {
 describe('worktree create + remove', () => {
   test('createWorktree places under ~/.agent-workflow/worktrees/{slug}/{taskId}', async () => {
     const result = await createWorktree({
+      resolveSubmoduleParams,
       repoPath,
       taskId: 'T-001',
       appHome,
@@ -157,6 +159,7 @@ describe('worktree create + remove', () => {
 
   test('createWorktree respects baseBranch', async () => {
     const result = await createWorktree({
+      resolveSubmoduleParams,
       repoPath,
       taskId: 'T-002',
       baseBranch: 'feature/x',
@@ -173,7 +176,7 @@ describe('worktree create + remove', () => {
     const notRepo = mkdtempSync(join(baseTmp, 'notrepo-'))
     try {
       await expect(
-        createWorktree({ repoPath: notRepo, taskId: 'T', appHome }),
+        createWorktree({ resolveSubmoduleParams, repoPath: notRepo, taskId: 'T', appHome }),
       ).rejects.toBeInstanceOf(ValidationError)
     } finally {
       rmSync(notRepo, { recursive: true, force: true })
@@ -181,15 +184,15 @@ describe('worktree create + remove', () => {
   })
 
   test('removeWorktree cleans up the directory', async () => {
-    const w = await createWorktree({ repoPath, taskId: 'T-003', appHome })
+    const w = await createWorktree({ resolveSubmoduleParams, repoPath, taskId: 'T-003', appHome })
     expect(existsSync(w.worktreePath)).toBe(true)
     await removeWorktree({ repoPath, worktreePath: w.worktreePath })
     expect(existsSync(w.worktreePath)).toBe(false)
   })
 
   test('two concurrent tasks on same repo get independent worktrees', async () => {
-    const a = await createWorktree({ repoPath, taskId: 'T-A', appHome })
-    const b = await createWorktree({ repoPath, taskId: 'T-B', appHome })
+    const a = await createWorktree({ resolveSubmoduleParams, repoPath, taskId: 'T-A', appHome })
+    const b = await createWorktree({ resolveSubmoduleParams, repoPath, taskId: 'T-B', appHome })
     try {
       expect(a.worktreePath).not.toBe(b.worktreePath)
       // Branches don't collide

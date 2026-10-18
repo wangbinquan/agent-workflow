@@ -12,6 +12,7 @@
 //   - reuse a branch that exists only on the remote → fetch + check out
 //   - invalid branch name → working-branch-invalid
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -86,6 +87,7 @@ describe('createWorktree RFC-075 working branch', () => {
 
   test('no workingBranch → legacy agent-workflow/{taskId} branch', async () => {
     const r = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: f.source,
       taskId: 'task-legacy',
       baseBranch: 'main',
@@ -98,6 +100,7 @@ describe('createWorktree RFC-075 working branch', () => {
 
   test('new working branch → created off base', async () => {
     const r = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: f.source,
       taskId: 'task-new',
       baseBranch: 'main',
@@ -112,6 +115,7 @@ describe('createWorktree RFC-075 working branch', () => {
 
   test('branch ref read failure is reported as incomplete cleanup, never as missing', async () => {
     const r = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: f.source,
       taskId: 'task-ref-read-failure',
       baseBranch: 'main',
@@ -151,6 +155,7 @@ describe('createWorktree RFC-075 working branch', () => {
     await runGit(f.source, ['commit', '-q', '-m', 'advance base'])
 
     const r = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: f.source,
       taskId: 'task-ff',
       baseBranch: 'main',
@@ -175,6 +180,7 @@ describe('createWorktree RFC-075 working branch', () => {
     await runGit(f.source, ['commit', '-q', '-m', 'advance base'])
 
     const r = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: f.source,
       taskId: 'task-div',
       baseBranch: 'main',
@@ -200,6 +206,7 @@ describe('createWorktree RFC-075 working branch', () => {
 
     await expect(
       createWorktree({
+        resolveSubmoduleParams,
         repoPath: f.source,
         taskId: 'task-capture-race',
         baseBranch: 'main',
@@ -245,6 +252,7 @@ describe('createWorktree RFC-075 working branch', () => {
 
     await expect(
       createWorktree({
+        resolveSubmoduleParams,
         repoPath: f.source,
         taskId: 'task-prepared-race',
         baseBranch: 'main',
@@ -292,6 +300,7 @@ describe('createWorktree RFC-075 working branch', () => {
     let thrown: unknown
     try {
       await createWorktree({
+        resolveSubmoduleParams,
         repoPath: f.source,
         taskId: 'task-cf',
         baseBranch: 'main',
@@ -313,6 +322,7 @@ describe('createWorktree RFC-075 working branch', () => {
 
   test('branch already checked out elsewhere → working-branch-in-use', async () => {
     await createWorktree({
+      resolveSubmoduleParams,
       repoPath: f.source,
       taskId: 'task-w1',
       baseBranch: 'main',
@@ -323,6 +333,7 @@ describe('createWorktree RFC-075 working branch', () => {
     let thrown: unknown
     try {
       await createWorktree({
+        resolveSubmoduleParams,
         repoPath: f.source,
         taskId: 'task-w2',
         baseBranch: 'main',
@@ -344,6 +355,7 @@ describe('createWorktree RFC-075 working branch', () => {
     await runGit(f.source, ['branch', '-D', 'feature/remote'])
 
     const r = await createWorktree({
+      resolveSubmoduleParams,
       repoPath: f.source,
       taskId: 'task-remote',
       baseBranch: 'main',
@@ -359,6 +371,7 @@ describe('createWorktree RFC-075 working branch', () => {
     let thrown: unknown
     try {
       await createWorktree({
+        resolveSubmoduleParams,
         repoPath: f.source,
         taskId: 'task-bad',
         baseBranch: 'main',

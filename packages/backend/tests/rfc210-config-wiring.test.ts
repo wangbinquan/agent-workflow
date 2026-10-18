@@ -15,12 +15,14 @@
 // syncSubmodules 发出的 argv。'never' 时更要做到一个 submodule 进程都不 spawn。
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { syncSubmodules } from '@/services/gitSubmodule'
+import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+import { runGit } from '@/util/git'
 
 let home = ''
 let prevHome: string | undefined
@@ -112,5 +114,56 @@ describe('RFC-210 settings → submodule params', () => {
       '--jobs',
       '16',
     ])
+  })
+})
+
+describe('RFC-377 production submodule policy wiring', () => {
+  test.each(['never', 'default'] as const)(
+    'materializeWorktree honors %s configuration in a real local repository',
+    async (mode) => {
+      if (mode === 'never') writeConfig({ gitRecurseSubmodules: 'never' })
+      const repoPath = join(home, 'repo')
+      mkdirSync(repoPath)
+      const git = async (args: string[]) => {
+        const result = await runGit(repoPath, args)
+        if (result.exitCode !== 0) throw new Error(result.stderr)
+      }
+      await git(['init', '-q', '-b', 'main'])
+      writeFileSync(join(repoPath, '.gitmodules'), '# No gitlinks: this test never fetches.\n')
+      await git(['add', '.gitmodules'])
+      await git([
+        '-c',
+        'user.name=RFC377',
+        '-c',
+        'user.email=rfc377@example.test',
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '-qm',
+        'base',
+      ])
+      const result = await materializeWorktree({
+        repoPath,
+        baseBranch: 'main',
+        taskId: `production-policy-${mode}`,
+        appHome: home,
+      })
+      expect(result.earlyError).toBeNull()
+      expect(result.hasSubmodules).toBe(mode === 'default')
+      expect(result.submoduleInitOk).toBe(true)
+      expect(result.submoduleInitError).toBeNull()
+    },
+  )
+
+  test('all eight isolation entry calls pass the imported cache policy resolver', () => {
+    const source = readFileSync(
+      resolve(import.meta.dir, '../src/platform/workspace/local/isolation.ts'),
+      'utf8',
+    )
+    expect(source).toContain("import { resolveSubmoduleParams } from '@/services/gitRepoCache'")
+    const calls = source.match(
+      /(?:createIsolatedWorktree\(\{|(?:alignWorktreeGitlinks|materializeTree)\([^\n{]*\{)\s*resolveSubmoduleParams,/g,
+    )
+    expect(calls).toHaveLength(8)
   })
 })

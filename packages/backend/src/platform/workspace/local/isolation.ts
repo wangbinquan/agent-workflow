@@ -43,8 +43,9 @@ import {
 } from '@/services/mergeAgent'
 import { repoRelForcedPaths } from '@/modules/source-control/public/queries'
 
-// RFC-210. Static import is safe: gitSubmodule imports util/git, util/git reaches
-// gitSubmodule only through a dynamic import, so the edge stays one-way.
+// RFC-210 / RFC-377: orchestration owns policy; git primitives stay in util/git.
+// Pass the cache service's settings/capability resolver at every entry point.
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import {
   bottomUp,
   detectSubmodules,
@@ -445,6 +446,7 @@ export async function createNodeIso(opts: {
     // is equivalent there — but it also works when a test wires them as separate
     // repos (the snapshot lives only in the canonical worktree's ODB).
     await createIsolatedWorktree({
+      resolveSubmoduleParams,
       repoPath: r.worktreePath,
       isoPath: isoWorktreePath,
       baseSnapshotCommit: baseSnapshot,
@@ -468,6 +470,7 @@ export async function createNodeIso(opts: {
     // capture just attached.
     if (detectSubmodules(isoWorktreePath)) {
       const aligned = await alignWorktreeGitlinks(isoWorktreePath, baseSnapshot, taskBaseHead, {
+        resolveSubmoduleParams,
         ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
         ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
         ...(opts.log !== undefined ? { log: opts.log } : {}),
@@ -1315,6 +1318,7 @@ export async function mergeBackNodeIso(
       if (salvage !== null && salvage.landedPaths.length > 0) {
         const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
         await materializeTree(r.canonWorktreePath, {
+          resolveSubmoduleParams,
           mergedTree: salvage.tree,
           canonCurrentTree,
         })
@@ -1335,6 +1339,7 @@ export async function mergeBackNodeIso(
     }
     const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
     await materializeTree(r.canonWorktreePath, {
+      resolveSubmoduleParams,
       mergedTree: merge.mergedTree,
       canonCurrentTree,
     })
@@ -1424,6 +1429,7 @@ export async function undoPriorShardDeltaInIso(
   }
   const canonCurrentTree = await treeOf(isoWorktreePath, isoCurrent)
   await materializeTree(isoWorktreePath, {
+    resolveSubmoduleParams,
     mergedTree: rev.mergedTree,
     canonCurrentTree,
     ...(log !== undefined ? { log } : {}),
@@ -1791,6 +1797,7 @@ export async function finishConflictResolution(
   })
   const canonCurrentTree = await treeOf(conflict.canonWorktreePath, ours)
   await materializeTree(conflict.canonWorktreePath, {
+    resolveSubmoduleParams,
     mergedTree: resolvedTree,
     canonCurrentTree,
   })
@@ -1900,6 +1907,7 @@ export async function completeHumanResolvedConflict(
       }
       const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
       await materializeTree(r.canonWorktreePath, {
+        resolveSubmoduleParams,
         mergedTree: probe.mergedTree,
         canonCurrentTree,
       })
@@ -1947,6 +1955,7 @@ export async function completeHumanResolvedConflict(
     }
     const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
     await materializeTree(r.canonWorktreePath, {
+      resolveSubmoduleParams,
       mergedTree: merge.mergedTree,
       canonCurrentTree,
     })

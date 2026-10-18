@@ -1,5 +1,6 @@
 /** RFC-362 test composition only. Maps are process-local characterization state,
  * never a durable seal/journal implementation or a production admission writer. */
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -62,7 +63,7 @@ export function repositoryLaunchContracts(input: {
     RepositoryPreparationEffectCapability,
     {
       operation: RepositoryPreparationOperationRef
-      options: Omit<CreateWorktreeOptions, 'repoPath' | 'appHome'>
+      options: Omit<CreateWorktreeOptions, 'repoPath' | 'appHome' | 'resolveSubmoduleParams'>
     }
   >()
   const operations = new Map<
@@ -195,6 +196,7 @@ export function repositoryLaunchContracts(input: {
       const result = (async (): Promise<WorkspacePreparationExecutionOutcome> => {
         try {
           const workspace = await createWorktree({
+            resolveSubmoduleParams,
             ...effect.options,
             repoPath: snapshot.row.localPath,
             baseBranch: snapshot.base,
@@ -270,7 +272,9 @@ export function repositoryLaunchContracts(input: {
     preparation,
     content,
     taskWorkspace,
-    effect(options: Omit<CreateWorktreeOptions, 'repoPath' | 'appHome'>) {
+    effect(
+      options: Omit<CreateWorktreeOptions, 'repoPath' | 'appHome' | 'resolveSubmoduleParams'>,
+    ) {
       const operation = decodeRepositoryLaunchRef('operation', `sc:operation:v1:${ulid()}`)
       const capability = Object.freeze({}) as RepositoryPreparationEffectCapability
       effects.set(capability, { operation, options })

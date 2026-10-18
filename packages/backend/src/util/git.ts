@@ -4,7 +4,7 @@
 // is line-parsed; no porcelain v2 / NUL-separated yet — paths with newlines
 // will not survive lsFiles, which we accept as a v1 limitation.
 
-import type { GitRef } from '@agent-workflow/shared'
+import { redactGitUrl, type GitRef } from '@agent-workflow/shared'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -563,13 +563,17 @@ export interface CreateWorktreeOptions {
   appHome: string
   /**
    * RFC-034: behavior for the post-`worktree add` `submodule update --init`
-   * pass. Defaults to 'auto' (init when `.gitmodules` is present in the parent
-   * repo). Caller (services/task.ts startTask) wires this through from
-   * settings.gitRecurseSubmodules.
+   * pass. The injected resolver applies settings/defaults when omitted
+   * (default: 'auto', init when `.gitmodules` is present in the parent repo).
    */
   submoduleMode?: 'auto' | 'always' | 'never'
   /** RFC-034: --jobs N for the submodule init. Defaults to 4. */
   submoduleJobs?: number
+  /** RFC-377: caller-owned settings and capability policy; no implicit fallback. */
+  resolveSubmoduleParams: (
+    mode: SubmoduleMode | undefined,
+    jobs: number | undefined,
+  ) => { mode: SubmoduleMode; jobs: number; remote: boolean }
   /** RFC-303: abort long launch-time git operations before task commit. */
   signal?: AbortSignal
   /**
@@ -1142,11 +1146,7 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<Creat
         branchBefore: cleanup.branchBefore,
         preparedCommit: cleanup.branchAfter,
       })
-      // RFC-034: dynamic import to avoid a circular dep between util/git.ts and
-      // services/gitSubmodule.ts (which itself imports runGit from this file).
-      const { syncSubmodules } = await import('@/services/gitSubmodule')
-      const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
-      const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
+      const effective = opts.resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
       // RFC-210 G8: the ONE place `--remote` applies. Every other sync site
       // (iso creation, materialize) deliberately omits it so the baseline stays
       // pinned for the whole task.
@@ -2762,9 +2762,9 @@ export async function hasDirtySubmoduleContent(worktreePath: string): Promise<bo
   // `submodule status --recursive` unconditionally, so a repo with no
   // submodules — the overwhelming majority — paid one git process per call
   // and `gitRecurseSubmodules='never'` could not reach "zero submodule argv".
-  // Duplicated inline rather than imported: services/gitSubmodule.ts imports
-  // this module, so the edge only goes one way (util/git.ts reaches it via
-  // dynamic import).
+  // Keep the zero-process probe before the submodule scan. RFC-377 places
+  // the shared submodule primitives in this leaf module; policy is injected
+  // by callers that need settings or capability resolution.
   if (!existsSync(join(worktreePath, '.gitmodules'))) return false
   const status = await runGit(worktreePath, ['submodule', 'status', '--recursive'])
   if (status.exitCode !== 0 || status.stdout.trim() === '') return false // no submodules
@@ -2869,6 +2869,7 @@ export interface CreateIsolatedWorktreeOptions {
   taskBaseHead: string
   submoduleMode?: 'auto' | 'always' | 'never'
   submoduleJobs?: number
+  resolveSubmoduleParams: CreateWorktreeOptions['resolveSubmoduleParams']
 }
 
 /**
@@ -2905,9 +2906,7 @@ export async function createIsolatedWorktree(opts: CreateIsolatedWorktreeOptions
     )
   }
   // D20: worktree add does not populate submodule working dirs — sync like createWorktree.
-  const { syncSubmodules } = await import('@/services/gitSubmodule')
-  const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
-  const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
+  const effective = opts.resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
   await syncSubmodules(opts.isoPath, { mode: effective.mode, jobs: effective.jobs })
 }
 
@@ -2934,15 +2933,15 @@ export async function alignWorktreeGitlinks(
   worktreePath: string,
   tree: string,
   currentTree: string | null,
-  opts?: {
+  opts: {
     submoduleMode?: 'auto' | 'always' | 'never'
     submoduleJobs?: number
+    resolveSubmoduleParams: CreateWorktreeOptions['resolveSubmoduleParams']
     log?: Logger
   },
 ): Promise<boolean> {
-  const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
-  const effective = resolveSubmoduleParams(opts?.submoduleMode, opts?.submoduleJobs)
-  return checkoutMergedGitlinks(worktreePath, tree, effective, opts?.log, '', {
+  const effective = opts.resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
+  return checkoutMergedGitlinks(worktreePath, tree, effective, opts.log, '', {
     rootPath: worktreePath,
     currentTree,
   })
@@ -3180,6 +3179,7 @@ export async function materializeTree(
     canonCurrentTree: string
     submoduleMode?: 'auto' | 'always' | 'never'
     submoduleJobs?: number
+    resolveSubmoduleParams: CreateWorktreeOptions['resolveSubmoduleParams']
     log?: Logger
   },
 ): Promise<void> {
@@ -3220,9 +3220,7 @@ export async function materializeTree(
     restoreGitMergeOperationFiles(mergeOperationFiles)
   }
   // ⑤ refresh submodule working dirs for any changed gitlink (D20/D22).
-  const { syncSubmodules } = await import('@/services/gitSubmodule')
-  const { resolveSubmoduleParams } = await import('@/services/gitRepoCache')
-  const effective = resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
+  const effective = opts.resolveSubmoduleParams(opts.submoduleMode, opts.submoduleJobs)
   const synced = await syncSubmodules(worktreePath, { mode: effective.mode, jobs: effective.jobs })
   if (!synced.ok) {
     // RFC-210: this return value used to be discarded, which is part of why the
@@ -3301,7 +3299,6 @@ async function checkoutMergedGitlinks(
   // ⟹ the file exists but is unparseable: an absent path then cannot be
   // trusted to mean "stray" (round 9, P1), so ownership classification below
   // fails loud instead of silently skipping a managed submodule's update.
-  const { readDeclaredSubmodulePaths } = await import('@/services/gitSubmodule')
   const declared = await readDeclaredSubmodulePaths(worktreePath)
   // `-r` is load-bearing, not an optimization. Without it this lists only the
   // root level, and a submodule at `libs/vendor` shows up as `040000 tree libs`
@@ -3410,8 +3407,6 @@ async function checkoutMergedGitlinks(
       // silently skipping would drop the node's submodule from the accumulated
       // task state (and the next node's snapshot would then read the vanished
       // path as a DELETION and delete it from canonical too).
-      const { attachSubmoduleFromPool, resolveSubmodulePool } =
-        await import('@/services/gitSubmodule')
       if (!declared.ok) {
         // Same parse-failure classification hazard as the initialized branch —
         // an unparseable `.gitmodules` must not be read as "no declaration"
@@ -3480,7 +3475,6 @@ async function checkoutMergedGitlinks(
         // comment below it claimed "snapshotting is the caller's job".
         // The pid+nonce suffix keeps a SECOND snapshot at the same HEAD from
         // overwriting the first recovery point (impl-gate A5-fix).
-        const { snapshotSubmodule, subSlug } = await import('@/services/gitSubmodule')
         const pinRef = `refs/agent-workflow/subsnap/${subSlug(relPath)}/${preHead}-${process.pid}-${subsnapNonce++}`
         try {
           const snap = await snapshotSubmodule(subPath, pinRef)
@@ -3561,4 +3555,439 @@ export async function deleteIsoRefs(
       timeoutMs: opts?.timeoutMs,
     })
   }
+}
+
+// RFC-210 / RFC-377: submodule primitives belong to the git leaf layer.
+// Settings and capability policy are resolved by the caller.
+
+export type SubmoduleMode = 'auto' | 'always' | 'never'
+
+export interface SubmoduleSyncOptions {
+  mode: SubmoduleMode
+  jobs: number
+  /**
+   * RFC-210 G1: pass `--reference <poolDir>` so a FIRST-TIME init clones with a
+   * shared object pool instead of a full copy.
+   *
+   * NOT a correctness mechanism, for two independent reasons:
+   *  - On an ALREADY initialized module dir its effect is VERSION-DEPENDENT:
+   *    git 2.50.1 leaves alternates absent (silent no-op), CI runners' git
+   *    attaches it. Both exit 0, so a caller cannot tell which happened.
+   *  - git applies a single `--reference` to EVERY submodule in the tree
+   *    (measured: an unrelated submodule gets bound to this pool).
+   * Correctness comes from `ensureSubmoduleAlternates`, which writes
+   * `objects/info/alternates` per submodule. This flag is a first-clone
+   * speedup only.
+   */
+  referencePool?: string
+  /** RFC-210 G8: `--remote` (track the submodule's upstream branch tip). */
+  remote?: boolean
+  /** Override the redaction step (default: shared `redactGitUrl`). */
+  redactStderr?: (s: string) => string
+  /** Test hook: replace runGit. */
+  runGitImpl?: typeof runGit
+  /**
+   * RFC-287 AC-14（三轮门并发面 Codex P1）—— 取消/停机必须**真的杀掉** git 子进程。
+   *
+   * 本模块此前一个 `signal` 都没有：`git.ts` 建树那一步传了 signal，紧接着进
+   * `syncSubmodules` 就断了线。于是一旦 `worktree add` 成功、进入子模块 checkout
+   * （大子模块可以跑很久），取消只 abort 了 controller：5 秒兜底把任务写成 canceled，
+   * 而 git 子进程还活着、准备行还是 running、驱动租约还被持有 ⇒ 重试 409
+   * `task-still-running`、删除 409 `task-active`。AC-14 原话要求「底层 git 子进程确实
+   * 终止」，这条通道是漏的。
+   *
+   * 同一缺口还会**永久占住 URL 队列**：后台保鲜在 `withUrlLock` 里做完带 timeout 的
+   * fetch 之后进入无界的 submodule update，同 URL 的启动全部排在它后面。
+   *
+   * 注入在 `run` 这一层（本文件 31 处 `runGit` 共用它），不逐处改。
+   */
+  signal?: AbortSignal
+  /** 每次 git 调用的超时上限；与 signal 同源，防「信号没来但进程也不结束」。 */
+  timeoutMs?: number
+}
+
+export interface SubmoduleSyncResult {
+  ok: boolean
+  /** Already-redacted; safe to log / persist / send to clients. */
+  error: string | null
+  hasGitmodules: boolean
+}
+
+/** Probe-only: does the working tree have a `.gitmodules` at its root? */
+export function detectSubmodules(repoPath: string): boolean {
+  try {
+    return existsSync(join(repoPath, '.gitmodules'))
+  } catch {
+    return false
+  }
+}
+
+function defaultRedact(s: string): string {
+  return redactGitUrl(s.trim())
+}
+
+/**
+ * Run `git submodule sync --recursive && git submodule update --init
+ * --recursive --jobs N` on `repoPath`. Idempotent — repeated calls on a
+ * fully-initialized tree are cheap no-ops.
+ *
+ * - `mode='never'`: short-circuit with ok=true, hasGitmodules=false, no git
+ *   processes spawned. Used as the platform escape hatch.
+ * - `mode='auto'`: skip when `.gitmodules` is absent; otherwise run.
+ * - `mode='always'`: always run (idempotent no-op when `.gitmodules` absent).
+ */
+export async function syncSubmodules(
+  repoPath: string,
+  opts: SubmoduleSyncOptions,
+): Promise<SubmoduleSyncResult> {
+  const redact = opts.redactStderr ?? defaultRedact
+  const baseRun = opts.runGitImpl ?? runGit
+  // 统一注入终止条件——调用方给了就带上，没给就与从前逐字一致（不改既有行为）。
+  const run: typeof runGit =
+    opts.signal === undefined && opts.timeoutMs === undefined
+      ? baseRun
+      : (cwd, args, o) =>
+          baseRun(cwd, args, {
+            ...(o ?? {}),
+            ...(opts.signal !== undefined && o?.signal === undefined
+              ? { signal: opts.signal }
+              : {}),
+            ...(opts.timeoutMs !== undefined && o?.timeoutMs === undefined
+              ? { timeoutMs: opts.timeoutMs }
+              : {}),
+          })
+
+  if (opts.mode === 'never') {
+    return { ok: true, error: null, hasGitmodules: false }
+  }
+
+  const hasGitmodules = detectSubmodules(repoPath)
+  if (opts.mode === 'auto' && !hasGitmodules) {
+    return { ok: true, error: null, hasGitmodules: false }
+  }
+
+  // `submodule sync` is cheap and idempotent — pulls any URL changes from
+  // .gitmodules into .git/config. Failure here is fatal for this pass.
+  const sync = await run(repoPath, ['submodule', 'sync', '--recursive'])
+  if (sync.exitCode !== 0) {
+    return {
+      ok: false,
+      error: redact(sync.stderr) || 'submodule sync failed (no stderr)',
+      hasGitmodules,
+    }
+  }
+
+  // RFC-252 G1: `--checkout` pins the update strategy on the command line so a
+  // repo-local `submodule.<name>.update = !command` cannot execute here. `-c`
+  // cannot reach it (the key is wildcard-named) and checkout IS git's default —
+  // this only removes the config's ability to override it, so behavior for every
+  // honest repo is unchanged. The sibling call site (attachSubmodulePool below)
+  // already passes it; these two must not drift.
+  const updateArgs = ['submodule', 'update', '--init', '--checkout', '--recursive']
+  // RFC-210: both flags are opt-in and appended BEFORE --jobs so that a caller
+  // passing neither produces the pre-RFC-210 argv byte-for-byte (AC-10/AC-12).
+  if (opts.remote === true) {
+    updateArgs.push('--remote')
+  }
+  if (opts.referencePool !== undefined) {
+    updateArgs.push('--reference', opts.referencePool)
+  }
+  // jobs=1 is the default; only emit --jobs when > 1 so we play nice with
+  // ancient git versions and keep argv small in logs.
+  if (opts.jobs > 1) {
+    updateArgs.push('--jobs', String(opts.jobs))
+  }
+  const update = await run(repoPath, updateArgs)
+  if (update.exitCode !== 0) {
+    return {
+      ok: false,
+      error: redact(update.stderr) || 'submodule update failed (no stderr)',
+      hasGitmodules,
+    }
+  }
+
+  return { ok: true, error: null, hasGitmodules }
+}
+
+/**
+ * RFC-210 — the paths DECLARED in a level's `.gitmodules`, distinguishing a
+ * clean "no declarations" from a read/parse failure (Codex review round 9, P1).
+ *
+ * `ok: false` ⟹ `.gitmodules` EXISTS but git could not parse it (measured:
+ * `git config --get-regexp` exits 128 on a malformed file, vs 1 for a valid
+ * empty one). A caller must NOT then treat an absent path as "stray" — that
+ * would misclassify a managed submodule and silently skip its update; it is an
+ * error condition to surface. No `.gitmodules` at all ⟹ `ok: true`, empty set
+ * (a gitlink here is genuinely undeclared / stray).
+ *
+ * Load this ONCE per level and reuse the set, rather than one `git config` scan
+ * per gitlink (round 9, P2: the per-gitlink lookup was O(N²) + N processes).
+ */
+export async function readDeclaredSubmodulePaths(
+  levelPath: string,
+): Promise<{ ok: boolean; paths: Set<string> }> {
+  if (!existsSync(join(levelPath, '.gitmodules'))) return { ok: true, paths: new Set() }
+  const r = await runGit(levelPath, [
+    'config',
+    '-f',
+    '.gitmodules',
+    '--get-regexp',
+    String.raw`^submodule\..*\.path$`,
+  ])
+  // 0 = matches · 1 = no matching keys (valid, possibly empty) · >1 = parse error.
+  if (r.exitCode > 1) return { ok: false, paths: new Set() }
+  const paths = new Set<string>()
+  for (const line of r.stdout.split('\n')) {
+    const sp = line.indexOf(' ')
+    if (sp < 0) continue
+    // Validate the submodule NAME, not just extract the path (Codex review
+    // round 10, P1): `git config --get-regexp` matches `submodule..path` for an
+    // `[submodule ""]` subsection (exit 0, parseable), but git's own submodule
+    // machinery IGNORES an empty-name entry. Without this check a crafted
+    // `.gitmodules` would re-classify a stray gitlink as managed and let
+    // `checkout --detach` rewind it — the very thing the round-8 guard exists
+    // to prevent. `submoduleNameForPath` has always required a non-empty name.
+    // `[\s\S]` not `.` (round 11, P2): git accepts subsection names containing
+    // U+2028/U+2029, which JS `.` does not match — a `.`-based regex would go
+    // null on such a valid name and drop a MANAGED submodule's update.
+    const key = line.slice(0, sp)
+    const m = /^submodule\.([\s\S]*)\.path$/.exec(key)
+    if (m?.[1] === undefined || m[1] === '') continue
+    const p = line.slice(sp + 1).trim()
+    if (p !== '') paths.add(p)
+  }
+  return { ok: true, paths }
+}
+
+/**
+ * RFC-210 — the `.gitmodules` NAME for a submodule path at ONE level (path
+ * relative to `levelPath`, no slashes across gitlink boundaries). Needed to
+ * address `submodule.<name>.url` config; name and path differ whenever the
+ * submodule was added with a custom `--name` or later moved.
+ */
+export async function submoduleNameForPath(
+  levelPath: string,
+  relPath: string,
+): Promise<string | null> {
+  const declared = await runGit(levelPath, [
+    'config',
+    '-f',
+    '.gitmodules',
+    '--get-regexp',
+    String.raw`^submodule\..*\.path$`,
+  ])
+  if (declared.exitCode !== 0) return null
+  for (const line of declared.stdout.split('\n')) {
+    const sp = line.indexOf(' ')
+    if (sp < 0) continue
+    if (line.slice(sp + 1).trim() !== relPath) continue
+    const key = line.slice(0, sp)
+    // `[\s\S]` not `.` (Codex review round 12, P2): must match the SAME name
+    // set `readDeclaredSubmodulePaths` accepts — a U+2028/U+2029 name it marks
+    // declared would otherwise return null here, and `attachSubmoduleFromPool`
+    // would throw `no .gitmodules entry` on a submodule the classifier owns.
+    const m = /^submodule\.([\s\S]*)\.path$/.exec(key)
+    if (m?.[1] !== undefined && m[1] !== '') return m[1]
+  }
+  return null
+}
+
+/**
+ * RFC-210 impl-gate A3-fix — initialize + check out a submodule whose gitlink
+ * exists only as tree data, sourcing objects from the shared POOL instead of
+ * the network.
+ *
+ * `git submodule update --init` clones from `submodule.<name>.url` and then
+ * direct-fetches the wanted sha — both steps that fail for a commit that only
+ * exists locally (a node's own work is on no remote; measured:
+ * `upload-pack: not our ref <sha>`). The url is therefore pointed at the pool
+ * for the duration of the clone and restored via `submodule sync` afterwards.
+ *
+ * The gitlink is injected into the REAL index only transiently (`submodule
+ * update` reads its target sha from the index) and the prior index state is
+ * restored in `finally`, so the materialized delta stays UNSTAGED (D23/D28).
+ *
+ * Never throws; the caller decides how a failure escalates.
+ */
+export async function attachSubmoduleFromPool(
+  levelPath: string,
+  args: { relPath: string; sha: string; pool: string },
+): Promise<{ ok: boolean; error: string | null }> {
+  const { relPath, sha, pool } = args
+  const name = await submoduleNameForPath(levelPath, relPath)
+  if (name === null) {
+    return { ok: false, error: `no .gitmodules entry for '${relPath}'` }
+  }
+  const prior = await runGit(levelPath, ['ls-files', '-s', '--', relPath])
+  const priorLine = prior.exitCode === 0 ? prior.stdout.trimEnd() : ''
+  const fail = (msg: string): { ok: false; error: string } => ({
+    ok: false,
+    error: redactGitUrl(msg.trim()) || 'submodule attach failed',
+  })
+  const body = async (): Promise<{ ok: boolean; error: string | null }> => {
+    const inject = await runGit(levelPath, [
+      'update-index',
+      '--add',
+      '--cacheinfo',
+      `160000,${sha},${relPath}`,
+    ])
+    if (inject.exitCode !== 0) return fail(`update-index: ${inject.stderr}`)
+    const init = await runGit(levelPath, ['submodule', 'init', '--', relPath])
+    if (init.exitCode !== 0) return fail(`submodule init: ${init.stderr}`)
+    const url = await runGit(levelPath, ['config', `submodule.${name}.url`, pool])
+    if (url.exitCode !== 0) return fail(`config url: ${url.stderr}`)
+    // `-c protocol.file.allow=always` is REQUIRED, command-scoped: since the
+    // 2.38.4 lockdown git rejects local-path clone URLs by default (`fatal:
+    // transport 'file' not allowed`), and the pool url IS a local path. The
+    // pool is platform-owned — this does not widen trust for user-configured
+    // submodule urls, which never pass through here (Codex review round 2, P1).
+    const update = await runGit(levelPath, [
+      '-c',
+      'protocol.file.allow=always',
+      'submodule',
+      'update',
+      '--init',
+      '--checkout',
+      '--',
+      relPath,
+    ])
+    // Restore the real url from .gitmodules whether or not the update worked —
+    // leaving the pool as the recorded remote would leak an internal path into
+    // the user's config and, worse, make a later auto-commit-push publish the
+    // submodule INTO THE POOL while the parent's gitlink claims the real
+    // remote has it. A failed restore therefore fails the attach even when
+    // the update itself succeeded (Codex review round 2, P2).
+    const sync = await runGit(levelPath, ['submodule', 'sync', '--', relPath])
+    if (update.exitCode !== 0) return fail(`submodule update: ${update.stderr}`)
+    if (sync.exitCode !== 0) return fail(`submodule sync (url restore): ${sync.stderr}`)
+    const head = await runGit(join(levelPath, relPath), ['rev-parse', 'HEAD'])
+    if (head.exitCode !== 0 || head.stdout.trim() !== sha) {
+      return fail(`attached HEAD is ${head.stdout.trim() || '(none)'}, wanted ${sha}`)
+    }
+    return { ok: true, error: null }
+  }
+  const result = await body()
+  // The transient index injection MUST be rolled back — a leftover entry
+  // breaks the unstaged-materialization contract (D23/D28) and can replace
+  // the caller's staged state. A failed restore (index.lock contention, fs
+  // error) turns the whole attach into a failure even if the body succeeded
+  // (Codex review round 2, P2).
+  const restored =
+    priorLine === ''
+      ? await runGit(levelPath, ['update-index', '--force-remove', '--', relPath])
+      : await runGit(levelPath, ['update-index', '--index-info'], { stdin: priorLine + '\n' })
+  if (restored.exitCode !== 0) {
+    return fail(
+      `index restore: ${restored.stderr.trim()}${result.error !== null ? ` (after: ${result.error})` : ''}`,
+    )
+  }
+  return result
+}
+
+/** Absolute git dir of a submodule inside a working tree, or null. */
+export async function submoduleGitDir(
+  worktreePath: string,
+  subPath: string,
+): Promise<string | null> {
+  const r = await runGit(join(worktreePath, subPath), ['rev-parse', '--absolute-git-dir'])
+  if (r.exitCode !== 0) return null
+  const v = r.stdout.trim()
+  return v === '' ? null : v
+}
+
+/**
+ * Locate the shared object pool for one submodule of a working tree.
+ *
+ * The pool is the submodule's module dir inside the HOST repository (the thing
+ * `--git-common-dir` points at), which every linked worktree of that repo shares.
+ * Resolved by asking git in the host repo rather than hand-assembling
+ * `modules/x/modules/y`, so nested layout assumptions can't drift.
+ *
+ * Returns null — caller must degrade to a worktree-private module dir — when:
+ *  - the path isn't a git working tree (mock harnesses), or
+ *  - `isPathMode` is set (D11): the host is the USER'S OWN repo, and a pool there
+ *    would collect platform objects, refs and commits that can never be cleaned up.
+ */
+export async function resolveSubmodulePool(
+  worktreePath: string,
+  subPath: string,
+  opts?: { isPathMode?: boolean },
+): Promise<string | null> {
+  if (opts?.isPathMode === true) return null
+  const common = await runGit(worktreePath, [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-common-dir',
+  ])
+  if (common.exitCode !== 0) return null
+  const hostGitDir = common.stdout.trim()
+  if (hostGitDir === '') return null
+  // Ask git where THIS submodule's module dir lives, from the host repo's own
+  // checkout, instead of assuming the modules/<a>/modules/<b> layout.
+  const hostWorktree = dirname(hostGitDir)
+  const viaHost = await submoduleGitDir(hostWorktree, subPath)
+  if (viaHost !== null && existsSync(viaHost)) return viaHost
+  // Host has no checkout of it (bare mirror): fall back to the documented layout.
+  const guess = join(
+    hostGitDir,
+    'modules',
+    ...subPath.split('/').flatMap((s, i) => (i === 0 ? [s] : ['modules', s])),
+  )
+  return existsSync(guess) ? guess : null
+}
+
+/** A submodule's state at a point in time, restorable by `rollbackSubmodule`. */
+export interface SubSnapshot {
+  /** HEAD before the platform touched anything. */
+  head: string
+  /** Full-state snapshot commit (tracked + untracked). */
+  snapshot: string
+  /** Ref keeping `snapshot` reachable — a dangling commit is one gc away from gone. */
+  pinRef: string
+}
+
+/**
+ * Snapshot one submodule's complete state (HEAD + tracked + untracked) without
+ * touching its real index, HEAD, or working tree.
+ *
+ * Delegates to `snapshotFullState` — a submodule is an ordinary git working tree,
+ * and forking a second snapshot implementation would be one more thing to drift.
+ * `pinRef` is REQUIRED: the snapshot is a dangling commit otherwise.
+ */
+export async function snapshotSubmodule(subPath: string, pinRef: string): Promise<SubSnapshot> {
+  const head = await runGit(subPath, ['rev-parse', 'HEAD'])
+  if (head.exitCode !== 0) {
+    throw new Error(
+      `submodule snapshot: rev-parse HEAD failed in ${subPath}: ${head.stderr.trim()}`,
+    )
+  }
+  const snapshot = await snapshotFullState(subPath, { pinRef })
+  // Impl-gate A5-fix: read the ref BACK and require it to resolve to the
+  // snapshot before anyone treats this as a recovery point. `snapshotFullState`
+  // now throws on a failed `update-ref`, but a pin that raced a concurrent
+  // writer (or landed on a case-folding filesystem alias) can still point
+  // elsewhere — and the only caller of this function is about to `checkout -f`
+  // away the user's uncommitted work on the strength of this snapshot.
+  const pinned = await runGit(subPath, ['rev-parse', '--verify', '--quiet', `${pinRef}^{commit}`])
+  if (pinned.exitCode !== 0 || pinned.stdout.trim() !== snapshot) {
+    throw new Error(
+      `submodule snapshot: pin ${pinRef} resolves to '${pinned.stdout.trim()}', expected ${snapshot}`,
+    )
+  }
+  return { head: head.stdout.trim(), snapshot, pinRef }
+}
+
+/**
+ * Ref-name-safe token for a submodule path.
+ *
+ * A submodule path MUST NOT be interpolated into a refname directly:
+ *  - nested paths collide as directory/file — `refs/x/vendor` and
+ *    `refs/x/vendor/inner` cannot coexist (measured: exit 128, "'refs/x/vendor'
+ *    exists; cannot create '.../vendor/inner'"), and ANY >=2-level nesting hits it;
+ *  - spaces are rejected outright ("refusing to update ref with bad name"), as
+ *    are '.lock' suffixes, leading dots, and ~ ^ : ? * [ \.
+ * The path itself is persisted in `iso_submodules_json`; the ref is only an anchor.
+ */
+export function subSlug(subPath: string): string {
+  return sha1Hex(subPath).slice(0, 16)
 }

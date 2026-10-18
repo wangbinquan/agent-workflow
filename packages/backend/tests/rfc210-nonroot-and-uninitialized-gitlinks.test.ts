@@ -21,6 +21,7 @@
 //
 // 判据用 `existsSync(<sub>/.git)` —— `expandSubmodulePaths` 早就在用同一条。
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -259,6 +260,7 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     // Materialize a tree that STILL records c0 for the stray (the HEAD tree) —
     // exactly what a merge result that never touched it looks like.
     await materializeTree(canon, {
+      resolveSubmoduleParams,
       mergedTree: headTree,
       canonCurrentTree: headTree,
     })
@@ -316,7 +318,11 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     // The submodule is MANAGED and initialized; classification must refuse
     // rather than silently treat the corrupt-config path as stray and skip it.
     await expect(
-      materializeTree(canon, { mergedTree: headTree, canonCurrentTree: headTree }),
+      materializeTree(canon, {
+        resolveSubmoduleParams,
+        mergedTree: headTree,
+        canonCurrentTree: headTree,
+      }),
     ).rejects.toThrow(/could not be parsed to classify ownership/)
   }, 120_000)
 
@@ -350,6 +356,7 @@ describe('RFC-210 — gitlink with no initialized working tree', () => {
     expect((await runGit(canonNested, ['cat-file', '-e', c0])).exitCode).toBe(0)
 
     await materializeTree(canon, {
+      resolveSubmoduleParams,
       mergedTree: headTree,
       canonCurrentTree: headTree,
     })

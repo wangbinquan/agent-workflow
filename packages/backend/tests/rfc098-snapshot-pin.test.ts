@@ -24,6 +24,7 @@
 // 确定性说明：纯本地 git（init/commit/worktree add/stash create/gc/update-ref），
 //   无网络/clone——不属于 RUN_GIT_NETWORK 门控形态（8859a67）。
 
+import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -104,7 +105,7 @@ describeEachProvider(
       const workflowId = ulid()
       const taskId = ulid()
       const nodeRunId = ulid()
-      const wt = await createWorktree({ repoPath, taskId, appHome })
+      const wt = await createWorktree({ resolveSubmoduleParams, repoPath, taskId, appHome })
 
       // Snapshot taken FROM the worktree (the scheduler's write-point shape):
       // the ref lands in the SHARED source-repo odb because snapshot refs are
