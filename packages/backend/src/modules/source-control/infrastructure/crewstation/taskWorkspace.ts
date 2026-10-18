@@ -108,6 +108,22 @@ export class HostedWorkspaceProvisioningTimeoutError extends DomainError {
   }
 }
 
+/** The project's concurrent task quota stayed full for the whole provisioning
+ * wait. The parent request is kept: resuming the task resubmits the same
+ * request key, which the platform admits once another parent pauses or closes. */
+export class HostedWorkspaceQuotaExhaustedError extends DomainError {
+  constructor(waitedMs: number, platformMessage: string) {
+    super(
+      'hosted-task-quota-exhausted',
+      `The CrewStation project's concurrent task quota stayed full for ${Math.round(waitedMs / 1000)} s: ` +
+        'every task slot is held by other running tasks (a finished task frees its slot once its ' +
+        'container pauses). Resume this task when other tasks have finished.',
+      429,
+      { waitedMs, platformMessage },
+    )
+  }
+}
+
 /** CS reports `unknown` resources when its own observation fails; a short
  * outage is waited out, a persistent one means the container is gone. */
 const UNKNOWN_RESOURCE_GRACE_MS = 60_000
@@ -232,14 +248,36 @@ export function createHostedTaskWorkspaces(input: {
   }
   /** Replays the persisted create intent. The platform answers a known
    * requestKey with the original parent, so a lost receipt is recovered
-   * without a second volume. */
+   * without a second volume.
+   *
+   * A full concurrent task quota (`429 quota_exceeded`) is a wait, not a
+   * failure: the platform admits the same request key once another parent
+   * pauses or closes — typically a just-finished task whose container is in
+   * its pause grace, or a system scratch parent (RFC-370 hosted acceptance,
+   * 2026-10-17: a task launched right after another one failed its repository
+   * preparation within seconds). The wait shares the provisioning budget. */
   const allocate = async (row: Row): Promise<string> => {
-    const task = await input.api.createTask({
-      requestKey: row.requestKey,
-      fence: input.fence.current(),
-      taskContractVersion: input.taskContractVersion,
-      labels: { 'aw-task-id': row.taskId, 'aw-installation': input.installation },
-    })
+    const started = now()
+    let task: BusinessTask
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        task = await input.api.createTask({
+          requestKey: row.requestKey,
+          fence: input.fence.current(),
+          taskContractVersion: input.taskContractVersion,
+          labels: { 'aw-task-id': row.taskId, 'aw-installation': input.installation },
+        })
+        break
+      } catch (error) {
+        if (
+          !(isCrewStationApiError(error) && error.status === 429 && error.code === 'quota_exceeded')
+        )
+          throw error
+        if (now() - started >= readyTimeoutMs)
+          throw new HostedWorkspaceQuotaExhaustedError(now() - started, error.message)
+        await sleep(Math.min(POLL_MS * 2 ** attempt, 30_000))
+      }
+    }
     await write(async (tx) => {
       const current = await read(tx, row.taskId)
       if (
