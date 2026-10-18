@@ -22,7 +22,10 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { eq } from 'drizzle-orm'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import type { AppDeps } from '../src/server'
-import { deleteReviewComment, updateReviewCommentText } from '../src/services/review'
+import {
+  deleteReviewComment,
+  updateReviewCommentText,
+} from '@/modules/collaboration/infrastructure/review'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'

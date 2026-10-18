@@ -22,7 +22,10 @@
 
 import type { ReviewComment, ReviewCommentAnchor } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { recomputeOccurrenceIndex, renderCommentsForPrompt } from '../src/services/review'
+import {
+  recomputeOccurrenceIndex,
+  renderCommentsForPrompt,
+} from '@/modules/collaboration/infrastructure/review'
 
 // ---------------------------------------------------------------------------
 // GAP 1 — recomputeOccurrenceIndex strategy-2 tie & bestScore===0 fall-through.

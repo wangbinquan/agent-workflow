@@ -29,7 +29,7 @@ import { clarifyRounds, agents, nodeRunEvents, nodeRuns, tasks, workflows } from
 // via the real PR-B path (autoDispatchClarifyRound = seal + auto-dispatch + mint the 承接 rerun +
 // write the node clarify state) instead of the legacy immediate mint, which created no dispatched
 // entry.
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,

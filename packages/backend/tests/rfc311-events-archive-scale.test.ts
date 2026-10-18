@@ -16,7 +16,7 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
-import { readMaintenanceNumber } from '../src/services/maintenanceState'
+import { readMaintenanceNumber } from '@/platform/persistence/maintenanceState'
 import { asc, count, max } from 'drizzle-orm'
 
 type Db = ProviderNeutralDatabase

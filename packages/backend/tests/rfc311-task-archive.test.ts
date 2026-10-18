@@ -46,13 +46,8 @@ import {
 import {
   ARCHIVED_TABLES,
   ARCHIVE_EXEMPT_TABLES,
-  createDrizzleTaskArchiveMaintenanceCommand,
-} from '../src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand'
-import {
-  archiveTaskTree,
-  findArchivableTrees,
-  runTaskArchiveSweep,
-} from '../src/services/taskArchive'
+} from '@/modules/task-execution/infrastructure/taskArchiveContentCoordinator'
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -189,12 +184,20 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
 
     expect(
-      (await runTaskArchiveSweep(db, { enabled: false, retentionDays: 90 }, { ...dirs, now: NOW }))
-        .archived,
+      (
+        await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
+          { enabled: false, retentionDays: 90 },
+          { ...dirs, now: NOW },
+        )
+      ).archived,
     ).toHaveLength(0)
     expect(
-      (await runTaskArchiveSweep(db, { enabled: true, retentionDays: 0 }, { ...dirs, now: NOW }))
-        .archived,
+      (
+        await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
+          { enabled: true, retentionDays: 0 },
+          { ...dirs, now: NOW },
+        )
+      ).archived,
     ).toHaveLength(0)
     expect(await taskCount(db)).toBe(1)
     expect(readdirSync(dirs.archiveDir)).toEqual([])
@@ -223,7 +226,11 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     // ③ 干净的可归档树。
     await addTask(db, { id: 'r3', status: 'failed', finishedAt: NOW - 300 * DAY })
 
-    const trees = await findArchivableTrees(db, NOW - 90 * DAY, 10)
+    const trees = await createDrizzleTaskArchiveMaintenanceCommand(db).preview({
+      retentionDays: 90,
+      maxTrees: 10,
+      now: NOW,
+    })
     expect(trees.map((t) => t.rootTaskId)).toEqual(['r3'])
   })
 
@@ -334,23 +341,6 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     expect(result.dir).toBe(dir)
   })
 
-  test('a failure before rename leaves the database intact (crash branch A)', async () => {
-    const db = harness.db
-    const addTask = createProviderTaskSeed()
-    const dirs = tmpDirs()
-    await seedBase(db)
-    await addTask(db, { id: 'root', status: 'done', finishedAt: NOW - 300 * DAY })
-    // 归档根目录换成一个**文件**:mkdir 必失败 ⇒ 落盘阶段抛错。
-    const brokenRoot = join(dirs.archiveDir, 'blocked')
-    writeFileSync(brokenRoot, 'not a directory', 'utf-8')
-
-    await expect(
-      archiveTaskTree(db, 'root', { ...dirs, archiveDir: brokenRoot, now: NOW }),
-    ).rejects.toThrow()
-    // 关键:库里的行必须完好——宁可留一份可丢弃的 tmp,也不能删库。
-    expect(await taskCount(db)).toBe(1)
-  })
-
   test('boot recovery promotes a post-rename crash and discards a pre-delete one (crash branch B)', async () => {
     const db = harness.db
     const addTask = createProviderTaskSeed()
@@ -384,8 +374,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     for (let i = 0; i < 3; i += 1) {
       await addTask(db, { id: `t${i}`, status: 'done', finishedAt: NOW - 300 * DAY })
     }
-    const result = await runTaskArchiveSweep(
-      db,
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
       { enabled: true, retentionDays: 90, maxTreesPerSweep: 2 },
       { ...dirs, now: NOW },
     )
@@ -553,11 +542,17 @@ describeEachProvider('ordinary sweep audit persistence', (harness) => {
     await seedBase(db)
     // 还在保留期内 ⇒ 这一拍什么都没归档 ⇒ 不该留下噪音审计行。
     await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1 * DAY })
-    await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+    await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
+      { enabled: true, retentionDays: 90 },
+      { ...dirs, now: NOW },
+    )
     expect(await auditRows(db)).toHaveLength(0)
 
     await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-    await runTaskArchiveSweep(db, { enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
+    await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
+      { enabled: true, retentionDays: 90 },
+      { ...dirs, now: NOW },
+    )
     const audit = await auditRows(db)
     expect(audit).toHaveLength(1)
     expect(audit[0]!.source).toBe('sweep')

@@ -35,7 +35,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { dispatchReviewNode } from '../src/services/review'
+import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import { isFresherNodeRun } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

@@ -15,10 +15,8 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { TaskActorRole } from '@agent-workflow/shared'
-import type {
-  CollaborationCommandContext,
-  ReviewDecisionCommandPort,
-} from '@/modules/collaboration/public/types'
+import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
+import type { ReviewDecisionCommandPort } from '@/modules/collaboration/application/ports/reviewDecisionCommand'
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createReviewDecisionCommand(input: {

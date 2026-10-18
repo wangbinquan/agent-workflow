@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
+import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { clarifyRounds, agents, nodeRuns, tasks, workflows } from '../src/db/schema'
@@ -34,7 +34,7 @@ import {
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'

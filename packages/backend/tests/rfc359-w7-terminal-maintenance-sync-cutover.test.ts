@@ -1,3 +1,4 @@
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // LOCKS: RFC-359 W7 —— 终态维护的三条消费路径迁离 `dbTxSync` 之后的行为（两个引擎各跑一遍）。
 //
 // 为什么这份用例存在
@@ -21,8 +22,8 @@
 //       `branch_started_at` 沿父链重算（RFC-311 P1-6，同时把 `MAX()` 聚合读在两个引擎上照一遍）。
 //   T2  delete：**事务内**终态复检。持有任务写锁把 `deleteTask` 卡在锁上，趁机把任务翻回 running；
 //       事务必须整笔失败——行还在、认领仍停在 io-complete、revision 不变。
-//   T3  archive：`archiveTaskTree` 整棵树出库（`deleteTreeRows` 的递归 CTE + 分块删除）。
-//   T4  archive：`recoverInterruptedArchives` 接着一个停在 io-complete 的认领续做。
+//   T3  archive：`runManual` 整棵树出库（`deleteTreeRows` 的递归 CTE + 分块删除）。
+//   T4  archive：`recover` 接着一个停在 io-complete 的认领续做。
 //   T5  workspace-GC：`finishClaimedWorkspacePrune` 端到端（认领 → 删目录 → 终结事务盖章）。
 //   T6  workspace-GC：终结事务的原子性。墓碑（`workspace_pruning_at`）被抹掉后 CAS 命中 0 行，
 //       整笔回滚——`workspace_pruned_at` 仍为空、认领仍停在 io-complete。
@@ -48,7 +49,6 @@ import {
   finishClaimedWorkspacePrune,
   recoverInterruptedWorkspaceGc,
 } from '@/platform/persistence/sqlite/systemWorkspaceGc'
-import { archiveTaskTree, recoverInterruptedArchives } from '@/services/taskArchive'
 import { deleteTask } from '@/services/taskDelete'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -267,7 +267,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
 })
 
 // ---------------------------------------------------------------------------
-// T3 / T4 —— services/taskArchive.ts
+// T3 / T4 —— TaskArchiveMaintenanceCommand
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (harness) => {
@@ -278,12 +278,18 @@ describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (har
     const childId = await seedTask(db, workflowId, { parentTaskId: rootId })
     const archiveDir = makeScratchDir('archive')
 
-    const archived = await archiveTaskTree(legacy(db), rootId, {
-      archiveDir,
-      runsDir: join(archiveDir, 'runs'),
-      logsDir: join(archiveDir, 'logs'),
-      now: NOW,
-    })
+    const sweep = await createDrizzleTaskArchiveMaintenanceCommand(legacy(db)).runManual(
+      { retentionDays: 1, maxTrees: 1, actorUserId: null },
+      {
+        archiveDir,
+        runsDir: join(archiveDir, 'runs'),
+        logsDir: join(archiveDir, 'logs'),
+        now: NOW + 2 * 86_400_000,
+      },
+    )
+    expect(sweep.archived).toHaveLength(1)
+    const archived = sweep.archived[0]!
+    expect(archived.rootTaskId).toBe(rootId)
     expect([...archived.taskIds].sort()).toEqual([childId, rootId].sort())
     expect(existsSync(join(archiveDir, rootId, 'manifest.json'))).toBe(true)
 
@@ -325,8 +331,14 @@ describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (har
     const ioComplete = await store(db).transition({ claim, to: 'io-complete', now: NOW + 1 })
     expect(ioComplete.revision).toBe(2)
 
-    const recovered = await recoverInterruptedArchives(legacy(db), { archiveDir, now: NOW + 2 })
-    expect(recovered.claimedRoots.has(rootId)).toBe(true)
+    const recovered = await createDrizzleTaskArchiveMaintenanceCommand(legacy(db)).recover({
+      archiveDir,
+      now: NOW + 2,
+      runsDir: join(archiveDir, 'runs'),
+      logsDir: join(archiveDir, 'logs'),
+    })
+    // The final directory already exists: recovery completes the claim without a rename.
+    expect(recovered).toEqual({ promoted: [], discarded: [] })
 
     expect(await taskExists(db, rootId)).toBe(false)
     expect((await claimRow(db, claim.claimId))?.state).toBe('completed')

@@ -22,7 +22,7 @@
 //   reproduces the same fire/skip decisions (B18). They are the before-photo.
 
 import { describe, expect, test } from 'bun:test'
-import { pickFreshestReviewRun } from '../src/services/review'
+import { pickFreshestReviewRun } from '@/modules/collaboration/infrastructure/review'
 import type { nodeRuns } from '../src/db/schema'
 
 type Row = typeof nodeRuns.$inferSelect

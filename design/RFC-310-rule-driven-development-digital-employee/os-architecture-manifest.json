@@ -11,7 +11,7 @@
         "infrastructure",
         "public"
       ],
-      "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
+      "publicEntries": ["commands.ts", "events.ts", "participants.ts", "types.ts"],
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
         "cli/postgresqlDaemonApplication.ts -> composition",
@@ -51,7 +51,7 @@
         "infrastructure",
         "public"
       ],
-      "publicEntries": ["commands.ts", "events.ts", "participants.ts", "queries.ts", "types.ts"],
+      "publicEntries": ["commands.ts", "participants.ts", "queries.ts", "types.ts"],
       "externalImports": [
         "bootstrap/crewstation.ts -> composition",
         "bootstrap/workspaceTaskImage.ts -> composition",

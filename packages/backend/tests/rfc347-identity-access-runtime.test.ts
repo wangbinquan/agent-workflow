@@ -277,7 +277,6 @@ describe('RFC-347 exact production source locks', () => {
       'src/main.ts',
       'src/modules/identity-access/composition/userOperations.ts',
       'src/server.ts',
-      'src/services/ownerIdentity.ts',
       'src/services/ownerScopedName.ts',
       'src/services/userIdentities.ts',
       'src/services/users.ts',

@@ -47,8 +47,6 @@ import {
 import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'
-import { DAEMON_CADENCE, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 
 const log = createLogger('gc')
 
@@ -1084,51 +1082,4 @@ export async function runIsoWorktreeGc(
     }
   }
   return { scanned: taskDirs.length, removed }
-}
-
-/**
- * Start an hourly worktree-GC ticker. The supplied `loadConfig` is invoked
- * each tick so config changes take effect without daemon restart. `appHome` (when
- * given) also GCs orphan iso worktrees (RFC-130 PR-E) and orphan scratch dirs
- * (RFC-165 F9) each tick.
- */
-export function startWorktreeGc(
-  db: ProviderNeutralDatabase,
-  // RFC-287：半成品目录的年龄阈值要随 `gitCloneTimeoutMs` 放大（无上限的配置项），
-  // 所以这里比原来多读一个字段。仍是**窄投影**，不是整份 Config。
-  loadConfig: () => Pick<Config, 'worktreeAutoGc' | 'gitCloneTimeoutMs'>,
-  intervalMs: number = DAEMON_CADENCE.worktreeGc,
-  appHome?: string,
-  isTaskActive: (taskId: string) => boolean = () => false,
-  // RFC-322：错峰相位。本拍是全部维护任务里最重的一个（下面串跑 6 段遍历文件系统的
-  // GC），所以排在相位表最前，让它独占自己的窗口。原实现的 handle 没有 unref()，
-  // 收编后统一 unref。
-  phaseOffsetMs: number = MAINTENANCE_PHASE.worktreeGc,
-): { stop: () => void } {
-  return startMaintenanceTicker({
-    job: 'worktreeGc',
-    intervalMs,
-    phaseOffsetMs,
-    onTick: () =>
-      recoverInterruptedWorkspaceGc(db)
-        .then(() => runClaimedWebhookWorkspacePrunes(db, { isTaskActive, staleOnly: true }))
-        .then(() => runWorktreeGc(db, loadConfig(), Date.now(), isTaskActive))
-        .then(() =>
-          appHome !== undefined ? runIsoWorktreeGc(db, appHome, isTaskActive) : undefined,
-        )
-        .then(() => (appHome !== undefined ? runScratchOrphanGc(db, appHome) : undefined))
-        // RFC-222 — sweep orphan task worktrees (deleted-task backstop, §6.4).
-        .then(() => (appHome !== undefined ? runWorktreeOrphanGc(db, appHome) : undefined))
-        // RFC-287：半成品镜像目录（SIGKILL 落在冷克隆中途时留下），此前无人回收。
-        .then(async () => {
-          if (appHome !== undefined) {
-            await runPartialCloneGc(appHome, Date.now(), loadConfig().gitCloneTimeoutMs)
-          }
-        })
-        .catch((err: unknown) => {
-          log.error('runWorktreeGc failed', {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }),
-  })
 }

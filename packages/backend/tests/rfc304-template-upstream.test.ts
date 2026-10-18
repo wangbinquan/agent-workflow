@@ -1,3 +1,4 @@
+import { composeCapabilityTemplateOperations } from '../src/modules/code-capability/composition/capabilityTemplateOperations'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-304 §11.6 (T64) — the four states, and the base that makes them knowable.
@@ -16,25 +17,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 // two-way merge guesses — and is wrong half the time on exactly the fields
 // somebody cared enough to edit.
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 
 import type { Actor } from '../src/auth/actor'
-import {
-  copyTemplate as copyTemplateWithPersistence,
-  createTemplate as createTemplateWithPersistence,
-  templateDigest,
-} from '../src/services/capabilityTemplates'
-import type { CapabilityTemplatePersistence } from '../src/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
-
-function bindTemplatePersistence<Args extends unknown[], Result>(
-  operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
-): (db: ProviderNeutralDatabase, ...args: Args) => Result {
-  return (db, ...args) => operation(createCapabilityTemplatePersistence(db), ...args)
-}
-
-const copyTemplate = bindTemplatePersistence(copyTemplateWithPersistence)
-const createTemplate = bindTemplatePersistence(createTemplateWithPersistence)
+import { readUpstreamReport } from '../src/modules/code-capability/application/templateUpstreamStatus'
+import { createTemplateUpstreamPersistence } from '../src/modules/code-capability/infrastructure/templateUpstreamPersistence'
+import { updateResourceAcl } from '../src/services/resourceAcl'
 import {
   judgeUpstream,
   mergeUnoverridden,
@@ -246,46 +235,127 @@ describeEachProvider('RFC-304 T64 — copying records the origin', (harness) => 
 
     expect(copy.upstreamId).toBe(source.id)
     expect(copy.upstreamVersion).toBe(source.updatedAt)
-    expect(copy.baseDigest).toBe(templateDigest(source))
+    expect(copy.baseDigest).toMatch(/^[a-f0-9]{64}$/)
   })
 
   test('the base digest matches the source at copy time, so a fresh copy is CURRENT', async () => {
+    // The copied body must reproduce the source's digest despite its new identity.
+    // Copying it again exposes that digest without exporting a private helper.
     const db = harness.db
     const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
     const copy = await copyTemplate(db, source, AUTHOR, 'mine', 2000)
+    const copyOfCopy = await copyTemplate(db, copy, AUTHOR, 'same body', 3000)
+    expect(copy.baseDigest).not.toBeNull()
+    expect(copyOfCopy.baseDigest).toBe(copy.baseDigest)
 
-    const status = judgeUpstream({
-      link: {
-        upstreamId: copy.upstreamId!,
-        upstreamVersion: copy.upstreamVersion!,
-        baseDigest: copy.baseDigest!,
-      },
-      upstreamVersionNow: source.updatedAt,
-      localDigest: templateDigest(copy),
-      localOverrides: [],
+    const report = await readUpstreamReport(createTemplateUpstreamPersistence(db), copy.id)
+    expect(report).toMatchObject({
+      link: { upstreamId: source.id, upstreamVersion: source.updatedAt },
+      baseRecorded: true,
+      status: { state: 'current', localOverrides: [] },
     })
-    expect(status.state).toBe('current')
+    expect(report?.fields.every((field) => field.action === 'unchanged')).toBe(true)
   })
-})
-
-describeEachProvider('RFC-304 T64 — copying records the origin', (harness) => {
-  let db: ProviderNeutralDatabase
-  beforeEach(() => {
-    db = harness.db
-  })
-  afterEach(() => {})
 
   test('the digest ignores the ACL, so a visibility change is not a body change', async () => {
-    // Otherwise every grant edit upstream would mark healthy copies
-    // `conflicted`, and the state would stop meaning anything.
-    const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
-    const withDifferentAcl = { ...source, visibility: 'public' as const, aclRevision: 7 }
-    expect(templateDigest(withDifferentAcl)).toBe(templateDigest(source))
+    // Otherwise grant edits would look like body edits and healthy copies would
+    // stop being comparable. Compare the live copy receipts on both sides.
+    const db = harness.db
+    const owner = {
+      ...AUTHOR,
+      permissions: new Set(AUTHOR.permissions).add('resource-acl:private'),
+    }
+    const source = await createTemplate(db, FRAMEWORK, owner, 1000)
+    const copy = await copyTemplate(db, source, owner, 'mine', 2000)
+    await updateResourceAcl(
+      db,
+      owner,
+      'capability_template',
+      source,
+      {
+        expectedResourceId: source.id,
+        expectedAclRevision: source.aclRevision,
+        visibility: 'public',
+      },
+      { updatedAt: 3000 },
+    )
+    const upstream = await storedTemplate(db, source.id)
+    expect(upstream.visibility).toBe('public')
+    expect(upstream.aclRevision).toBe(source.aclRevision + 1)
+    const afterAclChange = await copyTemplate(db, upstream, owner, 'after ACL change', 4000)
+    expect(afterAclChange.baseDigest).toBe(copy.baseDigest)
+
+    const report = await readUpstreamReport(createTemplateUpstreamPersistence(db), copy.id)
+    expect(report?.fields.every((field) => field.action === 'unchanged')).toBe(true)
+    // The live ACL writer also advances updatedAt. Status follows that version,
+    // not the body digest, so it advertises an update with no changed fields.
+    expect(upstream.updatedAt).toBe(3000)
+    expect(report?.status).toMatchObject({ state: 'update-available', localOverrides: [] })
   })
 
   test('the digest DOES change when a script body changes', async () => {
+    // A real upstream fix must reach copies as an available update; ignoring
+    // scripts in the digest would make two different bodies share a base.
+    const db = harness.db
     const source = await createTemplate(db, FRAMEWORK, AUTHOR, 1000)
-    const edited = { ...source, scriptsJson: JSON.stringify({ collect: { script: 'other' } }) }
-    expect(templateDigest(edited)).not.toBe(templateDigest(source))
+    const copy = await copyTemplate(db, source, AUTHOR, 'mine', 2000)
+    const scripts = { collect: { language: 'node' as const, script: 'console.log(2)' } }
+    const upstream = await templateOperations(db, 3000).update(AUTHOR, source.id, {
+      ...FRAMEWORK,
+      scripts,
+    })
+    const afterScriptChange = await copyTemplate(db, upstream, AUTHOR, 'after script change', 4000)
+    expect(afterScriptChange.baseDigest).not.toBe(copy.baseDigest)
+
+    const report = await readUpstreamReport(createTemplateUpstreamPersistence(db), copy.id)
+    expect(report?.status).toMatchObject({ state: 'update-available', localOverrides: [] })
+    expect(report?.fields).toContainEqual({
+      field: 'scripts',
+      action: 'take-upstream',
+      value: scripts,
+    })
   })
 })
+
+// RFC-375: writes use the live operation API; persistence reads inspect stored receipts.
+function templateOperations(db: ProviderNeutralDatabase, now?: number) {
+  return composeCapabilityTemplateOperations({
+    db,
+    ...(now === undefined ? {} : { now: () => now }),
+    access: {
+      filterVisible: async (_actor, rows) => [...rows],
+      canView: async () => true,
+      requireEdit: async () => 'own' as const,
+      requireGovern: async () => {},
+      assertNameUnchangedForEditor: () => {},
+    },
+  })
+}
+async function storedTemplate(db: ProviderNeutralDatabase, id: string) {
+  const row = await createCapabilityTemplatePersistence(db).load(id)
+  if (row === null) throw new Error(`missing template ${id}`)
+  return row
+}
+async function createTemplate(
+  db: ProviderNeutralDatabase,
+  raw: unknown,
+  actor: Actor,
+  now?: number,
+) {
+  const result = await templateOperations(db, now).create(actor, raw)
+  return storedTemplate(db, result.id)
+}
+async function copyTemplate(
+  db: ProviderNeutralDatabase,
+  source: { readonly id: string },
+  actor: Actor,
+  name?: string,
+  now?: number,
+) {
+  const result = await templateOperations(db, now).copy(
+    actor,
+    source.id,
+    name === undefined ? {} : { name },
+  )
+  return storedTemplate(db, result.id)
+}

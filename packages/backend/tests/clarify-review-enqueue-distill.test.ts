@@ -11,7 +11,7 @@ import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { clarifyRounds, memoryDistillJobs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 async function seedFixture(db: ProviderNeutralDatabase): Promise<{
@@ -191,7 +191,7 @@ describe('source-code grep guard — review distill is a durable committed-event
   test('review.ts never enqueues inline and the committed-event consumer owns the call', async () => {
     const fs = await import('node:fs')
     const review = fs.readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'review.ts'),
+      resolve(import.meta.dir, '../src/modules/collaboration/infrastructure/review.ts'),
       'utf8',
     )
     const consumer = fs.readFileSync(

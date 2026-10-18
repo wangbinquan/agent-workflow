@@ -43,7 +43,7 @@ import {
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import type { ProbedMcpClient } from '../src/services/mcpProbe'
-import { buildSiblingOutputsBlock } from '../src/services/review'
+import { buildSiblingOutputsBlock } from '@/modules/collaboration/infrastructure/review'
 import {
   createManagedSkill,
   type SkillFsOptions,

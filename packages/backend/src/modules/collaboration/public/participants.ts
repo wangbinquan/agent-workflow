@@ -3,8 +3,6 @@
 // consumer-owned human-gate SPI remains module-internal.
 
 import { createWorkgroupClarifyAskGate as createWorkgroupClarifyAskGateInternal } from '../infrastructure/workgroupClarifyAskGate'
-
-export type { HumanGateOpenParticipantResult } from '../application/ports/humanGateOpenParticipant'
 export type {
   TaskDagCollaborationOperations,
   TaskDagOpenClarifyEvidence,
@@ -25,7 +23,6 @@ export type {
   CollaborationReviewDispatchResult,
   CollaborationReviewPromptInput,
   CollaborationRuntimeMechanics,
-  CollaborationTaskRuntimeOperations,
 } from '../application/ports/collaborationRuntimeMechanics'
 export type { ClarifyRepairParticipant } from '../application/ports/clarifyRepairParticipant'
 export type {
@@ -35,10 +32,8 @@ export type {
 export type {
   AddReviewCommentInput,
   AddedReviewComment,
-  CollaborationClarifyDraftEventPublisher,
   CollaborationRouteActor,
   CollaborationRouteOperations,
-  CollaborationTaskQuestionView,
   ListClarifySummariesInput,
   ListReviewSummariesInput,
   ReassignTaskQuestionAction,

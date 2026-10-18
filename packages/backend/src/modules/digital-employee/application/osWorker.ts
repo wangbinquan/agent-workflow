@@ -98,35 +98,3 @@ export async function runDigitalEmployeeOsCycle(
       0,
   }
 }
-
-export function startDigitalEmployeeOsWorker(input: {
-  readonly dependencies: DigitalEmployeeOsWorkerDependencies
-  readonly intervalMs: number
-  readonly onError: (error: unknown) => void
-  readonly onCycle?: (result: DigitalEmployeeOsCycleResult) => void
-}): { readonly stop: () => void; readonly runNow: () => Promise<void> } {
-  let running = false
-  let stopped = false
-  const runNow = async (): Promise<void> => {
-    if (running || stopped) return
-    running = true
-    try {
-      const result = await runDigitalEmployeeOsCycle(input.dependencies)
-      input.onCycle?.(result)
-    } catch (error) {
-      input.onError(error)
-    } finally {
-      running = false
-    }
-  }
-  const timer = setInterval(() => void runNow(), input.intervalMs)
-  timer.unref?.()
-  void runNow()
-  return {
-    stop() {
-      stopped = true
-      clearInterval(timer)
-    },
-    runNow,
-  }
-}

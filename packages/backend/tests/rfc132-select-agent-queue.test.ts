@@ -27,7 +27,10 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { bindTriggerRun, selectAgentQueue } from '../src/services/clarifyQueue'
+import {
+  bindTriggerRun,
+  selectAgentQueue,
+} from '@/modules/collaboration/infrastructure/clarify/queue'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion } from '@agent-workflow/shared'
 

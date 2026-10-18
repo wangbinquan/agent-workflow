@@ -52,7 +52,7 @@ import {
   dispatchReviewNode,
   submitReviewDecision,
   type SubmitReviewDecisionArgs,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import { DomainError } from '../src/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'

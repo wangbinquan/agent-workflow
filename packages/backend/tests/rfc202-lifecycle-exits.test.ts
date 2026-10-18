@@ -21,17 +21,16 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { sealRoundQuestions } from '../src/services/clarifySeal'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import {
   submitReviewDecision,
   listReviewSummaries,
   countPendingReviews,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
 import { deleteWorkflow, scheduledRowsReferencingWorkflow } from '../src/services/workflow'
 import { ConflictError } from '../src/util/errors'
@@ -135,7 +134,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     await seedClarifyRound(db, taskId, 'cross', crossRun)
 
     const sweep = createHumanGateTerminalSweepCommand(db)
-    const result = await sealOpenHumanGatesForTask(sweep, taskId, 'task-canceled')
+    const result = await sweep.run({ taskId: taskId, cause: 'task-canceled' })
     expect(result.sealedSelfRounds).toBe(1)
     expect(result.abandonedCrossRounds).toBe(1)
 
@@ -165,7 +164,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     expect(xsessions[0]?.status).toBe('abandoned')
 
     // idempotent: second sweep is a no-op
-    const again = await sealOpenHumanGatesForTask(sweep, taskId, 'task-canceled')
+    const again = await sweep.run({ taskId: taskId, cause: 'task-canceled' })
     expect(again.sealedSelfRounds).toBe(0)
     expect(again.abandonedCrossRounds).toBe(0)
     expect(again.canceledRuns.length).toBe(0)
@@ -217,11 +216,10 @@ describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onTerminalTask(hookDb, taskId) {
         terminalSweeps.push(
-          sealOpenHumanGatesForTask(
-            createHumanGateTerminalSweepCommand(hookDb),
-            taskId,
-            'task-canceled',
-          ),
+          createHumanGateTerminalSweepCommand(hookDb).run({
+            taskId: taskId,
+            cause: 'task-canceled',
+          }),
         )
       },
     })

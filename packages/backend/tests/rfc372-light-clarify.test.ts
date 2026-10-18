@@ -21,7 +21,7 @@ import {
 } from '@agent-workflow/shared'
 import { clarifyRounds, nodeRuns, tasks, workflows } from '@/db/schema'
 import { createClarifyRound } from '@/services/clarify/service'
-import { sealRoundQuestions } from '@/services/clarifySeal'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { saveClarifyDraft } from '@/modules/collaboration/infrastructure/clarifyRounds'
 import { createClarifyFollowupStore } from '@/modules/collaboration/infrastructure/clarifyFollowupStore'
 import { createClarifyFollowupOperations } from '@/modules/collaboration/application/clarifyFollowup'

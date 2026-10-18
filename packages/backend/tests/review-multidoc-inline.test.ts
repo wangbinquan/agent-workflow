@@ -29,7 +29,7 @@ import {
   getReviewDetail,
   setDocumentSelection,
   submitReviewDecision,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import { joinMarkdownDocs } from '@agent-workflow/shared'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

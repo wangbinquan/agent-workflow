@@ -635,17 +635,8 @@ describe('RFC-333 T4 review artifact recovery', () => {
       ),
       'utf8',
     )
-    const tickerSource = readFileSync(
-      resolve(
-        import.meta.dir,
-        '../src/modules/collaboration/composition/humanGateRecoveryTicker.ts',
-      ),
-      'utf8',
-    )
     expect(recoverySource).not.toContain('task-execution')
     expect(recoverySource).not.toContain('submitTaskContinuation')
     expect(recoverySource).not.toContain('resumeTask')
-    expect(tickerSource).not.toContain('setInterval(')
-    expect(tickerSource).toContain('startMaintenanceTicker(')
   })
 })

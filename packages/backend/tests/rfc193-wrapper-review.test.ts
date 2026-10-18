@@ -311,7 +311,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
 
     const { nodeRunOutputs, nodeRuns } = await import('../src/db/schema')
     const { and } = await import('drizzle-orm')
-    const { parseArchiveJson } = await import('../src/services/portArtifacts')
+    const { parseArchiveJson } = await import('@/modules/task-execution/public/queries')
     async function projectedRow(nodeId: string, port: string) {
       const runs = await h.db
         .select()
@@ -433,7 +433,7 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     'composition',
     'taskEngineApplication.ts',
   )
-  const REVIEW = resolve(import.meta.dir, '..', 'src', 'services', 'review.ts')
+  const REVIEW = resolve(import.meta.dir, '../src/modules/collaboration/infrastructure/review.ts')
   // RFC-359 AC-1（第 8 刀）：两份修复实现合成一份，S1 的锚点随之换到留下的那一份。
   // 合并前**留下的这一份就是直传 `ctx.task.worktreePath` 的**——正是本用例禁止的写法；
   // `deriveScopeRoot` 随合并从退役那份移植过来，本用例是它的红绿依据。

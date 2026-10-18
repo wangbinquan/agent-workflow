@@ -51,12 +51,6 @@ describe('RFC-308 hard-cut source inventory', () => {
       .map((path) => readFileSync(path, 'utf8'))
       .join('\n')
     expect(codeCapability).not.toMatch(/modules\/(?:source-control|task-execution)\//)
-    const taskAdapter = readFileSync(
-      join(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'taskWorkspaceCommit.ts'),
-      'utf8',
-    )
-    expect(taskAdapter).toContain('@/modules/source-control/public/participants')
-    expect(taskAdapter).not.toContain('@/modules/source-control/composition')
     expect(ordinary).not.toMatch(/modules\/source-control\/(?:application|domain|infrastructure)/)
     // 原断言逐条禁止 code-capability 自己跑 git 动词（add/commit/push/
     // update-ref）；T105 后该模块整体无 git 调用，一条正则覆盖全部。

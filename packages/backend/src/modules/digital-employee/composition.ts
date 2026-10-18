@@ -75,13 +75,15 @@ import type {
 } from './domain/model'
 import type {
   EmployeeCaseDetailProjectionParticipant,
-  EmployeeCaseLaunchInput,
-  EmployeeCaseProjectionDocument,
   EmployeeTypePackageRegistration,
   EmployeeTypeCollaborationCodec,
   EmployeeTypeContextCodec,
   EmployeeTypeReactionCodec,
 } from './public/types'
+import type {
+  EmployeeCaseLaunchInput,
+  EmployeeCaseProjectionDocument,
+} from './application/ports/caseRuntime'
 import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/types'
 import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
 import type { DigitalEmployeeMaintenanceCommands } from './public/commands'
@@ -98,7 +100,7 @@ export const createPostgresqlDigitalEmployeeIntegrationTriggerParticipant =
   createDigitalEmployeeIntegrationTriggerParticipantIn
 
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
-export { runDigitalEmployeeOsCycle, startDigitalEmployeeOsWorker } from './application/osWorker'
+export { runDigitalEmployeeOsCycle } from './application/osWorker'
 export { composeDigitalEmployeeAgentTemplateCatalogParticipant } from './composition/agentTemplateCatalog'
 // RFC-370 M2: hosted employee program / input content (CrewStation objects).
 export { composeCrewStationEmployeeContent } from './composition/crewstationContent'

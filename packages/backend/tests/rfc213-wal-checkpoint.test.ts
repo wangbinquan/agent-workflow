@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
 import { workflows } from '../src/db/schema'
-import { checkpointWal, startWalCheckpointLoop } from '../src/services/backupScheduler'
+import { checkpointWal } from '../src/services/backupScheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -48,17 +48,5 @@ describe('RFC-213 checkpointWal', () => {
     expect(after).toBeLessThan(before)
     expect(after).toBe(0) // TRUNCATE zeroes the file
     ;(db as unknown as { $client: Database }).$client.close()
-  })
-
-  // RFC-311 余项：间隔改成每拍热读（`getIntervalMs`）后，0 仍然是「不 checkpoint」，
-  // 只是监督拍还在跑——这样把配置改回非 0 不需要重启 daemon。热切换本身由
-  // `rfc311-maintenance-boot-tick.test.ts` 锁定。
-  test('startWalCheckpointLoop with getIntervalMs()=0 never touches the db', () => {
-    const handle = startWalCheckpointLoop({
-      db: {} as never,
-      getIntervalMs: () => 0,
-      tickMs: 5,
-    })
-    expect(() => handle.stop()).not.toThrow()
   })
 })

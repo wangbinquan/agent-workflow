@@ -16,20 +16,9 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import {
-  agents,
-  capabilityTemplates,
-  nodeRuns,
-  repoCapabilityConfig,
-  taskRepos,
-  tasks,
-  users,
-  workflows,
-  workgroupTaskState,
-} from '@/db/schema'
+import { nodeRuns, taskRepos, tasks, users, workflows, workgroupTaskState } from '@/db/schema'
 import { composeCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
-import { DrizzleReviewerResolutionRead } from '@/modules/code-capability/infrastructure/reviewerResolutionRead'
 import { composeDevelopmentConfigOperationsFor } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
@@ -155,61 +144,6 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
     expect(
       await postgresql.capabilityParams.find({ repoId: `r_${ulid()}`, capability: 'code-review' }),
     ).toBeNull()
-  })
-
-  test('评审人槽位解析读：仓库能力 → 模板 → agent 三跳都在真库上', async () => {
-    const repoId = `r_${ulid()}`
-    const templateId = `ct_${ulid()}`
-    const agentId = `a_${ulid()}`
-    const agentName = `reviewer-${agentId.slice(-6).toLowerCase()}`
-    await harness.db.insert(agents).values({
-      id: agentId,
-      name: agentName,
-      description: '',
-      outputs: '[]',
-      permission: '{}',
-      skills: '[]',
-      frontmatterExtra: '{}',
-      bodyMd: '',
-      createdAt: T0,
-      updatedAt: T0,
-    })
-    await harness.db.insert(capabilityTemplates).values({
-      id: templateId,
-      name: `tpl-${templateId.slice(-6).toLowerCase()}`,
-      description: '',
-      capability: 'code-review',
-      paramSchemaJson: '[]',
-      paramDefaultsJson: '{}',
-      agentBySlotJson: JSON.stringify({ reviewer: agentId }),
-      promptBySlotJson: '{}',
-      paramsJson: '{}',
-      createdAt: T0,
-      updatedAt: T0,
-    })
-    await harness.db.insert(repoCapabilityConfig).values({
-      id: `rcc_${ulid()}`,
-      repoId,
-      capability: 'code-review',
-      templateId,
-      enabled: true,
-      createdAt: T0,
-      updatedAt: T0,
-    })
-
-    const read = new DrizzleReviewerResolutionRead(harness.db)
-    expect(
-      await read.loadRepositoryCapability({ repositoryId: repoId, capability: 'code-review' }),
-    ).toEqual({ templateId })
-    expect(
-      await read.loadRepositoryCapability({ repositoryId: repoId, capability: 'no-such' }),
-    ).toBeNull()
-    expect(JSON.parse((await read.loadTemplate(templateId))?.agentBySlotJson ?? '{}')).toEqual({
-      reviewer: agentId,
-    })
-    expect(await read.loadTemplate(`ct_${ulid()}`)).toBeNull()
-    expect((await read.loadAgent(agentId))?.name).toBe(agentName)
-    expect(await read.loadAgent(`a_${ulid()}`)).toBeNull()
   })
 
   test('能力模板操作：列表 / 创建 / 读取 / 删除经 Resource Catalog 的授权面落真库', async () => {

@@ -1,11 +1,5 @@
-// RFC-310 PR-2 T30 —— daemon 恢复扫描 + fence settle + durable wake 语义。
-//
-// 锁：①cancel-pending + dispatched effect：recovery 经 executor 按外部真相
-// 结算（confirm）后 mission 收口 canceled、fence 清零、epoch 已 bump、MR
-// claim 释放；executor 缺席时保持 fence-pending（绝不假装外部没发生）；
-// ②handoff-pending → tracking-only；③epoch 过期的 prepared effect 被
-// invalidate；④到期 deferred wake 被 fire（state 迁移）且 domain 语义：
-// early 唤醒/重启都不清零 attemptOrdinal。
+// RFC-310/RFC-375 — recovery keeps dispatched effects pending, invalidates stale
+// prepared effects, settles empty fences, and preserves durable wake ordinals.
 
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -18,7 +12,6 @@ import {
   nextAttemptOrdinal,
   type DeferredWakeRow,
 } from '../src/modules/development-automation/domain/deferredWake'
-import type { MissionEffectExecutorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import {
   listFencedMissionIds,
   listPreparedEffectRows,
@@ -36,14 +29,8 @@ function readersOf(f: Pr2Fixture) {
   }
 }
 
-const okExecutor: MissionEffectExecutorPort = {
-  async execute(input) {
-    return { ok: true, receiptRef: `receipt-${input.effectId}` }
-  },
-}
-
 describeEachProvider('rfc310 pr2 recovery', (harness) => {
-  test('cancel with a dispatched effect settles through the executor, then reaches canceled', async () => {
+  test('cancel with a dispatched effect remains fence-pending', async () => {
     const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-cancel-1')
     const mission = (await f.store.getMission(missionId))!
@@ -87,14 +74,6 @@ describeEachProvider('rfc310 pr2 recovery', (harness) => {
     const withoutExecutor = await recoverMissions(f.deps({}), readersOf(f))
     expect(withoutExecutor.pendingFences).toBe(1)
     expect((await f.store.getMission(missionId))!.status).not.toBe('canceled')
-
-    const report = await recoverMissions(f.deps({ effectExecutor: okExecutor }), readersOf(f))
-    expect(report.settledFences).toBe(1)
-    const settled = (await f.store.getMission(missionId))!
-    expect(settled.status).toBe('canceled')
-    expect(settled.transitionFence).toBe('none')
-    expect(settled.epoch).toBeGreaterThan(mission.epoch)
-    expect((await f.store.getEffect(effect.effect.id))!.state).toBe('confirmed')
   })
 
   test('handoff-pending settles into tracking-only with automation writes fenced off', async () => {

@@ -5,7 +5,6 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskExecutionIntents, tasks } from '@/db/schema'
 import { createHumanGateContinuationWorkerDefinition } from '@/modules/collaboration/application/humanGateContinuationWorker'
 import { startManagedWorkerDefinition } from '@/platform/events/committed/workerDefinitions'
-import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -92,8 +91,7 @@ describe('RFC-341 human-gate continuation worker', () => {
       await seedLegacyTaskGate(db)
       const driven: Array<{ taskId: string; continuationRef: string }> = []
       const worker = createHumanGateContinuationWorkerDefinition({
-        listPending: () =>
-          listPendingHumanGateContinuations(createHumanGateContinuationRecoveryQueries(db)),
+        listPending: () => createHumanGateContinuationRecoveryQueries(db).listPending(),
         drive: async (continuation) => {
           driven.push(continuation)
           await db

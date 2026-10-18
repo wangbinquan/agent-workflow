@@ -209,7 +209,7 @@ describe('RFC-349 port-artifact provider cutover', () => {
   test('transport and filesystem presenter do not import database mechanisms', () => {
     for (const relativePath of [
       'routes/port-artifacts.ts',
-      'services/portArtifacts.ts',
+      'platform/content/local/rootFileQueries.ts',
       'services/sessionView.ts',
     ]) {
       const source = readFileSync(resolve(import.meta.dir, '..', 'src', relativePath), 'utf8')

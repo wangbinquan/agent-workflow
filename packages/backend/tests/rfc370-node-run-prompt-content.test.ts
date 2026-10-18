@@ -20,11 +20,8 @@ import type {
   NodeRunPromptOperations,
   NodeRunPromptRow,
 } from '../src/modules/task-execution/application/ports/nodeRunPromptContent'
-import {
-  nodeRunPromptRelPath,
-  readNodeRunPrompt,
-  storeNodeRunPrompt,
-} from '../src/services/nodeRunPrompt'
+import { nodeRunPromptRelPath, storeNodeRunPrompt } from '@/modules/task-execution/public/commands'
+import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 
 function held<T>() {
   let resolve!: (value: T) => void

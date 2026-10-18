@@ -11,12 +11,10 @@
 // human — the loop never guesses.
 //
 // resolveOptions / applyOption are injected so the loop logic is unit-testable
-// without the full repair engine; startAutoRepairLoop wires the real
+// without the full repair engine; the maintenance Worker supplies the real
 // listRepairOptionsForAlert / applyRepairOption.
 
 import { selectAutoApplyOption, type RepairOption } from '@agent-workflow/shared'
-
-import { loadConfig } from '@/config'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -26,11 +24,7 @@ import {
 } from '@/services/recoveryBreaker'
 import { listAllOpenLifecycleAlerts, type OpenLifecycleAlert } from '@/services/taskAlerts'
 import { createLogger } from '@/util/log'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import type {
-  TaskLifecycleAutoRepairCommand,
-  TaskLifecycleAutoRepairResult,
-} from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
+import type { TaskLifecycleAutoRepairResult } from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
 
 const log = createLogger('auto-repair')
 
@@ -116,49 +110,4 @@ export async function runAutoRepairOnce(deps: AutoRepairDeps): Promise<AutoRepai
     }
   }
   return out
-}
-
-export interface AutoRepairLoopHandle {
-  stop: () => void
-}
-
-/**
- * Periodic auto-repair ticker for the daemon. DEFAULT OFF: with `autoRepair`
- * empty (the default) every tick early-outs in O(1) before touching the DB, so
- * this is free until an operator enables a rule. The repair engine is loaded via
- * dynamic import to keep this module out of the lifecycleRepair→options→task
- * static cycle (binary-build safety).
- */
-export function startAutoRepairLoop(opts: {
-  command: TaskLifecycleAutoRepairCommand
-  configPath: string
-  intervalMs?: number
-}): AutoRepairLoopHandle {
-  const intervalMs = opts.intervalMs ?? DAEMON_CADENCE.autoRepair
-  let inFlight = false
-  const tick = async (): Promise<void> => {
-    if (inFlight) return
-    inFlight = true
-    try {
-      const cfg = loadConfig(opts.configPath)
-      const autoRepair = cfg.autoRepair ?? {}
-      if (!Object.values(autoRepair).some((v) => v === true)) return // default: nothing enabled
-      await opts.command.run({
-        enabledRules: Object.entries(autoRepair)
-          .filter(([, enabled]) => enabled === true)
-          .map(([rule]) => rule),
-        maxPerWindow: cfg.maxAutoRecoveriesPerWindow,
-        windowMs: cfg.autoRecoveryWindowMs,
-      })
-    } catch (err) {
-      log.warn('auto-repair tick failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    } finally {
-      inFlight = false
-    }
-  }
-  const timer = setInterval(() => void tick(), intervalMs)
-  ;(timer as { unref?: () => void }).unref?.()
-  return { stop: () => clearInterval(timer) }
 }

@@ -15,12 +15,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 describe('RFC-349 execution-peripheral provider boundary', () => {
   test('keeps database mechanisms out of peripheral orchestration services', () => {
-    const services = [
-      'agentLaunch.ts',
-      'codeReviewAgentCaller.ts',
-      'commitPushRunner.ts',
-      'dynamicWorkflowRunner.ts',
-    ]
+    const services = ['agentLaunch.ts', 'commitPushRunner.ts', 'dynamicWorkflowRunner.ts']
 
     // RFC-353 T5：`fusion.ts` 已迁出 `services/`，成为
     // `modules/knowledge-evolution/application/fusionOrchestration.ts`。它不再是

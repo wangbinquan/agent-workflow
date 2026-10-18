@@ -17,13 +17,13 @@ import { and, eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
-import { sealRoundQuestions } from '../src/services/clarifySeal'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import {
   listTaskQuestions,
   reassignTaskQuestion,
   stageTaskQuestion,
 } from '../src/services/taskQuestions'
-import { buildClarifyQueueContext } from '../src/services/clarifyQueue'
+import { buildClarifyQueueContext } from '@/modules/collaboration/infrastructure/clarify/queue'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type {
   ClarifyAnswer,

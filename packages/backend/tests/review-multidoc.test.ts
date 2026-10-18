@@ -40,7 +40,7 @@ import {
   listReviewSummaries,
   setDocumentSelection,
   submitReviewDecision,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import { ConflictError } from '../src/util/errors'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { acquireWriterLease } from '../src/platform/persistence/writerLease'

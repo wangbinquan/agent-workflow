@@ -28,20 +28,15 @@ import {
   writeSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { Config } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
 import type { EventsArchiveContent } from '@/platform/background/eventsArchiveContent'
 export { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
-import { MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('events-archive')
-
-const HOUR_MS = 60 * 60 * 1000
 
 export interface ArchiveRunResult {
   perGroupArchived: number
@@ -597,40 +592,4 @@ function finalizeArchiveJournal(file: string): void {
 
 function jsonlPath(logsDir: string, taskId: string, nodeRunId: string): string {
   return join(logsDir, taskId, `${nodeRunId}.jsonl`)
-}
-
-/**
- * Start the hourly archive ticker. `loadConfig` is called each tick so
- * config changes apply without restart, matching worktree-GC's pattern.
- *
- * RFC-311 余项（2026-08-21 生产对账）：**boot 后必须先跑一拍**。此前这里只有
- * `setInterval(1h)`，于是平均重启间隔短于一个周期的部署（发版 / 崩溃 / watchdog）
- * 一次都不会归档——生产实测跑着含字节水位的 v0.18.11，事件表照样长到 78.6 万行
- * / 1.72GB。首拍延迟 30s 是为了让开机风暴（迁移、备份、恢复、boot 巡检）先过去：
- * 一轮归档在 2.6GB 库上实测 4-6s，撞在启动上没有必要。
- */
-export function startEventsArchiver(
-  // RFC-359：这里只把 db 转交给 `archiveEvents`，而后者早就收中立客户端了——
-  // `DbClient` 是一个纯粹多余的收紧，两个引擎的归档器都该能从这里起。
-  db: ProviderNeutralDatabase,
-  loadConfig: () => Pick<Config, 'eventsArchiveThresholds'>,
-  logsDir: string,
-  intervalMs: number = HOUR_MS,
-  bootDelayMs: number = MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
-  // RFC-322：boot 首拍（体积封顶，见 MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS）与相位
-  // 正交——前者管「重启频繁的部署也得跑一次」，后者管「别和另外 13 个同刻引爆」。
-  phaseOffsetMs: number = MAINTENANCE_PHASE.eventsArchive,
-): { stop: () => void } {
-  return startMaintenanceTicker({
-    job: 'eventsArchive',
-    intervalMs,
-    phaseOffsetMs,
-    bootDelayMs,
-    onTick: () =>
-      archiveEvents(db, loadConfig(), logsDir).catch((err: unknown) => {
-        log.error('archiveEvents failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }),
-  })
 }

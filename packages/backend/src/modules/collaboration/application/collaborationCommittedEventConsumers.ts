@@ -7,7 +7,7 @@ import {
 import {
   COLLABORATION_COMMITTED_EVENT_REF,
   COLLABORATION_COMMITTED_SOURCE_REF,
-} from '../public/events'
+} from '@/modules/collaboration/domain/collaborationCommittedEvents'
 
 interface CollaborationCommittedObservationInput {
   readonly sourceRef: { readonly id: string; readonly revision: number }

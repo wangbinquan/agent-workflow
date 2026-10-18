@@ -13,5 +13,4 @@ export {
   reconcileRunningFusions,
   repairFusionProvenance,
   seedFusionResources,
-  startFusionReconcileLoop,
 } from '../application/fusionOrchestration'

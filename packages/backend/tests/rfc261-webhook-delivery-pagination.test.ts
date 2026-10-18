@@ -1,3 +1,5 @@
+import { runWebhookDeliveryMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
+import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 // RFC-261 — 投递审计列表的封套化分页与过滤锁（proposal AC-1..5, AC-9, D9'）。
 // 锁定：{items,total,page,pageCount} 封套、(received_at DESC, id DESC) tie-break
 // 的跨页无重/漏、四过滤 AND 与 total 一致、参数钳制姿态（catch/coerce 不 422）、
@@ -23,7 +25,6 @@ import { webhookDeliveries } from '../src/db/schema'
 import { createWebhookDeliveryPersistence } from '../src/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { gcDeliveries } from '../src/services/webhook/deliveryStore'
-import { retentionFromConfig, runDeliveryGcSweep } from '../src/services/webhook/webhookGc'
 import type { WebhookDeliveryStatus } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -304,15 +305,6 @@ describeEachProviderHttpApplication(
     tempPrefix: 'aw-rfc261-',
   },
   (scope) => {
-    test('retentionFromConfig 天→毫秒换算', () => {
-      expect(
-        retentionFromConfig({
-          webhookDeliveryBodyRetentionDays: 7,
-          webhookDeliveryRowRetentionDays: 30,
-        }),
-      ).toEqual({ bodyRetentionMs: 7 * DAY, rowRetentionMs: 30 * DAY })
-    })
-
     async function configHarness(initialConfig?: Record<string, unknown>) {
       const db = scope.harness.db
       // 打底内置 runtime，避免配置接口测试依赖主机上的 runtime 安装状态。
@@ -413,19 +405,6 @@ describe('RFC-261 · 源码层文本锁（行为等价面的兜底，CLAUDE.md �
     expect(route).toContain('runtime.queries.listRepoPaths()')
     expect(route).not.toContain('@/db/')
   })
-
-  test('GC ticker 保有再入闸（收缩后的长 sweep 不叠加——P1-② 附带）', () => {
-    // RFC-322：再入闸不再是本文件里的一句 `if (running) return`——它和另外 13 个
-    // hourly 循环的同款样板一起被收进了共享原语 `services/maintenanceTicker.ts`。
-    // 守的东西没变（保留期收缩后的首次 sweep 可能超一小时，下一拍不许叠加第二个
-    // sweep），所以这里改锁两头，比原来只钉一处字面量更强：
-    //   ① 本 ticker 确实走那个原语（绕开它自己写 setInterval ⇒ 红）；
-    //   ② 原语里的闸本身还在（谁把它删了 ⇒ 红，而不是只在这一个 ticker 上失守）。
-    const gc = readFileSync(join(SRC, 'services', 'webhook', 'webhookGc.ts'), 'utf8')
-    expect(gc).toContain('startMaintenanceTicker(')
-    const ticker = readFileSync(join(SRC, 'services', 'maintenanceTicker.ts'), 'utf8')
-    expect(ticker).toContain('if (stopped || running) return')
-  })
 })
 
 // RFC-359 AC-6 —— 这一块是**服务层**的（不打 HTTP），必须与上面的注册面**平级**，
@@ -470,19 +449,36 @@ describeEachProvider('RFC-261 delivery retention', (harness) => {
     expect(left[0]!.bodyJson).toBe('{"keep":1}')
   })
 
-  test('runDeliveryGcSweep 每次调用热读 getter（评审门 P2-④）', async () => {
+  test('maintenance job uses the current retention policy on each sweep', async () => {
     const db = harness.db
     const now = Date.now()
     await seed(db, { receivedAt: now - 50 * DAY, bodyJson: '{"old":1}' })
     let days = { webhookDeliveryBodyRetentionDays: 3650, webhookDeliveryRowRetentionDays: 3650 }
-    const persistence = createWebhookDeliveryPersistence(db)
-    expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
+    const commands = composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db))
+    const sweep = async () => {
+      const counters = { bodiesCleared: 0, rowsDeleted: 0 }
+      let cursor: unknown
+      do {
+        const result = await runWebhookDeliveryMaintenanceJob({
+          commands,
+          bodyRetentionDays: days.webhookDeliveryBodyRetentionDays,
+          rowRetentionDays: days.webhookDeliveryRowRetentionDays,
+          now,
+          cursor,
+        })
+        counters.bodiesCleared += result.counters.bodiesCleared ?? 0
+        counters.rowsDeleted += result.counters.rowsDeleted ?? 0
+        cursor = result.continuation?.cursor
+      } while (cursor !== undefined)
+      return counters
+    }
+    expect(await sweep()).toEqual({
       bodiesCleared: 0,
       rowsDeleted: 0,
     })
     // 两次 sweep 之间收缩保留期——不重启、不重建 ticker，直接生效
     days = { webhookDeliveryBodyRetentionDays: 30, webhookDeliveryRowRetentionDays: 40 }
-    expect(await runDeliveryGcSweep(persistence, () => days)).toEqual({
+    expect(await sweep()).toEqual({
       bodiesCleared: 1,
       rowsDeleted: 1,
     })

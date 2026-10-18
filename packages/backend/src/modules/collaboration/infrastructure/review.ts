@@ -123,14 +123,12 @@ import {
 import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
-  readCommittedReviewArtifactBody,
   resolveReviewAnchor,
-} from '@/modules/collaboration/public/queries'
-import type {
-  CanonicalHumanGateRequest,
-  ReviewAnchorFailure,
-  ReviewGateOpenDocumentDraft,
-} from '@/modules/collaboration/public/types'
+} from '@/modules/collaboration/domain/reviewAnchor'
+import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
+import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
+import type { ReviewAnchorFailure } from '@/modules/collaboration/domain/reviewAnchor'
+import type { ReviewGateOpenDocumentDraft } from '@/modules/collaboration/application/prepareReviewGateOpen'
 import {
   agents as agentsTable,
   collaborationGateOperations,

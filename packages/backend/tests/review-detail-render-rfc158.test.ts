@@ -17,7 +17,7 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { insertInBatches } from '../src/platform/persistence/batchInsert'
-import { getReviewDetail } from '../src/services/review'
+import { getReviewDetail } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 

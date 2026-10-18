@@ -29,7 +29,10 @@ import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
 import { openDb } from '../src/db/client'
-import { cleanupRetiredStores, reportDiskReclaimable } from '../src/services/maintenanceDisk'
+import {
+  cleanupRetiredStores,
+  reportDiskReclaimable,
+} from '@/platform/persistence/sqlite/systemMaintenanceDisk'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

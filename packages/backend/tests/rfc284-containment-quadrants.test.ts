@@ -22,7 +22,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { NODE_VALIDATE_IO } from '../src/services/envelope'
-import { existsInsideRoot, readInsideRoot } from '../src/services/portArtifacts'
+import { existsInsideRoot, readInsideRoot } from '@/platform/content/local/rootFileQueries'
 
 let base: string
 let root: string // 词法根（可能带 /var → /private/var 之类的未解析前缀）

@@ -31,7 +31,7 @@ import { eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,

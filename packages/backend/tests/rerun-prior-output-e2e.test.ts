@@ -48,7 +48,10 @@ import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { nodeRuns } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { addReviewComment, submitReviewDecision } from '../src/services/review'
+import {
+  addReviewComment,
+  submitReviewDecision,
+} from '@/modules/collaboration/infrastructure/review'
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,

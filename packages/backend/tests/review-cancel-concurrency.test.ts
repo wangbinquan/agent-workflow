@@ -42,14 +42,13 @@ import {
   setDocumentSelection,
   submitReviewDecision,
   updateReviewCommentText,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import {
   __hasTaskReviewMutationQueueForTesting,
   withTaskReviewMutationLock,
 } from '../src/services/reviewMutationCoordinator'
 import { __registerActiveTaskForTesting, __setActiveTaskForTesting } from '../src/services/task'
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import {
   TASK_CHANNEL,
@@ -203,11 +202,10 @@ async function seedHarness<Database extends ProviderNeutralDatabase>(
 
   const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onTerminalTask(hookDb, hookTaskId, to) {
-      void sealOpenHumanGatesForTask(
-        createHumanGateTerminalSweepCommand(hookDb),
-        hookTaskId,
-        `task-${to}`,
-      )
+      void createHumanGateTerminalSweepCommand(hookDb).run({
+        taskId: hookTaskId,
+        cause: `task-${to}`,
+      })
     },
   })
 

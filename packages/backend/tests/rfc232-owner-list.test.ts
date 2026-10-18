@@ -11,7 +11,7 @@ import {
   listScheduledTaskItems,
   listScheduledTasks,
 } from './helpers/integrationTriggerResourceBinding'
-import { OWNER_IDENTITY_SQL_BATCH_SIZE } from '../src/services/ownerIdentity'
+import { OWNER_IDENTITY_SQL_BATCH_SIZE } from '@/modules/identity-access/public/operations'
 
 const SCHEDULE_SPEC = JSON.stringify({ kind: 'daily', at: '09:00', timezone: 'UTC' })
 

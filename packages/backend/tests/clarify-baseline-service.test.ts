@@ -22,7 +22,7 @@ import { eq } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { clarifyRounds, nodeRuns, nodeRunOutputs, tasks, workflows } from '../src/db/schema'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createClarifyRound,
   evaluateDesignerRerunReadiness,

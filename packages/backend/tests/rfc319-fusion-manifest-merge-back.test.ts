@@ -38,7 +38,7 @@ import {
   createFusion as createFusionWithAuthority,
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import { forcedPortPathsForTask } from '../src/services/portArtifacts'
+import { forcedPortPathsForTask } from '@/modules/task-execution/public/queries'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'

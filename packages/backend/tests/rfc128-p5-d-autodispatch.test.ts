@@ -38,13 +38,13 @@ import {
   autoDispatchClarifyRound,
   autoDispatchClarifyRoundWithDecision,
   finishCommittedClarifyAutoDispatch,
-} from '../src/services/clarifyAutoDispatch'
+} from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { prepareClarifyDecision } from '../src/services/clarifyDecision'
 import { composeGateContinuationPreDrive as createGateContinuationPreDriveStep } from '../src/modules/task-execution/composition/gateContinuationPreDrive'
 import { createTaskExecutionTestModule } from '../src/modules/task-execution/composition'
 import { createTaskExecutionContext } from '../src/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
-import { sealRoundQuestions } from '../src/services/clarifySeal'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import {
   loadUndispatchedDesignerTargets,

@@ -12,7 +12,7 @@
 import { expect, test } from 'bun:test'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { listReviewSummaries } from '../src/services/review'
+import { listReviewSummaries } from '@/modules/collaboration/infrastructure/review'
 import { describeEachProvider } from './helpers/eachProvider'
 
 interface SeedOptions {

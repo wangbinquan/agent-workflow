@@ -23,7 +23,10 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { addReviewComment, submitReviewDecision } from '../src/services/review'
+import {
+  addReviewComment,
+  submitReviewDecision,
+} from '@/modules/collaboration/infrastructure/review'
 import * as reviewMutationCoordinator from '../src/services/reviewMutationCoordinator'
 import { acquireWriterLease } from '../src/platform/persistence/writerLease'
 import { runGit } from '../src/util/git'

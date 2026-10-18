@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runManagedProcess } from '@/services/execution/managedProcess'
-import { runAgentProcess } from '@/services/execution/agentProcess'
+import { runAgentProcess } from '@/platform/execution/local/agentProcess'
 
 const BUN = process.execPath
 

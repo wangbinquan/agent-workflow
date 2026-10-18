@@ -43,7 +43,7 @@ import {
   listReviewRounds,
   submitReviewDecision,
   type RoundGroupRow,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import { createUser } from '../src/services/users'
 import { wakeHumanGateContinuation } from '../src/services/task'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

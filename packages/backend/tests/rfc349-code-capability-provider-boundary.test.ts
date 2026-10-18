@@ -44,8 +44,6 @@ describe('RFC-349 code-capability provider boundary', () => {
       ...files(join(MODULE, 'public')),
       join(BACKEND, 'src', 'routes', 'code.ts'),
       join(BACKEND, 'src', 'routes', 'capabilityTemplates.ts'),
-      join(BACKEND, 'src', 'services', 'capabilityTemplates.ts'),
-      join(BACKEND, 'src', 'services', 'codeCapabilityParams.ts'),
       join(BACKEND, 'src', 'services', 'codeIntel', 'codeIntel.ts'),
       join(BACKEND, 'src', 'services', 'codeIntel', 'fileSymbols.ts'),
       join(BACKEND, 'src', 'services', 'changeNarrative.ts'),
@@ -74,7 +72,7 @@ describe('RFC-349 code-capability provider boundary', () => {
     ])
   })
 
-  // RFC-359 W12：这十二个读面家族均已合一为单文件，两个 provider 共用一份实现。
+  // RFC-359 W12 / RFC-375：十一个存活读面家族均已合一，两个 provider 共用一份实现。
   test('SQLite and PostgreSQL own the same closed live adapter families', () => {
     const infrastructure = new Set(
       files(join(MODULE, 'infrastructure')).map((file) =>
@@ -88,7 +86,6 @@ describe('RFC-349 code-capability provider boundary', () => {
       ['roundAttemptsRead.ts'],
       ['workItemProjectionRead.ts'],
       ['repoEndpointRead.ts'],
-      ['readinessFactsRead.ts'],
       ['templateUpstreamPersistence.ts'],
       ['capabilityTemplatePersistence.ts'],
       ['capabilityParamRead.ts'],

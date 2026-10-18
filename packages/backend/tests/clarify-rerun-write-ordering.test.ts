@@ -30,7 +30,7 @@ import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 function makeQ(id: string): ClarifyQuestion {

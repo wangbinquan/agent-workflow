@@ -107,7 +107,7 @@ describe('RFC-202 source locks', () => {
     const lifecycle = read('packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts')
     expect(lifecycle).not.toContain('registerTerminalTaskHook')
     expect(lifecycle).not.toContain("from '@/services/terminalSweep'")
-    expect(lifecycle).not.toContain("from '@/services/review'")
+    expect(lifecycle).not.toContain("from '@/modules/collaboration/infrastructure/review'")
     expect(lifecycle).not.toContain("from '@/services/clarify")
   })
 

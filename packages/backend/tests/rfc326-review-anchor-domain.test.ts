@@ -18,12 +18,12 @@ import {
   paragraphIdxAt,
   resolveReviewAnchor,
   sectionPathAt,
-} from '../src/modules/collaboration/public/queries'
+} from '@/modules/collaboration/domain/reviewAnchor'
 import type {
   ReviewAnchorFailure,
-  ReviewAnchorRequest,
   ReviewAnchorSuccess,
-} from '../src/modules/collaboration/public/types'
+} from '@/modules/collaboration/domain/reviewAnchor'
+import type { ReviewAnchorRequest } from '../src/modules/collaboration/public/types'
 
 const DOC = `# Order Service Design
 

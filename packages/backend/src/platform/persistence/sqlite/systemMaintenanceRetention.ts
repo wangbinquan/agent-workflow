@@ -18,7 +18,6 @@
 
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   intentSessions,
@@ -33,8 +32,6 @@ import {
 } from '@/db/schema'
 import { BOUNDED_DELETE_MAX_ROWS } from '@/platform/persistence/capabilities'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('maintenance-retention')
@@ -311,23 +308,4 @@ export async function runRetentionSweep(
   const totalDeleted = Object.values(result).reduce((a, b) => a + b, 0)
   if (totalDeleted > 0) log.info('retention sweep', { ...result })
   return result
-}
-
-/** RFC-311 — hourly ticker; config re-read each tick via the injected loader. */
-export function startRetentionSweeper(
-  db: DbClient,
-  loadRetentionConfig: () => RetentionConfig,
-  intervalMs: number = HOUR_MS,
-  // RFC-322：相位由 daemonCadence 的注册表给，避免与其它 hourly 维护同刻引爆。
-  phaseOffsetMs: number = MAINTENANCE_PHASE.retentionSweep,
-): { stop: () => void } {
-  return startMaintenanceTicker({
-    job: 'retentionSweep',
-    intervalMs,
-    phaseOffsetMs,
-    onTick: () =>
-      runRetentionSweep(db, loadRetentionConfig()).catch((err) =>
-        log.warn('retention sweep threw', { error: (err as Error).message }),
-      ),
-  })
 }

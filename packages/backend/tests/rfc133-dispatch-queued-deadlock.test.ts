@@ -30,7 +30,7 @@ import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/exec
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

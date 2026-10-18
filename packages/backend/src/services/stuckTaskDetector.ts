@@ -41,8 +41,6 @@ import type {
 } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createLogger } from '@/util/log'
 
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
-
 const log = createLogger('lifecycle.stuck')
 
 const MIN_MS = 60_000
@@ -547,38 +545,4 @@ export async function runStuckTaskDetector(
     resolvedAlerts: reconciled.resolvedAlerts,
     openAlerts,
   }
-}
-
-/**
- * Run every `intervalMs` (default 5 min). No boot delay separate from
- * the lifecycle invariants ticker — stuck detection can wait the full
- * first interval since the freshness gate already requires
- * `> stuckThresholdMs` of inactivity, and any historic stuck task will
- * still show up on the second tick.
- */
-export function startStuckTaskDetectorLoop(opts: {
-  operations: TaskRecoveryOperations
-  onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
-  onResolved?: (taskId: string) => void
-  intervalMs?: number
-}): { stop: () => void } {
-  const interval = opts.intervalMs ?? DAEMON_CADENCE.stuckTaskScan
-  let running = false
-  const safeRun = (): void => {
-    if (running) return
-    running = true
-    void runStuckTaskDetector({
-      operations: opts.operations,
-      onAlert: opts.onAlert,
-      onResolved: opts.onResolved,
-    })
-      .catch((err: unknown) => {
-        log.error('scan failed', { error: err instanceof Error ? err.message : String(err) })
-      })
-      .finally(() => {
-        running = false
-      })
-  }
-  const handle = setInterval(safeRun, interval)
-  return { stop: () => clearInterval(handle) }
 }

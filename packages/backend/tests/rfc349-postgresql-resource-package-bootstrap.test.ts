@@ -8,9 +8,9 @@ import { BundleOpSchema } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import {
-  createPostgresqlResourcePackagePluginArtifactOwner,
-  createPostgresqlResourcePackageSkillArtifactOwner,
-} from '../src/modules/resource-catalog/infrastructure/resourcePackageArtifacts'
+  createFileResourcePackagePluginArtifactOwner as createPostgresqlResourcePackagePluginArtifactOwner,
+  createFileResourcePackageSkillArtifactOwner as createPostgresqlResourcePackageSkillArtifactOwner,
+} from '@/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts'
 import type {
   PostgresqlResourcePackageApplyReceipt,
   PostgresqlResourcePackageMutationRequestContext,

@@ -51,34 +51,3 @@ export async function runEventCenterCycle(
     madeProgress: publicationRuns + observerRuns + notificationDeliveries > 0,
   }
 }
-
-export function startEventCenterWorker(input: {
-  readonly dependencies: EventCenterWorkerDependencies
-  readonly intervalMs: number
-  readonly onError: (error: unknown) => void
-  readonly onCycle?: (result: EventCenterCycleResult) => void
-}): { readonly stop: () => void; readonly runNow: () => Promise<void> } {
-  let running = false
-  let stopped = false
-  const runNow = async (): Promise<void> => {
-    if (running || stopped) return
-    running = true
-    try {
-      input.onCycle?.(await runEventCenterCycle(input.dependencies))
-    } catch (error) {
-      input.onError(error)
-    } finally {
-      running = false
-    }
-  }
-  const timer = setInterval(() => void runNow(), input.intervalMs)
-  timer.unref?.()
-  void runNow()
-  return {
-    stop() {
-      stopped = true
-      clearInterval(timer)
-    },
-    runNow,
-  }
-}

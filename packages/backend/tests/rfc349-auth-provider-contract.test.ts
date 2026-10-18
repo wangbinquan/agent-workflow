@@ -40,7 +40,6 @@ describeEachProvider(
         'tests/helpers/auth/patStore.ts',
         'tests/helpers/auth/sessionStore.ts',
         'src/auth/session.ts',
-        'src/services/accountAuthPolicy.ts',
       ]
       for (const relativePath of facades) {
         const source = readFileSync(resolve(import.meta.dir, '..', relativePath), 'utf8')

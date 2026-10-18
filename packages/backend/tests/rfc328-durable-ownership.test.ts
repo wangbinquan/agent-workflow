@@ -1,3 +1,4 @@
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // RFC-328 core correctness matrix. These fixtures use the real migration and the
 // provider-neutral persistence adapters; no clock sleeps or process-global task
 // map is involved.
@@ -59,7 +60,6 @@ import {
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
-import { archiveTaskTree } from '@/services/taskArchive'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
 import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
@@ -1556,7 +1556,13 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       }
       for (const dir of Object.values(dirs)) mkdirSync(dir, { recursive: true })
       try {
-        const archived = await archiveTaskTree(database, 'task-archive-ledger', dirs)
+        const sweep = await createDrizzleTaskArchiveMaintenanceCommand(database).runSweep(
+          { enabled: true, retentionDays: 1 },
+          { ...dirs, now: Date.now() },
+        )
+        expect(sweep.archived).toHaveLength(1)
+        const archived = sweep.archived[0]!
+        expect(archived.rootTaskId).toBe('task-archive-ledger')
         const expectedRows: Record<string, number> = {
           task_execution_owners: 1,
           task_execution_intents: 1,

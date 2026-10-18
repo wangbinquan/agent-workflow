@@ -43,7 +43,10 @@ import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
-import { addReviewComment, submitReviewDecision } from '@/services/review'
+import {
+  addReviewComment,
+  submitReviewDecision,
+} from '@/modules/collaboration/infrastructure/review'
 import { abortAllActiveTasks, isTaskActive, wakeHumanGateContinuation } from '@/services/task'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

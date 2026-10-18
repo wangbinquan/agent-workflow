@@ -31,15 +31,15 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
 import {
-  archivePortArtifacts,
   encodePortSegment,
   parseArchiveJson,
   portArchiveRootRel,
   readPortArtifact,
   toContainerRelative,
   truncationNotice,
-} from '../src/services/portArtifacts'
+} from '@/modules/task-execution/public/queries'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'

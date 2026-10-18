@@ -35,7 +35,7 @@ import { monotonicFactory } from 'ulid'
 // the rerun and flake the assertion. A shared monotonicFactory guarantees the
 // later-seeded rerun always sorts freshest — mirrors scheduler-clarify-mid-batch.test.ts.
 const ulid = monotonicFactory()
-import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
+import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { agents, clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'

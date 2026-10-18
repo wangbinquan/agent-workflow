@@ -9,7 +9,6 @@ import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
-  agents,
   cachedRepos,
   codeAiAttempts,
   codeHostConnections,
@@ -23,15 +22,12 @@ import {
   taskRepos,
   tasks,
   users,
-  webhookEndpoints,
-  webhookTriggers,
 } from '@/db/schema'
 import type { CapabilityTemplateRecord } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityParamRead } from '@/modules/code-capability/infrastructure/capabilityParamRead'
 import { createCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/capabilityTemplatePersistence'
 import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { createCodeCapabilityDemoSeedPersistence } from '@/modules/code-capability/infrastructure/demoSeedPersistence'
-import { createReadinessFactsRead } from '@/modules/code-capability/infrastructure/readinessFactsRead'
 import { createRepoEndpointRead } from '@/modules/code-capability/infrastructure/repoEndpointRead'
 import { createRoundAttemptsRead } from '@/modules/code-capability/infrastructure/roundAttemptsRead'
 import { INITIAL_CUTOVER_STATE } from '@/modules/development-automation/domain/cutover'
@@ -167,71 +163,6 @@ describeEachProvider(
         paramsJson: '{"x":2}',
       })
       expect(await params.find({ repoId: 'repo-b5a', capability: 'requirement' })).toBeNull()
-
-      // 就绪度事实：模板存在性、槽位代理可见性、能力触发器。
-      const facts = createReadinessFactsRead(db)
-      expect(await facts.templateExists('tpl-a')).toBe(true)
-      expect(await facts.templateExists('missing')).toBe(false)
-      expect(await facts.agentSlotVisible({ templateId: 'tpl-a', slot: 'reviewer' })).toBe(false)
-      await db.insert(agents).values({
-        id: 'agent-b5a',
-        name: 'agent-b5a',
-        description: 'test',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        createdAt: NOW,
-        updatedAt: NOW,
-      })
-      expect(await facts.agentSlotVisible({ templateId: 'tpl-a', slot: 'reviewer' })).toBe(true)
-      expect(await facts.agentSlotVisible({ templateId: 'tpl-a', slot: 'author' })).toBe(false)
-      expect(await facts.agentSlotVisible({ templateId: 'missing', slot: 'reviewer' })).toBe(false)
-      await db.insert(webhookEndpoints).values([
-        {
-          id: 'ep-b5a',
-          name: 'ep',
-          provider: 'gitlab',
-          urlToken: 'aw_whk_b5a',
-          secretEnc: 'sealed',
-          enabled: true,
-        },
-        {
-          id: 'ep-b5a-off',
-          name: 'ep-off',
-          provider: 'github',
-          urlToken: 'aw_whk_b5a_off',
-          secretEnc: 'sealed',
-          enabled: false,
-        },
-      ])
-      const trigger = (id: string, launchKind: 'code-round' | 'workflow', launchRefId: string) => ({
-        id,
-        name: id,
-        endpointId: 'ep-b5a',
-        ownerUserId: owner,
-        repoScope: '{"kind":"all"}',
-        eventTypes: '["merge_request"]',
-        launchKind,
-        launchRefId,
-        launchPayload: '{}',
-      })
-      await db
-        .insert(webhookTriggers)
-        .values([
-          trigger('tr-b5a', 'code-round', 'mr-review'),
-          trigger('tr-b5a-other', 'code-round', 'requirement'),
-          trigger('tr-b5a-wf', 'workflow', 'wf-1'),
-        ])
-      expect(
-        (await facts.listCapabilityTriggers({ endpointId: 'ep-b5a', capability: 'mr-review' })).map(
-          (row) => row.id,
-        ),
-      ).toEqual(['tr-b5a'])
-      expect(await facts.repoEndpoints.listEnabledEndpoints()).toEqual([
-        { id: 'ep-b5a', provider: 'gitlab' },
-      ])
 
       // 端点 / 连接事实读取。
       const endpoints = createRepoEndpointRead(db)

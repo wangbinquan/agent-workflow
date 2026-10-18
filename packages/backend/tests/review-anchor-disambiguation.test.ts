@@ -13,7 +13,7 @@ import {
   canonicalizeAnchor,
   findAllOccurrences,
   recomputeOccurrenceIndex,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 
 const DOC = `# Order Service Design
 

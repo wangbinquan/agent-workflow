@@ -11,10 +11,9 @@
 // After the child dies the runner's exit handler marks the node — this module
 // only pulls the trigger.
 //
-// findStalledRuns / killChild are injected so the loop is unit-testable;
-// startHeartbeatKillLoop wires the real query + killStaleRunProcessTree.
+// findStalledRuns / killChild are injected; the maintenance Worker supplies
+// the production query and process operation.
 
-import { loadConfig } from '@/config'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -22,11 +21,6 @@ import {
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
 } from '@/services/recoveryBreaker'
-import { killStaleRunProcessTree } from '@/util/process'
-import { createLogger } from '@/util/log'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
-
-const log = createLogger('auto-kill')
 
 export interface StalledRun {
   id: string
@@ -138,56 +132,4 @@ export async function runHeartbeatKillOnce(deps: HeartbeatKillDeps): Promise<Hea
     else skip(run, `not-killed:${outcome ?? 'lease-held'}`)
   }
   return out
-}
-
-export interface HeartbeatKillLoopHandle {
-  stop: () => void
-}
-
-/**
- * Periodic heartbeat-kill ticker. DEFAULT OFF: each tick early-outs in O(1) when
- * `autoKillStalledChild` is false (the default), so it's free until enabled.
- */
-export function startHeartbeatKillLoop(opts: {
-  operations: TaskRecoveryOperations
-  configPath: string
-  intervalMs?: number
-}): HeartbeatKillLoopHandle {
-  const intervalMs = opts.intervalMs ?? DAEMON_CADENCE.autoKill
-  let inFlight = false
-  const tick = async (): Promise<void> => {
-    if (inFlight) return
-    inFlight = true
-    try {
-      const cfg = loadConfig(opts.configPath)
-      if (cfg.autoKillStalledChild !== true) return
-      const now = Date.now()
-      await runHeartbeatKillOnce({
-        operations: opts.operations,
-        enabled: true,
-        breaker: {
-          maxPerWindow: cfg.maxAutoRecoveriesPerWindow,
-          windowMs: cfg.autoRecoveryWindowMs,
-        },
-        findStalledRuns: () =>
-          findStalledRunningChildren(opts.operations, cfg.heartbeatStallMs, now),
-        killChild: (run) =>
-          killStaleRunProcessTree({
-            pid: run.pid,
-            startedAt: run.startedAt,
-            spawnBinaryPath: run.spawnBinaryPath,
-            spawnLaunchNonce: run.spawnLaunchNonce,
-          }),
-      })
-    } catch (err) {
-      log.warn('heartbeat-kill tick failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    } finally {
-      inFlight = false
-    }
-  }
-  const timer = setInterval(() => void tick(), intervalMs)
-  ;(timer as { unref?: () => void }).unref?.()
-  return { stop: () => clearInterval(timer) }
 }

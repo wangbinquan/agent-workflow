@@ -52,7 +52,6 @@ import {
 } from '../src/modules/resource-catalog/domain/resourceKinds'
 import type { IntentResourceChangesetReceipt } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import { resourceRef } from '../src/modules/resource-catalog/domain/resourceRef'
-import { resourceSummaryRevisionEquals } from '../src/modules/resource-catalog/domain/resourceRevision'
 import type {
   SkillFileCommands,
   SkillVersionCommands,
@@ -345,42 +344,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       kind: 'scheduled_task',
       id: 'schedule-1',
     })
-  })
-
-  test('summary revisions compare only the exact aggregate fence', () => {
-    expect(
-      resourceSummaryRevisionEquals(
-        { kind: 'agent', updatedAt: 1, aclRevision: 2 },
-        { kind: 'agent', updatedAt: 1, aclRevision: 2 },
-      ),
-    ).toBe(true)
-    expect(
-      resourceSummaryRevisionEquals(
-        { kind: 'agent', updatedAt: 1, aclRevision: 2 },
-        { kind: 'agent', updatedAt: 1, aclRevision: 3 },
-      ),
-    ).toBe(false)
-    expect(
-      resourceSummaryRevisionEquals({ kind: 'skill', token: 'v1' }, { kind: 'skill', token: 'v2' }),
-    ).toBe(false)
-    expect(
-      resourceSummaryRevisionEquals(
-        { kind: 'mcp', configHash: 'same' },
-        { kind: 'plugin', configHash: 'same' },
-      ),
-    ).toBe(false)
-    expect(
-      resourceSummaryRevisionEquals(
-        { kind: 'workflow', version: 4 },
-        { kind: 'workflow', version: 4 },
-      ),
-    ).toBe(true)
-    expect(
-      resourceSummaryRevisionEquals(
-        { kind: 'workgroup', version: 4 },
-        { kind: 'workgroup', version: 5 },
-      ),
-    ).toBe(false)
   })
 
   test('public entrypoints stay data-only and cannot grow a generic loader or writer', () => {

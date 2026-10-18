@@ -1,26 +1,18 @@
 // Remaining task-execution compatibility facade.
 //
 // RFC-332/334/339 moved TaskEngine, node execution, wrapper runtime and merge
-// recovery into modules/task-execution. This file now retains the W3 lifecycle
-// status helpers, W5 commit-push mechanics and a few source-compatible exports
+// recovery into modules/task-execution. This file now retains W5 commit-push
+// mechanics and a few source-compatible exports
 // until their separately authorized waves cut over.
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import {
-  buildWorkflowScopeParentMap,
-  DAEMON_RESTART_ERROR_SUMMARY,
-  isDaemonInterruptionAbortReason,
-} from '@agent-workflow/shared'
+import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
 // RFC-253 — script node execution.
 import { readTaskCommitExcludePatterns } from '@/modules/task-execution/public/queries'
 import { createFileTaskOperationConfiguration } from '@/modules/task-execution/composition'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
-
-import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
-import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
-import { taskStopProjection, type TaskStopCause } from '@/modules/task-execution/public/types'
 import {
   buildCommitAgent,
   buildCommitMessagePrompt,
@@ -30,9 +22,8 @@ import {
 } from '@/services/commitPush'
 import { runCommitPush } from '@/services/commitPushRunner'
 import { pickFreshestRun } from '@/services/freshness'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { runTaskAgentWithFamily as runNode } from '@/modules/task-execution/public/commands'
-import { createLogger, type Logger } from '@/util/log'
+import { type Logger } from '@/util/log'
 import {
   DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,
   DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES,
@@ -54,7 +45,6 @@ import {
   pickInheritableRunConfig,
 } from '@/modules/task-execution/public/commands'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
-import type { TaskRuntimeLifecyclePersistence } from '@/modules/task-execution/public/participants'
 
 // Compatibility exports for the existing scheduler test contract. The owner is
 // task-execution/public/commands; production consumers import that exact surface.
@@ -374,142 +364,6 @@ export async function maybeRunCommitPush(
 
 // RFC-098 WP-10 T-a: the old `insertNodeRun` half-factory was absorbed into
 // the single mint factory — see services/nodeRunMint.ts (grep-guarded).
-
-export async function failTask(
-  topology: SchedulerRuntimeTopology,
-  lifecycle: TaskRuntimeLifecyclePersistence,
-  taskId: string,
-  errorSummary: string,
-  errorMessage: string,
-  failedNodeId?: string,
-  executionContext?: TaskExecutionContextRef,
-): Promise<void> {
-  // RFC-097: callers sit either before mark-running (snapshot-invalid /
-  // unsupported-kind → from=pending) or inside the running scope. A canceled
-  // winner is respected (cancel outranks fail).
-  const won = await lifecycle.trySet({
-    taskId,
-    to: 'failed',
-    allowedFrom: ['pending', 'running'],
-    extra: {
-      finishedAt: Date.now(),
-      errorSummary,
-      errorMessage,
-      ...(failedNodeId !== undefined ? { failedNodeId } : {}),
-    },
-    ...(executionContext !== undefined ? { executionContext } : {}),
-    now: Date.now(),
-    reason: `failTask: ${errorSummary}`,
-  })
-  if (!won) {
-    createLogger('scheduler').warn(
-      'failTask write lost to a concurrent transition — respecting winner',
-      { taskId, errorSummary },
-    )
-    return
-  }
-}
-
-export async function cancelTaskRow(
-  topology: SchedulerRuntimeTopology,
-  lifecycle: TaskRuntimeLifecyclePersistence,
-  taskId: string,
-  failedNodeId?: string,
-  abortReason?: unknown,
-  executionContext?: TaskExecutionContextRef,
-): Promise<void> {
-  return withTaskReviewMutationLock(taskId, () =>
-    cancelTaskRowUnlocked(topology, lifecycle, taskId, failedNodeId, abortReason, executionContext),
-  )
-}
-
-async function cancelTaskRowUnlocked(
-  topology: SchedulerRuntimeTopology,
-  lifecycle: TaskRuntimeLifecyclePersistence,
-  taskId: string,
-  failedNodeId?: string,
-  abortReason?: unknown,
-  executionContext?: TaskExecutionContextRef,
-): Promise<void> {
-  // RFC-202 T4: a graceful daemon shutdown aborts the scheduler exactly like
-  // a user cancel did — but writing 'canceled by user' misattributes it and
-  // strands the task (canceled has no resume edge; audit P1 F-13). The
-  // shutdown path tags its abort with reason='daemon-shutdown'
-  // (AbortController.abort(reason)); a user cancel aborts with no argument,
-  // whose signal.reason is a DOMException — the string comparison below
-  // leaves that path byte-identical. Shutdown-interrupted tasks land
-  // interrupted + DAEMON_RESTART_ERROR_SUMMARY so both the Resume button and
-  // boot auto-resume (autoResume.ts matches exactly that summary) cover them.
-  if (isDaemonInterruptionAbortReason(abortReason)) {
-    const now = Date.now()
-    await lifecycle.trySet({
-      taskId,
-      to: 'interrupted',
-      allowedFrom: ['running'],
-      extra: {
-        finishedAt: Date.now(),
-        errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
-        errorMessage: 'daemon shutdown interrupted this task; resume (or auto-resume) continues it',
-        ...(failedNodeId !== undefined ? { failedNodeId } : {}),
-      },
-      ...(executionContext !== undefined ? { executionContext } : {}),
-      now,
-      reason: 'cancelTaskRow-shutdown',
-    })
-    return
-  }
-  const structuredCause = taskStopCauseOf(abortReason)
-  const projection = taskStopProjection(structuredCause ?? { kind: 'user' })
-  // RFC-097: idempotent — cancelTask's fallback (or a failTask that raced
-  // first) may already have landed a terminal status; respect the winner.
-  const now = Date.now()
-  const won = await lifecycle.trySet({
-    taskId,
-    to: 'canceled',
-    allowedFrom: ['running'],
-    extra: {
-      finishedAt: Date.now(),
-      errorSummary: projection.summary,
-      errorMessage:
-        structuredCause?.kind === 'webhook-terminal'
-          ? `${projection.code}: delivery=${structuredCause.deliveryId} revision=${structuredCause.streamRevision}`
-          : structuredCause?.kind === 'parent-cascade' && structuredCause.rootCause !== undefined
-            ? `${projection.code}: parent=${structuredCause.parentTaskId} delivery=${structuredCause.rootCause.deliveryId} revision=${structuredCause.rootCause.streamRevision}`
-            : projection.code,
-      ...(failedNodeId !== undefined ? { failedNodeId } : {}),
-    },
-    ...(executionContext !== undefined ? { executionContext } : {}),
-    now,
-    reason: 'cancelTaskRow',
-  })
-  if (!won) {
-    createLogger('scheduler').warn(
-      'cancelTaskRow lost to a concurrent transition — respecting winner',
-      { taskId },
-    )
-    return
-  }
-}
-
-function taskStopCauseOf(value: unknown): TaskStopCause | null {
-  if (typeof value !== 'object' || value === null || !('kind' in value)) return null
-  const candidate = value as TaskStopCause
-  switch (candidate.kind) {
-    case 'user':
-    case 'daemon-shutdown':
-      return candidate
-    case 'parent-cascade':
-      return typeof candidate.parentTaskId === 'string' ? candidate : null
-    case 'webhook-terminal':
-      return (candidate.terminal === 'closed' || candidate.terminal === 'merged') &&
-        typeof candidate.deliveryId === 'string' &&
-        Number.isInteger(candidate.streamRevision)
-        ? candidate
-        : null
-    default:
-      return null
-  }
-}
 
 /**
  * Direct containment map: every child node id → its immediate wrapper. Chained

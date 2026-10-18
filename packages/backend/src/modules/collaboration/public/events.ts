@@ -1,12 +1,7 @@
-export const COLLABORATION_COMMITTED_SOURCE_REF = {
-  id: 'platform.collaboration-committed',
-  revision: 1,
-} as const
-
-export const COLLABORATION_COMMITTED_EVENT_REF = {
-  id: 'platform.collaboration.committed',
-  revision: 1,
-} as const
+import {
+  COLLABORATION_COMMITTED_SOURCE_REF,
+  COLLABORATION_COMMITTED_EVENT_REF,
+} from '../domain/collaborationCommittedEvents'
 
 /** Internal Event Center catalog contribution for durable W3 diagnostics. */
 export const collaborationCommittedEventCatalogJson = JSON.stringify({

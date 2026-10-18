@@ -39,7 +39,7 @@ import {
   buildReviewPromptContext,
   buildSiblingOutputsBlock,
   submitReviewDecision,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,

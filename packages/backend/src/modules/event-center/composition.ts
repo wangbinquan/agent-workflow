@@ -42,7 +42,7 @@ import type {
   ManualCommittedEventRetryReceipt,
 } from '@/platform/events/committed/types'
 
-export { runEventCenterCycle, startEventCenterWorker } from './application/eventCenterWorker'
+export { runEventCenterCycle } from './application/eventCenterWorker'
 export { createEventAutomationWorkIntentStore } from './infrastructure/eventAutomationWorkIntentStore'
 // RFC-370 M2: the hosted observer program receiver (task image) and its
 // CrewStation factory, reached by bootstrap through this exact entry.

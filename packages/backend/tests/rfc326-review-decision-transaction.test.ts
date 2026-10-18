@@ -52,7 +52,10 @@ import {
   users,
   workflows,
 } from '../src/db/schema'
-import { submitReviewDecision, type SubmitReviewDecisionArgs } from '../src/services/review'
+import {
+  submitReviewDecision,
+  type SubmitReviewDecisionArgs,
+} from '@/modules/collaboration/infrastructure/review'
 import { wakeHumanGateContinuation } from '../src/services/task'
 import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMutationCoordinator'
 import { hasActingMembership, updateTaskMembers } from '../src/services/taskCollab'

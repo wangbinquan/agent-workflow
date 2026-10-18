@@ -29,7 +29,7 @@ import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/exec
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { sealRoundQuestions } from '../src/services/clarifySeal'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { reassignTaskQuestion } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

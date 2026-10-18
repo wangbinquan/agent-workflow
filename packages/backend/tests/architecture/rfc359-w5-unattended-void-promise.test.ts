@@ -148,8 +148,6 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   // RFC-370: all three host shutdown callbacks now report rejection through the selected adapter.
   'cli/start.ts: 3',
   'mcp/server.ts: 1',
-  'modules/digital-employee/application/osWorker.ts: 1',
-  'modules/event-center/application/eventCenterWorker.ts: 1',
   // RFC-370 H8: the existing observer nudge moved out of the HTTP transport unchanged.
   'modules/integration/application/verifiedWebhookIngress.ts: 1',
   'modules/intent/application/dispatcher.ts: 3',
@@ -160,10 +158,8 @@ export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'platform/execution/local/managedProcess.ts: 4',
   'server.ts: 4',
   'services/controlListener.ts: 1',
-  'services/pluginGenerationGc.ts: 1',
   'services/repoBatchImport.ts: 2',
   'services/reviewMutationCoordinator.ts: 1',
-  'services/scheduledTaskScheduler.ts: 1',
   'services/structuralDiff/service.ts: 2',
 ]
 

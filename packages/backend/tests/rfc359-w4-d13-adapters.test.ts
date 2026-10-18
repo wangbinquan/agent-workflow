@@ -18,7 +18,7 @@ import {
 } from '@/db/schema'
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { MissionRow } from '@/modules/development-automation/application/ports/missionStore'
-import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
+import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/infrastructure/developmentDeliveryProvider'
 import { createEmployeePlatformWorkItemPersistence } from '@/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence'
 import { createMissionPersistence } from '@/modules/development-automation/infrastructure/missionStore'
@@ -378,14 +378,14 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
   })
 
   test('旧 Mission 排空：只数未终态；报告按 (createdAt, id) 采样、如实标 truncated，计数只算 active claim / 未了结审批', async () => {
-    const drain = createLegacyMissionDrainPort(harness.db)
+    const drain = createDigitalEmployeeWriterCutoverPersistence(harness.db)
     const store = createMissionPersistence(harness.db)
     const saga = createPlaybookSagaPersistence(harness.db)
-    const before = await drain.openMissionCount()
+    const before = (await drain.refresh(Date.now())).legacyOpenMissionCount
     const first = await newMission(harness.db, { createdAt: T0 })
     const second = await newMission(harness.db, { createdAt: T0 + 1 })
     await newMission(harness.db, { createdAt: T0 + 2, status: 'merged', terminalAt: T0 + 3 })
-    expect(await drain.openMissionCount()).toBe(before + 2)
+    expect((await drain.refresh(Date.now())).legacyOpenMissionCount).toBe(before + 2)
 
     await store.claimMr({
       id: `claim-a-${first}`,
@@ -461,7 +461,7 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
       now: T0 + 1,
     })
 
-    const full = await drain.drainReport(100)
+    const full = (await drain.migrationSnapshot(100)).drain
     expect(full.truncated).toBe(false)
     const entry = full.entries.find((row) => row.missionId === first)
     expect(entry).toEqual({
@@ -478,7 +478,7 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
     })
     const ids = full.entries.map((row) => row.missionId)
     expect(ids.indexOf(first)).toBeLessThan(ids.indexOf(second))
-    const truncated = await drain.drainReport(1)
+    const truncated = (await drain.migrationSnapshot(1)).drain
     expect(truncated.truncated).toBe(true)
     expect(truncated.entries).toHaveLength(1)
   })
@@ -489,7 +489,6 @@ test('源码锁：development-automation 的持久化与装配不再有 provider
   for (const file of [
     'infrastructure/employeePlatformWorkItemPersistence.ts',
     'infrastructure/developmentDeliveryProvider.ts',
-    'composition/legacyMissionDrain.ts',
     'composition/digitalEmployeeWorkspace.ts',
     'composition/digitalEmployeePlatformWorkItems.ts',
   ]) {

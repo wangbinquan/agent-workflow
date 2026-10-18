@@ -374,7 +374,7 @@ describe('RFC-346 System Operations contracts', () => {
     // 迁进 `modules/knowledge-evolution`，legacy 侧已无同域文件可锚）；第三条换成
     // `routes/memories.ts`——RFC-352 T10 那次「复数名字漏网、纯 memory 路由记成 W4-E1」的
     // 原始现场，登记制之后它不再依赖任何正则是否写了复数。
-    expect(targetContextFor('packages/backend/src/services/taskArchive.ts')).toBe('task-execution')
+    expect(targetContextFor('packages/backend/src/services/taskDelete.ts')).toBe('task-execution')
     expect(targetContextFor('packages/backend/src/util/git.ts')).toBe('source-control')
     expect(targetContextFor('packages/backend/src/routes/memories.ts')).toBe('memory')
   })

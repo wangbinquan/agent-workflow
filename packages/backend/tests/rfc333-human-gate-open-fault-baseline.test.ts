@@ -32,7 +32,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { dispatchReviewNode } from '../src/services/review'
+import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

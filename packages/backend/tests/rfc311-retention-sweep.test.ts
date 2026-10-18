@@ -30,7 +30,10 @@ import {
   webhookTriggers,
   workflows,
 } from '../src/db/schema'
-import { runRetentionSweep, type RetentionConfig } from '../src/services/maintenanceRetention'
+import {
+  runRetentionSweep,
+  type RetentionConfig,
+} from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 86_400_000

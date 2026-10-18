@@ -9,7 +9,6 @@ import { docVersions, nodeRunOutputs, nodeRuns, tasks } from '../src/db/schema'
 import { createRepairEngine } from './helpers/repairEngine'
 import { describeEachProvider } from './helpers/eachProvider'
 import { cancelViaEngine } from './helpers/cancelEngine'
-import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import {
   buildHarness,
@@ -416,11 +415,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          void sealOpenHumanGatesForTask(
-            createHumanGateTerminalSweepCommand(db),
-            taskId,
-            `task-${to}`,
-          )
+          void createHumanGateTerminalSweepCommand(db).run({ taskId: taskId, cause: `task-${to}` })
         },
       })
       // 运维那一侧真实发生的次序：别人刚把任务取消掉，诊断面板上的那个按钮还在，点下去。
@@ -465,11 +460,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          void sealOpenHumanGatesForTask(
-            createHumanGateTerminalSweepCommand(db),
-            taskId,
-            `task-${to}`,
-          )
+          void createHumanGateTerminalSweepCommand(db).run({ taskId: taskId, cause: `task-${to}` })
         },
       })
       // 反过来的次序：修复先落库，随后任务被取消——取消的清扫不该把修复刚写下的事实抹掉。

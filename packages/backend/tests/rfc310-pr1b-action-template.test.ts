@@ -21,10 +21,6 @@ import {
   reviseActionTemplateDraft,
   type ActionTemplateCommandDeps,
 } from '../src/modules/development-automation/application/commands/actionTemplateCommands'
-import {
-  getConfigResource,
-  listConfigResources,
-} from '../src/modules/development-automation/application/queries/configResourceQueries'
 import { createActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import { parseOk, unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
@@ -174,27 +170,5 @@ describeEachProvider('rfc310 pr1b action template', (harness) => {
     ).rejects.toThrow()
     expect(await deps.store.listRevisions(created.id)).toEqual([])
     expect((await deps.store.getById(created.id))?.publishedRevision).toBeNull()
-  })
-
-  test('visibility filtering: private rows hidden from other actors, admin bypass sees all', async () => {
-    const deps = newDeps(harness.db)
-    const mine = await createActionTemplate(deps, {
-      actorUserId: 'user-1',
-      name: 'mine',
-      capabilityId: 'change.implement',
-      draft: {},
-    })
-    const audienceOwner = { actorUserId: 'user-1', bypassAcl: false }
-    const audienceOther = { actorUserId: 'user-2', bypassAcl: false }
-    const audienceAdmin = { actorUserId: 'admin', bypassAcl: true }
-    expect((await listConfigResources(deps.store, audienceOwner)).map((r) => r.id)).toEqual([
-      mine.id,
-    ])
-    expect(await listConfigResources(deps.store, audienceOther)).toEqual([])
-    expect((await listConfigResources(deps.store, audienceAdmin)).map((r) => r.id)).toEqual([
-      mine.id,
-    ])
-    expect(await getConfigResource(deps.store, audienceOther, mine.id)).toBeNull()
-    expect((await getConfigResource(deps.store, audienceOwner, mine.id))?.id).toBe(mine.id)
   })
 })

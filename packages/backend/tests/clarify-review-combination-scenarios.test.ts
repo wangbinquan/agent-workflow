@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { readNodeRunPrompt } from '../src/services/nodeRunPrompt'
+import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -39,9 +39,12 @@ import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
 // clarifyRerunLedger via the isReviewSupersededCanceled exception (same predicate as
 // isTargetNodeConsumed's aging-side supersede exception). If S3/S6 wedge again on
 // dispatch-in-flight, that exception regressed.
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { setNodeClarifyDirective } from '../src/services/taskClarifyDirective'
-import { addReviewComment, submitReviewDecision } from '../src/services/review'
+import {
+  addReviewComment,
+  submitReviewDecision,
+} from '@/modules/collaboration/infrastructure/review'
 import {
   abortAllActiveTasks,
   startTaskWithLocalRepo as startTaskWithLocalRepoBase,

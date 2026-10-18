@@ -38,7 +38,7 @@ import {
   reassignTaskQuestion,
 } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,

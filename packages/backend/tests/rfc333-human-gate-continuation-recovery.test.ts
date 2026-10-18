@@ -1,13 +1,14 @@
+// RFC-333/RFC-375 — pending continuations recover through the live managed worker.
+import {
+  createHumanGateContinuationWorkerDefinition,
+  type PendingHumanGateContinuation,
+} from '@/modules/collaboration/application/humanGateContinuationWorker'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import { nodeRuns, taskExecutionIntents, tasks } from '@/db/schema'
-import {
-  recoverPendingHumanGateContinuations,
-  type PendingHumanGateContinuation,
-} from '@/services/humanGateContinuationRecovery'
 import { createHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/humanGateContinuationRecovery'
 import { reapOrphanRuns } from '@/services/orphans'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
@@ -228,9 +229,11 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
     const before = await db.select().from(taskExecutionIntents).all()
     const calls: PendingHumanGateContinuation[] = []
 
-    const result = await recoverPendingHumanGateContinuations({
-      queries: createHumanGateContinuationRecoveryQueries(db),
-      wake: async (continuation) => {
+    const failures: Array<PendingHumanGateContinuation & { error: unknown }> = []
+    const worker = createHumanGateContinuationWorkerDefinition({
+      listPending: () => createHumanGateContinuationRecoveryQueries(db).listPending(),
+      onError: (failure) => failures.push(failure),
+      drive: async (continuation) => {
         calls.push(continuation)
         if (continuation.continuationRef === 'intent-gate-b') {
           throw new Error('wake-b-failed')
@@ -238,21 +241,19 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       },
     })
 
+    const result = await worker.runCycle()
     expect(calls).toEqual([
       { taskId: 'task-gate-a', continuationRef: 'intent-gate-a' },
       { taskId: 'task-gate-b', continuationRef: 'intent-gate-b' },
     ])
-    expect(result).toEqual({
-      attempted: calls,
-      woken: [{ taskId: 'task-gate-a', continuationRef: 'intent-gate-a' }],
-      failed: [
-        {
-          taskId: 'task-gate-b',
-          continuationRef: 'intent-gate-b',
-          error: 'wake-b-failed',
-        },
-      ],
-    })
+    expect(result).toEqual({ attempted: 2, completed: 1, failed: 1 })
+    expect(failures).toEqual([
+      {
+        taskId: 'task-gate-b',
+        continuationRef: 'intent-gate-b',
+        error: new Error('wake-b-failed'),
+      },
+    ])
     expect(await db.select().from(taskExecutionIntents).all()).toEqual(before)
   })
 })

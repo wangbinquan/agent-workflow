@@ -35,7 +35,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { submitReviewDecision } from '../src/services/review'
+import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

@@ -533,15 +533,7 @@ async function settleFence(deps: ReconcileDeps, mission: MissionRow): Promise<Re
       await deps.store.invalidateEffect(effect.id, now)
       continue
     }
-    // dispatched：必须按外部真相结算——经 executor 查询/重放；无 executor 则保持 pending。
-    if (deps.ports.effectExecutor === undefined) continue
-    const settled = await deps.ports.effectExecutor.execute({
-      effectId: effect.id,
-      effectKind: effect.effectKind,
-      intentDigest: effect.intentDigest,
-    })
-    if (settled.ok) await deps.store.confirmEffect(effect.id, settled.receiptRef, now)
-    else await deps.store.failEffect(effect.id, JSON.stringify(settled.failure), now)
+    // Dispatched effects remain pending until the existing recovery path settles them.
   }
   const remaining = (await deps.store.listUnsettledEffects(mission.id)).filter(
     (e) => e.state === 'dispatched',

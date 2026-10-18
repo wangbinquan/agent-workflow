@@ -31,7 +31,10 @@ import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // 同毫秒插入仍保 id 单调（pure-id freshness）
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { addReviewComment, submitReviewDecision } from '../src/services/review'
+import {
+  addReviewComment,
+  submitReviewDecision,
+} from '@/modules/collaboration/infrastructure/review'
 import { wakeHumanGateContinuation } from '../src/services/task'
 import { submitTaskContinuation } from '../src/modules/task-execution/application/submitTaskContinuation'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'

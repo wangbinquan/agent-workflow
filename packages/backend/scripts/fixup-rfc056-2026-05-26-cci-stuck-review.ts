@@ -60,7 +60,10 @@ import { ulid } from 'ulid'
 import * as schema from '@/db/schema'
 import { crossClarifySessions, nodeRuns, tasks } from '@/db/schema'
 import { isFresherNodeRun } from '@/services/scheduler'
-import { isReviewCciAlignedWithUpstream, pickFreshestReviewRun } from '@/services/review'
+import {
+  isReviewCciAlignedWithUpstream,
+  pickFreshestReviewRun,
+} from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
 interface CliArgs {

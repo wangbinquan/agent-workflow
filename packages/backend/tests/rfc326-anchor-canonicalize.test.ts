@@ -23,7 +23,7 @@ import type { ReviewCommentAnchor } from '@agent-workflow/shared'
 import {
   buildReviewAnchorDocument,
   resolveReviewAnchor,
-} from '../src/modules/collaboration/public/queries'
+} from '@/modules/collaboration/domain/reviewAnchor'
 import {
   AnchorValidationError,
   assertResolvedAnchorConsistent,
@@ -31,7 +31,7 @@ import {
   findAllOccurrences,
   recomputeOccurrenceIndex,
   resolveCommentAnchor,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import { DomainError, ValidationError } from '../src/util/errors'
 
 // Design-gate F2 document: a heading, then four byte-identical 53-char table

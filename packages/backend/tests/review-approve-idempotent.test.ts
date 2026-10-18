@@ -15,7 +15,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { submitReviewDecision } from '../src/services/review'
+import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { describeEachProvider } from './helpers/eachProvider'

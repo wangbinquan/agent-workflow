@@ -23,7 +23,7 @@ import {
   type LocalProcessSettlement,
   type LocalProcessResources,
 } from '@/modules/task-execution/infrastructure/local/processEffectProjection'
-import { runAgentProcess } from '@/services/execution/agentProcess'
+import { runAgentProcess } from '@/platform/execution/local/agentProcess'
 
 function deferred() {
   let resolve: () => void = () => {}

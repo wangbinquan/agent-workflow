@@ -46,8 +46,6 @@ import type {
   TaskRecoveryOperations,
 } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createLogger, type Logger } from '@/util/log'
-import { DAEMON_CADENCE, MAINTENANCE_PHASE } from '@/services/daemonCadence'
-import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('lifecycle.invariants')
 
@@ -76,6 +74,7 @@ type _AssertBackendSubsetOfShared = InvariantRule | StuckRule extends SharedLife
 type _AssertSharedSubsetOfBackend = SharedLifecycleAlertRule extends InvariantRule | StuckRule
   ? true
   : never
+
 const _LIFECYCLE_RULE_UNION_GUARD: [_AssertBackendSubsetOfShared, _AssertSharedSubsetOfBackend] = [
   true,
   true,
@@ -122,6 +121,7 @@ type _AssertInvariantRulesExhaustive =
   Exclude<InvariantRule, (typeof INVARIANT_RULES)[number]> extends never ? true : never
 type _AssertStuckRulesExhaustive =
   Exclude<StuckRule, (typeof STUCK_RULES)[number]> extends never ? true : never
+
 const _RULE_LIST_EXHAUSTIVE_GUARD: [_AssertInvariantRulesExhaustive, _AssertStuckRulesExhaustive] =
   [true, true]
 
@@ -675,74 +675,4 @@ export async function runLifecycleInvariants(
     stateChanged,
   )
   return { scanned: snapshots.length, ...reconciled }
-}
-
-// =============================================================================
-// startup + periodic scan adapter
-// =============================================================================
-
-/**
- * Drives the invariant scan on two cadences:
- *   - boot: run once after `bootDelayMs` (~5s default) with `{ all: true }`
- *     so historic stuck tasks surface in lifecycle_alerts on first daemon
- *     start after rollout (severity='warning' for 24h grace then promoted).
- *   - periodic: every `intervalMs` (default 1h) with `{ since: now - 2h }`
- *     incremental.
- *
- * Returns a handle whose `.stop()` clears both timers; integration with
- * graceful shutdown lives in cli/start.ts.
- *
- * `onAlert` is passed straight through to `runLifecycleInvariants` so the
- * caller can broadcast `tasksListBroadcaster` events without this module
- * importing the WS layer (keeps the service unit-testable in isolation).
- */
-export function startLifecycleInvariantsLoop(opts: {
-  operations: TaskRecoveryOperations
-  onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
-  onResolved?: (taskId: string) => void
-  bootDelayMs?: number
-  intervalMs?: number
-  /** Incremental window: how far back to look (default 2h). */
-  incrementalWindowMs?: number
-  /** RFC-322：周期拍的错峰相位。 */
-  phaseOffsetMs?: number
-}): { stop: () => void } {
-  const bootDelay = opts.bootDelayMs ?? 5_000
-  const interval = opts.intervalMs ?? DAEMON_CADENCE.lifecycleInvariants
-  const window = opts.incrementalWindowMs ?? 2 * HOUR_MS
-  let running = false
-
-  const safeRun = (scope: InvariantScope): void => {
-    if (running) return
-    running = true
-    void runLifecycleInvariants({
-      operations: opts.operations,
-      scope,
-      onAlert: opts.onAlert,
-      onResolved: opts.onResolved,
-    })
-      .catch((err: unknown) => {
-        log.error('scan failed', { error: err instanceof Error ? err.message : String(err) })
-      })
-      .finally(() => {
-        running = false
-      })
-  }
-
-  // RFC-322：boot 拍与周期拍跑的是**不同 scope**（全量 vs 增量窗口），所以不能把 boot
-  // 交给 startMaintenanceTicker 的 bootDelayMs（那是同一个 onTick）；只把周期拍纳入
-  // 错峰。`safeRun` 自带的 running 闸仍是两者共享的那一个，语义逐字不变。
-  const bootTimer = setTimeout(() => safeRun({ all: true }), bootDelay)
-  const periodicTicker = startMaintenanceTicker({
-    job: 'lifecycleInvariants',
-    intervalMs: interval,
-    phaseOffsetMs: opts.phaseOffsetMs ?? MAINTENANCE_PHASE.lifecycleInvariants,
-    onTick: () => safeRun({ since: Date.now() - window }),
-  })
-  return {
-    stop: (): void => {
-      clearTimeout(bootTimer)
-      periodicTicker.stop()
-    },
-  }
 }

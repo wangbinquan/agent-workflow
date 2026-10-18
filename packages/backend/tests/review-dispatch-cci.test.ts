@@ -43,7 +43,10 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { dispatchReviewNode, pickFreshestReviewRun } from '../src/services/review'
+import {
+  dispatchReviewNode,
+  pickFreshestReviewRun,
+} from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const REVIEW_SOURCE_PATH = resolve(

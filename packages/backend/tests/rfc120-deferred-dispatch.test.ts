@@ -44,8 +44,11 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { sealRoundQuestions } from '../src/services/clarifySeal'
-import { bindTriggerRun, buildClarifyQueueContext } from '../src/services/clarifyQueue'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
+import {
+  bindTriggerRun,
+  buildClarifyQueueContext,
+} from '@/modules/collaboration/infrastructure/clarify/queue'
 import {
   confirmTaskQuestion,
   listTaskQuestions,
@@ -57,7 +60,7 @@ import {
   dispatchTaskQuestions,
   dispatchTaskQuestionsWithDecision,
 } from '../src/services/taskQuestionDispatch'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'

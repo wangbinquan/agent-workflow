@@ -29,7 +29,7 @@ import {
   users,
 } from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
-import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
+import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createUser } from '@/services/users'
 
@@ -95,12 +95,12 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
 
   test('只数未终结的 Mission（terminalAt 为 NULL）', async () => {
     const db = harness.db
-    const drain = createLegacyMissionDrainPort(db)
-    expect(await drain.openMissionCount()).toBe(0)
+    const drain = createDigitalEmployeeWriterCutoverPersistence(db)
+    expect((await drain.refresh(Date.now())).legacyOpenMissionCount).toBe(0)
 
     await seedMission(db, 'open-1', false)
     await seedMission(db, 'closed-1', true)
-    expect(await drain.openMissionCount()).toBe(1)
+    expect((await drain.refresh(Date.now())).legacyOpenMissionCount).toBe(1)
   })
 
   /**
@@ -178,7 +178,8 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
 
     await seedApproval(db, { id: 'saga-1', missionId: 'parent-1', latestStatus: 'pending' })
 
-    const report = await createLegacyMissionDrainPort(db).drainReport(10)
+    const report = (await createDigitalEmployeeWriterCutoverPersistence(db).migrationSnapshot(10))
+      .drain
     expect(report.truncated).toBe(false)
     // 顺序是端口契约的一部分：按 (createdAt, id) 升序。两条 createdAt 相同，
     // 于是按 id —— 'child-1' 在 'parent-1' 之前。截断判据（下一条用例）依赖这个
@@ -212,14 +213,16 @@ describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (ha
       })
     }
     expect(
-      (await createLegacyMissionDrainPort(db).drainReport(10)).entries[0]?.pendingApprovalCount,
+      (await createDigitalEmployeeWriterCutoverPersistence(db).migrationSnapshot(10)).drain
+        .entries[0]?.pendingApprovalCount,
     ).toBe(0)
   })
 
   test('超过 limit 时如实标 truncated（报告不能假装自己是全部）', async () => {
     const db = harness.db
     for (let index = 0; index < 4; index += 1) await seedMission(db, `bulk-${index}`, false)
-    const report = await createLegacyMissionDrainPort(db).drainReport(2)
+    const report = (await createDigitalEmployeeWriterCutoverPersistence(db).migrationSnapshot(2))
+      .drain
     expect(report.truncated).toBe(true)
     expect(report.entries).toHaveLength(2)
   })

@@ -12,9 +12,9 @@ describe('RFC-341 collaboration owner source locks', () => {
       'routes/reviews.ts',
       'routes/clarify.ts',
       'routes/taskQuestions.ts',
-      'services/reviewDecisionComposition.ts',
-      'services/clarifyDecisionComposition.ts',
-      'services/questionDispatchComposition.ts',
+      'modules/collaboration/infrastructure/reviewDecisionCommand.ts',
+      'modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
+      'modules/collaboration/infrastructure/questionDispatchCommand.ts',
     ]) {
       const value = source(path)
       expect(value).not.toContain('@/ws/broadcaster')
@@ -46,9 +46,9 @@ describe('RFC-341 collaboration owner source locks', () => {
       expect(publishAt, entry.path).toBeGreaterThan(barrierAt)
     }
     for (const path of [
-      'services/reviewDecisionComposition.ts',
-      'services/clarifyDecisionComposition.ts',
-      'services/questionDispatchComposition.ts',
+      'modules/collaboration/infrastructure/reviewDecisionCommand.ts',
+      'modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
+      'modules/collaboration/infrastructure/questionDispatchCommand.ts',
     ]) {
       expect(source(path)).not.toContain('waitAtHumanGateDecisionCommitBarrier')
     }

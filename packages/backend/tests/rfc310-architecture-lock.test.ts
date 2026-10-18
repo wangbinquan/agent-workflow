@@ -5,13 +5,10 @@
 //    public/composition 七层目录 + composition.ts；public/ 下只允许 RFC-294 的
 //    五个 exact 入口名（跨 context 深 import 由 rfc294-architecture-preflight 锁，
 //    此处锁的是结构本身）。
-// 2. composition.ts 与 composition/required-ports.ts 的全仓消费者精确账本
-//    （toEqual）：增删一个消费者都必须显式修订本测试并说明批次归属。
+// 2. composition.ts 的全仓消费者精确账本；已退役 required-ports 的消费者须保持为空。
 // 3. 模块内分层禁边：domain 纯净（只许 shared 中性值对象 / zod / 本层相对
 //    导入）；application/engine/public 不得触 infrastructure、Hono、路由等。
-// 4. composition/required-ports 在模块内只允许 composition.ts 引用（模块外的
-//    合法形态——provider `application/adapters/*-adapter.ts` type-only——由
-//    rfc294-architecture-preflight 放行并记账）。
+// 4. 保留 required-ports 禁边，防止重新引入已删除的投机合同。
 //
 // 变异实证（2026-08-18，开发期手工做过一轮）：在 domain 下临时放一个
 // `import { Hono } from 'hono'` 文件 → 第 3 条红；在 services/ 下临时 import
@@ -214,30 +211,6 @@ describe('rfc310 development-automation architecture lock', () => {
         }
       })
     }
-    expect(offenders).toEqual([])
-  }, 30_000)
-
-  test('required-ports DTOs stay opaque: no credentials/db/host handles in code lines', () => {
-    // design.md §1.5：port DTO 只许 opaque ref/closed union/digest/revision/
-    // budget/capability 票据。注释行（// 与 *）不参与扫描——RFC-072 教训。
-    const text = readFileSync(join(MODULE_ROOT, 'composition', 'required-ports.ts'), 'utf8')
-    const codeLines = text.split('\n').filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-    const banned: [RegExp, string][] = [
-      [/DbClient/, 'DbClient'],
-      [/AbortSignal/, 'AbortSignal'],
-      [/Record<\s*string\s*,\s*unknown\s*>/, 'open Record<string, unknown>'],
-      [/https?:\/\//, 'URL literal'],
-      [/\bsessionId\b/, 'runtime session id'],
-      [/\bcredential/i, 'credential'],
-      [/\bsecret/i, 'secret material'],
-      [/\babsolutePath\b|\bhostPath\b/, 'host path field'],
-    ]
-    const offenders: string[] = []
-    codeLines.forEach((line) => {
-      for (const [re, label] of banned) {
-        if (re.test(line)) offenders.push(`${label}: ${line.trim()}`)
-      }
-    })
     expect(offenders).toEqual([])
   }, 30_000)
 

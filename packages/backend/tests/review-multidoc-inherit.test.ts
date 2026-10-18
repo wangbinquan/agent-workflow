@@ -31,7 +31,7 @@ import {
   dispatchReviewNode,
   setDocumentSelection,
   submitReviewDecision,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import { transitionTaskStatusByEvent } from '../src/services/lifecycle'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

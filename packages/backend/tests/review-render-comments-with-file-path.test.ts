@@ -12,7 +12,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { ReviewComment } from '@agent-workflow/shared'
-import { renderCommentsForPrompt } from '../src/services/review'
+import { renderCommentsForPrompt } from '@/modules/collaboration/infrastructure/review'
 
 const SAMPLE: ReviewComment = {
   id: 'cmt_1',

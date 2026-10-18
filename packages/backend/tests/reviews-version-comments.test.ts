@@ -23,7 +23,7 @@ import type { DbClient } from '../src/db/client'
 import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/db/schema'
 import type { createApp } from '../src/server'
 import { type AppDeps } from '../src/server'
-import { getDocVersionDetail } from '../src/services/review'
+import { getDocVersionDetail } from '@/modules/collaboration/infrastructure/review'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

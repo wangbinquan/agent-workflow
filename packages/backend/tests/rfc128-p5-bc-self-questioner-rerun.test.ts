@@ -36,8 +36,8 @@ import {
   reconcileTaskQuestionsForRound,
 } from '../src/services/taskQuestions'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { sealRoundQuestions } from '../src/services/clarifySeal'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
+import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { getTaskQuestionWriteSem, getTaskWriteSem } from '../src/services/taskWriteLocks'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'

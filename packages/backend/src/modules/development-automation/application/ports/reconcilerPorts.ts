@@ -58,14 +58,6 @@ export type PortOutcome<T> =
   | ({ readonly ok: true } & T)
   | { readonly ok: false; readonly failure: OperationFailureReceipt }
 
-export interface MissionEffectExecutorPort {
-  execute(input: {
-    readonly effectId: string
-    readonly effectKind: string
-    readonly intentDigest: string
-  }): Promise<PortOutcome<{ readonly receiptRef: string }>>
-}
-
 /**
  * PR-4 T41 —— task-execution 侧 runner 的结构同形端口（launch/收取/取消）。
  * 执行是长过程：launch 只换 durable executionRef；终态由 wake hint 提示、
@@ -683,7 +675,6 @@ export interface ConflictMergePort {
 export interface ReconcilerPorts {
   readonly repositoryFacts?: RepositoryFactsCollectorPort
   readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
-  readonly effectExecutor?: MissionEffectExecutorPort
   readonly agentLauncher?: AgentActionLauncherPort
   readonly scriptLauncher?: ScriptActionLauncherPort
   readonly playbookSaga?: PlaybookSagaPersistence

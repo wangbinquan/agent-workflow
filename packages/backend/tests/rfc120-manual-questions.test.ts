@@ -27,8 +27,8 @@ import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/exec
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunOutputs, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import { createClarifyRound } from '../src/services/clarify/service'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
-import { buildClarifyQueueContext } from '../src/services/clarifyQueue'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
+import { buildClarifyQueueContext } from '@/modules/collaboration/infrastructure/clarify/queue'
 import {
   confirmTaskQuestion,
   createManualTaskQuestion,

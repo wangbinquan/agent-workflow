@@ -37,11 +37,6 @@ import {
 } from '../src/routes/capabilityTemplates'
 import { resetRouteMetaRegistry } from '../src/routes/registry'
 import {
-  copyTemplate as copyTemplateWithPersistence,
-  mergeableSnapshot,
-  templateDigest,
-} from '../src/services/capabilityTemplates'
-import {
   assertNameUnchangedForEditor,
   canViewResource,
   filterVisibleRows,
@@ -69,14 +64,6 @@ const mergeFromUpstream = (
   actor: Actor,
   now?: number,
 ) => mergeFromUpstreamWithPort(createTemplateUpstreamPersistence(db), row.id, actor, now)
-
-const copyTemplate = (
-  db: ProviderNeutralDatabase,
-  source: typeof capabilityTemplates.$inferSelect,
-  actor: Actor,
-  name: string | undefined,
-  now?: number,
-) => copyTemplateWithPersistence(createCapabilityTemplatePersistence(db), source, actor, name, now)
 
 const COPIER = {
   user: { id: 'u-copier', name: 'copier', role: 'user' },
@@ -413,20 +400,12 @@ describeEachProvider(
 
     /** A copy exactly as RFC-304 wrote them: link and digest, no base values. */
     async function legacyCopy(): Promise<string> {
-      const source = await row('up-1')
-      await db.insert(capabilityTemplates).values({
-        ...source,
-        id: 'legacy-1',
-        name: 'legacy copy',
-        ownerUserId: 'u-copier',
-        upstreamId: 'up-1',
-        upstreamVersion: source.updatedAt,
-        baseDigest: templateDigest(source),
-        baseSnapshotJson: null,
-        createdAt: NOW + 1_000,
-        updatedAt: NOW + 1_000,
-      })
-      return 'legacy-1'
+      const copy = await copyTemplate(db, await row('up-1'), COPIER, 'legacy copy', NOW + 1_000)
+      await db
+        .update(capabilityTemplates)
+        .set({ baseSnapshotJson: null })
+        .where(eq(capabilityTemplates.id, copy.id))
+      return copy.id
     }
 
     test('says so, so the interface can stop offering a merge it cannot predict', async () => {
@@ -466,9 +445,17 @@ describeEachProvider(
       const copy = await copyTemplate(db, await row('up-1'), COPIER, 'fresh', NOW + 1_000)
       const stored = await row(copy.id)
       expect(stored.baseSnapshotJson).not.toBeNull()
-      expect(JSON.parse(stored.baseSnapshotJson ?? 'null')).toEqual(
-        mergeableSnapshot(await row('up-1')) as Record<string, unknown>,
-      )
+      expect(JSON.parse(stored.baseSnapshotJson ?? 'null')).toEqual({
+        description: null,
+        scripts: { collect: { language: 'bash', script: 'echo v1' } },
+        hooks: [],
+        paramSchema: [],
+        paramDefaults: {},
+        agentBySlot: { reviewer: 'agent-dept' },
+        promptBySlot: {},
+        params: { maxFindings: 20 },
+        stageContractVer: 1,
+      })
     })
   },
 )
@@ -574,3 +561,37 @@ describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went w
     expect(JSON.stringify(await res.json())).toContain('capability-template-upstream-gone')
   })
 })
+
+// RFC-375: writes use the live operation API; persistence reads inspect stored receipts.
+function templateOperations(db: ProviderNeutralDatabase, now?: number) {
+  return composeCapabilityTemplateOperations({
+    db,
+    ...(now === undefined ? {} : { now: () => now }),
+    access: {
+      filterVisible: async (_actor, rows) => [...rows],
+      canView: async () => true,
+      requireEdit: async () => 'own' as const,
+      requireGovern: async () => {},
+      assertNameUnchangedForEditor: () => {},
+    },
+  })
+}
+async function storedTemplate(db: ProviderNeutralDatabase, id: string) {
+  const row = await createCapabilityTemplatePersistence(db).load(id)
+  if (row === null) throw new Error(`missing template ${id}`)
+  return row
+}
+async function copyTemplate(
+  db: ProviderNeutralDatabase,
+  source: { readonly id: string },
+  actor: Actor,
+  name?: string,
+  now?: number,
+) {
+  const result = await templateOperations(db, now).copy(
+    actor,
+    source.id,
+    name === undefined ? {} : { name },
+  )
+  return storedTemplate(db, result.id)
+}

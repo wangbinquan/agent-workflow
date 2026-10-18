@@ -1,3 +1,4 @@
+import { composeCapabilityTemplateOperations } from '../src/modules/code-capability/composition/capabilityTemplateOperations'
 // RFC-304 T57 → RFC-309 — the capability template, merged.
 //
 // RFC-304 split this into a department framework (scripts + hooks) and a group
@@ -26,17 +27,14 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { createApp } from '../src/server'
 import { capabilityTemplates } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import {
-  assertTemplateFieldsAllowed,
-  copyTemplate as copyTemplateWithPersistence,
-  createTemplate as createTemplateWithPersistence,
-  deleteTemplate as deleteTemplateWithPersistence,
-  getTemplateRow as getTemplateRowWithPersistence,
-  serializeTemplate,
-  updateTemplate as updateTemplateWithPersistence,
-} from '../src/services/capabilityTemplates'
-import type { CapabilityTemplatePersistence } from '../src/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/capabilityTemplatePersistence'
+import {
+  assertNameUnchangedForEditor,
+  canViewResource,
+  filterVisibleRows,
+  requireResourceEdit,
+  requireResourceGovern,
+} from '../src/services/resourceAcl'
 import { SYSTEM_DOMAIN_POINTS, type Permission } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -51,18 +49,6 @@ import { join as joinFixturePath } from 'node:path'
 
 const ROUTE_TOKEN = 'a'.repeat(64)
 const NOW = 1_700_000_000_000
-
-function bindTemplatePersistence<Args extends unknown[], Result>(
-  operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
-): (db: ProviderNeutralDatabase, ...args: Args) => Result {
-  return (db, ...args) => operation(createCapabilityTemplatePersistence(db), ...args)
-}
-
-const copyTemplate = bindTemplatePersistence(copyTemplateWithPersistence)
-const createTemplate = bindTemplatePersistence(createTemplateWithPersistence)
-const deleteTemplate = bindTemplatePersistence(deleteTemplateWithPersistence)
-const getTemplateRow = bindTemplatePersistence(getTemplateRowWithPersistence)
-const updateTemplate = bindTemplatePersistence(updateTemplateWithPersistence)
 
 const actorWith = (id: string, points: Permission[]): Actor =>
   ({
@@ -122,34 +108,78 @@ describe('RFC-309 — the permission boundary survives the merge', () => {
       expect(SYSTEM_DOMAIN_POINTS).not.toContain(point)
     }
   })
+})
 
-  test('changing scripts without `scripts:author` is refused, and the message names both', () => {
-    expect(() => assertTemplateFieldsAllowed(NOT_AN_AUTHOR, true, TEMPLATE_INPUT, null)).toThrow(
-      /scripts:author/,
-    )
-    // The CODE as well as the message. A caller that branches on the code (and
-    // the guard that requires every route-thrown code to be named by a test)
-    // sees `capability-template-scripts-forbidden`, so pinning only the prose
-    // would let a rename ship silently.
-    let code: unknown
-    try {
-      assertTemplateFieldsAllowed(NOT_AN_AUTHOR, true, TEMPLATE_INPUT, null)
-    } catch (err) {
-      code = (err as { code?: unknown }).code
-    }
-    expect(code).toBe('capability-template-scripts-forbidden')
+// RFC-375: keep the field and resource permission cases on the live operations.
+describeEachProvider('RFC-309 — template writes retain both permission checks', (harness) => {
+  let operations: ReturnType<typeof composeCapabilityTemplateOperations>
+  beforeEach(() => {
+    const db = harness.db
+    operations = composeCapabilityTemplateOperations({
+      db,
+      now: () => NOW,
+      access: {
+        filterVisible: async (actor, rows) =>
+          filterVisibleRows(db, actor, 'capability_template', rows),
+        canView: async (actor, row) => canViewResource(db, actor, 'capability_template', row),
+        requireEdit: async (actor, row) =>
+          requireResourceEdit(db, actor, 'capability_template', row),
+        requireGovern: async (actor, row) =>
+          requireResourceGovern(db, actor, 'capability_template', row),
+        assertNameUnchangedForEditor,
+      },
+    })
   })
 
-  test('a template with NO scripts needs no extra grant', () => {
+  test('changing scripts without `scripts:author` is refused, and the message names both', async () => {
+    const created = await operations.create(NOT_AN_AUTHOR, {
+      ...PLAIN_INPUT,
+      visibility: 'public',
+    })
+    // The CODE as well as the message: callers branch on it, so pinning only
+    // the prose would let a rename ship silently when the old helper is removed.
+    await expect(
+      operations.update(NOT_AN_AUTHOR, created.id, {
+        ...PLAIN_INPUT,
+        scripts: TEMPLATE_INPUT.scripts,
+      }),
+    ).rejects.toMatchObject({
+      code: 'capability-template-scripts-forbidden',
+      message: expect.stringContaining('scripts:author'),
+    })
+  })
+
+  test('a template with NO scripts needs no extra grant', async () => {
     // Otherwise the merge would have taken templates away from the people it
-    // exists to serve.
-    expect(() => assertTemplateFieldsAllowed(NOT_AN_AUTHOR, true, PLAIN_INPUT, null)).not.toThrow()
+    // exists to serve: an ordinary owner must still be able to create and edit.
+    const created = await operations.create(NOT_AN_AUTHOR, {
+      ...PLAIN_INPUT,
+      visibility: 'public',
+    })
+    const edited = await operations.update(NOT_AN_AUTHOR, created.id, {
+      ...PLAIN_INPUT,
+      params: { maxFindings: 20 },
+    })
+    expect(edited.ownerUserId).toBe(NOT_AN_AUTHOR.user.id)
+    expect((await operations.get(NOT_AN_AUTHOR, created.id)).params).toEqual({ maxFindings: 20 })
   })
 
-  test('no resource write means refused regardless of scripts:author', () => {
-    expect(() => assertTemplateFieldsAllowed(AUTHOR, false, PLAIN_INPUT, null)).toThrow(
-      /write access/,
-    )
+  test('no resource write means refused regardless of scripts:author', async () => {
+    // Authoring scripts does not grant edit access to somebody else's template.
+    // A public row reaches the read-only branch instead of the not-found branch.
+    const created = await operations.create(NOT_AN_AUTHOR, {
+      ...PLAIN_INPUT,
+      visibility: 'public',
+    })
+    for (const reader of [AUTHOR, actorWith('u-reader', ['capability-templates:update'])]) {
+      await expect(
+        operations.update(reader, created.id, { ...PLAIN_INPUT, params: { maxFindings: 20 } }),
+      ).rejects.toMatchObject({
+        code: 'resource-read-only',
+        message:
+          'you have read-only access to this capability_template; ask its owner for an edit grant or make your own copy',
+      })
+    }
   })
 })
 
@@ -162,7 +192,7 @@ describeEachProvider('RFC-309 — reads redact rather than withhold', (harness) 
 
   test('a non-author sees the template, its params and agents, and NO script bodies', async () => {
     const [row] = await db.select().from(capabilityTemplates)
-    const wire = serializeTemplate(row!, NOT_AN_AUTHOR)
+    const wire = await templateOperations(db).get(NOT_AN_AUTHOR, row!.id)
     expect(wire.scriptsRedacted).toBe(true)
     expect(wire.scripts).toBeUndefined()
     expect(wire.hooks).toBeUndefined()
@@ -174,7 +204,7 @@ describeEachProvider('RFC-309 — reads redact rather than withhold', (harness) 
 
   test('an author sees the script bodies', async () => {
     const [row] = await db.select().from(capabilityTemplates)
-    const wire = serializeTemplate(row!, AUTHOR)
+    const wire = await templateOperations(db).get(AUTHOR, row!.id)
     expect(wire.scriptsRedacted).toBe(false)
     expect(wire.scripts?.collect?.script).toBe('console.log(1)')
   })
@@ -480,3 +510,61 @@ describeEachProviderHttpApplication(
     })
   },
 )
+
+// RFC-375: writes use the live operation API; persistence reads inspect stored receipts.
+function templateOperations(db: ProviderNeutralDatabase, now?: number) {
+  return composeCapabilityTemplateOperations({
+    db,
+    ...(now === undefined ? {} : { now: () => now }),
+    access: {
+      filterVisible: async (_actor, rows) => [...rows],
+      canView: async () => true,
+      requireEdit: async () => 'own' as const,
+      requireGovern: async () => {},
+      assertNameUnchangedForEditor: () => {},
+    },
+  })
+}
+async function storedTemplate(db: ProviderNeutralDatabase, id: string) {
+  const row = await createCapabilityTemplatePersistence(db).load(id)
+  if (row === null) throw new Error(`missing template ${id}`)
+  return row
+}
+async function createTemplate(
+  db: ProviderNeutralDatabase,
+  raw: unknown,
+  actor: Actor,
+  now?: number,
+) {
+  const result = await templateOperations(db, now).create(actor, raw)
+  return storedTemplate(db, result.id)
+}
+async function copyTemplate(
+  db: ProviderNeutralDatabase,
+  source: { readonly id: string },
+  actor: Actor,
+  name?: string,
+  now?: number,
+) {
+  const result = await templateOperations(db, now).copy(
+    actor,
+    source.id,
+    name === undefined ? {} : { name },
+  )
+  return storedTemplate(db, result.id)
+}
+
+const getTemplateRow = (db: ProviderNeutralDatabase, id: string) =>
+  createCapabilityTemplatePersistence(db).load(id)
+async function updateTemplate(
+  db: ProviderNeutralDatabase,
+  existing: { readonly id: string },
+  raw: unknown,
+  actor: Actor,
+  now?: number,
+) {
+  const result = await templateOperations(db, now).update(actor, existing.id, raw)
+  return storedTemplate(db, result.id)
+}
+const deleteTemplate = (db: ProviderNeutralDatabase, row: { readonly id: string }) =>
+  templateOperations(db).delete(AUTHOR, row.id)

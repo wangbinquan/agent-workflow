@@ -80,14 +80,6 @@ export function createTaskFeedback(
   ).create(input, memoryDistillEnqueuer)
 }
 
-export {
-  canonicalHumanGateJson,
-  canonicalHumanGateRequestHash,
-  deriveHumanGateCompatibilityKey,
-} from '../domain/canonicalGateRequest'
-export { encodeGateDecisionReceipt, gateDecisionReceipt } from '../domain/gateReceipt'
-export { preparedHumanGateRef } from '../domain/humanGateOperation'
-
 export type ReviewGateOpenReceipt =
   | Readonly<{
       kind: 'prepared'

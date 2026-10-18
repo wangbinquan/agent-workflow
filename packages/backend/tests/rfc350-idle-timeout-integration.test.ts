@@ -1,3 +1,4 @@
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // RFC-350 —— 端到端：真库 + 真 cancelTask + 真归档器，把「超时 → 终结 → 出库」
 // 这条链整条跑一遍。
 //
@@ -27,7 +28,6 @@ import {
   createTaskIdleTimeoutPersistence,
   runTaskIdleTimeoutSweep,
 } from '../src/modules/task-execution/composition/taskIdleTimeout'
-import { runTaskArchiveSweep } from '../src/services/taskArchive'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const HOUR = 3_600_000
@@ -233,8 +233,7 @@ describeEachProvider('RFC-350 端到端', (provider) => {
     // 保留期内不动。
     expect(
       (
-        await runTaskArchiveSweep(
-          db,
+        await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
           { enabled: true, retentionDays: 90 },
           { ...dirs, now: finishedAt + 10 * DAY },
         )
@@ -243,8 +242,7 @@ describeEachProvider('RFC-350 端到端', (provider) => {
     expect(await taskCount()).toBe(1)
 
     // 跨过保留期 ⇒ 出库并从库里删除。
-    const archived = await runTaskArchiveSweep(
-      db,
+    const archived = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
       { enabled: true, retentionDays: 90 },
       { ...dirs, now: finishedAt + 91 * DAY },
     )
@@ -259,8 +257,7 @@ describeEachProvider('RFC-350 端到端', (provider) => {
     await runTaskIdleTimeoutSweep(operations(), IDLE_CONFIG, { now: NOW })
 
     const dirs = tmpDirs()
-    const archived = await runTaskArchiveSweep(
-      db,
+    const archived = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
       { enabled: false, retentionDays: 90 },
       { ...dirs, now: NOW + 999 * DAY },
     )

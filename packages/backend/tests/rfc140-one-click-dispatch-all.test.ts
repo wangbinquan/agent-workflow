@@ -37,7 +37,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { autoDispatchDeferredQuestions } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchDeferredQuestions } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { stageTaskQuestion } from '../src/services/taskQuestions'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'

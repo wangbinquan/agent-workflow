@@ -3,11 +3,9 @@
 // 分页游标、模板上游的锁定读 + 决策 + 落补丁在一个事务里。
 
 import { expect, test } from 'bun:test'
-import { ulid } from 'ulid'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
-  agents,
   capabilityTemplates,
   codeRoundStages,
   codeTriggerDeliveries,
@@ -15,11 +13,9 @@ import {
   codeWorkRounds,
   employeeCases,
   employeeReactionRounds,
-  repoCapabilityConfig,
 } from '@/db/schema'
 import type { TemplateUpstreamMergePatch } from '@/modules/code-capability/application/ports/templateUpstreamPersistence'
 import { createDeliveryChainRead } from '@/modules/code-capability/infrastructure/deliveryChainRead'
-import { DrizzleReviewerResolutionRead } from '@/modules/code-capability/infrastructure/reviewerResolutionRead'
 import { createTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/templateUpstreamPersistence'
 import { createWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/workItemProjectionRead'
 import { createReactionRoundQueries } from '@/modules/digital-employee/infrastructure/reactionRoundQueries'
@@ -74,53 +70,8 @@ async function seedWorkItem(
 describeEachProvider(
   'RFC-359 W4-B5b —— code-capability / digital-employee 读取与上游持久化',
   (harness) => {
-    test('评审人解析读取 / 反应轮次查询', async () => {
+    test('反应轮次查询', async () => {
       const db = harness.db
-      const reviewer = new DrizzleReviewerResolutionRead(db)
-      expect(
-        await reviewer.loadRepositoryCapability({
-          repositoryId: 'repo-b5b',
-          capability: 'mr-review',
-        }),
-      ).toBeNull()
-      await db.insert(capabilityTemplates).values(template('tpl-b5b'))
-      await db.insert(repoCapabilityConfig).values({
-        id: ulid(),
-        repoId: 'repo-b5b',
-        capability: 'mr-review',
-        templateId: 'tpl-b5b',
-        enabled: true,
-        readiness: 'ready',
-        createdAt: NOW,
-        updatedAt: NOW,
-      })
-      expect(
-        await reviewer.loadRepositoryCapability({
-          repositoryId: 'repo-b5b',
-          capability: 'mr-review',
-        }),
-      ).toEqual({
-        templateId: 'tpl-b5b',
-      })
-      expect(await reviewer.loadTemplate('tpl-b5b')).toEqual({
-        agentBySlotJson: JSON.stringify({ reviewer: 'agent-b5b' }),
-      })
-      expect(await reviewer.loadTemplate('missing')).toBeNull()
-      expect(await reviewer.loadAgent('agent-b5b')).toBeNull()
-      await db.insert(agents).values({
-        id: 'agent-b5b',
-        name: 'agent-b5b',
-        description: 'test',
-        outputs: '[]',
-        permission: '{}',
-        skills: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: '',
-        createdAt: NOW,
-        updatedAt: NOW,
-      })
-      expect((await reviewer.loadAgent('agent-b5b'))?.name).toBe('agent-b5b')
-
       const rounds = createReactionRoundQueries(db)
       expect(await rounds.frozenPlan('missing')).toBeNull()
       expect(

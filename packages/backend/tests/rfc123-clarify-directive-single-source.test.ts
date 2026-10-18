@@ -40,7 +40,7 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/executionIntent'
 import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRuns, taskNodeClarifyDirectives, tasks, workflows } from '../src/db/schema'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import {
   getNodeClarifyDirective,
   listNodeClarifyDirectives,

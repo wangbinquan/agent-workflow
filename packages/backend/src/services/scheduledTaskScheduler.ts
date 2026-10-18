@@ -1,12 +1,6 @@
-// RFC-159 — scheduled-task background loop.
-//
-// Poll due rows → CAS-advance next_run_at (per-slot single-flight, at-most-once) →
-// fire on a bounded-concurrency pool with a backpressure cap → record the outcome
-// with atomic SQL. `running` guards only the fast poll+claim; fires run async so a
-// slow/hung launch never stalls the poll cadence. See design.md §4 (R2-a bounded
-// backlog, R2-c/R3-2 atomic counter + firedAt-guarded display, R4-1 no last_run_at
-// write in the claim).
-import type { Config } from '@agent-workflow/shared'
+// RFC-159/RFC-375 — claim due schedules and run a bounded batch.
+// The maintenance Worker owns the periodic cadence.
+
 import { computeNextRunAt, ScheduleSpecSchema } from '@agent-workflow/shared'
 
 import {
@@ -16,11 +10,7 @@ import {
   type ScheduleAuthorityRuntime,
   type ScheduledTaskOperations,
 } from '@/services/scheduledTasks'
-import { createLogger } from '@/util/log'
-import { Semaphore } from '@/util/semaphore'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
-
-const log = createLogger('scheduled-tasks')
 
 export const SCHEDULE_TICK_MS = 30_000 // preset minute granularity is plenty; lighter than 1Hz
 export const SCHEDULE_FIRE_CONCURRENCY = 4 // actual parallel launches
@@ -169,57 +159,4 @@ export async function runDueSchedulesOnce(
     )
   }
   return claimed
-}
-
-/** Start the background ticker. Returns `{ stop }`. */
-export function startScheduledTaskLoop(opts: {
-  operations: ScheduledTaskOperations
-  loadConfig: () => Config
-  buildLaunch: BuildScheduleLaunch
-  identityAccess: ScheduleAuthorityRuntime
-  intervalMs?: number
-  onAutoDisable?: (id: string) => void
-}): { stop: () => void } {
-  const sem = new Semaphore(SCHEDULE_FIRE_CONCURRENCY)
-  let running = false
-  let inFlight = 0
-  const handle = setInterval(() => {
-    if (running) return
-    const cfg = opts.loadConfig()
-    if (cfg.scheduledTasksEnabled === false) return // live master switch, read per tick
-    running = true
-    const capacity = Math.max(0, SCHEDULE_MAX_IN_FLIGHT - inFlight)
-    const maxFailures = cfg.scheduledTasksMaxFailures
-    const poll =
-      capacity === 0
-        ? Promise.resolve([] as readonly Row[])
-        : pollAndClaim(opts.operations, Date.now(), capacity)
-    poll
-      .then((claimed) => {
-        for (const row of claimed) {
-          inFlight++
-          void sem
-            .run(() =>
-              fireClaimed(
-                opts.operations,
-                row,
-                opts.buildLaunch,
-                opts.identityAccess,
-                maxFailures,
-                opts.onAutoDisable,
-                cfg.defaultRuntime,
-              ),
-            )
-            .finally(() => {
-              inFlight--
-            })
-        }
-      })
-      .catch((err) => log.error('scheduled-task tick failed', { error: msgOf(err) }))
-      .finally(() => {
-        running = false
-      })
-  }, opts.intervalMs ?? SCHEDULE_TICK_MS)
-  ;(handle as { unref?: () => void }).unref?.()
-  return { stop: () => clearInterval(handle) }
 }

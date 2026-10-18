@@ -23,10 +23,6 @@ import {
   factPredicateSchema,
   PREDICATE_MAX_DEPTH,
 } from '@/modules/development-automation/domain/predicate'
-import {
-  developmentMissionRef,
-  missionRevisionRefSchema,
-} from '@/modules/development-automation/domain/refs'
 import { pipelineEvidenceManifestV1Schema } from '@/modules/development-automation/domain/pipelineManifest'
 import { requirementBundleManifestV1Schema } from '@/modules/development-automation/domain/requirementManifest'
 import { parseOk, unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
@@ -144,16 +140,6 @@ const pipelineManifestFixture = {
 } as const
 
 describe('rfc310 pr0 codecs', () => {
-  test('opaque refs mint/validate and reject non-ulids', () => {
-    const id = '01ARZ3NDEKTSV4RRFFQ69G5FAV'
-    expect(developmentMissionRef.mint(id)).toBe(id as ReturnType<typeof developmentMissionRef.mint>)
-    expect(() => developmentMissionRef.mint('not-a-ulid')).toThrow()
-    expect(developmentMissionRef.schema.safeParse('lowercase-bad').success).toBe(false)
-    expect(unknownKeySurvivors(missionRevisionRefSchema, { missionId: id, revision: 3 })).toEqual(
-      [],
-    )
-  })
-
   test('canonical stringify is key-order independent and digest-stable', () => {
     const a = { z: 1, a: [{ b: 2, a: 3 }], m: 'x' }
     const b = { m: 'x', a: [{ a: 3, b: 2 }], z: 1 }

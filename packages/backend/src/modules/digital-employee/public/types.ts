@@ -23,31 +23,6 @@ export interface EmployeeTypeRef {
   readonly revision: number
 }
 
-export interface ExactResourceRef {
-  readonly id: string
-  readonly revision: number
-}
-
-export interface DigitalEmployeeResourceReceipt {
-  readonly resourceKind: 'tool' | 'job-template' | 'employee' | 'execution-policy'
-  readonly ref: ExactResourceRef
-  readonly state: 'draft' | 'published' | 'retired'
-  readonly contentDigest: string
-  readonly projectionJson: string
-}
-
-export interface DigitalEmployeeProjectionPage {
-  readonly projectionKind: 'type' | 'tool' | 'job-template' | 'employee'
-  readonly itemsJson: string
-  readonly nextCursor: string | null
-}
-
-export interface DigitalEmployeeProjectionDocument {
-  readonly projectionKind: 'type-package' | 'authoring-manifest' | 'employee' | 'execution-policy'
-  readonly projectionJson: string
-  readonly contentDigest: string
-}
-
 /**
  * Code-owned employee types cross the bootstrap boundary as canonical JSON.
  * The owner validates the descriptor and every callback result before it can
@@ -168,39 +143,6 @@ export interface EmployeeCaseDetailProjectionInputV1 {
 export interface EmployeeCaseDetailProjectionParticipant {
   readonly typeId: string
   projectJson(inputJson: string): Promise<string>
-}
-
-export interface EmployeeCaseRef {
-  readonly id: string
-  readonly revision: number
-}
-
-export interface EmployeeContextRef {
-  readonly id: string
-  readonly revision: number
-}
-
-export interface EventSubjectInput {
-  readonly typeId: string
-  readonly subjectRef: string
-}
-
-export interface EmployeeCaseLaunchInput {
-  readonly employeeRef: ExactResourceRef
-  readonly primaryContextTypeId: string
-  readonly primaryContextSchemaVersion: number
-  readonly primaryContextState: 'active' | 'waiting' | 'terminal'
-  readonly primaryContextJson: string
-  readonly artifactRefs: readonly string[]
-  readonly workSubject: EventSubjectInput
-}
-
-export interface EmployeeCaseProjectionDocument {
-  readonly caseRef: EmployeeCaseRef
-  readonly state: 'active' | 'waiting' | 'blocked' | 'terminal'
-  readonly currentWorkItemRef: string | null
-  readonly projectionJson: string
-  readonly projectionRevision: number
 }
 
 /**

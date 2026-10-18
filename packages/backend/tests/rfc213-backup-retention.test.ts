@@ -187,8 +187,12 @@ describe('startBackupScheduler side-effects (AC-6)', () => {
       resolve(import.meta.dir, '..', 'src', 'platform', 'background', 'providerBackupScheduler.ts'),
       'utf-8',
     )
-    expect(src.includes('let running = false')).toBe(true)
-    expect(src.includes('if (running) return')).toBe(true)
+    const schedulerStart = src.indexOf('export function startBackupScheduler(')
+    expect(schedulerStart).toBeGreaterThanOrEqual(0)
+    const nextExport = src.indexOf('\nexport ', schedulerStart + 1)
+    const scheduler = src.slice(schedulerStart, nextExport === -1 ? undefined : nextExport)
+    expect(scheduler.includes('let running = false')).toBe(true)
+    expect(scheduler.includes('if (stopped || running) return')).toBe(true)
   })
 })
 

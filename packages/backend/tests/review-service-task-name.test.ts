@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { docVersions, nodeRuns, tasks, workflows } from '../src/db/schema'
-import { listReviewSummaries } from '../src/services/review'
+import { listReviewSummaries } from '@/modules/collaboration/infrastructure/review'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedReview(db: ProviderNeutralDatabase, taskName: string): Promise<void> {

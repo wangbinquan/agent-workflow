@@ -28,7 +28,7 @@ import {
   getReviewDetail,
   listReviewSummaries,
   submitReviewDecision,
-} from '../src/services/review'
+} from '@/modules/collaboration/infrastructure/review'
 import {
   abortAllActiveTasks,
   isTaskActive,

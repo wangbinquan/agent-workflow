@@ -24,7 +24,7 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { dispatchReviewNode } from '../src/services/review'
+import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 describeEachProvider(

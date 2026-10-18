@@ -103,10 +103,8 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
-import type {
-  CanonicalHumanGateRequest,
-  GateDecisionReceipt,
-} from '@/modules/collaboration/public/types'
+import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
+import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
 import {
   humanGateComposition,

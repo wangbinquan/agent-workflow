@@ -72,7 +72,6 @@ export const FAKE_POSTGRESQL_RUNTIME_LITERALS: readonly string[] = [
   'rfc349-code-legacy-facades-postgresql-adapter.test.ts: 3',
   'rfc349-code-matrix-postgresql-adapter.test.ts: 3',
   'rfc349-code-metrics-postgresql-adapter.test.ts: 3',
-  'rfc349-code-readiness-postgresql-adapter.test.ts: 3',
   'rfc349-code-template-upstream-postgresql-adapter.test.ts: 3',
   'rfc349-code-work-items-postgresql-adapter.test.ts: 3',
   'rfc349-collaboration-runtime-mechanics.test.ts: 3',

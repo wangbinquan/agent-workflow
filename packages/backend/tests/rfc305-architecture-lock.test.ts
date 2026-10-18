@@ -431,8 +431,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/services/oidcProviders.ts -> @/modules/identity-access/public/operations',
-      'packages/backend/src/services/ownerIdentity.ts -> @/modules/identity-access/composition/providerOperations',
-      'packages/backend/src/services/ownerIdentity.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/services/ownerScopedName.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/services/resourcePackage/executionAdapter.ts -> @/modules/identity-access/public/participants',

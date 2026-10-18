@@ -1,25 +1,4 @@
-// RFC-326 — the `collaboration` context's public QUERIES (RFC-294 exact entrypoint).
-//
-// `resolveReviewAnchor` is a pure query: given a document and a simplified locator
-// it answers "which composite anchor does this denote", or exactly why it cannot
-// (candidates with global occurrence numbers, near misses, …). It never writes.
-//
-// `buildReviewAnchorDocument` prepares the one-scan document model a batch of
-// resolutions shares; `createReviewAnchorBudget` bounds the total scanning a single
-// request may do.
-
-export {
-  REVIEW_ANCHOR_CANDIDATE_LIMIT,
-  REVIEW_ANCHOR_CONTEXT_CHARS,
-  REVIEW_ANCHOR_DEFAULT_BUDGET_CHARS,
-  REVIEW_ANCHOR_MESSAGE_CANDIDATE_LIMIT,
-  REVIEW_ANCHOR_SUGGESTION_LIMIT,
-  buildReviewAnchorDocument,
-  createReviewAnchorBudget,
-  paragraphIdxAt,
-  resolveReviewAnchor,
-  sectionPathAt,
-} from '../domain/reviewAnchor'
+// RFC-326/RFC-333 — collaboration's public queries.
 
 import {
   requireCommittedReviewArtifactReader,
@@ -106,13 +85,6 @@ export function listTaskFeedback(
   return taskFeedbackService(context).list(taskId)
 }
 
-export function listRecentTaskFeedback(
-  context: CollaborationCommandContext,
-  limit = 20,
-): Promise<readonly TaskFeedback[]> {
-  return taskFeedbackService(context).listRecent(limit)
-}
-
 export function resolveCollaborationTaskAccess(
   context: CollaborationCommandContext,
   input: { readonly actor: ReviewActor; readonly taskId: string },
@@ -149,17 +121,6 @@ export function collaborationQuestionTaskId(
   entryId: string,
 ): Promise<string | null> {
   return requireCollaborationTaskAccess(context).questionTaskId(entryId)
-}
-
-export function getCollaborationClarifyDirective(
-  context: CollaborationCommandContext,
-  input: {
-    readonly taskId: string
-    readonly nodeId: string
-    readonly shardKey?: string | null
-  },
-): Promise<Readonly<{ directive: ClarifyDirective; updatedAt: number }> | null> {
-  return requireClarifyDirectiveStore(context).get(input)
 }
 
 export function listCollaborationClarifyDirectives(

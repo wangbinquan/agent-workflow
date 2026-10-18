@@ -160,23 +160,6 @@
     {
       "auditedBy": "transport-platform",
       "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/platform/persistence/transactionScope.ts#$file"
-      ],
-      "claimAudit": "Holds and is runtime-enforced, not just type-branded: a forged scope object is rejected by the claims WeakMap (existingTransactionScope.ts:48-49) and nested/async use throws (75-84). Only 3 production consumers today (services/userIdentities.ts, auth/loginPolicy.ts, modules/identity-access/infrastructure/sqliteUserAccessRepository.ts).",
-      "core": false,
-      "files": [
-        "packages/backend/src/platform/persistence/transactionScope.ts"
-      ],
-      "guards": [],
-      "id": "platform-persistence-transactionscope",
-      "layer": "infrastructure",
-      "owner": "platform",
-      "singleSourceOf": "Opaque branded transaction handle so module code never receives a Drizzle transaction; the SQLite bridge proxies the live handle and revokes it after the callback (sqlite/existingTransactionScope.ts:23-208).",
-      "title": "platform/persistence TransactionScope"
-    },
-    {
-      "auditedBy": "transport-platform",
-      "canonicalOwnerEntryIds": [
         "owner:packages/backend/src/routes/registry.ts#$file"
       ],
       "claimAudit": "Claims to be THE route gate ('there is exactly one route gate to reason about', registry.ts:24-25). Holds for authorization: all 57 route files register through registerRoute, routes-to-points drift is caught by assertRouteMetaCoverage (server.ts:408), and route-gate-single-source.test.ts:39-104 bans the 7 retired helpers by name. Does NOT hold for coverage completeness: routeMetaCoverage drops every method='ALL' mount (registry.ts:298) and every EXEMPT_MOUNTS path (registry.ts:299,318-331), and neither hole is test-frozen.",
@@ -247,15 +230,15 @@
       "canonicalOwnerEntryIds": [
         "owner:packages/backend/src/services/execution/agentProcess.ts#$file"
       ],
-      "claimAudit": "Claims it copies no timers and only adapts agent semantics. Verified true \u2014 it owns no setTimeout and delegates every reliability concern. mapOutcome (agentProcess.ts:120-134) is a clean exhaustive switch over ManagedProcessOutcome.",
+      "claimAudit": "Claims it copies no timers and only adapts agent semantics. Verified true \u2014 it owns no setTimeout and delegates every reliability concern. mapOutcome (agentProcess.ts:120-134) is a clean exhaustive switch over ManagedProcessOutcome. RFC-375 deleted the services/execution/agentProcess.ts re-export facade; the kernel now points at the implementation it re-exported.",
       "core": true,
       "files": [
-        "packages/backend/src/services/execution/agentProcess.ts"
+        "packages/backend/src/platform/execution/local/agentProcess.ts"
       ],
       "guards": [],
       "id": "runagentprocess-mapoutcome",
-      "layer": "engine",
-      "owner": "task-execution",
+      "layer": "infrastructure",
+      "owner": "platform",
       "singleSourceOf": "Agent adapter over managedProcess: receipt fence (onSpawned throw \u21d2 abort \u21d2 'aborted'), typed outcome map, cleanup-after-reap ordering.",
       "title": "runAgentProcess / mapOutcome"
     },
@@ -625,14 +608,14 @@
       "canonicalOwnerEntryIds": [
         "owner:packages/backend/src/services/taskArchive.ts#$file"
       ],
-      "claimAudit": "Claims (comment at :223, and the guard's own preamble at packages/backend/tests/rfc311-task-archive.test.ts:479-485) that every table that vanishes with the archive is either exported or explicitly exempt. DOES NOT HOLD: the guard walks exactly one FK hop, and review_comments (a transitive cascade descendant) is in neither list. AUDITED BY NOBODY.",
+      "claimAudit": "Claims (comment at :223, and the guard's own preamble at packages/backend/tests/rfc311-task-archive.test.ts:479-485) that every table that vanishes with the archive is either exported or explicitly exempt. DOES NOT HOLD: the guard walks exactly one FK hop, and review_comments (a transitive cascade descendant) is in neither list. AUDITED BY NOBODY. RFC-375 deleted the superseded services/taskArchive.ts; ARCHIVED_TABLES / ARCHIVE_EXEMPT_TABLES now live in the task-execution archive content coordinator.",
       "core": false,
       "files": [
-        "packages/backend/src/services/taskArchive.ts"
+        "packages/backend/src/modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts"
       ],
       "guards": [],
       "id": "task-archive-cascade-table-registry",
-      "layer": "application",
+      "layer": "infrastructure",
       "owner": "task-execution",
       "singleSourceOf": "ARCHIVED_TABLES + ARCHIVE_EXEMPT_TABLES declare which tables must be exported to JSONL before a terminal task tree is deleted from the DB (archive = export + delete, deletion by FK cascade).",
       "title": "Task-archive cascade-table registry"

@@ -28,7 +28,10 @@ import {
   countAwaitingClarifyRounds,
   listClarifyRoundSummaries,
 } from '../src/services/clarify/rounds'
-import { countPendingReviews, listReviewSummaries } from '../src/services/review'
+import {
+  countPendingReviews,
+  listReviewSummaries,
+} from '@/modules/collaboration/infrastructure/review'
 import { visibleTaskIdsOf } from '../src/services/taskAuthorization'
 
 type Db = ProviderNeutralDatabase

@@ -15,13 +15,6 @@
 
 import { describe, expect, test } from 'bun:test'
 import {
-  classifyChange,
-  effectiveConfig,
-  invertBatch,
-  previewBulk,
-  type CellChange,
-} from '../src/modules/code-capability/domain/configScale'
-import {
   ROUND_WINDOW,
   describeHidden,
   roundWindow,
@@ -29,100 +22,6 @@ import {
   stageMayHaveAttempts,
   VIRTUALISE_THRESHOLD,
 } from '../src/modules/code-capability/domain/stateViewScale'
-
-const change = (over: Partial<CellChange> = {}): CellChange => ({
-  repoId: 'repo-1',
-  capability: 'mr-review',
-  before: { enabled: false, templateId: null },
-  after: { enabled: true, templateId: 'binding-1' },
-  ...over,
-})
-
-describe('RFC-304 T65 — a bulk edit is explicit writes', () => {
-  test('a cell that does not exist yet is a create', () => {
-    expect(classifyChange(change({ before: null }))).toBe('create')
-  })
-
-  test('a cell already holding the target value is a NO-OP, not an update', () => {
-    expect(
-      classifyChange(
-        change({
-          before: { enabled: true, templateId: 'binding-1' },
-          after: { enabled: true, templateId: 'binding-1' },
-        }),
-      ),
-    ).toBe('no-op')
-  })
-
-  test('the preview COUNTS no-ops instead of hiding them', () => {
-    // "This will change 12 repositories" reads very differently from "this
-    // matched 200, 188 already set" — and the second is what tells the author
-    // their selector is wider than they meant, which is the mistake a bulk tool
-    // makes easy.
-    const preview = previewBulk([
-      change({ repoId: 'a', before: null }),
-      change({ repoId: 'b' }),
-      change({
-        repoId: 'c',
-        before: { enabled: true, templateId: 'binding-1' },
-        after: { enabled: true, templateId: 'binding-1' },
-      }),
-    ])
-    expect(preview.creates).toHaveLength(1)
-    expect(preview.updates).toHaveLength(1)
-    expect(preview.noOps).toHaveLength(1)
-    expect(preview.message).toContain('1 already set')
-  })
-
-  test('a selector matching nothing says so plainly', () => {
-    expect(previewBulk([]).message).toContain('matches nothing')
-  })
-})
-
-describe('RFC-304 T65 — revert restores exactly what was changed', () => {
-  test('the inverse comes from the RECORDED before, not the current state', () => {
-    // By the time somebody reverts, other edits may have landed. Re-deriving
-    // from the current state would either clobber those or fail; the recorded
-    // before restores this batch and nothing else.
-    const applied = [change({ repoId: 'a' })]
-    const inverse = invertBatch(applied)
-    expect(inverse[0]?.after).toEqual({ enabled: false, templateId: null })
-    expect(inverse[0]?.before).toEqual({ enabled: true, templateId: 'binding-1' })
-  })
-
-  test('a created cell reverts by DISABLING, not by deletion', () => {
-    // Deleting would also discard the readiness and trigger configuration the
-    // create brought along. A revert that destroys more than the thing it
-    // reverses is not one.
-    const inverse = invertBatch([change({ before: null })])
-    expect(inverse[0]?.after).toEqual({ enabled: false, templateId: null })
-  })
-
-  test('no-ops are not inverted — they changed nothing', () => {
-    const inverse = invertBatch([
-      change({
-        before: { enabled: true, templateId: 'b' },
-        after: { enabled: true, templateId: 'b' },
-      }),
-    ])
-    expect(inverse).toEqual([])
-  })
-})
-
-describe('RFC-304 T65 — one read model', () => {
-  test('the effective config says where its values came from', () => {
-    // `source` is a constant today and stated anyway: it is the field that
-    // would have to grow values if inheritance were ever added, so the read
-    // model would not change shape to say so.
-    const cfg = effectiveConfig({
-      repoId: 'r',
-      capability: 'mr-review',
-      enabled: true,
-      templateId: 'b',
-    })
-    expect(cfg.source).toBe('cell')
-  })
-})
 
 describe('RFC-304 T66 — the state view is bounded', () => {
   test('a short history is returned whole with nothing hidden', () => {

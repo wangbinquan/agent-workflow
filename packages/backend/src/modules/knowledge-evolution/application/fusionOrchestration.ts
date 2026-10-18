@@ -66,7 +66,6 @@ import {
   SKILL_MERGER_AGENT_ID,
   SKILL_MERGER_AGENT_NAME,
 } from '@/services/systemResources'
-import { DAEMON_CADENCE } from '@/services/daemonCadence'
 // RFC-353 T4（RFC-294 W4-E3）—— 纯判据 / 纯文本已迁进 knowledge-evolution 的 domain 层。
 // 这里只剩编排；`isValidFusionTransition` 继续从本模块再导出，既有 import 面不变
 // （consumer 在 T8 随路由与恢复入口一起切到 KE public）。
@@ -565,31 +564,6 @@ export async function recoverFusionDecisions(
   persistence: FusionPersistence,
 ): Promise<FusionDecisionRecoveryReceipt> {
   return await persistence.recoverDecisions()
-}
-
-/**
- * Daemon background loop: periodically settle running fusions against their
- * engine task's terminal state, so a fusion whose task finished reaches
- * awaiting_approval (or failed) even when no client is polling /api/fusions.
- * Reconcile only needs db + appHome (no opencode), so the lighter FusionDeps
- * suffices. Non-overlapping; best-effort.
- */
-export function startFusionReconcileLoop(
-  deps: FusionDeps,
-  opts: { intervalMs?: number } = {},
-): { stop: () => void } {
-  const intervalMs = opts.intervalMs ?? DAEMON_CADENCE.fusionReconcile
-  let busy = false
-  const timer = setInterval(() => {
-    if (busy) return
-    busy = true
-    void reconcileRunningFusions(deps)
-      .catch(() => undefined)
-      .finally(() => {
-        busy = false
-      })
-  }, intervalMs)
-  return { stop: () => clearInterval(timer) }
 }
 
 // ---------------------------------------------------------------------------

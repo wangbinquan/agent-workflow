@@ -17,10 +17,7 @@ import {
   MAINTENANCE_SLOW_TICK_MS,
   MIN_PHASE_GAP_MS,
 } from '../src/services/daemonCadence'
-import {
-  HEAVY_MAINTENANCE_JOB_KEYS,
-  MAINTENANCE_JOB_CATALOG,
-} from '../src/platform/background/maintenanceCatalog'
+import { MAINTENANCE_JOB_CATALOG } from '../src/platform/background/maintenanceCatalog'
 import { startMaintenanceTicker, type TimerApi } from '../src/services/maintenanceTicker'
 import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
 
@@ -512,11 +509,12 @@ describe('RFC-322 登记棘轮（AC-2）', () => {
     const all = tsFiles(SRC)
       .map((f) => readFileSync(f, 'utf8'))
       .join('\n')
+    // RFC-338 coordinator 调度整个 catalog，包含 lifecycleInvariants 等 fixed job；
+    // 只有未登记在 catalog 的 job 才需要唯一的独立 ticker。
     for (const job of Object.keys(MAINTENANCE_PHASE)) {
-      if ((HEAVY_MAINTENANCE_JOB_KEYS as readonly string[]).includes(job)) {
-        expect(MAINTENANCE_JOB_CATALOG.find((spec) => spec.key === job)?.phaseOffsetMs).toBe(
-          MAINTENANCE_PHASE[job as keyof typeof MAINTENANCE_PHASE],
-        )
+      const spec = MAINTENANCE_JOB_CATALOG.find((candidate) => candidate.key === job)
+      if (spec !== undefined) {
+        expect(spec.phaseOffsetMs).toBe(MAINTENANCE_PHASE[job as keyof typeof MAINTENANCE_PHASE])
         continue
       }
       const hits = all.split(`job: '${job}'`).length - 1

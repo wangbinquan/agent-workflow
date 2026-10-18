@@ -26,7 +26,10 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { dispatchReviewNode, submitReviewDecision } from '../src/services/review'
+import {
+  dispatchReviewNode,
+  submitReviewDecision,
+} from '@/modules/collaboration/infrastructure/review'
 import { transitionTaskStatusByEvent } from '../src/services/lifecycle'
 import { isFresherNodeRun } from '../src/services/scheduler'
 import { runGit } from '../src/util/git'

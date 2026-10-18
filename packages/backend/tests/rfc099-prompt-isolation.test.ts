@@ -13,7 +13,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { renderCommentsForPrompt } from '../src/services/review'
+import { renderCommentsForPrompt } from '@/modules/collaboration/infrastructure/review'
 import type { ReviewComment } from '@agent-workflow/shared'
 
 const USER_ID = '01HUSERIDLEAKCANARY0000000'

@@ -38,7 +38,7 @@ import { docVersions, nodeRuns, reviewComments, tasks, workflows } from '../src/
 import {
   buildReviewAnchorDocument,
   resolveReviewAnchor,
-} from '../src/modules/collaboration/public/queries'
+} from '@/modules/collaboration/domain/reviewAnchor'
 import { REVIEW_WRITE_BODY_MAX_BYTES } from '../src/routes/reviews'
 import type { createApp } from '../src/server'
 import type { ProviderNeutralDatabase } from '../src/db/query'

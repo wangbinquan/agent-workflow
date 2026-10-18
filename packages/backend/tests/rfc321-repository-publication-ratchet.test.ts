@@ -250,9 +250,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const legacyAdapterReferences = corpus.filter((file) =>
       read(file).includes('bindTaskWorkspaceCommitParticipant'),
     )
-    expect(legacyAdapterReferences).toEqual([
-      'packages/backend/src/modules/task-execution/composition/taskWorkspaceCommit.ts',
-    ])
+    expect(legacyAdapterReferences).toEqual([])
   }, 20_000)
 
   test('task, candidate, and employee-case publication reuse one fixed transport session', () => {

@@ -28,7 +28,7 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { clarifyRounds, nodeRuns, tasks } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { abortAllActiveTasks, startTaskWithLocalRepo } from '../src/services/task'
 import { listTaskQuestions } from '../src/services/taskQuestions'
 import { reenterScheduler } from './reenter-scheduler'

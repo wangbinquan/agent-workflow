@@ -22,7 +22,7 @@ import { createCollaborationCommandContext } from '@/modules/collaboration/compo
 import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { listNodeClarifyDirectives } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
-import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/public/types'
+import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'
 import type { EnqueueMemoryDistillJobInput } from '@/modules/memory/public/commands'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { ConflictError } from '@/util/errors'

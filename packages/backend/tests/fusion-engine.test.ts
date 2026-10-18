@@ -53,7 +53,6 @@ import {
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { getTask } from '../src/services/task'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
-import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
 import { createHumanGateTerminalSweepCommand } from '../src/modules/collaboration/infrastructure/humanGateTerminalSweep'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -1148,11 +1147,10 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     })
     const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
       onTerminalTask(hookDb, hookTaskId, to) {
-        void sealOpenHumanGatesForTask(
-          createHumanGateTerminalSweepCommand(hookDb),
-          hookTaskId,
-          `task-${to}`,
-        )
+        void createHumanGateTerminalSweepCommand(hookDb).run({
+          taskId: hookTaskId,
+          cause: `task-${to}`,
+        })
       },
     })
 

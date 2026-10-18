@@ -1,3 +1,4 @@
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 // RFC-350 —— `interrupted` 任务树必须能被归档出库（回归防护）。
 //
 // 为什么这条测试存在：`shared/lifecycle.ts` 的 `TERMINAL_TASK_STATUSES` 含
@@ -21,7 +22,6 @@ import { join } from 'node:path'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskRepos, tasks, users, workflows } from '../src/db/schema'
-import { runTaskArchiveSweep } from '../src/services/taskArchive'
 
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
@@ -112,8 +112,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     await seedBase(db)
     await addTask(db, { id: 'orphaned', status: 'interrupted', finishedAt: NOW - 300 * DAY })
 
-    const result = await runTaskArchiveSweep(
-      db,
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
       { enabled: true, retentionDays: 90 },
       { ...dirs, now: NOW },
     )
@@ -128,8 +127,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     await seedBase(db)
     await addTask(db, { id: 'recent', status: 'interrupted', finishedAt: NOW - 10 * DAY })
 
-    const result = await runTaskArchiveSweep(
-      db,
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
       { enabled: true, retentionDays: 90 },
       { ...dirs, now: NOW },
     )
@@ -167,8 +165,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
       parentTaskId: 'c-root',
     })
 
-    const result = await runTaskArchiveSweep(
-      db,
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
       { enabled: true, retentionDays: 90 },
       { ...dirs, now: NOW },
     )
@@ -182,8 +179,7 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     await seedBase(db)
     await addTask(db, { id: 'orphaned', status: 'interrupted', finishedAt: NOW - 300 * DAY })
 
-    const result = await runTaskArchiveSweep(
-      db,
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
       { enabled: false, retentionDays: 90 },
       { ...dirs, now: NOW },
     )

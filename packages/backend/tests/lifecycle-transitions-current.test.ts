@@ -38,8 +38,11 @@ import {
   tasks,
   workflows,
 } from '../src/db/schema'
-import { dispatchReviewNode, submitReviewDecision } from '../src/services/review'
-import { autoDispatchClarifyRound } from '../src/services/clarifyAutoDispatch'
+import {
+  dispatchReviewNode,
+  submitReviewDecision,
+} from '@/modules/collaboration/infrastructure/review'
+import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { reapOrphanRuns } from '../src/services/orphans'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

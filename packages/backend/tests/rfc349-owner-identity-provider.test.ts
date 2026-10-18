@@ -152,10 +152,7 @@ describeEachProvider('RFC-349 owner identity provider seam', (harness) => {
   })
 
   test('legacy service facades own no database mechanism', () => {
-    for (const relativePath of [
-      'src/services/ownerIdentity.ts',
-      'src/services/ownerScopedName.ts',
-    ]) {
+    for (const relativePath of ['src/services/ownerScopedName.ts']) {
       const text = source(relativePath)
       for (const forbidden of [
         "from '@/db/",

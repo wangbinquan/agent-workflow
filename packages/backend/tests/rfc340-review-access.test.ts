@@ -25,7 +25,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { countPendingReviews } from '../src/services/review'
+import { countPendingReviews } from '@/modules/collaboration/infrastructure/review'
 
 function actor(id: string) {
   return buildActor({

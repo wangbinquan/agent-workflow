@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { checkLexicalThenRealpath } from '@/util/safePath'
-import { existsInsideRoot, readInsideRoot } from '@/services/portArtifacts'
+import { existsInsideRoot, readInsideRoot } from '@/platform/content/local/rootFileQueries'
 
 describe('RFC-287 G7 — 空根一律判否（共用底座）', () => {
   test('checkLexicalThenRealpath 对空根不解析、不判 inside', () => {

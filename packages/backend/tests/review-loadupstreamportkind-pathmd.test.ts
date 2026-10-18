@@ -16,7 +16,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { isReviewableBodyKindString, type WorkflowDefinition } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createAgent } from '../src/services/agent'
-import { loadUpstreamPortKind } from '../src/services/review'
+import { loadUpstreamPortKind } from '@/modules/collaboration/infrastructure/review'
 
 function agentPayload(name: string, outputKinds: Record<string, string>) {
   return {
