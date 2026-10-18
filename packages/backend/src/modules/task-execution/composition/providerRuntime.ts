@@ -346,7 +346,13 @@ export function composeSqliteTaskExecutionProviderRuntime<
     persistence,
     children: participants.children,
     topology: runtime.topology,
-    resumeRuntimeFor: (_actor, taskId) => dependencies.rootResumeRuntime(taskId),
+    // The REST / MCP actor reaches the continuation: only an actor command may
+    // authorize replaying an operation of unknown outcome (RFC-370 hosted
+    // acceptance, 2026-10-17; the SQLite route passes it the same way).
+    resumeRuntimeFor: async (actor, taskId) => ({
+      ...(await dependencies.rootResumeRuntime(taskId)),
+      actorUserId: actor.user.id,
+    }),
     repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,
@@ -584,7 +590,13 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     children: participants.children,
     activity: participants.activity,
     topology: runtime.topology,
-    resumeRuntimeFor: (_actor, taskId) => dependencies.rootResumeRuntime(taskId),
+    // The REST / MCP actor reaches the continuation: only an actor command may
+    // authorize replaying an operation of unknown outcome (RFC-370 hosted
+    // acceptance, 2026-10-17; the SQLite route passes it the same way).
+    resumeRuntimeFor: async (actor, taskId) => ({
+      ...(await dependencies.rootResumeRuntime(taskId)),
+      actorUserId: actor.user.id,
+    }),
     repositoryPreparationRetry,
     resourceAuthorityFor: taskRouteLaunchDependencies.resourceAuthorityFor,
     validateHostWorkflow: (definition, candidate) =>

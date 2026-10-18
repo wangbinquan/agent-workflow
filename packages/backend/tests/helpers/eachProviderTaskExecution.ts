@@ -191,7 +191,10 @@ export async function createEachProviderTaskExecution(
     delegatedRequests: identityAccess.delegatedRequests,
     taskExecutionResources: resources,
   }
-  const rootResumeRuntime = () => ({ runConfig, actorUserId: actor.user.id })
+  // Production-shaped: the root resume runtime serves boot / auto resumes and
+  // carries no actor; a REST / MCP resume adds its actor in the provider
+  // runtime (rfc359-w10 J locks that the route does).
+  const rootResumeRuntime = () => ({ runConfig })
   const unavailable = (name: string): never => {
     throw new Error(`execution-chain fixture unexpectedly invoked ${name}`)
   }

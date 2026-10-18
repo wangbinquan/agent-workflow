@@ -44,7 +44,7 @@ import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, users, workflows } from '@/db/schema'
+import { nodeRuns, taskExecutionIntents, tasks, users, workflows } from '@/db/schema'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -329,5 +329,28 @@ describeEachProvider('RFC-359 W10 —— resume 的准入面对拍', (harness) =
     const outcome = await resumeOutcome(harness, fixture)
     expect(outcome.code).toBe('no-throw')
     expect(outcome.status).not.toBe('failed')
+  })
+
+  // RFC-370 托管验收（2026-10-17）：发布交接打断的任务，用户点「恢复」在 PostgreSQL 上一律
+  // 409 `task-execution-outcome-unknown`。两个 provider 运行时的 `resumeRuntimeFor` 丢掉了
+  // 演员，续跑以 `internal` 来源提交，授权不了被打断操作的重放（同 TASK-27 的形态，这次是
+  // resume）。演员的恢复必须以 rest 来源、带重放授权进入准入。
+  test('J 演员发起的恢复以 rest 来源提交并带重放授权', async () => {
+    fixture = await seedFixture(harness.db)
+    const outcome = await resumeOutcome(harness, fixture)
+    expect(outcome.code).toBe('no-throw')
+    const resumes = (
+      await harness.db
+        .select({
+          kind: taskExecutionIntents.kind,
+          source: taskExecutionIntents.source,
+          replayAuthorizationId: taskExecutionIntents.replayAuthorizationId,
+        })
+        .from(taskExecutionIntents)
+        .where(eq(taskExecutionIntents.taskId, fixture.taskId))
+    ).filter((intent) => intent.kind === 'resume')
+    expect(resumes).toHaveLength(1)
+    expect(resumes[0]!.source).toBe('rest')
+    expect(resumes[0]!.replayAuthorizationId).not.toBeNull()
   })
 })
