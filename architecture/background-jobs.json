@@ -8615,7 +8615,7 @@
       ],
       "file": "packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts#$setTimeout:192",
+      "id": "background:packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts#$setTimeout:200",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8629,7 +8629,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:192",
+      "symbol": "$setTimeout:200",
       "targetContext": "source-control"
     },
     {
@@ -14284,5 +14284,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2b2ea5bb0feffac4b51be00ad0d05898e04be2265c8de668ad70c73c2f6c9b11"
+  "sourceDigest": "sha256:3d8b25d93c5b057b77b43e787bfa2c0e317cf561d3df31df17006c6ade77c259"
 }

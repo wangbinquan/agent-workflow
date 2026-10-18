@@ -2774,8 +2774,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/source-control/infrastructure/crewstation/taskWorkspace.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/crewstation/taskWorkspace.ts#transaction:164",
-      "line": 164,
+      "id": "tx:packages/backend/src/modules/source-control/infrastructure/crewstation/taskWorkspace.ts#transaction:180",
+      "line": 180,
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/crewstation/taskWorkspace.ts#createHostedTaskWorkspaces",
       "status": "clear",
       "symbol": "createHostedTaskWorkspaces",
@@ -2798,8 +2798,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts#transaction:94",
-      "line": 94,
+      "id": "tx:packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts#transaction:97",
+      "line": 97,
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/crewstation/workspaceLifecycle.ts#createHostedWorkspaceLifecycle",
       "status": "clear",
       "symbol": "createHostedWorkspaceLifecycle",
@@ -3450,7 +3450,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2b2ea5bb0feffac4b51be00ad0d05898e04be2265c8de668ad70c73c2f6c9b11",
+  "sourceDigest": "sha256:3d8b25d93c5b057b77b43e787bfa2c0e317cf561d3df31df17006c6ade77c259",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
