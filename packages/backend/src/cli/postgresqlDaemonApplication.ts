@@ -2443,7 +2443,7 @@ export async function composePostgresqlApplication(
       runtimeTests: { commands: mcpRuntimeTests.commands, queries: mcpRuntimeTests.queries },
       runtimeTestCommandContextFor: mcpRuntimeTests.contexts.command,
       runtimeTestQueryContextFor: mcpRuntimeTests.contexts.query,
-      probe: mcpRuntimeTests.probe,
+      probeRunner: mcpRuntimeTests.probeRunner,
     }),
     plugins: Object.freeze({
       queries: pluginCatalog.queries,

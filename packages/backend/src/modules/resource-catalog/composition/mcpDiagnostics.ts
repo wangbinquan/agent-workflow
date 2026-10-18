@@ -56,6 +56,6 @@ export function bindMcpDiagnosticsRuntime(
     resume: () => application.resume(),
     /** A deployment that runs Agents elsewhere selects where probes run too;
      * absent, the route probes in-process. */
-    probe: undefined as McpProbeRunner | undefined,
+    probeRunner: undefined as McpProbeRunner | undefined,
   })
 }

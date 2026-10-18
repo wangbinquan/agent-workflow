@@ -87,7 +87,7 @@ export interface McpRouteDependencies {
   readonly runtimeTestCommandContextFor: (actor: Actor) => CommandContext
   readonly runtimeTestQueryContextFor: (actor: Actor) => QueryContext
   /** Where the deployment runs its Agents' MCP servers; absent, in-process. */
-  readonly probe?: McpProbeRunner
+  readonly probeRunner?: McpProbeRunner
 }
 
 export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
@@ -521,12 +521,12 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
           let result
           try {
             result =
-              module.probe === undefined
+              module.probeRunner === undefined
                 ? await probeMcp(start.captured, {
                     ...probeOptionsOverride,
                     startedAt: start.startedAt,
                   })
-                : await module.probe(start.captured, { startedAt: start.startedAt })
+                : await module.probeRunner.probe(start.captured, { startedAt: start.startedAt })
           } catch (err) {
             if (err instanceof DomainError) throw err
             log.error('probeMcp unexpectedly threw', {

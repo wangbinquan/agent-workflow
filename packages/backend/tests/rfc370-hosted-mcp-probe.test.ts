@@ -83,7 +83,9 @@ describe('hosted MCP probe runner', () => {
       },
     }
     const mcp: McpOperationResource = { ...localMcp(), operationConfigHash: 'a'.repeat(64) }
-    expect(await createHostedMcpProbe({ helper })(mcp, { startedAt: 1000 })).toEqual(measurement)
+    expect(await createHostedMcpProbe({ helper }).probe(mcp, { startedAt: 1000 })).toEqual(
+      measurement,
+    )
     expect(calls).toHaveLength(1)
     const [call] = calls
     expect(call).toMatchObject({ taskId: 'system:shared', operation: 'mcp-probe' })
@@ -101,7 +103,9 @@ describe('hosted MCP probe runner', () => {
         return { ...measurement, status: 'unknown' } as T
       },
     }
-    await expect(createHostedMcpProbe({ helper })(localMcp(), { startedAt: 1 })).rejects.toThrow()
+    await expect(
+      createHostedMcpProbe({ helper }).probe(localMcp(), { startedAt: 1 }),
+    ).rejects.toThrow()
   })
 })
 
@@ -150,19 +154,21 @@ describe('hosted probe selection wiring', () => {
 
   test('the route probes through the selected runner and in-process only without one', async () => {
     const route = await read('routes/mcps.ts')
-    expect(route).toContain('module.probe === undefined')
-    expect(route).toContain('await module.probe(start.captured, { startedAt: start.startedAt })')
+    expect(route).toContain('module.probeRunner === undefined')
+    expect(route).toContain(
+      'await module.probeRunner.probe(start.captured, { startedAt: start.startedAt })',
+    )
   })
 
   test('the PostgreSQL daemon hands the diagnostics runner to the routes; only hosted selects one', async () => {
     expect(await read('cli/postgresqlDaemonApplication.ts')).toContain(
-      'probe: mcpRuntimeTests.probe,',
+      'probeRunner: mcpRuntimeTests.probeRunner,',
     )
     expect(await read('modules/resource-catalog/composition/mcpDiagnostics.ts')).toContain(
-      'probe: undefined as McpProbeRunner | undefined,',
+      'probeRunner: undefined as McpProbeRunner | undefined,',
     )
     expect(
       await read('modules/resource-catalog/composition/crewstationMcpDiagnostics.ts'),
-    ).toContain('probe: createHostedMcpProbe({ helper: input.helper }),')
+    ).toContain('probeRunner: createHostedMcpProbe({ helper: input.helper }),')
   })
 })

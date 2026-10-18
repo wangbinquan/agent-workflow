@@ -135,6 +135,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/integration-opencode/rfc281-boundary.integration.test.ts#skipIf': 1,
   'packages/backend/tests/mcp-probe-http-integration.test.ts#skipIf': 2,
   'packages/backend/tests/mcp-probe-stdio-integration.test.ts#skipIf': 1,
+  // RFC-370: the task-image `mcp-probe` operation spawns the same real stdio
+  // fixture as the suite above, under the same RUN_GIT_NETWORK gate; its
+  // dispatch and contract cases always run.
+  'packages/backend/tests/rfc370-hosted-mcp-probe.test.ts#skipIf': 1,
   'packages/backend/tests/opencode-models.test.ts#skipIf': 1,
   'packages/backend/tests/worktree-submodule-init.test.ts#skipIf': 1,
   // RFC-310 PR-0：symlink/mkfifo 攻击夹具依赖 POSIX 语义（Windows 造 symlink 需

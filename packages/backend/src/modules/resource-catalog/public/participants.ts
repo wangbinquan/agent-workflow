@@ -209,10 +209,9 @@ export type McpProbeMeasurement = Omit<McpProbe, 'id' | 'mcpId' | 'mcpName' | 'u
  * standalone route probes in-process; the hosted deployment selects a runner
  * that probes inside the task image (RFC-370). `startedAt` is captured before
  * the configuration snapshot was read. */
-export type McpProbeRunner = (
-  mcp: Mcp,
-  options: { readonly startedAt: number },
-) => Promise<McpProbeMeasurement>
+export interface McpProbeRunner {
+  probe(mcp: Mcp, options: { readonly startedAt: number }): Promise<McpProbeMeasurement>
+}
 
 /** Provider-neutral persistence participant for MCP probe measurements. */
 export interface McpProbeStore {

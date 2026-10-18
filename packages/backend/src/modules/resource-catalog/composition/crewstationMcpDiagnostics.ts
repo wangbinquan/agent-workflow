@@ -61,7 +61,7 @@ export function createCrewStationMcpDiagnostics(
       reconcileDurableIntents,
       reconciliation: Object.freeze({ reconcileDurableIntents }),
       // No hosted entry spawns in the service slot (RFC-370 §3.3), the probe included.
-      probe: createHostedMcpProbe({ helper: input.helper }),
+      probeRunner: createHostedMcpProbe({ helper: input.helper }),
     })
   }
 }

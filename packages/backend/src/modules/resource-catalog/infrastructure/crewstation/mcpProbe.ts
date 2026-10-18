@@ -12,16 +12,19 @@ export const HOSTED_MCP_PROBE_TIMEOUT_MS = 120_000
 const Measurement = McpProbeSchema.omit({ id: true, mcpId: true, mcpName: true, updatedAt: true })
 
 export function createHostedMcpProbe(input: { readonly helper: WorkspaceHelper }): McpProbeRunner {
-  return async (mcp, options) =>
-    Measurement.parse(
-      await input.helper.call(
-        OWNER,
-        'mcp-probe',
-        { mcp: McpSchema.parse(mcp), startedAt: options.startedAt },
-        {
-          operationId: `mcp-probe:${mcp.id}:${options.startedAt}`,
-          timeoutMs: HOSTED_MCP_PROBE_TIMEOUT_MS,
-        },
-      ),
-    )
+  return {
+    async probe(mcp, options) {
+      return Measurement.parse(
+        await input.helper.call(
+          OWNER,
+          'mcp-probe',
+          { mcp: McpSchema.parse(mcp), startedAt: options.startedAt },
+          {
+            operationId: `mcp-probe:${mcp.id}:${options.startedAt}`,
+            timeoutMs: HOSTED_MCP_PROBE_TIMEOUT_MS,
+          },
+        ),
+      )
+    },
+  }
 }
