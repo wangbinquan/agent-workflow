@@ -260,11 +260,11 @@ describeEachProvider('RFC-370 hosted recovery consumer', (harness) => {
       expect(f.resumed).toEqual([])
     })
 
-  test('a resume for a task AW paused itself, or any recovery of a finished task, is rejected', async () => {
+  test('a resume for a task AW paused itself, or a recovery of an unknown task, is rejected', async () => {
     for (const [status, action, reason] of [
       ['awaiting_human', 'resume-task', 'recovery-task-not-resumable: awaiting_human'],
       ['pending', 'resume-task', 'recovery-task-not-resumable: pending'],
-      ['done', 'rebuild-workspace', 'recovery-task-finished'],
+      ['done', 'resume-task', 'recovery-task-not-resumable: done'],
       [null, 'rebuild-workspace', 'recovery-task-not-found'],
     ] as const) {
       await harness.db.delete(hostedRecoveryRequests)
@@ -275,6 +275,22 @@ describeEachProvider('RFC-370 hosted recovery consumer', (harness) => {
       expect(f.platform.calls).not.toContain(action === 'resume-task' ? 'resume' : 'rebuild')
     }
   })
+
+  // RFC-370 hosted acceptance (2026-10-18): a done task whose container
+  // failed ("容器不存在") showed "rebuild the workspace" for its files, yet
+  // its rebuild was refused as `recovery-task-finished` — the files stayed
+  // unreadable on an intact volume. The rebuild now runs; nothing is resumed.
+  for (const status of ['done', 'awaiting_human'] as const)
+    test(`rebuild-workspace of a ${status} task rebuilds the container without a resume`, async () => {
+      const f = setup({ action: 'rebuild-workspace' })
+      f.business.status = status
+      f.platform.platformState = 'succeeded'
+      await f.consumer.tick()
+      expect(f.platform.calls).toContain('rebuild')
+      expect(f.platform.rejected).toEqual([])
+      expect(f.resumed).toEqual([])
+      expect(await f.row()).toMatchObject({ state: 'succeeded', taskId: 'aw-task' })
+    })
 
   test('rebuild-workspace is admitted for a task that is still running', async () => {
     const f = setup({ action: 'rebuild-workspace' })

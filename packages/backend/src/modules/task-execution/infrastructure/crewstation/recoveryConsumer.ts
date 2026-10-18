@@ -108,9 +108,13 @@ export function createHostedRecoveryConsumer(input: {
       await reject(claim, request, reasonOf(error))
       return null
     }
-    // A parent AW paused itself (the task waits for a person, or is queued)
-    // is resumed by AW when the task continues; a platform resume would only
-    // be paused again. A finished task needs no rebuilt container.
+    // A parent AW paused itself (the task waits for a person, is queued or
+    // finished) is resumed by AW when it is next used; a platform resume would
+    // only be paused again. A failed container is different: its volume is
+    // reachable again only after a rebuild, whatever the task's status — a
+    // finished task's files stay browsable on its paused parent (RFC-370
+    // hosted acceptance, 2026-10-18: a done task whose container failed could
+    // never show its files again because the rebuild was refused).
     const status = await input.business.taskStatus(taskId)
     if (status === null) {
       await reject(claim, request, 'recovery-task-not-found')
@@ -120,17 +124,15 @@ export function createHostedRecoveryConsumer(input: {
       await reject(claim, request, `recovery-task-not-resumable: ${status}`)
       return null
     }
-    if (status === 'done') {
-      await reject(claim, request, 'recovery-task-finished')
-      return null
-    }
     const record = await input.journal.admit({ request, taskId, actorUserId: actor.user.id })
     return { record, actor }
   }
 
   /** After the platform operation succeeded and the container is running,
    * AW resumes the task with its ordinary command (rolling interrupted or
-   * failed nodes back to their pre-run snapshots, as standalone does). */
+   * failed nodes back to their pre-run snapshots, as standalone does). A task
+   * that is not resumable (finished, running, waiting) is left as it is: the
+   * rebuilt container serves it, and AW pauses it again once idle. */
   const project = async (record: HostedRecoveryRecord): Promise<void> => {
     const current = await input.recovery.read(record.requestId)
     if (current.state === 'failed' || current.state === 'rejected') {

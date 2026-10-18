@@ -77,9 +77,10 @@ export const HOSTED_NO_ARTIFACTS_REASON =
 type Row = typeof hostedTaskWorkspaces.$inferSelect
 
 /** RFC-370 §9.2 V4 — the parent's container or volume is unusable (failed,
- * or its resources are failed / unobservable after provisioning). The node
- * fails with this explicit reason; the platform's recovery page can rebuild
- * the workspace on its original volume, after which the task is resumed. */
+ * or its resources are failed / unobservable after provisioning). A node, or
+ * a read of the task's files, fails with this explicit reason; the platform's
+ * recovery page can rebuild the workspace on its original volume, after which
+ * the files are readable again and an unfinished task is resumed. */
 export class HostedWorkspaceUnavailableError extends DomainError {
   constructor(businessTaskId: string, task: BusinessTask) {
     const state =
@@ -89,7 +90,8 @@ export class HostedWorkspaceUnavailableError extends DomainError {
     super(
       'hosted-workspace-unavailable',
       `The CrewStation task container is ${state} (${task.message || 'no platform message'}). ` +
-        "Rebuild the workspace from CrewStation's recovery page, then resume this task.",
+        "Rebuild the workspace from CrewStation's recovery page: the task's files are then available " +
+        'again, and an unfinished task continues once it is resumed.',
       503,
       {
         businessTaskId,

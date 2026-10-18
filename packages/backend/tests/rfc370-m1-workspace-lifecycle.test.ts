@@ -257,7 +257,7 @@ describeEachProvider('RFC-370 persistent workspace lifecycle', (harness) => {
 
   // §9.2 V4: an unusable container/volume fails the node with an explicit,
   // task-page-readable reason pointing at the platform's rebuild action.
-  test('a failed or unobservable parent fails with a rebuild-and-resume instruction', async () => {
+  test('a failed or unobservable parent fails with a rebuild instruction', async () => {
     const f = await setup()
     await f.workspace.ensure('task')
     for (const task of [
@@ -284,7 +284,8 @@ describeEachProvider('RFC-370 persistent workspace lifecycle', (harness) => {
       expect((error as Error).message).toContain('The CrewStation task container is ')
       expect((error as Error).message).toContain(task.message ?? 'no platform message')
       expect((error as Error).message).toContain(
-        "Rebuild the workspace from CrewStation's recovery page, then resume this task.",
+        "Rebuild the workspace from CrewStation's recovery page: the task's files are then available " +
+          'again, and an unfinished task continues once it is resumed.',
       )
       // An open of the same registration fails identically.
       await expect(f.workspace.open('task')).rejects.toMatchObject({
