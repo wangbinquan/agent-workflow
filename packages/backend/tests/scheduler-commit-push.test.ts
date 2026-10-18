@@ -6,6 +6,8 @@
 //     commit&push node_run appears (pushed), and the remote received the
 //     isolation branch.
 //   - autoCommitPush OFF → no commit node_run (byte-baseline: zero change).
+//   - RFC-370: a commit&push interrupted by a restart or a lost execution lease
+//     is re-run once by the resume, so its change still reaches the remote.
 //   - clarify/readonly/no-change are covered by commit-push-core unit tests;
 //     here we lock the live wiring path (diff-driven trigger + runNode-driven
 //     commit-agent message + git push).
@@ -17,14 +19,17 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { nodeRuns } from '../src/db/schema'
+import { nodeRuns, tasks } from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { createAgent } from '../src/services/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { startTaskWithLocalRepo } from '../src/services/task'
 import { commitPushNodeId, isCommitPushNodeId } from '../src/services/commitPush'
 import type { CommitPushMeta } from '@agent-workflow/shared'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import {
+  createTaskExecutionTestTopology,
+  runTaskWithRealTestTopology,
+} from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -194,6 +199,93 @@ describe('RFC-075 scheduler auto commit&push', () => {
       `refs/heads/agent-workflow/${task.id}`,
     ])
     expect(ls.exitCode).toBe(0)
+  })
+
+  // RFC-370 (2026-10-17 hosted acceptance): a handoff — like a daemon restart —
+  // interrupted the auto commit&push after its node had completed. Nothing in
+  // the resumed invocation re-triggers it (the node is already complete), so
+  // the staged change was never committed or pushed. Resume re-runs it once.
+  test('resume re-runs an interrupted auto commit&push and publishes the change', async () => {
+    const task = await startTaskWithLocalRepo(
+      {
+        workflowId: h.wfId,
+        name: 'cp-resume',
+        repoPath: h.repoPath,
+        baseBranch: 'main',
+        inputs: { topic: 't' },
+        autoCommitPush: true,
+      },
+      {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        appHome: h.appHome,
+        binaryOverride: [process.execPath, 'run', h.stub],
+        awaitScheduler: true,
+      },
+    )
+    const branchRef = `refs/heads/agent-workflow/${task.id}`
+    const commitRuns = async () =>
+      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).filter(
+        (r) => r.rerunCause === 'commit-push',
+      )
+    const [interrupted] = await commitRuns()
+    expect(interrupted?.status).toBe('done')
+    // The interruption: the commit never happened, nothing reached the remote,
+    // the container row was reaped `interrupted` and the task stopped.
+    const worktree = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!.worktreePath
+    expect((await runGit(worktree, ['reset', '--soft', 'HEAD~1'])).exitCode).toBe(0)
+    expect((await runGit(h.remote, ['update-ref', '-d', branchRef])).exitCode).toBe(0)
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'interrupted', commitPushJson: null })
+      .where(eq(nodeRuns.id, interrupted!.id))
+    // Its message session was left adoptable (a hosted boot puts a run whose
+    // remote execution is unsettled back to `pending`), but nothing dispatches it.
+    const session = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+      (r) => r.parentNodeRunId === interrupted!.id,
+    )!
+    await h.db
+      .update(nodeRuns)
+      .set({ status: 'pending', finishedAt: null })
+      .where(eq(nodeRuns.id, session.id))
+    await h.db
+      .update(tasks)
+      .set({ status: 'pending', finishedAt: null })
+      .where(eq(tasks.id, task.id))
+
+    await runTaskWithRealTestTopology({
+      taskId: task.id,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: [process.execPath, 'run', h.stub],
+    })
+
+    const runs = await commitRuns()
+    expect(runs).toHaveLength(2)
+    const rerun = runs.find((r) => r.id !== interrupted!.id)!
+    expect(rerun.status).toBe('done')
+    expect(rerun.parentNodeRunId).toBe(interrupted!.parentNodeRunId)
+    expect((JSON.parse(rerun.commitPushJson!) as CommitPushMeta).pushOutcome).toBe('pushed')
+    expect((await runGit(h.remote, ['rev-parse', '--verify', branchRef])).exitCode).toBe(0)
+    expect((await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!.status).toBe('done')
+    // The superseded attempt's session is retired, so its execution is settled.
+    expect((await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, session.id)))[0]!.status).toBe(
+      'canceled',
+    )
+
+    // Only an interrupted latest run is re-run: another resume publishes nothing new.
+    await h.db
+      .update(tasks)
+      .set({ status: 'pending', finishedAt: null })
+      .where(eq(tasks.id, task.id))
+    await runTaskWithRealTestTopology({
+      taskId: task.id,
+      db: h.db,
+      appHome: h.appHome,
+      binaryOverride: [process.execPath, 'run', h.stub],
+    })
+    expect(await commitRuns()).toHaveLength(2)
   })
 
   test('autoCommitPush OFF (default) → no commit node_run (byte-baseline)', async () => {

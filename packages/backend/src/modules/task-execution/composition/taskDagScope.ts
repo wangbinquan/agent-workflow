@@ -117,6 +117,91 @@ export async function runScope(
       inFlight.delete(k)
     }
   }
+  // ok — RFC-075 auto commit&push after a top-level node completes (opt-in;
+  // a commit failure must NEVER break task execution). RFC-098 B1: runs as
+  // a SYNTHETIC in-flight entry instead of a synchronous await — the
+  // dispatch loop keeps racing node completions and dispatching ready
+  // nodes while the commit session runs. The synthetic resolves kind 'ok'
+  // unconditionally (failures are logged inside).
+  const startCommitPush = (node: (typeof scopeNodes)[number]): void => {
+    const nodeId = node.id
+    const syntheticKey = `commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`
+    const commitWork = commitPushTail.then(() => maybeRunCommitPush(state, node, iteration, log))
+    commitPushTail = commitWork.then(
+      () => undefined,
+      () => undefined,
+    )
+    inFlight.set(
+      syntheticKey,
+      commitWork
+        .catch((err) => {
+          log.warn('auto commit&push trigger failed (ignored)', {
+            nodeId,
+            syntheticKey,
+            error: err instanceof Error ? err.message : String(err),
+          })
+          return {} as { processUnreaped?: true }
+        })
+        .then((commitResult) => ({
+          nodeId: syntheticKey,
+          result: (commitResult.processUnreaped === true
+            ? {
+                kind: 'failed',
+                summary: 'commit agent child could not be reaped',
+                message: 'commit-agent-child-unreaped',
+                processUnreaped: true,
+              }
+            : {
+                kind: 'ok',
+                summary: 'commit&push settled',
+                message: '',
+              }) as NodeMechanicsResult,
+        })),
+    )
+  }
+
+  // RFC-370 — an auto commit&push that a daemon restart or a lost execution
+  // lease interrupted is never re-triggered by this invocation (its node is
+  // already complete), so the changes it was publishing would stay
+  // unpublished. The first frontier read re-runs it once, diff-driven like
+  // every commit synthetic.
+  let commitPushResumePending = scopeId === null && state.task.autoCommitPush
+  const resumeInterruptedCommitPush = async (
+    rows: Awaited<ReturnType<typeof opts.persistence.nodeExecution.list>>,
+  ): Promise<void> => {
+    commitPushResumePending = false
+    const latest = rows.filter((row) => row.rerunCause === 'commit-push').at(-1)
+    if (latest?.status !== 'interrupted' || latest.parentNodeRunId === null) return
+    const trigger = rows.find((row) => row.id === latest.parentNodeRunId)
+    const node = trigger === undefined ? undefined : scopeNodeById.get(trigger.nodeId)
+    if (node === undefined || !state.topLevelIds.has(node.id)) return
+    // A message session the interruption left adoptable belongs to the
+    // superseded attempt: nothing re-dispatches it, so it is retired here and
+    // the hosted settler stops its remote execution.
+    for (const session of rows) {
+      if (session.parentNodeRunId !== latest.id) continue
+      if (session.status !== 'pending' && session.status !== 'running') continue
+      try {
+        await opts.persistence.nodeRuns.transition({
+          nodeRunId: session.id,
+          event: { kind: 'cancel-by-supersede', reason: 'commit-push-rerun' },
+          extra: { finishedAt: Date.now() },
+          ...(opts.executionContext === undefined
+            ? {}
+            : { executionContext: opts.executionContext }),
+        })
+      } catch (error) {
+        const code = (error as { code?: unknown } | null)?.code
+        if (code !== 'concurrent-node-run-transition' && code !== 'illegal-node-run-transition')
+          throw error
+      }
+    }
+    log.info('re-running an interrupted auto commit&push', {
+      nodeId: node.id,
+      interruptedRunId: latest.id,
+    })
+    startCommitPush(node)
+  }
 
   while (true) {
     if (opts.signal?.aborted === true) {
@@ -149,6 +234,7 @@ export async function runScope(
       // scheduler tick (the tick re-enters after each node-run completion), so
       // long tasks made the scheduler itself the event-loop hog.
       const rows = await opts.persistence.nodeExecution.list({ taskId })
+      if (commitPushResumePending) await resumeInterruptedCommitPush(rows)
       const openClarify = await opts.taskDagCollaboration.loadOpenClarifyEvidence(taskId)
       // RFC-132 PR-B (universal deferred model): the park gate applies to ALL tasks now — a
       // sealed-undispatched entry (a designer waiting for its siblings — "park 等齐" — or a
@@ -277,12 +363,7 @@ export async function runScope(
       }
       continue
     }
-    // ok — RFC-075 auto commit&push after a top-level node completes (opt-in;
-    // a commit failure must NEVER break task execution). RFC-098 B1: runs as
-    // a SYNTHETIC in-flight entry instead of a synchronous await — the
-    // dispatch loop keeps racing node completions and dispatching ready
-    // nodes while the commit session runs. The synthetic resolves kind 'ok'
-    // unconditionally (failures are logged inside).
+    // ok — auto commit&push after a top-level node completes (startCommitPush).
     if (
       !handoffRequested &&
       state.task.autoCommitPush &&
@@ -290,43 +371,7 @@ export async function runScope(
       !nodeId.startsWith('commitpush:')
     ) {
       const node = scopeNodeById.get(nodeId)
-      if (node !== undefined) {
-        const syntheticKey = `commitpush:${nodeId}:${iteration}:${nextCommitPushSequence++}`
-        const commitWork = commitPushTail.then(() =>
-          maybeRunCommitPush(state, node, iteration, log),
-        )
-        commitPushTail = commitWork.then(
-          () => undefined,
-          () => undefined,
-        )
-        inFlight.set(
-          syntheticKey,
-          commitWork
-            .catch((err) => {
-              log.warn('auto commit&push trigger failed (ignored)', {
-                nodeId,
-                syntheticKey,
-                error: err instanceof Error ? err.message : String(err),
-              })
-              return {} as { processUnreaped?: true }
-            })
-            .then((commitResult) => ({
-              nodeId: syntheticKey,
-              result: (commitResult.processUnreaped === true
-                ? {
-                    kind: 'failed',
-                    summary: 'commit agent child could not be reaped',
-                    message: 'commit-agent-child-unreaped',
-                    processUnreaped: true,
-                  }
-                : {
-                    kind: 'ok',
-                    summary: 'commit&push settled',
-                    message: '',
-                  }) as NodeMechanicsResult,
-            })),
-        )
-      }
+      if (node !== undefined) startCommitPush(node)
     }
   }
 }

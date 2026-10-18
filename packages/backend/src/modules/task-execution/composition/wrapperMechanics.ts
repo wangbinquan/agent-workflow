@@ -12,6 +12,7 @@ import type {
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   declaredPorts,
+  isMergeStateSettled,
   stringifyKind,
   tryParseKind,
 } from '@agent-workflow/shared'
@@ -81,6 +82,7 @@ import {
   type SchedulerState,
 } from '@/modules/task-execution/composition/nodeMechanics'
 import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
+import { completeFrameMerges, completeInterruptedMerge } from './executionMergeRecovery'
 import { sha256Hex } from '@/util/hash'
 import type { WrapperDataPort } from '../application/ports/wrapperData'
 import { loadFrameChain } from '../application/frameChain'
@@ -345,13 +347,22 @@ export function createWrapperMechanicsPorts(
             scopeRoot: handle.containerPath,
           }
       const label = kind === 'wrapper-loop' ? 'loop' : 'git'
-      return state.driveScope(innerState, {
-        scopeId: input.scope.wrapperId,
-        scopeIds: new Set(input.scope.directNodeIds),
-        containerRunId: input.containerRunId,
-        iteration: input.iteration,
-        log: executionLog.child(`${label}:${input.scope.wrapperId}`),
-      })
+      const scopeLog = executionLog.child(`${label}:${input.scope.wrapperId}`)
+      // RFC-370 — a revived body first finishes the merge-backs a crash or a
+      // lost execution lease interrupted in it, into this wrapper's worktree.
+      return completeFrameMerges(
+        innerState,
+        { containerRunId: input.containerRunId, iteration: input.iteration },
+        scopeLog,
+      ).then(() =>
+        state.driveScope(innerState, {
+          scopeId: input.scope.wrapperId,
+          scopeIds: new Set(input.scope.directNodeIds),
+          containerRunId: input.containerRunId,
+          iteration: input.iteration,
+          log: scopeLog,
+        }),
+      )
     },
   }
 
@@ -551,20 +562,36 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   //   3. anything else (no candidate / prior-generation non-done residue /
   //      done but hash-mismatched or reuse-disabled) → mint a fresh row under
   //      this wrapper, stamped with sha256(shard.value) (shared rows stay NULL).
-  const candidates = (
-    await state.opts.persistence.nodeExecution.list({
-      taskId,
-      nodeId: innerNode.id,
-      iteration,
-      childOnly: true,
-    })
-  ).filter((row) => (row.shardKey ?? null) === rowShardKey)
-  const freshest = pickFreshestRun(candidates, { topLevelOnly: false })
+  const readCandidates = async () =>
+    (
+      await state.opts.persistence.nodeExecution.list({
+        taskId,
+        nodeId: innerNode.id,
+        iteration,
+        childOnly: true,
+      })
+    ).filter((row) => (row.shardKey ?? null) === rowShardKey)
+  let candidates = await readCandidates()
   const forcedProcessRetry = args.processRetryIndex !== undefined
-  const reusable =
+  const reusableNow = () =>
     args.reuseDisabled || forcedProcessRetry
       ? undefined
       : pickReusableShardRun(candidates, { shardKey: rowShardKey, valueHash })
+  // RFC-370 — a done shard is reusable only once its delta is in this scope's
+  // canonical. One whose merge-back a crash or a lost execution lease
+  // interrupted finishes it here, in the dispatching scope (its merge target);
+  // a shard whose merge-back failed is re-run instead of replayed without it.
+  const interrupted = reusableNow()
+  if (
+    interrupted !== undefined &&
+    interrupted.id === pickFreshestRun(candidates, { topLevelOnly: false })?.id &&
+    (interrupted.mergeState === 'pending-merge' || interrupted.mergeState === 'isolating')
+  ) {
+    await completeInterruptedMerge(state, interrupted, log)
+    candidates = await readCandidates()
+  }
+  const freshest = pickFreshestRun(candidates, { topLevelOnly: false })
+  const reusable = reusableNow()
   let shardRunId: string
   let shardRetryIndex: number
   // RFC-130 §8.3 D9 (T14): when this dispatch RE-RUNS a shard whose prior attempt's
@@ -600,7 +627,8 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     !forcedProcessRetry &&
     freshest !== undefined &&
     reusable !== undefined &&
-    reusable.id === freshest.id
+    reusable.id === freshest.id &&
+    (isMergeStateSettled(reusable.mergeState) || reusable.mergeState === 'conflict-human')
   ) {
     // Branch 1 — replay. The `reusable.id === freshest.id` guard refuses a
     // done row that has been SUPERSEDED by a fresher attempt of any status
@@ -1155,22 +1183,35 @@ async function dispatchFanoutAggregatorAttempt(
   //      permanently-interrupted row, scheduler-audit-s21 test 1).
   //   3. anything else → mint a fresh row (no shard_value_hash — the
   //      aggregator has no per-shard value).
-  const aggCandidates = (
-    await state.opts.persistence.nodeExecution.list({
-      taskId,
-      nodeId: aggNode.id,
-      iteration,
-      childOnly: true,
-    })
-  ).filter((row) => row.shardKey === null)
-  const freshestAgg = pickFreshestRun(aggCandidates, { topLevelOnly: false })
+  const readAggCandidates = async () =>
+    (
+      await state.opts.persistence.nodeExecution.list({
+        taskId,
+        nodeId: aggNode.id,
+        iteration,
+        childOnly: true,
+      })
+    ).filter((row) => row.shardKey === null)
+  let freshestAgg = pickFreshestRun(await readAggCandidates(), { topLevelOnly: false })
   const forcedProcessRetry = args.processRetryIndex !== undefined
-  if (
+  const replayable = (row: typeof freshestAgg): row is NonNullable<typeof freshestAgg> =>
     !forcedProcessRetry &&
     !args.reuseDisabled &&
-    freshestAgg !== undefined &&
-    freshestAgg.status === 'done' &&
-    participatingRowIds.every((id) => isFresherNodeRun<{ id: string }>(freshestAgg, { id }))
+    row !== undefined &&
+    row.status === 'done' &&
+    participatingRowIds.every((id) => isFresherNodeRun<{ id: string }>(row, { id }))
+  // RFC-370 — same rule as the shards: an interrupted merge-back completes in
+  // the dispatching scope before the aggregation is replayed, a failed one re-runs.
+  if (
+    replayable(freshestAgg) &&
+    (freshestAgg.mergeState === 'pending-merge' || freshestAgg.mergeState === 'isolating')
+  ) {
+    await completeInterruptedMerge(state, freshestAgg, log)
+    freshestAgg = pickFreshestRun(await readAggCandidates(), { topLevelOnly: false })
+  }
+  if (
+    replayable(freshestAgg) &&
+    (isMergeStateSettled(freshestAgg.mergeState) || freshestAgg.mergeState === 'conflict-human')
   ) {
     const outRows = await state.opts.persistence.nodeExecution.listOutputs(freshestAgg.id)
     const outputs: Record<string, string> = {}

@@ -316,6 +316,8 @@ export async function composeCrewStationSystemSelections(input: {
     acceptedTaskContractVersions: [HOSTED_TASK_CONTRACT_VERSION],
     log: createLogger('crewstation-execution-authority'),
   })
+  // Crash-only (§3.2): once this instance loses its lease it writes nothing more.
+  barrier.follow(authority)
   const executionAuthority: CrewStationExecutionAuthorityPort = {
     ...authority,
     // Competing for execution is where this instance starts serving: from here

@@ -5,12 +5,14 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
+  nodeRunOutputs,
   nodeRuns,
   tasks,
   workflows,
   taskExecutionEffects,
   taskExecutionEffectAttempts,
 } from '@/db/schema'
+import { sha256Hex } from '@/util/hash'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
@@ -28,7 +30,10 @@ import {
   executeWorkgroupHostMechanics,
 } from '@/modules/task-execution/composition/nodeMechanics'
 import { createWrapperMechanicsPorts } from '@/modules/task-execution/composition/wrapperMechanics'
-import { composeExecutionMergeRecovery } from '@/modules/task-execution/composition/executionMergeRecovery'
+import {
+  completeFrameMerges,
+  composeExecutionMergeRecovery,
+} from '@/modules/task-execution/composition/executionMergeRecovery'
 import { createIsoUnderLock, persistIsoBase, mergeBackAndSettle } from '@/services/isolatedAgentRun'
 import { discardNodeIso } from '@/services/nodeIsolation'
 import {
@@ -1107,6 +1112,201 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
         } finally {
           f.reset()
         }
+      }
+    },
+    TIMEOUT,
+  )
+
+  // RFC-370 (2026-10-17 hosted acceptance): a handoff — like a daemon crash —
+  // can stop a merge-back after the run went `done` but before its final
+  // snapshot pinned the node tree. The kept workspace still holds the run's
+  // final state; every frame completes such runs into ITS OWN merge target
+  // before its frontier is derived (the top frame into the task worktree, a
+  // wrapper body into the wrapper's worktree), instead of wedging the scope.
+  test(
+    'interrupted done runs complete in their own frame: snapshot of the kept workspace, pin, merge',
+    async () => {
+      const f = await fixture(harness.db)
+      try {
+        await runWithTaskExecutionContext(f.context, async () => {
+          const wrapperId = await f.row('git-wrapper', {
+            mergeState: 'isolating',
+            isoBaseSnapshot: 'wrapper-base',
+            isoWorktreePath: 'memory:workspace:wrapper-w',
+          })
+          const top = await f.row('top', {
+            status: 'done',
+            mergeState: 'isolating',
+            isoBaseSnapshot: 'base-top',
+            isoWorktreePath: 'memory:workspace:kept-top',
+          })
+          const unfinished = await f.row('unfinished', {
+            mergeState: 'isolating',
+            isoBaseSnapshot: 'base-unfinished',
+            isoWorktreePath: 'memory:workspace:kept-unfinished',
+          })
+          const inner = await f.row('inner', {
+            status: 'done',
+            mergeState: 'isolating',
+            containerRunId: wrapperId,
+            isoBaseSnapshot: 'base-inner',
+            isoWorktreePath: 'memory:workspace:kept-inner',
+          })
+          const innerPinned = await f.row('inner-pinned', {
+            status: 'done',
+            mergeState: 'pending-merge',
+            containerRunId: wrapperId,
+            isoBaseSnapshot: 'base-pinned',
+            isoNodeTree: 'pinned-tree',
+            isoWorktreePath: 'memory:workspace:lost-inner',
+          })
+          const targetOf = (id: string) =>
+            f.store.merged.find((workspace) => workspace.dbNodeRunId === id)?.repositories[0]
+              ?.canonicalRef
+
+          await composeExecutionMergeRecovery(f.state, f.state.log).recoverBeforeScope()
+          expect(await f.read(top)).toMatchObject({
+            mergeState: 'merged',
+            isoNodeTree: 'tree@kept-top:',
+          })
+          expect(targetOf(top)).toBe(f.state.repos[0]!.worktreePath)
+          expect(f.store.discarded.map((workspace) => workspace.dbNodeRunId)).toContain(top)
+          // A run that never finished re-runs; a wrapper body waits for its wrapper.
+          expect((await f.read(unfinished)).mergeState).toBe('isolating')
+          expect((await f.read(inner)).mergeState).toBe('isolating')
+          expect((await f.read(innerPinned)).mergeState).toBe('pending-merge')
+
+          const body = {
+            ...f.state,
+            repos: f.state.repos.map((repo) => ({
+              ...repo,
+              worktreePath: 'memory:workspace:wrapper-w',
+            })),
+          } as typeof f.state
+          await completeFrameMerges(body, { containerRunId: wrapperId, iteration: 0 }, f.state.log)
+          expect(await f.read(inner)).toMatchObject({
+            mergeState: 'merged',
+            isoNodeTree: 'tree@kept-inner:',
+          })
+          expect((await f.read(innerPinned)).mergeState).toBe('merged')
+          expect(targetOf(inner)).toBe('memory:workspace:wrapper-w')
+          expect(targetOf(innerPinned)).toBe('memory:workspace:wrapper-w')
+          // Only the interrupted runs are snapshotted: a pinned tree bypasses it.
+          expect(
+            f.store.calls
+              .filter((call) => call.method === 'snapshot')
+              .map((call) => (call.args[0] as { dbNodeRunId: string }).dbNodeRunId),
+          ).toEqual([top, inner])
+        })
+      } finally {
+        f.reset()
+      }
+    },
+    TIMEOUT,
+  )
+
+  test(
+    'an interrupted done run whose kept workspace cannot be completed fails its node',
+    async () => {
+      const f = await fixture(harness.db)
+      try {
+        await runWithTaskExecutionContext(f.context, async () => {
+          const gone = await f.row('gone', {
+            status: 'done',
+            mergeState: 'isolating',
+            isoBaseSnapshot: 'base-gone',
+            isoWorktreePath: 'memory:workspace:gone',
+          })
+          const unrecorded = await f.row('unrecorded', {
+            status: 'done',
+            mergeState: 'isolating',
+            isoWorktreePath: 'memory:workspace:unrecorded',
+          })
+          f.store.before = (call) => {
+            if (call.method === 'snapshot') throw new Error('the isolated worktree is gone')
+          }
+          await composeExecutionMergeRecovery(f.state, f.state.log).recoverBeforeScope()
+          // merge-failed fails the scope loudly; nothing reached the task worktree.
+          expect((await f.read(gone)).mergeState).toBe('merge-failed')
+          expect((await f.read(unrecorded)).mergeState).toBe('merge-failed')
+          expect(f.store.merged).toEqual([])
+          expect(
+            f.warnings
+              .filter(
+                (entry) =>
+                  entry.message === 'interrupted merge-back could not be completed; the node fails',
+              )
+              .map((entry) => String(entry.fields!.nodeRunId))
+              .sort(),
+          ).toEqual([gone, unrecorded].sort())
+        })
+      } finally {
+        f.reset()
+      }
+    },
+    TIMEOUT,
+  )
+
+  test(
+    'a fan-out child is replayed only once its delta merged: an interrupted one completes first, a failed one re-runs',
+    async () => {
+      const f = await fixture(harness.db),
+        wrapperId = await f.row('fanout')
+      try {
+        await runWithTaskExecutionContext(f.context, async () => {
+          const interrupted = await f.row('worker', {
+            status: 'done',
+            mergeState: 'isolating',
+            parentNodeRunId: wrapperId,
+            containerRunId: wrapperId,
+            shardKey: 'one',
+            shardValueHash: sha256Hex('value-one'),
+            isoBaseSnapshot: 'base-one',
+            isoWorktreePath: 'memory:workspace:shard-one',
+          })
+          await harness.db
+            .insert(nodeRunOutputs)
+            .values({ nodeRunId: interrupted, portName: 'summary', content: 'one finished' })
+          const failedMerge = await f.row('worker', {
+            status: 'done',
+            mergeState: 'merge-failed',
+            parentNodeRunId: wrapperId,
+            containerRunId: wrapperId,
+            shardKey: 'two',
+            isoBaseSnapshot: 'base-two',
+            isoWorktreePath: 'memory:workspace:shard-two',
+          })
+          const dispatch = (shardKey: string, value: string) =>
+            createWrapperMechanicsPorts(f.state, f.state.log).fanoutAttempts.dispatchShard({
+              wrapperId: 'fanout',
+              wrapperRunId: wrapperId,
+              innerNode: { id: 'worker', kind: 'agent-single', agentId: f.agent.id },
+              innerAgent: f.agent,
+              iteration: 0,
+              shard: { shardKey, value },
+              shardSourcePortName: 'items',
+              boundaryEdges: [],
+              broadcastInputs: {},
+              reuseDisabled: false,
+            })
+          expect(await dispatch('one', 'value-one')).toMatchObject({
+            kind: 'ok',
+            outputs: { summary: 'one finished' },
+          })
+          expect(await f.read(interrupted)).toMatchObject({
+            mergeState: 'merged',
+            isoNodeTree: 'tree@shard-one:',
+          })
+          expect(f.store.merged.map((workspace) => workspace.dbNodeRunId)).toEqual([interrupted])
+          // Before RFC-370 a merge-failed shard was replayed as if its delta had landed.
+          expect(await dispatch('two', 'value-two')).toMatchObject({
+            kind: 'failed',
+            message: 'fixture stopped before runtime execution',
+          })
+          expect((await f.read(failedMerge)).mergeState).toBe('merge-failed')
+        })
+      } finally {
+        f.reset()
       }
     },
     TIMEOUT,

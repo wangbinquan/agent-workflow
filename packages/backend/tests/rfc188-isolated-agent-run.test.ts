@@ -330,7 +330,7 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     expect(count('snapshotIsolatedWorkspace(')).toBe(1)
   })
 
-  test('装配站点走共享锁：createIsoUnderLock×7 + mergeBackAndSettle×7 + markMergeFailed×6', () => {
+  test('装配站点走共享锁：createIsoUnderLock×7 + mergeBackAndSettle×8 + markMergeFailed×7', () => {
     // 9 = workgroup hook / 主线首建 / 主线 fresh-session 重建 / shard /
     // aggregator / wrapper-private canonical / RFC-243 call 节点派生（D 步，
     // 子任务 canonical 的诞生点——与 agent 站点同一把 writeSem 短窗纪律）
@@ -344,15 +344,18 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     // 闭包（初次物化与 retryPolicy 换树都调它），故 8→7。**这不是覆盖变少**：物化
     // 站点本身合并了，两条调用路径仍都经过它（D17 的换树/留树判据在 keepIf 上）。
     expect(count('createIsoUnderLock(')).toBe(7)
-    // 7 = hook / 主线 §段③ / shard / aggregator / replayPendingMerges /
+    // 8 = hook / 主线 §段③ / shard / aggregator / replayPendingMerge /
     // RFC-243 call 节点 M 步（live 与 adoption-rebuild 共用同一调用点）
-    // + RFC-253 脚本节点成功后的合回。
-    expect(count('mergeBackAndSettle(')).toBe(7)
-    // 6 = 主线（T7 后是 spec 的 markMergeFailed 钩子体内那一次调用）/ shard /
+    // + RFC-253 脚本节点成功后的合回
+    // + RFC-370 completeInterruptedRun（已 done、merge-back 停在快照前的行：从保留的 iso
+    // 快照并合回，2026-10-17 托管交接实测）。
+    expect(count('mergeBackAndSettle(')).toBe(8)
+    // 7 = 主线（T7 后是 spec 的 markMergeFailed 钩子体内那一次调用）/ shard /
     // aggregator + RFC-243 call 的 adoption base 缺失与
     // merge 异常两处（hook 有意不打——留 pending-merge 走重放；wrapper 不在此列）
     // + **RFC-287 T5a 新增的脚本线**：漂移 A 修复前脚本线的 merge 是裸调用、没有
-    // catch，所以压根没有这处标记；收敛到与其余四线同处置后才有（C1 的直接产物）。
-    expect(count('markMergeFailed(')).toBe(6)
+    // catch，所以压根没有这处标记；收敛到与其余四线同处置后才有（C1 的直接产物）
+    // + RFC-370 completeInterruptedRun：保留的 iso 补不了快照 / 合不回时与 live 合回抛错同处置。
+    expect(count('markMergeFailed(')).toBe(7)
   })
 })

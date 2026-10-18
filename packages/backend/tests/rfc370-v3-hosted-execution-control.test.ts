@@ -7,10 +7,11 @@
 // forward; the epoch never goes back and one epoch never regresses or changes
 // holder; a migration freeze closes the window, a lease-loss freeze keeps it,
 // the next claim reopens it; an identical record writes nothing; every
-// `assertHeld` refusal is a retryable `execution-standby`; and the write-window
+// `assertHeld` refusal is a retryable `execution-standby`; the write-window
 // guard refuses writes only once enforcement starts (boot convergence precedes
-// it) and only while the window is closed. The PostgreSQL lock behaviour is in
-// `rfc370-v3-hosted-write-window.integration.test.ts`.
+// it) and only while the window is closed; and a guard that follows its own
+// lease refuses every write once the lease is lost or taken over. The
+// PostgreSQL lock behaviour is in `rfc370-v3-hosted-write-window.integration.test.ts`.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { hostedExecutionControl } from '@/db/schema'
@@ -24,8 +25,10 @@ import {
 } from '@/modules/system-operations/infrastructure/crewstation/databaseWriteBarrier'
 import {
   createDatabaseHostedExecutionControl,
+  encodeHostedFenceToken,
   HostedExecutionLeaseLostError,
 } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
+import type { ExecutionAuthorityState } from '@/modules/system-operations/application/ports/executionAuthority'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const lease = { epoch: 3, leaseId: 'lease-3', instanceId: 'instance-a' }
@@ -221,6 +224,52 @@ describeEachProvider('RFC-370 v3 hosted execution control row', (harness) => {
     // A database without any control row (standalone-shaped) is never refused.
     await harness.db.delete(hostedExecutionControl)
     await expect(guard(serving)).resolves.toBeUndefined()
+  })
+
+  // RFC-370 §3.2 crash-only (2026-10-17 hosted acceptance): the instance that
+  // lost a handoff kept writing after its lease was gone — it stamped
+  // `merge-failed` on a run whose merge-back command it had only detached, and
+  // the resumed task failed on it. Following its own lease, the barrier refuses
+  // every write once the lease is lost, and while it is still held as soon as
+  // the control row names a newer holder.
+  test('a barrier that follows its lease refuses writes once the lease is lost or taken over', async () => {
+    const store = await activate()
+    const barrier = createHostedDatabaseWriteBarrier()
+    let state: ExecutionAuthorityState = { kind: 'standby', reason: 'execution-lease-pending' }
+    const listeners: Array<(next: ExecutionAuthorityState) => void> = []
+    barrier.follow({
+      current: () => state,
+      onLost(listener) {
+        listeners.push(listener)
+        return () => undefined
+      },
+    })
+    const guard = () => harness.session.transaction((tx) => barrier.beforeWrite(tx))
+    const refusal = async (reason: string) => {
+      const error = await guard().then(
+        () => null,
+        (failure: unknown) => failure,
+      )
+      expect(error).toBeInstanceOf(HostedExecutionLeaseLostError)
+      expect(error).toMatchObject({ code: 'execution-standby', status: 503, details: { reason } })
+    }
+    // A standby keeps its resource writes; so does the holder of the lease.
+    await expect(guard()).resolves.toBeUndefined()
+    state = { kind: 'active', fence: { epoch: lease.epoch, token: encodeHostedFenceToken(lease) } }
+    await expect(guard()).resolves.toBeUndefined()
+    // A newer holder claims before this instance's renewal notices the handoff.
+    const successor = { epoch: lease.epoch + 1, owner: 'instance-b', leaseId: 'lease-4' } as const
+    await store.write({ ...successor, phase: 'preparing', expiresAt: clock + 30_000 })
+    await refusal('held by another instance')
+    // Once the lease is lost nothing is admitted again, whatever the row says.
+    state = { kind: 'frozen', reason: 'execution-frozen-by-platform' }
+    for (const listener of listeners) listener(state)
+    await refusal('execution-frozen-by-platform')
+    await store.write({ ...successor, phase: 'active', expiresAt: clock + 30_000 })
+    await refusal('execution-frozen-by-platform')
+    expect(() => barrier.follow({ current: () => state, onLost: () => () => undefined })).toThrow(
+      'the write barrier already follows a lease',
+    )
   })
 
   test('the window can only be closed on a frozen record', async () => {
