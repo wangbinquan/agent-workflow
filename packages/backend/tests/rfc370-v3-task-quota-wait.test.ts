@@ -9,11 +9,17 @@
 // as a slot frees, but the parent creation gave up after the transport's few
 // quick retries. It now waits within the provisioning budget, resubmitting the
 // same key; a quota that stays full ends in an explicit, resumable error.
+//
+// 2026-10-18: a CrewStation upgrade that changed the task runner base
+// invalidated the task image's validation; every launch then failed with the
+// raw `412 image_usage_unvalidated` refusal, shown as an unexplained HTTP 500.
+// That refusal now fails at once with an explicit operator action.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { hostedTaskWorkspaces } from '@/db/schema'
 import {
   createHostedTaskWorkspaces,
+  HostedTaskImageUnvalidatedError,
   HostedWorkspaceQuotaExhaustedError,
 } from '@/modules/source-control/infrastructure/crewstation/taskWorkspace'
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
@@ -119,6 +125,35 @@ describeEachProvider('RFC-370 a full task quota is waited out', (harness) => {
     expect(f.elapsed()).toBeGreaterThanOrEqual(300_000)
     expect(new Set(f.keys).size).toBe(1)
     // Resuming the task resubmits this same key once a slot is free.
+    expect(await f.row('01M56TASK')).toMatchObject({ state: 'creating', businessTaskId: null })
+  })
+
+  test('an unvalidated task image fails at once with the operator action', async () => {
+    const f = await setup(
+      () =>
+        new CrewStationApiError(412, 'precondition', '该镜像尚未通过所选用途与档位的验证', {
+          code: 'image_usage_unvalidated',
+          imageVersionId: 'version-1',
+          usage: 'task',
+        }),
+    )
+    const error = await f.workspaces.ensure('01M56TASK').then(
+      () => null,
+      (failure: unknown) => failure,
+    )
+    expect(error).toBeInstanceOf(HostedTaskImageUnvalidatedError)
+    expect(error).toMatchObject({
+      code: 'hosted-task-image-unvalidated',
+      status: 503,
+      details: {
+        imageVersionId: 'version-1',
+        platformMessage: '该镜像尚未通过所选用途与档位的验证',
+      },
+    })
+    expect((error as Error).message).toContain('re-validate the task image')
+    expect(f.keys).toHaveLength(1)
+    expect(f.elapsed()).toBe(0)
+    // No parent exists, so retrying after the re-validation resubmits this key.
     expect(await f.row('01M56TASK')).toMatchObject({ state: 'creating', businessTaskId: null })
   })
 

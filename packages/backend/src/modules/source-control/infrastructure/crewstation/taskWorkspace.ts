@@ -17,7 +17,7 @@ import type {
   BusinessTask,
   CrewStationBusinessExecution,
 } from '@/platform/crewstation/businessExecution'
-import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
+import { type CrewStationApiError, isCrewStationApiError } from '@/platform/crewstation/platformApi'
 import { DomainError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import { hostedWorkspaceOwnerKind } from './workspaceOwnership'
@@ -128,6 +128,29 @@ export class HostedWorkspaceQuotaExhaustedError extends DomainError {
     )
   }
 }
+
+/** The deployment's task image has no passed task-use validation for the
+ * platform's current task runner. A CrewStation upgrade that changes the
+ * runner base invalidates every earlier validation (RFC-370 hosted
+ * acceptance, 2026-10-18: each launch failed with an unexplained HTTP 500 until
+ * the image was re-validated). No parent is created, so the same task can be
+ * retried once an operator has re-validated the image. */
+export class HostedTaskImageUnvalidatedError extends DomainError {
+  constructor(platformMessage: string, imageVersionId: string | null) {
+    super(
+      'hosted-task-image-unvalidated',
+      "CrewStation refused to start this deployment's task container: the task image has not passed " +
+        'validation for task use on the current platform (a platform upgrade that changes the task ' +
+        'runner invalidates earlier validations). An operator must re-validate the task image version ' +
+        'or publish a release whose task image is built on the current runner base; then retry.',
+      503,
+      { imageVersionId, platformMessage },
+    )
+  }
+}
+
+const isTaskImageUnvalidated = (error: unknown): error is CrewStationApiError =>
+  isCrewStationApiError(error) && error.status === 412 && error.code === 'image_usage_unvalidated'
 
 /** CS reports `unknown` resources when its own observation fails; a short
  * outage is waited out, a persistent one means the container is gone. */
@@ -274,6 +297,13 @@ export function createHostedTaskWorkspaces(input: {
         })
         break
       } catch (error) {
+        if (isTaskImageUnvalidated(error)) {
+          const imageVersionId = error.details.imageVersionId
+          throw new HostedTaskImageUnvalidatedError(
+            error.message,
+            typeof imageVersionId === 'string' ? imageVersionId : null,
+          )
+        }
         if (
           !(isCrewStationApiError(error) && error.status === 429 && error.code === 'quota_exceeded')
         )
