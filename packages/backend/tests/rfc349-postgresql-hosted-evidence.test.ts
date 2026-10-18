@@ -201,14 +201,15 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
   // needed Main CI's ENVIRONMENT, not just its command — run 33732387691 went red
   // on two gaps that were purely environmental (RFC-294 N1a provenance guards need
   // `fetch-depth: 0`; `doctor returns ok when opencode + git present` needs a real
-  // opencode on PATH). Now that the lane is gone, those two properties have to
-  // hold on the leg that inherited the coverage, or the same two failures simply
-  // move rather than being covered.
+  // opencode on PATH). Now that the lane is gone, those properties have to hold on
+  // the leg that inherited the coverage, or the same failures simply move rather
+  // than being covered. RFC-376 retired the N1a provenance guards (and with them the
+  // full-history checkout), so only the opencode requirement remains.
   test('the owning Main CI backend job still carries the environment that lane needed', () => {
     type BackendJob = {
       'runs-on': string
       strategy: { matrix: { os?: string[] } }
-      steps: { uses?: string; with?: { 'fetch-depth'?: number }; run?: string }[]
+      steps: { uses?: string; run?: string }[]
     }
     const workflow = (name: string) =>
       parse(readFileSync(resolve(ROOT, '.github', 'workflows', name), 'utf8'))
@@ -218,11 +219,7 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(macos['runs-on']).toBe('macos-latest')
     // Both OS legs (per-push ubuntu, nightly macOS) still own this same environment.
     for (const backend of [ubuntu, macos]) {
-      expect(
-        backend.steps.some(
-          (step) => step.uses?.startsWith('actions/checkout@') && step.with?.['fetch-depth'] === 0,
-        ),
-      ).toBe(true)
+      expect(backend.steps.some((step) => step.uses?.startsWith('actions/checkout@'))).toBe(true)
       expect(
         backend.steps.some((step) => step.run?.includes('bun install -g opencode-ai@latest')),
       ).toBe(true)
