@@ -609,7 +609,7 @@ RFC-370 v2 的原则（同一业务路径、端口按语义、崩溃即退出的
 | 工作区 GC 策略（现在 platform） | source-control / task-execution | S5 |
 | human gate 组合（现在 services） | collaboration 装配 | S5 |
 | Intent 与 ResourcePackage 两套 apply、两套资源写入栈 | platform/atomic-apply + 各资源 participant | S7 |
-| `util/git` 及 git cache / submodule / version | source-control infrastructure | S8 |
+| `util/git` 及 git cache / submodule / version | source-control infrastructure | S8（RFC-377）叶子化；物理迁入归 W5 余项（plan §4.3） |
 | structuralDiff / codeIntel / changeNarrative | workspace-insight | W4 余项 |
 | capability template 写入与历史查询（code-capability） | development-automation | W4-E8 |
 | `ReconcilerPorts` 可选袋、`developmentDeliveryDeps` | development-automation required 端口 + integration provider adapter | W4-E8 |

@@ -42,7 +42,7 @@
 | W2 | Done（协调器、三路引擎注册、14 类节点注册、WrapperRuntime） | 引擎与执行器层的实现仍在 composition，由 S6 让各层成为真实层 |
 | W3 | Done（RFC-341） | 无 |
 | W4 | A/C/E0/E2/E3/E4a/E4b/E6/E7 Done；E1/E9 部分；B/D/E5/E8/E10 开放 | 见 §4.1；B/D 的原计数已归零，退出门改为入站适配器不再深引 legacy 与模块内部 |
-| W5 | 部分纵切 | RFC-308/310/321/363 已落 source-control 纵切；`util/git` 环族与 8 条 KNOWN 由 S8 处理；repo / cache / worktree owner 余项见 §4.3 |
+| W5 | 部分纵切 | RFC-308/310/321/363 已落 source-control 纵切；`util/git` 环族与 7 条 KNOWN（RFC-370 `166e918bd` 改变环形状时已删一条）由 S8（[RFC-377](../RFC-377-util-git-leaf/proposal.md)）处理；repo / cache / worktree owner 余项见 §4.3 |
 | W6 | 开放 | S7：唯一 AtomicApply 引擎 + 唯一资源写入栈 + 持久收敛 claim |
 | W7 | 开放；**第一刀提为正确性修复** | S1：每任务单调 `seq`；身份轴余项见 §4.5；不再依赖 W5 |
 | W8 | 可选、延后 | 仅 W7 后新号 RFC 获批才进入 |
@@ -132,6 +132,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S3 死代码清扫
 
+> 后继：[RFC-375](../RFC-375-backend-dead-code-sweep/proposal.md)（In Progress，2026-10-17 立项）。
+
 - **范围**（逐项以 HEAD 复核后删除，改指相关测试）：development-automation 的 `composition/required-ports.ts` 与
   `ReconcilerPorts.effectExecutor`；digital-employee 的投机 command / query 端口与仅被它们引用的 DTO；collaboration 无人使用的
   public 符号（仅本模块使用的移入 application）；`services/` 中零生产 import 的文件（如 `taskArchive.ts`、`capabilityTemplates.ts`、
@@ -141,6 +143,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **前置 / 冲突**：逐文件避让 RFC-370 在制文件。**能力影响**：无。
 
 ### S4 治理简化（W0-R 模型修订）
+
+> 后继：[RFC-376](../RFC-376-architecture-hard-gates/proposal.md)（In Progress，2026-10-17 立项，分两阶段交付）。
 
 - **范围**：落 design §13.1 的硬结构门（新增 context 值级无环、`platform` 不 import `modules`、application 直接 effect、
   composition 禁 drizzle / schema / `node:fs` / `child_process` / SQL、业务层零部署分支、生命周期清单一致；跨 context 规则以
@@ -180,6 +184,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **前置 / 冲突**：S2a 之后（收敛作业落在生命周期程序上）。**能力影响**：错误码收敛属用户可见变化，须列入口与错误码呈批。
 
 ### S8 `util/git` 叶子化与剩余 KNOWN（W5 一部分）
+
+> 后继：[RFC-377](../RFC-377-util-git-leaf/proposal.md)（In Progress，2026-10-17 立项）。`util/git` 物理迁入 source-control infrastructure 不在 S8，归 §4.3 W5 余项。
 
 - **范围**：把 `util/git.ts` 对 `services/git*` 的动态反向 import 改为参数注入，销 git 环族与两条 util→upper；shared
   `outputKinds` 注册改为注入、frontend 递归渲染改 children / render callback，可作为同批或独立小批。
