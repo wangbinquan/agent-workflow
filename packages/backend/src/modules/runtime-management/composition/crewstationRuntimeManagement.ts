@@ -126,6 +126,13 @@ export function createCrewStationRuntimeManagementEffects(input: {
           throw new Error('hosted-runtime-profile-not-tested')
         return input.smoke(request)
       },
+      // `smoke` refreshes the capabilities before it runs. A target captured
+      // from the copy read at the previous refresh then no longer matches the
+      // receipt computed afterwards, and the first probe after any platform
+      // profile change failed as `runtime-probe-stale`.
+      async prepareProbe() {
+        current = HostedRuntimeCapabilitiesSchema.parse(await input.capabilities())
+      },
       assertSpawnCapabilities: assertOptions,
     },
     modelDiscovery: {

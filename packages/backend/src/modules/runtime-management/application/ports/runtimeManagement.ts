@@ -61,6 +61,11 @@ export interface RuntimeDriverManagementPort {
     readonly ran?: boolean
   }>
   smoke(input: RuntimeSmokeRequest): Promise<RuntimeSmokeResult>
+  /** Brings target identity derived from outside state up to date before a
+   * registered probe captures its target, so the receipt names what the smoke
+   * runs. Hosted: the platform's current Agent profiles, which other projects
+   * can change between probes. Local targets need no refresh. */
+  prepareProbe?(): Promise<void>
   assertSpawnCapabilities(
     protocol: RuntimeKind,
     input: { readonly extraArgs?: readonly string[] | null; readonly isSandbox?: boolean },

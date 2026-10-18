@@ -11,6 +11,12 @@ import { composeRuntimeSmokeRunFamily } from './runtimeSmokeRunFamily'
 import { createRuntimeSmokeMaterialIntent } from './runtimeSmoke'
 import type { composeLocalRuntimeManagement } from './localRuntimeManagement'
 
+/** A hosted smoke turn includes platform admission and the Agent container
+ * start (10–15 s live) before the model answers, which overran the local 60 s
+ * budget. The probe request waits for the smoke, so this stays below the
+ * HTTP server's 255 s idle timeout. */
+export const HOSTED_RUNTIME_SMOKE_TIMEOUT_MS = 180_000
+
 export function createCrewStationRuntimeManagement(
   input: Pick<
     Parameters<typeof createHostedAgentInvocationPreparation>[0],
@@ -114,7 +120,7 @@ export function createCrewStationRuntimeManagement(
         ...input,
         configuration: options.configuration,
         runtimeTests: options.runtimeTests,
-        smoke: (request) => smoke.run(request),
+        smoke: (request) => smoke.run({ ...request, timeoutMs: HOSTED_RUNTIME_SMOKE_TIMEOUT_MS }),
       }),
     })
   }

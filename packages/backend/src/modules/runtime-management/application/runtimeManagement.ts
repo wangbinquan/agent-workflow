@@ -171,6 +171,7 @@ export function createRuntimeManagement(
       const row = await registry.getRuntime(name)
       if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
       const cfg = await config.current()
+      await drivers.prepareProbe?.()
       const diagnosticTarget = drivers.resolveTarget(row, cfg)
       const target = runtimeProbeTargetOf(row, diagnosticTarget.receiptKey)
       const extraArgs = parseRuntimeExtraArgs(row.extraArgsJson)
