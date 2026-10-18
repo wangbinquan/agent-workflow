@@ -66,6 +66,7 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
       },
       createTask: unused,
       closeTask: unused,
+      finalizeTask: unused,
       resumeTask: unused,
       listSubtasks: unused,
       createMaterial: unused,

@@ -353,6 +353,7 @@ describeEachProvider('RFC-370 hosted Git credentials on cold command replay', (h
       createTask: unused,
       getTask: unused,
       closeTask: unused,
+      finalizeTask: unused,
       pauseTask: unused,
       resumeTask: unused,
       listSubtasks: unused,

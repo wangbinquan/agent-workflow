@@ -24,6 +24,9 @@ export interface BusinessTask {
   readonly id: string
   readonly state: BusinessTaskState | string
   readonly generation: number
+  /** `archive-and-delete`: the volume is reclaimed by finalizing (RFC-035);
+   * absent or `legacy` (parents created before): closing keeps the volume. */
+  readonly completionPolicy?: 'legacy' | 'archive-and-delete'
   readonly volumeUid?: string | null
   readonly contractDigest?: string
   readonly resourceState?: string
@@ -222,12 +225,25 @@ export interface CrewStationBusinessExecution {
     readonly labels: Readonly<Record<string, string>>
   }): Promise<BusinessTask>
   getTask(taskId: string): Promise<BusinessTask>
+  /** Releases a `legacy` parent; its persistent volume is kept (RFC-027). */
   closeTask(
     taskId: string,
     input: {
       readonly requestKey: string
       readonly fence: BusinessExecutionFence
       readonly expectedGeneration: number
+    },
+  ): Promise<void>
+  /** Ends an `archive-and-delete` parent: compute stops, the archive (none for
+   * AW) is settled and the volume deleted (RFC-035 finalization). */
+  finalizeTask(
+    taskId: string,
+    input: {
+      readonly requestKey: string
+      readonly fence: BusinessExecutionFence
+      readonly expectedGeneration: number
+      readonly outcome: 'succeeded' | 'failed' | 'cancelled'
+      readonly archive: { readonly noArtifactsReason: string }
     },
   ): Promise<void>
   /** Releases the task container while keeping the persistent volume (RFC-027). */
@@ -296,11 +312,18 @@ export function createCrewStationBusinessExecution(
         fence: input.fence,
         taskContractVersion: input.taskContractVersion,
         volumeMode: 'persistent',
+        // RFC-370 hosted acceptance (2026-10-18): a `legacy` parent keeps its
+        // persistent volume when it is closed, so every deleted task leaked a
+        // PVC until the project's volume quota blocked new tasks.
+        completionPolicy: 'archive-and-delete',
         labels: input.labels,
       }),
     getTask: (taskId) => platform.get<BusinessTask>(task(taskId)),
     async closeTask(taskId, input) {
       await platform.post(`${task(taskId)}/close`, input)
+    },
+    async finalizeTask(taskId, input) {
+      await platform.post(`${task(taskId)}/finalize`, input)
     },
     async pauseTask(taskId, input) {
       await platform.post(`${task(taskId)}/pause`, input)

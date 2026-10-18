@@ -97,6 +97,7 @@ describeEachProvider('RFC-370 hosted workspace commands', (harness) => {
       createTask: unused,
       getTask: unused,
       closeTask: unused,
+      finalizeTask: unused,
       pauseTask: unused,
       resumeTask: unused,
       listSubtasks: unused,

@@ -65,6 +65,7 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       resumeTask: async (id) => {
         parents.set(id, { ...parents.get(id)!, state: 'running', resourceState: 'ready' })
       },
+      finalizeTask: unused,
       pauseTask: unused,
       listSubtasks: unused,
       createMaterial: unused,

@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm'
 import { hostedTaskWorkspaces } from '@/db/schema'
 import {
   createHostedTaskWorkspaces,
+  HOSTED_NO_ARTIFACTS_REASON,
   hostedLifecycleRequestKey,
 } from '@/modules/source-control/infrastructure/crewstation/taskWorkspace'
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
@@ -45,6 +46,7 @@ describeEachProvider('RFC-370 persistent workspace lifecycle', (harness) => {
     const calls: Parameters<CrewStationBusinessExecution['createTask']>[0][] = []
     const resumes: Mutation[] = []
     const closes: Mutation[] = []
+    const finalizes: Parameters<CrewStationBusinessExecution['finalizeTask']>[1][] = []
     let task: BusinessTask = {
       id: 'parent',
       state: 'running',
@@ -71,6 +73,11 @@ describeEachProvider('RFC-370 persistent workspace lifecycle', (harness) => {
         if (closeError !== null) throw closeError
         closes.push(request)
         task = { ...task, state: 'closing', generation: task.generation + 1 }
+      },
+      finalizeTask: async (_id, request) => {
+        if (closeError !== null) throw closeError
+        finalizes.push(request)
+        task = { ...task, state: 'finalizing', generation: task.generation + 1 }
       },
       pauseTask: unused,
       resumeTask: async (_id, request) => {
@@ -130,6 +137,7 @@ describeEachProvider('RFC-370 persistent workspace lifecycle', (harness) => {
       calls,
       resumes,
       closes,
+      finalizes,
       reads,
       sleeps,
       api,
@@ -381,6 +389,57 @@ describeEachProvider('RFC-370 persistent workspace lifecycle', (harness) => {
     expect(await f.workspace.close('task')).toBe(true)
     // A closing/closed parent is never asked to close twice.
     expect(f.closes).toHaveLength(1)
+  })
+
+  // RFC-370 hosted acceptance (2026-10-18): closing a `legacy` parent keeps
+  // its persistent volume, so every deleted task leaked a PVC until the
+  // project's volume quota failed new tasks (`pod-missing`). AW now creates
+  // `archive-and-delete` parents and finalizes them, which deletes the volume.
+  test('an archive-and-delete parent is finalized with no artifacts and never closed', async () => {
+    const f = await setup()
+    f.setTask({ ...f.task(), completionPolicy: 'archive-and-delete' })
+    await f.workspace.ensure('task')
+    expect(await f.workspace.close('task')).toBe(false)
+    expect((await f.row())!.state).toBe('closing')
+    expect(f.closes).toEqual([])
+    expect(f.finalizes).toEqual([
+      {
+        requestKey: hostedLifecycleRequestKey((await f.row())!.requestKey, 'finalize', 1),
+        fence: lease,
+        expectedGeneration: 1,
+        outcome: 'succeeded',
+        archive: { noArtifactsReason: HOSTED_NO_ARTIFACTS_REASON },
+      },
+    ])
+    // A finalization in progress is observed, never requested again.
+    expect(await f.workspace.close('task')).toBe(false)
+    expect(f.finalizes).toHaveLength(1)
+    f.setTask({
+      ...f.task(),
+      state: 'closed',
+      resourceState: 'released',
+    })
+    expect(await f.workspace.close('task')).toBe(true)
+    expect((await f.row())!.state).toBe('closed')
+  })
+
+  test('a legacy parent created before the completion policy is still closed', async () => {
+    const f = await setup()
+    f.setTask({ ...f.task(), completionPolicy: 'legacy' })
+    await f.workspace.ensure('task')
+    expect(await f.workspace.close('task')).toBe(false)
+    expect(f.finalizes).toEqual([])
+    expect(f.closes).toHaveLength(1)
+  })
+
+  test('a refused finalization records nothing and is retried later', async () => {
+    const f = await setup()
+    f.setTask({ ...f.task(), completionPolicy: 'archive-and-delete' })
+    await f.workspace.ensure('task')
+    f.failClose(new CrewStationApiError(409, 'conflict', 'stale', { code: 'stale_generation' }))
+    expect(await f.workspace.close('task')).toBe(false)
+    expect((await f.row())!.state).toBe('ready')
+    expect(f.finalizes).toEqual([])
   })
 
   test('a refused close records nothing and is retried later', async () => {

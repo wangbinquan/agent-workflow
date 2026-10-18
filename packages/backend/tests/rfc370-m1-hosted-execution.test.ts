@@ -98,6 +98,7 @@ function platform() {
     createTask: unused,
     getTask: unused,
     closeTask: unused,
+    finalizeTask: unused,
     pauseTask: unused,
     resumeTask: unused,
     listSubtasks: unused,

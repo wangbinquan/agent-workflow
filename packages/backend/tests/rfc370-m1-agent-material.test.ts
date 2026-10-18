@@ -74,6 +74,7 @@ function fixture(
     createTask: unavailable,
     getTask: unavailable,
     closeTask: unavailable,
+    finalizeTask: unavailable,
     pauseTask: unavailable,
     resumeTask: unavailable,
     listSubtasks: unavailable,

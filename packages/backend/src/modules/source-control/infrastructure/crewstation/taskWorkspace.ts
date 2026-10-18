@@ -49,9 +49,10 @@ export interface HostedTaskWorkspaces {
   /** Registered parents the platform currently runs. Read-only: a paused
    * parent is left paused (maintenance sweeps must not wake volumes). */
   listRunning(): Promise<readonly HostedTaskWorkspace[]>
-  /** Close the parent once its owner is deleted. CS is asked first; `closing`
-   * is recorded only after CS accepted. True once the platform reports the
-   * volume released, false while the close is still pending. */
+  /** End the parent once its owner is deleted: an `archive-and-delete` parent
+   * is finalized (its volume deleted), a `legacy` one closed. CS is asked
+   * first; `closing` is recorded only after CS accepted. True once the
+   * platform reports the parent released, false while that is still pending. */
   close(taskId: string): Promise<boolean>
   /** A scratch owner's parent created under another release, due to be
    * replaced (see `hostedWorkspaceOwnerKind`). Registration read only. */
@@ -68,6 +69,10 @@ const CLOSED = new Set(['finalizing', 'closing', 'closed'])
 const PROVISIONING = new Set(['admitting', 'creating'])
 /** CS request keys are at most 128 bytes. */
 const REQUEST_KEY_MAX = 128
+/** AW keeps every task result in its own database and object space; a parent's
+ * volume holds only a working copy, so finalizing archives nothing. */
+export const HOSTED_NO_ARTIFACTS_REASON =
+  'agent-workflow keeps task results in its own records; the workspace volume holds only a working copy'
 
 type Row = typeof hostedTaskWorkspaces.$inferSelect
 
@@ -141,7 +146,7 @@ function unavailable(task: BusinessTask, unobservedForMs: number): boolean {
  * the same generation is a lookup of the original platform operation. */
 export function hostedLifecycleRequestKey(
   parentRequestKey: string,
-  action: 'pause' | 'resume' | 'close',
+  action: 'pause' | 'resume' | 'close' | 'finalize',
   generation: number,
 ): string {
   const key = `${parentRequestKey}:${action}:${generation}`
@@ -324,13 +329,25 @@ export function createHostedTaskWorkspaces(input: {
     if (row === undefined || row.state === 'closed') return true
     const businessTaskId = row.businessTaskId ?? (await allocate(row))
     const task = await observe(businessTaskId)
-    if (task.state !== 'closing' && task.state !== 'closed') {
+    if (!CLOSED.has(task.state)) {
       try {
-        await input.api.closeTask(task.id, {
-          requestKey: hostedLifecycleRequestKey(row.requestKey, 'close', task.generation),
-          fence: input.fence.current(),
-          expectedGeneration: task.generation,
-        })
+        // A `legacy` parent (created before AW chose its completion policy)
+        // keeps the old lifecycle: CrewStation refuses to finalize it, and
+        // closing it retains the volume for an administrator to reclaim.
+        if (task.completionPolicy === 'archive-and-delete')
+          await input.api.finalizeTask(task.id, {
+            requestKey: hostedLifecycleRequestKey(row.requestKey, 'finalize', task.generation),
+            fence: input.fence.current(),
+            expectedGeneration: task.generation,
+            outcome: 'succeeded',
+            archive: { noArtifactsReason: HOSTED_NO_ARTIFACTS_REASON },
+          })
+        else
+          await input.api.closeTask(task.id, {
+            requestKey: hostedLifecycleRequestKey(row.requestKey, 'close', task.generation),
+            fence: input.fence.current(),
+            expectedGeneration: task.generation,
+          })
       } catch (error) {
         // A pause/resume still in flight or a subtask still settling: the
         // deletion step (or the lifecycle reconciler) retries.

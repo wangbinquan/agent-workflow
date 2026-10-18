@@ -57,6 +57,7 @@ describeEachProvider('RFC-370 a full task quota is waited out', (harness) => {
       },
       getTask: async (id) => parents.get(id)!,
       closeTask: unused,
+      finalizeTask: unused,
       resumeTask: unused,
       pauseTask: unused,
       listSubtasks: unused,
