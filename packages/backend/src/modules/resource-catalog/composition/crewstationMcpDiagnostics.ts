@@ -21,6 +21,7 @@ import {
   type LocalMcpDiagnosticsCompositionInput,
 } from './localMcpDiagnostics'
 import { composeMcpRuntimeTestProvider } from './mcpRuntimeTestPersistence'
+import { createHostedMcpProbe } from '../infrastructure/crewstation/mcpProbe'
 
 type HostedInput = Parameters<typeof createCrewStationMcpDiagnosticRunner>[0] & {
   readonly capabilities: () => Promise<HostedRuntimeCapabilities>
@@ -59,6 +60,8 @@ export function createCrewStationMcpDiagnostics(
       ...runtime,
       reconcileDurableIntents,
       reconciliation: Object.freeze({ reconcileDurableIntents }),
+      // No hosted entry spawns in the service slot (RFC-370 §3.3), the probe included.
+      probe: createHostedMcpProbe({ helper: input.helper }),
     })
   }
 }

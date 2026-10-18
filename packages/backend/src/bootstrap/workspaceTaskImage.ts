@@ -22,6 +22,7 @@ import { executeTaskImageVerification } from '@/modules/development-automation/c
 import { executeTaskImageDevelopmentAdapter } from '@/modules/integration/composition/taskImageDevelopmentAdapter'
 import { executeTaskImageArchive } from '@/modules/task-execution/composition/taskImageArchive'
 import { executeTaskImagePlugin } from '@/modules/resource-catalog/composition/taskImagePlugin'
+import { executeTaskImageMcpProbe } from '@/modules/resource-catalog/composition/taskImageMcpProbe'
 import {
   executeTaskImageObserver,
   TASK_IMAGE_OBSERVER_OPERATIONS,
@@ -105,6 +106,7 @@ export async function executeWorkspaceTaskImageOperation(
 ): Promise<unknown> {
   if (operation === 'archive-task-files') return executeTaskImageArchive(value, volumeRoot)
   if (operation === 'plugin-installation') return executeTaskImagePlugin(value, signal, volumeRoot)
+  if (operation === 'mcp-probe') return executeTaskImageMcpProbe(value)
   if (operation === 'evidence-files') return executeTaskImageEvidence(value, volumeRoot)
   if (operation === 'development-adapter')
     return executeTaskImageDevelopmentAdapter(value, signal, volumeRoot)

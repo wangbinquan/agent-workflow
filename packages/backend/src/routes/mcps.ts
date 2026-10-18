@@ -39,7 +39,7 @@ import type {
   RenameMcpCatalogInput,
   UpdateMcpCatalogInput,
 } from '@/modules/resource-catalog/public/types'
-import type { McpProbeStore } from '@/modules/resource-catalog/public/participants'
+import type { McpProbeRunner, McpProbeStore } from '@/modules/resource-catalog/public/participants'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
@@ -86,6 +86,8 @@ export interface McpRouteDependencies {
   }
   readonly runtimeTestCommandContextFor: (actor: Actor) => CommandContext
   readonly runtimeTestQueryContextFor: (actor: Actor) => QueryContext
+  /** Where the deployment runs its Agents' MCP servers; absent, in-process. */
+  readonly probe?: McpProbeRunner
 }
 
 export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
@@ -518,10 +520,13 @@ export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
 
           let result
           try {
-            result = await probeMcp(start.captured, {
-              ...probeOptionsOverride,
-              startedAt: start.startedAt,
-            })
+            result =
+              module.probe === undefined
+                ? await probeMcp(start.captured, {
+                    ...probeOptionsOverride,
+                    startedAt: start.startedAt,
+                  })
+                : await module.probe(start.captured, { startedAt: start.startedAt })
           } catch (err) {
             if (err instanceof DomainError) throw err
             log.error('probeMcp unexpectedly threw', {

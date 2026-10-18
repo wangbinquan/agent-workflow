@@ -5,7 +5,10 @@ import {
 import { createMcpDiagnosticsOperations } from '../application/mcps/diagnosticsOperations'
 import type { McpOperationCoordinatorPort } from '../application/mcps/ports'
 import { createMcpDiagnosticsContexts } from '../infrastructure/mcpDiagnosticsContexts'
-import type { McpRuntimeTestReconciliationParticipant } from '../public/participants'
+import type {
+  McpProbeRunner,
+  McpRuntimeTestReconciliationParticipant,
+} from '../public/participants'
 
 export type McpDiagnosticsApplicationInput = McpDiagnosticsDependencies
 
@@ -51,5 +54,8 @@ export function bindMcpDiagnosticsRuntime(
     dispose: (budgetMs?: number) => application.dispose(budgetMs),
     pause: (budgetMs?: number) => application.pause(budgetMs),
     resume: () => application.resume(),
+    /** A deployment that runs Agents elsewhere selects where probes run too;
+     * absent, the route probes in-process. */
+    probe: undefined as McpProbeRunner | undefined,
   })
 }
