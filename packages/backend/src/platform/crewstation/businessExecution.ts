@@ -112,6 +112,8 @@ export type BusinessEvent = EventEnvelope &
         readonly data: {
           readonly callId: string
           readonly name: string
+          /** A call reported only once, finished (OpenCode), carries its input here. */
+          readonly input?: unknown
           readonly output?: unknown
           readonly isError: boolean
         }
