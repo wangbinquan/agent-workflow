@@ -13,6 +13,8 @@ export interface CrewStationDeploymentProfile {
   readonly adminSubjectsDefinitionId: string
   readonly eventSourcesDefinitionId?: string
   readonly gitCredentialsDefinitionId?: string
+  /** Optional `AW_DATABASE_POOL_MAX` configuration (1–256); absent or empty keeps the hosted default. */
+  readonly databasePoolMaxDefinitionId?: string
   readonly eventTypeIds?: readonly string[]
   readonly agentProfilesDefinitionId: string
   readonly taskProfileId: string
@@ -162,12 +164,19 @@ export function parseDeploymentProfile(raw: unknown): CrewStationDeploymentProfi
     (typeof gitCredentialsDefinitionId !== 'string' || !UUID.test(gitCredentialsDefinitionId))
   )
     throw new Error('profile.gitCredentialsDefinitionId must be a resource UUID')
+  const databasePoolMaxDefinitionId = record.databasePoolMaxDefinitionId
+  if (
+    databasePoolMaxDefinitionId !== undefined &&
+    (typeof databasePoolMaxDefinitionId !== 'string' || !UUID.test(databasePoolMaxDefinitionId))
+  )
+    throw new Error('profile.databasePoolMaxDefinitionId must be a resource UUID')
   return {
     ...profile,
     agentProfiles,
     eventTypeIds,
     ...(typeof eventSourcesDefinitionId === 'string' ? { eventSourcesDefinitionId } : {}),
     ...(typeof gitCredentialsDefinitionId === 'string' ? { gitCredentialsDefinitionId } : {}),
+    ...(typeof databasePoolMaxDefinitionId === 'string' ? { databasePoolMaxDefinitionId } : {}),
   }
 }
 
@@ -244,6 +253,19 @@ export function renderCrewStationManifest(
                 name: 'AW_EVENT_SOURCES',
                 from: 'config',
                 configDefinitionId: profile.eventSourcesDefinitionId,
+              },
+            ]),
+        // The platform injects only declared entries into the service slot, so
+        // the pool size reaches AW only through this declaration (an unset
+        // value keeps the hosted default of 8).
+        ...(profile.databasePoolMaxDefinitionId === undefined
+          ? []
+          : [
+              {
+                name: 'AW_DATABASE_POOL_MAX',
+                from: 'config',
+                configDefinitionId: profile.databasePoolMaxDefinitionId,
+                default: '',
               },
             ]),
       ])

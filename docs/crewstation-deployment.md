@@ -27,10 +27,11 @@ RFC-370 的托管形态：agent-workflow（AW）作为 CrewStation（CS）上的
 | `AW_AGENT_PROFILES`          | 配置   | `[{protocol, model, agentProfileId}]`，`model: null` 是该协议的缺省映射                                                                      |
 | `AW_GIT_CREDENTIAL_BINDINGS` | 配置   | 可选。私有仓库凭据绑定：HTTP `{kind:"http",url,username,passwordSecretId}`，SSH `{kind:"ssh",url,privateKeySecretId,knownHosts}`，最多 32 个 |
 | `AW_EVENT_SOURCES`           | 配置   | 可选。托管事件来源，与发布档案的 `eventTypeIds` 同时出现                                                                                     |
+| `AW_DATABASE_POOL_MAX`       | 配置   | 可选。每实例 PostgreSQL 连接数（1–256，缺省 8）；发布档案的 `databasePoolMaxDefinitionId` 声明后才注入服务槽                                 |
 
 Git 凭据只以 Secret UUID 出现在配置里；任务命令拿到的是 CS 解析后的 `AW_GIT_AUTH_<n>` 与服务按命令下发的 `AW_GIT_RUNTIME_BINDINGS`（由 AW 生成，不要配置它），凭据不进入仓库、argv 或共享卷。平台会把项目配置注入任务容器环境，因此部署级的 `AW_GIT_CREDENTIAL_BINDINGS` 也会出现在任务容器里，AW 不再读取它作运行期绑定。
 
-连接池：托管实例缺省每实例 8 个 PostgreSQL 连接（蓝绿两槽同时在线），套餐允许时用 `AW_DATABASE_POOL_MAX`（1–256）调大。
+连接池：托管实例缺省每实例 8 个 PostgreSQL 连接（蓝绿两槽同时在线）。平台只把 Manifest 声明的配置注入服务槽，要调整须在生产配置里建 `AW_DATABASE_POOL_MAX` 并把它的定义 id 写进发布档案的 `databasePoolMaxDefinitionId`（未设置或空值保持缺省）。
 
 ## 任务镜像
 

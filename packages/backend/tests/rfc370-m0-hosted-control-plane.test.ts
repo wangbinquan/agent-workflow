@@ -516,6 +516,24 @@ test('the Manifest is rendered from a validated deployment profile', () => {
   expect(() =>
     parseDeploymentProfile({ ...profile, gitCredentialsDefinitionId: 'plaintext-token' }),
   ).toThrow('resource UUID')
+  // RFC-370 hosted acceptance (2026-10-18): the platform injects only declared
+  // env entries into the service slot, so AW_DATABASE_POOL_MAX reached a hosted
+  // instance only through a declaration; an unset value keeps the default of 8.
+  const poolProfile = parseDeploymentProfile({
+    ...profile,
+    databasePoolMaxDefinitionId: profile.adminSubjectsDefinitionId,
+  })
+  expect(JSON.parse(renderCrewStationManifest('{{ENV_JSON}}', poolProfile))).toContainEqual({
+    name: 'AW_DATABASE_POOL_MAX',
+    from: 'config',
+    configDefinitionId: profile.adminSubjectsDefinitionId,
+    default: '',
+  })
+  expect(renderCrewStationManifest('{{ENV_JSON}}', profile)).not.toContain('AW_DATABASE_POOL_MAX')
+  expect(() => parseDeploymentProfile({ ...profile, databasePoolMaxDefinitionId: '2' })).toThrow(
+    'resource UUID',
+  )
+  expect(crewStationDatabaseConfig({ AW_DATABASE_POOL_MAX: '' }).poolMax).toBe(8)
   expect(() =>
     parseDeploymentProfile({ ...profile, restoreObjectDefinitionId: 'arbitrary-url' }),
   ).toThrow('restoreObjectDefinitionId')
