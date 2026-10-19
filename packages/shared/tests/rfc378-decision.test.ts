@@ -137,6 +137,25 @@ describe('RFC-378 optional decision contract', () => {
     expect(ordinary).not.toContain('invent evidence')
     expect(mindmap).toContain('invent evidence')
     expect(mindmap).toContain('unnamed owner')
+    expect(mindmap).toContain('Unmarked answers remain unmarked')
+    expect(mindmap).toContain('model-inferred consequences separately')
     expect(mindmap).not.toContain('Every question must include mindmap')
+  })
+  // Real final output promoted confirmed, unmarked answers into "decided".
+  // Both prompt paths must explicitly retain absence instead of asking the model to infer it.
+  test('mindmap summaries carry unmarked maturity while ordinary answers stay unchanged', () => {
+    for (const notes of [undefined, {}, { uncertainty: 'Still unknown' }]) {
+      const unmarked = { ...answer, decision: notes }
+      for (const summarize of [summariseClarifyAnswer, summariseCrossAnswer]) {
+        const summary = summarize(q, unmarked)
+        expect(summary).toContain('Decision status: "unmarked"')
+        expect(summary).not.toContain('Decision status (user marked)')
+        if (notes?.uncertainty) expect(summary).toContain(notes.uncertainty)
+        expect(summarize({ ...q, mindmap: undefined }, { ...unmarked, decision: undefined })).toBe(
+          'User chose: "Observe first"',
+        )
+      }
+    }
+    expect(summariseClarifyAnswer(q, answer)).not.toContain('"unmarked"')
   })
 })

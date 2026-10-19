@@ -269,7 +269,7 @@ export function renderClarifyDirectiveTrailer(
  *   - multi, custom only:              `User selected only the custom answer: "<text>"`
  *   - empty:                           `User did not answer this question.` */
 export function summariseClarifyAnswer(question: ClarifyQuestion, answer: ClarifyAnswer): string {
-  const decision = summariseClarifyDecision(answer.decision)
+  const decision = summariseClarifyDecision(answer.decision, question.mindmap !== undefined)
   const answerText = summariseClarifyChoice(question, answer)
   return decision ? `${answerText}; ${decision}` : answerText
 }

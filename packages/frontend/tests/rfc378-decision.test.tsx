@@ -289,7 +289,11 @@ test('refresh restores the failed request quote and direction; a legacy failure 
     />,
   )
   fireEvent.click(screen.getByRole('button', { name: 'Select question' }))
-  expect(screen.getByRole('alert').textContent).toContain('Existing answers are kept')
+  expect(
+    screen
+      .getByText(/The follow-up did not finish\. Existing answers are kept/)
+      .getAttribute('role'),
+  ).toBe('alert')
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry follow-up' }))
   })

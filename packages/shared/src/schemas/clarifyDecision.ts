@@ -48,9 +48,11 @@ export function clarifyDecisionsEqual(
 }
 
 /** Deterministic readback, shared by self and cross clarify prompt rendering. */
-export function summariseClarifyDecision(value: ClarifyDecision | undefined): string {
+export function summariseClarifyDecision(
+  value: ClarifyDecision | undefined,
+  includeUnmarkedStatus = false,
+): string {
   const decision = normalizeClarifyDecision(value)
-  if (!decision) return ''
   const fields: [keyof ClarifyDecision, string][] = [
     ['status', 'Decision status (user marked)'],
     ['rationale', 'User rationale'],
@@ -59,11 +61,14 @@ export function summariseClarifyDecision(value: ClarifyDecision | undefined): st
     ['validationOwner', 'Validation owner (user named)'],
     ['revisitWhen', 'Revisit when'],
   ]
-  return fields
-    .filter(([key]) => decision[key])
-    .map(([key, label]) => `${label}: ${JSON.stringify(decision[key])}`)
-    .join('; ')
+  const parts = fields
+    .filter(([key]) => decision?.[key])
+    .map(([key, label]) => `${label}: ${JSON.stringify(decision?.[key])}`)
+  if (includeUnmarkedStatus && !decision?.status) {
+    parts.unshift('Decision status: "unmarked" (the user has not marked decision maturity)')
+  }
+  return parts.join('; ')
 }
 
 export const CLARIFY_DECISION_OUTPUT_GUIDANCE =
-  "Preserve the user's original wording and distinguish decisions from provisional assumptions, unverified facts, accepted tradeoffs and review arrangements. Do not turn an unknown into a fact, invent evidence, assign an unnamed owner, or claim a review task has been scheduled. Explicitly retain missing validation ownership or timing when an item is provisional."
+  "Preserve the user's original wording and distinguish decisions from provisional assumptions, unverified facts, accepted tradeoffs and review arrangements. Unmarked answers remain unmarked: present them as current user choices with maturity unmarked, never under an already-decided heading. Only an explicit user-marked decided or provisional status sets maturity; confirming or submitting an answer does not set it. Present model-inferred consequences separately from user-accepted tradeoffs; never claim that the user accepted a cost they did not state or select. Do not turn an unknown into a fact, invent evidence, assign an unnamed owner, or claim a review task has been scheduled. Explicitly retain missing validation ownership or timing when an item is provisional."

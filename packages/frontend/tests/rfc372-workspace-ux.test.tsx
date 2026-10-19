@@ -260,7 +260,13 @@ test('follow-up text and errors belong to the originating question while another
   expect(
     (screen.getByLabelText('What needs more detail? (optional)') as HTMLTextAreaElement).value,
   ).toBe('Retain this branch guidance')
-  expect(screen.getByRole('alert').textContent).toContain('missing mindmap category')
+  expect(
+    screen
+      .getByText(/The follow-up did not finish\. Existing answers are kept/)
+      .getAttribute('role'),
+  ).toBe('alert')
+  fireEvent.click(screen.getByText('Technical details', { exact: true }))
+  expect(screen.getByText('missing mindmap category: q1', { exact: true })).toBeTruthy()
   expect(followup).toHaveBeenCalledWith('q0', 'Retain this branch guidance')
 })
 

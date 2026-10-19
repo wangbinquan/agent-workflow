@@ -159,7 +159,12 @@ test('a failure reported by the round is shown on its branch once nothing genera
   expect(screen.queryByRole('button', { name: 'View failed follow-up' })).toBeNull()
   rerender(<Workspace failure={failure} />)
   fireEvent.click(screen.getByRole('button', { name: 'View failed follow-up' }))
-  expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toContain(
-    'missing mindmap category',
-  )
+  const dialog = within(screen.getByRole('dialog'))
+  expect(
+    dialog
+      .getByText(/The follow-up did not finish\. Existing answers are kept/)
+      .getAttribute('role'),
+  ).toBe('alert')
+  fireEvent.click(dialog.getByText('Technical details', { exact: true }))
+  expect(dialog.getByText('missing mindmap category', { exact: true })).toBeTruthy()
 })
