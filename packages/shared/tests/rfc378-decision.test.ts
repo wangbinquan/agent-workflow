@@ -164,10 +164,11 @@ describe('RFC-378 optional decision contract', () => {
         clarifyChannel: { kind, directive: 'mandatory', injectStopNotice: false },
         clarifyMindmap: { categories: [], instructions: '' },
       })
-      expect(prompt).toContain('recording usage and sending reminders are compatible')
-      expect(prompt).toContain('The interface may reorder recommended options')
-      expect(prompt).toContain('unless the user supplied evidence')
-      expect(prompt).toContain('Parent attachment does not replace this required field')
+      expect(prompt).toContain('release, sign-in, recording and reminders are independent')
+      expect(prompt).toContain('Options may be reordered: no positional references')
+      expect(prompt).toContain('Never invent a baseline, main pain point, existing system')
+      expect(prompt).toContain('Every question requires a non-empty mindmap.categoryPath')
+      expect(prompt).toContain('even with a parent')
     }
   })
   test('all answer and draft schemas preserve independent notes without inventing a status', () => {
