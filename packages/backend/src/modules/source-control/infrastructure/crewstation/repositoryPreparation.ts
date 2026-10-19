@@ -12,6 +12,7 @@ import type {
 } from '../../application/workspaceMaterialization'
 import { composeRepositoryWorkspaceStore } from '../repositoryWorkspaceStore'
 import { hostedWorkspaceReference, parseHostedWorkspaceReference } from './workspaceReference'
+import type { HostedTaskWorkspaces } from './taskWorkspace'
 import { assertHostedRepositoryUrl } from './repositoryUrl'
 
 function mapSpace<Value>(value: Value, path: (value: string) => string): Value {
@@ -180,7 +181,10 @@ export function createHostedRepositoryPreparation(input: {
   }
 }
 
-export function createHostedScratchWorkspaces(helper: WorkspaceHelper): ScratchWorkspaceEffects {
+export function createHostedScratchWorkspaces(
+  helper: WorkspaceHelper,
+  workspaces: Pick<HostedTaskWorkspaces, 'abandon'>,
+): ScratchWorkspaceEffects {
   return {
     async prepare(request) {
       await request.assertCurrent()
@@ -204,23 +208,16 @@ export function createHostedScratchWorkspaces(helper: WorkspaceHelper): ScratchW
         throw new Error('scratch-preparation-artifact-mismatch')
       return space
     },
+    // An unadmitted scratch space lives only in its own Task's volume, which
+    // `releaseUnadmitted` gives back with the parent. Cleaning it first used
+    // to wake (or wait up to five minutes for) that parent just to delete
+    // files on a volume about to go (RFC-370 hosted acceptance, 2026-10-19).
     async cleanup(request) {
       await request.assertCurrent()
-      return helper.call(
-        request.taskId,
-        'cleanup-space',
-        {
-          taskId: request.taskId,
-          cleanup: {
-            taskId: request.taskId,
-            ownedRoot: `/work/scratch/${request.taskId}`,
-            worktrees: [],
-            state: 'owned',
-            report: null,
-          },
-        },
-        { operationId: 'scratch-cleanup' },
-      )
+      return { taskId: request.taskId, complete: true, failures: [] }
+    },
+    async releaseUnadmitted(taskId) {
+      await workspaces.abandon(taskId)
     },
   }
 }

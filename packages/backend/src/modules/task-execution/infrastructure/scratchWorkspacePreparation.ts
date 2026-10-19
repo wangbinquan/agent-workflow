@@ -71,6 +71,9 @@ export async function compensateScratchWorkspace(input: {
       )
     },
   })
+  // The Task never existed: its platform workspace goes too, before `cleaned`
+  // (a failure leaves the claim for the orphan maintenance to repeat).
+  if (report.complete) await input.binding.releaseUnadmitted(input.taskId)
   if (report.complete)
     await withTaskExecutionWrite(input.db, async (tx) => {
       const current = await assertUnbound(tx, input.taskId, ['compensating', 'cleaned'])

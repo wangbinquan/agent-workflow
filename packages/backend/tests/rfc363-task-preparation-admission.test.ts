@@ -364,6 +364,14 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
   }, 60_000)
   test('synchronous admission rollback preserves the failed Task transaction and durably compensates Git', async () => {
     const f = await fixture()
+    // RFC-370 hosted acceptance (2026-10-19): the compensation also releases the
+    // platform workspace a never-admitted Task's preparation requested.
+    const released: string[] = []
+    const release = f.binding.releaseUnadmitted
+    f.binding.releaseUnadmitted = async (taskId) => {
+      released.push(taskId)
+      await release.call(f.binding, taskId)
+    }
     await expect(
       f.kernel(true).launch({ ...f.request, deferRepoPreparation: false }),
     ).rejects.toThrow('reject-after-source-freeze')
@@ -371,6 +379,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     const operations = await harness.db.select().from(scPreparationOperations)
     expect(operations).toHaveLength(1)
     expect(operations[0]?.state).toBe('cleaned')
+    expect(released).toHaveLength(1)
     expect(f.submitted).toEqual([])
   }, 60_000)
   test('before Task admission, a fresh adapter reuses the receipt and uploaded files; old orphan GC compensates once', async () => {

@@ -208,7 +208,7 @@ export function composeCrewStationWorkspaceOwner(
           recoverMaterialization: (taskId, operationId) =>
             helper.recover<MaterializedSpace>(taskId, operationId),
         }),
-        scratchWorkspaceEffects: createHostedScratchWorkspaces(helper),
+        scratchWorkspaceEffects: createHostedScratchWorkspaces(helper, workspaces),
       }
     },
   }

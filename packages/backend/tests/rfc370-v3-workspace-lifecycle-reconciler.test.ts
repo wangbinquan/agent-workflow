@@ -9,7 +9,7 @@
 // the re-check right before the effect, tolerance of lifecycle races, the
 // completion of lost close receipts, and per-row failure isolation.
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { hostedTaskWorkspaces } from '@/db/schema'
 import {
   createHostedWorkspaceLifecycle,
@@ -313,6 +313,23 @@ describeEachProvider('RFC-370 V3 hosted parent lifecycle reconciler', (harness) 
     f.closeResult(false)
     expect((await pass(f)).closed).toEqual([])
     expect(f.closed).toEqual(['01CLOSING', '01CLOSING'])
+  })
+
+  // RFC-370 hosted acceptance (2026-10-19): an abandoned launch whose create
+  // the platform was still admitting had no parent receipt, so no pass ever
+  // retried its close.
+  test('a closing registration without a parent receipt is retried; an allocation in flight is not', async () => {
+    const f = await setup()
+    await f.register('01ABANDONED', { state: 'closing' })
+    await f.register('01ALLOCATING', { state: 'creating' })
+    await harness.db
+      .update(hostedTaskWorkspaces)
+      .set({ businessTaskId: null })
+      .where(inArray(hostedTaskWorkspaces.taskId, ['01ABANDONED', '01ALLOCATING']))
+    const result = await pass(f)
+    expect(result.closed).toEqual(['01ABANDONED'])
+    expect(f.closed).toEqual(['01ABANDONED'])
+    expect(result.failed).toEqual([])
   })
 
   test('an aborted pass stops before the next parent and the owner loop ends on abort', async () => {

@@ -167,6 +167,9 @@ export function composeRepositoryPreparation(input: {
       await request.assertCurrent()
       return report
     },
+    async releaseUnadmitted(taskId: string): Promise<void> {
+      await scratch.releaseUnadmitted?.(taskId)
+    },
     sourceSeal: createPublicRepositorySourceSeal({
       db: input.db,
       appHome: input.appHome,

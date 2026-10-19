@@ -67,6 +67,9 @@ export interface TaskRepositoryPreparationBinding {
     taskId: string
     assertCurrent(): Promise<void>
   }): Promise<WorkspaceCleanupReport>
+  /** After a compensated launch preparation (the Task was never admitted):
+   * release the platform workspace that preparation requested, if any. */
+  releaseUnadmitted(taskId: string): Promise<void>
 
   readonly sourceSeal: PublicRepositorySourceSealPort
   sealedIdentity(reference: SealedPublicRepositorySourceRef): Promise<string>

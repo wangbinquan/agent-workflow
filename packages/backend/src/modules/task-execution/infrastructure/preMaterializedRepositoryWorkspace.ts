@@ -89,6 +89,9 @@ export async function compensatePreMaterializedRepository(input: {
   })
   try {
     const report = await effect.cleanup()
+    // The Task never existed: its platform workspace goes too, before `cleaned`
+    // (a failure leaves the claim for the orphan maintenance to repeat).
+    if (report.complete) await input.binding.releaseUnadmitted(input.taskId)
     if (report.complete)
       await withTaskExecutionWrite(input.db, async (tx) => {
         const current = await assertUnadmitted(tx, input.taskId, operationRef, [

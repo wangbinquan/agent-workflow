@@ -51,9 +51,16 @@ export interface HostedTaskWorkspaces {
   listRunning(): Promise<readonly HostedTaskWorkspace[]>
   /** End the parent once its owner is deleted: an `archive-and-delete` parent
    * is finalized (its volume deleted), a `legacy` one closed. CS is asked
-   * first; `closing` is recorded only after CS accepted. True once the
-   * platform reports the parent released, false while that is still pending. */
+   * first; `closing` is recorded only after CS accepted (or by `abandon`, as
+   * an intent). True once the platform reports the parent released, or that
+   * it never created one; false while that is still pending. */
   close(taskId: string): Promise<boolean>
+  /** The owner Task was never admitted (its launch preparation was
+   * compensated): its parent — running, still being created or admitted, or
+   * never created — is released. The intent is recorded first (`closing`), so
+   * the lifecycle reconciler completes a close the platform refuses for now;
+   * nothing waits for a quota slot or the physical release. */
+  abandon(taskId: string): Promise<void>
   /** A scratch owner's parent created under another release, due to be
    * replaced (see `hostedWorkspaceOwnerKind`). Registration read only. */
   superseded(taskId: string): Promise<boolean>
@@ -286,7 +293,10 @@ export function createHostedTaskWorkspaces(input: {
    * its pause grace, or a system scratch parent (RFC-370 hosted acceptance,
    * 2026-10-17: a task launched right after another one failed its repository
    * preparation within seconds). The wait shares the provisioning budget. */
-  const allocate = async (row: Row): Promise<string> => {
+  const allocate = async (
+    row: Row,
+    options: { readonly waitForQuota: boolean },
+  ): Promise<string> => {
     const started = now()
     let task: BusinessTask
     for (let attempt = 0; ; attempt += 1) {
@@ -310,7 +320,7 @@ export function createHostedTaskWorkspaces(input: {
           !(isCrewStationApiError(error) && error.status === 429 && error.code === 'quota_exceeded')
         )
           throw error
-        if (now() - started >= readyTimeoutMs)
+        if (!options.waitForQuota || now() - started >= readyTimeoutMs)
           throw new HostedWorkspaceQuotaExhaustedError(now() - started, error.message)
         await sleep(Math.min(POLL_MS * 2 ** attempt, 30_000))
       }
@@ -364,8 +374,21 @@ export function createHostedTaskWorkspaces(input: {
    * operation refused it (the caller decides again). Writes touch only the
    * registration generation `row` names (its request key), so one a concurrent
    * use re-armed in the meantime is left alone. */
-  const requestClose = async (row: Row): Promise<string | null> => {
-    const businessTaskId = row.businessTaskId ?? (await allocate(row))
+  const requestClose = async (row: Row): Promise<string | 'none' | null> => {
+    let businessTaskId = row.businessTaskId
+    if (businessTaskId === null) {
+      // No receipt yet: replaying the create answers the parent the platform
+      // holds for this key. A close never waits for a quota slot (the request
+      // is still being admitted: decide again later), and a refused image
+      // means the platform never created a parent.
+      try {
+        businessTaskId = await allocate(row, { waitForQuota: false })
+      } catch (error) {
+        if (error instanceof HostedWorkspaceQuotaExhaustedError) return null
+        if (error instanceof HostedTaskImageUnvalidatedError) return 'none'
+        throw error
+      }
+    }
     const task = await observe(businessTaskId)
     if (!CLOSED.has(task.state)) {
       try {
@@ -415,8 +438,10 @@ export function createHostedTaskWorkspaces(input: {
     if (businessTaskId === null) return false
     // Acknowledged close is not physical release. The owner retries until
     // the platform confirms the resources actually disappeared.
-    const released = await observe(businessTaskId)
-    if (released.state !== 'closed' || released.resourceState !== 'released') return false
+    if (businessTaskId !== 'none') {
+      const released = await observe(businessTaskId)
+      if (released.state !== 'closed' || released.resourceState !== 'released') return false
+    }
     await write(async (tx) => {
       await tx
         .update(hostedTaskWorkspaces)
@@ -503,7 +528,7 @@ export function createHostedTaskWorkspaces(input: {
       if (release === null) {
         if (row.state === 'closed' || row.state === 'closing')
           throw new Error('hosted-workspace-closed')
-        return ready(row, row.businessTaskId ?? (await allocate(row)))
+        return ready(row, row.businessTaskId ?? (await allocate(row, { waitForQuota: true })))
       }
       // A scratch owner. A parent of another release that still runs may serve
       // an invocation of that release and is used as it is (the lifecycle
@@ -516,11 +541,11 @@ export function createHostedTaskWorkspaces(input: {
           row = await replace(row, requestKey)
       }
       try {
-        return await ready(row, row.businessTaskId ?? (await allocate(row)))
+        return await ready(row, row.businessTaskId ?? (await allocate(row, { waitForQuota: true })))
       } catch (error) {
         if (!(error instanceof HostedWorkspaceUnavailableError)) throw error
         row = await replace((await read(input.db, taskId))!, requestKey)
-        return ready(row, row.businessTaskId ?? (await allocate(row)))
+        return ready(row, row.businessTaskId ?? (await allocate(row, { waitForQuota: true })))
       }
     },
     async open(taskId) {
@@ -547,6 +572,28 @@ export function createHostedTaskWorkspaces(input: {
       return running
     },
     close,
+    // RFC-370 hosted acceptance (2026-10-19): three launches that failed in
+    // their preparation each left a parent behind — two failed, one still
+    // being admitted, which would later have started a container for a Task
+    // that never existed — and nothing ever closed them.
+    async abandon(taskId) {
+      if (hostedWorkspaceOwnerKind(taskId) !== 'task')
+        throw new Error('hosted-workspace-abandon-requires-task-owner')
+      await write(async (tx) => {
+        await tx
+          .update(hostedTaskWorkspaces)
+          .set({ state: 'closing', updatedAt: now() })
+          .where(
+            and(
+              eq(hostedTaskWorkspaces.taskId, taskId),
+              inArray(hostedTaskWorkspaces.state, ['creating', 'ready']),
+            ),
+          )
+      })
+      // One attempt now; the lifecycle reconciler repeats a close the
+      // platform refuses for the moment.
+      await close(taskId).catch(() => false)
+    },
     async superseded(taskId) {
       const release = await releaseFor(taskId)
       if (release === null) return false

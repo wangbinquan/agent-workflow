@@ -15,4 +15,9 @@ export interface ScratchWorkspaceEffects {
     readonly taskId: string
     readonly assertCurrent: () => Promise<void>
   }): Promise<WorkspaceCleanupReport>
+  /** Releases the platform workspace a never-admitted Task's launch preparation
+   * requested (scratch or repository; the hosted parent and its volume), once
+   * that preparation is compensated. Absent where preparation holds no
+   * platform resource: `cleanup` already removed the local files. */
+  releaseUnadmitted?(taskId: string): Promise<void>
 }

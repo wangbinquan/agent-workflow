@@ -195,6 +195,62 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
     }
   })
 
+  // RFC-370 hosted acceptance (2026-10-19): a failed hosted launch left its
+  // CrewStation parent behind; the compensation now releases it.
+  test('a compensated preparation releases its platform workspace before it is recorded cleaned', async () => {
+    const taskId = ulid()
+    const journal = createWorkspacePreparationJournal(harness.db)
+    const releases: string[] = []
+    let cleanupComplete = false
+    let releaseFails = true
+    const selected: ScratchWorkspaceEffects = {
+      async prepare() {
+        return space(taskId)
+      },
+      restore(_taskId, saved) {
+        return saved
+      },
+      async cleanup(request) {
+        return { taskId: request.taskId, complete: cleanupComplete, failures: [] }
+      },
+      async releaseUnadmitted(id) {
+        releases.push(id)
+        expect((await journal.read(taskId))?.state).toBe('compensating')
+        if (releaseFails) throw new Error('platform unavailable')
+      },
+    }
+    const binding = composeRepositoryPreparation({
+      db: harness.db,
+      appHome: 'installation:selected',
+      scratchEffects: selected,
+    })
+    const prepared = await prepareScratchWorkspace({
+      db: harness.db,
+      binding,
+      appHome: 'installation:selected',
+      taskId,
+      gitCommitIdentity: null,
+      signal: new AbortController().signal,
+    })
+    prepared.commit()
+    try {
+      const input = { db: harness.db, binding, taskId }
+      // Files not yet gone: nothing is released.
+      expect((await compensateScratchWorkspace(input)).complete).toBe(false)
+      expect(releases).toEqual([])
+      // A failed release keeps the claim for the orphan maintenance to repeat.
+      cleanupComplete = true
+      await expect(compensateScratchWorkspace(input)).rejects.toThrow('platform unavailable')
+      expect((await journal.read(taskId))?.state).toBe('compensating')
+      releaseFails = false
+      expect((await compensateScratchWorkspace(input)).complete).toBe(true)
+      expect(releases).toEqual([taskId, taskId])
+      expect((await journal.read(taskId))?.state).toBe('cleaned')
+    } finally {
+      materializingSpaces.delete(taskId)
+    }
+  })
+
   test('selected preparation failure keeps the original error and compensates without a file fallback', async () => {
     const taskId = ulid()
     const failure = new Error('selected-prepare-failed')

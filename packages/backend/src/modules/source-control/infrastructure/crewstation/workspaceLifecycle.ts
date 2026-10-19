@@ -4,8 +4,9 @@
 // migration barrier requires parents to be paused. Source Control therefore
 // pauses every parent whose volume is not in use and lets the next use resume
 // it (`HostedTaskWorkspaces.ensure` / `open`). It also completes a close whose
-// platform receipt was lost (`closing` rows) and records parents the platform
-// already released.
+// platform receipt was lost or that the platform refused for the moment
+// (`closing` rows, including the parent of a launch that was never admitted)
+// and records parents the platform already released.
 //
 // "In use" (any one keeps the parent running):
 //   - task execution reports the owner active: an AW task bound to the volume
@@ -22,7 +23,7 @@
 // parent created under another release (`HostedTaskWorkspaces.superseded`) is
 // closed instead once idle, running or not, so its owner's next use gets a
 // parent with the running release's task image.
-import { and, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, or } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { hostedTaskWorkspaces } from '@/db/schema'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -72,14 +73,19 @@ export function createHostedWorkspaceLifecycle(input: {
   const now = input.now ?? Date.now
   const taskGraceMs = input.taskGraceMs ?? HOSTED_TASK_VOLUME_GRACE_MS
   const sharedIdleMs = input.sharedIdleMs ?? HOSTED_SHARED_VOLUME_IDLE_MS
+  // A `closing` registration may have no parent receipt yet: an abandoned
+  // launch whose create the platform is still admitting. It is retried too.
   const rows = () =>
     input.db
       .select()
       .from(hostedTaskWorkspaces)
       .where(
-        and(
-          inArray(hostedTaskWorkspaces.state, ['creating', 'ready', 'closing']),
-          isNotNull(hostedTaskWorkspaces.businessTaskId),
+        or(
+          eq(hostedTaskWorkspaces.state, 'closing'),
+          and(
+            inArray(hostedTaskWorkspaces.state, ['creating', 'ready']),
+            isNotNull(hostedTaskWorkspaces.businessTaskId),
+          ),
         ),
       )
   const lastUse = async (taskId: string) =>
