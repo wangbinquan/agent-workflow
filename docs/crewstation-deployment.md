@@ -31,6 +31,11 @@ RFC-370 的托管形态：agent-workflow（AW）作为 CrewStation（CS）上的
 
 Git 凭据只以 Secret UUID 出现在配置里；任务命令拿到的是 CS 解析后的 `AW_GIT_AUTH_<n>` 与服务按命令下发的 `AW_GIT_RUNTIME_BINDINGS`（由 AW 生成，不要配置它），凭据不进入仓库、argv 或共享卷。平台会把项目配置注入任务容器环境，因此部署级的 `AW_GIT_CREDENTIAL_BINDINGS` 也会出现在任务容器里，AW 不再读取它作运行期绑定。
 
+新项目首次发布前，平台侧还要满足两项发布前检查（2026-10-19 在新建的 RFC-042 验收项目上逐一遇到）：
+
+- **算力档位**：发布档案 `agentProfiles` 引用的每个算力档位都要向该项目开放；隐藏档位（`defaultVisible: false`，如按模型复制的档位副本）要列进项目算力策略的 `additionalProfiles`（`PUT /v1/projects/:projectId/compute-policy`），否则发布以 `profile-denied`（「项目未获授权使用算力档位」）被拒。
+- **对象存储**：项目须获授对象存储档位，且档位配额要落在对象后端剩余的分配预算内；后端预算被已有空间分完时，新服务的发布以 `config-incomplete`（「后端可分配空间预算不足」）被拒，须由平台管理员调整后端预算、为新项目配一个更小的档位，或调低已有空间的配额。
+
 连接池：托管实例缺省每实例 8 个 PostgreSQL 连接（蓝绿两槽同时在线）。平台只把 Manifest 声明的配置注入服务槽，要调整须在生产配置里建 `AW_DATABASE_POOL_MAX` 并把它的定义 id 写进发布档案的 `databasePoolMaxDefinitionId`（未设置或空值保持缺省）。
 
 ## 任务镜像
