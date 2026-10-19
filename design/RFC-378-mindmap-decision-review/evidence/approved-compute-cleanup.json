@@ -1,0 +1,181 @@
+{
+  "at": "2026-10-19T14:19:46.187Z",
+  "authorization": "user explicitly allowed two proposed Oct 15 Agent/CLI stops",
+  "children": [
+    {
+      "id": "01a13f48-19f6-7000-b2a8-bc2d681a5cc4",
+      "state": "released",
+      "native": {
+        "purpose": "cli",
+        "parentTaskId": "01a13edf-f800-7000-a46d-e38c341e2a1f",
+        "agentId": "01a13f48-1a1e-7000-88ad-c32c2b50f957",
+        "terminalId": "01a13f48-1a1e-7001-929f-5bda99bdb2c7",
+        "runnerId": "01a13f48-1a1e-7002-9e97-6b45abedb2b0",
+        "podUid": "2bba98dc-763a-47f6-90e8-3cc68b356db0",
+        "state": "finished",
+        "profile": {
+          "id": "01a0c12a-de0c-7002-8b96-f60e8e3dbbd7",
+          "cpu": "400m",
+          "name": "rfc003-cli-isolated",
+          "memory": "2Gi",
+          "storage": "2Gi"
+        }
+      }
+    },
+    {
+      "id": "01a13f4b-a05b-7000-afa7-b53d48f76ef7",
+      "state": "released",
+      "native": {
+        "purpose": "agent",
+        "parentTaskId": "01a13edf-f800-7000-a46d-e38c341e2a1f",
+        "agentId": "01a13f4b-a087-7000-937a-b7dd1e34370d",
+        "runnerId": "01a13f4b-a087-7001-bc85-e9679e13eb25",
+        "podUid": "0652f336-af4b-44f8-ba88-31dc9231d8d9",
+        "state": "finished",
+        "profile": {
+          "id": "01a0c12a-de0c-7002-8b96-f60e8e3dbbd7",
+          "cpu": "400m",
+          "name": "rfc003-cli-isolated",
+          "memory": "2Gi",
+          "storage": "2Gi"
+        }
+      }
+    }
+  ],
+  "parent": {
+    "id": "01a13edf-f800-7000-a46d-e38c341e2a1f",
+    "state": "running",
+    "pod": {
+      "name": "task-01a13edff8007000a46de38c341e2a1f",
+      "uid": "0ccaa08e-31f4-4081-8a68-225d41e1b3d8",
+      "phase": "Running",
+      "ready": true
+    }
+  },
+  "sharedWorkspace": {
+    "name": "task-01a13edff8007000a46de38c341e2a1f-work",
+    "uid": "22dead26-6f13-45b8-8909-e91916cf26aa",
+    "phase": "Bound"
+  },
+  "publishedService": {
+    "name": "snake-bot-20261014-green-dc5494fcd-82h4w",
+    "uid": "c46b9412-3f4b-4b7e-bc42-439b03f372a5",
+    "phase": "Running",
+    "ready": true
+  },
+  "formalAW": [
+    {
+      "name": "agent-workflow-blue-68f8bdcc4-q9q4w",
+      "uid": "a3e90f47-a84d-45b3-880d-6d8d92352949",
+      "phase": "Running",
+      "ready": true
+    },
+    {
+      "name": "agent-workflow-green-67d7674488-6jvjj",
+      "uid": "f0e90d22-8e1e-41a2-bbc3-dd4f8b0db5c2",
+      "phase": "Running",
+      "ready": true
+    }
+  ],
+  "releasedRequests": {
+    "cpuM": 800,
+    "memoryMi": 4096
+  },
+  "node": {
+    "name": "desktop-control-plane",
+    "allocatable": {
+      "cpu": "10",
+      "ephemeral-storage": "239128548Ki",
+      "hugepages-1Gi": "0",
+      "hugepages-2Mi": "0",
+      "hugepages-32Mi": "0",
+      "hugepages-64Ki": "0",
+      "memory": "32810996Ki",
+      "pods": "110"
+    },
+    "requested": {
+      "cpuM": 9105,
+      "memoryMi": 27216
+    },
+    "available": {
+      "cpuM": 895,
+      "memoryMi": 4825.98828125
+    }
+  },
+  "checks": {
+    "childPodsAbsent": true,
+    "parentRunning": true,
+    "parentPodSameUid": true,
+    "parentPodReady": true,
+    "workspaceSameUid": true,
+    "workspaceBound": true,
+    "publishedServiceSameUid": true,
+    "publishedServiceReady": true
+  },
+  "actions": [
+    {
+      "at": "2026-10-19T14:12:49.926Z",
+      "taskId": "01a13f48-19f6-7000-b2a8-bc2d681a5cc4",
+      "agentId": "01a13f48-1a1e-7000-88ad-c32c2b50f957",
+      "path": "/v1/tasks/01a13edf-f800-7000-a46d-e38c341e2a1f/agent-terminals/01a13f48-1a1e-7000-88ad-c32c2b50f957/stop",
+      "accepted": true
+    },
+    {
+      "at": "2026-10-19T14:12:50.984Z",
+      "taskId": "01a13f4b-a05b-7000-afa7-b53d48f76ef7",
+      "agentId": "01a13f4b-a087-7000-937a-b7dd1e34370d",
+      "path": "/v1/tasks/01a13edf-f800-7000-a46d-e38c341e2a1f/agents/01a13f4b-a087-7000-937a-b7dd1e34370d/cancel",
+      "accepted": true
+    }
+  ],
+  "capacityComparison": {
+    "beforeApprovedStops": {
+      "cpuM": 9605,
+      "memoryMi": 30288,
+      "freeCpuM": 395,
+      "freeMemoryMi": 1753.98828125
+    },
+    "newlyObservedServiceReplicas": [
+      {
+        "namespace": "cs-agent-workflow",
+        "name": "agent-workflow-blue-68f8bdcc4-q9q4w",
+        "cpuM": 250,
+        "memoryMi": 512
+      },
+      {
+        "namespace": "cs-rfc042-aw-restore",
+        "name": "rfc042-aw-restore-blue-7b6d5cb6c7-5bb9k",
+        "cpuM": 50,
+        "memoryMi": 512
+      }
+    ],
+    "taskImageValidationRequests": {
+      "cpuM": 1000,
+      "memoryMi": 2048
+    },
+    "remainingCpuDeficitM": 105,
+    "method": "effective scheduler requests include max of app containers and init containers; node describe agrees"
+  },
+  "nextAction": {
+    "state": "awaiting user authorization",
+    "project": "rfc011-role-home",
+    "previewReleaseId": "01a0c12a-de27-7028-a0a3-b2f388671ed3",
+    "cpuM": 500,
+    "memoryMi": 512
+  },
+  "sourcePublication": {
+    "githubSourceSha": "0c266dbcce2711ee8f90ba79bb627f59478127ee",
+    "githubCI": {
+      "runId": 39261747195,
+      "status": "completed",
+      "conclusion": "success",
+      "successfulJobs": 49
+    },
+    "gitlabCommit": "93b4c6c1a4fc3b7b5a6623cebd6f1131cd3bb2f0",
+    "project": "rfc378-mindmap",
+    "method": "existing scripts/crewstation-publish.ts --no-release reads committed blobs from primary main",
+    "fileActions": 162,
+    "commits": 2,
+    "releaseRequested": false
+  }
+}
