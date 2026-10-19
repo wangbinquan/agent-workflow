@@ -488,7 +488,7 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
     body = (
       <div className="centralized-answer">
         <p className="muted" data-testid="centralized-answer-hint">
-          {t('taskQuestions.answerPaneHint')}
+          {t('mindmap.taskEntry.groupHint')}
         </p>
         {activeGroups.map((g) => (
           <RoundAnswerBlock

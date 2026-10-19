@@ -210,6 +210,11 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           expect(prompt).toContain('Neither option decides any other mechanism')
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
           expect(prompt).toContain('who operates a channel is a separate question')
+          expect(prompt).toContain('Time grid and minimum duration are separate')
+          expect(prompt).toContain(
+            'Compatible features, sources, criteria or review triggers: kind multi',
+          )
+          expect(prompt).toContain('no "only", "none" or "no extra collection" option')
           expect(prompt).toContain('Every question needs 2–4 options')
           expect(prompt).toContain(
             '"configuredCategoryPaths":[["Scope"],["Performance","Database","SQL"]]',

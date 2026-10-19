@@ -196,6 +196,9 @@ test('fresh mindmap round routes to its review flow without sealing saved answer
     true,
   )
   const open = await screen.findByTestId('centralized-open-mindmap-nr_a')
+  expect(screen.getByTestId('centralized-answer-hint').textContent).toContain(
+    'Answer ordinary rounds here, or open a mindmap round to continue there.',
+  )
   expect(screen.queryByRole('radio')).toBeNull()
   expect((screen.getByTestId('centralized-answer-submit') as HTMLButtonElement).disabled).toBe(true)
   fireEvent.click(open)

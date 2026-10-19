@@ -1,6 +1,6 @@
 ## 2026-10-18 RFC-378：脑图澄清主动思考与决定复核（In Progress）
 
-进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与独立功能门已完成，已批准自主验收与上库。候选 `c0b2091730a82177cb09efc7bb256c926586b5aa` 的第五轮实际单机 task `01M5AC9KPTAEJBHGRCPPRMAXAG` 于 `2026-10-19T15:39:38.121Z` done，原始最终文档保留九个答案、原话、三种成熟度、未知和 TBD，本样本 AC10 通过；AC09 仍有独立取舍混合。独立托管项目 `rfc378-mindmap` 的 v0.1.2 已启用，控制面无 OpenCode，task `01M5AC6EGVPWZXER0GY2QT6DDV` 初始远程生成成功，实际 deepseek-v4.1-flash；追问取消/刷新保留回答，再次追问因单独的 180 秒预算超时，观测还缺冻结 runtime registration。当前已收齐具体提问形式/简化最终指导、统一追问预算/冻结观测、任务页脑图入口修复及用例，待新候选 CI 和两形态集中复验。当前 CI 39274464447 尚未取得完整终态；已有生产 a550f5a3e、文档 19347b3be 与后继基线 0c266dbcce 的 49/49 success 保留，历史失败未抹除。按用户授权清理的旧任务卷、两个指定子执行与五个旧 RFC 预览均有物理回执，正式 AW、snake 父会话/卷/服务保留。详见 [实际原题、输出、界面与逐项对账](design/RFC-378-mindmap-decision-review/acceptance.md)，AC09、托管 AC05/AC12 未闭合前保持 In Progress。
+进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与独立功能门已完成，已批准自主验收和上库。`52122e76a` 已发布并在独立托管 v0.1.3 启用；控制面无 OpenCode，同一真实 task `01M5AC6EGVPWZXER0GY2QT6DDV` 的追问已在 600000ms 预算内成功追加三题，旧答案保留，最终结果继续验收。第五轮单机原始文档 AC10 通过；第六轮初始 AC09 仍有数值/功能套餐及多选排他项，具体修复和用例已收齐。旧 c0 CI 39274464447 为 47 success / 2 failure，trace 确认 Windows reviewer prompt 32770 字符造成 ENAMETOOLONG，未丢答案；本轮压缩重复指导并保留完整长文档回放。`52122e76a` CI 39281632773 尚待终态。正式 AW 和 snake 父会话/卷/服务保持，旧资源清理按授权且有回执。详见 [逐项验收与原始证据](design/RFC-378-mindmap-decision-review/acceptance.md)，内容质量、托管最终结果和精确 SHA CI 未闭合前保持 In Progress。
 
 ## 2026-10-17 RFC-294 后继 S3 / S4 / S8：RFC-375 / 376 / 377 Done
 

@@ -7,6 +7,7 @@ import {
   ClarifyQuestionSchema,
   CLARIFY_FORMAT_EXAMPLE,
   CLARIFY_STRUCTURAL_RULES,
+  CLARIFY_MINDMAP_QUESTION_GUIDANCE,
   buildClarifyProtocolBlock,
   buildMandatoryClarifyPreamble,
   buildOptionalDualProtocolBlock,
@@ -47,6 +48,12 @@ const answer: ClarifyAnswer = {
 }
 
 describe('RFC-378 optional decision contract', () => {
+  // CI 39274464447: expanded guidance pushed the real recorded review prompt
+  // beyond Windows argv limits (32,770 chars, ENAMETOOLONG). Keep this added
+  // instruction budget bounded; the recorded E2E retains the full long document.
+  test('question guidance leaves room for the existing long-document review', () => {
+    expect(CLARIFY_MINDMAP_QUESTION_GUIDANCE.length).toBeLessThan(2800)
+  })
   // Real acceptance still bundled compatible measures and missed categoryPath:
   // the generic preamble contradicted mindmap guidance, and its example omitted
   // the required metadata. Assert the whole composed prompt, not only its tail.
@@ -76,6 +83,17 @@ describe('RFC-378 optional decision contract', () => {
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
           expect(prompt).toContain('who operates a channel is a separate question')
           expect(prompt).toContain('Each description is ONE short sentence')
+          expect(prompt).toContain('Time grid and minimum duration are separate')
+          expect(prompt).toContain(
+            'Compatible features, sources, criteria or review triggers: kind multi',
+          )
+          expect(prompt).toContain('no "only", "none" or "no extra collection" option')
+          expect(prompt).toContain(
+            'never single-choice "basic / basic plus X / basic plus Y" packages',
+          )
+          expect(prompt).toContain(
+            'Never invent a baseline, main pain point, existing system or automatic data collection',
+          )
           expect(prompt).toContain(
             'Success criteria, rollout scope and validation ownership are separate axes',
           )

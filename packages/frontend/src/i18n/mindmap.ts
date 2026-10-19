@@ -1,5 +1,6 @@
 export const mindmapZh = {
   taskEntry: {
+    groupHint: '按轮次处理待指派的问题。普通问答可在此填写后提交；脑图轮次请打开脑图继续。',
     open: '打开脑图，逐项澄清与复核',
     hint: '这轮使用脑图澄清。已有回答会保留，你可以继续追问、补充取舍，并在生成结果前复核决定。',
   },
@@ -153,6 +154,8 @@ export const mindmapZh = {
 }
 export const mindmapEn: typeof mindmapZh = {
   taskEntry: {
+    groupHint:
+      'Handle pending questions by round. Answer ordinary rounds here, or open a mindmap round to continue there.',
     open: 'Open mindmap to clarify and review',
     hint: 'This round uses mindmap clarification. Your answers are preserved so you can ask follow-ups, explain tradeoffs, and review decisions before generating the result.',
   },
