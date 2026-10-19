@@ -53,7 +53,9 @@ export async function runRecordedDirectionsScenario(
   if (
     fixture.configuredCategoryPaths &&
     !readScenarioAnswers(prompt).size &&
-    (!prompt.includes('multi-level categoryPath') || !prompt.includes('Empty notes do not disable'))
+    (!prompt.includes('non-empty mindmap.categoryPath array') ||
+      !prompt.includes('Preserve configured names/ancestry') ||
+      !prompt.includes('Empty focus notes keep these defaults'))
   )
     throw new Error('Missing built-in question guidance with empty business notes')
   if (prompt.startsWith('Ask 1–4 consequential follow-up questions')) {

@@ -1,6 +1,47 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import recording from '../src/runtime/fixtures/rfc372-real-directions.json'
-import { requireDirectionAnswers } from '../src/runtime/recordedDirectionsScenario'
+import hierarchy from '../src/runtime/fixtures/rfc372-real-hierarchy.json'
+import {
+  requireDirectionAnswers,
+  runRecordedDirectionsScenario,
+} from '../src/runtime/recordedDirectionsScenario'
+
+// RFC-378 shortened the shared guidance. Replay must accept that contract while
+// still rejecting missing defaults and lost configured category ancestry.
+test('hierarchy replay keeps empty-note defaults and configured ancestry checks', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'aw-recorded-directions-'))
+  const output = spyOn(process.stdout, 'write').mockReturnValue(true)
+  const required = [
+    'Every question requires a non-empty mindmap.categoryPath array in the user language.',
+    'Preserve configured names/ancestry and literal slashes.',
+    'Empty focus notes keep these defaults.',
+  ]
+  const prompt = [
+    ...required,
+    ...hierarchy.configuredCategoryPaths.map((path) => JSON.stringify(path)),
+    '<workflow-clarify nonce="recorded-hierarchy">',
+  ].join('\n')
+  try {
+    await expect(runRecordedDirectionsScenario(prompt, dir, hierarchy)).resolves.toBeUndefined()
+    expect(output).toHaveBeenCalled()
+    for (const rule of required) {
+      await expect(
+        runRecordedDirectionsScenario(prompt.replace(rule, ''), dir, hierarchy),
+      ).rejects.toThrow('Missing built-in question guidance with empty business notes')
+    }
+    for (const path of hierarchy.configuredCategoryPaths) {
+      await expect(
+        runRecordedDirectionsScenario(prompt.replace(JSON.stringify(path), ''), dir, hierarchy),
+      ).rejects.toThrow('Initial questions lost configured category ancestry')
+    }
+  } finally {
+    output.mockRestore()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 test('recorded category directions require every confirmed answer in the final resume', () => {
   const prompt = recording.questions

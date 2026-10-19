@@ -1,0 +1,255 @@
+{
+  "oldWorkloadsRemaining": [],
+  "preserved": [
+    {
+      "namespace": "cs-agent-workflow",
+      "name": "agent-workflow-blue-68f8bdcc4-q9q4w",
+      "uid": "a3e90f47-a84d-45b3-880d-6d8d92352949",
+      "phase": "Running",
+      "ready": true
+    },
+    {
+      "namespace": "cs-agent-workflow",
+      "name": "agent-workflow-green-67d7674488-6jvjj",
+      "uid": "f0e90d22-8e1e-41a2-bbc3-dd4f8b0db5c2",
+      "phase": "Running",
+      "ready": true
+    },
+    {
+      "namespace": "cs-agent-workflow",
+      "name": "task-01a151b9e4cb7000bd9367caf841aa33-s2",
+      "uid": "1753f7b6-f99a-489c-89b0-87febf9c4a47",
+      "phase": "Running",
+      "ready": true
+    },
+    {
+      "namespace": "cs-agent-workflow",
+      "name": "task-01a151e4249870009e5e374638a75e89-s2",
+      "uid": "7f138a75-edfa-43be-a14a-0ce993bb7d37",
+      "phase": "Running",
+      "ready": true
+    },
+    {
+      "namespace": "cs-snake-bot-20261014",
+      "name": "snake-bot-20261014-green-dc5494fcd-82h4w",
+      "uid": "c46b9412-3f4b-4b7e-bc42-439b03f372a5",
+      "phase": "Running",
+      "ready": true
+    },
+    {
+      "namespace": "cs-snake-bot-20261014",
+      "name": "task-01a13edff8007000a46de38c341e2a1f",
+      "uid": "0ccaa08e-31f4-4081-8a68-225d41e1b3d8",
+      "phase": "Running",
+      "ready": true
+    }
+  ],
+  "own": [
+    {
+      "name": "build-01a154f85dcb700092ef64c4446a0455-xjgwk",
+      "phase": "Running",
+      "conditions": [
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:33Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodReadyToStartContainers"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:32Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Initialized"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:33Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Ready"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:33Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "ContainersReady"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:32Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodScheduled"
+        }
+      ]
+    },
+    {
+      "name": "rfc378-mindmap-blue-f76874777-gq5r4",
+      "phase": "Running",
+      "conditions": [
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T15:59:47Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodReadyToStartContainers"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T15:59:47Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Initialized"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:01:20Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Ready"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:01:20Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "ContainersReady"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T15:59:47Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodScheduled"
+        }
+      ]
+    },
+    {
+      "name": "sub-01a154f7fd1a7002af8f3e43c6ff2dce",
+      "phase": "Running",
+      "conditions": [
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:37Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodReadyToStartContainers"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:42Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Initialized"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:42Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Ready"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:42Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "ContainersReady"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:37:36Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodScheduled"
+        }
+      ]
+    },
+    {
+      "name": "task-01a154c33cab70009d2c2b925b0e4ba6-s2",
+      "phase": "Running",
+      "conditions": [
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:21:25Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodReadyToStartContainers"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:21:31Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Initialized"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:21:31Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Ready"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:21:31Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "ContainersReady"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:21:25Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodScheduled"
+        }
+      ]
+    },
+    {
+      "name": "task-01a154e9077e7000876b6bea964ed2f5",
+      "phase": "Running",
+      "conditions": [
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:05:27Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodReadyToStartContainers"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:06:35Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Initialized"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:06:35Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "Ready"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:06:35Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "ContainersReady"
+        },
+        {
+          "lastProbeTime": null,
+          "lastTransitionTime": "2026-10-19T16:05:27Z",
+          "observedGeneration": 1,
+          "status": "True",
+          "type": "PodScheduled"
+        }
+      ]
+    }
+  ],
+  "observedAt": "2026-10-19T16:37:57Z"
+}

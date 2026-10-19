@@ -212,6 +212,7 @@ test('opening a mindmap waits for the mixed ordinary round draft to persist', as
   vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
   const write = vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockReturnValue(saved.promise)
   const post = vi.spyOn(api, 'post').mockResolvedValue({})
+  const put = vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
   const view = renderDialog(
     [entry({ originNodeRunId: 'nr_plain' }), entry({ originNodeRunId: 'nr_map' })],
     [
@@ -233,6 +234,14 @@ test('opening a mindmap waits for the mixed ordinary round draft to persist', as
   expect(await screen.findByTestId('mindmap-destination')).toBeTruthy()
   expect(view.router?.state.location.pathname).toBe('/clarify/nr_map')
   expect(post).not.toHaveBeenCalled()
+  // Draft sync deliberately survives navigation. Drain this round's queued PUT
+  // before restoring mocks, so it cannot escape into a shuffled neighbour.
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/clarify/nr_plain/draft',
+      expect.objectContaining({ questionId: 'q1', selectedOptionIndices: [0] }),
+    ),
+  )
 })
 
 test('sealed mindmap re-answers retain the existing editable control channel and decision notes', async () => {
@@ -266,6 +275,7 @@ test('sealed mindmap re-answers retain the existing editable control channel and
 test('failed draft persistence keeps the mixed dialog open instead of navigating to the mindmap', async () => {
   vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
   vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockRejectedValue(new Error('draft unavailable'))
+  const put = vi.spyOn(api, 'put').mockResolvedValue(undefined as never)
   renderDialog(
     [entry({ originNodeRunId: 'nr_plain' }), entry({ originNodeRunId: 'nr_map' })],
     [
@@ -283,6 +293,13 @@ test('failed draft persistence keeps the mixed dialog open instead of navigating
   fireEvent.click(screen.getByTestId('centralized-open-mindmap-nr_map'))
   expect(await screen.findByTestId('centralized-draft-close-error')).toBeTruthy()
   expect(screen.queryByTestId('mindmap-destination')).toBeNull()
+  // Server sync is independent of the rejected local write and must settle here.
+  await waitFor(() =>
+    expect(put).toHaveBeenCalledWith(
+      '/api/clarify/nr_plain/draft',
+      expect.objectContaining({ questionId: 'q1', selectedOptionIndices: [0] }),
+    ),
+  )
 })
 
 function deferred<T>() {
