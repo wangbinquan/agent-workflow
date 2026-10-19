@@ -1010,6 +1010,35 @@ export function buildMandatoryClarifyPreamble(mindmap = false): string {
  *  parameterized by the per-run nonce; the OPEN tag carries it so the parser
  *  only accepts this run's clarify envelope. Absent nonce → bare (legacy). */
 export function clarifyFormatExample(nonce?: string, mindmap = false): string {
+  if (mindmap)
+    return `Format:
+Concrete examples of independent choices. Adapt the topic and language to the task; do not copy these questions.
+${clarifyOpenTag(nonce)}
+{
+  "questions": [
+    {
+      "id": "reminder",
+      "title": "是否启用到期提醒？",
+      "mindmap": {"categoryPath": ["提醒"]},
+      "kind": "single",
+      "options": [
+        {"label": "启用到期提醒", "description": "可能减少遗漏，但会打扰；渠道和时机另定。", "recommended": true, "recommendationReason": "若遗漏会造成明显损失，且你愿意承担提醒打扰，可考虑启用。"},
+        {"label": "不启用到期提醒", "description": "避免提醒打扰，但遗漏风险可能保留；其他措施未定。"}
+      ]
+    },
+    {
+      "id": "evidence",
+      "title": "用哪些信息检查效果？",
+      "mindmap": {"categoryPath": ["验证"]},
+      "kind": "multi",
+      "options": [
+        {"label": "已有记录（如有）", "description": "可能提供历史线索，但可用性与覆盖范围需核实。"},
+        {"label": "新增抽样观察", "description": "可能补充当前线索，但需投入时间，不能代表整个时段。"}
+      ]
+    }
+  ]
+}
+</workflow-clarify>`
   return `Format:
 ${clarifyOpenTag(nonce)}
 {
@@ -1017,13 +1046,13 @@ ${clarifyOpenTag(nonce)}
     {
       "id": "<stable-id>",
       "title": "<question text>",
-${mindmap ? '      "mindmap": {"categoryPath": ["<meaningful category>"]},\n' : ''}      "kind": "single" | "multi",
+      "kind": "single" | "multi",
       "options": [
         {
           "label": "<picker text>",
-          "description": "${mindmap ? '<possible benefit and cost of only this choice; other mechanisms remain undecided>' : '<what this option does / expected outcome / trade-offs>'}",
+          "description": "<what this option does / expected outcome / trade-offs>",
           "recommended": true | false,
-          "recommendationReason": "${mindmap ? '<specific assumption and accepted cost; omit when unsupported>' : '<why the user should pick this one>'}"
+          "recommendationReason": "<why the user should pick this one>"
         }
       ]
     }

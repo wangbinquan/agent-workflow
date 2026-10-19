@@ -1,0 +1,180 @@
+{
+  "id": "01M5AKYGYT3VH87B9KDW9CSCDV:round",
+  "taskId": "01M5AKK5ZZ8CYS6BDGKPPXXEJH",
+  "kind": "self",
+  "terminatedAs": null,
+  "askingNodeId": "starter_clarifier",
+  "askingNodeRunId": "01M5AKPKC8PQF9538ZBH2WAVP0",
+  "askingShardKey": null,
+  "intermediaryNodeId": "starter_clarify",
+  "intermediaryNodeRunId": "01M5AKYGYT3VH87B9KDW9CSCDV",
+  "intermediaryNodeTitle": "复核决定",
+  "targetConsumerNodeId": null,
+  "loopIter": 0,
+  "iteration": 0,
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["分配规则"]
+      },
+      "id": "allocation-rule",
+      "title": "3 间会议室在热门时段被同时争抢时，第一版按什么规则决定归谁？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先到先得（提交成功即锁定）",
+          "description": "实现最简单、规则透明，但手快的人可能长期占住热门时段，也无法体现业务优先级。",
+          "recommended": true,
+          "recommendationReason": "假设团队目前没有成文的优先级或审批制度，且两周内要先跑通预约闭环；接受的代价是公平性依赖手速，不能盯表的人处于劣势。"
+        },
+        {
+          "label": "管理员审批（按用途人工裁定）",
+          "description": "能体现优先级与例外，但每次预约都要人工介入，还需先指定审批人和响应时限。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "部门或角色配额（按组分配时段额度）",
+          "description": "能抑制少数人长期占用，但需要先有分组与额度依据，当前没有任何使用数据可支撑。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "优先级标签加先到先得（高优先级可覆盖）",
+          "description": "兼顾效率与紧急需求，但覆盖规则容易引发争议，需明确谁有权打优先级标签。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["交付载体"]
+      },
+      "id": "delivery-surface",
+      "title": "第一版的预约入口放在哪里？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "复用团队现有日历或办公套件（若已具备）",
+          "description": "上手成本低、不新增入口，但受现有日历的权限、提醒和冲突规则限制。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "独立轻量预约页（自建）",
+          "description": "规则与冲突拦截完全可控，但账号、提醒和两周内的开发量都要自己承担。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "现有日历加轻量预约页组合",
+          "description": "兼顾日常查看与规则控制，但两处数据需同步，集成与一致性成本最高。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["冲突处理"]
+      },
+      "id": "conflict-handling",
+      "title": "同一时段已被预约时，第一版对后来者怎么处理？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "硬性阻止，只能另选时段",
+          "description": "规则清晰、不会重复占用，但高峰时段可能直接把人挡在外面，缺少缓冲。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "允许加入候补队列，有人退出时递补",
+          "description": "可能提高时段利用率，但需定义候补顺序与通知时限，开发和运营负担都会增加。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "允许超额预约并提示冲突",
+          "description": "保留灵活性，但实际到场可能撞车，冲突处理转嫁给使用者自行协调。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约管理"]
+      },
+      "id": "no-show-scope",
+      "title": "第一版是否纳入「爽约或未到场自动释放」机制？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "纳入：启用签到或到场确认后自动释放",
+          "description": "可能减少占而不用，但需要签到入口与判定时限，误释放会打断正常会议。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不纳入：第一版只做预约与冲突拦截",
+          "description": "避免误动作与额外流程，但占而不用的情况可能仍在，其他处理方式未定。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约参数"]
+      },
+      "id": "max-duration",
+      "title": "单次预约的最长时长设为多少？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "1 小时",
+          "description": "时段流转最快，但长会或评审需反复续订，可能制造碎片化占用。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "2 小时",
+          "description": "覆盖多数讨论场景，但半天工作坊需拆分或特殊处理。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "4 小时",
+          "description": "能容纳半天集中工作，但单条预约占用大，热门时段更难排出。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不设上限",
+          "description": "规则最少、无需额外解释，但缺少抑制长占的手段，公平性依赖自觉。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "interactionMode": "mindmap",
+  "directive": null,
+  "status": "awaiting_human",
+  "sessionMode": null,
+  "designerRunTriggeredAt": null,
+  "abandonedAt": null,
+  "createdAt": 1792431571930,
+  "answeredAt": null,
+  "answeredBy": null,
+  "submittedByRole": null,
+  "answerAttributions": null,
+  "draftAnswers": null
+}

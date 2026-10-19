@@ -17,6 +17,7 @@ import {
   clarifyFollowupContext,
   isClarifyAnswerConfirmed,
   normalizeClarifyDecision,
+  parseClarifyEnvelopeBody,
   renderFlatClarifyQueue,
   renderUserPrompt,
   summariseClarifyAnswer,
@@ -54,6 +55,38 @@ describe('RFC-378 optional decision contract', () => {
   test('question guidance leaves room for the existing long-document review', () => {
     expect(CLARIFY_MINDMAP_QUESTION_GUIDANCE.length).toBeLessThan(2800)
   })
+  // The tenth real model sample still bundled detection and enforcement despite
+  // abstract instructions. The production example now demonstrates actual valid
+  // independent alternatives and a compatible multi-select, rather than a
+  // one-option pseudo-JSON template. Validate the literal example we send.
+  test('mindmap examples parse as independent single and compatible multi questions', () => {
+    for (const nonce of [undefined, 'test-nonce']) {
+      const example = clarifyFormatExample(nonce, true)
+      const body = example.slice(
+        example.indexOf('>\n') + 2,
+        example.lastIndexOf('</workflow-clarify>'),
+      )
+      const result = parseClarifyEnvelopeBody(body, { mindmap: true })
+      expect(result.errors).toEqual([])
+      expect(result.warnings).toEqual([])
+      const questions = result.body!.questions
+      expect(questions.map((question) => question.kind)).toEqual(['single', 'multi'])
+      expect(questions.map((question) => question.options.length)).toEqual([2, 2])
+      expect(questions.every((question) => question.mindmap?.categoryPath.length === 1)).toBe(true)
+      expect(questions[0]!.options.map((option) => option.label)).toEqual([
+        '启用到期提醒',
+        '不启用到期提醒',
+      ])
+      expect(questions[0]!.options[0]!.description).toContain('渠道和时机另定')
+      expect(questions[0]!.options[1]!.description).toContain('其他措施未定')
+      expect(questions[1]!.options[0]!.label).toContain('如有')
+      expect(questions[1]!.options[1]!.description).toContain('不能代表整个时段')
+      const added = CLARIFY_MINDMAP_QUESTION_GUIDANCE + example
+      // Quotes also expand in the Windows command line; the concrete examples
+      // must fit the old combined guidance/example budget, not merely each part.
+      expect(added.length + (added.match(/"/g)?.length ?? 0)).toBeLessThan(3350)
+    }
+  })
   // Real acceptance still bundled compatible measures and missed categoryPath:
   // the generic preamble contradicted mindmap guidance, and its example omitted
   // the required metadata. Assert the whole composed prompt, not only its tail.
@@ -78,7 +111,7 @@ describe('RFC-378 optional decision contract', () => {
           expect(prompt).not.toContain('The moment you catch yourself hedging')
           expect(prompt).toContain('naming ONE variable in its title')
           expect(prompt).toContain('Audit the full options, including descriptions')
-          expect(prompt).toContain('exactly two options "Enable <that mechanism>"')
+          expect(prompt).toContain('two opposite options: enable / do not enable')
           expect(prompt).toContain('Neither option decides any other mechanism')
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
           expect(prompt).toContain('who operates a channel is a separate question')
@@ -92,19 +125,13 @@ describe('RFC-378 optional decision contract', () => {
             'Each set concerns ONE axis: features OR data sources OR triggers',
           )
           expect(prompt).toContain('Pilot size is rollout scope, not evidence')
-          expect(prompt).toContain('or imply "only manual handling"')
-          expect(prompt).toContain('避免误动作，但原风险可能仍在；其他处理方式未定。')
-          expect(prompt).toContain('具体判定来源、阈值另选。')
-          expect(prompt).toContain(
-            'Detection does not require sign-in: its signal is a separate choice',
-          )
-          expect(prompt).toContain('Start with 2–3 highest-impact unresolved decisions')
-          expect(prompt).toContain('Allocation order and approval are separate')
+          expect(prompt).toContain('Detection signal and threshold remain undecided')
+          expect(prompt).toContain('Ask ONLY 2–3 highest-impact unresolved decisions')
+          expect(prompt).toContain('Allocation order, quotas and approval are independent')
+          expect(prompt).toContain('does selecting one leave all other variables undecided?')
           expect(prompt).toContain('otherwise use one category level')
           expect(prompt).not.toContain('"categoryPath":["Category","Subcategory"]')
-          expect(prompt).toContain(
-            'never single-choice "basic / basic plus X / basic plus Y" packages',
-          )
+          expect(prompt).toContain('Never exclusive feature bundles')
           expect(prompt).toContain(
             'Never invent a baseline, main pain point, existing system or automatic data collection',
           )
@@ -125,9 +152,12 @@ describe('RFC-378 optional decision contract', () => {
               prompt.indexOf('</workflow-clarify>'),
             )
             expect(example).toContain('<workflow-clarify nonce="test-nonce">')
-            expect(example).toContain('"mindmap": {"categoryPath": ["<meaningful category>"]}')
-            expect(example).toContain('other mechanisms remain undecided')
-            expect(example).toContain('specific assumption and accepted cost')
+            expect(example).toContain('"kind": "single"')
+            expect(example).toContain('"kind": "multi"')
+            expect(example).toContain('渠道和时机另定')
+            expect(example).toContain('其他措施未定')
+            expect(example).toContain('已有记录（如有）')
+            expect(example).toContain('若遗漏会造成明显损失')
             expect(example).not.toContain('why the user should pick this one')
             expect(prompt).toContain('Confirmed answers may still be provisional or unmarked')
             if (directive === 'mandatory') {

@@ -204,18 +204,17 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           // triggers into single-choice. The application used to exemplify
           // only "kind":"single"; both kinds and structured tradeoffs must
           // reach the actual generator, for both self and cross rounds.
-          expect(prompt).toContain('"kind": "single" | "multi"')
+          expect(prompt).toContain('"kind": "single"')
+          expect(prompt).toContain('"kind": "multi"')
           expect(prompt).toContain('"recommendationReason"')
           expect(prompt).toContain('Do not manufacture exclusivity')
           expect(prompt).toContain('Neither option decides any other mechanism')
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
-          expect(prompt).toContain('避免误动作，但原风险可能仍在；其他处理方式未定。')
-          expect(prompt).toContain('具体判定来源、阈值另选。')
-          expect(prompt).toContain(
-            'Detection does not require sign-in: its signal is a separate choice',
-          )
-          expect(prompt).toContain('other mechanisms remain undecided')
-          expect(prompt).toContain('specific assumption and accepted cost')
+          expect(prompt).toContain('Detection signal and threshold remain undecided')
+          expect(prompt).toContain('渠道和时机另定')
+          expect(prompt).toContain('其他措施未定')
+          expect(prompt).toContain('已有记录（如有）')
+          expect(prompt).toContain('若遗漏会造成明显损失')
           expect(prompt).toContain('otherwise use one category level')
           expect(prompt).toContain('who operates a channel is a separate question')
           expect(prompt).toContain('Time grid and minimum duration are separate')
