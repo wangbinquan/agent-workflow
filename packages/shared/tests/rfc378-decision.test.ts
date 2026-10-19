@@ -5,6 +5,12 @@ import {
   ClarifyDraftSaveBodySchema,
   ClarifyDraftValueSchema,
   ClarifyQuestionSchema,
+  CLARIFY_FORMAT_EXAMPLE,
+  CLARIFY_STRUCTURAL_RULES,
+  buildClarifyProtocolBlock,
+  buildMandatoryClarifyPreamble,
+  buildOptionalDualProtocolBlock,
+  clarifyFormatExample,
   clarifyAnswerBasis,
   clarifyContentKey,
   clarifyFollowupContext,
@@ -40,6 +46,73 @@ const answer: ClarifyAnswer = {
 }
 
 describe('RFC-378 optional decision contract', () => {
+  // Real acceptance still bundled compatible measures and missed categoryPath:
+  // the generic preamble contradicted mindmap guidance, and its example omitted
+  // the required metadata. Assert the whole composed prompt, not only its tail.
+  test('mindmap mandatory/optional self/cross prompts have consistent examples and maturity rules', () => {
+    for (const kind of ['self', 'cross'] as const) {
+      for (const directive of ['mandatory', 'optional'] as const) {
+        for (const mode of ['isolated', 'inline'] as const) {
+          const prompt = renderUserPrompt({
+            promptTemplate: 'Clarify the requirement',
+            inputs: {},
+            meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
+            agentOutputs: ['result'],
+            envelopeNonce: 'test-nonce',
+            clarifyChannel: { kind, directive, injectStopNotice: false },
+            clarifyContext: { mode },
+            clarifyMindmap: { categories: [], instructions: '' },
+          })
+          expect(prompt).not.toContain('Batch closely-related points into one question')
+          expect(prompt).not.toContain('Treat every listed answer as an already-resolved decision')
+          expect(prompt).toContain(
+            'Success criteria, rollout scope and validation ownership are separate axes',
+          )
+          expect(prompt).toContain('Separate evidence collection from enforcement')
+          expect(prompt).toContain(
+            'Preserve explicit decided/provisional status and unmarked maturity',
+          )
+          if (mode === 'isolated') {
+            const example = prompt.slice(
+              prompt.indexOf('Format:'),
+              prompt.indexOf('</workflow-clarify>'),
+            )
+            expect(example).toContain('<workflow-clarify nonce="test-nonce">')
+            expect(example).toContain('"mindmap": {"categoryPath": ["<meaningful category>"]}')
+            expect(prompt).toContain('Confirmed answers may still be provisional or unmarked')
+            if (directive === 'mandatory') {
+              expect(prompt).toContain('never combine separate decisions to fit the limit')
+              expect(prompt).not.toContain('<port name="result">')
+            } else {
+              expect(prompt).toContain('Option B — finalize')
+              expect(prompt).toContain('<port name="result">')
+            }
+          }
+        }
+      }
+    }
+  })
+  test('ordinary clarify builder defaults retain their legacy example and rules', () => {
+    expect(buildMandatoryClarifyPreamble()).toBe(buildMandatoryClarifyPreamble(false))
+    expect(buildMandatoryClarifyPreamble()).toContain(
+      'Batch closely-related points into one question',
+    )
+    expect(CLARIFY_FORMAT_EXAMPLE).toBe(clarifyFormatExample(undefined, false))
+    expect(CLARIFY_FORMAT_EXAMPLE).not.toContain('mindmap')
+    for (const nonce of [undefined, 'test-nonce']) {
+      const mandatory = buildClarifyProtocolBlock(nonce)
+      expect(mandatory).toBe(buildClarifyProtocolBlock(nonce, false))
+      const optional = buildOptionalDualProtocolBlock(['result'], undefined, nonce)
+      expect(optional).toBe(
+        buildOptionalDualProtocolBlock(['result'], undefined, nonce, undefined, false),
+      )
+      for (const protocol of [mandatory, optional]) {
+        expect(protocol).toContain(CLARIFY_STRUCTURAL_RULES)
+        expect(protocol).toContain('Treat every listed answer as an already-resolved decision')
+        expect(protocol).not.toContain('categoryPath')
+      }
+    }
+  })
   // Real acceptance exposed compatible measures rendered as exclusive choices
   // and positional option labels broken by recommendation-first presentation.
   test('initial self/cross questions carry independent-option and evidence constraints', () => {

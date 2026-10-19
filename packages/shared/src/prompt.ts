@@ -755,11 +755,12 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // RFC-200 (T2): the per-run nonce scopes every emitted envelope open tag.
   // Absent (legacy / pre-RFC-200 run) → the emit helpers render bare tags, so
   // this whole block stays byte-identical to before.
+  const mindmap = input.clarifyMindmap !== undefined
   let trailing: string
   if (mandatoryAskBack) {
     trailing = inlineMode
       ? buildClarifyInlineReminder(nonce)
-      : buildMandatoryClarifyPreamble() + buildClarifyProtocolBlock(nonce)
+      : buildMandatoryClarifyPreamble(mindmap) + buildClarifyProtocolBlock(nonce, mindmap)
   } else if (optionalAskBack) {
     // RFC-165 (F12): optional ask-back — the agent sees BOTH envelope
     // formats and picks one. Inline (post-answer / same-session) rounds get
@@ -773,6 +774,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
           input.agentOutputKinds,
           nonce,
           input.agentBranchPorts,
+          mindmap,
         )
   } else if (input.workgroupProtocolBlock !== undefined) {
     // RFC-164: workgroup runs replace (never extend) the agent-outputs block.
@@ -970,13 +972,17 @@ export function buildProtocolBlock(
  * the product contract for "no assumptions until the human has given every
  * detail", so changing it is a behavioural change, not a cosmetic one.
  */
-export function buildMandatoryClarifyPreamble(): string {
+export function buildMandatoryClarifyPreamble(mindmap = false): string {
   return (
     '\n\n---\n' +
     '**This node is in MANDATORY ASK-BACK (clarify) mode.** The user wired a clarify channel because they require you to interrogate intent BEFORE doing any work. Your ONLY valid reply this round is a `<workflow-clarify>` envelope (format below). You may NOT emit `<workflow-output>` — the framework will reject it and re-prompt you. You are released to produce final output only after the user clicks "Stop clarifying".\n\n' +
     'Operate with ZERO guessing. Treat every unstated detail as a blocker you resolve by asking, never by assuming.\n' +
     '- **Investigate first, then ask.** Read the inputs, the repository, referenced files, and every prior-round answer; use any skills and tools available to resolve what you can on your own — never spend a question on something you could determine yourself.\n' +
-    '- **Ask the consequential things, in priority order.** Lead with the decisions that most change the outcome (naming, data shapes, API / contracts, UX behavior, scope boundaries, acceptance criteria, risky edge cases). Batch closely-related points into one question. Do NOT pad with low-stakes "just confirming…" questions — depth over breadth.\n' +
+    '- **Ask the consequential things, in priority order.** Lead with the decisions that most change the outcome (naming, data shapes, API / contracts, UX behavior, scope boundaries, acceptance criteria, risky edge cases). ' +
+    (mindmap
+      ? 'Group related questions by category, but ask one independently decidable tradeoff per question. Prioritize within the question limit and defer other decisions to later rounds; never combine separate decisions to fit the limit. '
+      : 'Batch closely-related points into one question. ') +
+    'Do NOT pad with low-stakes "just confirming…" questions — depth over breadth.\n' +
     '- **Pin down every detail that actually matters before acting.** Do not begin the deliverable until each decision needed to do it correctly is settled by the human. "Mostly clear" is not clear enough.\n' +
     '- **Never guess unfamiliar terms.** Any proprietary term, acronym, internal system / file / convention you do not fully understand — you MUST ask what it means; never infer or invent a meaning.\n' +
     '- **No assumptions, no fabrication, no silent defaults.** The moment you catch yourself hedging, writing "TBD", inventing a constraint the inputs didn\'t state, or choosing between plausible alternatives without a stated preference — stop and turn it into a question instead.\n' +
@@ -997,7 +1003,7 @@ export function buildMandatoryClarifyPreamble(): string {
  *  optional protocol blocks so the two renderings can never drift). RFC-200:
  *  parameterized by the per-run nonce; the OPEN tag carries it so the parser
  *  only accepts this run's clarify envelope. Absent nonce → bare (legacy). */
-export function clarifyFormatExample(nonce?: string): string {
+export function clarifyFormatExample(nonce?: string, mindmap = false): string {
   return `Format:
 ${clarifyOpenTag(nonce)}
 {
@@ -1005,7 +1011,7 @@ ${clarifyOpenTag(nonce)}
     {
       "id": "<stable-id>",
       "title": "<question text>",
-      "kind": "single" | "multi",
+${mindmap ? '      "mindmap": {"categoryPath": ["<meaningful category>"]},\n' : ''}      "kind": "single" | "multi",
       "options": [
         {
           "label": "<picker text>",
@@ -1026,13 +1032,17 @@ export const CLARIFY_FORMAT_EXAMPLE = clarifyFormatExample()
 
 /** RFC-023 — the structural clarify rules shared by both directive modes
  *  (question/option caps, labels, legacy form, Q&A echo semantics). */
-export const CLARIFY_STRUCTURAL_RULES = `- Limits: at most 5 questions, each question 2–4 options — any option beyond the 4th is silently dropped, so cap each question at 4. Do NOT add a "free text / other" option — the framework appends a user-input row automatically.
+function buildClarifyStructuralRules(mindmap = false): string {
+  return `- Limits: at most 5 questions, each question 2–4 options — any option beyond the 4th is silently dropped, so cap each question at 4. Do NOT add a "free text / other" option — the framework appends a user-input row automatically.
 - Each option needs a non-empty "label". The other three fields are optional but strongly recommended: "description" (always render an explanation of what picking this option means), and — when "recommended" is true — "recommendationReason" (why this is your pick).
 - Mark at most a couple of options across the whole envelope as "recommended": true. Recommended options sort to the top of the picker for the user.
 - Legacy form is also accepted: \`"options": ["a", "b", "c"]\` — strings are lifted into \`{label, description:"", recommended:false, recommendationReason:""}\`. Prefer the structured form for new emissions.
-- Once the user submits answers, you will receive every question answered so far in the next prompt under "## Clarify Q&A" — a single flat list where each question is an equal peer with the user's answer (a deterministic synthesis line). Treat every listed answer as an already-resolved decision.`
+- Once the user submits answers, you will receive every question answered so far in the next prompt under "## Clarify Q&A" — a single flat list where each question is an equal peer with the user's answer (a deterministic synthesis line). ${mindmap ? 'Respect each current user choice and its explicit decision maturity. Confirmed answers may still be provisional or unmarked; do not treat them as settled or validated facts. Follow up on unresolved evidence or consequences without silently changing the user choice.' : 'Treat every listed answer as an already-resolved decision.'}`
+}
 
-export function buildClarifyProtocolBlock(nonce?: string): string {
+export const CLARIFY_STRUCTURAL_RULES = buildClarifyStructuralRules()
+
+export function buildClarifyProtocolBlock(nonce?: string, mindmap = false): string {
   const nonceNote =
     nonce !== undefined && nonce.length > 0
       ? ` Copy the \`nonce="${nonce}"\` attribute EXACTLY onto your \`<workflow-clarify>\` tag; the framework ignores a clarify envelope that lacks it.`
@@ -1042,10 +1052,10 @@ export function buildClarifyProtocolBlock(nonce?: string): string {
     '**Clarify format.** Emit exactly one <workflow-clarify> block and nothing else — no <workflow-output> anywhere in the reply. Asking back is the expected outcome of this round.' +
     nonceNote +
     '\n\n' +
-    clarifyFormatExample(nonce) +
+    clarifyFormatExample(nonce, mindmap) +
     '\n\nHard rules — violation is treated as a malformed reply and the node will fail / retry:\n' +
     '- Your reply MUST contain exactly one <workflow-clarify> block and NO <workflow-output> — emitting <workflow-output> is rejected until the user stops clarifying. Defer all output ports to a later round; do not output partial data.\n' +
-    CLARIFY_STRUCTURAL_RULES
+    buildClarifyStructuralRules(mindmap)
   )
 }
 
@@ -1120,15 +1130,16 @@ export function buildOptionalDualProtocolBlock(
    * close a branch at all, and would have to invent the syntax to try.
    */
   branchPorts?: readonly string[],
+  mindmap = false,
 ): string {
   const optionA =
     `\n\n---\n` +
     '**Option A — ask the user (reply with ONE `<workflow-clarify>` block and nothing else).**\n\n' +
-    clarifyFormatExample(nonce) +
+    clarifyFormatExample(nonce, mindmap) +
     '\n\n' +
     'Rules if you choose Option A — violation is treated as a malformed reply:\n' +
     '- The reply must contain exactly one <workflow-clarify> block and NO <workflow-output> — you finalize in a LATER round, after the user answers.\n' +
-    CLARIFY_STRUCTURAL_RULES
+    buildClarifyStructuralRules(mindmap)
 
   // RFC-200: the heads reference the nonced output tag so the head-swap still
   // matches buildProtocolBlock's (now nonced) instruction line. Nonce absent →

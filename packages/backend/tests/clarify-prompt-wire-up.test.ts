@@ -92,7 +92,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     // RFC-200 threads the per-run envelope nonce through the mandatory clarify
     // protocol instead of rendering the historical bare-tag block.
     expect(src).toContain('const nonce = input.envelopeNonce')
-    expect(src).toContain('buildClarifyProtocolBlock(nonce)')
+    expect(src).toContain('buildClarifyProtocolBlock(nonce, mindmap)')
     // RFC-100: the clarify-active path mounts the mandatory ask-back preamble +
     // clarify format, gated on the clarifyChannel ADT's mandatory projection
     // (RFC-148 — was `hasClarifyChannel === true`). The bi-modal
@@ -100,7 +100,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     // while clarify is active the agent is given NO `<workflow-output>` format.
     // RFC-183: the projection routes through the shared clarifyDispositionFor
     // classifier (the runner consumes the SAME one — invite⟺accept 同源).
-    expect(src).toContain('buildMandatoryClarifyPreamble()')
+    expect(src).toContain('buildMandatoryClarifyPreamble(mindmap)')
     expect(src).toContain("disposition === 'invite-mandatory'")
     expect(src).toContain('clarifyDispositionFor(channel.directive)')
   })
