@@ -1,4 +1,8 @@
 export const mindmapZh = {
+  taskEntry: {
+    open: '打开脑图，逐项澄清与复核',
+    hint: '这轮使用脑图澄清。已有回答会保留，你可以继续追问、补充取舍，并在生成结果前复核决定。',
+  },
   decision: {
     title: '决定补充（选填）',
     hint: '可只填你认为有用的内容。回答已确认，不代表假设已经验证。',
@@ -148,6 +152,10 @@ export const mindmapZh = {
   readable: '可读比例',
 }
 export const mindmapEn: typeof mindmapZh = {
+  taskEntry: {
+    open: 'Open mindmap to clarify and review',
+    hint: 'This round uses mindmap clarification. Your answers are preserved so you can ask follow-ups, explain tradeoffs, and review decisions before generating the result.',
+  },
   decision: {
     title: 'Decision context (optional)',
     hint: 'Add what helps you decide. Confirming an answer does not verify its assumptions.',

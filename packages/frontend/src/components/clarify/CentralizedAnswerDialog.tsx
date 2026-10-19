@@ -22,7 +22,9 @@ import { DecisionDetails } from './mindmap/DecisionDetails'
 import { CLARIFY_QUERY_KEYS, TASK_QUERY_KEYS } from '@/lib/query-keys'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
+import { isMindmapRound } from '@agent-workflow/shared'
 import type {
   ClarifyAnswer,
   ClarifyRound,
@@ -268,7 +270,7 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
   }, [open])
 
   const closeAfterLocalSave = useCallback(async () => {
-    if (closePendingRef.current || submitMutatingRef.current) return
+    if (closePendingRef.current || submitMutatingRef.current) return false
     closePendingRef.current = true
     setClosePending(true)
     setCloseError(null)
@@ -279,8 +281,10 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
         [...durabilityHandlesRef.current.values()].map((handle) => handle.flushLocal()),
       )
       onClose()
+      return true
     } catch (error) {
       setCloseError(error)
+      return false
     } finally {
       closePendingRef.current = false
       setClosePending(false)
@@ -500,6 +504,7 @@ export function CentralizedAnswerDialog({ taskId, open, onClose }: CentralizedAn
             registerQuestionRef={registerQuestionRef}
             reportRoundOrder={reportRoundOrder}
             onAdvance={advanceFromQuestion}
+            onBeforeLeave={closeAfterLocalSave}
           />
         ))}
         {submitMut.error !== null &&
@@ -581,6 +586,35 @@ interface RoundAnswerBlockProps {
   /** Advance keyboard focus from (round, question) to the next question in the flattened global
    *  order. A NO-OP at the very last question (用户拍板 2026-07-01 — submit is never auto-focused). */
   onAdvance: (originNodeRunId: string, questionId: string) => void
+  onBeforeLeave: () => Promise<boolean>
+}
+
+/** Fresh mindmap rounds must use the same confirmation and decision review as
+ * the inbox entry. Save any ordinary rounds in this dialog before navigating. */
+function MindmapAnswerEntry({
+  originNodeRunId,
+  disabled,
+  onBeforeLeave,
+}: Pick<RoundAnswerBlockProps, 'originNodeRunId' | 'disabled' | 'onBeforeLeave'>) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <p className="muted">{t('mindmap.taskEntry.hint')}</p>
+      <button
+        type="button"
+        className="btn btn--primary"
+        disabled={disabled}
+        data-testid={`centralized-open-mindmap-${originNodeRunId}`}
+        onClick={async () => {
+          if (await onBeforeLeave())
+            await navigate({ to: '/clarify/$nodeRunId', params: { nodeRunId: originNodeRunId } })
+        }}
+      >
+        {t('mindmap.taskEntry.open')}
+      </button>
+    </>
+  )
 }
 
 /** One clarify round's answer block. Owns its local answer state + draft autosave (the
@@ -601,6 +635,7 @@ function RoundAnswerBlock({
   registerQuestionRef,
   reportRoundOrder,
   onAdvance,
+  onBeforeLeave,
 }: RoundAnswerBlockProps) {
   const { t } = useTranslation()
   const roundQuery = useQuery<ClarifyRound, ApiError>({
@@ -616,12 +651,17 @@ function RoundAnswerBlock({
   })
   const round = roundQuery.data
   const isCross = round?.kind === 'cross'
+  // Re-answering a sealed question retains the existing defer/resubmit channel.
+  const openInMindmap =
+    round?.status === 'awaiting_human' &&
+    isMindmapRound(round.questions) &&
+    resubmitQuestionIds.length === 0
 
   const answerableSet = useMemo(() => new Set(answerableQuestionIds), [answerableQuestionIds])
   const resubmitSet = useMemo(() => new Set(resubmitQuestionIds), [resubmitQuestionIds])
   const visibleQuestions = useMemo(
-    () => (round?.questions ?? []).filter((q) => answerableSet.has(q.id)),
-    [round?.questions, answerableSet],
+    () => (openInMindmap ? [] : (round?.questions ?? []).filter((q) => answerableSet.has(q.id))),
+    [openInMindmap, round?.questions, answerableSet],
   )
   const persistedQuestionIds = useMemo(
     () =>
@@ -671,7 +711,7 @@ function RoundAnswerBlock({
   // committed answer IS the durable baseline; closing the pane discards an un-submitted
   // edit, same as any unsaved form.
   useEffect(() => {
-    if (round === undefined || seeded) return
+    if (round === undefined || seeded || openInMindmap) return
     const fresh: Record<string, ClarifyAnswer> = {}
     for (const q of visibleQuestions) {
       fresh[q.id] = emptyAnswer(q.id)
@@ -772,6 +812,7 @@ function RoundAnswerBlock({
   }, [
     round,
     seeded,
+    openInMindmap,
     visibleQuestions,
     resubmitSet,
     persistedQuestionIds,
@@ -894,6 +935,13 @@ function RoundAnswerBlock({
       {roundQuery.isLoading && <LoadingState />}
       {roundQuery.error !== null && roundQuery.error !== undefined && (
         <ErrorBanner error={roundQuery.error} />
+      )}
+      {openInMindmap && (
+        <MindmapAnswerEntry
+          originNodeRunId={originNodeRunId}
+          disabled={disabled}
+          onBeforeLeave={onBeforeLeave}
+        />
       )}
       {seeded && persistedQuestionIds.length > 0 && (
         <FeedbackStack>

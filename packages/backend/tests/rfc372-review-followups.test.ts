@@ -375,6 +375,11 @@ describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
             model: 'frozen/model',
             isSandbox: true,
             __configDir: { env: 'OPENCODE_CONFIG_DIR', name: 'frozen-profile' },
+            __observation: {
+              registrationId: 'frozen-runtime-id',
+              configurationRevision: 7,
+              acceptedName: 'frozen-runtime-name',
+            },
           }),
         })
         .where(eq(nodeRuns.id, fixture.askingNodeRunId))
@@ -438,7 +443,14 @@ describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
         runtimeBinding,
         model: 'frozen/model',
         workspaceScope: workspace,
-        timeoutMs: 180000,
+        runtimeObservationIdentity: {
+          registrationId: 'frozen-runtime-id',
+          configurationRevision: 7,
+          acceptedName: 'frozen-runtime-name',
+        },
+        // RFC-378 hosted acceptance: a three-minute cap killed a healthy remote
+        // follow-up. Both selected families get the ordinary ten-minute budget.
+        timeoutMs: 600000,
         prompt: request.prompt,
         observationDemand: {
           originalId: fixture.askingNodeRunId,
@@ -453,5 +465,17 @@ describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
         'clarify-followup-failed',
       )
       expect(released).toHaveLength(2)
+      // Old or malformed snapshots must not fabricate today's registration.
+      fail = false
+      for (const identity of [undefined, { registrationId: '', configurationRevision: -1 }]) {
+        await h.db
+          .update(nodeRuns)
+          .set({
+            runtimeParamsJson: JSON.stringify({ model: 'frozen/model', __observation: identity }),
+          })
+          .where(eq(nodeRuns.id, fixture.askingNodeRunId))
+        expect(await generator.generate({ ...request, requestId: randomUUID() })).toBe(generated)
+        expect(requests.at(-1)?.runtimeObservationIdentity).toBeUndefined()
+      }
     })
 })

@@ -19,6 +19,14 @@
 //      body field being reintroduced here.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from '@tanstack/react-router'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { ClarifyRound } from '@agent-workflow/shared'
@@ -132,6 +140,7 @@ function renderDialog(
   rounds: ClarifyRound[],
   snapshot: unknown = { nodes: [] },
   onClose: () => void = () => {},
+  withRouter = false,
 ) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
@@ -141,13 +150,137 @@ function renderDialog(
   for (const r of rounds) {
     qc.setQueryData(['clarify', 'detail', r.intermediaryNodeRunId], r)
   }
-  const rendered = render(
+  const content = (
     <QueryClientProvider client={qc}>
       <CentralizedAnswerDialog taskId="task-1" open onClose={onClose} />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
-  return { ...rendered, qc }
+  if (!withRouter) return { ...render(content), qc, router: undefined }
+  const rootRoute = createRootRoute({ component: () => <Outlet /> })
+  const index = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: () => content,
+  })
+  const clarify = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/clarify/$nodeRunId',
+    component: () => <p data-testid="mindmap-destination">Mindmap opened</p>,
+  })
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([index, clarify]),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
+  const rendered = render(<RouterProvider router={router as never} />)
+  return { ...rendered, qc, router }
 }
+
+// RFC-378 real journey regression: the task board opened the legacy form,
+// bypassing mindmap confirmation, follow-ups and decision review.
+test('fresh mindmap round routes to its review flow without sealing saved answers', async () => {
+  const post = vi.spyOn(api, 'post').mockResolvedValue({})
+  const q = { ...singleQ('q1'), mindmap: { categoryPath: ['Rooms'] } }
+  const view = renderDialog(
+    [entry({})],
+    [
+      round({
+        intermediaryNodeRunId: 'nr_a',
+        questions: [q],
+        draftAnswers: {
+          q1: { selectedOptionIndices: [0], customText: '', decision: { status: 'provisional' } },
+        },
+      }),
+    ],
+    undefined,
+    undefined,
+    true,
+  )
+  const open = await screen.findByTestId('centralized-open-mindmap-nr_a')
+  expect(screen.queryByRole('radio')).toBeNull()
+  expect((screen.getByTestId('centralized-answer-submit') as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(open)
+  expect(await screen.findByTestId('mindmap-destination')).toBeTruthy()
+  expect(view.router?.state.location.pathname).toBe('/clarify/nr_a')
+  expect(post).not.toHaveBeenCalled()
+})
+
+test('opening a mindmap waits for the mixed ordinary round draft to persist', async () => {
+  const saved = deferred<void>()
+  vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+  const write = vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockReturnValue(saved.promise)
+  const post = vi.spyOn(api, 'post').mockResolvedValue({})
+  const view = renderDialog(
+    [entry({ originNodeRunId: 'nr_plain' }), entry({ originNodeRunId: 'nr_map' })],
+    [
+      round({ intermediaryNodeRunId: 'nr_plain', questions: [singleQ('q1')] }),
+      round({
+        intermediaryNodeRunId: 'nr_map',
+        questions: [{ ...singleQ('q1'), mindmap: { categoryPath: ['Rooms'] } }],
+      }),
+    ],
+    undefined,
+    undefined,
+    true,
+  )
+  fireEvent.click(await screen.findByRole('radio', { name: /^A/ }))
+  fireEvent.click(screen.getByTestId('centralized-open-mindmap-nr_map'))
+  await waitFor(() => expect(write).toHaveBeenCalled())
+  expect(screen.queryByTestId('mindmap-destination')).toBeNull()
+  await act(async () => saved.resolve())
+  expect(await screen.findByTestId('mindmap-destination')).toBeTruthy()
+  expect(view.router?.state.location.pathname).toBe('/clarify/nr_map')
+  expect(post).not.toHaveBeenCalled()
+})
+
+test('sealed mindmap re-answers retain the existing editable control channel and decision notes', async () => {
+  const q = { ...singleQ('q1'), mindmap: { categoryPath: ['Rooms'] } }
+  renderDialog(
+    [entry({ sealed: true })],
+    [
+      round({
+        intermediaryNodeRunId: 'nr_a',
+        questions: [q],
+        answers: [
+          {
+            questionId: 'q1',
+            selectedOptionIndices: [0],
+            selectedOptionLabels: ['A'],
+            customText: '',
+            decision: { status: 'provisional', uncertainty: 'No baseline' },
+          },
+        ],
+      }),
+    ],
+  )
+  expect(await screen.findByRole('radio', { name: /^A/ })).toBeTruthy()
+  expect(screen.queryByTestId('centralized-open-mindmap-nr_a')).toBeNull()
+  fireEvent.click(screen.getByText(/Decision context/))
+  expect((screen.getByLabelText('Still unverified') as HTMLTextAreaElement).value).toBe(
+    'No baseline',
+  )
+})
+
+test('failed draft persistence keeps the mixed dialog open instead of navigating to the mindmap', async () => {
+  vi.spyOn(clarifyDraftStore, 'getClarifyDraft').mockResolvedValue(null)
+  vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockRejectedValue(new Error('draft unavailable'))
+  renderDialog(
+    [entry({ originNodeRunId: 'nr_plain' }), entry({ originNodeRunId: 'nr_map' })],
+    [
+      round({ intermediaryNodeRunId: 'nr_plain', questions: [singleQ('q1')] }),
+      round({
+        intermediaryNodeRunId: 'nr_map',
+        questions: [{ ...singleQ('q1'), mindmap: { categoryPath: ['Rooms'] } }],
+      }),
+    ],
+    undefined,
+    undefined,
+    true,
+  )
+  fireEvent.click(await screen.findByRole('radio', { name: /^A/ }))
+  fireEvent.click(screen.getByTestId('centralized-open-mindmap-nr_map'))
+  expect(await screen.findByTestId('centralized-draft-close-error')).toBeTruthy()
+  expect(screen.queryByTestId('mindmap-destination')).toBeNull()
+})
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void

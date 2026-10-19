@@ -1,0 +1,407 @@
+{
+  "sourceCommit": "c0b2091730a82177cb09efc7bb256c926586b5aa",
+  "releaseId": "01a154b0-850d-7000-a091-164935643aad",
+  "releaseVersion": "v0.1.2",
+  "journeyId": "01a154b0-8641-7000-a78e-6b3aa8d3736e",
+  "imageDigest": "sha256:7732664be776592a56b417454773d377012f11cb9eaf2e84911bada76a039228",
+  "controlPlanePod": "rfc378-mindmap-green-854457d948-jrn2g",
+  "controlPlaneOpenCode": false,
+  "taskId": "01M5AC6EGVPWZXER0GY2QT6DDV",
+  "round": {
+    "intermediaryNodeRunId": "01M5ACK73ZP3SF9YSKFJWQT6TJ",
+    "askingNodeRunId": "01M5AC7P8Q5RW6Q9MJG25VSJ7T",
+    "status": "awaiting_human",
+    "questions": [
+      {
+        "mindmap": {
+          "categoryPath": [
+            "预约规则",
+            "满员分配"
+          ]
+        },
+        "id": "allocation-when-full",
+        "title": "当 3 间会议室在同一时段都被占用时，第一版采用哪种分配规则？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "先到先得",
+            "description": "规则透明、实现和解释成本最低；代价是手快的人可能长期占住热门时段，团队只能靠事后协调，缺少纠偏机制。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "按团队/角色配额或优先级分配",
+            "description": "能给关键团队保留容量；代价是要先定义谁有优先级、由谁维护名单，容易引发公平性质疑，且增加管理成本。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "由管理员审批冲突预约",
+            "description": "保留人工判断，适合需求差异大的情况；代价是预约依赖管理员响应，形成瓶颈，且审批标准不透明时争议更大。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": [
+            "交付形态",
+            "预约入口"
+          ]
+        },
+        "id": "booking-entry",
+        "title": "第一版的预约入口以什么为主？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "独立网页（桌面/移动浏览器）",
+            "description": "交付路径最短，不依赖现有系统；代价是团队要多打开一个地方，使用习惯需要重新建立。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "接入现有企业日历（若可用）",
+            "description": "贴近日常查看习惯，减少重复录入；代价是接口、权限和可用性需先核实，若不可用或限制多，两周交付风险上升。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "聊天机器人/群内指令",
+            "description": "在现有沟通场景里低门槛发起预约；代价是冲突展示和修改预约更弱，且依赖聊天平台能力与消息可靠性。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "管理员代订",
+            "description": "实现最简单、规则最易统一；代价是成员不能自助预约，管理员成为瓶颈，使用数据也会混入代订行为。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": [
+            "爽约治理",
+            "执行强度"
+          ]
+        },
+        "id": "no-show-enforcement",
+        "title": "第一版对“预约后未到会”的处理强度是什么？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "到点未使用则自动释放",
+            "description": "能减少空占、提高周转；代价是可能误释放实际到会但未操作的预约，需要处理申诉和例外，规则过严会引发不满。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "仅提醒，不自动释放",
+            "description": "保留预约者的控制权，冲突较小；代价是提醒可能被忽略，房间仍可能闲置，需要人工跟进。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "不提醒也不自动释放",
+            "description": "实现和沟通成本最低；代价是爽约只能靠事后发现，热门时段浪费更隐蔽，也难以及时纠正。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": [
+            "预约规则",
+            "时长上限"
+          ]
+        },
+        "id": "max-duration",
+        "title": "单次预约的最长时长设为多少？",
+        "kind": "single",
+        "recommended": false,
+        "options": [
+          {
+            "label": "最长 1 小时",
+            "description": "提高周转，适合短会；代价是长会要拆成多段或转线下，可能增加预约次数和协调成本。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "最长 2 小时",
+            "description": "在周转和常见会议时长之间取中；代价是热门时段仍可能被半天占用，需要靠其他规则调节。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "最长 4 小时",
+            "description": "容纳半天会议；代价是 3 间房很容易被少数长会占满，短期冲突可能上升。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "不设单次时长上限",
+            "description": "最灵活，适合差异大的会议；代价是可能出现整天占用，容量被少数预约锁定，公平和周转风险最高。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      },
+      {
+        "mindmap": {
+          "categoryPath": [
+            "验证安排",
+            "证据来源"
+          ]
+        },
+        "id": "baseline-evidence",
+        "title": "在缺少历史基线的情况下，第一版上线后先用哪些证据来判断效果？",
+        "kind": "multi",
+        "recommended": false,
+        "options": [
+          {
+            "label": "现有预约/群聊/邮件记录（若存在）",
+            "description": "能低成本还原部分历史需求；代价是记录可能不完整、口径不一，只能作为参考，不能当作可靠基线。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "新系统内的预约、取消与满员日志",
+            "description": "口径统一、可持续，能看需求时段和失败预约；代价是只覆盖上线后的行为，且需要提前埋点。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "实际到会与未到会观察（签到或人工抽查）",
+            "description": "能直接看到爽约和空置；代价是需要人工投入，抽查样本可能不代表全周，且被观察时行为可能改变。",
+            "recommended": false,
+            "recommendationReason": ""
+          },
+          {
+            "label": "使用者反馈与冲突求助记录",
+            "description": "能解释冲突发生在哪些场景、规则是否被接受；代价是主观、零散，不能单独作为量化结论。",
+            "recommended": false,
+            "recommendationReason": ""
+          }
+        ]
+      }
+    ],
+    "draftAnswers": {
+      "no-show-enforcement": {
+        "selectedOptionIndices": [],
+        "customText": "暂定不自动释放。是否签到、怎样记录、是否提醒仍各自未决定，不能由这个选择顺带确定。",
+        "decision": {
+          "status": "provisional",
+          "rationale": "没有爽约率和使用率基线，现在不能断言空占是主要问题。",
+          "tradeoff": "我接受可能继续空占的风险，以及每天最多10分钟观察的成本。",
+          "uncertainty": "真实空占比例、观察偏差和误释放的代价还不知道。",
+          "revisitWhen": "试用两周后再复核，具体日期与负责人待定。"
+        },
+        "confirmedBasis": "v2:d9875dbb569b24692053b84be1831961"
+      },
+      "booking-entry": {
+        "selectedOptionIndices": [],
+        "customText": "第一版只用团队已有的共享文档登记预约，不假设存在统一共享日历。",
+        "decision": {
+          "status": "decided",
+          "rationale": "没有使用基线，先用手头工具观察实际需求。",
+          "tradeoff": "我接受手动登记和人工核对冲突的时间成本。"
+        },
+        "confirmedBasis": "v2:ea46bbb0b5f78ab030afb6dca7e96ec4"
+      },
+      "allocation-when-full": {
+        "selectedOptionIndices": [],
+        "customText": "这20人都可以登记预约；满员时先由相关预约人协调。时段分配与优先级尚未定案。",
+        "confirmedBasis": "v2:4353b4bcadd9479ca21b4400da812198"
+      },
+      "max-duration": {
+        "selectedOptionIndices": [],
+        "customText": "最长时长暂未决定，先观察实际会议时长；未知不代表不设上限。",
+        "confirmedBasis": "v2:4e6eecb7c2430b9f9f5fed839f1e96c3"
+      },
+      "baseline-evidence": {
+        "selectedOptionIndices": [
+          0,
+          3
+        ],
+        "customText": "历史线索仅在可用时参考，和新增观察可以并行；冲突次数不能单独证明空占率。",
+        "confirmedBasis": "v2:15f8710a8fb9e6c428dafc9aff3a8464"
+      }
+    }
+  },
+  "calls": [
+    {
+      "id": "hosted-agent:01M5AC7P8Q5RW6Q9MJG25VSJ7T",
+      "purpose": "task",
+      "taskId": "01M5AC6EGVPWZXER0GY2QT6DDV",
+      "systemKind": null,
+      "systemLabel": null,
+      "nodeRunId": "01M5AC7P8Q5RW6Q9MJG25VSJ7T",
+      "nodeId": "starter_clarifier",
+      "attempt": 1,
+      "agentId": "01M5AC025JBNQ071TVEV0TVDS0",
+      "agentName": "mindmap-rfc378-hosted",
+      "runtimeId": "01M5ABAJQ8J5VYC61PD2QSGYKK",
+      "runtimeName": "opencode",
+      "protocol": "opencode",
+      "status": "done",
+      "startedAt": 1792423513673,
+      "endedAt": 1792423858275,
+      "usageState": "complete",
+      "costState": "unpriced",
+      "input": 11582,
+      "cacheRead": 11520,
+      "cacheWrite": 0,
+      "output": 10716,
+      "reasoning": 9220,
+      "costNano": 0,
+      "models": [
+        {
+          "model": "opencode-go/deepseek-v4.1-flash",
+          "input": 11582,
+          "cacheRead": 11520,
+          "cacheWrite": 0,
+          "output": 10716,
+          "reasoning": 9220,
+          "costNano": null
+        }
+      ]
+    },
+    {
+      "id": "aw-hosted-system:bfabb66c3302b789a3f8d13b565dcc6b926b1e62337cbaf9350d89cd2068c648",
+      "purpose": "system",
+      "taskId": "01M5AC6EGVPWZXER0GY2QT6DDV",
+      "systemKind": "clarify-followup",
+      "systemLabel": "分支追问",
+      "nodeRunId": null,
+      "nodeId": null,
+      "attempt": null,
+      "agentId": null,
+      "agentName": "clarify-followup",
+      "runtimeId": "builtin:opencode",
+      "runtimeName": null,
+      "protocol": "opencode",
+      "status": "canceled",
+      "startedAt": 1792424022774,
+      "endedAt": 1792424057773,
+      "usageState": "none",
+      "costState": "none",
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "reasoning": 0,
+      "costNano": 0,
+      "models": []
+    },
+    {
+      "id": "aw-hosted-system:eb19480af6b80b3043a66e86b0f7cf82741689e2e32962b0c932cd3168fe35ac",
+      "purpose": "system",
+      "taskId": "01M5AC6EGVPWZXER0GY2QT6DDV",
+      "systemKind": "clarify-followup",
+      "systemLabel": "分支追问",
+      "nodeRunId": null,
+      "nodeId": null,
+      "attempt": null,
+      "agentId": null,
+      "agentName": "clarify-followup",
+      "runtimeId": "builtin:opencode",
+      "runtimeName": null,
+      "protocol": "opencode",
+      "status": "failed",
+      "startedAt": 1792424115177,
+      "endedAt": 1792424309482,
+      "usageState": "none",
+      "costState": "none",
+      "input": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "output": 0,
+      "reasoning": 0,
+      "costNano": 0,
+      "models": []
+    }
+  ],
+  "followupFailure": {
+    "requestId": "df9bc06d-626f-4316-8769-0f8c574d0369",
+    "startedAt": 1792424114475,
+    "failedAt": "2026-10-19T15:38:29.776Z",
+    "error": "clarify-followup-timeout: ",
+    "configuredTimeoutMs": 180000,
+    "userAnswersRetained": 5,
+    "instructionRetainedOnFailure": true
+  },
+  "followupSubtask": {
+    "id": "01a154cd-a549-7002-9f8f-766cd782eab0",
+    "projectId": "01a15233-d0b4-7000-ba3b-4a72cf7da7e4",
+    "serviceId": "01a15233-d0b4-7001-bfa0-21f28bb515a4",
+    "kind": "business",
+    "state": "released",
+    "volumeMode": "persistent",
+    "profile": "01a0c12a-de0c-7001-a7d7-a0212edcc3dc",
+    "podName": "sub-01a154cda54970029f8f766cd782eab0",
+    "image": "registry.crewstation-system.svc.cluster.local:5000/crewstation/task-runtime@sha256:5a748ec63cad6b6209772f9c9cab93a2b18869fffa1907deb8055e02855aeaeb",
+    "connected": false,
+    "traceId": "01a154cc145170008569b583c8163abf",
+    "message": "此子任务的执行环境已回收，工作树保持",
+    "createdAt": "2026-10-19T15:35:26.523Z",
+    "lastActivityAt": "2026-10-19T15:35:49.885Z",
+    "startup": {
+      "state": "ready",
+      "stages": [
+        {
+          "kind": "queue",
+          "state": "succeeded",
+          "endedAt": "2026-10-19T15:35:40.037Z",
+          "startedAt": "2026-10-19T15:35:26.523Z",
+          "durationMs": 13514
+        },
+        {
+          "kind": "container",
+          "state": "succeeded",
+          "detail": "已调度到节点 desktop-control-plane · 镜像节点上已有",
+          "endedAt": "2026-10-19T15:35:40.037Z",
+          "startedAt": "2026-10-19T15:35:40.037Z",
+          "durationMs": 0
+        },
+        {
+          "kind": "connect",
+          "state": "succeeded",
+          "endedAt": "2026-10-19T15:35:49.885Z",
+          "startedAt": "2026-10-19T15:35:40.037Z",
+          "durationMs": 9848
+        },
+        {
+          "kind": "ready",
+          "state": "succeeded",
+          "endedAt": "2026-10-19T15:35:49.885Z",
+          "startedAt": "2026-10-19T15:35:49.885Z",
+          "durationMs": 0
+        }
+      ],
+      "endedAt": "2026-10-19T15:35:49.885Z",
+      "startedAt": "2026-10-19T15:35:26.523Z"
+    },
+    "native": {
+      "purpose": "subtask",
+      "parentTaskId": "01a154cc-14cf-7000-9be8-c9cf5e70629f",
+      "agentId": "01a154cd-a549-7001-9ff8-a80cd223bd4e",
+      "runnerId": "01a154cd-a549-7002-9f8f-766cd782eab0",
+      "podUid": "37ca9af2-d710-41cd-a37f-8705ca13e0c8",
+      "state": "finished",
+      "profile": {
+        "id": "01a0c12a-de0c-7001-a7d7-a0212edcc3dc",
+        "cpu": "100m",
+        "name": "rfc003-integration-qa",
+        "memory": "2Gi",
+        "storage": "2Gi"
+      }
+    }
+  },
+  "observationFinding": "Parent task attribution is correct; frozen runtime registration identity was not forwarded, resulting in builtin:opencode. Candidate fix forwards __observation without resolving a live profile."
+}

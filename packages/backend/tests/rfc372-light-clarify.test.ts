@@ -207,6 +207,9 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           expect(prompt).toContain('"kind": "single" | "multi"')
           expect(prompt).toContain('"recommendationReason"')
           expect(prompt).toContain('Do not manufacture exclusivity')
+          expect(prompt).toContain('Neither option decides any other mechanism')
+          expect(prompt).toContain('A negative choice does not prescribe a replacement process')
+          expect(prompt).toContain('who operates a channel is a separate question')
           expect(prompt).toContain('Every question needs 2–4 options')
           expect(prompt).toContain(
             '"configuredCategoryPaths":[["Scope"],["Performance","Database","SQL"]]',

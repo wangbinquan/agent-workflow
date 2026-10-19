@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 import {
   DEFAULT_CONFIG_DIR_PROFILE,
   RuntimeStatusEntrySchema,
@@ -8,6 +9,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks } from '@/db/schema'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import { createLogger } from '@/util/log'
+import { DEFAULT_TIMEOUT_MS } from '../application/systemAgentRun'
 import type {
   SystemAgentRunFamily,
   SystemAgentRunRequest,
@@ -130,6 +132,13 @@ export function createClarifyFollowupGeneration(input: {
         /* Legacy rows may have no usable frozen parameters. */
       }
       const config = params.__configDir as { env?: unknown; name?: unknown } | undefined
+      const observation = z
+        .object({
+          registrationId: z.string().min(1),
+          configurationRevision: z.number().int().nonnegative(),
+          acceptedName: z.string().min(1).max(200).optional(),
+        })
+        .safeParse(params.__observation)
       const protocol = RuntimeStatusEntrySchema.shape.protocol.safeParse(row?.protocol)
       const runtime = input.bindRuntime(
         row && protocol.success
@@ -138,6 +147,7 @@ export function createClarifyFollowupGeneration(input: {
               binaryPath: row.binaryPath,
               model: typeof params.model === 'string' ? params.model : null,
               isSandbox: params.isSandbox === true,
+              ...(observation.success ? { observationIdentity: observation.data } : {}),
               configDir:
                 config && typeof config.env === 'string' && typeof config.name === 'string'
                   ? { env: config.env, name: config.name }
@@ -165,9 +175,14 @@ export function createClarifyFollowupGeneration(input: {
         configDirName: runtime.configDir.name,
         model: runtime.model,
         isSandbox: runtime.isSandbox,
+        ...(runtime.observationIdentity
+          ? { runtimeObservationIdentity: runtime.observationIdentity }
+          : {}),
         workspaceScope: input.family.workspaces.capture({ namespace: 'shared' }),
         abortSignal: request.signal,
-        timeoutMs: 180000,
+        // Use the ordinary System Agent budget. Hosted startup and deep reasoning
+        // can exceed the old three-minute cap before any answer is emitted.
+        timeoutMs: DEFAULT_TIMEOUT_MS,
         maxEventTextBytes: 64000,
         log,
       })

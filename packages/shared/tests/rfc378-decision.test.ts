@@ -71,6 +71,11 @@ describe('RFC-378 optional decision contract', () => {
           expect(prompt).not.toContain('The moment you catch yourself hedging')
           expect(prompt).toContain('naming ONE variable in its title')
           expect(prompt).toContain('Audit the full options, including descriptions')
+          expect(prompt).toContain('exactly two options "Enable <that mechanism>"')
+          expect(prompt).toContain('Neither option decides any other mechanism')
+          expect(prompt).toContain('A negative choice does not prescribe a replacement process')
+          expect(prompt).toContain('who operates a channel is a separate question')
+          expect(prompt).toContain('Each description is ONE short sentence')
           expect(prompt).toContain(
             'Success criteria, rollout scope and validation ownership are separate axes',
           )
@@ -233,13 +238,39 @@ describe('RFC-378 optional decision contract', () => {
     expect(mindmap).toContain(
       'Missing, unselected and explicitly rejected are three different states',
     )
-    expect(mindmap).toContain('Preserve that status in EVERY later reference')
-    expect(mindmap).toContain(
-      'A heading such as "model inference" does not permit inventing its premises',
-    )
+    expect(mindmap).toContain('including any later reference')
+    expect(mindmap).toContain('make unresolved premises conditional')
     expect(mindmap).toContain('"reminders are undecided" must not become "no reminders"')
-    expect(mindmap).toContain('Remove unsupported scope exclusions')
+    expect(mindmap).toContain('ONE entry per answer')
+    expect(mindmap).toContain('do not add a second scope list')
+    expect(mindmap).toContain('Finish the requested output envelope')
     expect(mindmap).not.toContain('Every question must include mindmap')
+  })
+  // Fifth real acceptance exhausted 32k reasoning tokens while repeatedly
+  // rewriting the same decision document. Bound the shared instructions and
+  // provide a direct readback format instead of accumulating recursive audits.
+  test('stopped self/cross mindmap prompts give one bounded readback, without question authoring rules', () => {
+    for (const kind of ['self', 'cross'] as const) {
+      const input = {
+        promptTemplate: 'Write the decision document',
+        inputs: {},
+        meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
+        agentOutputs: ['result'],
+        clarifyChannel: { kind, directive: 'stopped' as const, injectStopNotice: true },
+      }
+      const ordinary = renderUserPrompt(input)
+      const mindmap = renderUserPrompt({
+        ...input,
+        clarifyMindmap: { categories: [], instructions: '' },
+      })
+      expect(mindmap).toContain('ONE entry per answer')
+      expect(mindmap).toContain('original choice and original decision notes')
+      expect(mindmap).toContain('retain TBD owners and timing as open arrangements')
+      expect(mindmap).not.toContain('Build a short set of independent decisions')
+      expect(mindmap).not.toContain('check EVERY factual or policy claim')
+      expect(mindmap.length - ordinary.length).toBeLessThan(2500)
+      expect(ordinary).not.toContain('ONE entry per answer')
+    }
   })
   // Fourth real output imported calendar/reminder policies from rejected options
   // despite preserving the custom answer verbatim. The authoritative flat Q&A
