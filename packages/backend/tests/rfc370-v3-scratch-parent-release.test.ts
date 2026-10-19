@@ -9,6 +9,14 @@
 // owners (`system:…`, `mcp-test:…`) now get a parent per release, and one the
 // platform closed or can no longer run is replaced. AW task volumes and durable
 // shared owners (`development:shared`) keep their parent.
+//
+// 2026-10-19: the first runtime probe after a release switch failed after 300 s
+// with `hosted-workspace-provisioning-timeout: … still closing`: replacing the
+// superseded `system:shared` parent waited for its physical release, and
+// CrewStation took about eight minutes to finalize it. The replacement now
+// waits only until the platform accepted the close. It also retires only the
+// registration it read, so a concurrent use that re-armed the owner first
+// keeps its new parent.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { hostedTaskWorkspaces } from '@/db/schema'
@@ -27,7 +35,7 @@ const unused = async (): Promise<never> => {
 
 describeEachProvider('RFC-370 scratch parents follow the running release', (harness) => {
   const lease = { epoch: 1, leaseId: 'lease', instanceId: 'instance' }
-  const setup = async () => {
+  const setup = async (options: { completionPolicy?: 'archive-and-delete' } = {}) => {
     const control = createDatabaseHostedExecutionControl({ db: harness.db })
     for (const phase of ['preparing', 'active'] as const)
       await control.write({
@@ -40,6 +48,8 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
     const byKey = new Map<string, string>()
     const created: string[] = []
     const closedParents: string[] = []
+    const finalized: string[] = []
+    let beforeGetTask: ((id: string) => Promise<void>) | null = null
     const api: CrewStationBusinessExecution = {
       createTask: async (request) => {
         let id = byKey.get(request.requestKey)
@@ -47,11 +57,25 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
           id = `parent-${byKey.size + 1}`
           byKey.set(request.requestKey, id)
           created.push(request.requestKey)
-          parents.set(id, { id, state: 'running', resourceState: 'ready', generation: 1 })
+          parents.set(id, {
+            id,
+            state: 'running',
+            resourceState: 'ready',
+            generation: 1,
+            ...(options.completionPolicy === undefined
+              ? {}
+              : { completionPolicy: options.completionPolicy }),
+          })
         }
         return parents.get(id)!
       },
-      getTask: async (id) => parents.get(id)!,
+      // The answer reflects the parent when the request was served, even when
+      // the response is held back (`beforeGetTask`).
+      getTask: async (id) => {
+        const observed = parents.get(id)!
+        if (beforeGetTask !== null) await beforeGetTask(id)
+        return observed
+      },
       closeTask: async (id) => {
         closedParents.push(id)
         const parent = parents.get(id)!
@@ -65,7 +89,18 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       resumeTask: async (id) => {
         parents.set(id, { ...parents.get(id)!, state: 'running', resourceState: 'ready' })
       },
-      finalizeTask: unused,
+      // Archive-and-delete: accepted at once, released whenever the platform
+      // gets to it (the test decides).
+      finalizeTask: async (id) => {
+        finalized.push(id)
+        const parent = parents.get(id)!
+        parents.set(id, {
+          ...parent,
+          state: 'finalizing',
+          resourceState: 'releasing',
+          generation: parent.generation + 1,
+        })
+      },
       pauseTask: unused,
       listSubtasks: unused,
       createMaterial: unused,
@@ -105,7 +140,12 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       parents,
       created,
       closedParents,
+      finalized,
       row,
+      elapsed: () => clock - 1_000_000,
+      holdGetTask: (hook: ((id: string) => Promise<void>) | null) => {
+        beforeGetTask = hook
+      },
       setRelease: (value: string | null) => {
         release = value
       },
@@ -177,6 +217,61 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
     // A closed AW task volume is never reopened.
     await f.workspaces.close('01TASK')
     await expect(f.workspaces.ensure('01TASK')).rejects.toThrow('hosted-workspace-closed')
+  })
+
+  test('a retired parent the platform is still finalizing does not hold its replacement', async () => {
+    const f = await setup({ completionPolicy: 'archive-and-delete' })
+    const first = await f.workspaces.ensure('system:shared')
+    f.setParent(first.businessTaskId, { state: 'paused', resourceState: 'released' })
+    f.setRelease('release-2')
+    const second = await f.workspaces.ensure('system:shared')
+    expect(second.businessTaskId).not.toBe(first.businessTaskId)
+    // Finalized once and still being released by the platform: nobody waited.
+    expect(f.finalized).toEqual([first.businessTaskId])
+    expect(f.parents.get(first.businessTaskId)).toMatchObject({
+      state: 'finalizing',
+      resourceState: 'releasing',
+    })
+    expect(f.elapsed()).toBe(0)
+    expect(await f.row('system:shared')).toMatchObject({
+      businessTaskId: second.businessTaskId,
+      state: 'ready',
+    })
+    expect((await f.row('system:shared')).requestKey.endsWith(releaseTag('release-2'))).toBe(true)
+  })
+
+  test('a concurrent use that re-armed the owner first keeps its new parent', async () => {
+    const f = await setup()
+    const first = await f.workspaces.ensure('system:shared')
+    f.setParent(first.businessTaskId, { state: 'paused', resourceState: 'released' })
+    f.setRelease('release-2')
+    // The slow use reads the superseded registration, then its observation of
+    // the old parent is held back while another use replaces the parent.
+    let held: (() => void) | null = null
+    let reached: () => void = () => undefined
+    const atGate = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    f.holdGetTask(async (id) => {
+      if (id !== first.businessTaskId || held !== null) return
+      await new Promise<void>((resolve) => {
+        held = resolve
+        reached()
+      })
+    })
+    const slow = f.workspaces.ensure('system:shared')
+    await atGate
+    const fast = await f.workspaces.ensure('system:shared')
+    expect(fast.businessTaskId).not.toBe(first.businessTaskId)
+    held!()
+    expect(await slow).toEqual(fast)
+    // Only the superseded parent was ever closed; the new one keeps running.
+    expect(f.closedParents).toEqual([first.businessTaskId])
+    expect(f.parents.get(fast.businessTaskId)?.state).toBe('running')
+    expect(await f.row('system:shared')).toMatchObject({
+      businessTaskId: fast.businessTaskId,
+      state: 'ready',
+    })
   })
 
   test('without a known release a scratch owner keeps the release-free key', async () => {

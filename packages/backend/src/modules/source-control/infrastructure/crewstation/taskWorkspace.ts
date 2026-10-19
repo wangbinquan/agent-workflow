@@ -317,8 +317,11 @@ export function createHostedTaskWorkspaces(input: {
     }
     await write(async (tx) => {
       const current = await read(tx, row.taskId)
+      // The parent answers `row`'s request key; a registration re-armed under
+      // another key meanwhile (a scratch owner's replacement) must not take it.
       if (
         current === undefined ||
+        current.requestKey !== row.requestKey ||
         (current.businessTaskId !== null && current.businessTaskId !== task.id)
       ) {
         throw new Error('hosted-workspace-receipt-mismatch')
@@ -356,9 +359,12 @@ export function createHostedTaskWorkspaces(input: {
     return 'dormant'
   }
 
-  const close = async (taskId: string): Promise<boolean> => {
-    const row = await read(input.db, taskId)
-    if (row === undefined || row.state === 'closed') return true
+  /** Asks the platform to release the parent registration `row` names and
+   * records `closing` once it accepted; null when a concurrent lifecycle
+   * operation refused it (the caller decides again). Writes touch only the
+   * registration generation `row` names (its request key), so one a concurrent
+   * use re-armed in the meantime is left alone. */
+  const requestClose = async (row: Row): Promise<string | null> => {
     const businessTaskId = row.businessTaskId ?? (await allocate(row))
     const task = await observe(businessTaskId)
     if (!CLOSED.has(task.state)) {
@@ -383,7 +389,7 @@ export function createHostedTaskWorkspaces(input: {
       } catch (error) {
         // A pause/resume still in flight or a subtask still settling: the
         // deletion step (or the lifecycle reconciler) retries.
-        if (isLifecycleRace(error)) return false
+        if (isLifecycleRace(error)) return null
         throw error
       }
     }
@@ -393,18 +399,34 @@ export function createHostedTaskWorkspaces(input: {
         .update(hostedTaskWorkspaces)
         .set({ state: 'closing', updatedAt: now() })
         .where(
-          and(eq(hostedTaskWorkspaces.taskId, taskId), ne(hostedTaskWorkspaces.state, 'closed')),
+          and(
+            eq(hostedTaskWorkspaces.taskId, row.taskId),
+            eq(hostedTaskWorkspaces.requestKey, row.requestKey),
+            ne(hostedTaskWorkspaces.state, 'closed'),
+          ),
         )
     })
+    return task.id
+  }
+  const close = async (taskId: string): Promise<boolean> => {
+    const row = await read(input.db, taskId)
+    if (row === undefined || row.state === 'closed') return true
+    const businessTaskId = await requestClose(row)
+    if (businessTaskId === null) return false
     // Acknowledged close is not physical release. The owner retries until
     // the platform confirms the resources actually disappeared.
-    const released = await observe(task.id)
+    const released = await observe(businessTaskId)
     if (released.state !== 'closed' || released.resourceState !== 'released') return false
     await write(async (tx) => {
       await tx
         .update(hostedTaskWorkspaces)
         .set({ state: 'closed', updatedAt: now() })
-        .where(eq(hostedTaskWorkspaces.taskId, taskId))
+        .where(
+          and(
+            eq(hostedTaskWorkspaces.taskId, taskId),
+            eq(hostedTaskWorkspaces.requestKey, row.requestKey),
+          ),
+        )
     })
     return true
   }
@@ -412,11 +434,32 @@ export function createHostedTaskWorkspaces(input: {
    * release's key, or a later replacement of it under the same release. */
   const isCurrent = (row: Row, requestKey: string) =>
     row.requestKey === requestKey || row.requestKey.startsWith(`${requestKey}~`)
-  /** Close a scratch owner's parent and re-arm the owner with a new parent of
-   * the running release. Nothing but invocation scratch is lost. */
+  /** Retire a scratch owner's parent and re-arm the owner with a new parent of
+   * the running release. Nothing but invocation scratch is lost.
+   *
+   * The owner waits only until the platform accepted the close: releasing the
+   * retired parent is then the platform's work, which can take minutes
+   * (RFC-370 hosted acceptance, 2026-10-19: CrewStation finalized the retired
+   * `system:shared` parent in about eight minutes, so the first runtime probe
+   * after a release switch timed out waiting for it). Only the registration
+   * generation `row` names is retired and re-armed: a concurrent use that
+   * re-armed the owner first keeps its new parent. */
   const replace = async (row: Row, requestKey: string): Promise<Row> => {
     const deadline = now() + readyTimeoutMs
-    while (!(await close(row.taskId))) {
+    const rearmedMeanwhile = async () =>
+      (await read(input.db, row.taskId))?.requestKey !== row.requestKey
+    const retired = async (): Promise<boolean> => {
+      const current = await read(input.db, row.taskId)
+      if (current === undefined || current.requestKey !== row.requestKey) return true
+      if (current.state === 'closing' || current.state === 'closed') return true
+      try {
+        return (await requestClose(current)) !== null
+      } catch (error) {
+        if (await rearmedMeanwhile()) return true
+        throw error
+      }
+    }
+    while (!(await retired())) {
       if (now() >= deadline)
         throw new HostedWorkspaceProvisioningTimeoutError(
           row.businessTaskId ?? row.taskId,
@@ -437,7 +480,7 @@ export function createHostedTaskWorkspaces(input: {
         .where(
           and(
             eq(hostedTaskWorkspaces.taskId, row.taskId),
-            eq(hostedTaskWorkspaces.state, 'closed'),
+            eq(hostedTaskWorkspaces.requestKey, row.requestKey),
           ),
         )
       return (await read(tx, row.taskId))!
