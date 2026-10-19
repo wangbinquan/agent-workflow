@@ -24,7 +24,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parseDeploymentProfile, renderCrewStationManifest } from './lib/crewstation-manifest'
 import {
+  chunkPublicationActions,
   createGitLabPublication,
+  partialPublicationMessage,
   planSourcePublication,
   previousPublication,
   sourceFile,
@@ -150,12 +152,13 @@ function committedFiles(sha: string): Map<string, SourceFile> {
   files.set('Dockerfile', dockerfile)
   return files
 }
-const previous = previousPublication({
+const baseline = previousPublication({
   headMessage: remoteHead.message,
   adopt: Bun.argv.includes('--adopt-existing'),
   committedFiles,
   remoteTree,
-}).files
+})
+const previous = baseline.files
 const next = committedFiles(head)
 const manifestSource = next.get('deploy/crewstation/crewstation.template.yaml')
 if (manifestSource === undefined) throw new Error('publication-manifest-template-missing')
@@ -182,17 +185,34 @@ const actions = await planSourcePublication({
     return publisher.file(path, remoteHead.id)
   },
 })
-const commitSha = await publisher.commit({
-  branch: profile.branch,
-  expectedHead: remoteHead.id,
-  actions,
-  // The first line is the provenance the next publication parses.
-  message: `agent-workflow ${head}`,
+// A large publication (the first one to a new project) goes as a sequence of
+// commits; only the last names the new source in its first line, the
+// provenance the next publication parses.
+const chunks = chunkPublicationActions(actions)
+const author = {
   authorName: run(['git', 'config', 'user.name'], repoRoot).trim(),
   authorEmail: run(['git', 'config', 'user.email'], repoRoot).trim(),
-})
+}
+let commitSha = remoteHead.id
+for (const [index, chunk] of (chunks.length === 0 ? [[]] : chunks).entries()) {
+  const final = index === Math.max(chunks.length, 1) - 1
+  commitSha = await publisher.commit({
+    branch: profile.branch,
+    expectedHead: commitSha,
+    actions: chunk,
+    message: final
+      ? `agent-workflow ${head}`
+      : partialPublicationMessage({
+          previousSha: baseline.sourceSha,
+          head,
+          part: index + 1,
+          parts: chunks.length,
+        }),
+    ...author,
+  })
+}
 process.stdout.write(
-  `published agent-workflow ${head} to ${profile.project}/${profile.branch}@${commitSha} (${actions.length} file actions)\n`,
+  `published agent-workflow ${head} to ${profile.project}/${profile.branch}@${commitSha} (${actions.length} file actions in ${Math.max(chunks.length, 1)} commit(s))\n`,
 )
 if (!Bun.argv.includes('--no-release')) {
   const release = await releaseCommit({

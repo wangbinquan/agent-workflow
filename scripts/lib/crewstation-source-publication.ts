@@ -77,6 +77,8 @@ export async function planSourcePublication(input: {
     const remote = await input.remoteFile(path)
     if (remote?.blob_id === next?.blob && remote?.execute_filemode === (next?.mode === '100755'))
       continue
+    // Already gone, e.g. deleted by an interrupted chunked publication.
+    if (remote === null && next === undefined) continue
     if (
       remote === null
         ? previous !== undefined
@@ -105,6 +107,59 @@ export async function planSourcePublication(input: {
     }
   }
   return actions
+}
+
+/** What one GitLab commit request carries at most. A first publication is the
+ * whole snapshot (~9.5k files, ~200 MiB as base64), which GitLab refused as
+ * one request (RFC-370 hosted acceptance, 2026-10-19:
+ * `source-publication-http-400`); deltas of ~8 MB have always gone through. */
+export const PUBLICATION_CHUNK_LIMITS = { actions: 500, bytes: 8 * 1024 * 1024 } as const
+
+/** Splits a publication into commit-sized chunks in order. A file's actions
+ * (its create / update and the chmod after it) stay in one chunk; a file
+ * larger than the byte limit goes alone. */
+export function chunkPublicationActions(
+  actions: readonly PublicationAction[],
+  limits: { readonly actions: number; readonly bytes: number } = PUBLICATION_CHUNK_LIMITS,
+): PublicationAction[][] {
+  const groups: PublicationAction[][] = []
+  for (const action of actions) {
+    const last = groups.at(-1)
+    if (last !== undefined && last[0]!.file_path === action.file_path) last.push(action)
+    else groups.push([action])
+  }
+  const chunks: PublicationAction[][] = []
+  let current: PublicationAction[] = []
+  let bytes = 0
+  for (const group of groups) {
+    const size = group.reduce((total, action) => total + (action.content?.length ?? 0), 0)
+    if (
+      current.length > 0 &&
+      (current.length + group.length > limits.actions || bytes + size > limits.bytes)
+    ) {
+      chunks.push(current)
+      current = []
+      bytes = 0
+    }
+    current.push(...group)
+    bytes += size
+  }
+  if (current.length > 0) chunks.push(current)
+  return chunks
+}
+
+/** The message of every commit but the last of a chunked publication. It still
+ * names the source the branch was published from, so an interrupted
+ * publication resumes as a delta (files already applied are skipped); a first
+ * publication has none and resumes with `--adopt-existing`. */
+export function partialPublicationMessage(input: {
+  readonly previousSha: string | null
+  readonly head: string
+  readonly part: number
+  readonly parts: number
+}): string {
+  const part = `partial publication ${input.part}/${input.parts} of agent-workflow ${input.head}`
+  return input.previousSha === null ? part : `agent-workflow ${input.previousSha}\n\n${part}`
 }
 
 export interface PublicationCommit {

@@ -1,9 +1,12 @@
 import { expect, test } from 'bun:test'
 import {
+  chunkPublicationActions,
   createGitLabPublication,
+  partialPublicationMessage,
   planSourcePublication,
   previousPublication,
   sourceFile,
+  type PublicationAction,
   type SourceFile,
 } from '../../../scripts/lib/crewstation-source-publication'
 
@@ -218,4 +221,82 @@ test('adopting a template replaces its files, removes the rest and adds the snap
     last_commit_id: 'template',
     content: Buffer.from('FROM agent-workflow').toString('base64'),
   })
+})
+
+// The first publication is the whole snapshot (~9.5k files, ~200 MiB as
+// base64), which GitLab refused as one commit request (`source-publication-http-400`).
+const create = (path: string, bytes: number): PublicationAction => ({
+  action: 'create',
+  file_path: path,
+  content: 'x'.repeat(bytes),
+  encoding: 'base64',
+})
+
+test('a large publication is split into ordered chunks that keep each file whole', () => {
+  const actions: PublicationAction[] = [
+    create('a', 10),
+    create('b', 10),
+    { action: 'chmod', file_path: 'b', execute_filemode: true },
+    create('c', 10),
+    create('huge', 100),
+    { action: 'delete', file_path: 'old', last_commit_id: 'x' },
+  ]
+  const chunks = chunkPublicationActions(actions, { actions: 3, bytes: 50 })
+  expect(chunks.map((chunk) => chunk.map((a) => `${a.action}:${a.file_path}`))).toEqual([
+    ['create:a', 'create:b', 'chmod:b'],
+    ['create:c'],
+    ['create:huge'],
+    ['delete:old'],
+  ])
+  expect(chunks.flat()).toEqual(actions)
+  expect(chunkPublicationActions([])).toEqual([])
+})
+
+test('a partial commit keeps the provenance a resumed publication plans against', () => {
+  const head = 'b'.repeat(40)
+  const resumed = partialPublicationMessage({ previousSha: SOURCE, head, part: 2, parts: 5 })
+  expect(
+    previousPublication({
+      headMessage: resumed,
+      adopt: false,
+      committedFiles: (sha) => new Map([[sha, original]]),
+      remoteTree: template,
+    }).sourceSha,
+  ).toBe(SOURCE)
+  expect(resumed).toContain(`partial publication 2/5 of agent-workflow ${head}`)
+  // A first publication has no source yet: an interrupted one is adopted again.
+  const first = partialPublicationMessage({ previousSha: null, head, part: 1, parts: 5 })
+  expect(() =>
+    previousPublication({
+      headMessage: first,
+      adopt: false,
+      committedFiles: unread,
+      remoteTree: template,
+    }),
+  ).toThrow('pass --adopt-existing')
+})
+
+test('a resumed publication skips what an interrupted one already applied', async () => {
+  const actions = await planSourcePublication({
+    previous: new Map([
+      ['gone', original],
+      ['updated', original],
+      ['pending', original],
+    ]),
+    next: new Map([
+      ['updated', changed],
+      ['pending', changed],
+    ]),
+    remoteFile: async (path) =>
+      path === 'gone'
+        ? null
+        : {
+            blob_id: path === 'updated' ? changed.blob : original.blob,
+            execute_filemode: false,
+            last_commit_id: 'partial',
+          },
+  })
+  expect(actions.map((action) => [action.action, action.file_path])).toEqual([
+    ['update', 'pending'],
+  ])
 })
