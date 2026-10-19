@@ -1,7 +1,11 @@
 // RFC-370 M0 — publish the committed agent-workflow sources to a CrewStation project.
 //
 //   CS_TOKEN=<platform session> CS_GITLAB_TOKEN=<repository token> [CS_API_URL=<platform api>] \
-//     bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release]
+//     bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release] [--adopt-existing]
+//
+// The first publication to a new project replaces the template it was created
+// from only with `--adopt-existing`; later publications are deltas against the
+// previously published source commit named in the branch head.
 //
 // 1. Read committed blobs from the primary checkout (never the working tree);
 // 2. add `deploy/crewstation/Dockerfile` and the rendered `crewstation.yaml` at
@@ -22,6 +26,7 @@ import { parseDeploymentProfile, renderCrewStationManifest } from './lib/crewsta
 import {
   createGitLabPublication,
   planSourcePublication,
+  previousPublication,
   sourceFile,
   type SourceFile,
 } from './lib/crewstation-source-publication'
@@ -100,7 +105,7 @@ async function releaseCommit(input: {
 const profilePath = flag('--profile')
 if (profilePath === undefined) {
   console.error(
-    'usage: bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release]',
+    'usage: bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release] [--adopt-existing]',
   )
   process.exit(2)
 }
@@ -117,8 +122,7 @@ const publisher = createGitLabPublication({
   token: gitlabToken,
 })
 const remoteHead = await publisher.head(profile.branch)
-const previousSha = /^agent-workflow ([a-f0-9]{40})(?:\n|$)/.exec(remoteHead.message)?.[1]
-if (previousSha === undefined) throw new Error('publication-target-source-provenance-missing')
+const remoteTree = await publisher.tree(remoteHead.id)
 function committedFiles(sha: string): Map<string, SourceFile> {
   const files = new Map<string, SourceFile>()
   for (const entry of run(['git', 'ls-tree', '-r', '-z', sha], repoRoot)
@@ -146,7 +150,12 @@ function committedFiles(sha: string): Map<string, SourceFile> {
   files.set('Dockerfile', dockerfile)
   return files
 }
-const previous = committedFiles(previousSha)
+const previous = previousPublication({
+  headMessage: remoteHead.message,
+  adopt: Bun.argv.includes('--adopt-existing'),
+  committedFiles,
+  remoteTree,
+}).files
 const next = committedFiles(head)
 const manifestSource = next.get('deploy/crewstation/crewstation.template.yaml')
 if (manifestSource === undefined) throw new Error('publication-manifest-template-missing')
@@ -160,7 +169,6 @@ const oldManifest = await publisher.file('crewstation.yaml', remoteHead.id)
 if (oldManifest !== null)
   previous.set('crewstation.yaml', sourceFile(Buffer.from(oldManifest.content, 'base64')))
 next.set('crewstation.yaml', sourceFile(Buffer.from(manifest)))
-const remoteTree = await publisher.tree(remoteHead.id)
 const actions = await planSourcePublication({
   previous,
   next,

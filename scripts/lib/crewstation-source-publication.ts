@@ -24,6 +24,44 @@ export function sourceFile(bytes: Uint8Array): SourceFile {
   return { blob, mode: '100644', bytes: () => bytes }
 }
 
+/** The head message of every AW publication names its source commit. */
+const PROVENANCE = /^agent-workflow ([a-f0-9]{40})(?:\n|$)/
+
+/** The files the next publication is planned against. A branch AW published
+ * before names that source commit in its head message. A branch AW never
+ * published — a new CrewStation project still holding its template scaffold —
+ * is adopted only on request: its current files count as the previous
+ * publication, so AW's snapshot replaces them and removes the rest (RFC-370
+ * hosted acceptance, 2026-10-19: the first publication to a new project
+ * failed with no way forward). */
+export function previousPublication(input: {
+  readonly headMessage: string
+  readonly adopt: boolean
+  readonly committedFiles: (sha: string) => Map<string, SourceFile>
+  readonly remoteTree: ReadonlyMap<string, { readonly id: string; readonly mode: string }>
+}): { readonly sourceSha: string | null; readonly files: Map<string, SourceFile> } {
+  const sha = PROVENANCE.exec(input.headMessage)?.[1]
+  if (sha !== undefined) return { sourceSha: sha, files: input.committedFiles(sha) }
+  if (!input.adopt)
+    throw new Error(
+      'publication-target-source-provenance-missing: agent-workflow never published this branch; ' +
+        'for the first publication to a new project pass --adopt-existing to replace its current files',
+    )
+  const files = new Map<string, SourceFile>()
+  for (const [path, entry] of input.remoteTree) {
+    if (entry.mode !== '100644' && entry.mode !== '100755')
+      throw new Error(`publication-unsupported-remote-entry: ${path}`)
+    files.set(path, {
+      blob: entry.id,
+      mode: entry.mode,
+      bytes: () => {
+        throw new Error(`publication-adopted-file-unread: ${path}`)
+      },
+    })
+  }
+  return { sourceSha: null, files }
+}
+
 /** Delta against the previous published AW snapshot. Unmanaged files are
  * untouched. A modified managed file blocks publication instead of being
  * replaced. API last_commit_id also protects the read/commit race. */

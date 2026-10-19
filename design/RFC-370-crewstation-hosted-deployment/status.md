@@ -68,35 +68,37 @@
 | `96f8d8977`                | 托管 MCP 探测：本地 stdio MCP `m2-local`（`node -e …`）82 毫秒内 `connect-failed: Executable not found in $PATH: "node"`——RFC-030 探测路由在 AW 服务容器里启动服务端，而服务镜像没有 node/npx，也不是托管 Agent 启动 MCP 的地方（§3.3：托管入口不在服务槽本地 spawn）。Resource Catalog 增 `McpProbeRunner` 参与者；托管 MCP 诊断选择把探测作为 `mcp-probe` 命令发到 `system:shared` 临时卷的任务镜像（随运行版本），任务镜像里运行不变的 RFC-030 探测；路由保留准入、新鲜度与持久化，无选择时仍进程内探测（单机不变）                                                                                                                                                                                                                                                                        |
 | `20069e91a`                | CS 升级换了 Runner 底座后，任务启动、系统 Agent 与探测一律 HTTP 500：平台以 `412 image_usage_unvalidated` 拒绝创建父任务（任务镜像的验证随 Runner 合同摘要失效，见上文），AW 把原始拒绝当作内部错误。父任务创建把该拒绝映射为 `hosted-task-image-unvalidated`（503，说明须由运维重新验证任务镜像版本，或发布以当前底座构建的任务镜像），立即失败、不按额度等待，父任务请求保留，重新验证后同一任务可直接重试                                                                                                                                                                                                                                                                                                                                                                                  |
 | `b8e5af2a0`                | 已完成任务 `01M5634T53TYTZVM2RPZTD4439` 的 CS 父任务容器失效（`容器不存在`，卷完好）后，查看其文件一律 503 `hosted-workspace-unavailable`「从 CS 恢复页重建工作区，然后恢复本任务」；CS 对该父任务提供 `rebuild-workspace`，但 AW 恢复消费者对已完成任务一律以 `recovery-task-finished` 拒绝，文件从此不可读。已完成任务保留暂停的父任务正是为了文件可浏览（V3），失效容器的卷只有重建后才能再访问：`rebuild-workspace` 改为不论任务状态都受理，平台重建后只对可恢复的任务执行恢复，空闲父任务照常再暂停；`resume-task` 仍拒绝不可恢复的任务（含已完成）。不可用提示不再要求恢复已完成的任务                                                                                                                                                                                                  |
+| `96275f186`                | 切到 v0.6.22 后的第一次运行时探测 300 秒后 504 `hosted-workspace-provisioning-timeout: … still closing`：被新版本取代的 `system:shared` 父任务（archive-and-delete）替换时，AW 先终结旧父任务、再在供给预算内等它物理释放，而 CS 用了约 8 分钟才终结完（卷早已删除，状态停在 `finalizing`／`releasing`）——每次切流后 scratch owner（探测、意图、记忆蒸馏）的第一次使用都可能超时。平台受理关闭后旧父任务的释放归平台：替换只等受理，随即为新版本重新登记父任务；任务删除与生命周期对账仍等物理释放。替换还只退役它读到的那一代登记（按 request key）：此前一次使用决定替换、却在另一并发使用已重新登记之后才去关闭，会关掉对方的新父任务；`allocate` 也不再把父任务记到已按别的 key 重新登记的行上                                                                                            |
 
 **CI 归因（2026-10-18）**：`b224e0342` 的 CI `39126009136` 只在后端分片 21 红：`RFC-359 W6-T28 L6`（PostgreSQL 并发删兄弟任务）的维护认领转移遇 `40001` 序列化冲突、用例的写锁等待超时——与该提交（运行时探测）无关，同一用例在前后各次运行（含 `96f8d8977`）均通过，归属不明、未认领，失败日志保留。`96f8d8977` 的 CI `39127482168` 红在两条守卫（公共面 ratchet、跳过策略），均为该提交所致，`869d59180` 修复。`869d59180` 的 CI `39128987961` 只有 Playwright e2e macOS 分片 3/3 红：`workgroup-matrix.spec.ts:270` 首次尝试「等待 daemon 就绪行 30 秒超时」、重试断言失败；该提交只改 MCP 探测的类型与命名，`96f8d8977` 上同一 e2e 各分片全部通过，判为运行器启动抖动，未认领；以后继提交的 CI 作证据。`dccb41909` 的 CI `39134101208`、`20069e91a` 的 `39138974893`、`c704aee79` 的 `39140349016` 全部成功。`b8e5af2a0` 的 CI `39140807563` 只有 Playwright e2e Windows 分片 3/4 红：`task-lifecycle-states.spec.ts:479`「done（快速桩）」首次与重试都在 30 秒内仍为 running，守护进程日志有 1.4～2.4 秒的事件循环停顿与 1.6 秒的慢查询；该提交只改托管恢复消费者与托管工作区提示，单机守护进程不装配这两处，紧邻的前两次运行同一分片通过，判为 Windows 运行器缓慢，未认领；以后继提交的 CI 作证据。
 
 **发布**（服务槽蓝绿交替，项目仓库镜像提交略）：
 
-| 版本    | 发布 id      | AW 提交     | 任务镜像版本                           | 结果                                                            |
-| ------- | ------------ | ----------- | -------------------------------------- | --------------------------------------------------------------- |
-| v0.6.0  | `01a148c2-…` | `04072a0ff` | `01a148b6-1518-…`（`04072a0ff`）       | failed：服务镜像 apt `500 … unexpected EOF`（`b864cd42a` 前）   |
-| v0.6.1  | `01a148ce-…` | `b864cd42a` | 同上                                   | failed：新槽待命崩溃循环，未就绪（`4163865a8` 前）              |
-| v0.6.2  | `01a148fb-…` | `2b5b8f9c5` | 同上                                   | ready                                                           |
-| v0.6.3  | `01a14935-…` | `dfe075c27` | 同上                                   | ready                                                           |
-| v0.6.4  | `01a14942-…` | `d63e57110` | 同上                                   | failed：平台 buildkitd 被 OOMKilled（4 Gi）                     |
-| v0.6.5  | `01a14944-…` | `d63e57110` | 同上                                   | ready                                                           |
-| v0.6.6  | `01a14a2d-…` | `1cc89ee66` | `01a14a2a-8d06-…`（`1cc89ee66`）       | ready                                                           |
-| v0.6.7  | `01a14a4d-…` | `a1f35c48b` | `01a14a49-cd34-…`（`a1f35c48b`）       | ready                                                           |
-| v0.6.8  | `01a14a6c-…` | `c06f28af3` | `01a14a6b-2610-…`（`c06f28af3`）       | ready                                                           |
-| v0.6.9  | `01a14c2c-…` | `2dc736b57` | `01a14a99-0a8a-…`（`2dc736b57`）       | ready；M1 代表性工作流通过                                      |
-| v0.6.10 | `01a14c42-…` | `b76a88e70` | `01a14c3e-1609-…`（`b76a88e70`，装配） | ready；交接验收的目标版本                                       |
-| v0.6.11 | `01a14c8c-…` | `47d0379a2` | `01a14c8a-798a-…`（`ebad918a4`，装配） | failed：平台 buildkitd 健康检查超时被重启（CPU 争用），构建中断 |
-| v0.6.12 | `01a14c90-…` | `36f907078` | 同上                                   | ready；M2 材料验收通过；交接恢复暴露 `2a70c9328` 的缺陷         |
-| v0.6.13 | `01a14d7e-…` | `1fd8a131c` | `01a14d79-f0d5-…`（`e2cb7cf49`，装配） | ready；交接复验的旧实例                                         |
-| v0.6.14 | `01a14d88-…` | `3a81b7551` | 同上                                   | ready；交接复验的新实例，现为生产                               |
-| v0.6.15 | `01a14db0-…` | `19ad368d1` | 同上                                   | failed：迁移 Job 超出截止时间（单节点 CPU 满载，Pod 未调度）    |
-| v0.6.16 | `01a14e10-…` | `bb48c1f8b` | 同上                                   | ready；评审门修复，切流时为生产（epoch 30）                     |
-| v0.6.17 | `01a14e33-…` | `b7bb6efec` | 同上                                   | failed：平台 buildkitd 被 OOMKilled（4 Gi），构建中断           |
-| v0.6.18 | `01a14e38-…` | `b7bb6efec` | 同上                                   | ready；首个带事件订阅的版本，接管验收的目标版本（epoch 32）     |
-| v0.6.19 | `01a14e87-…` | `a70504206` | 同上                                   | ready；父任务 archive-and-delete，现为生产（epoch 34）          |
-| v0.6.20 | `01a14f7b-…` | `dccb41909` | `01a14f10-db5d-…`（`96f8d8977`，装配） | failed：CS 升级后任务镜像验证失效（见上文），重新验证前发布     |
-| v0.6.21 | `01a14f80-…` | `dccb41909` | 同上                                   | ready（preview）；运行时探测与 MCP 探测修复的复验目标           |
+| 版本    | 发布 id      | AW 提交     | 任务镜像版本                             | 结果                                                            |
+| ------- | ------------ | ----------- | ---------------------------------------- | --------------------------------------------------------------- |
+| v0.6.0  | `01a148c2-…` | `04072a0ff` | `01a148b6-1518-…`（`04072a0ff`）         | failed：服务镜像 apt `500 … unexpected EOF`（`b864cd42a` 前）   |
+| v0.6.1  | `01a148ce-…` | `b864cd42a` | 同上                                     | failed：新槽待命崩溃循环，未就绪（`4163865a8` 前）              |
+| v0.6.2  | `01a148fb-…` | `2b5b8f9c5` | 同上                                     | ready                                                           |
+| v0.6.3  | `01a14935-…` | `dfe075c27` | 同上                                     | ready                                                           |
+| v0.6.4  | `01a14942-…` | `d63e57110` | 同上                                     | failed：平台 buildkitd 被 OOMKilled（4 Gi）                     |
+| v0.6.5  | `01a14944-…` | `d63e57110` | 同上                                     | ready                                                           |
+| v0.6.6  | `01a14a2d-…` | `1cc89ee66` | `01a14a2a-8d06-…`（`1cc89ee66`）         | ready                                                           |
+| v0.6.7  | `01a14a4d-…` | `a1f35c48b` | `01a14a49-cd34-…`（`a1f35c48b`）         | ready                                                           |
+| v0.6.8  | `01a14a6c-…` | `c06f28af3` | `01a14a6b-2610-…`（`c06f28af3`）         | ready                                                           |
+| v0.6.9  | `01a14c2c-…` | `2dc736b57` | `01a14a99-0a8a-…`（`2dc736b57`）         | ready；M1 代表性工作流通过                                      |
+| v0.6.10 | `01a14c42-…` | `b76a88e70` | `01a14c3e-1609-…`（`b76a88e70`，装配）   | ready；交接验收的目标版本                                       |
+| v0.6.11 | `01a14c8c-…` | `47d0379a2` | `01a14c8a-798a-…`（`ebad918a4`，装配）   | failed：平台 buildkitd 健康检查超时被重启（CPU 争用），构建中断 |
+| v0.6.12 | `01a14c90-…` | `36f907078` | 同上                                     | ready；M2 材料验收通过；交接恢复暴露 `2a70c9328` 的缺陷         |
+| v0.6.13 | `01a14d7e-…` | `1fd8a131c` | `01a14d79-f0d5-…`（`e2cb7cf49`，装配）   | ready；交接复验的旧实例                                         |
+| v0.6.14 | `01a14d88-…` | `3a81b7551` | 同上                                     | ready；交接复验的新实例，现为生产                               |
+| v0.6.15 | `01a14db0-…` | `19ad368d1` | 同上                                     | failed：迁移 Job 超出截止时间（单节点 CPU 满载，Pod 未调度）    |
+| v0.6.16 | `01a14e10-…` | `bb48c1f8b` | 同上                                     | ready；评审门修复，切流时为生产（epoch 30）                     |
+| v0.6.17 | `01a14e33-…` | `b7bb6efec` | 同上                                     | failed：平台 buildkitd 被 OOMKilled（4 Gi），构建中断           |
+| v0.6.18 | `01a14e38-…` | `b7bb6efec` | 同上                                     | ready；首个带事件订阅的版本，接管验收的目标版本（epoch 32）     |
+| v0.6.19 | `01a14e87-…` | `a70504206` | 同上                                     | ready；父任务 archive-and-delete，现为生产（epoch 34）          |
+| v0.6.20 | `01a14f7b-…` | `dccb41909` | `01a14f10-db5d-…`（`96f8d8977`，装配）   | failed：CS 升级后任务镜像验证失效（见上文），重新验证前发布     |
+| v0.6.21 | `01a14f80-…` | `dccb41909` | 同上                                     | ready（preview），未切流；被 v0.6.22 取代                       |
+| v0.6.22 | `01a1517e-…` | `821acaa3b` | `01a14fc6-95a1-…`（`20069e91a`，新底座） | ready；2026-10-19 切流（用户授权），现为生产                    |
 
 **M1 验收**（工作流 `rfc370-m1-acceptance`：git 包装器内 opencode Agent 改两个文件 → 脚本节点用 bash / node / python3 / git 汇报 → 自动提交推送到本机 GitLab 项目 550 的工作分支；模型走缺省 Agent 档案 `aw-default`）：
 
@@ -107,6 +109,8 @@
 - **服务交接（重启）**：`01M565645BNZ5SM15S55MRSNXT` 在 v0.6.9 上运行到 `__commit_push__:snap` 时切流到 v0.6.10：旧实例失权 detach（不发 CS cancel）并以 1 退出重启，新实例 epoch 22 取得执行权；运行中的提交推送被标 `interrupted`，任务 `interrupted`（与单机守护进程重启一致，自动修复未开启时不自动续跑）。用户恢复被上表 `ebad918a4` 的缺陷拒绝，修复部署后复验。v0.6.12 上恢复被接受，但任务以 `scheduler stalled; failed parked: count` 失败：旧实例失权后仍把交接时正在 merge-back 的 `count` 写成 `merge-failed`（只读查库：`count` 无任何合回 effect、卷内快照命令由新实例对账为成功），提交推送也不会再被触发——即上表 `2a70c9328`，修复后在新版本上复验。
 - **服务交接复验通过**（v0.6.13 → v0.6.14）：`01M56RRG6A0F7KP5N1JXJ9FNNF` 在 `count` 的 merge-back 快照进行中（`done`／`isolating`）、git 包装器的提交推送已开始时切流。旧实例失权后写库全部被拒（日志中连关机时的会话收尾都以 `HostedExecutionLeaseLostError` 被拒），`count` 停在 `done`／`isolating`、隔离区保留，提交推送 `interrupted`，任务 `interrupted`——与单机在该时刻崩溃一致。用户恢复后 `count` 从保留的隔离区快照并合回（不重跑），被打断的提交推送重跑一次，推上 `3ec42914`（`NOTES.md`、`src/greeting.js`）到 `aw-m1-handoff-20261017i`，任务 done。
 
+- **回退演练（AC07，用户授权）**：2026-10-19 00:12 切流 v0.6.19 → v0.6.22（新底座任务镜像）；00:48:33 回退到仍在另一槽的 v0.6.19（CS 200）。v0.6.22 实例失权后以 1 退出、作为待命槽重启；v0.6.19 实例 57 秒内取得执行权（其间发起任务返回 503「本实例暂不执行任务」），随后启动的任务 `01M58T4429TKF2PEFX4E1D2CX8` done。向前一步见下一版本的切流。
+
 - **接管通过（无需用户操作）**（v0.6.16 → v0.6.18）：`01M573PVYFDZZNRS2E4GPTPQQK` 在 `writer` 的 CS Agent 子任务流式输出时切流（绑定 `running`、带游标、epoch 30）。任务 `interrupted` → `pending` → `running` 约 50 秒内自动恢复，新实例（epoch 32）按原运行 id 接管同一个 Agent 子任务（绑定仍是 attempt 1，没有第二次 writer 执行），`writer` → `count` → 提交推送依次完成，推上 `489835c3` 到 `aw-m1-handoff-20261018a`，任务 done；三条执行绑定均在 epoch 32 下结算。
   **M2 验收**：
 
@@ -116,6 +120,7 @@
 - **内容对象通过**（v0.6.19）：工作流 `rfc370-m4-artifacts2`（脚本节点写文件，Agent `m4-reporter`（`oc-deepseek`）在 `path<md>` / `path<png>` 端口报告路径）。任务 `01M57HARN763TXPXWFHG83NMJ3` done，两个端口产物在 emit 时归档为 `task-artifact` 发布（对象 `01a14f1b-2a84-…` 18 字节、`01a14f1b-7268-…` 70 字节），经 `/api/tasks/:id/port-artifacts/:nodeRunId/:port` 下载：元数据 `source: archive`、MIME `text/markdown` / `image/png`，字节的 SHA-256 与 Agent 实际写入的内容逐字节相同（`b27db49e…` / `43be52f9…`，PNG 含 NUL）。注：脚本节点缺省只读、写入不合回，Agent 没找到文件便自己写了一份——验收比对的是它实际写入的字节，结论不变。删除任务后父任务立即 `closed`（工作卷随 archive-and-delete 终结回收）；对象发布按设计由 Task Execution 的对象清扫在 24 小时启动宽限期后释放（启动前可能已保留输入文件，`HOSTED_TASK_OBJECT_GRACE_MS`；已删除任务的释放由 `rfc370-task-object-sweep.test.ts` 双引擎覆盖），删除后 7 分钟仍为 `ready` 属预期。
 - **调用子工作流 / 工作组通过，与单机一致**（v0.6.19）：工作流 `rfc370-m2-call`（`call-workflow` 调用脚本子工作流 `rfc370-m2-child`，`call-workgroup` 调用单成员工作组 `rfc370-m2-wg`）。托管任务 `01M57JQ9Z4BFHH4JW9TCJD5X0Q` done，两个子任务（`01M57JTT1E…` / `01M57JSVQ2…`）各自 done；`child_report` = `child saw: blue-green handoff` 与单机对照 `01M578KXDZS313DTDYJFAJ4BK7` 逐字相同，`group_result` 两边都是对主题的一句话说明（模型输出，托管遵守了 `WG:` 前缀）。
 - **真实浏览器用户流程通过**（v0.6.19，AC11）：Playwright 无头 Chromium 带 CS 平台会话 Cookie 经网关打开 AW：`/api/whoami` 映射为 AW 用户 `dev-admin`（admin，`source: session`）；代理 / 工作流 / MCP / 任务页渲染无错误横幅、控制台 0 错误；任务向导「Agent `rfc370-intent-probe` + 临时空间」启动任务 `01M57MX14VK84VWBCGPE8FB7NH`，完成页显示「已完成」与工作流状态图，`answer` = 对 `git status` 的一句话说明。托管启动接口要等平台为任务建好父任务与工作卷才返回（实测约 39 秒，额度满时最长等到 300 秒供给预算），期间向导按钮显示「启动中…」，超时则按任务名对账未知结果——记为体验特性。
+- **运行时探测与 MCP 探测（v0.6.22 复验）**：MCP 探测 `m2-local` 在任务镜像内运行，10 秒内 `status: ok`（握手 1.6 秒，`serverInfo` 与工具 `m2_local_token` 列出；`partial` 只因内联测试服务端未实现 resources / prompts 列表），即上表 `96f8d8977` 的修复。运行时探测 `oc-glm` 不再报 `runtime-probe-stale`（`b224e0342`）：Agent 子任务 exit 0 并回显随机标记（`sawNonce: true`、会话已捕获），但本机这一轮用了 166 秒，加上约 43 秒的工作区供给，结果比固定的 180 秒轮次预算晚 3 秒到达，报 `model-call-failed: timed out`——由上表 `cd897613d` 改为整个探测请求共用一个截止时间，待下一版本复验。切流后第一次探测还撞上 `96275f186` 的缺陷（旧 `system:shared` 父任务终结约 8 分钟）。
 - **工具调用显示通过**（CS `02b66a22` 部署后）：任务 `01M57RVYMS1S6BDJM4MR5F5WWB`（`m2-helper`，`oc-deepseek`）让 Agent 用 bash 执行 `echo tool-end-$((6*7))`：节点会话树中该工具调用为 `completed`，带输入与输出 `tool-end-42`，v0.6.19（生产）与 v0.6.21（预览槽）的会话接口一致；v0.6.21 预览槽在真实浏览器中渲染为「工具调用 bash 已完成 … 工具返回 tool-end-42」，并显示待机横幅（待机实例的 `worktree-tree` 返回 503，属预期）。此前每个 OpenCode 工具都显示为运行中、无输出（CS RFC-040 的业务投影缺陷，见 CS 验收记录）。
 - **本地 MCP / Git 插件 / 权限通过**（v0.6.19）：工作流 `rfc370-m2-materials2` 的主 Agent `m2-lead2`（`oc-glm`）挂本地 stdio MCP `m2-local`（`node -e` 内联服务，env `M2_LOCAL_TOKEN`）、Git 插件 `rfc370-m2-plugin`（`git+…aw-rfc370-acceptance.git#aw-m2-plugin`，经托管 plugin-installation 命令安装，`resolvedVersion e990bf1ab681`）与权限 `bash: deny`。`01M57CSZ2BS5YAVZJ7A2PAJS9Q` done：`plugin_token` = `PLUGIN-9873d72f`（插件的 system transform 生效）；`plugin_observation` = `bash=deny`（插件 `config` 钩子看到编译后的 Agent 权限）；`bash_probe` = `denied`（模型工具清单中无 bash）；`local_token` 为 `***`——事件中模型调用了 `m2_local_token`，工具返回的是 MCP env 里的值，CS 公共事件把秘密叶值替换为 `***`（与 CS RFC-040 options nonce 的处理相同），故端口值为掩码。启动清单 verified：`m2-local` connected（injected）。
 
@@ -124,6 +129,7 @@
 - **事件入站通过**（v0.6.19）：本机 GitLab 项目 550 新建分支 `aw-m3-evt2-20261018a`（`a8d24426`）→ GitLab webhook → 中继（GitLab 容器解析不到 CS 服务域，中继按原字节转发到宿主网关的 `gitlab-event-producer.svc.cs.internal/hooks/gitlab`）→ 生产方 202（`gitlab.push`）→ cs-events → AW 订阅 `/integrations/crewstation/events`（首次投递即 `delivered`；此前一律 401，即上表 `f6f8d1fcc`）→ `cs_event_inbox` → 路由与冻结目标 → webhook 投递 `matched` → 触发器 `rfc370-m3-push-v2` 以 scratch 空间启动任务 `01M5792FXWFSRTRK2T8R2BC4CY` → 脚本报告 `push aw-m3-evt2-20261018a @ a8d24426…`（分支与提交 SHA 由模板映射）→ done。分支过滤之外的 push（M1 的提交推送）被记录、不触发。
 - **任务删除与资源释放通过**（v0.6.19）：上一任务的父任务以 `archive-and-delete` 创建；删除任务后 35 秒内 PVC 消失，CS 任务「执行容器已停止，任务正在归档与回收工作卷」——即上表 `a70504206`。此前版本的 `legacy` 父任务删除后卷保留：删除 10 个旧验收任务后，其卷在 CS 资源中心成为「待回收」，经「删除工作卷」回收（项目 PVC 20/20 → 5/20）。
 - **平台恢复动作通过**（v0.6.19，CS `621e6183`）：对上述失败任务的父任务 `01a14e94-3366-…` 在 CS 发起 `resume-task`（评估摘要 + `requestKey: rfc370-m2c-resume-20261018a`，CS 202）。AW 恢复消费者认领后由平台恢复容器（原卷 UID `b2d0fb21-…`，操作 `01a14eef-5ec6-…`），再以请求者身份调用 AW 的普通恢复命令：请求 21 秒内 `succeeded`，任务 `failed` → `running`，失败节点续跑至 done（见 M2 控制流）。
+- **重建工作区通过**（v0.6.22，`b8e5af2a0`）：已完成任务 `01M5634T53TYTZVM2RPZTD4439` 的父任务 `01a14c32-…` 容器失效（`容器不存在`），查看文件 503；CS 评估给出 `rebuild-workspace`（原卷 `561e50fb-…`），请求 `rfc370-rebuild-done-20261019a`（CS 202）24 秒内 `succeeded`（操作 `01a1519d-16da-…`），父任务 `creating` → `running/ready`（世代 3），任务保持 `done`、未被续跑，文件树重新可读（`scripts/`、`src/`、`NOTES.md`、`README.md`）；空闲约 4 分钟后生命周期对账把父任务再次暂停（00:48）。
 - **API 自动化通过**（v0.6.14）：同一 CS 用户（平台管理员会话）签发只读 PAT（`scopes: []`；读权限对 PAT 恒隐含，可勾选的只有写权限点）。CS 会话 + PAT 调 `/api/whoami` 为 PAT 身份（`source: pat`、同一 AW 用户），读接口 200、越权写 403；无效 PAT、只带 PAT（无 CS 会话）、只带 CS 会话调 `/api/mcp` 均 401；CS 会话 + PAT 的 MCP `initialize` 200；撤销后 401。
 - **系统 Agent（记忆蒸馏）**：v0.6.12 起的 5 个蒸馏作业全部 done（此前在早期版本创建的共享 scratch 父任务里全部失败，见上表 `05ca7e200`）；切流到 v0.6.13 后，v0.6.12 时期的 `system:shared` 父任务在空闲时被关闭，新作业在新版本的父任务中运行。
 

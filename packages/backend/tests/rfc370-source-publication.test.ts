@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import {
   createGitLabPublication,
   planSourcePublication,
+  previousPublication,
   sourceFile,
   type SourceFile,
 } from '../../../scripts/lib/crewstation-source-publication'
@@ -131,4 +132,90 @@ test('a publication commits onto the existing branch without a new-branch start 
   expect(bodies).toHaveLength(1)
   expect(bodies[0]).toMatchObject({ branch: 'main', commit_message: 'candidate' })
   expect(bodies[0]).not.toHaveProperty('start_sha')
+})
+
+// RFC-370 hosted acceptance (2026-10-19): the first publication to a new
+// CrewStation project (its branch still holds the template it was created from)
+// failed with `publication-target-source-provenance-missing` and no way forward.
+const SOURCE = 'a'.repeat(40)
+const template = new Map([
+  ['Dockerfile', { id: file('FROM template').blob, mode: '100644' }],
+  ['src/main.ts', { id: file('template app').blob, mode: '100644' }],
+  ['run.sh', { id: file('#!/bin/sh').blob, mode: '100755' }],
+])
+const unread = () => {
+  throw new Error('a published source commit is read, the adopted tree is not')
+}
+
+test('a branch agent-workflow published plans against the source commit its head names', () => {
+  const committed = new Map([['a', original]])
+  for (const adopt of [false, true]) {
+    const baseline = previousPublication({
+      headMessage: `agent-workflow ${SOURCE}\n`,
+      adopt,
+      committedFiles: (sha) => {
+        expect(sha).toBe(SOURCE)
+        return committed
+      },
+      remoteTree: template,
+    })
+    expect(baseline).toEqual({ sourceSha: SOURCE, files: committed })
+  }
+})
+
+test('a branch agent-workflow never published is replaced only on request', () => {
+  expect(() =>
+    previousPublication({
+      headMessage: 'chore: initialize from template',
+      adopt: false,
+      committedFiles: unread,
+      remoteTree: template,
+    }),
+  ).toThrow('pass --adopt-existing')
+  expect(() =>
+    previousPublication({
+      headMessage: 'chore: initialize from template',
+      adopt: true,
+      committedFiles: unread,
+      remoteTree: new Map([['link', { id: file('x').blob, mode: '120000' }]]),
+    }),
+  ).toThrow('publication-unsupported-remote-entry: link')
+})
+
+test('adopting a template replaces its files, removes the rest and adds the snapshot', async () => {
+  const baseline = previousPublication({
+    headMessage: 'chore: initialize from template',
+    adopt: true,
+    committedFiles: unread,
+    remoteTree: template,
+  })
+  expect(baseline.sourceSha).toBeNull()
+  const next = new Map([
+    ['Dockerfile', file('FROM agent-workflow')],
+    ['run.sh', { ...file('#!/bin/sh'), mode: '100755' as const }],
+    ['package.json', file('{}')],
+  ])
+  const actions = await planSourcePublication({
+    previous: baseline.files,
+    next,
+    remoteFile: async (path) => {
+      const entry = template.get(path)
+      return entry === undefined
+        ? null
+        : {
+            blob_id: entry.id,
+            execute_filemode: entry.mode === '100755',
+            last_commit_id: 'template',
+          }
+    },
+  })
+  expect(actions.map((action) => [action.action, action.file_path])).toEqual([
+    ['update', 'Dockerfile'],
+    ['delete', 'src/main.ts'],
+    ['create', 'package.json'],
+  ])
+  expect(actions[0]).toMatchObject({
+    last_commit_id: 'template',
+    content: Buffer.from('FROM agent-workflow').toString('base64'),
+  })
 })
