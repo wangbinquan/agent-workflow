@@ -254,7 +254,8 @@ export function createHostedMigrationDrain(input: {
     stop: BusinessStopAuthority,
     ...parts: readonly (string | number)[]
   ) => {
-    const value = [parentRequestKey, 'migration', stop.operationId, action, ...parts].join(':')
+    const suffix = parts.map((part) => `:${part}`).join('')
+    const value = `${parentRequestKey}:migration:${stop.operationId}:${action}${suffix}`
     return value.length <= 128 ? value : `aw-task-op:${sha256Hex(value)}`
   }
   return async (stop, signal) => {
