@@ -1,0 +1,134 @@
+{
+  "id": "01M5APVBG2GECFM5MZ4YMV2X47:round",
+  "taskId": "01M5APJPEBEYM8RSTDH0VGC0V5",
+  "kind": "self",
+  "terminatedAs": null,
+  "askingNodeId": "starter_clarifier",
+  "askingNodeRunId": "01M5APM3F2TFS750SYEFECDJG7",
+  "askingShardKey": null,
+  "intermediaryNodeId": "starter_clarify",
+  "intermediaryNodeRunId": "01M5APVBG2GECFM5MZ4YMV2X47",
+  "intermediaryNodeTitle": "复核决定",
+  "targetConsumerNodeId": null,
+  "loopIter": 0,
+  "iteration": 0,
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["问题优先级"]
+      },
+      "id": "primary_problem",
+      "title": "第一版优先解决哪一个问题？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "避免同一房间被重复预约",
+          "description": "可能让冲突在提交时被阻止，但会增加预约规则和例外处理的成本。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "降低预约后不出现的情况",
+          "description": "可能释放被占用的房间，但需要记录爽约并可能引入提醒或约束，容易被理解为管理压力。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "提高三间房的实际使用率",
+          "description": "可能让更多会议排得进去，但需要可靠的占用信息，并可能改变现有预约习惯。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "让预约规则更公平、可解释",
+          "description": "可能减少争抢和争议，但紧急预约可能要额外审批，流程会变慢。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["成功标准"]
+      },
+      "id": "success_signal",
+      "title": "两周后用什么可观察结果判断第一版有效？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "冲突在提交时被阻止，且规则可追溯",
+          "description": "两周内较容易直接验证，但不能说明爽约或使用率是否改善。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "爽约和取消能被一致记录并按周汇总",
+          "description": "能为后续干预提供线索，但两周样本可能不足，且要先约定记录口径。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "关键时段三间房的实际使用情况能被核对",
+          "description": "能反映资源是否被真正使用，但需要可靠的现场或系统占用证据。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "团队成员能按新流程完成预约，例外有记录",
+          "description": "能观察采用情况，但“完成”与“例外”的判定标准需要提前说清。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["验证证据"]
+      },
+      "id": "validation_evidence",
+      "title": "在没有历史基线的情况下，两周内采用哪些可行证据来校验？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "访谈或短问卷收集当前痛点与例外",
+          "description": "成本较低，能补充主观背景，但样本和回忆偏差会限制代表性。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "现场抽样观察房间实际占用",
+          "description": "能直接看到使用情况，但只覆盖观察时段，不能代表整个周期。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "若现有工具可导出，提取预约与取消记录",
+          "description": "若数据可用则成本较低，但覆盖范围和字段完整性需要先核实。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "每周登记冲突、爽约和临时换房事件",
+          "description": "能捕捉真实异常，但依赖团队持续上报，并会增加记录负担。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "interactionMode": "mindmap",
+  "directive": null,
+  "status": "awaiting_human",
+  "sessionMode": null,
+  "designerRunTriggeredAt": null,
+  "abandonedAt": null,
+  "createdAt": 1792434613762,
+  "answeredAt": null,
+  "answeredBy": null,
+  "submittedByRole": null,
+  "answerAttributions": null,
+  "draftAnswers": null
+}

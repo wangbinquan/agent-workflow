@@ -215,7 +215,10 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           expect(prompt).toContain('A negative choice does not prescribe a replacement process')
           expect(prompt).toContain('渠道和时机另定')
           expect(prompt).toContain('其他措施未定')
-          expect(prompt).toContain('已有记录（如有）')
+          expect(prompt).toContain('用哪些结果判断方案有效？')
+          expect(prompt).toContain(
+            'Success criteria and evidence sources remain multi after choosing a primary goal',
+          )
           expect(prompt).toContain('按已约定的紧急程度')
           expect(prompt).toContain('otherwise use one category level')
           expect(prompt).toContain('Every question needs 2–4 options')

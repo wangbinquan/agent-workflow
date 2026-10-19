@@ -79,8 +79,8 @@ describe('RFC-378 optional decision contract', () => {
       ])
       expect(questions[0]!.options[0]!.description).toContain('渠道和时机另定')
       expect(questions[0]!.options[1]!.description).toContain('其他措施未定')
-      expect(questions[2]!.options[0]!.label).toContain('如有')
-      expect(questions[2]!.options[1]!.description).toContain('不能代表整个时段')
+      expect(questions[2]!.options[0]!.description).toContain('需先建立可比基线')
+      expect(questions[2]!.options[1]!.description).toContain('不能代替效果证据')
       expect(questions[1]!.options.map((option) => option.label)).toEqual([
         '按到达时间',
         '按已约定的紧急程度',
@@ -121,10 +121,12 @@ describe('RFC-378 optional decision contract', () => {
             'Neither option decides any other mechanism',
             'A negative choice does not prescribe a replacement process',
             'Multi: compatible additions on ONE axis',
-            'Never exclusive feature bundles or a none/only/no-extra option',
+            'Success criteria and evidence sources remain multi after choosing a primary goal',
+            'single needs an explicitly named primary criterion',
+            'No exclusive feature bundles or none/only/no-extra option',
             'Pilot size is scope, not evidence',
-            'History and observations coexist; scheduled and event-triggered reviews coexist',
-            'Review is not automatic policy activation',
+            'History/observations and scheduled/event-triggered reviews can coexist',
+            'Review does not activate policy',
             'no added commitments or positional references',
             'Recommend only with a specific assumption and cost',
             'Never invent a baseline, main pain point, existing system or automatic collection',
@@ -149,7 +151,7 @@ describe('RFC-378 optional decision contract', () => {
             expect(example).toContain('"kind": "multi"')
             expect(example).toContain('渠道和时机另定')
             expect(example).toContain('其他措施未定')
-            expect(example).toContain('已有记录（如有）')
+            expect(example).toContain('用哪些结果判断方案有效？')
             expect(example).toContain('若遗漏会造成明显损失')
             expect(example).not.toContain('why the user should pick this one')
             expect(prompt).toContain('Confirmed answers may still be provisional or unmarked')

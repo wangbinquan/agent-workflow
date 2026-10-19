@@ -1037,13 +1037,13 @@ ${clarifyOpenTag(nonce)}
       ]
     },
     {
-      "id": "evidence",
-      "title": "用哪些信息检查效果？",
-      "mindmap": {"categoryPath": ["验证"]},
+      "id": "criteria",
+      "title": "用哪些结果判断方案有效？",
+      "mindmap": {"categoryPath": ["成功标准"]},
       "kind": "multi",
       "options": [
-        {"label": "已有记录（如有）", "description": "可能提供历史线索，但可用性与覆盖范围需核实。"},
-        {"label": "新增抽样观察", "description": "可能补充当前线索，但需投入时间，不能代表整个时段。"}
+        {"label": "遗漏减少", "description": "可能表明目标有所改善，但需先建立可比基线。"},
+        {"label": "操作负担可接受", "description": "可能说明方案易用，但需实际使用反馈，不能代替效果证据。"}
       ]
     }
   ]
