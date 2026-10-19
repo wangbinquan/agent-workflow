@@ -178,7 +178,7 @@ function unavailable(task: BusinessTask, unobservedForMs: number): boolean {
  * the same generation is a lookup of the original platform operation. */
 export function hostedLifecycleRequestKey(
   parentRequestKey: string,
-  action: 'pause' | 'resume' | 'close' | 'finalize',
+  action: 'pause' | 'resume' | 'close' | 'finalize' | 'upgrade',
   generation: number,
 ): string {
   const key = `${parentRequestKey}:${action}:${generation}`

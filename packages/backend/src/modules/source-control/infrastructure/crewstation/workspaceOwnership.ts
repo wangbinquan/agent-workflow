@@ -11,8 +11,9 @@ import { parseHostedWorkspaceReference } from './workspaceReference'
  * Scratch owners (`system:…`, `mcp-test:…`) hold nothing but per-invocation
  * scratch. A CrewStation parent keeps the task image it was created with, so
  * their parent follows the running release instead: one created under another
- * release is replaced (RFC-370 hosted acceptance, 2026-10-17). Durable shared
- * owners such as `development:shared` keep theirs. */
+ * release is replaced (RFC-370 hosted acceptance, 2026-10-17). AW task owners
+ * and durable shared owners such as `development:shared` keep theirs; its task
+ * image is upgraded to the release's instead (§10 V21, CS RFC-043). */
 export function hostedWorkspaceOwnerKind(owner: string): 'task' | 'shared' | 'scratch' {
   if (!owner.includes(':')) return 'task'
   return owner.startsWith('system:') || owner.startsWith('mcp-test:') ? 'scratch' : 'shared'

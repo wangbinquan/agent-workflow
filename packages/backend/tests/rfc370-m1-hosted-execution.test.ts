@@ -859,6 +859,43 @@ describeEachProvider('RFC-370 hosted execution settlement in the background', (h
     expect((await f.store.get('earlier'))?.result?.reason).toBe('completed')
   })
 
+  // RFC-370 hosted acceptance (2026-10-19): a system agent that never got
+  // capacity cancelled its submission and detached. The binding stayed
+  // unsettled for the rest of the epoch, so `system:shared` stayed in use and
+  // its parent was never paused, holding the project's quota and memory.
+  test('an ownerless execution cancelled in this epoch is settled once nobody observes it', async () => {
+    const f = await setup()
+    await f.bind('cancelled', {})
+    await f.store.requestCancel('cancelled', 'user')
+    await f.bind('current', {})
+    f.history('cancelled', [resultOf('cancelled', 'c1', 'cancelled')])
+    await pass(f.settler)
+    expect((await f.store.unsettled()).map((binding) => binding.executionId)).toEqual(['current'])
+    expect((await f.store.get('cancelled'))?.result?.reason).toBe('cancelled')
+    expect(f.transport.cancels).toHaveLength(1)
+  })
+
+  test('a cancelled submission the platform never admitted is abandoned instead of waiting for capacity', async () => {
+    const f = await setup()
+    await f.store.prepare({ ...intent, executionId: 'unadmitted', requestKey: 'unadmitted' })
+    await f.store.requestCancel('unadmitted', 'user')
+    let submits = 0
+    f.transport.api.submitSubtask = async () => {
+      submits += 1
+      throw apiError(429, '项目并发额度已满，子任务未启动；请稍后重试')
+    }
+    await pass(f.settler)
+    expect(submits).toBe(1)
+    expect(await f.store.unsettled()).toEqual([])
+    expect((await f.store.get('unadmitted'))?.result?.reason).toStartWith(
+      'abandoned: cancelled before admission',
+    )
+    expect(f.logs).toEqual([
+      { level: 'info', message: 'hosted execution settled with an unknown outcome' },
+    ])
+    expect(f.transport.cancels).toEqual([])
+  })
+
   test('an unobservable execution is settled as unknown without blocking the others', async () => {
     const f = await setup()
     await f.bind('gone', { nodeRunId: 'canceled-run' })

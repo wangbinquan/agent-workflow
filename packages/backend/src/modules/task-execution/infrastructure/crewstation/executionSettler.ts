@@ -9,7 +9,8 @@
 //   cancelled, since no run consumes it any more;
 // - bindings restored from a database snapshot (§9.2 V5) — always stopped;
 // - executions owned by no node (system agents, runtime smoke) whose
-//   process ended; an owner that comes back reads the stored result.
+//   process ended; an owner that comes back reads the stored result;
+// - executions owned by no node that their owner cancelled in this epoch.
 // A detached observation (shutdown) or an unobservable outcome only affects
 // the binding at hand; the next pass retries what is still unsettled.
 import { inArray } from 'drizzle-orm'
@@ -82,8 +83,14 @@ export function createHostedExecutionSettler(input: {
       // An owner of this process is between preparing and observing its own
       // execution; only an earlier owner's executions are orphans. Their
       // owner may come back for the stored result, so they are not cancelled.
+      // A cancel recorded in this epoch with nobody observing is an orphan too:
+      // its owner gave up (a system agent that never got capacity) and will not
+      // consume it. Waiting for the next epoch kept its volume in use and its
+      // parent running (RFC-370 hosted acceptance, 2026-10-19).
       if (binding.nodeRunId === undefined)
-        return binding.epoch < epoch ? [{ binding, cancel: binding.cancelRequested }] : []
+        return binding.epoch < epoch || binding.cancelRequested
+          ? [{ binding, cancel: binding.cancelRequested }]
+          : []
       const status = states.get(binding.nodeRunId)
       // A pending/running run adopts its own execution through the scheduler.
       if (status !== undefined && ADOPTABLE_RUN_STATES.has(status)) return []

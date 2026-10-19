@@ -221,6 +221,17 @@ export function createHostedExecution(input: {
           await input.readyWorkspace(binding.taskId)
           continue
         }
+        // The platform admits nothing on a capacity refusal and does not queue
+        // it (CS RFC-027 §3): a cancelled submission has nothing left to stop.
+        if (
+          isCrewStationApiError(error) &&
+          error.status === 429 &&
+          (await input.store.get(binding.executionId))?.cancelRequested === true
+        ) {
+          const reason = `cancelled before admission: ${error.message}`
+          await input.store.abandon(binding.executionId, reason)
+          throw new HostedExecutionUnknownError(binding.executionId, reason)
+        }
         if (isCrewStationApiError(error) && !isTransientObservationError(error)) {
           const reason = `submission rejected: ${error.message}`
           await input.store.abandon(binding.executionId, reason)

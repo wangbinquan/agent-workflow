@@ -11,6 +11,11 @@
 // gone and nothing is resubmitted on its behalf. A caller that comes back with
 // the same operation id resubmits with the original requestKey, which CS
 // answers with the original subtask if it was created.
+//
+// An operation the parent's task image does not know runs again once, under
+// its own operation id (`<id>:image-upgraded`), after the parent was upgraded
+// to the release's image (§10 V21). A replay or recovery of the original id
+// follows that retry.
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
@@ -40,6 +45,11 @@ import {
   type WorkspaceHelperOutcome,
 } from '@/platform/crewstation/workspaceProtocol'
 import { sha256Hex } from '@/util/hash'
+import {
+  isUnknownTaskImageOperation,
+  NO_HOSTED_IMAGE_UPGRADES,
+  type HostedWorkspaceImageUpgrades,
+} from './workspaceImageUpgrade'
 
 /** The daemon is stopping: the command keeps running and is reconciled by
  * the next execution-authority holder. */
@@ -88,6 +98,8 @@ const CANCEL_SUFFIX = ':cancel'
 const MAX_PARENT_RESUMES = 3
 /** A `submitting` row of this process older than this has lost its caller. */
 const SUBMISSION_GRACE_MS = 60_000
+/** §10 V21: the operation id of the one run after a task-image upgrade. */
+const IMAGE_UPGRADE_RETRY_SUFFIX = ':image-upgraded'
 
 function authorityHeld(fence: CrewStationMutationFence): boolean {
   try {
@@ -118,10 +130,13 @@ export function createHostedWorkspaceCommands(input: {
   readonly commandEnvironment?: (
     operation: string,
   ) => Readonly<Record<string, BusinessEnvironmentValue>> | undefined
+  /** §10 V21: upgrades the parent's task image after a command it does not know. */
+  readonly imageUpgrades?: Pick<HostedWorkspaceImageUpgrades, 'afterUnknownOperation'>
   readonly now?: () => number
 }): HostedWorkspaceCommands {
   const session = databaseSessionFor(input.db)
   const now = input.now ?? Date.now
+  const imageUpgrades = input.imageUpgrades ?? NO_HOSTED_IMAGE_UPGRADES
   const inFlight = new Set<string>()
 
   const fenced = async <T>(work: (tx: ProviderNeutralDatabase, epoch: number) => Promise<T>) => {
@@ -373,6 +388,73 @@ export function createHostedWorkspaceCommands(input: {
     }
   }
 
+  const callOnce = async <T>(
+    taskId: string,
+    operation: string,
+    value: unknown,
+    operationId: string,
+    options: WorkspaceHelperOptions,
+  ): Promise<T> => {
+    const workspace = await input.workspaces.ensure(taskId)
+    const executionId = `command:${taskId}:${operationId}`
+    const resultPath = workspaceResultPath(digest(executionId))
+    const argv = workspaceHelperArguments(operation, value, resultPath)
+    const existing = await read(executionId)
+    if (existing !== null) {
+      const frozen = JSON.parse(existing.requestJson) as { argv: string[] }
+      if (
+        existing.businessTaskId !== workspace.businessTaskId ||
+        existing.operation !== operation ||
+        JSON.stringify(frozen.argv) !== JSON.stringify(argv)
+      )
+        throw new Error('hosted-command-replay-mismatch')
+      if (existing.state === 'settled') return conclude<T>(outcomeOf(existing))
+      if (existing.state === 'abandoned') {
+        await patch(executionId, { state: 'submitting' })
+        return observe<T>({ ...existing, state: 'submitting' }, options)
+      }
+      // The original persisted Secret references win over a later
+      // deployment configuration change during a cold retry.
+      return observe<T>(existing, options)
+    }
+    const environment = input.commandEnvironment?.(operation)
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    const requestJson = JSON.stringify({
+      argv,
+      resultPath,
+      ...(environment === undefined ? {} : { env: environment }),
+      timeoutSeconds: Math.min(86_400, Math.max(1, Math.ceil(timeoutMs / 1_000))),
+    })
+    await fenced(async (tx, epoch) => {
+      await tx
+        .insert(hostedWorkspaceCommands)
+        .values({
+          executionId,
+          taskId,
+          businessTaskId: workspace.businessTaskId,
+          operation,
+          requestKey: `aw-command:${digest(executionId)}`,
+          requestJson,
+          state: 'submitting',
+          epoch,
+          createdAt: now(),
+          updatedAt: now(),
+        })
+        .onConflictDoNothing()
+    })
+    const inserted = await read(executionId)
+    if (inserted === null) throw new Error('hosted-command-intent-missing')
+    return observe<T>(inserted, options)
+  }
+  const retryOf = (operationId: string) => `${operationId}${IMAGE_UPGRADE_RETRY_SUFFIX}`
+  /** The command runs again when its parent's image did not know the
+   * operation and was upgraded just now, or when that run already exists (a
+   * replay of the original id). */
+  const rerunsAfterImageUpgrade = async (taskId: string, operationId: string, error: unknown) =>
+    isUnknownTaskImageOperation(error) &&
+    ((await read(`command:${taskId}:${retryOf(operationId)}`)) !== null ||
+      (await imageUpgrades.afterUnknownOperation(taskId, error)))
+
   return {
     async call<T>(
       taskId: string,
@@ -380,60 +462,20 @@ export function createHostedWorkspaceCommands(input: {
       value: unknown,
       options: WorkspaceHelperOptions = {},
     ) {
-      const workspace = await input.workspaces.ensure(taskId)
       const operationId = options.operationId ?? ulid()
-      const executionId = `command:${taskId}:${operationId}`
-      const resultPath = workspaceResultPath(digest(executionId))
-      const argv = workspaceHelperArguments(operation, value, resultPath)
-      const existing = await read(executionId)
-      if (existing !== null) {
-        const frozen = JSON.parse(existing.requestJson) as { argv: string[] }
-        if (
-          existing.businessTaskId !== workspace.businessTaskId ||
-          existing.operation !== operation ||
-          JSON.stringify(frozen.argv) !== JSON.stringify(argv)
-        )
-          throw new Error('hosted-command-replay-mismatch')
-        if (existing.state === 'settled') return conclude<T>(outcomeOf(existing))
-        if (existing.state === 'abandoned') {
-          await patch(executionId, { state: 'submitting' })
-          return observe<T>({ ...existing, state: 'submitting' }, options)
-        }
-        // The original persisted Secret references win over a later
-        // deployment configuration change during a cold retry.
-        return observe<T>(existing, options)
+      try {
+        return await callOnce<T>(taskId, operation, value, operationId, options)
+      } catch (error) {
+        if (options.signal?.aborted || !(await rerunsAfterImageUpgrade(taskId, operationId, error)))
+          throw error
+        return callOnce<T>(taskId, operation, value, retryOf(operationId), options)
       }
-      const environment = input.commandEnvironment?.(operation)
-      const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-      const requestJson = JSON.stringify({
-        argv,
-        resultPath,
-        ...(environment === undefined ? {} : { env: environment }),
-        timeoutSeconds: Math.min(86_400, Math.max(1, Math.ceil(timeoutMs / 1_000))),
-      })
-      await fenced(async (tx, epoch) => {
-        await tx
-          .insert(hostedWorkspaceCommands)
-          .values({
-            executionId,
-            taskId,
-            businessTaskId: workspace.businessTaskId,
-            operation,
-            requestKey: `aw-command:${digest(executionId)}`,
-            requestJson,
-            state: 'submitting',
-            epoch,
-            createdAt: now(),
-            updatedAt: now(),
-          })
-          .onConflictDoNothing()
-      })
-      const inserted = await read(executionId)
-      if (inserted === null) throw new Error('hosted-command-intent-missing')
-      return observe<T>(inserted, options)
     },
     async recover<T>(taskId: string, operationId: string) {
-      const row = await read(`command:${taskId}:${operationId}`)
+      // A command that ran again after an image upgrade is recovered as that run.
+      const row =
+        (await read(`command:${taskId}:${retryOf(operationId)}`)) ??
+        (await read(`command:${taskId}:${operationId}`))
       if (row === null || row.state === 'abandoned') return null
       if (row.state === 'settled') return { value: conclude<T>(outcomeOf(row)) }
       return { value: await observe<T>(row, {}) }

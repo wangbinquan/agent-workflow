@@ -8,6 +8,7 @@ import type { HostedVolumeActivity } from '../public/participants'
 import type { WorkspaceExcludeProfileReceipt } from '../public/types'
 import { createHostedTaskWorkspaces } from '../infrastructure/crewstation/taskWorkspace'
 import { createHostedWorkspaceCommands } from '../infrastructure/crewstation/workspaceCommands'
+import { createHostedWorkspaceImageUpgrades } from '../infrastructure/crewstation/workspaceImageUpgrade'
 import { createHostedWorkspaceEffects } from '../infrastructure/crewstation/workspaceEffects'
 import { createHostedRepositoryRevisionContent } from '../infrastructure/crewstation/repositoryRevisionContent'
 import { createHostedRepositoryRemote } from '../infrastructure/crewstation/repositoryRemote'
@@ -50,14 +51,27 @@ export function composeCrewStationWorkspaceOwner(
     readonly commandEnvironment?: (
       operation: string,
     ) => Readonly<Record<string, BusinessEnvironmentValue>> | undefined
+    /** The task image version the running release declares; null while the
+     * platform cannot upgrade a parent's image (§10 V21, CS RFC-043). */
+    readonly taskImage?: () => Promise<string | null>
   },
 ) {
   const workspaces = createHostedTaskWorkspaces(input)
+  // §10 V21: AW task and durable shared owners keep their parent, whose task
+  // image follows the release's.
+  const imageUpgrades = createHostedWorkspaceImageUpgrades({
+    db: input.db,
+    api: input.api,
+    fence: input.fence,
+    releaseTaskImage: input.taskImage ?? (async () => null),
+    hasUnsettledCommands: (businessTaskId) => commands.hasUnsettledCommands(businessTaskId),
+  })
   const commands = createHostedWorkspaceCommands({
     db: input.db,
     fence: input.fence,
     api: input.api,
     workspaces,
+    imageUpgrades,
     ...(input.commandEnvironment === undefined
       ? {}
       : { commandEnvironment: input.commandEnvironment }),
@@ -100,6 +114,7 @@ export function composeCrewStationWorkspaceOwner(
           commands,
           activity,
           held,
+          imageUpgrades,
           ...(options.taskGraceMs === undefined ? {} : { taskGraceMs: options.taskGraceMs }),
           ...(options.sharedIdleMs === undefined ? {} : { sharedIdleMs: options.sharedIdleMs }),
           ...(options.log === undefined ? {} : { log: options.log }),

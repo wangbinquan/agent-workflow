@@ -12,6 +12,8 @@ import { sha256Hex } from '@/util/hash'
 export const HostedRuntimeCapabilitiesSchema = z.object({
   protocolVersion: z.literal(3),
   releaseId: z.string(),
+  runtimeImageUpgrade: z.literal(1).optional(),
+  taskRuntimeImageVersionId: z.string().nullable().optional(),
   agentProfiles: z.array(
     z.object({
       agentProfileId: z.string().uuid(),

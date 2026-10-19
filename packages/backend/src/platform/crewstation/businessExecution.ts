@@ -45,6 +45,29 @@ export interface BusinessTask {
   readonly contractDigest?: string
   readonly resourceState?: string
   readonly message?: string
+  /** The task image the parent's container runs on: the creation snapshot,
+   * or the one an upgrade re-pinned it to (CS RFC-043). Absent on platforms
+   * that do not report it. */
+  readonly runtimeImage?: { readonly versionId: string } | null
+}
+
+export type BusinessOperationState =
+  | 'admitting'
+  | 'pending'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'retryable-rejected'
+
+/** A platform operation as `GET …/operations/:operationId` reports it. A
+ * failed lifecycle operation names its reason in `message`. */
+export interface BusinessOperation {
+  readonly operationId: string
+  readonly taskId: string
+  readonly state: BusinessOperationState | string
+  readonly message?: string
+  /** Not in the current contract; read when the platform reports one. */
+  readonly code?: string
 }
 
 export type BusinessSubtaskState =
@@ -278,6 +301,22 @@ export interface CrewStationBusinessExecution {
       readonly expectedGeneration: number
     },
   ): Promise<void>
+  /** CS RFC-043: re-pins a paused persistent parent to another task image
+   * version (by default the one the platform's active release declares); the
+   * next resume starts its container on it, with the same volume. Optional so
+   * partial clients need not provide it; whether the platform supports it is
+   * the capability snapshot's `runtimeImageUpgrade`. */
+  upgradeRuntimeImage?(
+    taskId: string,
+    input: {
+      readonly requestKey: string
+      readonly fence: BusinessExecutionFence
+      readonly expectedGeneration: number
+      readonly runtimeImageVersionId?: string
+    },
+  ): Promise<BusinessOperation>
+  /** The current state of an operation on the task (for example an upgrade). */
+  getOperation?(taskId: string, operationId: string): Promise<BusinessOperation>
   /** Every subtask of the task, including non-terminal ones. */
   listSubtasks(taskId: string): Promise<readonly BusinessSubtask[]>
   createMaterial(taskId: string, input: CreateBusinessMaterial): Promise<BusinessMaterial>
@@ -345,6 +384,12 @@ export function createCrewStationBusinessExecution(
     async resumeTask(taskId, input) {
       await platform.post(`${task(taskId)}/resume`, input)
     },
+    upgradeRuntimeImage: (taskId, input) =>
+      platform.post<BusinessOperation>(`${task(taskId)}/runtime-image`, input),
+    getOperation: (taskId, operationId) =>
+      platform.get<BusinessOperation>(
+        `${task(taskId)}/operations/${encodeURIComponent(operationId)}`,
+      ),
     async listSubtasks(taskId) {
       return (await platform.get<{ items: BusinessSubtask[] }>(`${task(taskId)}/subtasks`)).items
     },

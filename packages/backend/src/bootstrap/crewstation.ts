@@ -135,6 +135,12 @@ export async function composeCrewStationStartOptions(
         (current) => current.releaseId,
         () => null,
       )),
+    // §10 V21 (CS RFC-043): durable parents follow the task image this
+    // release declares, once the platform can upgrade a parent's image.
+    taskImage: async () => {
+      const current = await capabilities()
+      return current.runtimeImageUpgrade === 1 ? (current.taskRuntimeImageVersionId ?? null) : null
+    },
     commandEnvironment: createHostedGitCommandEnvironment(env.AW_GIT_CREDENTIAL_BINDINGS),
   })
   // §9.2 V7 (CS RFC-027): during a migration or restore freeze this release

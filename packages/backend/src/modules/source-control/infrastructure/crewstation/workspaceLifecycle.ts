@@ -22,7 +22,9 @@
 // Only parents the platform reports `running` are paused. A scratch owner's
 // parent created under another release (`HostedTaskWorkspaces.superseded`) is
 // closed instead once idle, running or not, so its owner's next use gets a
-// parent with the running release's task image.
+// parent with the running release's task image. A durable shared owner's idle
+// parent that is already paused is upgraded to the release's task image when
+// it runs another one (§10 V21, CS RFC-043); its next use resumes it on it.
 import { and, eq, inArray, isNotNull, or } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { hostedTaskWorkspaces } from '@/db/schema'
@@ -41,6 +43,10 @@ import {
   TERMINAL_SUBTASK_STATES,
   type HostedTaskWorkspaces,
 } from './taskWorkspace'
+import {
+  NO_HOSTED_IMAGE_UPGRADES,
+  type HostedWorkspaceImageUpgrades,
+} from './workspaceImageUpgrade'
 import { hostedWorkspaceOwnerKind } from './workspaceOwnership'
 
 /** Short grace after the last use of an AW task's volume. */
@@ -54,6 +60,8 @@ export interface HostedWorkspaceLifecyclePass {
   readonly paused: readonly string[]
   readonly closed: readonly string[]
   readonly failed: readonly string[]
+  /** Paused parents upgraded to the release's task image; only when any were. */
+  readonly upgraded?: readonly string[]
 }
 
 export interface HostedWorkspaceLifecycle {
@@ -69,6 +77,8 @@ export function createHostedWorkspaceLifecycle(input: {
   readonly activity: HostedVolumeActivity
   /** In-process holds by volume owner. */
   readonly held: (owner: string) => boolean
+  /** §10 V21: task-image upgrades of idle durable parents. */
+  readonly imageUpgrades?: Pick<HostedWorkspaceImageUpgrades, 'due' | 'upgradePaused'>
   readonly taskGraceMs?: number
   readonly sharedIdleMs?: number
   readonly now?: () => number
@@ -76,6 +86,7 @@ export function createHostedWorkspaceLifecycle(input: {
 }): HostedWorkspaceLifecycle {
   const session = databaseSessionFor(input.db)
   const now = input.now ?? Date.now
+  const imageUpgrades = input.imageUpgrades ?? NO_HOSTED_IMAGE_UPGRADES
   const taskGraceMs = input.taskGraceMs ?? HOSTED_TASK_VOLUME_GRACE_MS
   const sharedIdleMs = input.sharedIdleMs ?? HOSTED_SHARED_VOLUME_IDLE_MS
   // A `closing` registration may have no parent receipt yet: an abandoned
@@ -119,8 +130,15 @@ export function createHostedWorkspaceLifecycle(input: {
       const paused: string[] = []
       const closed: string[] = []
       const failed: string[] = []
+      const upgraded: string[] = []
+      const outcome = (): HostedWorkspaceLifecyclePass => ({
+        paused,
+        closed,
+        failed,
+        ...(upgraded.length === 0 ? {} : { upgraded }),
+      })
       const candidates = await rows()
-      if (candidates.length === 0) return { paused, closed, failed }
+      if (candidates.length === 0) return outcome()
       let active = await input.activity.activeVolumeOwners()
       for (const row of candidates) {
         if (signal.aborted) break
@@ -143,7 +161,8 @@ export function createHostedWorkspaceLifecycle(input: {
             continue
           }
           const retire = await input.workspaces.superseded(owner)
-          if (task.state !== 'running' && !retire) continue
+          const upgrade = !retire && (await imageUpgrades.due(owner, task))
+          if (task.state !== 'running' && !retire && !upgrade) continue
           // Re-check use right before the effect: a use that started during this
           // pass refreshed `updatedAt` or made the owner active meanwhile.
           active = await input.activity.activeVolumeOwners()
@@ -159,6 +178,10 @@ export function createHostedWorkspaceLifecycle(input: {
             continue
           if (retire) {
             if (await input.workspaces.close(owner)) closed.push(owner)
+            continue
+          }
+          if (upgrade) {
+            if (await imageUpgrades.upgradePaused(row, task, signal)) upgraded.push(owner)
             continue
           }
           try {
@@ -181,7 +204,7 @@ export function createHostedWorkspaceLifecycle(input: {
           })
         }
       }
-      return { paused, closed, failed }
+      return outcome()
     },
   }
 }

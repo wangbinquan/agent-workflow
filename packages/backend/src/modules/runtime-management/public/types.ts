@@ -6,6 +6,11 @@ export type RuntimeKind = 'opencode' | 'claude-code'
 export interface HostedRuntimeCapabilities {
   readonly protocolVersion: 3
   readonly releaseId: string
+  /** CS RFC-043: the platform upgrades a paused parent's task image. */
+  readonly runtimeImageUpgrade?: 1
+  /** CS RFC-043: the task image version this release declares; null when it
+   * declares none. */
+  readonly taskRuntimeImageVersionId?: string | null
   readonly agentProfiles: readonly {
     readonly agentProfileId: string
     readonly computeProfileId: string
