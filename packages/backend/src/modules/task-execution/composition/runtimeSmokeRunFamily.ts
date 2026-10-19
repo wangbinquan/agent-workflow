@@ -15,10 +15,17 @@ export function composeRuntimeSmokeRunFamily(input: {
     async run(request) {
       const log = request.log ?? createLogger('runtimeSmoke')
       const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS
+      const deadlineAt = request.deadlineAt
       const opened = input.invocations.open(request, log)
       const nonce = `awsmoke-${randomBytes(8).toString('hex')}`
       const invocation = opened.materialize()
-      return runRuntimeSmokeCore(request, { log, timeoutMs, nonce, invocation })
+      return runRuntimeSmokeCore(request, {
+        log,
+        timeoutMs,
+        ...(deadlineAt === undefined ? {} : { deadlineAt }),
+        nonce,
+        invocation,
+      })
     },
   })
 }

@@ -44,6 +44,11 @@ export interface RuntimeSmokeCompiledInvocation {
 export interface RuntimeSmokeCoreInput {
   readonly log: Logger
   readonly timeoutMs: number
+  /** Absolute end of the whole probe (epoch ms). The model turn then gets the
+   * time preparation left, at most `timeoutMs`: a probe that answers one
+   * synchronous request cannot spend a fixed turn budget after a preparation
+   * of variable length (a hosted platform provisions the workspace first). */
+  readonly deadlineAt?: number
   readonly nonce: string
   readonly invocation: {
     readonly workspace: AgentMaterialWorkspace
@@ -71,6 +76,8 @@ export interface RuntimeSmokeRunRequest extends RuntimeSmokeCorePolicy {
   readonly extraArgs?: readonly string[]
   readonly isSandbox?: boolean
   readonly timeoutMs?: number
+  /** See `RuntimeSmokeCoreInput.deadlineAt`. */
+  readonly deadlineAt?: number
   readonly log?: Logger
 }
 

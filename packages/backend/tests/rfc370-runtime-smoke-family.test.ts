@@ -23,6 +23,7 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { composeRuntimeSmokeRunFamily } from '../src/modules/task-execution/composition/runtimeSmokeRunFamily'
+import { MIN_TURN_TIMEOUT_MS } from '../src/modules/task-execution/application/runtimeSmoke'
 import { composeLocalRuntimeSmokeRunFamily } from '../src/modules/task-execution/composition/localRuntimeSmokeRunFamily'
 import { createLocalRuntimeDiagnosticTargets } from '../src/modules/runtime-management/composition/runtimeDiagnosticTargets'
 import type {
@@ -182,7 +183,10 @@ afterEach(() => {
   homes.clear()
 })
 
-function selectedFamily(protocol: 'opencode' | 'claude-code') {
+function selectedFamily(
+  protocol: 'opencode' | 'claude-code',
+  overrides: Pick<RuntimeSmokeRunRequest, 'timeoutMs' | 'deadlineAt'> = {},
+) {
   const selected = selectedInvocation(protocol)
   const target = Object.freeze({
     protocol,
@@ -198,6 +202,7 @@ function selectedFamily(protocol: 'opencode' | 'claude-code') {
     isSandbox: true,
     timeoutMs: selected.options.timeoutMs,
     log: selected.options.log,
+    ...overrides,
   }
   class Invocations implements RuntimeSmokeInvocationFamily {
     open(actual: RuntimeSmokeRunRequest, log: typeof selected.options.log) {
@@ -354,6 +359,41 @@ describe('RFC-370 complete Runtime smoke family', () => {
     ).rejects.toBe(failure)
     expect(calls).toEqual(['log', 'timeout', 'open'])
     expect(selected.calls).toEqual([])
+  })
+
+  // RFC-370 hosted acceptance (2026-10-19): a hosted probe answers one
+  // synchronous request; a fixed turn budget counted after a variable
+  // provisioning time ran past the request or cut a slow turn short.
+  test('a probe deadline gives the turn what preparation left, never more than its budget', async () => {
+    const bounded = selectedFamily('opencode', {
+      timeoutMs: 240_000,
+      deadlineAt: Date.now() + 90_000,
+    })
+    expect((await bounded.family.run(bounded.request)).conforms).toBe(true)
+    expect(bounded.state.submitted!.timeoutMs).toBeLessThanOrEqual(90_000)
+    expect(bounded.state.submitted!.timeoutMs).toBeGreaterThan(80_000)
+    const generous = selectedFamily('opencode', {
+      timeoutMs: 30_000,
+      deadlineAt: Date.now() + 600_000,
+    })
+    await generous.family.run(generous.request)
+    expect(generous.state.submitted!.timeoutMs).toBe(30_000)
+    // Without a deadline the turn keeps the request's own budget.
+    const plain = selectedFamily('opencode')
+    await plain.family.run(plain.request)
+    expect(plain.state.submitted!.timeoutMs).toBe(42)
+  })
+
+  test('a spent probe deadline still runs the turn and reports the budget it had', async () => {
+    const spent = selectedFamily('opencode', {
+      timeoutMs: 240_000,
+      deadlineAt: Date.now() - 5_000,
+    })
+    spent.state.result = { ...spent.state.result, outcome: 'timeout', exitCode: null }
+    const result = await spent.family.run(spent.request)
+    expect(spent.state.submitted!.timeoutMs).toBe(MIN_TURN_TIMEOUT_MS)
+    expect(result).toMatchObject({ outcome: 'model-call-failed', conforms: false })
+    expect(result.detail).toContain(`timed out after ${MIN_TURN_TIMEOUT_MS}ms`)
   })
 
   test('compile rejection and unreaped results retain the original core release boundaries', async () => {

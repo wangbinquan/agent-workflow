@@ -11,11 +11,16 @@ import { composeRuntimeSmokeRunFamily } from './runtimeSmokeRunFamily'
 import { createRuntimeSmokeMaterialIntent } from './runtimeSmoke'
 import type { composeLocalRuntimeManagement } from './localRuntimeManagement'
 
-/** A hosted smoke turn includes platform admission and the Agent container
- * start (10–15 s live) before the model answers, which overran the local 60 s
- * budget. The probe request waits for the smoke, so this stays below the
- * HTTP server's 255 s idle timeout. */
-export const HOSTED_RUNTIME_SMOKE_TIMEOUT_MS = 180_000
+/** A hosted probe answers one synchronous request. The system workspace's
+ * provisioning (tens of seconds when its parent is created) and the smoke
+ * turn (platform admission, the Agent container start, then the model) share
+ * this budget, which stays below the HTTP server's 255 s idle timeout and the
+ * UI's 300 s request deadline; the turn gets what provisioning left. A fixed
+ * turn budget overran: the local 60 s first (RFC-370 hosted acceptance,
+ * 2026-10-18), then 180 s counted after ~43 s of provisioning ended 3 s
+ * before the turn's successful result (2026-10-19, a 166 s turn on the
+ * acceptance cluster). */
+export const HOSTED_RUNTIME_PROBE_BUDGET_MS = 240_000
 
 export function createCrewStationRuntimeManagement(
   input: Pick<
@@ -120,7 +125,12 @@ export function createCrewStationRuntimeManagement(
         ...input,
         configuration: options.configuration,
         runtimeTests: options.runtimeTests,
-        smoke: (request) => smoke.run({ ...request, timeoutMs: HOSTED_RUNTIME_SMOKE_TIMEOUT_MS }),
+        smoke: (request) =>
+          smoke.run({
+            ...request,
+            timeoutMs: HOSTED_RUNTIME_PROBE_BUDGET_MS,
+            deadlineAt: Date.now() + HOSTED_RUNTIME_PROBE_BUDGET_MS,
+          }),
       }),
     })
   }

@@ -12,13 +12,18 @@
 // probe. The retry then failed as `model-call-failed: timed out after 60000ms`:
 // the local smoke budget does not cover platform admission and the Agent
 // container start of a hosted turn.
+//
+// 2026-10-19: a fixed 180 s turn budget, counted after ~43 s of workspace
+// provisioning, still ended 3 s before a slow turn's successful result. The
+// hosted probe now has one budget for the whole request and the turn gets
+// what provisioning left (`rfc370-runtime-smoke-family` covers the core).
 import { expect, test } from 'bun:test'
 import {
   createCrewStationRuntimeManagementEffects,
   type HostedRuntimeCapabilities,
 } from '@/modules/runtime-management/composition/crewstationRuntimeManagement'
 import { composeRuntimeManagement } from '@/modules/runtime-management/composition/runtimeManagement'
-import { HOSTED_RUNTIME_SMOKE_TIMEOUT_MS } from '@/modules/task-execution/composition/crewstationRuntimeManagement'
+import { HOSTED_RUNTIME_PROBE_BUDGET_MS } from '@/modules/task-execution/composition/crewstationRuntimeManagement'
 import { DEFAULT_TIMEOUT_MS } from '@/modules/task-execution/application/runtimeSmoke'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -116,18 +121,22 @@ describeEachProvider('RFC-370 hosted runtime probe', (harness) => {
   })
 })
 
-test('the hosted smoke budget covers the platform container start and stays within the HTTP idle timeout', () => {
-  expect(HOSTED_RUNTIME_SMOKE_TIMEOUT_MS).toBeGreaterThan(DEFAULT_TIMEOUT_MS)
+test('the hosted probe budget covers provisioning and a slow turn, within the HTTP idle timeout', () => {
+  // The acceptance cluster's turn took 166 s after ~43 s of provisioning.
+  expect(HOSTED_RUNTIME_PROBE_BUDGET_MS).toBeGreaterThanOrEqual(43_000 + 166_000 + 10_000)
+  expect(HOSTED_RUNTIME_PROBE_BUDGET_MS).toBeGreaterThan(DEFAULT_TIMEOUT_MS)
   // cli/start.ts serves HTTP with `idleTimeout: 255`; the probe request waits for the smoke.
-  expect(HOSTED_RUNTIME_SMOKE_TIMEOUT_MS).toBeLessThan(255_000)
+  expect(HOSTED_RUNTIME_PROBE_BUDGET_MS).toBeLessThan(255_000)
 })
 
-test('the hosted runtime management runs its smokes with the hosted budget', async () => {
+test('the hosted runtime management runs its smokes against the probe deadline', async () => {
   const source = await Bun.file(
     new URL(
       '../src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
       import.meta.url,
     ),
   ).text()
-  expect(source).toContain('smoke.run({ ...request, timeoutMs: HOSTED_RUNTIME_SMOKE_TIMEOUT_MS })')
+  // One deadline for the whole probe request: the turn gets what provisioning left.
+  expect(source).toContain('timeoutMs: HOSTED_RUNTIME_PROBE_BUDGET_MS,')
+  expect(source).toContain('deadlineAt: Date.now() + HOSTED_RUNTIME_PROBE_BUDGET_MS,')
 })

@@ -11,6 +11,9 @@ import type {
 
 const MAX_OUTPUT_BYTES = 256 * 1024
 export const DEFAULT_TIMEOUT_MS = 60_000
+/** Floor of a turn whose probe deadline is (nearly) spent: the turn still
+ * starts and reports a timeout instead of skipping the protocol check. */
+export const MIN_TURN_TIMEOUT_MS = 1_000
 const CHILD_TERM_GRACE_MS = 2_000
 const AUTH_SIGNATURES =
   /not logged in|unauthorized|authentication|invalid api key|please run .*login|no api key|anthropic_api_key|log ?in to/i
@@ -111,6 +114,11 @@ export async function runRuntimeSmokeCore(
   // (managedProcess adapter): spawn/stdin/timeout/TERM→KILL/reap/drain all live
   // there; this probe only classifies what came back.
   const invocation = compiled.bind()
+  // A probe with an overall deadline gives the turn what preparation left.
+  const turnTimeoutMs =
+    input.deadlineAt === undefined
+      ? timeoutMs
+      : Math.max(MIN_TURN_TIMEOUT_MS, Math.min(timeoutMs, input.deadlineAt - Date.now()))
   const observationRun = input.invocation.observe
     ? await input.invocation.observe(nonce, Date.now())
     : undefined
@@ -119,7 +127,7 @@ export async function runRuntimeSmokeCore(
     : undefined
   const run = await invocation.execute(
     {
-      timeoutMs,
+      timeoutMs: turnTimeoutMs,
       termGraceMs: CHILD_TERM_GRACE_MS,
       ...(usageCapture !== undefined || invocation.lifecycle.beforeStart !== undefined
         ? { beforeStart: usageCapture?.beforeStart ?? invocation.lifecycle.beforeStart }
@@ -299,7 +307,7 @@ export async function runRuntimeSmokeCore(
     detail = `binary speaks the ${opts.protocol} protocol (session captured, nonce echoed)`
   } else if (timedOut) {
     outcome = 'model-call-failed'
-    detail = withEvidence(`timed out after ${timeoutMs}ms`)
+    detail = withEvidence(`timed out after ${turnTimeoutMs}ms`)
   } else if (networkHit) {
     outcome = 'network-blocked'
     detail = withEvidence(
