@@ -13,6 +13,7 @@
 | `05fe01fb878eb843bd6e9ad4a8bc8bb4835f5f75` | 仅 E2E 在刷新后按 textbox 可访问名称查找已恢复内容，原严格值/状态断言保留 | [CI 39198998975](https://github.com/wangbinquan/agent-workflow/actions/runs/39198998975) 完整终态 success，包含三平台 E2E 与 `CI required`；生产源码与 `96bef8c18` 完全一致。 |
 | `a550f5a3ec8db734ca4af4ec69d560b2f00e76af` | 消除脑图前言要求未知全部定案的冲突；单选仅改变一个变量；最终文档不新增成熟度必填门 | [CI 39200587900](https://github.com/wangbinquan/agent-workflow/actions/runs/39200587900) 完整终态 success，49/49 jobs 成功。四文件独立功能复核通过，第四轮真实任务完成，内容质量缺口见下。 |
 | `19347b3be8365e1531024aa2752a4aff6abc4e0f` | 四轮单机验收的原始内容、界面证据与未通过项；生产源码未改变 | [CI 39202756779](https://github.com/wangbinquan/agent-workflow/actions/runs/39202756779) 完整终态 success，49/49 jobs 成功。 |
+| `54d485de419c6203be93287d4c3522ba067aab25` | 存储解阻和计算容量失败回执；生产源码未改变 | [CI 39208822738](https://github.com/wangbinquan/agent-workflow/actions/runs/39208822738) failure：47/49 jobs 成功；Ubuntu E2E shard 3/3 的工作组用例期望 5 次 leader run，实际 9 次，汇总门随之失败。`a550f5a3e..54d485de4` 无生产、测试或依赖差异，额外 4 次运行报 clarify-forbidden；根因归属未确认，保留失败，未代改或重跑追绿。 |
 
 所有失败均按实际 job 日志和本次差异归因；没有代改或回退其他 session 的代码。没有执行本地 Bun 功能测试、E2E 或开发服务。限定路径的 TypeScript、ESLint、Prettier 和 diff 静态检查通过。真实验收运行的是下载的 CI 生产二进制。
 
@@ -98,6 +99,18 @@
 
 只读查看资源中心时，切换「资源清单」意外触发“运行镜像授权有未保存的输入”提示。自动审批拒绝了放弃输入，随后已选择「继续编辑」并保留页面，没有丢弃或提交这些状态；这不影响上述 API 与 Kubernetes 回执，也没有据此代改 CrewStation。
 
+### 2026-10-19：按授权清理超过 14 天的任务资源
+
+用户明确授权“你可以自由清理14天以前的任务”。以开始盘点时的 UTC 时刻固定截止线 `2026-10-05T13:10:57.000Z`，通过平台任务 API 盘点 31 个项目、373 条任务记录；212 条早于截止线，其中 198 条已释放、14 条失败，没有仍在运行的旧任务。任务创建时间与实际 Kubernetes UID 对照，未用容器最近重建时间替代任务年龄。
+
+先通过资源中心 `delete-volume` 动作回收 19 个已标记 PendingReclaim 的旧任务工作卷，其中 3 个为平台已登记的孤立任务卷。剩余业务任务 `01a0e30e-e096-7000-be22-db3c8ecd4171` 创建于 `2026-09-27T13:29:58.166Z`；在确认全部子执行均终结后，经其所属服务 `rfc028-images-20260927` 的 `/actions` 正常 close，操作 `01a1544d-94f7-7000-a7e5-ab5e2f5d0f52`。任务读回 closed / resourceState released / quotaHeld false，原失败 Pod 消失，最后一个卷转为可回收后再执行 delete-volume。
+
+截至 `2026-10-19T13:17:15.281Z`，20 个目标 PVC 与对应 PV 均已物理消失，失败 Pod UID `f748cdc5-645f-4982-96bf-835e648f38e1` 已不存在；20 条卷台账全部 stopped。被回收卷的申请容量合计 **101 GiB**，该数不是实际磁盘已释放字节数。任务历史记录保留。正式 AW 服务 Pod 仍 Running / Ready，未停止较新的任务、其他服务或项目。完整 [清理与容量回执](evidence/old-task-cleanup.json) 记录对象、时间、平台动作、物理消失和容量结果。
+
+清理前旧任务均未占用运行中的计算资源，故 CPU/内存调度容量未因本次清理增加。盘点后的节点 requests 为 `9605m / 30288Mi`，尚余 `395m / 1753.98828125Mi`。仍不足以调度 1 CPU / 2 GiB 的镜像验证，也不足以运行父任务与 Agent 的 4 GiB 并行需求。未重新发起必然被同一容量条件阻断的验证或发布；托管 AC05/AC12 继续保持待验。
+
+后继共享基线 `a6c05417bd437fc0b00655b862ed524380ad5f37` 的 [CI 39242700213](https://github.com/wangbinquan/agent-workflow/actions/runs/39242700213) 终态 failure：后台 shard 15/24 的 development-automation 装配架构断言、shard 20/24 的 RFC-370 PostgreSQL 程序工具 HTTP 201/500 断言失败，汇总门失败。该基线不是本轮清理提交；并发工作区正在修改相关生产文件和测试，本会话未提交或修改这些文件。另 [全量 E2E 39250118444](https://github.com/wangbinquan/agent-workflow/actions/runs/39250118444) 失败，不能据此前生产候选 49/49 成功宣称当前共享 CI 全绿。
+
 ## 6. 完成边界
 
 原型、独立代码功能门、实际单机运行、模型内容、自动化、托管部署分别成立才记录相应完成状态。一次代理走查证明操作链路与可见内容，不证明真实使用者已经形成更深入的思考或责任习惯；后续试用应观察主动质疑、明确代价、保留未知和提出可执行复核安排，而不是统计填写字段或分支数量。
@@ -119,7 +132,7 @@
 | AC11 可用界面 | 桌面、390/320px、浅/深色、键盘与文本选择实际检查通过；5000 节点/深度 100/300 同级规模由 E2E 覆盖。 |
 | AC12 完整旅程 | 单机从起步到真实追问、编辑/刷新/复核/最终输出和 task done 通过；托管旅程待候选部署。 |
 
-自动化覆盖的“通过”以最终候选确切 SHA 的终态为准，生产候选及验收记录提交的确切 SHA CI 均已完整成功。RFC 保持 In Progress，直到 AC09/AC10 剩余内容质量与托管 AC05/AC12 分别闭合。
+自动化覆盖的“通过”以相应候选确切 SHA 的终态为准。生产候选 `a550f5a3e` 和首批验收记录 `19347b3be` 已完整成功；后续 `54d485de4` 与共享基线 `a6c05417b` 的失败分别保留，不能作为当前全仓通过。RFC 保持 In Progress，直到 AC09/AC10 剩余内容质量与托管 AC05/AC12 分别闭合。
 
 ## 8. 实际界面证据
 

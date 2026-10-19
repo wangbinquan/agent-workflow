@@ -1,0 +1,396 @@
+{
+  "at": "2026-10-19T13:19:46.175Z",
+  "authorization": {
+    "quote": "你可以自由清理14天以前的任务",
+    "cutoff": "2026-10-05T13:10:57.000Z"
+  },
+  "inventory": {
+    "projectCount": 31,
+    "taskCount": 373,
+    "oldTaskCount": 212,
+    "oldReleased": 198,
+    "oldFailed": 14,
+    "oldRunning": 0
+  },
+  "cleanup": {
+    "method": "platform resource delete-volume action; one failed business task closed through owning service /actions before reclaim",
+    "volumeCount": 20,
+    "requestedStorageGi": 101,
+    "volumeRecords": [
+      {
+        "id": "01a0cec0-e795-7000-ae09-054431e2907b",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0c12a-de2a-702e-a3f1-eed50335dafe/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T14:52:23.828Z",
+        "updatedAt": "2026-10-19T13:14:34.337Z",
+        "children": []
+      },
+      {
+        "id": "01a0cec0-e7c2-7000-b908-4d645d45ba96",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0c12a-de2a-7039-884a-cb35d7cac5c9/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T14:52:23.873Z",
+        "updatedAt": "2026-10-19T13:14:34.342Z",
+        "children": []
+      },
+      {
+        "id": "01a0cec0-e7f3-7000-ab49-4e0da5567acd",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0c12a-de2a-705c-9192-fb59d3e5d043/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T14:52:23.922Z",
+        "updatedAt": "2026-10-19T13:14:34.243Z",
+        "children": []
+      },
+      {
+        "id": "01a0cf2b-22e3-7000-a175-bb5d1536723d",
+        "owner": {
+          "module": "cluster-control",
+          "ref": "orphan:cs-rfc006-verify/task-01a0b3e0c77e-work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T16:48:25.827Z",
+        "updatedAt": "2026-10-19T13:14:34.287Z",
+        "children": []
+      },
+      {
+        "id": "01a0cec0-e727-7000-8c58-678e32b32bb3",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0c12a-de2a-7025-8b25-95bfa22660ca/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T14:52:23.718Z",
+        "updatedAt": "2026-10-19T13:14:34.481Z",
+        "children": []
+      },
+      {
+        "id": "01a0cf2b-22f3-7000-bc61-421695e815a6",
+        "owner": {
+          "module": "cluster-control",
+          "ref": "orphan:cs-rfc010-cluster-qa/task-01a0beeee213-work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T16:48:25.842Z",
+        "updatedAt": "2026-10-19T13:14:34.378Z",
+        "children": []
+      },
+      {
+        "id": "01a0cf2b-22fc-7000-b974-57bebc1a7d85",
+        "owner": {
+          "module": "cluster-control",
+          "ref": "orphan:cs-rfc010-cluster-qa/task-01a0befe5410-work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T16:48:25.851Z",
+        "updatedAt": "2026-10-19T13:14:34.500Z",
+        "children": []
+      },
+      {
+        "id": "01a0cec0-e80c-7000-aafe-421369218bda",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0ccf9-6e42-7000-9dec-e56e28ec0b10/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T14:52:23.948Z",
+        "updatedAt": "2026-10-19T13:14:34.556Z",
+        "children": []
+      },
+      {
+        "id": "01a0cec0-e819-7000-9287-0bb766cb17de",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0ccf9-cbfc-7000-9887-89f900ffbcb9/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-23T14:52:23.960Z",
+        "updatedAt": "2026-10-19T13:14:34.559Z",
+        "children": []
+      },
+      {
+        "id": "01a0e044-7145-7000-b549-4f276a535fac",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e044-7120-7000-bfcc-51c08a8cc253/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T00:29:36.964Z",
+        "updatedAt": "2026-10-19T13:14:34.661Z",
+        "children": []
+      },
+      {
+        "id": "01a0e232-e605-7000-965a-a3242d79708e",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e232-e5a9-7000-baf7-7d1576010ec2/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T09:29:41.632Z",
+        "updatedAt": "2026-10-19T13:14:34.751Z",
+        "children": []
+      },
+      {
+        "id": "01a0e241-804e-7000-9fa6-f8f29d3b049f",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e241-8026-7000-9de4-b3199b4517cb/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T09:45:38.637Z",
+        "updatedAt": "2026-10-19T13:14:34.763Z",
+        "children": []
+      },
+      {
+        "id": "01a0e263-46e5-7000-ac23-b550bdaecfaa",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e263-469b-7000-9d64-d8d19e0ea1b7/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T10:22:32.163Z",
+        "updatedAt": "2026-10-19T13:14:34.810Z",
+        "children": []
+      },
+      {
+        "id": "01a0e2eb-87c1-7000-850c-8c410afcc964",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e2eb-876e-7000-8a97-bf5d06a95d17/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T12:51:21.662Z",
+        "updatedAt": "2026-10-19T13:14:34.829Z",
+        "children": []
+      },
+      {
+        "id": "01a0e311-9ee4-7000-9500-13aec595475b",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e311-9ea9-7000-864f-4be0fe16c1b3/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T13:32:57.953Z",
+        "updatedAt": "2026-10-19T13:14:34.869Z",
+        "children": []
+      },
+      {
+        "id": "01a0e36f-c8cc-7000-a950-59725d97eda2",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e36f-c884-7000-b9e7-3ff652cde99d/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T15:15:49.066Z",
+        "updatedAt": "2026-10-19T13:14:34.841Z",
+        "children": []
+      },
+      {
+        "id": "01a0e443-d726-7000-bef7-3036cf3b007d",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e443-d6e2-7000-884d-4d5d26a90143/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T19:07:26.371Z",
+        "updatedAt": "2026-10-19T13:14:34.948Z",
+        "children": []
+      },
+      {
+        "id": "01a0e448-142f-7000-875c-e78020daa735",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e448-13e1-7000-bc00-39f5197fe12c/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T19:12:04.140Z",
+        "updatedAt": "2026-10-19T13:14:34.989Z",
+        "children": []
+      },
+      {
+        "id": "01a0e47e-5215-7000-b9bf-c8beaffdfa07",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e47e-51dc-7000-82a6-ce217a750f04/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T20:11:18.931Z",
+        "updatedAt": "2026-10-19T13:14:34.999Z",
+        "children": []
+      },
+      {
+        "id": "01a0e30e-e19e-7000-8922-acbac78e8b76",
+        "owner": {
+          "module": "task-runtime",
+          "ref": "01a0e30e-e096-7000-be22-db3c8ecd4171/work"
+        },
+        "phase": "stopped",
+        "reason": {
+          "code": "volume-deleted",
+          "message": "管理员确认删除工作卷"
+        },
+        "createdAt": "2026-09-27T13:29:58.420Z",
+        "updatedAt": "2026-10-19T13:16:22.462Z",
+        "children": []
+      }
+    ],
+    "closedTask": {
+      "id": "01a0e30e-e096-7000-be22-db3c8ecd4171",
+      "state": "closed",
+      "resourceState": "released",
+      "quotaHeld": false,
+      "createdAt": "2026-09-27T13:29:58.166Z"
+    },
+    "closeReceipt": {
+      "at": "2026-10-19T13:15:33.821Z",
+      "task": {
+        "id": "01a0e30e-e096-7000-be22-db3c8ecd4171",
+        "createdAt": "2026-09-27T13:29:58.166Z",
+        "state": "failed"
+      },
+      "input": {
+        "action": "close",
+        "requestKey": "rfc378-cleanup-older14d-20261019",
+        "taskId": "01a0e30e-e096-7000-be22-db3c8ecd4171",
+        "expectedGeneration": 1
+      },
+      "status": 200,
+      "response": "{\"operationId\":\"01a1544d-94f7-7000-a7e5-ab5e2f5d0f52\",\"taskId\":\"01a0e30e-e096-7000-be22-db3c8ecd4171\",\"state\":\"pending\"}"
+    },
+    "physical": {
+      "at": "2026-10-19T13:17:15.281590+00:00",
+      "cutoff": "2026-10-05T13:10:57.000Z",
+      "targetPvcCount": 20,
+      "targetPvcRequestedGi": 101,
+      "remainingTargetPvcs": [],
+      "remainingTargetPvs": [],
+      "remainingOldPod": [],
+      "formalAWPods": [
+        {
+          "name": "agent-workflow-green-67d7674488-6jvjj",
+          "uid": "f0e90d22-8e1e-41a2-bbc3-dd4f8b0db5c2",
+          "phase": "Running",
+          "ready": true
+        }
+      ]
+    }
+  },
+  "capacity": {
+    "node": "desktop-control-plane",
+    "allocatable": {
+      "cpu": "10",
+      "ephemeral-storage": "239128548Ki",
+      "hugepages-1Gi": "0",
+      "hugepages-2Mi": "0",
+      "hugepages-32Mi": "0",
+      "hugepages-64Ki": "0",
+      "memory": "32810996Ki",
+      "pods": "110"
+    },
+    "requests": {
+      "cpuM": 9605,
+      "memoryMi": 30288
+    },
+    "remaining": {
+      "cpuM": 395,
+      "memoryMi": 1753.98828125
+    },
+    "requiredImageValidation": {
+      "cpuM": 1000,
+      "memoryMi": 2048
+    },
+    "requiredTaskAndAgent": {
+      "cpuM": 200,
+      "memoryMi": 4096
+    }
+  },
+  "candidate": {
+    "githubSha": "a550f5a3ec8db734ca4af4ec69d560b2f00e76af",
+    "deployed": false
+  },
+  "remaining": "Capacity still insufficient; no newer task or service stopped. No second validation or release attempted."
+}
