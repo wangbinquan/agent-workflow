@@ -1,0 +1,198 @@
+{
+  "recordedAt": "2026-10-19T06:11:42.861Z",
+  "candidate": {
+    "sourceSha": "19347b3be8365e1531024aa2752a4aff6abc4e0f",
+    "gitlabCommit": "bdec7705b49f554d1405e743a4271e7bc3a04627",
+    "projectId": "01a15233-d0b4-7000-ba3b-4a72cf7da7e4",
+    "serviceId": "01a15233-d0b4-7001-bfa0-21f28bb515a4"
+  },
+  "storageBudget": {
+    "recordedAt": "2026-10-19T06:00:12.208Z",
+    "authorization": "User approved the recommended 60 GiB to 62 GiB shared budget increase in this conversation.",
+    "before": {
+      "id": "01a0e955-7699-7000-ae9f-6b118e4e99ad",
+      "name": "Local Garage",
+      "state": "active",
+      "health": "ready",
+      "revision": 1,
+      "budgetBytes": 64424509440,
+      "physicalFreeBytes": 13846831104,
+      "physicalObservedAt": "2026-10-19T06:00:02.322Z"
+    },
+    "after": {
+      "id": "01a0e955-7699-7000-ae9f-6b118e4e99ad",
+      "name": "Local Garage",
+      "state": "active",
+      "health": "ready",
+      "revision": 2,
+      "budgetBytes": 66571993088,
+      "physicalFreeBytes": 13846831104,
+      "physicalObservedAt": "2026-10-19T06:00:02.322Z"
+    }
+  },
+  "spaces": {
+    "items": [
+      {
+        "id": "01a152bf-6c72-7000-8c98-09d7a549ed0a",
+        "env": "production",
+        "health": "ready",
+        "planId": "01a15265-9b8f-7000-a4d8-a050cdf8d145",
+        "revision": 1,
+        "backendId": "01a0e955-7699-7000-ae9f-6b118e4e99ad",
+        "createdAt": "2026-10-19T06:00:39.288Z",
+        "projectId": "01a15233-d0b4-7000-ba3b-4a72cf7da7e4",
+        "serviceId": "01a15233-d0b4-7001-bfa0-21f28bb515a4",
+        "usedBytes": 0,
+        "quotaBytes": 2147483648,
+        "objectCount": 0,
+        "planRevision": 1,
+        "deletingBytes": 0,
+        "reservedBytes": 0,
+        "maxObjectBytes": 1073741824,
+        "maxConcurrentTransfers": 2,
+        "backendPlacementRevision": 1,
+        "quotaRevision": 0,
+        "quotaSource": "plan",
+        "serviceSlug": "rfc378-mindmap"
+      }
+    ]
+  },
+  "release": {
+    "id": "01a152bf-6ffe-7000-a80d-bea6275b65ad",
+    "journeyId": "01a152bf-70a4-7000-91cb-d200a88ea2bc",
+    "serviceId": "01a15233-d0b4-7001-bfa0-21f28bb515a4",
+    "tag": "v0.1.1",
+    "commitSha": "bdec7705b49f554d1405e743a4271e7bc3a04627",
+    "branch": "main",
+    "status": "failed",
+    "databaseRestoreSupported": false,
+    "message": "该镜像尚未通过所选用途与档位的验证",
+    "redeployable": false,
+    "createdBy": "01a0c12a-de09-7005-b0f9-d55a8676540b",
+    "createdAt": "2026-10-19T06:00:39.937Z",
+    "updatedAt": "2026-10-19T06:00:42.985Z"
+  },
+  "validation": {
+    "id": "01a152c3-29d8-7000-8325-e5d15b8d00a3",
+    "versionId": "01a14fc6-95a1-7000-b860-518323f4a121",
+    "projectId": "01a15233-d0b4-7000-ba3b-4a72cf7da7e4",
+    "target": {
+      "usage": "task"
+    },
+    "state": "failed",
+    "contractDigest": "sha256:056028c919bfdd1e25547e2c0dbff8cbe5458600a9a303fd727d6c72b8e247a5",
+    "createdBy": "01a0c12a-de09-7005-b0f9-d55a8676540b",
+    "createdAt": "2026-10-19T06:04:44.376Z",
+    "updatedAt": "2026-10-19T06:09:51.951Z",
+    "error": "验证环境未能完成初始化",
+    "checks": []
+  },
+  "pod": null,
+  "node": {
+    "name": "desktop-control-plane",
+    "capacity": {
+      "cpu": "10",
+      "ephemeral-storage": "239128548Ki",
+      "hugepages-1Gi": "0",
+      "hugepages-2Mi": "0",
+      "hugepages-32Mi": "0",
+      "hugepages-64Ki": "0",
+      "memory": "32810996Ki",
+      "pods": "110"
+    },
+    "allocatable": {
+      "cpu": "10",
+      "ephemeral-storage": "239128548Ki",
+      "hugepages-1Gi": "0",
+      "hugepages-2Mi": "0",
+      "hugepages-32Mi": "0",
+      "hugepages-64Ki": "0",
+      "memory": "32810996Ki",
+      "pods": "110"
+    },
+    "allocatedSummary": "Allocated resources:\n  (Total limits may be over 100 percent, i.e., overcommitted.)\n  Resource           Requests       Limits\n  --------           --------       ------\n  cpu                9855m (98%)    19725m (197%)\n  memory             30800Mi (96%)  44884Mi (140%)\n  ephemeral-storage  24Gi (10%)     24Gi (10%)\n  hugepages-1Gi      0 (0%)         0 (0%)\n  hugepages-2Mi      0 (0%)         0 (0%)\n  hugepages-32Mi     0 (0%)         0 (0%)\n  hugepages-64Ki     0 (0%)         0 (0%)"
+  },
+  "scope": {
+    "formalAgentWorkflowChanged": false,
+    "otherProjectResourcesChanged": false
+  },
+  "schedulingEvents": [
+    {
+      "eventTime": "2026-10-19T06:04:47.745375Z",
+      "reason": "FailedScheduling",
+      "message": "0/1 nodes are available: 1 Insufficient cpu, 1 Insufficient memory. no new claims to deallocate, preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "task-01a152c329d870008325e5d15b8d00a3",
+        "namespace": "crewstation-system",
+        "resourceVersion": "5700682",
+        "uid": "bf2a21ca-1ed4-476a-b84a-a85c858c0c3e"
+      }
+    },
+    {
+      "eventTime": "2026-10-19T06:05:24.265941Z",
+      "reason": "FailedScheduling",
+      "message": "0/1 nodes are available: 1 Insufficient cpu, 1 Insufficient memory. no new claims to deallocate, preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "task-01a152c329d870008325e5d15b8d00a3",
+        "namespace": "crewstation-system",
+        "resourceVersion": "5700683",
+        "uid": "bf2a21ca-1ed4-476a-b84a-a85c858c0c3e"
+      },
+      "series": {
+        "count": 2,
+        "lastObservedTime": "2026-10-19T06:07:11.859564Z"
+      }
+    }
+  ],
+  "observedWhilePending": {
+    "source": "kubectl get pod and describe node during this acceptance",
+    "podName": "task-01a152c329d870008325e5d15b8d00a3",
+    "phase": "Pending",
+    "requests": {
+      "cpu": "1",
+      "memory": "2Gi",
+      "ephemeral-storage": "10Gi"
+    },
+    "limits": {
+      "cpu": "1",
+      "memory": "2Gi",
+      "ephemeral-storage": "10Gi"
+    },
+    "nodeRequestedCpuMillicores": 9905,
+    "nodeRequestedMemoryMiB": 31312
+  },
+  "probeCleanup": {
+    "terminalState": "failed",
+    "terminalAt": "2026-10-19T06:09:51.951Z",
+    "podAbsentAt": "2026-10-19T06:11:42.861Z",
+    "manuallyDeleted": false
+  },
+  "requiredRuntimeResources": {
+    "source": "current selected task and compute profiles",
+    "taskProfileId": "01a0c12a-de0c-7001-a7d7-a0212edcc3dc",
+    "task": {
+      "cpu": "100m",
+      "memory": "2Gi"
+    },
+    "agentProfileId": "01a14489-d4f8-7000-bbac-f691878394df",
+    "agentProfileRevision": 3,
+    "agentTaskProfileId": "01a0c12a-de0c-7001-a7d7-a0212edcc3dc",
+    "agent": {
+      "cpu": "100m",
+      "memory": "2Gi"
+    },
+    "sequentialValidationPeak": {
+      "cpu": "1",
+      "memory": "2Gi"
+    },
+    "taskAndAgentPeak": {
+      "cpu": "200m",
+      "memory": "4Gi"
+    },
+    "note": "Additional candidate service resources and build/migration headroom are separate."
+  }
+}
