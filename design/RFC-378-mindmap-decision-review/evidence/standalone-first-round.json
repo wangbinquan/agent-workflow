@@ -1,0 +1,400 @@
+{
+  "id": "01M593RM926RN9KFCTBS5GNWBQ:round",
+  "taskId": "01M593MGE19EQN2J13X6MT64EP",
+  "kind": "self",
+  "status": "answered",
+  "directive": "stop",
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["交付范围", "第一版边界"]
+      },
+      "id": "v1-scope",
+      "title": "两周内要交付的第一版，功能边界定在哪一档？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "上一档 + 自动冲突拦截与超时未到释放",
+          "description": "用系统挡住最明显的双订与空占。代价是需要额外定义签到/释放的阈值，且两周内要先定出暂定值。",
+          "recommended": true,
+          "recommendationReason": "在完全无基线的前提下，这两项机制能直接压低最痛的冲突与空占；接受代价是释放阈值只能暂定、后续需按数据修正。"
+        },
+        {
+          "label": "查看空闲 + 预约 + 取消（冲突靠人工兜底）",
+          "description": "最小可用版本。冲突、爽约、空占都由人在群里协调。上线最快、成本最低，但双订与空占风险最高。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "上一档 + 团队配额 / 审批流",
+          "description": "引入更强的公平性治理。代价是审批与配额的开发、沟通与规则设计成本最高，规则一旦定错返工代价大。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["分配规则", "公平性模型"]
+      },
+      "id": "allocation-model",
+      "title": "3 间会议室在 20 人团队之间按什么规则分配？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "完全先到先得（FCFS）",
+          "description": "规则最简单、无需维护配额。代价是高频用户/团队可能挤占低频团队，长期公平性无保障。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "先到先得 + 每团队每日/每周上限",
+          "description": "保留灵活性同时抑制独占。代价是需先定义团队边界与上限数值，而当前没有使用率基线，只能暂定。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按团队/职能固定配额或固定时段",
+          "description": "公平且可预期。代价是灵活性差、配额难调，并可能造成会议室闲置（利用率下降）。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按时段优先级（如客户/跨部门会议优先）",
+          "description": "支持业务优先级。代价是优先级判定偏主观，容易产生争议与申诉，需要额外治理成本。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "时间粒度"]
+      },
+      "id": "slot-granularity",
+      "title": "预约的时间槽与起止粒度采用哪一种？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "30 分钟固定槽，整点/半点起止",
+          "description": "实现与协调最简单、可视化清晰。代价是短会浪费时间段，长会需要连续预订。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "15 分钟最小粒度，自由起止",
+          "description": "利用率最高、贴合真实会议时长。代价是规则与界面更复杂，冲突检测与释放逻辑的边界更细。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "整小时或半天为单位",
+          "description": "极简、无需细化。代价是在 20 人抢 3 间的紧张场景下，时间浪费会非常明显。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约治理", "释放与约束"]
+      },
+      "id": "no-show-policy",
+      "title": "没有爽约率基线时，第一版如何处理爽约 / 空占？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "只记录不惩罚，先用两周采集基线",
+          "description": "仅记录「预约—签到—释放」数据，不设惩罚。代价是这两周内空占可能继续存在，没有即时约束。",
+          "recommended": true,
+          "recommendationReason": "在无任何历史基线时，任何惩罚阈值都是凭空设定；先采集可比数据再定规则更稳妥。接受的代价是短期容忍空占。"
+        },
+        {
+          "label": "预约后 N 分钟未签到自动释放（N 暂定）",
+          "description": "能立即减少空占。代价是 N 值缺乏依据，可能误伤迟到者或大到形同虚设。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "记录爽约，累计到阈值后限制预约",
+          "description": "具备实际约束力。代价是阈值与申诉机制都没有基线支撑，容易引发不满与争议。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "会前提醒 + 一键取消/转让",
+          "description": "用低成本行为干预减少空占。代价是效果完全依赖用户主动性，无法强制。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["验证安排", "基线与复核"]
+      },
+      "id": "baseline-verification",
+      "title": "基线与验证由谁、在何时、用什么数据复核？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "行政/运营每周手工导出记录，两周后与团队代表复核",
+          "description": "不依赖系统集成，落地最快。代价是人工整理、可能有遗漏或口径不一致。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "IT 从日历/预约系统自动采集指标并出周报",
+          "description": "数据一致、可追溯、口径统一。代价是需要 IT 投入，可能拖慢两周的交付节奏。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "各团队代表轮值观察并上报",
+          "description": "视角贴近实际使用。代价是上报口径难统一、难以形成量化基线。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约治理", "释放与约束"],
+        "parentQuestionId": "no-show-policy",
+        "requestId": "fce6f235-b35d-4a46-842f-64717b758b08",
+        "requestBasis": "v2:78d03954d273ef66efd00d5cad89fe76"
+      },
+      "id": "fq-fce6f235-b35d-4a46-842f-64717b758b08-0",
+      "title": "要区分「真实需求不足」与「空占」，第一版至少采集哪些信号？（可多选）",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "预约总量与取消时间点：可看出需求多少、是否临近才取消；代价是需要系统或表格导出",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约后的签到/实际使用：把「约了没用」与「用了」分开；代价是需现场签到动作，可能漏签",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "想约而未约成的被拒/候补需求：识别供给不足；代价是需额外入口，且只有三间全满才触发",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "提醒触达与响应：可看提醒是否改变行为；代价是把观测与干预混在一起（见基线纯度问题）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约治理", "释放与约束"],
+        "parentQuestionId": "no-show-policy",
+        "requestId": "fce6f235-b35d-4a46-842f-64717b758b08",
+        "requestBasis": "v2:78d03954d273ef66efd00d5cad89fe76"
+      },
+      "id": "fq-fce6f235-b35d-4a46-842f-64717b758b08-1",
+      "title": "如何记录「想预约但约不到」的需求？（这是区分需求不足与空占的关键证据）",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "设满房候补/登记入口：三间全满时可留意愿，能量化被拒需求；代价是增加一个要维护的入口，冷启动可能没人用",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "前台或组长口头询问并人工记录：零开发；代价是样本依赖自觉、易漏记，且口径不统一",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不做被拒需求记录，只用使用率判断：最省成本；代价是无法直接区分需求不足与空占，结论只能靠推断",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "会前设无签到释放窗口转给候补：能同时观测与缓解；代价是会改变行为、污染自然基线，且实质引入自动释放",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约治理", "释放与约束"],
+        "parentQuestionId": "no-show-policy",
+        "requestId": "fce6f235-b35d-4a46-842f-64717b758b08",
+        "requestBasis": "v2:78d03954d273ef66efd00d5cad89fe76"
+      },
+      "id": "fq-fce6f235-b35d-4a46-842f-64717b758b08-2",
+      "title": "「空占」第一版采用哪个口径记录，才能保证两周后数据可比？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "会议发起人未签到即算空占：口径最简单；代价是发起人迟到或他人代用会被误记",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "未签到且未提前取消才算空占：更贴近主观爽约；代价是取消行为本身需被记录并统一讲解",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按实际使用人数/容量低于某比例算低效使用：能反映低效占用；代价是该比例阈值缺乏基线依据",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "以现场巡查「房间无人」为准：最接近实际观感；代价是巡查时点有误差、人工成本高",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约治理", "释放与约束"],
+        "parentQuestionId": "no-show-policy",
+        "requestId": "fce6f235-b35d-4a46-842f-64717b758b08",
+        "requestBasis": "v2:78d03954d273ef66efd00d5cad89fe76"
+      },
+      "id": "fq-fce6f235-b35d-4a46-842f-64717b758b08-3",
+      "title": "提醒会改变行为、可能污染基线，第一版如何安排「记录」与「提醒」的并行？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先纯记录一周再加入提醒一周，形成前后对照：能得较干净的对照；代价是首周无提醒、周期拉长且两段条件不同",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "记录与提醒同时启用：简单统一；代价是基线被提醒效果稀释，只能解释为「提醒后的空占」，无法还原自然空占率",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "对部分预约发提醒、部分不发做准对照：能估提醒净效果；代价是20人样本小，且有人被区别对待",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "并行且不追求纯净基线，只看趋势与是否出现被拒需求：最省事；代价是难以归因，两周后仍可能说不清主因",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "questionId": "v1-scope",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "第一版只做查看空闲、预约、取消、同一会议室同一时段冲突拦截、记录与会前提醒。不做自动释放、处罚和审批流。",
+      "confirmedBasis": "v2:42f867532768fc7f2c6f913fad38da3b"
+    },
+    {
+      "questionId": "allocation-model",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["完全先到先得（FCFS）"],
+      "customText": "",
+      "confirmedBasis": "v2:2410a27ca81ec158c496cc38239fbdcc"
+    },
+    {
+      "questionId": "slot-granularity",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["30 分钟固定槽，整点/半点起止"],
+      "customText": "",
+      "confirmedBasis": "v2:59886c4c85903e0e39c191848a8b4026"
+    },
+    {
+      "questionId": "no-show-policy",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "我暂定先记录爽约并提供会前提醒，两周内不自动释放，也不处罚。我们还不知道空占是否是主要矛盾。",
+      "decision": {
+        "status": "provisional",
+        "rationale": "没有历史基线，先观察两周再决定是否增加强制规则。",
+        "tradeoff": "接受短期空占仍可能发生，以及每周人工核对的成本。",
+        "uncertainty": "空占率、冲突次数和提醒是否有效都尚未验证；并行启用提醒后的记录不能还原自然空占率。",
+        "validationOwner": "产品负责人（验收场景角色）",
+        "revisitWhen": "试行两周后复核；若一周内出现三次有记录的实际冲突，提前讨论。"
+      },
+      "confirmedBasis": "v2:0703c8fddf6c1e7307db853d862cd603"
+    },
+    {
+      "questionId": "baseline-verification",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "由产品负责人（验收场景角色）每周汇总预约、冲突及自报未使用记录，两周后与团队代表复核。承认自报可能漏记，不把它当作精确爽约率。",
+      "confirmedBasis": "v2:cfa46e3dfb3ae1150b13d131c434b671"
+    },
+    {
+      "questionId": "fq-fce6f235-b35d-4a46-842f-64717b758b08-0",
+      "selectedOptionIndices": [0, 1, 2],
+      "selectedOptionLabels": [
+        "预约总量与取消时间点：可看出需求多少、是否临近才取消；代价是需要系统或表格导出",
+        "预约后的签到/实际使用：把「约了没用」与「用了」分开；代价是需现场签到动作，可能漏签",
+        "想约而未约成的被拒/候补需求：识别供给不足；代价是需额外入口，且只有三间全满才触发"
+      ],
+      "customText": "",
+      "confirmedBasis": "v2:2924230bec2bf5a378f28d2fca79a757"
+    },
+    {
+      "questionId": "fq-fce6f235-b35d-4a46-842f-64717b758b08-1",
+      "selectedOptionIndices": [1],
+      "selectedOptionLabels": [
+        "前台或组长口头询问并人工记录：零开发；代价是样本依赖自觉、易漏记，且口径不统一"
+      ],
+      "customText": "",
+      "confirmedBasis": "v2:9c12fea7756029550d487ca7aceae545"
+    },
+    {
+      "questionId": "fq-fce6f235-b35d-4a46-842f-64717b758b08-2",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "第一版把“未签到且未提前取消”只标记为疑似空占，由会议发起人事后补充是否实际使用。未补充的记录保持未知，不直接用于处罚或推导精确爽约率。",
+      "confirmedBasis": "v2:6fb8209fc7883e99a173a1bf52113e89"
+    },
+    {
+      "questionId": "fq-fce6f235-b35d-4a46-842f-64717b758b08-3",
+      "selectedOptionIndices": [1],
+      "selectedOptionLabels": [
+        "记录与提醒同时启用：简单统一；代价是基线被提醒效果稀释，只能解释为「提醒后的空占」，无法还原自然空占率"
+      ],
+      "customText": "",
+      "confirmedBasis": "v2:14089d0e700349d61b96b44afaa27a22"
+    }
+  ],
+  "answeredAt": 1792382086587
+}

@@ -1,6 +1,6 @@
 ## 2026-10-18 RFC-378：脑图澄清主动思考与决定复核（In Progress）
 
-进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。用户要求实际使用脑图澄清、参考 TreeLearn 并完整推进改进。已完成真实原版走查、候选 TreeLearn 源码对照、三件套、可交互原型与浏览器检查；[设计检视记录](design/RFC-378-mindmap-decision-review/prototype-review.md) 记录两项 P2 修复及独立功能设计门通过。重点为原子取舍、具体/引用追问、区分回答确认和决定成熟度、保留未知与复核安排、提交前按原答案复核。托管追问固定构造本地 SystemAgentRunFamily 的遗漏已定位，原版最终生成任务仍未获得完成证据。用户已明确批准实现、自主验收并提交远端，完整实现与用例已收齐，[独立功能实现门](design/RFC-378-mindmap-decision-review/implementation-review.md) 两项发现已修复并通过；限定路径静态核对通过，进入远端 CI 与独立环境实机验收。原版任务诊断为 S5 活跃运行事件流停滞，尚无最终输出；目前不代表真实模型闭环已通过。共享在制改动保留。
+进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。用户已审核原型并明确批准实现、自主验收和提交远端。完整实现 `3fd0c4f28` 与集中验证修复已发布到 `a550f5a3e`：[独立功能实现门](design/RFC-378-mindmap-decision-review/implementation-review.md) 通过，覆盖决定内容贯通、确认与成熟度分离、具体/引用追问、提交复核、脑图起步模板及托管已选执行 binding。实际单机使用 CI 生产二进制、`opencode-go/deepseek-v4.1-flash` 完成四轮旅程；最新 task `01M597Q2K6DD0N55FY06VN15AY` 于 `2026-10-19T04:53:19.721Z` done，9 个回答的 15 段原选择/补充全部进入输出，三种成熟度、未知与未定复核人保留。桌面、390/320px、浅/深色、键盘、取消/失败/刷新恢复已实测。已修正脑图提示的剩余冲突并明确单变量选项构造，但第四轮仍出现兼容选项单选，结果推断把“签到未决定”当“不设签到”，AC09/AC10 内容一致性未完全通过。自动化按生产候选 [CI 39200587900](https://github.com/wangbinquan/agent-workflow/actions/runs/39200587900) 的确切 SHA 终态记账；独立托管候选已送入 GitLab，发布被对象存储共享预算已满（HTTP 412）拦住，专用 2 GiB 档位已准备，等待用户决定是否增加共享预算。托管 AC05/AC12 仍待实机证据。详见 [集中验收与逐项对账](design/RFC-378-mindmap-decision-review/acceptance.md)，保持 In Progress；正式 AW 与其他 session 产出未被回退或停止。
 
 ## 2026-10-17 RFC-294 后继 S3 / S4 / S8：RFC-375 / 376 / 377 Done
 

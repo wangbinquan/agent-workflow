@@ -1,0 +1,404 @@
+{
+  "id": "01M595DN9BYKMEG0J952FSJWPS:round",
+  "taskId": "01M595BGCZ4WS394Q2QBFT6RWY",
+  "kind": "self",
+  "status": "answered",
+  "interactionMode": "mindmap",
+  "directive": "stop",
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["现有工具与依赖", "日历协作平台"]
+      },
+      "id": "existing-platform",
+      "title": "你们团队目前主要用哪套日历/协作工具承载日常会议？这决定第一版能否直接复用会议室资源，而不是从零造工具。",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "Google Calendar / Google Workspace",
+          "description": "Workspace 支持把房间登记为会议室资源，靠日程邀请占用；代价是需管理员配置资源并培养邀请习惯。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "Microsoft 365 / Outlook",
+          "description": "可用会议室邮箱资源，日程邀请即占用；代价是需 IT 建资源、处理权限与跨组织邀请。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "飞书 / 钉钉 / 企业微信",
+          "description": "多数自带会议室或群日程能力，落地快；代价是功能受平台限制，跨部门规则不易自定义。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "目前没有统一的日历工具",
+          "description": "现状是各自用日历或口头约；代价是需要先选定载体，两周内自建或引入成本更高。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["交付形态", "第一版落地形式"]
+      },
+      "id": "delivery-form",
+      "title": "第一版以什么形态落地？这是影响交付周期与长期维护成本的核心取舍。",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "复用现有日历的会议室资源，用日程邀请即占用",
+          "description": "改动最小，员工无需学新工具；代价是冲突与爽约规则受日历能力限制，难做复杂审批与统计。",
+          "recommended": true,
+          "recommendationReason": "若团队已有统一日历，且只有 3 间房、20 人，这是两周内最可能被真正用起来的方案；若并无统一日历，该前提不成立，请勿选此项。"
+        },
+        {
+          "label": "自建轻量预约页或表单加占用看板",
+          "description": "规则与统计最可控，可按仲裁规则定制；代价是两周内工期紧、需有人持续维护和技术支持。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "共享电子表格或协作文档登记",
+          "description": "几乎零开发、当天可上线；代价是靠自觉刷新、并发编辑易冲突，数据质量弱。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "先只定规则与协调方式，不建工具",
+          "description": "把两周花在规则共识而非工具上，最省力也最可逆；代价是无强制约束、无法沉淀数据，冲突仍靠人协调。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["冲突与仲裁", "重叠预约裁决"]
+      },
+      "id": "conflict-rule",
+      "title": "当两人预约同一房间同一时段时，按什么规则裁决？这决定谁占用的正当性依据。",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先到先得，先占用者有效，后到者另择",
+          "description": "规则最简单、无需管理者介入；代价是可能被抢房，重要会议反被挤掉，且无补偿机制。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约需审批，由管理员或房间负责人确认",
+          "description": "公平性和优先级可控；代价是增加单人审批负担，响应慢时会成为瓶颈。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "优先级规则，按会议类型或团队或用途分配",
+          "description": "能把稀缺资源留给高价值会议；代价是什么算高优先级极难服众，易引发争议与申诉。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "冲突时由指定仲裁人临时裁决",
+          "description": "平时自由、只在冲突时介入，平衡效率与公平；代价是裁决标准因人而异，且依赖指定人随时可用。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与基线", "无历史数据下的策略"]
+      },
+      "id": "noshow-baseline",
+      "title": "在没有任何爽约率或使用率基线的情况下，第一版如何处理预约了却不用？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "只记录不外罚，记录预约与实际使用，两周后拿数据再定规则",
+          "description": "先建立基线、不引入惩罚，最可逆；代价是短期内空占仍会发生，且需要有人确认实际是否使用。",
+          "recommended": true,
+          "recommendationReason": "你明确说没有历史基线，此时直接上签到或惩罚等于在无依据下猜测；先记录能让后续规则有据可依。前提是你们能接受把这两周作为观测期。"
+        },
+        {
+          "label": "超时未签到自动释放房间",
+          "description": "直接减少空占，机制可自动执行；代价是需要签到动作与释放阈值，阈值拍错会误伤准时开会的人。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "鼓励自助取消或释放，无强制签到",
+          "description": "靠善意与便利性降低空占，改动轻；代价是对不主动取消的人无约束，效果不确定。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "指定房间管理员巡查并释放空房",
+          "description": "人肉兜底、立即可行；代价是占用人力、覆盖时段有限，且依赖管理员在场。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["验收与复核", "交付成功判定"]
+      },
+      "id": "acceptance",
+      "title": "两周后，用什么标准判定第一版交付成功，由谁复核？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "全员自助完成无冲突预约，并试运行两周后由指定负责人复核记录",
+          "description": "以无需人工协调即可约到为验收，需保留预约记录作为证据；代价是需要明确的指定负责人与复核时点。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "先在 1 个小范围试点，达标后再全员推广",
+          "description": "风险与影响面最小，便于快速纠错；代价是全员可用时间被推迟，可能超出两周的期望。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "以冲突或爽约次数的下降幅度为验收指标",
+          "description": "最贴近问题是否被解决；代价是当前无基线，需先测出基线才能谈下降，两周内可能尚不足以判定。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "以上线并通知全员、有人实际使用即算交付",
+          "description": "标准最宽松、最易达成；代价是无法说明是否真的解决了预约问题，可能只是换了个入口。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与基线", "无历史数据下的策略"],
+        "parentQuestionId": "noshow-baseline",
+        "requestId": "8729b9b2-f983-47fe-a0c1-8b44932bda7f",
+        "requestBasis": "v2:f474ab0bb62a441540374253e572e03d"
+      },
+      "id": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-0",
+      "title": "第一版把\"空占\"记成什么口径？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "区分主动取消、迟到使用、完全未用三类分别记录",
+          "description": "数据最细，能区分\"没人想用\"与\"订了不来\"，直接检验空占是否为主要矛盾；代价是每条预约记录项最多。",
+          "recommended": true,
+          "recommendationReason": "你在回答里说还不知道空占是否是主要矛盾；只有把取消、迟到使用与完全未用分开，看数据时才分得清需求不足还是到场问题。前提是你们能接受每条预约多记两三个字段；若连这点记录都嫌重，可退回只判\"是否被使用\"。"
+        },
+        {
+          "label": "预约开始后约10分钟房间无人即记为空占",
+          "description": "响应快、能反映迟到，但可能把短暂迟到误判为空占，从而高估爽约。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约时段内房间始终无人使用才记为空占",
+          "description": "判定最保守、误判少，但会漏掉\"到过又走\"的短时空占。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "只看预约最终是否被使用，不再细分",
+          "description": "记录最省力、几乎零额外负担，但无法解释空占原因，日后也难据此区分对策。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与基线", "无历史数据下的策略"],
+        "parentQuestionId": "noshow-baseline",
+        "requestId": "8729b9b2-f983-47fe-a0c1-8b44932bda7f",
+        "requestBasis": "v2:f474ab0bb62a441540374253e572e03d"
+      },
+      "id": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-1",
+      "title": "实际使用情况用哪些方式采集（可并行勾选）？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "预约人自助标记\"已使用/已取消\"",
+          "description": "无额外人力、最省力，但依赖自觉，可能漏标或误标，数据完整性不确定。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "组织者按预约逐条抽查\"开始后房间是否有人\"",
+          "description": "覆盖到每条预约、可与空占口径对齐；代价是每天需固定投入时间，与你已接受的人工抽样一致。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "每天定时全楼巡查三间房的忙闲",
+          "description": "只看整体占用、不逐条追预约，人力最低；但无法把忙闲对回到具体预约，难以区分迟到与未用。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与基线", "无历史数据下的策略"],
+        "parentQuestionId": "noshow-baseline",
+        "requestId": "8729b9b2-f983-47fe-a0c1-8b44932bda7f",
+        "requestBasis": "v2:f474ab0bb62a441540374253e572e03d"
+      },
+      "id": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-2",
+      "title": "观测期在什么条件下结束并进入复核？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "两周或样本量任一先达到即复核",
+          "description": "兼顾时间与证据，任一口径达标就复盘；前提是事先把两个阈值都写清，否则会各说各话。",
+          "recommended": true,
+          "recommendationReason": "你已把两周与人工抽样作为可接受的观测成本；再加一个样本量下限，可在数据明显不足时避免\"到点就下结论\"。前提是团队愿意事先写定两个数值，代价是复核时点会有两个可能的触发源。"
+        },
+        {
+          "label": "固定两周结束，无论样本多少",
+          "description": "日程清晰、方便排期，但样本可能不足以下结论，或早已够用仍在空转。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "以最小样本量为停止条件（如累计30–40次预约观测）",
+          "description": "以证据量决定何时停，避免样本不足；代价是结束日期不确定，可能拖长或提前。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不设固定停止点，持续记录直到团队主动暂停",
+          "description": "最灵活、不打断现有节奏；但没有明确复核时点，容易一直拖延、观测变成常态。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与基线", "无历史数据下的策略"],
+        "parentQuestionId": "noshow-baseline",
+        "requestId": "8729b9b2-f983-47fe-a0c1-8b44932bda7f",
+        "requestBasis": "v2:f474ab0bb62a441540374253e572e03d"
+      },
+      "id": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-3",
+      "title": "为检验\"空占是否是主要矛盾\"，观测期还应同时采集哪些信号（可并行勾选）？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "记录\"想订却订不到\"的冲突次数",
+          "description": "直接反证\"空占是主要矛盾\"：若冲突频繁，瓶颈更可能是供给不足而非爽约。",
+          "recommended": true,
+          "recommendationReason": "你明确说不知道空占是否为主要矛盾，冲突次数是最省力的对照证据；前提是有人记下被拒的订房请求，代价是可能漏记非正式口头预订。"
+        },
+        {
+          "label": "记录每天高峰时段三间房的订满比例",
+          "description": "反映供给压力随时间分布，帮助判断是否需要错峰或扩容；代价是需每天定时看一眼日历。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "记录大家改用走廊、电话或线上会议等替代做法的情况",
+          "description": "捕捉\"需求外溢\"这种隐性信号，能揭示未被预约系统体现的真实需求；代价是这类信息多为口耳相传，完整性低。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "questionId": "existing-platform",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "还没核实团队是否统一使用日历；不能把未知写成没有日历。当前以共享文档开展试行，现有工具情况由负责人补充核实。",
+      "confirmedBasis": "v2:296c1591372b4ea5bf3afffdf4a18e11"
+    },
+    {
+      "questionId": "delivery-form",
+      "selectedOptionIndices": [2],
+      "selectedOptionLabels": ["共享电子表格或协作文档登记"],
+      "customText": "",
+      "decision": {
+        "status": "decided",
+        "rationale": "验收场景先用现有协作文档，避免在缺少问题基线时直接投入开发。",
+        "tradeoff": "我接受需要手动刷新和人工核对冲突，第一版不保证自动拦截。"
+      },
+      "confirmedBasis": "v2:698c31f5b191d0b1515d74519aa28895"
+    },
+    {
+      "questionId": "conflict-rule",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["先到先得，先占用者有效，后到者另择"],
+      "customText": "",
+      "confirmedBasis": "v2:82e79de0b91fc604e6628e244cbd4848"
+    },
+    {
+      "questionId": "noshow-baseline",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "暂定并行记录实际使用、提醒主动取消；两周内不自动释放、不处罚。我们还不知道空占是否是主要矛盾。",
+      "decision": {
+        "status": "provisional",
+        "rationale": "没有爽约率和真实需求基线，先观察再讨论强制措施。",
+        "tradeoff": "我接受两周内仍可能空占，并承担每天十分钟人工抽样记录。",
+        "uncertainty": "我们还不知道空占是否是主要矛盾；记录与主动取消可以并行。",
+        "validationOwner": "试点组织者（待团队确认具体人选）",
+        "revisitWhen": "两周后，或连续三天出现预约冲突时复核；没有足够观测就继续保持未知。"
+      },
+      "confirmedBasis": "v2:812cbf3e4115e532d6edef5afeb489ae"
+    },
+    {
+      "questionId": "acceptance",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "先由志愿小组试行，检查是否能查看、预约、取消且发现冲突；记录样本和失败案例。具体人数、成功率阈值与复核人选尚未商定，不能声称爽约率已经下降。",
+      "confirmedBasis": "v2:67705935f9a2570592843001a61bb2b9"
+    },
+    {
+      "questionId": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-0",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "只记抽样时点是否有人、预约是否已取消，以及记录时间；抽样没看到人不能等同整个时段未使用。暂不定义爽约率。",
+      "confirmedBasis": "v2:00ad66241f0e61085a68727036634a1c"
+    },
+    {
+      "questionId": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-1",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["预约人自助标记\"已使用/已取消\""],
+      "customText": "另在每天十分钟内做有限抽样，不承诺逐条覆盖；记录缺失并保留自报可能失真的未知。",
+      "confirmedBasis": "v2:537cf8a13c197457a341a971168411ef"
+    },
+    {
+      "questionId": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-2",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "两周后或连续三天出现预约冲突就复核，这只是复核触发条件，不等于证据已经充足。样本不足时继续保留未知，是否延长观测由团队另行决定。",
+      "confirmedBasis": "v2:ecab79359a369653f832f06dffc31f83"
+    },
+    {
+      "questionId": "fq-8729b9b2-f983-47fe-a0c1-8b44932bda7f-3",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["记录\"想订却订不到\"的冲突次数"],
+      "customText": "同时对照当时实际是否有人使用；冲突次数单独不能反证空占，也可能正是空占造成的。不得据此直接建议扩容。",
+      "confirmedBasis": "v2:73f8281ad9ed4b804d664d42cb07d908"
+    }
+  ],
+  "answeredAt": 1792383398722
+}

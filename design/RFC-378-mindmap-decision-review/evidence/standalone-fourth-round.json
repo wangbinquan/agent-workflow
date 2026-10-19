@@ -1,0 +1,419 @@
+{
+  "id": "01M597SD6T49DH2G5J2899CX0F:round",
+  "taskId": "01M597Q2K6DD0N55FY06VN15AY",
+  "kind": "self",
+  "terminatedAs": null,
+  "askingNodeId": "starter_clarifier",
+  "askingNodeRunId": "01M597Q2WSHY67S41AN5TYJAA9",
+  "askingShardKey": null,
+  "intermediaryNodeId": "starter_clarify",
+  "intermediaryNodeRunId": "01M597SD6T49DH2G5J2899CX0F",
+  "intermediaryNodeTitle": "复核决定",
+  "targetConsumerNodeId": null,
+  "loopIter": 0,
+  "iteration": 0,
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["方案范围", "第一版交付形态"]
+      },
+      "id": "q-deliverable-form",
+      "title": "两周内交付的「第一版」应该是哪种形态？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "书面约定 + 现有共享日历（不开发任何工具）",
+          "description": "产出一份预约规则文档，配合团队已有的共享日历落地，靠自觉执行与人工协调。改动可逆、几乎必然能在两周内交付；代价是完全依赖人工遵守，冲突与爽约只能靠人发现和记录，缺少结构化数据。",
+          "recommended": true,
+          "recommendationReason": "在缺少预约/爽约/使用率基线、且只有两周窗口时，用零开发成本的流程先跑起来，能以最小风险取得真实预约行为；前提是团队愿意遵守书面约定。若团队连基本遵守都难保证，这条代价会立即显现。"
+        },
+        {
+          "label": "轻量工具（表单/共享表格 + 日历自动化）",
+          "description": "用现成表单、共享表格或日历自动化搭一个带预约入口和规则提示的最小工具。相比纯流程约定，工具天然带来可查询的预约记录与提醒；代价是需要有人搭建与维护，两周内交付存在排期压力。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "采购或复用现成商用会议室系统",
+          "description": "直接上成熟系统，功能与报表完整；代价是采购/试用/导入流程通常超出两周，且规则被系统预设，在无基线时未必贴合这个 20 人、3 间房的团队。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "冲突裁决规则"]
+      },
+      "id": "q-conflict-rule",
+      "title": "同一时段出现多个预约需求时，采用哪种冲突裁决规则？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先到先得（提交时间早者优先）",
+          "description": "规则直观、执行成本低、争议少；代价是无法体现会议重要程度差异，可能让低优先级需求长期占住热门时段。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "优先级规则（按外部客户、人数规模或层级等定优先级）",
+          "description": "让被认定为高优先的会议优先拿到房间；代价是需要事先定义并维护优先级标准，且标准在无数据时难以定准，容易引发公平性争议。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "配额制（按团队/周期分配房间时长额度）",
+          "description": "把 3 间房的使用时长按团队切分额度；代价是跨团队共用效率可能下降，而额度在无使用数据时很难定得合理。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["资源分配", "房间归属模型"]
+      },
+      "id": "q-room-allocation",
+      "title": "3 间会议室在 20 人团队中如何归属？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "完全开放共享池（任何人都可预约任意房间）",
+          "description": "灵活度与理论上限利用率较高；代价是热门时段争抢集中，冲突更多依赖裁决规则来消化。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "固定分配给团队/小组专用",
+          "description": "各组有稳定、可预期的房间，协调成本低；代价是闲时浪费明显，3 间房分给 20 人后容量与时段都会紧张。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "混合（少数房间固定，其余开放共享）",
+          "description": "兼顾稳定与灵活；代价是规则更复杂，需要额外说明哪些房间固定、共享池如何分配，第一版说明成本更高。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "爽约与空闲释放"]
+      },
+      "id": "q-noshow-release",
+      "title": "预约时段开始后无人到场时，是否自动释放房间？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "不自动释放，只做到场记录与提示",
+          "description": "保持可逆、避免误伤；代价是空置会持续存在，短期房间利用率有损失，只能先观察真实爽约情况。",
+          "recommended": true,
+          "recommendationReason": "爽约率未知、交付窗口只有两周时，先只观察记录、不施加自动惩罚，能以较低代价取得真实爽约数据；前提是团队能接受短期空置。若空置带来的损失明显高于误释放风险，则应改选自动释放。"
+        },
+        {
+          "label": "启用自动释放（超过设定时间未签到即释放）",
+          "description": "能直接压缩爽约造成的空置；代价是无基线时阈值难定，可能误释放迟到但仍要用的会议，并且需要签到机制配合才能执行。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["基线与验证", "证据获取方式"]
+      },
+      "id": "q-baseline-evidence",
+      "title": "在没有历史基线的情况下，第一版规则依据的数据从哪里来？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先用约两周并行采集真实预约/到场数据，再据数据定规则",
+          "description": "规则更有依据、更贴合真实行为；代价是与「两周内交付第一版」直接冲突，首版可能只剩采集与流程，细化规则要延后。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "回溯现有日历/门禁等已有记录做粗略估算",
+          "description": "能较快得到近似基线，支持先定规则；代价是已有记录可能不完整或口径不一致，估算偏差需要明确标注为暂定。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不先采集，直接上最小规则再按反馈迭代",
+          "description": "交付最快、两周内可落地；代价是规则缺乏依据，可能需要很快重定，需接受返工成本。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "爽约与空闲释放"],
+        "parentQuestionId": "q-noshow-release",
+        "requestId": "83e86e68-56dd-4ae6-a375-17a3a31904a4",
+        "requestBasis": "v2:33dd90a951895071449f7855b17a4b85"
+      },
+      "id": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-0",
+      "title": "在两周观察中，一次预约满足什么条件才计作一次“空占”？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "整个预约时段内房间始终无人使用，才计一次空占",
+          "description": "口径最严、误记最少；代价是迟到后仍实际使用的会议不计入，可能低估开始时空占的损失。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约开始后超过另行约定的时长仍无人到场，即计一次空占（迟到与真爽约合并统计）",
+          "description": "更贴近“开始即占位”的损失；代价是时长需另外商定，且迟到者与真正爽约无法区分。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "只统计系统内有明确取消或改期记录的预约，其余一律不计",
+          "description": "数据最易获得、几乎无主观判断；代价是只能看到已取消的部分，看不到从头到尾从未动过的空占。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "爽约与空闲释放"],
+        "parentQuestionId": "q-noshow-release",
+        "requestId": "83e86e68-56dd-4ae6-a375-17a3a31904a4",
+        "requestBasis": "v2:33dd90a951895071449f7855b17a4b85"
+      },
+      "id": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-1",
+      "title": "这次观察主要用什么作为“房间是否真的被使用”的证据？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "预约系统的预约、取消与改期日志（不引入现场设备）",
+          "description": "零额外工具、可随时回溯；代价是只反映预约端动作，无法确认房间是否真的被占用。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约结束后由预约人自行标记实际使用情况",
+          "description": "能覆盖真实使用结果；代价是完全依赖自觉填报，漏报或粉饰会污染数据。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "由观察者每天现场巡查并逐间记录",
+          "description": "最接近客观使用情况；代价是每天约十分钟人力，且只能观察到巡查时点的状态。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "爽约与空闲释放"],
+        "parentQuestionId": "q-noshow-release",
+        "requestId": "83e86e68-56dd-4ae6-a375-17a3a31904a4",
+        "requestBasis": "v2:33dd90a951895071449f7855b17a4b85"
+      },
+      "id": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-2",
+      "title": "谁负责收集并复核这两周的观察记录？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "指定一名固定负责人",
+          "description": "责任清晰、统计口径容易统一；代价是负担集中在一人身上，缺席时容易断档。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "三间会议室的实际使用者轮值记录",
+          "description": "分散负担、贴近使用现场；代价是多人执行时判定口径容易不一致，需要额外对齐。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不指定负责人，任何成员发现问题时自行上报",
+          "description": "启动成本最低、不增加角色；代价是数据零散，很可能大量漏记，观察结果可信度低。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "爽约与空闲释放"],
+        "parentQuestionId": "q-noshow-release",
+        "requestId": "83e86e68-56dd-4ae6-a375-17a3a31904a4",
+        "requestBasis": "v2:33dd90a951895071449f7855b17a4b85"
+      },
+      "id": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-3",
+      "title": "出现什么信号时，就重新评估是否启用自动释放？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "两周观察期结束时的固定复核，期间不提前评估",
+          "description": "流程简单、样本完整；代价是即使空占明显严重，也要等满两周才处理。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "累计记录到的空占次数达到事先约定的阈值时提前复核",
+          "description": "能更早响应；代价是阈值在无基线下只能凭经验设定，可能过早或过晚触发。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "出现具体受影响案例时复核，例如有人因房间被占而无法开会",
+          "description": "贴近真实痛点、不做无谓调整；代价是依赖有人主动报告，可能漏掉无人发声的损失。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "interactionMode": "mindmap",
+  "answers": [
+    {
+      "questionId": "q-deliverable-form",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "第一版使用已有共享文档登记；尚未确认存在可用共享日历，不把日历自动化和提醒一起选定。",
+      "decision": {
+        "status": "decided",
+        "rationale": "没有使用基线，先用手头工具观察实际需求。",
+        "tradeoff": "我接受手动登记和人工核对冲突的时间成本。"
+      },
+      "confirmedBasis": "v2:1e6c84a7355276193db5111785ca2da1"
+    },
+    {
+      "questionId": "q-conflict-rule",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["先到先得（提交时间早者优先）"],
+      "customText": "",
+      "confirmedBasis": "v2:b0923bdbafc6705d76df999b20d8cb35"
+    },
+    {
+      "questionId": "q-room-allocation",
+      "selectedOptionIndices": [0],
+      "selectedOptionLabels": ["完全开放共享池（任何人都可预约任意房间）"],
+      "customText": "",
+      "confirmedBasis": "v2:78ec5666e49b98ec52246f2648ce40e4"
+    },
+    {
+      "questionId": "q-noshow-release",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "首版暂不自动释放房间。是否签到、怎样记录与是否提醒另行决定，不能随这个选项一并确定。",
+      "decision": {
+        "status": "provisional",
+        "rationale": "我们没有爽约与使用率基线，不能认定空占是主要问题。",
+        "tradeoff": "我接受短期仍可能有空占，并投入每天十分钟观察。",
+        "uncertainty": "真实空占比例、观察偏差与误释放损失尚未知；暂无指定验证负责人。",
+        "revisitWhen": "两周试点后复核；具体日期和负责人尚未商定。"
+      },
+      "confirmedBasis": "v2:c791c71de46ec2bb10d6c2a5894f517b"
+    },
+    {
+      "questionId": "q-baseline-evidence",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "先确认是否有可用历史记录，同时在两周试点中采集新记录；两者可以并行，不因此推迟第一版，也不声称已有基线。",
+      "confirmedBasis": "v2:6b7c1a7db0fd876732258055e88d554f"
+    },
+    {
+      "questionId": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-0",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "分别记录预约中且观察时点无人、预约人自报未使用；已取消不算空占，抽样不能推断整个预约时段无人。",
+      "confirmedBasis": "v2:e4243cf542baae7bad2dce954e621ca3"
+    },
+    {
+      "questionId": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-1",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "对照共享文档登记、预约人自愿反馈和每天十分钟内的现场抽样，三者并用并记录缺失；不能假设已有预约系统日志。",
+      "confirmedBasis": "v2:ba877b9989a15d69e9d8acc56c3eae35"
+    },
+    {
+      "questionId": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-2",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "收集人与复核人都尚未商定，保留 TBD；这不等于已决定采用无人负责的上报方式，也不自动指派管理员。",
+      "confirmedBasis": "v2:034431788243a3baa72e41581f114962"
+    },
+    {
+      "questionId": "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-3",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "两周到期和出现具体损失案例均可触发复核，先检查记录偏差与误释放后果；触发复核不等于自动开启释放。",
+      "confirmedBasis": "v2:d8c856a29896fcc82016367ad7cf3888"
+    }
+  ],
+  "directive": "stop",
+  "status": "answered",
+  "sessionMode": null,
+  "designerRunTriggeredAt": null,
+  "abandonedAt": null,
+  "createdAt": 1792385266906,
+  "answeredAt": 1792385568936,
+  "answeredBy": "01M593CZJFJ5D57BZJGK53PNDB",
+  "submittedByRole": "owner",
+  "answerAttributions": {
+    "q-deliverable-form": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385351154
+    },
+    "q-conflict-rule": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385362637
+    },
+    "q-room-allocation": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385404441
+    },
+    "q-noshow-release": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385383352
+    },
+    "q-baseline-evidence": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385418218
+    },
+    "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-0": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385519533
+    },
+    "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-1": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385520740
+    },
+    "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-2": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385533862
+    },
+    "fq-83e86e68-56dd-4ae6-a375-17a3a31904a4-3": {
+      "userId": "01M593CZJFJ5D57BZJGK53PNDB",
+      "role": "owner",
+      "updatedAt": 1792385535158
+    }
+  },
+  "draftAnswers": null
+}

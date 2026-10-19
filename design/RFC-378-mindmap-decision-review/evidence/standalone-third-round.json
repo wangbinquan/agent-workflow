@@ -1,0 +1,316 @@
+{
+  "id": "01M596JKJ8MJE2SD7SFY4DENMX:round",
+  "taskId": "01M596GKWDDAK42HW2D9AA04RQ",
+  "kind": "self",
+  "status": "answered",
+  "interactionMode": "mindmap",
+  "directive": "stop",
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": ["交付形态"]
+      },
+      "id": "delivery-mode",
+      "title": "首版准备用什么方式承载这 20 人的日常预约？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "独立轻量预约页",
+          "description": "为 3 间房和 20 人做一个只含查看空房、预约、取消的网页，规则和界面完全可控。代价是新增一个入口，需要处理登录与通知，团队也要改变现有习惯。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "现有日历的房间资源",
+          "description": "把 3 间房建成团队日历中的资源，用日历邀请占位并依赖日历冲突提示。前提是团队已有统一日历且允许建资源；代价是预约规则受日历能力限制，爽约与使用统计较弱。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "群聊机器人或共享表格",
+          "description": "用群内指令或共享表格登记，管理员维护。开发量最低、上线最快；代价是并发冲突和实时性弱，容易出现漏看或重复，需要人工巡检。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "只交付规则与线下流程",
+          "description": "两周内先统一预约、取消和释放规则，用线下登记或现有工具执行，不交付软件。代价是无法自动防冲突，数据靠人工记录，但能先积累基线再决定是否开发。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["预约规则", "时间粒度"]
+      },
+      "id": "time-granularity",
+      "title": "预约时间按什么粒度切分？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "固定 60 分钟整段",
+          "description": "所有预约都按 60 分钟整段选择，系统只接受整段。实现和冲突判断最简单，规则也最容易解释；代价是短会浪费时段，长会必须连订，房间利用率可能下降。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "固定 30 分钟步长",
+          "description": "以 30 分钟为最小步长，允许跨多个步长连订。比 60 分钟整段灵活，又比完全自由可控；代价是组合更多、界面更复杂，仍会产生一定碎片。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "自由起止，只校验重叠",
+          "description": "用户自选开始和结束时间，系统只阻止时间重叠。最贴合真实会议长度；代价是时间碎片多、公平性难保证，界面和规则解释更复杂。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "固定时段加管理员例外",
+          "description": "日常按固定时段预约，管理员可为特殊会议手动破例。兼顾简单与例外；代价是例外不透明，容易引发公平争议，且管理员成为瓶颈。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["冲突与公平", "冲突处理"]
+      },
+      "id": "conflict-policy",
+      "title": "出现预约冲突时，首版采用哪种处理规则？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "先到先得，硬性阻止重叠",
+          "description": "谁先提交谁获得时段，系统直接拒绝重叠预约。规则透明、开发最省；代价是慢一步的人没有补救，热门时段可能被先订者长期占用。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "先到先得加候补队列",
+          "description": "主规则仍是先到先得，订不到可排队，空出后按顺序通知。给未订到的人第二次机会；代价是要维护候补顺序、通知和过期失效，两周内复杂度上升。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "按团队或项目配额与优先级",
+          "description": "给不同团队或会议类型分配配额或优先级，冲突时按规则让位。可保护资源弱势方或关键会议；代价是配额和优先级需要额外定义，容易被质疑不透明，也可能降低整体利用率。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "允许重叠，使用者自行协调",
+          "description": "系统只展示已有时段，不阻止重叠预约。灵活性最高、实现最简单；代价是可能出现真实撞会，首版无法承诺不冲突。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与使用", "处理深度"]
+      },
+      "id": "no-show-policy",
+      "title": "对已预约但未实际使用的情况，首版做到哪一步？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "只记录使用或未使用，不自动释放",
+          "description": "预约结束后由用户确认或管理员补记，先积累爽约基线。好处是不因误判直接取消预约；代价是空置期间房间不能自动回流，需要人工跟进。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "开始后 15 分钟未签到自动释放",
+          "description": "到点后要求签到，超时未签到则释放房间。能提高周转；代价是迟到或忘记签到会被误释放，需要签到入口、通知和恢复或申诉机制。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "管理员巡查后手动释放",
+          "description": "管理员发现房间空置再手动取消或释放。保留人工判断、误伤少；代价是依赖管理员在场，释放不及时，且判断标准难统一。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "首版不记录也不处理",
+          "description": "不增加签到、巡查或释放逻辑，只做预约和取消。范围最小、交付最快；代价是无法判断爽约是否真实存在，后续规则没有数据依据。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["验证与复核", "证据记录"]
+      },
+      "id": "validation-evidence",
+      "title": "首版上线后，哪些证据必须被记录并在复核时使用？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "预约、取消与改期次数",
+          "description": "按房间和时段记录请求量，判断需求集中在哪。代价是需要先定义统计口径，且不能直接说明房间是否真的被使用。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "实际使用或未使用记录",
+          "description": "记录预约后是否有人使用，形成爽约基线。代价是需要签到或事后确认，增加用户操作。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "冲突、候补与被拒次数",
+          "description": "记录因重叠被拒、进入候补、候补成功或失败的情况。能看出供给紧张程度；代价是候补功能若不做，只能记录被拒次数。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "20 人试用反馈与协调耗时",
+          "description": "收集使用者对找房、公平感和协调时间的定性反馈。能补充数字看不到的体验问题；代价是主观、样本小，需要统一提问方式。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与使用", "处理深度"],
+        "parentQuestionId": "no-show-policy",
+        "requestId": "9c7fad77-54de-471c-a4b4-455d0ba41619",
+        "requestBasis": "v2:970d3c705574a5cedb7289c802ec783e"
+      },
+      "id": "fq-9c7fad77-54de-471c-a4b4-455d0ba41619-0",
+      "title": "首版是否允许人工释放被确认空置的预约时段？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "允许管理员在确认房间确实空置后手动释放该时段（周转更快，但依赖人工在场与统一判断，存在误释放风险）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "首版不提供任何释放操作，空置时段仍归原预约人（避免误伤，但空置无法回流，只能等记录积累后再定规则）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": ["爽约与使用", "处理深度"],
+        "parentQuestionId": "no-show-policy",
+        "requestId": "9c7fad77-54de-471c-a4b4-455d0ba41619",
+        "requestBasis": "v2:970d3c705574a5cedb7289c802ec783e"
+      },
+      "id": "fq-9c7fad77-54de-471c-a4b4-455d0ba41619-1",
+      "title": "在不预设空占是主要矛盾的前提下，首版可以并行收集哪些使用证据？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "系统自动记录预约、修改、取消的时间戳（零人工负担，但只能反映操作，不能证明是否实际使用）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约开始后由使用方自愿标记到场或未到场（比时间戳更接近实际，但依赖自觉，样本可能有偏）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "预约结束后由使用方自愿标记实际使用或未使用（补充结果视角，但同样依赖反馈意愿）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "管理员按固定频次抽样巡查并记录空置（能发现未反馈的空置，但只覆盖抽样时段且有观察成本）",
+          "description": "",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "answers": [
+    {
+      "questionId": "delivery-mode",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "首版用已有共享文档登记，不把群聊机器人与表格视为同一个已选方案。",
+      "decision": {
+        "status": "decided",
+        "rationale": "先用已有工具收集需求，不在缺少基线时投入开发。",
+        "tradeoff": "我接受手动刷新与人工核对冲突的时间成本。"
+      },
+      "confirmedBasis": "v2:a1960a27a8793f45e4f7c46fe57f23ed"
+    },
+    {
+      "questionId": "time-granularity",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "先试行30分钟步长；是否允许管理员例外是另一项决定，尚未讨论。",
+      "confirmedBasis": "v2:6e7e1cce34e6d15c150bc56626a0359c"
+    },
+    {
+      "questionId": "conflict-policy",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "共享文档由人核对并按先登记者优先处理，不声称系统已能硬拦截；候补、配额和优先级本轮都不决定。",
+      "confirmedBasis": "v2:eea919f470ceef92f346fce427ef8b9a"
+    },
+    {
+      "questionId": "no-show-policy",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "暂定同时记录使用情况并提醒主动取消，不自动释放、不处罚。记录与人工判断是否释放是两项独立决定。",
+      "decision": {
+        "status": "provisional",
+        "rationale": "没有爽约和使用率基线，先观察。",
+        "tradeoff": "我接受每天十分钟抽样记录，以及短期仍有空占的风险。",
+        "uncertainty": "空占是否为主要矛盾未知，抽样不能直接证明整个时段未使用。",
+        "revisitWhen": "两周后复核；负责人尚未商定，不能自动认领或派发。"
+      },
+      "confirmedBasis": "v2:0326b62b62139f8db85ca9fb868a0a8d"
+    },
+    {
+      "questionId": "validation-evidence",
+      "selectedOptionIndices": [0, 3],
+      "selectedOptionLabels": ["预约、取消与改期次数", "20 人试用反馈与协调耗时"],
+      "customText": "按实际参与者收集反馈，不承诺20人全覆盖；在每日十分钟内抽样观察并记录缺失，冲突不直接证明供给不足。",
+      "confirmedBasis": "v2:66f935dd7c7caad152ced5b11747daed"
+    },
+    {
+      "questionId": "fq-9c7fad77-54de-471c-a4b4-455d0ba41619-0",
+      "selectedOptionIndices": [],
+      "selectedOptionLabels": [],
+      "customText": "首版不允许管理员代为释放；预约人仍可主动取消自己的预约。",
+      "confirmedBasis": "v2:63d8440b8a6ec6930bf47b4f2cfa5707"
+    },
+    {
+      "questionId": "fq-9c7fad77-54de-471c-a4b4-455d0ba41619-1",
+      "selectedOptionIndices": [2, 3],
+      "selectedOptionLabels": [
+        "预约结束后由使用方自愿标记实际使用或未使用（补充结果视角，但同样依赖反馈意愿）",
+        "管理员按固定频次抽样巡查并记录空置（能发现未反馈的空置，但只覆盖抽样时段且有观察成本）"
+      ],
+      "customText": "实际抽样记录者尚未商定，暂按每天十分钟的上限设计；不能因为勾选这个措施就指派管理员。",
+      "confirmedBasis": "v2:5a9cd03643ed687ea10f274aad15778a"
+    }
+  ],
+  "answeredAt": 1792384249018
+}
