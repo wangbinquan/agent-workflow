@@ -22,6 +22,7 @@ import {
   type StructuralDiff,
   type Task,
 } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
 import { DomainError } from '@/util/errors'
 import type { Logger } from '@/util/log'
 import type { Actor } from '@/auth/actor'
@@ -360,7 +361,11 @@ export async function triggerChangeNarrative(
       throw new DomainError('narrative-nothing-to-narrate', 'this task changed no files', 409)
     }
     const startedAt = (deps.now ?? Date.now)()
-    const promise = runGeneration(deps, task, input)
+    // Each trigger is its own attempt, so a regeneration after a failure runs
+    // again: a hosted execution is durable per attempt identity, and with the
+    // content digest alone the first attempt's recorded failure came back.
+    const attempt = `${input.digest}:${ulid()}`
+    const promise = runGeneration(deps, task, input, attempt)
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err)
         failures.set(task.id, { message, at: Date.now() })
@@ -382,6 +387,7 @@ async function runGeneration(
   deps: ChangeNarrativeDeps,
   task: Task,
   input: NarrativeInput,
+  attempt: string,
 ): Promise<void> {
   const runtime = await deps.resolveRuntime({
     runtimeName: deps.runtimeName ?? null,
@@ -397,7 +403,7 @@ async function runGeneration(
       observationDemand: {
         kind: 'change-narrative',
         originalId: task.id,
-        originalAttempt: input.digest,
+        originalAttempt: attempt,
         name: '变更叙述',
         parentTaskId: task.id,
         purpose: 'system',

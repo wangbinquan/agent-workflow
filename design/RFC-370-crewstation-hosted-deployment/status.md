@@ -124,6 +124,29 @@ v4 实机验收中发现两个问题，按 redesign §10.5 与 §9.2 的补正�
 - rfc042 上有一条创建请求先被额度拒绝、随后对应的 AW 任务被删，CS 一直把它列为 admitting（不占额度与卷）。
 - 数字员工创作接口对不合法的请求体返回 500（服务内的 ZodError 没有映射成 400），与托管无关。
 
+### v0.6.27 托管实机验收（2026-10-19）
+
+`bba506bd2`（F5～F7，CI `39328423440` 全绿）发布为正式 AW `v0.6.27`（切流后约 36 秒执行交接完成，epoch 53）与 rfc042 `v0.2.7`（epoch 19；`v0.2.6` 的构建因平台 buildkitd 中途崩溃失败，原样重发）。
+
+- **F5**：rfc042（数据库技能存储）上恢复融合版 v2，技能行的描述随之变为融合后的描述；再恢复 v1，回到原描述，两次都与 SKILL.md 一致。
+- **F7**：新的开发数字员工 Case（正文加一个上传）通过了 `prepare-materials`，进入 `analyze-implement`。
+- **V16 全部读取**：在一个新增 TypeScript 代码的单仓任务上验证（`01M5B1MEZ5EFDPNZ9TPSHMR74K`）：
+  - 结构化 diff 列出新增的函数 `greet`、`main` 与 import，`callChainAvailable` 为 true；文件符号按 TypeScript 识别。
+  - 代码智能：基线模式把 `main` 里的 `greet` 解析到 `src/greet.ts` 1～3 行；深度模式以 `indexing-unavailable` 回落基线（设计如此）。
+  - 调用目标：`src/main.ts#main` 得到 `console.log()`（未解析）与 `greet()`（external），与单机在同一组文件上的结果逐字相同。
+  - 文件内容（工作树侧与基线侧）、工作树目录与文件读取均为 200。
+- **V18**：Case 进入 `analyze-implement` 后被阻塞，原因是平台卷配额，见下方 F9；仓库事实扫描与种子放置的实机验证待卷配额问题解决后重做。
+- **变更叙述**：重新生成仍失败，见 F8。
+
+验收中发现：
+
+- **F8 变更叙述无法重新生成（已修复）**：叙述的观测 attempt 用的是内容摘要，同一任务、同一 diff 再次生成时得到同一个执行身份。托管执行按身份持久，于是重新生成拿到的是上一次的绑定：这一次它属于已被替换并关闭的旧 `system:shared` 父任务，提交前的意图校验不通过，报 `spawn-failed`（同一父任务时则会原样返回上次的失败）。单机每次调用都会重新运行。其他系统 Agent 的 attempt 本来就按次区分（意图轮次、蒸馏作业次数、探测 nonce、反问请求）。现在叙述每次触发生成新的 attempt（摘要加 ULID）。同一时间的运行时探测（同一托管系统 Agent 路径，nonce 区分）结果为 conforms。
+- **F9 平台卷配额耗尽（待决定）**：正式 AW 项目命名空间的 Kubernetes 配额是 20 个 PVC，已用满。新的 `development:shared` 父任务的工作卷被拒（`exceeded quota: persistentvolumeclaims=20`）；CS 重试后以「容器不存在」判失败，没有说明真实原因。20 个卷的去向：
+  - 14 个是已结束 AW 任务的暂停父任务。托管下 AW 任务的父任务（与卷）一直保留到任务被删除；单机的工作树也默认保留（`worktreeAutoGc` 默认关闭），但单机不受卷数量限制。托管 GC 开启时也只删卷内的工作树目录，卷本身不释放。
+  - 4 个是 CS 判失败的父任务，CS 为恢复动作保留卷。
+  - 1 个属于按旧存储生命周期关闭的 CS 任务（10-18 的 `system:shared`）：任务已关闭、资源已释放，PVC 却仍在（CS 遗留，没有回收路径）。
+  - 1 个是运行中的 `system:shared`。
+
 ## 2026-10-17 托管实机验收（进行中）
 
 - **任务镜像**：CS 运行镜像的源码构建器资源固定（500m / 1 Gi / 3 Gi 缓存），AW 二进制构建实测峰值内存约 2.15 GB，平台内构建被驱逐（缓存超 3 Gi）。改为运维在平台外从准确提交构建、作为「已有镜像」登记并做任务用途验证，步骤写入 [docs/crewstation-deployment.md](../../docs/crewstation-deployment.md)。`3387c37ed` 的任务镜像 `runtime/agent-workflow/task@sha256:860b8932…`（底座 `7701acd4`）已登记：镜像 `01a1480f-2e12-7000-bff7-3cfdcce5ccc6`，修订 3 `01a1483d-38a4-…`，版本 `01a1483d-402a-7000-8067-e7737ee88bba`。

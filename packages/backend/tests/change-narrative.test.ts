@@ -387,6 +387,75 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     )
   })
 
+  // RFC-370 v0.6.27 hosted acceptance (2026-10-19): the narrative's attempt was
+  // its content digest, so a regeneration after a failure reused the first
+  // attempt's identity. A hosted execution is durable per identity, and the
+  // regeneration got the recorded failure back instead of a new run.
+  test('each trigger is its own attempt: regenerating after a failure runs again', async () => {
+    const db = harness.db,
+      world = await seedWorld(db)
+    const original = deps(db, undefined)
+    const attempts: string[] = []
+    const selected = Object.freeze<SystemAgentRunFamily>({
+      workspaces: {
+        capture(scope) {
+          return Object.freeze({ ...scope })
+        },
+        withName(scope, name) {
+          return Object.freeze({ ...scope, name })
+        },
+      },
+      async run(request) {
+        attempts.push(request.observationDemand?.originalAttempt ?? '')
+        const { scratchDir: _native, ...response } =
+          attempts.length === 1
+            ? { ...okRun(GOOD_OUTPUT), status: 'timeout' as const }
+            : okRun(GOOD_OUTPUT)
+        return { ...response, retainedRef: `narrative-attempt-${attempts.length}` }
+      },
+      retainedContents: {
+        forget() {},
+        release() {
+          throw new Error('Narrative does not separately release completed scratch')
+        },
+      },
+    })
+    const trigger = () =>
+      triggerSelectedNarrative(
+        {
+          workspace: original.workspace,
+          requireMember: original.requireMember,
+          async resolveRuntime(input) {
+            const profile = await original.resolveRuntime(input)
+            return {
+              protocol: profile.protocol,
+              runtimeBinding: Object.freeze({
+                owner: 'runtime-management',
+                reference: 'narrative-runtime:1',
+                version: '1',
+              }),
+              configDir: profile.configDir,
+              model: profile.model,
+              isSandbox: profile.isSandbox,
+            }
+          },
+          systemAgents: selected,
+        },
+        world.task,
+        world.owner,
+      )
+    await trigger()
+    await settleNarrative(world.task.id)
+    expect((await getChangeNarrativeStatus(world.task.id))?.status).toBe('failed')
+    await trigger()
+    await settleNarrative(world.task.id)
+    expect((await getChangeNarrativeStatus(world.task.id))?.status).toBe('ready')
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0]).not.toBe(attempts[1])
+    const digest = (await buildNarrativeInput(db, world.task)).digest
+    for (const attempt of attempts) expect(attempt.startsWith(`${digest}:`)).toBe(true)
+  })
+
   test('member gate: owner/collaborator/non-member admin pass, outsider 403', async () => {
     const db = harness.db
     const w = await seedWorld(db)
