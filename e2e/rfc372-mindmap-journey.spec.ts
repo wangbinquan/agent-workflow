@@ -407,9 +407,12 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await select(page, '首期服务哪些预约场景？')
   await expect(detail(page).getByLabel('仅会议室预约', { exact: false })).toBeChecked()
   await detail(page).locator('summary').filter({ hasText: 'Decision context' }).click()
-  await expect(detail(page).getByLabel('Still unverified', { exact: true })).toHaveValue(
-    '真实冲突率和爽约率未知。',
-  )
+  // The restored textarea has its initial value in textContent. The implicit
+  // label text query includes it; the textbox accessible name remains the
+  // visible field label (as confirmed by the failed run's ARIA snapshot).
+  await expect(
+    detail(page).getByRole('textbox', { name: 'Still unverified', exact: true }),
+  ).toHaveValue('真实冲突率和爽约率未知。')
   await expect(detail(page).getByRole('radio', { name: 'Provisional', exact: true })).toBeChecked()
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
   await expect(
