@@ -67,8 +67,8 @@
 //   packages/frontend/src/components/repos/SubmoduleBadge.tsx:34-63  三态徽标 + title 带 stderr
 //   packages/frontend/src/components/launch/RepoSourceRow.tsx:205-244 下拉：缓存镜像 / 组 / 手工 URL 三类条目
 //   packages/frontend/src/components/launch/RepoSourceRow.tsx:262-266 URL 非法 → repo-source-url-error-N
-//   packages/frontend/src/components/launch/GitPicker.tsx:52-57       分支下拉的数据源 /api/repos/refs?path=
-//   packages/frontend/src/lib/launch-repo-source.ts:106-128           resolveUrlRepoPath：按 canonical key 找镜像 localPath
+//   packages/frontend/src/components/launch/GitPicker.tsx:52-57       分支下拉的数据源 /api/repos/refs?cachedRepoId=（RFC-370 §10 V17）
+//   packages/frontend/src/lib/launch-repo-source.ts:106-128           resolveUrlCachedRepoId：按 canonical key 找镜像登记行 id
 //   packages/frontend/src/routes/tasks.new.tsx:1106-1114              sourceReady：每一行 URL 都要 parse 得动
 //   packages/frontend/src/i18n/en-US.ts:8031-8046                     repo 家族的精确错误文案（未列码走域兜底 + raw）
 //
@@ -612,7 +612,7 @@ test('REPO-44 /api/repos/refs 与 /files 只认缓存镜像内的路径，向导
     {
       what: 'missing',
       path: null,
-      why: '不带 path 也肯回答 ⇒ 接口在拿某个默认目录作答，用户看到的是别人的仓',
+      why: '不带 cachedRepoId / path 也肯回答 ⇒ 接口在拿某个默认目录作答，用户看到的是别人的仓',
     },
     {
       what: 'system dir',
@@ -644,7 +644,9 @@ test('REPO-44 /api/repos/refs 与 /files 只认缓存镜像内的路径，向导
       expect(
         body.code,
         `${endpoint} / ${probe.what} 拒了但没给出可分辨的原因 ⇒ 调用方分不清「没填参数」和「路径不在白名单」`,
-      ).toBe(probe.path === null ? 'path-required' : 'repo-path-unknown')
+        // RFC-370 §10 V17: the pickers name a registered repository by
+        // `cachedRepoId`; a request naming neither says that.
+      ).toBe(probe.path === null ? 'cached-repo-id-required' : 'repo-path-unknown')
     }
   }
 
@@ -665,11 +667,21 @@ test('REPO-44 /api/repos/refs 与 /files 只认缓存镜像内的路径，向导
     'README.md',
   )
 
+  // 正向（RFC-370 §10 V17）：按登记行 id 读到的是同一个镜像。
+  const refsById = await jsonOf<{ branches: string[] }>(
+    await req(`/api/repos/refs?cachedRepoId=${encodeURIComponent(alphaMirror.id)}`),
+    'refs of the mirror by its registration id',
+  )
+  expect(refsById.branches, '按 cachedRepoId 读不到这个镜像的分支').toContain(
+    `origin/${ALPHA_RELEASE_BRANCH}`,
+  )
+
   // --- 界面面：分支下拉 ---------------------------------------------------
   const refsQueries: string[] = []
   page.on('request', (request) => {
     const url = new URL(request.url())
-    if (url.pathname === '/api/repos/refs') refsQueries.push(url.searchParams.get('path') ?? '')
+    if (url.pathname === '/api/repos/refs')
+      refsQueries.push(url.searchParams.get('cachedRepoId') ?? '')
   })
 
   await openWizard(page, gitInputWorkflowId)
@@ -695,9 +707,9 @@ test('REPO-44 /api/repos/refs 与 /files 只认缓存镜像内的路径，向导
 
   expect(
     refsQueries,
-    '分支下拉查的不是这个镜像的本地路径 ⇒ 要么它在问别的仓（选出来的分支不属于' +
-      `这个仓），要么它在问一个白名单不认的路径（下拉永远空白）：${JSON.stringify(refsQueries)}`,
-  ).toContain(alphaMirror.localPath)
+    '分支下拉查的不是这个镜像的登记行 ⇒ 要么它在问别的仓（选出来的分支不属于' +
+      `这个仓），要么它在问一个不存在的登记（下拉永远空白）：${JSON.stringify(refsQueries)}`,
+  ).toContain(alphaMirror.id)
 })
 
 // ===========================================================================

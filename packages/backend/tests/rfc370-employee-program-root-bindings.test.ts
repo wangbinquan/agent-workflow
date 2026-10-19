@@ -1,4 +1,8 @@
 // RFC-370 A2: real HTTP put/read must use the bootstrap-selected program store.
+// RFC-370 §10 V19: creating a program tool also validates its fixture against
+// the selected store's bytes (before V19 validation read the application
+// home, so a hosted deployment failed every program tool) — that read is the
+// first; the gated GET is the second.
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -62,6 +66,7 @@ describeEachProviderHttpApplication(
               runtimeProfileRef: { id: 'builtin:script-runtime', revision: 1 },
             } as const
             expect(input).toEqual(expectedRead)
+            if (reads === 1) return { source, parameterValues }
             readEntered.resolve()
             await readReady.promise
             if (outcome === 'failure') throw new Error('selected program read failed')
@@ -143,7 +148,7 @@ describeEachProviderHttpApplication(
           }
           expect(await store.getTool(tool.id)).toEqual(before)
           expect(puts).toBe(1)
-          expect(reads).toBe(1)
+          expect(reads).toBe(2)
           expect(existsSync(join(appHome, 'digital-employee', 'program-tools'))).toBe(false)
         } finally {
           putReady.resolve()

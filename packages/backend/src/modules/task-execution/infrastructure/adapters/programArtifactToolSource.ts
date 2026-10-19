@@ -21,12 +21,9 @@ export interface ProgramArtifactReader {
 export function createArtifactProgramToolSource(store: ProgramArtifactReader): ProgramToolSource {
   return {
     async read(implementation) {
-      const program = await store.read({
-        runtimeKind: implementation.runtimeKind,
-        executableArtifactRef: implementation.executableArtifactRef,
-        executableDigest: implementation.executableDigest,
-        parameterValuesRef: implementation.parameterValuesRef,
-      })
+      // The implementation reaches the store as the authoring path hands it
+      // over (the store reads the fields it needs).
+      const program = await store.read(implementation)
       // The store answers null for an absent object, a digest mismatch and
       // unreadable parameter values alike.
       if (program === null)

@@ -97,6 +97,7 @@ import {
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
+import { createArtifactProgramToolSource } from '@/modules/task-execution/composition/programTools'
 import { createExecutionContractResourceAdapter } from '@/modules/resource-catalog/composition/executionContractResource'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
@@ -2569,7 +2570,14 @@ export function composeSqliteApplicationDeps(
           deps.db,
           developmentImplicitAgentContractDeclarations,
         ),
-        programFixtures: createExecutionContractProgramFixtureAdapter({ appHome: appHome }),
+        // RFC-370 §10 V19: a selected program store answers fixture reads
+        // too (the same store the authoring wrote), on both roots.
+        programFixtures: createExecutionContractProgramFixtureAdapter({
+          appHome: appHome,
+          ...(deps.employeePrograms === undefined
+            ? {}
+            : { programs: createArtifactProgramToolSource(deps.employeePrograms) }),
+        }),
       }),
     codeHistoryQueries: deps.codeHistoryQueries ?? composeCodeHistoryQueries(deps.db),
     developmentAdmissionLookup:
@@ -3367,6 +3375,9 @@ function composeSqliteApiRouteMounts(
         // 与 PostgreSQL daemon 同一条路。此前这一侧在 composer 函数体里直接读库、
         // 用 `startTask` + `preCreatedWorktree` 启动（按定义只服务 SQLite）。
         appHome,
+        ...(deps.employeePrograms === undefined
+          ? {}
+          : { programs: createArtifactProgramToolSource(deps.employeePrograms) }),
         resolveActor: async () => {
           const identity = await admitDaemonIdentity(identityAccess)
           if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')

@@ -66,14 +66,8 @@ test('a hosted program is read from the selected store and run by the selected s
     kind: 'completed',
     rawStdout: 'envelope',
   })
-  expect(store.reads).toEqual([
-    {
-      runtimeKind: 'node',
-      executableArtifactRef: implementation.executableArtifactRef,
-      executableDigest: 'abc',
-      parameterValuesRef: implementation.parameterValuesRef,
-    },
-  ])
+  // The selected store receives the implementation as authoring hands it over.
+  expect(store.reads).toEqual([implementation])
   expect(runs).toEqual([
     {
       runtimeKind: 'node',

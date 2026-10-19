@@ -115,11 +115,8 @@ import {
   createActionTemplatePersistence,
   createVerificationProfilePersistence,
 } from './infrastructure/configResourceStore'
-import {
-  createRepositoryFactsCollector,
-  type RepositoryFactsScanner,
-} from './infrastructure/repositoryFactsCollector'
-import type { RepositoryFactsScan } from './infrastructure/repositoryFactsScan'
+import { createRepositoryFactsCollector } from './infrastructure/repositoryFactsCollector'
+import { repositoryFactsScannerOf } from './composition/repositoryFactsScanner'
 import { recordUploadPublicationReceipt } from './infrastructure/uploadPublicationReceipt'
 import { runVerificationProfileWithEffects } from './application/verificationRunner'
 import { verificationProfileContentSchema } from './domain/verificationProfile'
@@ -461,17 +458,6 @@ function composeDevelopmentAutomationFromPersistence(
     sweepRetention: () => persistence.sweepRetention(lookup, now()),
     recover: () => recoverMissions(reconcileDeps, persistence.recoveryReaders),
   }
-}
-
-/** The repository facts scan of a volume selection runs next to the files;
- * the native selection scans in-process. */
-function repositoryFactsScannerOf(
-  workspace: AutomationWorkspaceEffectsFactory | undefined,
-): RepositoryFactsScanner | undefined {
-  const tree = workspace?.treeOperations
-  if (tree === undefined) return undefined
-  return async (localPath) =>
-    (await tree.run('repository-facts-scan', { root: localPath })) as RepositoryFactsScan
 }
 
 /** 一份装配，两个 provider 共用：每个持久化入口都已是中立实现（RFC-359 W4-D12）。 */
