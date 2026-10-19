@@ -3104,6 +3104,11 @@ export const developmentEmployeeTypePackage: EmployeeTypePackageRegistration = {
 const uploadSeedSchema = z
   .object({
     artifactRef: z.string().min(1).max(1_000),
+    /** The verified upload digest; the artifact reference itself is opaque. */
+    sha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     placement: z.enum(['repository', 'temporary']).default('repository'),
     targetPath: z
       .string()
@@ -3769,6 +3774,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         workingBranch: request.intake.typeOptions['working-branch'] ?? null,
         uploads: request.intake.uploads.map((upload) => ({
           artifactRef: `employee-input:${upload.blobRef}`,
+          sha256: upload.sha256,
           placement: upload.placement,
           targetPath: upload.targetPath,
           originalName: upload.originalName,

@@ -79,7 +79,12 @@ const issueSchema = z
         uploads: z.array(
           z
             .object({
-              artifactRef: z.string().regex(/^employee-input:[a-f0-9]{64}$/),
+              // Opaque: content-addressed locally, an object reference when hosted.
+              artifactRef: z.string().regex(/^employee-input:./),
+              sha256: z
+                .string()
+                .regex(/^[a-f0-9]{64}$/)
+                .optional(),
               placement: z.enum(['repository', 'temporary']).default('repository'),
               // RFC-317 T38（CC-08）—— 与**产出这个值的那一侧**共用同一个 schema。
               // 这里原本是 `z.string().min(1)`：同一条「上传目标必须是安全的仓库相对
@@ -128,6 +133,21 @@ const employeeUploadPlanSchema = z
 
 type EmployeeUploadPlan = z.infer<typeof employeeUploadPlanSchema>
 
+/**
+ * The upload's verified digest travels with its seed: the artifact reference is
+ * opaque here (hosted uploads are object references). Seeds frozen before the
+ * digest was recorded name a local content-addressed blob, whose reference is
+ * the digest itself.
+ */
+function recordedUploadDigest(upload: {
+  readonly artifactRef: string
+  readonly sha256?: string | undefined
+}): string | null {
+  if (upload.sha256 !== undefined) return upload.sha256
+  const contentAddress = upload.artifactRef.slice('employee-input:'.length)
+  return /^[a-f0-9]{64}$/.test(contentAddress) ? contentAddress : null
+}
+
 async function resolveEmployeeUploadPlan(input: {
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
@@ -149,7 +169,10 @@ async function resolveEmployeeUploadPlan(input: {
   )
   const entries: EmployeeUploadPlan['entries'][number][] = []
   for (const upload of repositoryUploads) {
-    const uploadSha256 = upload.artifactRef.slice('employee-input:'.length)
+    const uploadSha256 = recordedUploadDigest(upload)
+    if (uploadSha256 === null) {
+      return { ok: false, code: 'upload-digest-unknown', detail: upload.targetPath }
+    }
     const stat = await baseline.stat(upload.targetPath)
     if (stat === 'directory' || stat === 'unsupported') {
       return {

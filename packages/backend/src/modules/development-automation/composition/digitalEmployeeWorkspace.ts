@@ -72,6 +72,10 @@ const issueContextSchema = z
           z
             .object({
               artifactRef: z.string().regex(/^employee-input:/),
+              sha256: z
+                .string()
+                .regex(/^[a-f0-9]{64}$/)
+                .optional(),
               placement: z.enum(['repository', 'temporary']).default('repository'),
               // RFC-317 T38（CC-08）—— 与**产出这个值的那一侧**共用同一个 schema。
               // 这里原本是 `z.string().min(1)`：同一条「上传目标必须是安全的仓库相对

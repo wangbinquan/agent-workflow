@@ -6,7 +6,8 @@
 //   subtask keeps running, the binding stays unsettled and the next authority
 //   holder adopts it from the durable cursor;
 // - a user cancel or the node deadline sends one platform cancel and keeps
-//   observing until the platform reports the result;
+//   observing until the platform reports the result; the deadline runs from
+//   the process start the platform reports, like the local child's timer;
 // - transient platform failures (5xx, 429, transport) only delay the
 //   observation; expired history or a rejected request ends it with an
 //   explicit unknown outcome and settles the binding so it never blocks a volume.
@@ -278,25 +279,34 @@ export function createHostedExecution(input: {
       // idempotent. The platform is then read strictly after that prefix.
       let result = binding.result
       let cursor = binding.lastCursor
-      for (const event of await input.store.replay(executionId)) {
-        await sink.event(event)
-        cursor = event.cursor
-        if (event.type === 'result') result = event.data
-      }
-      await sink.checkpoint()
-      const deadline =
-        binding.timeoutMs === undefined ? null : binding.createdAt + binding.timeoutMs
       let timedOut = binding.cancelReason === 'timeout'
       let cancelSent = false
-      if (deadline !== null && result === null) {
+      // The deadline bounds the run, as the local child's timer does: it
+      // starts when the platform reports the process started, never while the
+      // submission waits for capacity or the process for its environment (the
+      // platform ends a process that cannot start: failed-before-start).
+      // Counted from the binding's creation, it cancelled every run that had
+      // waited for capacity longer than its timeout the moment it was admitted.
+      const timeoutMs = binding.timeoutMs
+      const armDeadline = (event: BusinessEvent) => {
+        if (timeoutMs === undefined || deadlineTimer !== undefined) return
+        if (event.type !== 'execution-state' || event.data.process === 'not-started') return
+        const startedAt = Date.parse(event.occurredAt)
         deadlineTimer = setTimeout(
           () => {
             timedOut = true
             wake()
           },
-          Math.max(0, deadline - now()),
+          Math.max(0, (Number.isNaN(startedAt) ? now() : startedAt) + timeoutMs - now()),
         )
       }
+      for (const event of await input.store.replay(executionId)) {
+        await sink.event(event)
+        cursor = event.cursor
+        armDeadline(event)
+        if (event.type === 'result') result = event.data
+      }
+      await sink.checkpoint()
       while (result === null) {
         const latest = await input.store.get(executionId)
         if (latest === null) throw new Error('hosted-execution-binding-missing')
@@ -350,6 +360,7 @@ export function createHostedExecution(input: {
               await sink.event(event)
               await sink.checkpoint()
               cursor = event.cursor
+              armDeadline(event)
             },
           })
         } catch (error) {

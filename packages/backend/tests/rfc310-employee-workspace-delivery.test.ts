@@ -28,6 +28,7 @@ import {
   bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
+import type { EmployeeInputArtifactPort } from '@/modules/digital-employee/composition/required-ports'
 import type { ReactionExecutionPlan as EmployeeReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
 import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
@@ -446,7 +447,13 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     })
   })
 
-  test('upload target and Agent edits survive the Case, fresh retry restores the round scene, and only platform code publishes MR', async () => {
+  // RFC-370 V18 hosted acceptance (2026-10-19): a hosted upload reference is an
+  // object reference, not the upload's digest. Every work item then refused the
+  // Case (`artifactRef` had to be `employee-input:<sha256>`) and the upload plan
+  // read the digest out of the reference. The same delivery runs with opaque
+  // references whose seeds record the digest; content-addressed seeds frozen
+  // before the digest was recorded keep working.
+  const uploadDelivery = (references: 'content-addressed' | 'opaque') => async () => {
     const baselineRepo = join(scene, 'baseline')
     const remoteRepo = join(scene, 'remote.git')
     const appHome = join(scene, 'home')
@@ -508,9 +515,13 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       })
       .run()
 
-    const artifactStore = createEmployeeInputArtifactStore(
+    const contentAddressed = createEmployeeInputArtifactStore(
       join(appHome, 'artifacts', 'employee-inputs'),
     )
+    const artifactStore =
+      references === 'opaque' ? opaqueReferences(contentAddressed) : contentAddressed
+    const recorded = (upload: { readonly sha256: string }) =>
+      references === 'opaque' ? { sha256: upload.sha256 } : {}
     const uploadSource = join(scene, 'requirement.md')
     writeFileSync(uploadSource, '# Required acceptance\n')
     const artifact = await artifactStore.putFile(uploadSource)
@@ -535,21 +546,25 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
         uploads: [
           {
             artifactRef: `employee-input:${artifact.blobRef}`,
+            ...recorded(artifact),
             targetPath: 'docs/requirements/REQ-42.md',
             originalName: 'requirement.md',
           },
           {
             artifactRef: `employee-input:${replacementArtifact.blobRef}`,
+            ...recorded(replacementArtifact),
             targetPath: 'config/existing.txt',
             originalName: 'replacement.txt',
           },
           {
             artifactRef: `employee-input:${alreadyArtifact.blobRef}`,
+            ...recorded(alreadyArtifact),
             targetPath: 'config/already.txt',
             originalName: 'already.txt',
           },
           {
             artifactRef: `employee-input:${editableSameArtifact.blobRef}`,
+            ...recorded(editableSameArtifact),
             targetPath: 'config/editable-same.txt',
             originalName: 'editable-same.txt',
           },
@@ -2088,5 +2103,36 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       readyToMerge: false,
     })
     expect(baselineSha).not.toBe(publishedSha)
-  })
+  }
+
+  test(
+    'upload target and Agent edits survive the Case, fresh retry restores the round scene, and only platform code publishes MR',
+    uploadDelivery('content-addressed'),
+  )
+  test(
+    'opaque upload references (hosted objects) deliver the same uploads through their recorded digests',
+    uploadDelivery('opaque'),
+  )
 })
+
+/** A selected input store whose references name objects, not digests (as hosted). */
+function opaqueReferences(inner: EmployeeInputArtifactPort): EmployeeInputArtifactPort {
+  const names = new Map<string, string>()
+  return {
+    async putFile(path) {
+      const stored = await inner.putFile(path)
+      const blobRef = `aw-object:v2:employee-input:${String(names.size + 1).padStart(4, '0')}:${stored.bytes}:${stored.sha256}`
+      names.set(blobRef, stored.blobRef)
+      return { ...stored, blobRef }
+    },
+    hasBlob: (blobRef) => {
+      const name = names.get(blobRef)
+      return name !== undefined && inner.hasBlob(name)
+    },
+    copyBlobTo: (blobRef, target) => {
+      const name = names.get(blobRef)
+      if (name === undefined) throw new Error(`unknown object reference: ${blobRef}`)
+      return inner.copyBlobTo(name, target)
+    },
+  }
+}

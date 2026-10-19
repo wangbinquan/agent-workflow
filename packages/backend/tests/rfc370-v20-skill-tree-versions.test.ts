@@ -31,6 +31,7 @@ import { selectSkillContentDependencies } from '@/modules/resource-catalog/compo
 import { createDatabaseSkillContent } from '@/modules/resource-catalog/infrastructure/databaseSkillContent'
 import { createManagedSkill } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { restoreSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -71,7 +72,7 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       const trees = composeSkillVersionCommitParticipantFactory(
         binding === undefined ? {} : { skillContent: binding },
       ).bind({ db: harness.db, appHome })
-      return { appHome, skill, trees }
+      return { appHome, opts, skill, trees }
     }
     async function state(skillId: string) {
       const skill = (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]!
@@ -220,6 +221,42 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       })
       await trees.abort(second)
       expect(await state(skill.id)).toEqual({ contentVersion: 1, activeOperations: 0, locks: 0 })
+    })
+
+    // 2026-10-19 hosted acceptance: approving a fusion whose SKILL.md declared a
+    // new description left `skills.description` (what skill lists and pickers
+    // show) at the old text; restoring an earlier version did the same.
+    test(`${storage}: the current SKILL.md's description is the skill's — after a fused tree (BOM too) and after a restore`, async () => {
+      const { opts, skill, trees } = await fixture()
+      const fuse = async (main: string, now: number) => {
+        const staged = await trees.stage({
+          skillId: skill.id,
+          source: { kind: 'tree', files: [file('SKILL.md', main)] },
+          versionSource: 'fusion',
+          summary: null,
+          fusionId: null,
+          authorUserId: '__system__',
+          now,
+        })
+        await harness.session.transaction(
+          async (tx) => await trees.inTransaction(tx).commit(staged),
+        )
+        await trees.publish(staged)
+      }
+      const description = async () =>
+        (await harness.db.select().from(skills).where(eq(skills.id, skill.id)))[0]!.description
+      const restore = (version: number) =>
+        restoreSkillVersion(harness.db, opts, skill.id, version, null, {
+          unfuseForRestore: async () => [],
+        })
+      await fuse(`\uFEFF---\nname: ${skill.name}\ndescription: fused guidance\n---\n# body\n`, 20)
+      expect(await description()).toBe('fused guidance')
+      await fuse('# no frontmatter\n', 21)
+      expect(await description()).toBe('')
+      await restore(2)
+      expect(await description()).toBe('fused guidance')
+      await restore(1)
+      expect(await description()).toBe('d')
     })
 
     test(`${storage}: a candidate stages directly; a tree without SKILL.md is refused before any operation`, async () => {

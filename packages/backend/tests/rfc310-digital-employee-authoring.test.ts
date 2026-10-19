@@ -1187,6 +1187,55 @@ describeEachProviderHttpApplication(
         )
       })
 
+      // RFC-370 V18 hosted acceptance (2026-10-19): a hosted upload reference names
+      // an object, not the upload's digest, so the seed records the verified digest.
+      test("the issue context records each upload's verified digest beside its opaque reference", () => {
+        const blobRef = `aw-object:v2:employee-input:01a155f6-3586-7000-b0f6-c51497da0d2f:73:${'f'.repeat(64)}`
+        const launch = JSON.parse(
+          developmentEmployeeRuntimeCodec.buildInitialCaseJson(
+            JSON.stringify({
+              schemaVersion: 1,
+              caseRef: 'case-upload-digest',
+              employeeRef: { id: 'employee-upload-digest', revision: 1 },
+              workScopeJson: JSON.stringify({ kind: 'repository', repositoryId: 'repo-1' }),
+              receivedAt: 1,
+              intake: {
+                kind: 'files',
+                target: {},
+                body: null,
+                externalId: null,
+                idempotencyKey: 'upload-digest',
+                executionOptions: {},
+                uploads: [
+                  {
+                    uploadRef: 'upload-1',
+                    blobRef,
+                    sha256: 'e'.repeat(64),
+                    bytes: 73,
+                    originalName: 'seed.md',
+                    placement: 'repository',
+                    targetPath: 'docs/seed.md',
+                  },
+                ],
+              },
+            }),
+          ),
+        ) as { primaryContextJson: string; artifactRefs: string[] }
+        const context = JSON.parse(launch.primaryContextJson) as {
+          request: { uploads: unknown[] }
+        }
+        expect(context.request.uploads).toEqual([
+          {
+            artifactRef: `employee-input:${blobRef}`,
+            sha256: 'e'.repeat(64),
+            placement: 'repository',
+            targetPath: 'docs/seed.md',
+            originalName: 'seed.md',
+          },
+        ])
+        expect(launch.artifactRefs).toEqual([`employee-input:${blobRef}`])
+      })
+
       test('a job template cannot publish before every required graph node has a tool', async () => {
         const module = fixtureModule()
         const draft = await module.commands.createJobTemplate({

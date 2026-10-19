@@ -725,6 +725,18 @@ async function requireVersionRow(
   return row
 }
 
+/**
+ * The description a SKILL.md declares: the value `skills.description` must hold
+ * while that SKILL.md is current. Writes that replace SKILL.md without an
+ * explicit description (a fusion's tree, a restore) fold it into the version
+ * bump, as the editor and ZIP import do with `setDescription`.
+ */
+export function skillMainDescription(main: string | null): string {
+  if (main === null) return ''
+  const description = parseFrontmatter(main.replace(/^\uFEFF/, '')).data.description
+  return typeof description === 'string' ? description : ''
+}
+
 export async function getSkillVersionContent(
   db: SkillVersionDb,
   opts: SkillVersionFsOptions,
@@ -832,6 +844,11 @@ export async function restoreSkillVersion(
     )
   }
   let unfusedMemoryIds: string[] = []
+  // The restored SKILL.md becomes current, and so does the description it declares.
+  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
+  const restoredDescription = skillMainDescription(
+    (await reader.readSnapshot({ skillId, version: target })).main,
+  )
   const version = await commitSkillVersion(
     db,
     opts,
@@ -840,6 +857,7 @@ export async function restoreSkillVersion(
     {
       source: 'restore',
       restoredFromVersion: target,
+      setDescription: restoredDescription,
       authorUserId,
       ...(expectedOwnerUserId !== undefined ? { expectedOwnerUserId } : {}),
       ...(fence ?? {}),

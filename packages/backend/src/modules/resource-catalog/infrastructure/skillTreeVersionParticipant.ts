@@ -39,6 +39,7 @@ import { advancePhase } from './legacy/skillOperations'
 import {
   abortStagedSkillVersion,
   publishStagedSkillVersion,
+  skillMainDescription,
   stageSkillVersion,
   type SkillVersionFsOptions,
   type StagedSkillVersion,
@@ -54,6 +55,8 @@ export interface SkillTreeVersionParticipant extends SkillTreeVersionOperations 
 interface StagedEntry {
   readonly staged: StagedSkillVersion
   readonly request: SkillTreeVersionStageRequest
+  /** What the staged SKILL.md declares; committed with the version. */
+  readonly description: string
 }
 
 const toFiles = (
@@ -154,7 +157,11 @@ export function createSkillTreeVersionParticipant(input: {
         skillId: staged.skillId,
         versionIndex: staged.newVersion,
       })
-      stagedVersions.set(handle, { staged, request })
+      stagedVersions.set(handle, {
+        staged,
+        request,
+        description: skillMainDescription(mainContent),
+      })
       return handle
     },
     inTransaction(transaction: DatabaseTransaction) {
@@ -163,7 +170,7 @@ export function createSkillTreeVersionParticipant(input: {
           handle: StagedSkillTreeVersion,
           hooks?: SkillVersionCommitHooks<Promise<void> | void>,
         ): Promise<number> {
-          const { staged, request } = entryOf(handle)
+          const { staged, request, description } = entryOf(handle)
           if (staged.noop !== null) throw new Error('a skill tree version is never a no-op write')
           await hooks?.before?.()
           if (skillVersionCompositeFenceRequested(request)) {
@@ -188,6 +195,7 @@ export function createSkillTreeVersionParticipant(input: {
             restoredFromVersion: null,
             authorUserId: request.authorUserId,
             now: request.now,
+            setDescription: description,
           })
           await transaction.update(skills).set(plan.skillPatch).where(eq(skills.id, staged.skillId))
           await transaction.insert(skillVersions).values(plan.versionRow)

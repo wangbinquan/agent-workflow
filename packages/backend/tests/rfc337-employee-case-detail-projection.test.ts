@@ -132,6 +132,33 @@ describe('RFC-337 digital employee Case detail projection', () => {
     expect(event.input.body).toBe('Implement the exact request')
   })
 
+  // RFC-370 V18 (2026-10-19): seeds record their verified digest; the detail
+  // input keeps its declared upload shape (its HTTP schema is strict).
+  test("an upload seed's recorded digest stays out of the detail input", () => {
+    const issue = issueRequest({ kind: 'files', body: null, externalId: null })
+    const withDigest = {
+      ...issue,
+      request: {
+        ...issue.request,
+        uploads: issue.request.uploads.map((upload) => ({ ...upload, sha256: 'e'.repeat(64) })),
+      },
+    }
+    const projection = projectDevelopmentEmployeeCaseDetail({
+      snapshot: snapshot('manual', [
+        context('context-issue', 'development.issue-handling', withDigest, 1),
+      ]),
+      workspace: null,
+    })
+    expect(projection.input.uploads).toEqual([
+      {
+        artifactRef: 'employee-input:requirements',
+        placement: 'repository',
+        targetPath: 'inputs/requirements/issue.md',
+        originalName: 'issue.md',
+      },
+    ])
+  })
+
   test('projects exact workspace, change candidate, and MR facts with related UI refs', () => {
     const projection = projectDevelopmentEmployeeCaseDetail({
       snapshot: snapshot('manual', [

@@ -91,7 +91,14 @@ export function projectDevelopmentEmployeeCaseDetail(input: {
           repositoryRef: issue.repositoryRef,
           body: issue.request.body,
           externalId: issue.request.externalId,
-          uploads: issue.request.uploads,
+          uploads: issue.request.uploads.map(
+            ({ artifactRef, originalName, placement, targetPath }) => ({
+              artifactRef,
+              originalName,
+              placement,
+              targetPath,
+            }),
+          ),
           executionOptions: issue.request.executionOptions,
           advancedOptions:
             issue.request.workingBranch === null

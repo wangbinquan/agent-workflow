@@ -61,6 +61,17 @@ const output = (cursor: string, text: string): BusinessEvent => ({
   type: 'output',
   data: { stream: 'stdout', text },
 })
+/** The platform reports the process started (the deadline's origin). */
+const live = (cursor: string, at: number): BusinessEvent => ({
+  taskId: 'parent-1',
+  subtaskId: 'subtask-1',
+  attempt: 1,
+  cursor,
+  sourceEventId: cursor,
+  occurredAt: new Date(at).toISOString(),
+  type: 'execution-state',
+  data: { state: 'running', process: 'live' },
+})
 const result = (cursor = 'c2', reason = 'completed'): BusinessEvent => ({
   taskId: 'parent-1',
   subtaskId: 'subtask-1',
@@ -456,6 +467,7 @@ describeEachProvider('RFC-370 hosted execution binding, journal and lifecycle', 
     const f = await setup()
     f.transport.api.streamEvents = async function* (_task, _query, signal) {
       if (f.transport.cancels.length === 0) {
+        yield live('c1', Date.now())
         yield* idleUntilAbort(signal)
         return
       }
@@ -465,6 +477,60 @@ describeEachProvider('RFC-370 hosted execution binding, journal and lifecycle', 
     expect(completed).toMatchObject({ timedOut: true, result: { reason: 'cancelled' } })
     expect(f.transport.cancels).toHaveLength(1)
     expect((await f.store.get(intent.executionId))?.cancelReason).toBe('timeout')
+  })
+
+  // 2026-10-19 hosted acceptance: a change narrative (120 s budget) waited six
+  // minutes for project capacity; once admitted it was cancelled before it
+  // started, because the deadline had run from the binding's creation.
+  test('the node deadline runs from the reported process start, not while the submission waits for capacity', async () => {
+    const f = await setup()
+    let clock = 1_000_000
+    const store = createHostedExecutionStore({ db: harness.db, fence: f.fence, now: () => clock })
+    let refusals = 0
+    f.transport.api.submitSubtask = async () => {
+      if (refusals < 2) {
+        refusals += 1
+        throw apiError(429, 'agent concurrency quota exceeded')
+      }
+      return receipt
+    }
+    let streams = 0
+    f.transport.api.streamEvents = async function* (_task, _query, signal) {
+      streams += 1
+      if (streams === 1) {
+        yield live('c1', clock)
+        // Long enough for a deadline counted from the binding's creation
+        // (twenty minutes earlier) to fire first.
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 50)
+          signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer)
+              resolve()
+            },
+            { once: true },
+          )
+        })
+        if (signal?.aborted) return
+      }
+      yield result('c2', 'completed')
+    }
+    const completed = await createHostedExecution({
+      api: f.transport.api,
+      store,
+      fence: f.fence,
+      now: () => clock,
+      // Each capacity refusal waits ten minutes.
+      sleep: async () => {
+        clock += 10 * 60_000
+      },
+      workspaceTaskId: async () => 'parent-1',
+    }).run({ ...intent, timeoutMs: 60_000 }, sink().consumer)
+    expect(refusals).toBe(2)
+    expect(completed).toMatchObject({ timedOut: false, result: { reason: 'completed' } })
+    expect(f.transport.cancels).toHaveLength(0)
+    expect((await store.get(intent.executionId))?.cancelReason).toBeNull()
   })
 
   test('cancellation arriving before ACK is applied to the acknowledged original attempt', async () => {
