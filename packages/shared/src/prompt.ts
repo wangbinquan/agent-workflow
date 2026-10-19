@@ -976,16 +976,22 @@ export function buildMandatoryClarifyPreamble(mindmap = false): string {
   return (
     '\n\n---\n' +
     '**This node is in MANDATORY ASK-BACK (clarify) mode.** The user wired a clarify channel because they require you to interrogate intent BEFORE doing any work. Your ONLY valid reply this round is a `<workflow-clarify>` envelope (format below). You may NOT emit `<workflow-output>` — the framework will reject it and re-prompt you. You are released to produce final output only after the user clicks "Stop clarifying".\n\n' +
-    'Operate with ZERO guessing. Treat every unstated detail as a blocker you resolve by asking, never by assuming.\n' +
+    (mindmap
+      ? 'Do not invent facts or preferences. Ask about consequential unknowns; the user may explicitly keep them unknown or provisional and choose to proceed.\n'
+      : 'Operate with ZERO guessing. Treat every unstated detail as a blocker you resolve by asking, never by assuming.\n') +
     '- **Investigate first, then ask.** Read the inputs, the repository, referenced files, and every prior-round answer; use any skills and tools available to resolve what you can on your own — never spend a question on something you could determine yourself.\n' +
     '- **Ask the consequential things, in priority order.** Lead with the decisions that most change the outcome (naming, data shapes, API / contracts, UX behavior, scope boundaries, acceptance criteria, risky edge cases). ' +
     (mindmap
       ? 'Group related questions by category, but ask one independently decidable tradeoff per question. Prioritize within the question limit and defer other decisions to later rounds; never combine separate decisions to fit the limit. '
       : 'Batch closely-related points into one question. ') +
     'Do NOT pad with low-stakes "just confirming…" questions — depth over breadth.\n' +
-    '- **Pin down every detail that actually matters before acting.** Do not begin the deliverable until each decision needed to do it correctly is settled by the human. "Mostly clear" is not clear enough.\n' +
+    (mindmap
+      ? '- **Let the user own the stopping point.** While this round is active, ask about the highest-impact unresolved tradeoffs. When the user stops clarifying, produce the result with current choices and explicit unknowns; settled maturity and assigned validation owners are not prerequisites.\n'
+      : '- **Pin down every detail that actually matters before acting.** Do not begin the deliverable until each decision needed to do it correctly is settled by the human. "Mostly clear" is not clear enough.\n') +
     '- **Never guess unfamiliar terms.** Any proprietary term, acronym, internal system / file / convention you do not fully understand — you MUST ask what it means; never infer or invent a meaning.\n' +
-    '- **No assumptions, no fabrication, no silent defaults.** The moment you catch yourself hedging, writing "TBD", inventing a constraint the inputs didn\'t state, or choosing between plausible alternatives without a stated preference — stop and turn it into a question instead.\n' +
+    (mindmap
+      ? '- **No fabrication or silent defaults.** Keep missing evidence and preferences explicit. A user-stated TBD is valid content, not permission to guess and not a requirement to keep asking until the user supplies a definite answer.\n'
+      : '- **No assumptions, no fabrication, no silent defaults.** The moment you catch yourself hedging, writing "TBD", inventing a constraint the inputs didn\'t state, or choosing between plausible alternatives without a stated preference — stop and turn it into a question instead.\n') +
     '- **Ask in the same language as the inputs / the user.**\n' +
     '- **Asking back is the correct outcome here, not a failure.** Returning early because you "have enough to start" defeats the purpose of this node.'
   )

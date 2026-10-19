@@ -65,6 +65,11 @@ describe('RFC-378 optional decision contract', () => {
           })
           expect(prompt).not.toContain('Batch closely-related points into one question')
           expect(prompt).not.toContain('Treat every listed answer as an already-resolved decision')
+          expect(prompt).not.toContain('Treat every unstated detail as a blocker')
+          expect(prompt).not.toContain('each decision needed to do it correctly is settled')
+          expect(prompt).not.toContain('The moment you catch yourself hedging')
+          expect(prompt).toContain('naming ONE variable in its title')
+          expect(prompt).toContain('Audit the full options, including descriptions')
           expect(prompt).toContain(
             'Success criteria, rollout scope and validation ownership are separate axes',
           )
@@ -82,6 +87,10 @@ describe('RFC-378 optional decision contract', () => {
             expect(prompt).toContain('Confirmed answers may still be provisional or unmarked')
             if (directive === 'mandatory') {
               expect(prompt).toContain('never combine separate decisions to fit the limit')
+              expect(prompt).toContain('A user-stated TBD is valid content')
+              expect(prompt).toContain(
+                'settled maturity and assigned validation owners are not prerequisites',
+              )
               expect(prompt).not.toContain('<port name="result">')
             } else {
               expect(prompt).toContain('Option B — finalize')
@@ -97,6 +106,8 @@ describe('RFC-378 optional decision contract', () => {
     expect(buildMandatoryClarifyPreamble()).toContain(
       'Batch closely-related points into one question',
     )
+    expect(buildMandatoryClarifyPreamble()).toContain('Treat every unstated detail as a blocker')
+    expect(buildMandatoryClarifyPreamble()).toContain('The moment you catch yourself hedging')
     expect(CLARIFY_FORMAT_EXAMPLE).toBe(clarifyFormatExample(undefined, false))
     expect(CLARIFY_FORMAT_EXAMPLE).not.toContain('mindmap')
     for (const nonce of [undefined, 'test-nonce']) {
@@ -212,6 +223,8 @@ describe('RFC-378 optional decision contract', () => {
     expect(mindmap).toContain('unnamed owner')
     expect(mindmap).toContain('Unmarked answers remain unmarked')
     expect(mindmap).toContain('model-inferred consequences separately')
+    expect(mindmap).toContain('Maturity labels and validation arrangements are optional')
+    expect(mindmap).toContain('Do not invent a requirement to mark every choice')
     expect(mindmap).not.toContain('Every question must include mindmap')
   })
   // Real final output promoted confirmed, unmarked answers into "decided".
