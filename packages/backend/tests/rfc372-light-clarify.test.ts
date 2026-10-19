@@ -219,7 +219,14 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
           expect(prompt).toContain(
             'Success criteria and evidence sources remain multi after choosing a primary goal',
           )
-          expect(prompt).toContain('按已约定的紧急程度')
+          expect(prompt).toContain('观测覆盖哪些时段？')
+          expect(prompt).toContain('记录时机另定')
+          expect(prompt).toContain(
+            'Evidence source, coverage window and recording time are separate',
+          )
+          expect(prompt).toContain('Scheduled logs and event reports can coexist')
+          expect(prompt).toContain('Review does not activate policy or prove causality')
+          expect(prompt).toContain('not proof the chosen goal is wrong')
           expect(prompt).toContain('otherwise use one category level')
           expect(prompt).toContain('Every question needs 2–4 options')
           expect(prompt).toContain(

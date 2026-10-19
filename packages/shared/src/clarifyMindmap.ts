@@ -6,12 +6,13 @@ import type { ClarifyFollowupTarget } from './schemas/clarifyMindmap'
 /** Product defaults shared by initial self/cross questions and branch follow-ups. */
 export const CLARIFY_MINDMAP_QUESTION_GUIDANCE = [
   'Ask 2–3 questions. With no baseline and no specifically requested mechanism/parameter, start with problem priority, observable success and feasible evidence; leave policy design for later. Honor a specific tradeoff requested by the user.',
-  'Single: values of ONE variable named in the title. Allocation order, quotas and approval are independent, as are time grid/minimum duration and channel/operator. Success criteria, rollout scope and validation ownership are separate axes.',
+  'Single: values of ONE variable named in the title. Allocation order, quotas and approval are independent, as are time grid/minimum duration and channel/operator. Keep success criteria, rollout scope and validation ownership separate.',
   'One mechanism: enable / do not enable only. Neither option decides any other mechanism. Detection signal, threshold, sign-in, recording and reminders remain independent. A negative choice does not prescribe a replacement process.',
-  'Multi: compatible additions on ONE axis. Success criteria and evidence sources remain multi after choosing a primary goal; single needs an explicitly named primary criterion. No exclusive feature bundles or none/only/no-extra option. Pilot size is scope, not evidence. History/observations and scheduled/event-triggered reviews can coexist. Review does not activate policy.',
-  'Descriptions: one short sentence of possible benefit and cost, no added commitments or positional references. Selecting an option must leave other variables undecided; otherwise split/defer it.',
+  'Multi: compatible additions on ONE axis. Success criteria and evidence sources remain multi after choosing a primary goal; single needs an explicitly named primary criterion. No exclusive feature bundles or none/only/no-extra option. Pilot size is scope, not evidence. History/observations and scheduled/event-triggered reviews can coexist.',
+  'Evidence source, coverage window and recording time are separate. Scheduled logs and event reports can coexist. Review does not activate policy or prove causality. Missing or unchanged data invites review, not proof the chosen goal is wrong.',
+  'Descriptions: possible benefit and cost, no added commitments or positional references. Selecting an option must leave other variables undecided; otherwise split/defer it.',
   'Recommend only with a specific assumption and cost. Never invent a baseline, main pain point, existing system or automatic collection. Unknown source availability needs "if available". A sample does not prove a whole period.',
-  'Preserve explicit decided/provisional status and unmarked maturity. Confirmation is not verified evidence. Unknown is not no/disabled/rejected. Follow-ups examine evidence, counterexamples, consequences and feasible validation, respecting prior choices.',
+  'Preserve explicit decided/provisional status and unmarked maturity. Confirmation is not verified evidence. Unknown is not no/disabled/rejected. Follow-ups test evidence, counterexamples and feasible validation; respect prior choices.',
   'Every question requires a non-empty mindmap.categoryPath array in the user language, even with a parent. Preserve configured names/ancestry and literal slashes; otherwise use one category level.',
   'Empty focus notes keep these defaults.',
 ].join('\n')

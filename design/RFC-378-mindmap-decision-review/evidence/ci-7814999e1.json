@@ -1,0 +1,450 @@
+{
+  "headSha": "7814999e16de64e9a153591924c35a8ef6d2f1cc",
+  "runId": 39301151416,
+  "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "databaseId": 118226373796,
+      "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:26:08Z",
+      "completedAt": "2026-10-19T18:29:17Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226373796"
+    },
+    {
+      "databaseId": 118226373893,
+      "name": "Build production binary + e2e artifact (smoke) (windows-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:20:16Z",
+      "completedAt": "2026-10-19T18:24:30Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226373893"
+    },
+    {
+      "databaseId": 118226373993,
+      "name": "Markdown link check (design/)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:19:06Z",
+      "completedAt": "2026-10-19T18:19:27Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226373993"
+    },
+    {
+      "databaseId": 118226374013,
+      "name": "Build production binary + e2e artifact (smoke) (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:25:16Z",
+      "completedAt": "2026-10-19T18:26:48Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374013"
+    },
+    {
+      "databaseId": 118226374072,
+      "name": "Backend tests (ubuntu-latest shard 24/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:18:32Z",
+      "completedAt": "2026-10-19T18:24:25Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374072"
+    },
+    {
+      "databaseId": 118226374094,
+      "name": "Backend tests (ubuntu-latest shard 22/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:19:29Z",
+      "completedAt": "2026-10-19T18:27:48Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374094"
+    },
+    {
+      "databaseId": 118226374109,
+      "name": "Build production binary + e2e artifact (smoke) (macos-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:19:35Z",
+      "completedAt": "2026-10-19T18:22:06Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374109"
+    },
+    {
+      "databaseId": 118226374150,
+      "name": "Backend tests (ubuntu-latest shard 12/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:26:51Z",
+      "completedAt": "2026-10-19T18:34:42Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374150"
+    },
+    {
+      "databaseId": 118226374175,
+      "name": "Backend tests (ubuntu-latest shard 7/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:01Z",
+      "completedAt": "2026-10-19T18:33:54Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374175"
+    },
+    {
+      "databaseId": 118226374181,
+      "name": "Backend tests (ubuntu-latest shard 23/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:49Z",
+      "completedAt": "2026-10-19T18:34:44Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374181"
+    },
+    {
+      "databaseId": 118226374225,
+      "name": "Lint + Typecheck + Format + Shared + system mock tests",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:24:27Z",
+      "completedAt": "2026-10-19T18:32:02Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374225"
+    },
+    {
+      "databaseId": 118226374246,
+      "name": "Perf microbenchmark gate",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:31:18Z",
+      "completedAt": "2026-10-19T18:31:41Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374246"
+    },
+    {
+      "databaseId": 118226374252,
+      "name": "Backend tests (ubuntu-latest shard 4/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:26:38Z",
+      "completedAt": "2026-10-19T18:31:58Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374252"
+    },
+    {
+      "databaseId": 118226374326,
+      "name": "Frontend tests (ubuntu-latest shard 1/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:24:54Z",
+      "completedAt": "2026-10-19T18:27:12Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374326"
+    },
+    {
+      "databaseId": 118226374332,
+      "name": "Backend tests (ubuntu-latest shard 17/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:51Z",
+      "completedAt": "2026-10-19T18:35:22Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374332"
+    },
+    {
+      "databaseId": 118226374341,
+      "name": "Frontend tests (ubuntu-latest shard 3/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:24:12Z",
+      "completedAt": "2026-10-19T18:27:04Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374341"
+    },
+    {
+      "databaseId": 118226374355,
+      "name": "Frontend tests (ubuntu-latest shard 2/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:20:19Z",
+      "completedAt": "2026-10-19T18:23:00Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374355"
+    },
+    {
+      "databaseId": 118226374425,
+      "name": "Frontend tests (windows-latest shard 3/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:24:32Z",
+      "completedAt": "2026-10-19T18:30:22Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374425"
+    },
+    {
+      "databaseId": 118226374435,
+      "name": "Frontend tests (windows-latest shard 1/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:19:26Z",
+      "completedAt": "2026-10-19T18:25:00Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374435"
+    },
+    {
+      "databaseId": 118226374496,
+      "name": "Frontend tests (windows-latest shard 2/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:40Z",
+      "completedAt": "2026-10-19T18:32:53Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374496"
+    },
+    {
+      "databaseId": 118226374506,
+      "name": "Backend tests (ubuntu-latest shard 8/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:06Z",
+      "completedAt": "2026-10-19T18:32:45Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374506"
+    },
+    {
+      "databaseId": 118226374554,
+      "name": "Backend tests (ubuntu-latest shard 19/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:14Z",
+      "completedAt": "2026-10-19T18:36:44Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374554"
+    },
+    {
+      "databaseId": 118226374559,
+      "name": "Backend tests (ubuntu-latest shard 9/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:20:22Z",
+      "completedAt": "2026-10-19T18:27:49Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374559"
+    },
+    {
+      "databaseId": 118226374590,
+      "name": "Backend tests (ubuntu-latest shard 14/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:20:31Z",
+      "completedAt": "2026-10-19T18:27:26Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374590"
+    },
+    {
+      "databaseId": 118226374610,
+      "name": "Backend tests (ubuntu-latest shard 10/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:23:02Z",
+      "completedAt": "2026-10-19T18:30:28Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374610"
+    },
+    {
+      "databaseId": 118226374614,
+      "name": "Backend tests (ubuntu-latest shard 15/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:22:08Z",
+      "completedAt": "2026-10-19T18:26:59Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374614"
+    },
+    {
+      "databaseId": 118226374648,
+      "name": "Backend tests (ubuntu-latest shard 20/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:49Z",
+      "completedAt": "2026-10-19T18:35:32Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374648"
+    },
+    {
+      "databaseId": 118226374707,
+      "name": "Backend tests (ubuntu-latest shard 2/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:27Z",
+      "completedAt": "2026-10-19T18:36:15Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374707"
+    },
+    {
+      "databaseId": 118226374733,
+      "name": "Backend tests (ubuntu-latest shard 11/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:22:45Z",
+      "completedAt": "2026-10-19T18:27:47Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374733"
+    },
+    {
+      "databaseId": 118226374744,
+      "name": "Backend tests (ubuntu-latest shard 21/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:23:01Z",
+      "completedAt": "2026-10-19T18:31:16Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374744"
+    },
+    {
+      "databaseId": 118226374764,
+      "name": "Backend tests (ubuntu-latest shard 3/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:20:45Z",
+      "completedAt": "2026-10-19T18:27:39Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374764"
+    },
+    {
+      "databaseId": 118226374845,
+      "name": "Backend tests (ubuntu-latest shard 16/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:36Z",
+      "completedAt": "2026-10-19T18:35:32Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374845"
+    },
+    {
+      "databaseId": 118226374889,
+      "name": "Backend tests (ubuntu-latest shard 18/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:29:19Z",
+      "completedAt": "2026-10-19T18:37:41Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374889"
+    },
+    {
+      "databaseId": 118226374931,
+      "name": "Backend tests (ubuntu-latest shard 5/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:30:30Z",
+      "completedAt": "2026-10-19T18:34:49Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226374931"
+    },
+    {
+      "databaseId": 118226375580,
+      "name": "Backend tests (ubuntu-latest shard 13/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:23:52Z",
+      "completedAt": "2026-10-19T18:30:50Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226375580"
+    },
+    {
+      "databaseId": 118226375681,
+      "name": "Backend tests (ubuntu-latest shard 6/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:32:00Z",
+      "completedAt": "2026-10-19T18:37:25Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226375681"
+    },
+    {
+      "databaseId": 118226375948,
+      "name": "Backend tests (real PostgreSQL)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:32:05Z",
+      "completedAt": "2026-10-19T18:35:41Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226375948"
+    },
+    {
+      "databaseId": 118226376242,
+      "name": "Backend tests (ubuntu-latest shard 1/24)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:25:02Z",
+      "completedAt": "2026-10-19T18:33:44Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118226376242"
+    },
+    {
+      "databaseId": 118228960420,
+      "name": "Playwright e2e (macos-latest shard 2/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:27:44Z",
+      "completedAt": "2026-10-19T18:42:19Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118228960420"
+    },
+    {
+      "databaseId": 118228960568,
+      "name": "Playwright e2e (macos-latest shard 3/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:30:33Z",
+      "completedAt": "2026-10-19T18:38:29Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118228960568"
+    },
+    {
+      "databaseId": 118228960706,
+      "name": "Playwright e2e (macos-latest shard 1/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:31:49Z",
+      "completedAt": "2026-10-19T18:43:36Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118228960706"
+    },
+    {
+      "databaseId": 118230109368,
+      "name": "Playwright e2e (windows-latest shard 3/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:33:01Z",
+      "completedAt": "2026-10-19T18:42:15Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118230109368"
+    },
+    {
+      "databaseId": 118230109421,
+      "name": "Playwright e2e (windows-latest shard 4/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:30:52Z",
+      "completedAt": "2026-10-19T18:37:01Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118230109421"
+    },
+    {
+      "databaseId": 118230109437,
+      "name": "Playwright e2e (windows-latest shard 1/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:32:55Z",
+      "completedAt": "2026-10-19T18:41:11Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118230109437"
+    },
+    {
+      "databaseId": 118230109446,
+      "name": "Playwright e2e (windows-latest shard 2/4)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:32:48Z",
+      "completedAt": "2026-10-19T18:40:53Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118230109446"
+    },
+    {
+      "databaseId": 118231225740,
+      "name": "Playwright e2e (ubuntu-latest shard 2/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:33:56Z",
+      "completedAt": "2026-10-19T18:42:48Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118231225740"
+    },
+    {
+      "databaseId": 118231225834,
+      "name": "Playwright e2e (ubuntu-latest shard 1/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:34:44Z",
+      "completedAt": "2026-10-19T18:42:35Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118231225834"
+    },
+    {
+      "databaseId": 118231225877,
+      "name": "Playwright e2e (ubuntu-latest shard 3/3)",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:33:46Z",
+      "completedAt": "2026-10-19T18:38:27Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118231225877"
+    },
+    {
+      "databaseId": 118239404206,
+      "name": "CI required",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-10-19T18:50:56Z",
+      "completedAt": "2026-10-19T18:50:59Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39301151416/job/118239404206"
+    }
+  ]
+}

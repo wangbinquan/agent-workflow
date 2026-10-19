@@ -1015,38 +1015,38 @@ export function clarifyFormatExample(nonce?: string, mindmap = false): string {
 Concrete examples of independent choices. Adapt the topic and language to the task; do not copy these questions.
 ${clarifyOpenTag(nonce)}
 {
-  "questions": [
-    {
-      "id": "reminder",
-      "title": "是否启用到期提醒？",
-      "mindmap": {"categoryPath": ["提醒"]},
-      "kind": "single",
-      "options": [
-        {"label": "启用到期提醒", "description": "可能减少遗漏，但会打扰；渠道和时机另定。", "recommended": true, "recommendationReason": "若遗漏会造成明显损失，且你愿意承担提醒打扰，可考虑启用。"},
-        {"label": "不启用到期提醒", "description": "避免提醒打扰，但遗漏风险可能保留；其他措施未定。"}
-      ]
-    },
-    {
-      "id": "ordering",
-      "title": "已满足资格的请求按什么顺序处理？",
-      "mindmap": {"categoryPath": ["处理顺序"]},
-      "kind": "single",
-      "options": [
-        {"label": "按到达时间", "description": "顺序容易解释，但不能体现紧急程度。"},
-        {"label": "按已约定的紧急程度", "description": "可能优先解决急事，但须定义可核对的紧急标准。"}
-      ]
-    },
-    {
-      "id": "criteria",
-      "title": "用哪些结果判断方案有效？",
-      "mindmap": {"categoryPath": ["成功标准"]},
-      "kind": "multi",
-      "options": [
-        {"label": "遗漏减少", "description": "可能表明目标有所改善，但需先建立可比基线。"},
-        {"label": "操作负担可接受", "description": "可能说明方案易用，但需实际使用反馈，不能代替效果证据。"}
-      ]
-    }
-  ]
+"questions": [
+{
+"id": "reminder",
+"title": "是否启用到期提醒？",
+"mindmap": {"categoryPath": ["提醒"]},
+"kind": "single",
+"options": [
+{"label": "启用到期提醒", "description": "可能减少遗漏，但会打扰；渠道和时机另定。", "recommended": true, "recommendationReason": "若遗漏会造成明显损失，且你愿意承担提醒打扰，可考虑启用。"},
+{"label": "不启用到期提醒", "description": "避免提醒打扰，但遗漏风险可能保留；其他措施未定。"}
+]
+},
+{
+"id": "coverage",
+"title": "观测覆盖哪些时段？",
+"mindmap": {"categoryPath": ["观测范围"]},
+"kind": "single",
+"options": [
+{"label": "全天时段", "description": "覆盖面较广，但投入可能更高；记录时机另定。"},
+{"label": "固定高峰时段", "description": "投入可能较少，但仅代表高峰；记录时机另定。"}
+]
+},
+{
+"id": "criteria",
+"title": "用哪些结果判断方案有效？",
+"mindmap": {"categoryPath": ["成功标准"]},
+"kind": "multi",
+"options": [
+{"label": "遗漏减少", "description": "可能表明目标有所改善，但需先建立可比基线。"},
+{"label": "操作负担可接受", "description": "可能说明方案易用，但需实际使用反馈，不能代替效果证据。"}
+]
+}
+]
 }
 </workflow-clarify>`
   return `Format:

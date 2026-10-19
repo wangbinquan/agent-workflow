@@ -1,6 +1,6 @@
 ## 2026-10-18 RFC-378：脑图澄清主动思考与决定复核（In Progress）
 
-进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与功能门完成，单机和托管完整旅程、原始结果、冻结执行与观测归属已有真实通过证据；3b / e899 两个确切 SHA CI 均 49/49 success。56 的 macOS daemon 就绪超时按原日志保留，未代改他人代码。最新已发布源码 `7814999e1`（完整保留并发 c66 发布脚本）通过明确 --source 发布并启用独立 v0.1.9，CI 待终态。第十二轮已先问优先问题、成功信号和证据，证据多选/可用性/抽样局限正确；剩余是兼容成功信号被做成 single，AC09 未签。当前补“选定优先目标不排斥其他成功标准”的明确规则、完整标准多选示例和全部回归，原 parser 与组合预算保持。继续同场景真实复验，正式 AW 与 snake 均保持运行。详见 [验收与原始证据](design/RFC-378-mindmap-decision-review/acceptance.md)。
+进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与功能门完成，单机/托管完整旅程及原文已有真实通过证据；3b、e899、781、cf4 四个确切 SHA CI 均 49/49 success。cf4 已在独立 v0.1.11 启用；v0.1.10 因共享 BuildKit 退出 137/EOF 中断，原失败回执保留，同源码正常重建成功。第十三轮初始题通过，但追加题仍把观察时段与登记时机混为单选、把复核信号写成方向错误的结论，AC09 未签。现补两轴独立、复核不证明因果的指导与观测范围完整示例，全部回归已写齐，原 parser/3350 预算保持。三个原始回答与任务留作审计，正式 AW 与 snake 保持运行；继续新候选真实复验。详见 [验收记录](design/RFC-378-mindmap-decision-review/acceptance.md)。
 
 ## 2026-10-17 RFC-294 后继 S3 / S4 / S8：RFC-375 / 376 / 377 Done
 

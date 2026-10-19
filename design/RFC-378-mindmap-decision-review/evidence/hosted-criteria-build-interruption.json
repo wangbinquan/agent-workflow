@@ -1,0 +1,89 @@
+{
+  "recordedAt": "2026-10-19T18:49:00Z",
+  "sourceSha": "cf4f93cc8b0292af3bcda18830ca3c24e3f8014e",
+  "release": {
+    "id": "01a15578-d425-7000-8a2a-f635995809f5",
+    "journeyId": "01a15578-d554-7000-949a-54a827a52932",
+    "serviceId": "01a15233-d0b4-7001-bfa0-21f28bb515a4",
+    "tag": "v0.1.10",
+    "commitSha": "97131190e52b24a04306fe792aad99d8b30571a9",
+    "branch": "main",
+    "image": "registry.crewstation-system.svc.cluster.local:5000/rfc378-mindmap:v0.1.10",
+    "status": "failed",
+    "databaseRestoreSupported": false,
+    "message": "构建失败：Job has reached the specified backoff limit",
+    "redeployable": false,
+    "createdBy": "01a0c12a-de09-7005-b0f9-d55a8676540b",
+    "createdAt": "2026-10-19T18:42:24.046Z",
+    "updatedAt": "2026-10-19T18:46:05.780Z"
+  },
+  "failure": "BuildKit transport EOF while frontend transform was running",
+  "buildkit": {
+    "uid": "71d63535-b575-47ae-82bd-0608f8a38c5b",
+    "containerStatuses": [
+      {
+        "allocatedResources": {
+          "cpu": "200m",
+          "memory": "512Mi"
+        },
+        "containerID": "containerd://d8c90db56330988b20a6cf963d4bd436dbaca26449cf03fd3fef7d2e1460c0e5",
+        "image": "docker.io/moby/buildkit:v0.33.0-rootless",
+        "imageID": "docker.io/moby/buildkit@sha256:80b15f0735e87bab7bf59ec4d695dfb4a7cfb25521cf56dc75d6f256285b63ef",
+        "lastState": {
+          "terminated": {
+            "containerID": "containerd://ff4b639c789783efc68dd267f33dbb9336ca98ee447b01a78c2214f5a02c0720",
+            "exitCode": 137,
+            "finishedAt": "2026-10-19T18:46:00Z",
+            "reason": "Error",
+            "startedAt": "2026-10-19T16:41:00Z"
+          }
+        },
+        "name": "buildkitd",
+        "ready": true,
+        "resources": {
+          "limits": {
+            "memory": "4Gi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "512Mi"
+          }
+        },
+        "restartCount": 7,
+        "started": true,
+        "state": {
+          "running": {
+            "startedAt": "2026-10-19T18:46:00Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 1000,
+            "supplementalGroups": [1000],
+            "uid": 1000
+          }
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/home/user/.local/share/buildkit",
+            "name": "cache"
+          },
+          {
+            "mountPath": "/etc/buildkit",
+            "name": "config",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          },
+          {
+            "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+            "name": "kube-api-access-gznxn",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          }
+        ]
+      }
+    ]
+  },
+  "attribution": "BuildKit restarted at 18:46:00Z with previous exit 137, matching the build failure. Exact cause of the BuildKit exit is not established; no source compilation error was emitted. Shared infrastructure was not modified.",
+  "nextAction": "Retry the identical committed source through the normal release path as v0.1.11; retain v0.1.10 failure."
+}

@@ -82,9 +82,12 @@ describe('RFC-378 optional decision contract', () => {
       expect(questions[2]!.options[0]!.description).toContain('需先建立可比基线')
       expect(questions[2]!.options[1]!.description).toContain('不能代替效果证据')
       expect(questions[1]!.options.map((option) => option.label)).toEqual([
-        '按到达时间',
-        '按已约定的紧急程度',
+        '全天时段',
+        '固定高峰时段',
       ])
+      expect(
+        questions[1]!.options.every((option) => option.description.includes('记录时机另定')),
+      ).toBe(true)
       const added = CLARIFY_MINDMAP_QUESTION_GUIDANCE + example
       // Quotes also expand in the Windows command line; the concrete examples
       // must fit the old combined guidance/example budget, not merely each part.
@@ -127,6 +130,10 @@ describe('RFC-378 optional decision contract', () => {
             'Pilot size is scope, not evidence',
             'History/observations and scheduled/event-triggered reviews can coexist',
             'Review does not activate policy',
+            'Evidence source, coverage window and recording time are separate',
+            'Scheduled logs and event reports can coexist',
+            'not proof the chosen goal is wrong',
+            'or prove causality',
             'no added commitments or positional references',
             'Recommend only with a specific assumption and cost',
             'Never invent a baseline, main pain point, existing system or automatic collection',
