@@ -1,6 +1,6 @@
 ## 2026-10-18 RFC-378：脑图澄清主动思考与决定复核（In Progress）
 
-进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与独立功能门已完成，已批准自主验收和上库。`52122e76a` 已发布并在独立托管 v0.1.3 启用；控制面无 OpenCode，同一真实 task `01M5AC6EGVPWZXER0GY2QT6DDV` 的追问已在 600000ms 预算内成功追加三题，旧答案保留，最终结果继续验收。第五轮单机原始文档 AC10 通过；第六轮初始 AC09 仍有数值/功能套餐及多选排他项，具体修复和用例已收齐。旧 c0 CI 39274464447 为 47 success / 2 failure，trace 确认 Windows reviewer prompt 32770 字符造成 ENAMETOOLONG，未丢答案；本轮压缩重复指导并保留完整长文档回放。`52122e76a` CI 39281632773 尚待终态。正式 AW 和 snake 父会话/卷/服务保持，旧资源清理按授权且有回执。详见 [逐项验收与原始证据](design/RFC-378-mindmap-decision-review/acceptance.md)，内容质量、托管最终结果和精确 SHA CI 未闭合前保持 In Progress。
+进行中 RFC：[RFC-378](design/RFC-378-mindmap-decision-review/proposal.md)。完整实现与独立功能门已完成，已批准自主验收和上库。`52122e76a` 已发布并在独立托管 v0.1.3 启用；控制面无 OpenCode，同一真实 task `01M5AC6EGVPWZXER0GY2QT6DDV` 的追问已在 600000ms 预算内成功追加三题，旧答案保留，最终结果继续验收；平台子执行暂处 pending，已把独立项目额度从 2 调到 3，并按授权将五个 14 天前的 RFC-003 验证服务缩到 0（数据保留），释放 2.5 GiB 请求供模型与构建。第五轮单机原始文档 AC10 通过；第七轮初始已分离数值参数与兼容功能，AC09 仍有试点范围混入证据来源，具体修复和用例已收齐。旧 c0 CI 39274464447 为 47 success / 2 failure，trace 确认 Windows reviewer prompt 32770 字符造成 ENAMETOOLONG，未丢答案；本轮压缩重复指导并保留完整长文档回放。`52122e76a` CI 39281632773 尚待终态。正式 AW 和 snake 父会话/卷/服务保持，旧资源清理按授权且有回执。详见 [逐项验收与原始证据](design/RFC-378-mindmap-decision-review/acceptance.md)，内容质量、托管最终结果和精确 SHA CI 未闭合前保持 In Progress。
 
 ## 2026-10-17 RFC-294 后继 S3 / S4 / S8：RFC-375 / 376 / 377 Done
 

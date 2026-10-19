@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-19T16:37:33.349Z",
+  "before": {
+    "maxConcurrentTasks": 2,
+    "running": 2
+  },
+  "after": {
+    "maxConcurrentTasks": 3,
+    "running": 2
+  },
+  "reason": "two parent workspaces and one model child must coexist; serialize model children to fit local capacity"
+}

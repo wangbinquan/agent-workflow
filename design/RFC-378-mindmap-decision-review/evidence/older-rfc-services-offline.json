@@ -1,0 +1,231 @@
+{
+  "authorization": "user explicitly authorized taking other RFC resources older than one week offline; selected service workloads are also older than fourteen days",
+  "cutoff": "2026-10-05T00:00:00.000Z",
+  "actions": [
+    {
+      "at": "2026-10-19T16:37:32.347Z",
+      "slug": "rfc003-ux",
+      "projectId": "01a0c12a-de0c-700a-a4b1-347ad03066c6",
+      "serviceId": "01a0c12a-de0d-7003-85c4-721e23f048d2",
+      "releaseId": "01a0c12a-de27-701a-b8b8-090d1fdc7837",
+      "releaseCreatedAt": "2026-09-13T01:20:08.281Z",
+      "namespace": "cs-rfc003-ux",
+      "deployment": "rfc003-ux-green",
+      "uid": "4feb3c8e-e258-491e-b8fe-09428705e33a",
+      "createdAt": "2026-09-13T01:20:18Z",
+      "replicas": 1,
+      "containers": [
+        {
+          "name": "rfc003-ux-green",
+          "image": "registry.crewstation-system.svc.cluster.local:5000/rfc003-ux:v0.1.0",
+          "requests": {
+            "cpu": "500m",
+            "memory": "512Mi"
+          }
+        }
+      ],
+      "command": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-ux-green",
+        "-n",
+        "cs-rfc003-ux",
+        "--replicas=0",
+        "--current-replicas=1",
+        "--resource-version=4640550"
+      ],
+      "output": "deployment.apps/rfc003-ux-green scaled",
+      "restore": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-ux-green",
+        "-n",
+        "cs-rfc003-ux",
+        "--replicas=1",
+        "--current-replicas=0"
+      ]
+    },
+    {
+      "at": "2026-10-19T16:37:32.523Z",
+      "slug": "rfc003-verify-workbench",
+      "projectId": "01a0c12a-de0c-700e-9b63-4aecb7eccb2d",
+      "serviceId": "01a0c12a-de0d-7004-b71e-93160df5dd17",
+      "releaseId": "01a0c12a-de27-7003-b2b4-f744b21ed7f6",
+      "releaseCreatedAt": "2026-09-14T06:55:29.584Z",
+      "namespace": "cs-rfc003-verify-workbench",
+      "deployment": "rfc003-verify-workbench-green",
+      "uid": "05b18ca7-b4e2-4116-b834-0ec5516cddb7",
+      "createdAt": "2026-09-14T06:55:45Z",
+      "replicas": 1,
+      "containers": [
+        {
+          "name": "rfc003-verify-workbench-green",
+          "image": "registry.crewstation-system.svc.cluster.local:5000/rfc003-verify-workbench:v0.1.0",
+          "requests": {
+            "cpu": "50m",
+            "memory": "512Mi"
+          }
+        }
+      ],
+      "command": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-workbench-green",
+        "-n",
+        "cs-rfc003-verify-workbench",
+        "--replicas=0",
+        "--current-replicas=1",
+        "--resource-version=4640831"
+      ],
+      "output": "deployment.apps/rfc003-verify-workbench-green scaled",
+      "restore": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-workbench-green",
+        "-n",
+        "cs-rfc003-verify-workbench",
+        "--replicas=1",
+        "--current-replicas=0"
+      ]
+    },
+    {
+      "at": "2026-10-19T16:37:32.738Z",
+      "slug": "rfc003-verify-delivery",
+      "projectId": "01a0c12a-de0c-700b-bf95-00816e57d3e0",
+      "serviceId": "01a0c12a-de0d-7005-bec0-d675e25cb92d",
+      "releaseId": "01a0c12a-de27-7026-9039-3714ef880883",
+      "releaseCreatedAt": "2026-09-15T16:44:34.993Z",
+      "namespace": "cs-rfc003-verify-delivery",
+      "deployment": "rfc003-verify-delivery-blue",
+      "uid": "07e3f147-1a7d-4d50-bc85-505adb749d0e",
+      "createdAt": "2026-09-15T16:44:51Z",
+      "replicas": 1,
+      "containers": [
+        {
+          "name": "rfc003-verify-delivery-blue",
+          "image": "registry.crewstation-system.svc.cluster.local:5000/rfc003-verify-delivery:v0.1.2",
+          "requests": {
+            "cpu": "25m",
+            "memory": "512Mi"
+          }
+        }
+      ],
+      "command": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-delivery-blue",
+        "-n",
+        "cs-rfc003-verify-delivery",
+        "--replicas=0",
+        "--current-replicas=1",
+        "--resource-version=4640872"
+      ],
+      "output": "deployment.apps/rfc003-verify-delivery-blue scaled",
+      "restore": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-delivery-blue",
+        "-n",
+        "cs-rfc003-verify-delivery",
+        "--replicas=1",
+        "--current-replicas=0"
+      ]
+    },
+    {
+      "at": "2026-10-19T16:37:32.987Z",
+      "slug": "rfc003-verify-files",
+      "projectId": "01a0c12a-de0c-700c-802d-7cfec36f9d3e",
+      "serviceId": "01a0c12a-de0d-7006-adc1-34a91bf1f501",
+      "releaseId": "01a0c12a-de27-7022-b821-69e8efe5eac7",
+      "releaseCreatedAt": "2026-09-15T00:34:39.755Z",
+      "namespace": "cs-rfc003-verify-files",
+      "deployment": "rfc003-verify-files-green",
+      "uid": "61cbe363-0370-4f78-a7b3-fbd34841337a",
+      "createdAt": "2026-09-14T12:38:15Z",
+      "replicas": 1,
+      "containers": [
+        {
+          "name": "rfc003-verify-files-green",
+          "image": "registry.crewstation-system.svc.cluster.local:5000/rfc003-verify-files:v0.1.8",
+          "requests": {
+            "cpu": "50m",
+            "memory": "512Mi"
+          }
+        }
+      ],
+      "command": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-files-green",
+        "-n",
+        "cs-rfc003-verify-files",
+        "--replicas=0",
+        "--current-replicas=1",
+        "--resource-version=4640592"
+      ],
+      "output": "deployment.apps/rfc003-verify-files-green scaled",
+      "restore": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-files-green",
+        "-n",
+        "cs-rfc003-verify-files",
+        "--replicas=1",
+        "--current-replicas=0"
+      ]
+    },
+    {
+      "at": "2026-10-19T16:37:33.230Z",
+      "slug": "rfc003-verify-integration",
+      "projectId": "01a0c12a-de0c-700d-a7a3-a10318035a95",
+      "serviceId": "01a0c12a-de0d-7007-8c4a-c45471602975",
+      "releaseId": "01a0c12a-de27-7012-be68-c77cd230c145",
+      "releaseCreatedAt": "2026-09-15T15:37:27.383Z",
+      "namespace": "cs-rfc003-verify-integration",
+      "deployment": "rfc003-verify-integration-green",
+      "uid": "e6fb6e64-6649-4d2f-9659-c67080fde079",
+      "createdAt": "2026-09-15T07:09:53Z",
+      "replicas": 1,
+      "containers": [
+        {
+          "name": "rfc003-verify-integration-green",
+          "image": "registry.crewstation-system.svc.cluster.local:5000/rfc003-verify-integration:v0.1.5",
+          "requests": {
+            "cpu": "50m",
+            "memory": "512Mi"
+          }
+        }
+      ],
+      "command": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-integration-green",
+        "-n",
+        "cs-rfc003-verify-integration",
+        "--replicas=0",
+        "--current-replicas=1",
+        "--resource-version=4640849"
+      ],
+      "output": "deployment.apps/rfc003-verify-integration-green scaled",
+      "restore": [
+        "kubectl",
+        "scale",
+        "deployment",
+        "rfc003-verify-integration-green",
+        "-n",
+        "cs-rfc003-verify-integration",
+        "--replicas=1",
+        "--current-replicas=0"
+      ]
+    }
+  ]
+}

@@ -89,6 +89,11 @@ describe('RFC-378 optional decision contract', () => {
           )
           expect(prompt).toContain('no "only", "none" or "no extra collection" option')
           expect(prompt).toContain(
+            'Each set concerns ONE axis: features OR data sources OR triggers',
+          )
+          expect(prompt).toContain('Pilot size is rollout scope, not evidence')
+          expect(prompt).toContain('or imply "only manual handling"')
+          expect(prompt).toContain(
             'never single-choice "basic / basic plus X / basic plus Y" packages',
           )
           expect(prompt).toContain(

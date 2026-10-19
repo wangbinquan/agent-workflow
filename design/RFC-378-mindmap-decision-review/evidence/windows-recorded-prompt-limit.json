@@ -1,0 +1,129 @@
+{
+  "workflowRun": "39274464447",
+  "jobId": "118139307326",
+  "sourceSha": "c0b2091730a82177cb09efc7bb256c926586b5aa",
+  "taskId": "01M5ACAN1DJGENR2V2FYQ0VYMR",
+  "runs": [
+    {
+      "id": "01M5ACAPDPK20BS4YFB0HTWAPS",
+      "nodeId": "topic",
+      "status": "done",
+      "errorMessage": null,
+      "startedAt": 1792423582134,
+      "finishedAt": 1792423582134,
+      "retryIndex": 0,
+      "promptCharacters": 0
+    },
+    {
+      "id": "01M5ACAPETKR5HW9GSWCCKN7V2",
+      "nodeId": "designer",
+      "status": "done",
+      "errorMessage": null,
+      "startedAt": 1792423582938,
+      "finishedAt": 1792423583359,
+      "retryIndex": 0,
+      "promptCharacters": 12657
+    },
+    {
+      "id": "01M5ACAQMZHPCXH9SPSHW77JW5",
+      "nodeId": "clarify",
+      "status": "done",
+      "errorMessage": null,
+      "startedAt": 1792423583391,
+      "finishedAt": 1792423607154,
+      "retryIndex": 0,
+      "promptCharacters": 0
+    },
+    {
+      "id": "01M5ACBEWXJS08H69FQ97RXHQS",
+      "nodeId": "designer",
+      "status": "done",
+      "errorMessage": null,
+      "startedAt": 1792423613531,
+      "finishedAt": 1792423617973,
+      "retryIndex": 1,
+      "promptCharacters": 5206
+    },
+    {
+      "id": "01M5ACBZ30V95F6ZB42NVTWA9D",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423627585,
+      "finishedAt": 1792423629611,
+      "retryIndex": 0,
+      "promptCharacters": 32770
+    },
+    {
+      "id": "01M5ACC7JZXX2WRG8W5W064HPF",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423632495,
+      "finishedAt": 1792423633601,
+      "retryIndex": 1,
+      "promptCharacters": 32770
+    },
+    {
+      "id": "01M5ACCBPQP37VMZ8NW6KBKA9X",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423636736,
+      "finishedAt": 1792423637048,
+      "retryIndex": 2,
+      "promptCharacters": 32770
+    },
+    {
+      "id": "01M5ACCD9Y2QSQWY9V7AKQ9ADQ",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423638352,
+      "finishedAt": 1792423638621,
+      "retryIndex": 3,
+      "promptCharacters": 32770
+    },
+    {
+      "id": "01M5ACCF7M9M1S9B4M4G8KF1D0",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423640324,
+      "finishedAt": 1792423640639,
+      "retryIndex": 4,
+      "promptCharacters": 32770
+    },
+    {
+      "id": "01M5ACCJAZCXW4ZBMPHNNKER4H",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423643638,
+      "finishedAt": 1792423644033,
+      "retryIndex": 5,
+      "promptCharacters": 32770
+    },
+    {
+      "id": "01M5ACCMVJ662WQJQXWG362QEB",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423646086,
+      "finishedAt": 1792423646504,
+      "retryIndex": 6,
+      "promptCharacters": 32770
+    },
+    {
+      "id": "01M5ACCQ91D3K78P8NXNRCA7DQ",
+      "nodeId": "reviewer",
+      "status": "failed",
+      "errorMessage": "spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn",
+      "startedAt": 1792423648586,
+      "finishedAt": 1792423648897,
+      "retryIndex": 7,
+      "promptCharacters": 32770
+    }
+  ],
+  "finding": "Designer completed with all actual answers. Reviewer failed before the model started: Windows argv exceeded the process command-line limit. No scenario parser change is required."
+}

@@ -1,0 +1,190 @@
+{
+  "id": "01M5AG12MV1D1BJA8WSGZGHGDD:round",
+  "taskId": "01M5AG004R8WXJR02YC2PSN7R3",
+  "kind": "self",
+  "terminatedAs": null,
+  "askingNodeId": "starter_clarifier",
+  "askingNodeRunId": "01M5AG00E9ZCWRBGFMP7REP5YB",
+  "askingShardKey": null,
+  "intermediaryNodeId": "starter_clarify",
+  "intermediaryNodeRunId": "01M5AG12MV1D1BJA8WSGZGHGDD",
+  "intermediaryNodeTitle": "复核决定",
+  "targetConsumerNodeId": null,
+  "loopIter": 0,
+  "iteration": 0,
+  "questions": [
+    {
+      "mindmap": {
+        "categoryPath": [
+          "冲突规则"
+        ]
+      },
+      "id": "conflict-policy",
+      "title": "当两人预约同一房间同一时段时，系统采用哪种冲突处理？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "硬性阻止重叠预约",
+          "description": "可保证不出现重复占用，但被拒的一方需自行改时间，可能增加沟通成本。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "仅提示冲突、仍允许提交",
+          "description": "保留人工协调弹性，但可能出现实际撞房，需要额外约定谁让位。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": [
+          "时间粒度"
+        ]
+      },
+      "id": "time-grid",
+      "title": "预约时间网格采用哪一档？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "15 分钟",
+          "description": "时间安排最灵活，但预约记录更碎，冲突判断和统计更复杂。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "30 分钟",
+          "description": "灵活性与管理成本较平衡，但短会仍需占用至少一个整格。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "60 分钟",
+          "description": "管理最简单，但短会浪费房间时间，可能降低 3 间房的周转。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "任意起止时间",
+          "description": "最贴合实际会议，但需要另行确定最短时长与边界规则。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": [
+          "爽约治理"
+        ]
+      },
+      "id": "no-show-release",
+      "title": "是否启用“预约后未到自动释放房间”机制？",
+      "kind": "single",
+      "recommended": false,
+      "options": [
+        {
+          "label": "启用未到自动释放",
+          "description": "可减少空占，但迟到者可能被误释放，且需另定判定时点。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "不启用未到自动释放",
+          "description": "避免误释放风险，但空占只能靠人工发现和处理。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": [
+          "第一版范围"
+        ]
+      },
+      "id": "v1-scope",
+      "title": "第一版在“预约+冲突检查”之外，还要纳入哪些能力？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "取消与改期",
+          "description": "让释放房间有正式入口，但增加状态与权限处理。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "会前提醒",
+          "description": "可能降低爽约，但依赖通知渠道且会增加配置工作。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "签到或使用确认",
+          "description": "可支撑未到判定，但增加现场操作负担。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "候补队列",
+          "description": "提高满员时的房间利用率，但实现与规则复杂度最高。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    },
+    {
+      "mindmap": {
+        "categoryPath": [
+          "验证安排"
+        ]
+      },
+      "id": "validation-evidence",
+      "title": "在两周内、没有历史基线的情况下，用哪些证据验证第一版？",
+      "kind": "multi",
+      "recommended": false,
+      "options": [
+        {
+          "label": "系统预约与取消日志",
+          "description": "可直接观察预约量和取消行为，但只能反映系统内动作。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "上线后空置房间抽样",
+          "description": "可发现实际空占，但抽样时点有限，不能证明整个时段未被使用。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "20 人问卷或访谈",
+          "description": "能了解主观痛点与规则接受度，但样本小且易受近期事件影响。",
+          "recommended": false,
+          "recommendationReason": ""
+        },
+        {
+          "label": "小范围试点小组",
+          "description": "可在受控范围内观察行为，但会推迟全员上线并引入公平性讨论。",
+          "recommended": false,
+          "recommendationReason": ""
+        }
+      ]
+    }
+  ],
+  "interactionMode": "mindmap",
+  "directive": null,
+  "status": "awaiting_human",
+  "sessionMode": null,
+  "designerRunTriggeredAt": null,
+  "abandonedAt": null,
+  "createdAt": 1792427461275,
+  "answeredAt": null,
+  "answeredBy": null,
+  "submittedByRole": null,
+  "answerAttributions": null,
+  "draftAnswers": null
+}

@@ -149,6 +149,14 @@
 
 `c0b209173` 的 [CI 39274464447](https://github.com/wangbinquan/agent-workflow/actions/runs/39274464447) 终态 failure，47 success / 2 failure（Windows E2E shard 3 和汇总门）。trace 中实际答案已完整送达且 designer 已 done；reviewer 的 8 次尝试均 `spawn opencode failed: ENAMETOOLONG: name too long, uv_spawn`，原始 prompt 32770 字符。故根因是本 RFC 的指导扩张越过 Windows 命令行容量，而不是摘要解析或回答丢失；未改 scenario parser。现将指导收敛到 2800 字符预算内，补组合提示与预算回归断言，保留真实长文档录制 E2E 不裁剪。`52122e76a` 的 CI 39281632773 尚未取得终态，新修复候选仍须精确 SHA CI 和真实内容复验。
 
+### 2026-10-19：第七轮原题与并发资源排队
+
+`68b44b40f97767d92ffd783f954f64efb3f7fa9c` 的 CI artifact `12202706570`（平台 archive digest `sha256:ade9b82d439d7baeb6f75113dc059b4c770604c68901335bd9026d0cc609ac07`）已在原隔离目录启动，版本核对 `agent-workflow 68b44b4`。实际 UI 启动 task `01M5AG004R8WXJR02YC2PSN7R3`，初始轮次 `01M5AG12MV1D1BJA8WSGZGHGDD`；时间粒度没有捆绑最短时长，功能项改为 multi，分类均为单层，但“试点小组”仍混入证据来源题，未记 AC09 通过。[原始问题](evidence/standalone-seventh-initial.json) 保留。继续补充同一题必须是同一种取舍轴，明确试点规模不属于证据来源，否定自动措施不意味着只剩人工；保持 2800 字符指导预算。`f5c03f480` 仅同步上一候选的旧断言文案，生产内容不变；CI 39285166918 待终态。
+
+托管最终 run `01M5AFFDXP4QBFN4A0BCNEH38J` 在 AW 为 running，但平台子执行 `01a154f8-7187-7000-aa79-20ae3ceaa72c` 实际 pending / not-started；并行记忆蒸馏也 pending。独立项目原 `maxConcurrentTasks=2`，两个父工作区已占 2/2，模型子执行无法受理；已通过平台 quota API 以 expectedMaxConcurrentTasks=2 调整为 3，让两个父工作区与一个模型子执行共存，子模型串行等待。此为验收项目配置修正，不改变运行模型或业务答案。
+
+同时新版本 build Pod 因 Insufficient memory Pending。按用户授权下线旧 RFC 资源，核对五个 RFC-003 验证服务的 release 和 Deployment 均早于 2026-10-05 且没有活跃业务任务后，以 UID / resourceVersion / 原 replicas=1 为前置条件将其 Deployment 缩至 0：rfc003-ux、rfc003-verify-workbench、rfc003-verify-delivery、rfc003-verify-files、rfc003-verify-integration。释放目标为 675m / 2560Mi；源码、镜像、数据库、卷及访问配置保留，恢复命令为各自 `kubectl scale deployment <name> -n <namespace> --replicas=1 --current-replicas=0`。这是旧验证服务的明确运维下线，平台原发布记录保留，不冒称应用仍在线。逐项 UID、创建日期、执行回执和恢复命令见 [下线回执](evidence/older-rfc-services-offline.json)，独立项目额度见 [额度回执](evidence/own-project-execution-quota.json)。物理回收与在途结果另行确认，正式 AW 和 snake 未纳入目标集合。
+
 ## 6. 完成边界
 
 原型、独立代码功能门、实际单机运行、模型内容、自动化、托管部署分别成立才记录相应完成状态。一次代理走查证明操作链路与可见内容，不证明真实使用者已经形成更深入的思考或责任习惯；后续试用应观察主动质疑、明确代价、保留未知和提出可执行复核安排，而不是统计填写字段或分支数量。

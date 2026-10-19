@@ -215,6 +215,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
             'Compatible features, sources, criteria or review triggers: kind multi',
           )
           expect(prompt).toContain('no "only", "none" or "no extra collection" option')
+          expect(prompt).toContain('Pilot size is rollout scope, not evidence')
           expect(prompt).toContain('Every question needs 2–4 options')
           expect(prompt).toContain(
             '"configuredCategoryPaths":[["Scope"],["Performance","Database","SQL"]]',
