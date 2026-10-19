@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test'
 import type {
   BusinessEvent,
   BusinessEventPage,
+  BusinessSubtask,
   CrewStationBusinessExecution,
 } from '@/platform/crewstation/businessExecution'
 import { CrewStationApiError } from '@/platform/crewstation/platformApi'
@@ -52,10 +53,13 @@ const apiError = (status: number) => new CrewStationApiError(status, 'test', `st
 function fake(script: {
   pages?: (BusinessEventPage | Error)[]
   stream?: (signal?: AbortSignal) => AsyncGenerator<BusinessEvent>
+  subtask?: () => BusinessSubtask
 }) {
   const queries: unknown[] = []
   const pages = [...(script.pages ?? [])]
-  const api: Pick<CrewStationBusinessExecution, 'events' | 'streamEvents'> = {
+  const api: Pick<CrewStationBusinessExecution, 'events' | 'streamEvents'> &
+    Partial<Pick<CrewStationBusinessExecution, 'getSubtask'>> = {
+    ...(script.subtask === undefined ? {} : { getSubtask: async () => script.subtask!() }),
     async events(_task, query) {
       queries.push(query)
       const next = pages.shift() ?? { items: [], hasMore: false, nextCursor: null }
@@ -242,5 +246,88 @@ describe('RFC-370 CrewStation subtask observation', () => {
       }),
     ).toEqual({ kind: 'stopped' })
     expect(moving.queries).toHaveLength(1)
+  })
+
+  // RFC-370 hosted acceptance (2026-10-19): the platform ended a cancelled
+  // Agent subtask without the result event its events must end with. The
+  // owner waited for it forever, keeping `system:shared` in use; its parent
+  // never paused and held a quota slot.
+  describe('a subtask the platform already ended', () => {
+    const cleanEnd = async function* (): AsyncGenerator<BusinessEvent> {
+      yield* []
+    }
+    const view = (state: string, result?: BusinessEvent & { type: 'result' }): BusinessSubtask => ({
+      id: 'sub',
+      taskId: 'parent',
+      kind: 'agent',
+      attempt: 2,
+      state,
+      executionId: 'execution',
+      ...(result === undefined ? {} : { result: result.data }),
+      ...(state === 'failed'
+        ? { error: { code: 'agent_environment_unavailable', message: 'x' } }
+        : {}),
+    })
+    test('without a result event ends the observation instead of waiting forever', async () => {
+      const { api, queries } = fake({ stream: cleanEnd, subtask: () => view('failed') })
+      const observation = observeSubtask({
+        api,
+        target,
+        after: 'c1',
+        signal: new AbortController().signal,
+        onEvent: async () => {},
+      })
+      await expect(observation).rejects.toMatchObject({
+        name: 'SubtaskObservationError',
+        failure: 'ended',
+      })
+      await observation.catch((error: SubtaskObservationError) => {
+        expect(error.message).toContain('failed: agent_environment_unavailable')
+      })
+      // The page is read again before concluding, in case the result was written meanwhile.
+      expect(queries).toHaveLength(2)
+    })
+    test('with a result in its view journals that result as its event', async () => {
+      const ended = event('c9', 'result') as BusinessEvent & { type: 'result' }
+      const delivered: BusinessEvent[] = []
+      const { api } = fake({ stream: cleanEnd, subtask: () => view('cancelled', ended) })
+      const end = await observeSubtask({
+        api,
+        target,
+        after: 'c1',
+        signal: new AbortController().signal,
+        onEvent: async (e) => {
+          delivered.push(e)
+        },
+      })
+      expect(end).toEqual({ kind: 'result', result: ended.data, cursor: 'c9' })
+      expect(delivered).toHaveLength(1)
+      expect(delivered[0]).toMatchObject({
+        type: 'result',
+        cursor: 'c9',
+        subtaskId: 'sub',
+        attempt: 2,
+      })
+    })
+    test('that still runs keeps being observed', async () => {
+      let streams = 0
+      const { api } = fake({
+        stream: () =>
+          streams++ === 0
+            ? cleanEnd()
+            : (async function* () {
+                yield event('c5', 'result')
+              })(),
+        subtask: () => view('running'),
+      })
+      const end = await observeSubtask({
+        api,
+        target,
+        after: 'c1',
+        signal: new AbortController().signal,
+        onEvent: async () => {},
+      })
+      expect(end).toMatchObject({ kind: 'result', cursor: 'c5' })
+    })
   })
 })

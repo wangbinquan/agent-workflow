@@ -14,6 +14,11 @@
 // invalidated the task image's validation; every launch then failed with the
 // raw `412 image_usage_unvalidated` refusal, shown as an unexplained HTTP 500.
 // That refusal now fails at once with an explicit operator action.
+//
+// 2026-10-19: a paused parent's resume was refused for a full quota and retried
+// with a key built from the generation the refusal had advanced; every poll
+// was admitted as a new lifecycle operation (generation 6 → 83 in half an
+// hour). The refused request is now replayed as it was sent.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { hostedTaskWorkspaces } from '@/db/schema'
@@ -98,7 +103,7 @@ describeEachProvider('RFC-370 a full task quota is waited out', (harness) => {
           .from(hostedTaskWorkspaces)
           .where(eq(hostedTaskWorkspaces.taskId, owner))
       )[0]
-    return { workspaces, keys, row, elapsed: () => clock - 1_000_000 }
+    return { workspaces, keys, row, api, parents, elapsed: () => clock - 1_000_000 }
   }
 
   test('the same request key is resubmitted until a slot frees', async () => {
@@ -112,6 +117,50 @@ describeEachProvider('RFC-370 a full task quota is waited out', (harness) => {
     expect(new Set(f.keys).size).toBe(1)
     expect(f.elapsed()).toBeGreaterThan(0)
     expect((await f.row('01M56TASK'))?.businessTaskId).toBe('parent-1')
+  })
+
+  test('a resume refused for a full quota is replayed with its own key and generation', async () => {
+    const f = await setup(() => null)
+    await f.workspaces.ensure('01M56TASK')
+    const parent = f.parents.get('parent-1')!
+    f.parents.set('parent-1', {
+      ...parent,
+      state: 'paused',
+      resourceState: 'released',
+      generation: 2,
+    })
+    const resumes: { requestKey: string; expectedGeneration: number }[] = []
+    const admitted = new Set<string>()
+    let refusals = 2
+    f.api.resumeTask = async (_id, request) => {
+      resumes.push({
+        requestKey: request.requestKey,
+        expectedGeneration: request.expectedGeneration,
+      })
+      // The platform advances the generation once per admitted key; a replay keeps it.
+      const current = f.parents.get('parent-1')!
+      const generation = admitted.has(request.requestKey)
+        ? current.generation
+        : current.generation + 1
+      admitted.add(request.requestKey)
+      if (refusals-- > 0) {
+        f.parents.set('parent-1', { ...current, state: 'paused', generation })
+        throw quotaFull()
+      }
+      f.parents.set('parent-1', {
+        ...current,
+        state: 'running',
+        resourceState: 'ready',
+        generation,
+      })
+    }
+    await expect(f.workspaces.ensure('01M56TASK')).resolves.toMatchObject({
+      businessTaskId: 'parent-1',
+    })
+    expect(resumes).toHaveLength(3)
+    expect(new Set(resumes.map((request) => request.requestKey)).size).toBe(1)
+    expect(resumes.every((request) => request.expectedGeneration === 2)).toBe(true)
+    expect(f.parents.get('parent-1')?.generation).toBe(3)
   })
 
   test('a quota that stays full ends in an explicit error and keeps the parent request', async () => {

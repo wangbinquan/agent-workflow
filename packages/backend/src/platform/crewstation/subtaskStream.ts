@@ -31,6 +31,8 @@ export type SubtaskObservationFailure =
   | 'rejected'
   /** An event for another subtask/attempt, or a result whose cursor is not its own. */
   | 'identity'
+  /** The platform reports the subtask ended, but no result event ever follows. */
+  | 'ended'
 
 export class SubtaskObservationError extends Error {
   constructor(
@@ -72,8 +74,13 @@ export function isTransientObservationError(error: unknown): boolean {
   return error.status >= 500 || error.status === 429 || error.status === 408
 }
 
+const TERMINAL_STATES = new Set(['succeeded', 'failed', 'cancelled'])
+
 export async function observeSubtask(input: {
-  readonly api: Pick<CrewStationBusinessExecution, 'events' | 'streamEvents'>
+  /** `getSubtask` lets a clean stream end check whether the platform already
+   * ended the subtask without the result event its events must end with. */
+  readonly api: Pick<CrewStationBusinessExecution, 'events' | 'streamEvents'> &
+    Partial<Pick<CrewStationBusinessExecution, 'getSubtask'>>
   readonly target: SubtaskObservationTarget
   /** Exclusive: only events strictly after this cursor are delivered. */
   readonly after: string | null
@@ -108,6 +115,38 @@ export async function observeSubtask(input: {
     cursor = event.cursor
     return event.type === 'result' ? event.data : null
   }
+  const endedWithoutEvent = async (): Promise<SubtaskObservationEnd | null> => {
+    if (input.api.getSubtask === undefined || input.signal.aborted) return null
+    const subtask = await input.api.getSubtask(businessTaskId, subtaskId)
+    if (subtask.attempt !== attempt || !TERMINAL_STATES.has(subtask.state)) return null
+    const page = await input.api.events(businessTaskId, {
+      ...(cursor === null ? {} : { after: cursor }),
+      subtaskId,
+    })
+    for (const event of page.items) {
+      const result = await consume(event)
+      if (result !== null) return { kind: 'result', result, cursor: event.cursor }
+    }
+    if (page.hasMore) return null
+    if (subtask.result === undefined)
+      throw new SubtaskObservationError(
+        'ended',
+        `the platform ended the subtask (${subtask.state}${subtask.error === undefined ? '' : `: ${subtask.error.code}`}) without a result event`,
+      )
+    // Journaled like the event it should have been, so the owner's projection
+    // and the stored binding see the same result.
+    const result = await consume({
+      taskId: businessTaskId,
+      subtaskId,
+      attempt,
+      cursor: subtask.result.finalCursor,
+      sourceEventId: `platform-view:${subtaskId}:${attempt}:result`,
+      occurredAt: new Date().toISOString(),
+      type: 'result',
+      data: subtask.result,
+    })
+    return result === null ? null : { kind: 'result', result, cursor: subtask.result.finalCursor }
+  }
   const active = input.active ?? (() => true)
   while (!input.signal.aborted && active()) {
     try {
@@ -132,7 +171,13 @@ export async function observeSubtask(input: {
         const result = await consume(event)
         if (result !== null) return { kind: 'result', result, cursor: event.cursor }
       }
-      // A clean end is the platform's bounded connection lifetime; reconnect.
+      // A clean end is the platform's bounded connection lifetime; reconnect,
+      // unless the platform already ended the subtask without a result event:
+      // otherwise the owner waits for it forever and its volume stays in use
+      // (RFC-370 hosted acceptance, 2026-10-19). One more page read first, in
+      // case the result was written meanwhile.
+      const ended = await endedWithoutEvent()
+      if (ended !== null) return ended
     } catch (error) {
       if (error instanceof ConsumerFailure) throw error.error
       if (input.signal.aborted) break

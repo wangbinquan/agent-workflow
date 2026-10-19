@@ -174,6 +174,9 @@ function unavailable(task: BusinessTask, unobservedForMs: number): boolean {
   return task.state !== 'paused' && !TRANSITIONAL.has(task.state)
 }
 
+/** A resume the platform refused for a full quota, replayed as it was sent. */
+type ResumeRequest = { readonly requestKey: string; readonly expectedGeneration: number }
+
 /** Deterministic per-generation lifecycle key: a retried pause/resume/close of
  * the same generation is a lookup of the original platform operation. */
 export function hostedLifecycleRequestKey(
@@ -252,15 +255,29 @@ export function createHostedTaskWorkspaces(input: {
     if (task.id !== businessTaskId) throw new Error('hosted-workspace-receipt-mismatch')
     return task
   }
-  const resume = async (row: Row, task: BusinessTask) => {
+  /** A full quota (`429 quota_exceeded`) refuses the resume, and the platform
+   * admits that same request once a slot frees ("请使用同一 requestKey 重试"). The
+   * refused request is returned so the next poll replays it. A key built from
+   * the generation that refusal advanced would admit a new lifecycle operation
+   * on every poll: a parent waiting for a slot climbed from generation 6 to 83
+   * in half an hour (RFC-370 hosted acceptance, 2026-10-19). */
+  const resume = async (
+    row: Row,
+    task: BusinessTask,
+    refused: ResumeRequest | null,
+  ): Promise<ResumeRequest | null> => {
+    const request = refused ?? {
+      requestKey: hostedLifecycleRequestKey(row.requestKey, 'resume', task.generation),
+      expectedGeneration: task.generation,
+    }
     try {
-      await input.api.resumeTask(task.id, {
-        requestKey: hostedLifecycleRequestKey(row.requestKey, 'resume', task.generation),
-        fence: input.fence.current(),
-        expectedGeneration: task.generation,
-      })
+      await input.api.resumeTask(task.id, { ...request, fence: input.fence.current() })
+      return null
     } catch (error) {
+      if (isCrewStationApiError(error) && error.status === 429 && error.code === 'quota_exceeded')
+        return request
       if (!isLifecycleRace(error)) throw error
+      return null
     }
   }
   /** Wait until the parent runs with a ready volume, resuming it if paused.
@@ -270,6 +287,7 @@ export function createHostedTaskWorkspaces(input: {
     const deadline = now() + readyTimeoutMs
     let last = 'unobserved'
     let unobservedSince: number | null = null
+    let refusedResume: ResumeRequest | null = null
     for (;;) {
       input.fence.current()
       const task = await observe(businessTaskId)
@@ -289,7 +307,7 @@ export function createHostedTaskWorkspaces(input: {
       if (CLOSED.has(task.state)) throw new Error(`hosted-workspace-closed: ${task.state}`)
       if (unavailable(task, unobservedSince === null ? 0 : now() - unobservedSince))
         throw new HostedWorkspaceUnavailableError(businessTaskId, task)
-      if (task.state === 'paused') await resume(row, task)
+      refusedResume = task.state === 'paused' ? await resume(row, task, refusedResume) : null
       last = `${task.state}/${task.resourceState ?? 'unknown'}`
       if (now() >= deadline) throw new HostedWorkspaceProvisioningTimeoutError(businessTaskId, last)
       await sleep(POLL_MS)
