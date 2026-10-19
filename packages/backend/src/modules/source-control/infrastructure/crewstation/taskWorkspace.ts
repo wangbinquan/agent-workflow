@@ -191,6 +191,13 @@ export function isLifecycleRace(error: unknown): boolean {
   return isCrewStationApiError(error) && (error.status === 409 || error.status === 429)
 }
 
+/** Subtask states with a result: nothing runs in the parent for them any more. */
+export const TERMINAL_SUBTASK_STATES: ReadonlySet<string> = new Set([
+  'succeeded',
+  'failed',
+  'cancelled',
+])
+
 export function createHostedTaskWorkspaces(input: {
   readonly db: ProviderNeutralDatabase
   readonly api: CrewStationBusinessExecution
@@ -235,6 +242,11 @@ export function createHostedTaskWorkspaces(input: {
       return operation(tx)
     })
   }
+  /** True while the platform still runs subtasks (agents, commands) in the parent. */
+  const runsSubtasks = async (businessTaskId: string): Promise<boolean> =>
+    (await input.api.listSubtasks(businessTaskId)).some(
+      (subtask) => !TERMINAL_SUBTASK_STATES.has(subtask.state),
+    )
   const observe = async (businessTaskId: string): Promise<BusinessTask> => {
     const task = await input.api.getTask(businessTaskId)
     if (task.id !== businessTaskId) throw new Error('hosted-workspace-receipt-mismatch')
@@ -530,14 +542,22 @@ export function createHostedTaskWorkspaces(input: {
           throw new Error('hosted-workspace-closed')
         return ready(row, row.businessTaskId ?? (await allocate(row, { waitForQuota: true })))
       }
-      // A scratch owner. A parent of another release that still runs may serve
-      // an invocation of that release and is used as it is (the lifecycle
-      // reconciler replaces it once idle); any other is replaced now, and so is
-      // a parent the platform closed or can no longer run.
+      // A scratch owner. A parent of another release keeps serving only the
+      // work it still runs (an invocation of that release, adopted after the
+      // switch). With nothing in flight the running release gets its own
+      // parent now, and with it the release's task image, so a command the
+      // release added is available at once (RFC-370 §10.3): waiting for the
+      // lifecycle reconciler's idle window kept the old image — and every new
+      // command unknown — for as long as system work kept the parent busy.
+      // A parent the platform closed or can no longer run is replaced too.
       if (row.state === 'closing' || row.state === 'closed') row = await replace(row, requestKey)
       else if (!isCurrent(row, requestKey)) {
         const task = row.businessTaskId === null ? null : await observe(row.businessTaskId)
-        if (task === null || (task.state !== 'running' && !PROVISIONING.has(task.state)))
+        if (
+          task === null ||
+          (task.state !== 'running' && !PROVISIONING.has(task.state)) ||
+          (task.state === 'running' && !(await runsSubtasks(task.id)))
+        )
           row = await replace(row, requestKey)
       }
       try {

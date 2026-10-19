@@ -17,6 +17,15 @@
 // waits only until the platform accepted the close. It also retires only the
 // registration it read, so a concurrent use that re-armed the owner first
 // keeps its new parent.
+//
+// 2026-10-19 (v4): a running superseded parent was kept until the lifecycle
+// reconciler found it idle for ten minutes, and every use reset that clock — so
+// after the v0.6.24 switch the release's new task-image commands
+// (`repository-remote`, `execution-contract-fixture`) failed with
+// `workspace-helper-operation-unknown` on the old image while system work kept
+// the parent busy. A superseded parent now keeps serving only while the
+// platform still runs subtasks in it; with nothing in flight the running
+// release gets its own parent at once.
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { hostedTaskWorkspaces } from '@/db/schema'
@@ -49,6 +58,7 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
     const created: string[] = []
     const closedParents: string[] = []
     const finalized: string[] = []
+    const running = new Map<string, readonly { id: string; state: string }[]>()
     let beforeGetTask: ((id: string) => Promise<void>) | null = null
     const api: CrewStationBusinessExecution = {
       createTask: async (request) => {
@@ -102,7 +112,7 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
         })
       },
       pauseTask: unused,
-      listSubtasks: unused,
+      listSubtasks: async (id) => (running.get(id) ?? []) as never,
       createMaterial: unused,
       submitSubtask: unused,
       getSubtask: unused,
@@ -152,6 +162,12 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       setParent: (id: string, patch: Partial<BusinessTask>) => {
         parents.set(id, { ...parents.get(id)!, ...patch })
       },
+      setSubtasks: (id: string, states: readonly string[]) => {
+        running.set(
+          id,
+          states.map((state, index) => ({ id: `subtask-${index}`, state })),
+        )
+      },
     }
   }
   const releaseTag = (release: string) => `@${sha256Hex(release).slice(0, 16)}`
@@ -170,14 +186,27 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
     expect(await f.workspaces.superseded('system:shared')).toBe(false)
   })
 
-  test('a running parent of another release keeps serving until it is replaced when idle', async () => {
+  test('a running parent of another release keeps serving while it still runs work', async () => {
     const f = await setup()
     const first = await f.workspaces.ensure('system:intent')
+    f.setSubtasks(first.businessTaskId, ['succeeded', 'running'])
     f.setRelease('release-2')
     expect(await f.workspaces.ensure('system:intent')).toEqual(first)
     expect(f.closedParents).toEqual([])
     // The lifecycle reconciler retires it once idle (it reads `superseded`).
     expect(await f.workspaces.superseded('system:intent')).toBe(true)
+  })
+
+  test('a running parent of another release with nothing in flight is replaced at once', async () => {
+    const f = await setup()
+    const first = await f.workspaces.ensure('system:shared')
+    f.setSubtasks(first.businessTaskId, ['succeeded', 'failed', 'cancelled'])
+    f.setRelease('release-2')
+    const second = await f.workspaces.ensure('system:shared')
+    expect(second.businessTaskId).not.toBe(first.businessTaskId)
+    expect(f.closedParents).toEqual([first.businessTaskId])
+    expect((await f.row('system:shared')).requestKey.endsWith(releaseTag('release-2'))).toBe(true)
+    expect(await f.workspaces.superseded('system:shared')).toBe(false)
   })
 
   test('a parent the platform failed or released is replaced under the same release', async () => {

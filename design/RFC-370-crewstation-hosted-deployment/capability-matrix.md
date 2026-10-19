@@ -22,5 +22,12 @@
 | 事件入站（V8）                                | integration `crewstation/eventInbox.ts`、`eventContract.ts`                                     | CS 事件投递到规则 / Reaction                   |
 | 系统 Agent、诊断、意图（M2）                  | `crewstationSystemAgentRunFamily.ts`、`crewstationMcpDiagnostics.ts`                            | MCP 诊断、运行时冒烟                           |
 | API 自动化（M3）                              | CS 用户会话 + 同一 AW 用户的 PAT                                                                | 外部客户端调用 AW API                          |
+| 平台冻结期间排空写者（§10 V14）               | source-control `workspaceLifecycle.ts` 的迁移排空、system-operations 冻结授权                   | CS RFC-042 恢复切换越过 `freezing`             |
+| 工作树文件下载（§10 V15）                     | `routes/worktree-files.ts` 经 Source Control 工作区内容端口                                     | 文件页下载、端口产物下载回退                   |
+| 代码评审读取（§10 V16）                       | source-control `RepositoryRevisionContent` / `code-review` 命令、code-capability 评审产物存储   | 任务「变更」页：结构化 diff、叙述、文件、符号  |
+| 仓库选择器与登记（§10 V17）                   | source-control `RepositoryMirrors` / `repository-remote` 命令                                   | 向导分支 / 文件选择器、批量导入、刷新          |
+| 开发任务卷内树操作（§10 V18）                 | development-automation `repository-facts-scan`、`seed-tree-*`、动作工作区读端口                 | 开发任务：仓库事实、上传种子、动作工作区       |
+| 程序工具（§10 V19）                           | task-execution `ProgramToolSource`、`execution-contract-fixture` 命令                           | 数字员工程序工具校验 / 发布、Reaction 执行     |
+| 记忆 → 技能融合（§10 V20）                    | resource-catalog `SkillTreeVersionOperations`、source-control `fusion-workspace` 命令           | 发起融合 → 提案 → 批准为新技能版本             |
 
 本表是验收清单，不改变 RFC-370 的完整交付标准。原正式 AW 始终保留；不通过停止或删除它来做破坏性验收。

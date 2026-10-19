@@ -38,6 +38,7 @@ import type { HostedVolumeActivity } from '../../public/participants'
 import {
   hostedLifecycleRequestKey,
   isLifecycleRace,
+  TERMINAL_SUBTASK_STATES,
   type HostedTaskWorkspaces,
 } from './taskWorkspace'
 import { hostedWorkspaceOwnerKind } from './workspaceOwnership'
@@ -220,7 +221,7 @@ export function hostedWorkspaceLifecycleOwner(
   }
 }
 
-const TERMINAL_SUBTASK: ReadonlySet<string> = new Set(['succeeded', 'failed', 'cancelled'])
+const TERMINAL_SUBTASK = TERMINAL_SUBTASK_STATES
 
 /** One drain pass; `remaining` counts the parents that still hold a container. */
 export type HostedMigrationDrain = (
