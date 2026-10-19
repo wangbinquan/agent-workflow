@@ -37,6 +37,7 @@ describe('RFC-199 T11 starter catalog', () => {
     expect(WORKFLOW_STARTER_CATALOG.map((entry) => entry.id)).toEqual([
       'standard-development',
       'audit-only',
+      'mindmap-clarify',
       'blank',
     ])
   })
@@ -123,5 +124,38 @@ describe('RFC-199 T11 starter catalog', () => {
         target: { nodeId: 'starter_output', portName: 'audit_report' },
       }),
     )
+  })
+})
+
+test('RFC-378 mindmap starter uses an existing text output and the original clarify cycle', () => {
+  const valid = agent('clarifier', {
+    outputs: ['signal', 'document'],
+    outputKinds: { signal: 'signal', document: 'markdown' },
+  })
+  const planned = planWorkflowStarter('mindmap-clarify', { clarifier: valid.id }, [valid])
+  expect(planned.ok).toBe(true)
+  if (!planned.ok) return
+  expect(planned.definition.nodes).toHaveLength(4)
+  expect(planned.definition.edges).toHaveLength(4)
+  expect(planned.definition.nodes.find((node) => node.kind === 'clarify')).toMatchObject({
+    interactionMode: 'mindmap',
+    mindmap: { categories: [], instructions: '' },
+  })
+  expect(planned.outputPorts.clarifier).toBe('document')
+  expect(planned.definition.edges).toContainEqual(
+    expect.objectContaining({
+      source: { nodeId: 'starter_clarify', portName: 'answers' },
+      target: { nodeId: 'starter_clarifier', portName: '__clarify_response__' },
+    }),
+  )
+  expect(
+    workflowStarterAgentIneligibleReason(
+      'clarifier',
+      agent('files', { outputs: ['file'], outputKinds: { file: 'path<md>' } }),
+    ),
+  ).toBe('text-output-required')
+  expect(planWorkflowStarter('mindmap-clarify', {}, [valid])).toEqual({
+    ok: false,
+    issues: [{ role: 'clarifier', code: 'role-unmapped' }],
   })
 })

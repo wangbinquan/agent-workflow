@@ -53,7 +53,7 @@ describe('RFC-372 single workspace', () => {
     ).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: 'Answer original question' }))
     fireEvent.click(screen.getByRole('button', { name: /Confirm this answer|确认这个回答/ }))
-    expect(screen.getByText(/This round is reviewed|本轮审阅完成/)).toBeTruthy()
+    expect(screen.getByText(/This round’s answers are confirmed|本轮回答已确认/)).toBeTruthy()
     const view = screen.getByRole('radiogroup', { name: /View|视图/ })
     fireEvent.click(screen.getByRole('button', { name: 'Open in focused answers' }))
     expect(
@@ -61,7 +61,7 @@ describe('RFC-372 single workspace', () => {
     ).toBe(true)
     expect(screen.getAllByRole('button', { name: 'Answer original question' })).toHaveLength(1)
     fireEvent.click(within(view).getByRole('radio', { name: /Panorama|全景/ }))
-    expect(screen.getByText(/This round is reviewed|本轮审阅完成/)).toBeTruthy()
+    expect(screen.getByText(/This round’s answers are confirmed|本轮回答已确认/)).toBeTruthy()
     expect(screen.queryByText(/Zoom branch|放大此分支/)).toBeNull()
   })
 })

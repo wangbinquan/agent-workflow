@@ -91,12 +91,14 @@ async function deepen(page: Page, hint: string) {
 }
 async function stop(page: Page, id: string) {
   if (await page.getByRole('dialog').isVisible()) await page.keyboard.press('Escape')
-  await expect(page.getByText('This round is reviewed and ready to submit.')).toBeVisible()
+  await expect(
+    page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+  ).toBeVisible()
   const response = page.waitForResponse(
     (res) => res.request().method() === 'POST' && res.url().endsWith(`/api/clarify/${id}/answers`),
   )
-  await page.getByTestId('clarify-submit-stop').click()
-  await page.getByTestId('clarify-stop-confirm').click()
+  await page.getByTestId('mindmap-review-open').click()
+  await page.getByTestId('mindmap-review-submit').click()
   const result = await response
   expect(result.ok()).toBe(true)
   const payload = result.request().postDataJSON()
@@ -223,7 +225,9 @@ test('recorded real-model task: preset directions, deep hierarchy, rich reading,
   await answer(page, 'self', 1)
   const first = await deepen(page, recording.hints.first)
   await expect(page.locator('.mindmap-workspace__progress')).toContainText('Generating questions')
-  await expect(page.getByTestId('clarify-submit-stop')).toBeDisabled()
+  await page.getByTestId('mindmap-review-open').click()
+  await expect(page.getByTestId('mindmap-review-submit')).toBeDisabled()
+  await page.getByRole('button', { name: 'Back to answers', exact: true }).click()
   await answer(page, 'self', 2)
   expect((await first.response).ok()).toBe(true)
   await expect(

@@ -3911,9 +3911,8 @@ function composeSqliteApiRouteMounts(
   const collaborationRouteOperations = composeCollaborationRouteOperations({
     followupGenerator: composeClarifyFollowupGenerator({
       db: deps.db,
-      appHome: systemAgentAppHome,
       registry: deps.runtimeRegistry,
-      observations: () => systemAgentObservations,
+      binding: narrativeSystemAgentBinding,
     }),
     db: deps.db,
     context: deps.collaborationContext,

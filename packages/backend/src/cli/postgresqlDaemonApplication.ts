@@ -1526,9 +1526,8 @@ export async function composePostgresqlApplication(
   const collaborationRouteOperations = composeCollaborationRouteOperations({
     followupGenerator: composeClarifyFollowupGenerator({
       db: input.db,
-      appHome: systemAgentAppHome,
       registry: core.runtimeRegistry,
-      observations: () => systemAgentObservations,
+      binding: narrativeSystemAgentBinding,
     }),
     db: input.db,
     context: boundCollaborationContext,

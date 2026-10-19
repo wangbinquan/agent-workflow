@@ -412,6 +412,7 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
         value: {
           selectedOptionIndices: parsed.data.selectedOptionIndices,
           customText: parsed.data.customText,
+          ...(parsed.data.decision ? { decision: parsed.data.decision } : {}),
           ...(parsed.data.confirmedBasis ? { confirmedBasis: parsed.data.confirmedBasis } : {}),
         },
         editor: { userId: actor.user.id, displayName: actor.user.displayName, role },

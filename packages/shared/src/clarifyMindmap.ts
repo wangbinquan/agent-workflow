@@ -1,3 +1,4 @@
+import { normalizeClarifyDecision } from './schemas/clarifyDecision'
 import type { ClarifyAnswer, ClarifyQuestion } from './schemas/clarify'
 import type { ClarifyDraftValue } from './schemas/resourceAcl'
 import type { ClarifyFollowupTarget } from './schemas/clarifyMindmap'
@@ -8,6 +9,8 @@ export const CLARIFY_MINDMAP_QUESTION_GUIDANCE = [
   'Configured category paths are the requested coverage outline. Preserve their exact names and ancestry, and use the most specific relevant configured path. When a category is broad, introduce useful subcategories instead of putting unrelated decisions in one flat bucket. Do not add empty or decorative levels.',
   'Ask the most consequential unresolved decisions first. Consider relevant sibling concerns rather than repeatedly exploring one aspect: for performance, consider application behavior, database queries/indexes/connection pools, capacity and external dependencies when applicable. Do not force irrelevant topics or repeat resolved questions.',
   'A category expresses a topic; parentQuestionId expresses a dependent follow-up to a concrete question. Do not use question dependency to imitate a category hierarchy. Respect existing answers, ask about missing constraints or consequences, and provide concrete choices with their tradeoffs.',
+  'Ask one independently decidable tradeoff per question. Do not bundle unrelated parameters into a package. Use multi-choice for compatible criteria and single-choice only for mutually exclusive alternatives.',
+  'Recommendations must state the assumptions under which they apply and the cost accepted. Without evidence, use conditional language; do not invent a baseline or claim one option is uniquely correct. Follow-ups should examine evidence, counterexamples, consequences and how uncertainty can be checked.',
   'Additional focus notes are optional business preferences. Empty notes do not disable these built-in classification and follow-up rules. The selected follow-up target and the workflow envelope/limits below still apply.',
 ].join('\n')
 
@@ -38,10 +41,12 @@ export function clarifyQuestionSetKey(questions: readonly ClarifyQuestion[]): st
   return clarifyContentKey(questions)
 }
 export function clarifyAnswerBasis(question: ClarifyQuestion, answer: ClarifyDraftValue): string {
+  const decision = normalizeClarifyDecision(answer.decision)
   return clarifyContentKey([
     question,
     [...answer.selectedOptionIndices].sort((a, b) => a - b),
     answer.customText,
+    ...(decision ? [decision] : []),
   ])
 }
 export function isClarifyAnswerConfirmed(
@@ -115,7 +120,7 @@ export function clarifyFollowupContext(
   const byId = new Map(questions.map((q) => [q.id, q]))
   const branch: {
     question: ClarifyQuestion
-    answer: { selectedOptionIndices: number[]; customText: string }
+    answer: ClarifyDraftValue
   }[] = []
   const seen = new Set<string>()
   if (typeof target !== 'string') {
@@ -130,6 +135,9 @@ export function clarifyFollowupContext(
             (a, b) => a - b,
           ),
           customText: drafts[question.id]?.customText ?? '',
+          ...(normalizeClarifyDecision(drafts[question.id]?.decision)
+            ? { decision: normalizeClarifyDecision(drafts[question.id]?.decision) }
+            : {}),
         },
       }))
   }
@@ -142,6 +150,9 @@ export function clarifyFollowupContext(
       answer: {
         selectedOptionIndices: [...(answer?.selectedOptionIndices ?? [])].sort((a, b) => a - b),
         customText: answer?.customText ?? '',
+        ...(normalizeClarifyDecision(answer?.decision)
+          ? { decision: normalizeClarifyDecision(answer?.decision) }
+          : {}),
       },
     })
     question = question.mindmap?.parentQuestionId

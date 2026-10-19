@@ -1,3 +1,8 @@
+import {
+  composeMindmapFollowup,
+  mindmapFollowupLimit,
+  restoreMindmapFollowup,
+} from '@/lib/clarify/mindmap/followup'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -10,6 +15,7 @@ import {
 import { Dialog } from '@/components/Dialog'
 import { Segmented } from '@/components/Segmented'
 import {
+  compressMindmapCategories,
   mindmapTargetNodeId,
   projectClarifyMindmap,
   visibleMindmapNodes,
@@ -24,6 +30,8 @@ import './mindmap.css'
 
 interface Props {
   title: string
+  focusRequest?: { questionId: string; sequence: number }
+  onFollowupError?(error: unknown): void
   questions: readonly ClarifyQuestion[]
   answers: Readonly<Record<string, ClarifyAnswer>>
   locked: ReadonlySet<string>
@@ -33,7 +41,7 @@ interface Props {
   /** RFC-372 O8: the target of the round's background generation, if any. */
   followupRunning?: ClarifyFollowupTarget
   /** RFC-372 O8: the round's last failed generation and its error. */
-  followupFailure?: { target: ClarifyFollowupTarget; error: unknown }
+  followupFailure?: { target: ClarifyFollowupTarget; error: unknown; instruction?: string }
   onChange(questionId: string, answer: ClarifyAnswer): void
   onFollowup(target: ClarifyFollowupTarget, instruction: string): Promise<void>
   onCancelFollowup(): Promise<void>
@@ -53,6 +61,7 @@ export function MindmapWorkspace(props: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [search, setSearch] = useState('')
   const [highlight, setHighlight] = useState(false)
+  const [quotes, setQuotes] = useState<Record<string, string>>({})
   const [instructions, setInstructions] = useState<Record<string, string>>({})
   const [followupOpen, setFollowupOpen] = useState<Set<string>>(() => new Set())
   const [errors, setErrors] = useState<Record<string, unknown>>({})
@@ -66,10 +75,13 @@ export function MindmapWorkspace(props: Props) {
     [props.questions, props.answers, props.locked, props.title],
   )
   const navigation = useMemo(() => indexMindmapNavigation(nodes), [nodes])
-  const visible = useMemo(() => visibleMindmapNodes(nodes, collapsed), [nodes, collapsed])
+  const visible = useMemo(
+    () => compressMindmapCategories(visibleMindmapNodes(nodes, collapsed), new Set([selected])),
+    [nodes, collapsed, selected],
+  )
   const topologyRevision = useMemo(
-    () => clarifyQuestionSetKey(props.questions) + JSON.stringify([...collapsed]),
-    [props.questions, collapsed],
+    () => clarifyQuestionSetKey(props.questions) + JSON.stringify([...collapsed]) + selected,
+    [props.questions, collapsed, selected],
   )
   const selectedNode = navigation.byId.get(selected) ?? nodes[0]!
   const selectedQuestion = props.questions.find(
@@ -89,6 +101,17 @@ export function MindmapWorkspace(props: Props) {
     !pending && reported
       ? { id: mindmapTargetNodeId(reported.target), error: reported.error }
       : null
+  useEffect(() => {
+    if (reported?.instruction === undefined) return
+    const id = mindmapTargetNodeId(reported.target)
+    const restored = restoreMindmapFollowup(reported.instruction)
+    setInstructions((previous) =>
+      Object.hasOwn(previous, id) ? previous : { ...previous, [id]: restored.instruction },
+    )
+    setQuotes((previous) =>
+      Object.hasOwn(previous, id) ? previous : { ...previous, [id]: restored.quote },
+    )
+  }, [reported?.instruction, reported?.target])
   const failed = failedParent ?? reportedFailure?.id ?? null
   const errorFor = (id: string) =>
     errors[id] ?? (reportedFailure?.id === id ? reportedFailure.error : undefined)
@@ -133,6 +156,13 @@ export function MindmapWorkspace(props: Props) {
       setReveal({ id, sequence: Date.now() })
     }
   }
+  useEffect(() => {
+    if (!props.focusRequest) return
+    setSelected(`q:${props.focusRequest.questionId}`)
+    setView('focus')
+    setMobile('detail')
+    setPanelOpen(false)
+  }, [props.focusRequest])
   const nextPending = () => {
     const index = pendingQuestions.findIndex((node) => node.id === selected)
     const next = pendingQuestions[(index + 1) % pendingQuestions.length]
@@ -153,14 +183,27 @@ export function MindmapWorkspace(props: Props) {
   const startFollowup = async () => {
     if (props.disabled || locked || pending) return
     const nodeId = selectedNode.id
+    const quote = quotes[nodeId] ?? ''
+    const instruction = instructions[nodeId] ?? ''
+    const limit = mindmapFollowupLimit(quote, instruction)
+    if (limit) {
+      setErrors((previous) => ({
+        ...previous,
+        [nodeId]: new Error(t(`mindmap.quote.${limit}Limit`)),
+      }))
+      return
+    }
+    setInstructions((previous) => ({ ...previous, [nodeId]: instruction }))
+    props.onFollowupError?.(null)
     setPendingParent(selectedNode.id)
     setFailedParent(null)
     setErrors((previous) => ({ ...previous, [nodeId]: null }))
     try {
-      await props.onFollowup(target, instructions[nodeId] ?? '')
+      await props.onFollowup(target, composeMindmapFollowup(quote, instruction))
     } catch (error) {
       setErrors((previous) => ({ ...previous, [nodeId]: error }))
       setFailedParent(nodeId)
+      props.onFollowupError?.(error)
     } finally {
       setPendingParent(null)
     }
@@ -213,8 +256,18 @@ export function MindmapWorkspace(props: Props) {
       canAdvance={pendingQuestions.length > 0}
       collapsed={collapsed.has(selectedNode.id)}
       instruction={instructions[selectedNode.id] ?? ''}
+      quote={quotes[selectedNode.id] ?? ''}
+      onQuote={(value) => {
+        setQuotes((previous) => ({ ...previous, [selectedNode.id]: value }))
+        setFollowupOpen((previous) => new Set(previous).add(selectedNode.id))
+      }}
+      onPrompt={(value) => {
+        if (value) setInstructions((previous) => ({ ...previous, [selectedNode.id]: value }))
+        setFollowupOpen((previous) => new Set(previous).add(selectedNode.id))
+      }}
       followupOpen={!selectedQuestion || followupOpen.has(selectedNode.id)}
       error={errorFor(selectedNode.id)}
+      canRetryFollowup={Object.hasOwn(instructions, selectedNode.id)}
       onSelect={select}
       onToggle={() => toggle(selectedNode.id)}
       onReturn={returnToMap}
@@ -302,6 +355,14 @@ export function MindmapWorkspace(props: Props) {
       <div className="mindmap-workspace__progress" role="status">
         <MindmapCounts counts={nodes[0]!.counts} />
         <span className="mindmap-workspace__progress-hint">{t(progressKey)}</span>
+        <span>
+          {t('mindmap.decision.progress', {
+            provisional: props.questions.filter(
+              (q) => props.answers[q.id]?.decision?.status === 'provisional',
+            ).length,
+            unmarked: props.questions.filter((q) => !props.answers[q.id]?.decision?.status).length,
+          })}
+        </span>
         {pending && generating && (
           <button
             className="btn btn--sm btn--ghost"

@@ -249,13 +249,15 @@ test('one workspace: classify, follow up, refresh, confirm and submit through th
     await page.getByLabel(option!, { exact: false }).first().check()
     await page.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
   }
-  await expect(page.getByText('This round is reviewed and ready to submit.')).toBeVisible()
+  await expect(
+    page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+  ).toBeVisible()
   const submitted = page.waitForRequest(
     (request) =>
       request.method() === 'POST' && request.url().endsWith(`/api/clarify/${nodeRunId}/answers`),
   )
-  await page.getByTestId('clarify-submit-stop').click()
-  await page.getByTestId('clarify-stop-confirm').click()
+  await page.getByTestId('mindmap-review-open').click()
+  await page.getByTestId('mindmap-review-submit').click()
   expect((await submitted).postDataJSON().questionSetKey).toMatch(/^v2:/)
   await expect
     .poll(async () => (await api<{ status: string }>(`/api/tasks/${taskId}`)).status, {

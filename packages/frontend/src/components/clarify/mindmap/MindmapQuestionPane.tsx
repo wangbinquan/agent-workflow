@@ -1,4 +1,6 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { DecisionDetails } from './DecisionDetails'
+import { mindmapFollowupLimit } from '@/lib/clarify/mindmap/followup'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   clarifyAnswerBasis,
@@ -32,8 +34,12 @@ interface Props {
   canAdvance: boolean
   collapsed: boolean
   instruction: string
+  quote: string
+  onQuote(value: string): void
+  onPrompt(value: string): void
   followupOpen: boolean
   error: unknown
+  canRetryFollowup: boolean
   onSelect(id: string): void
   onToggle(): void
   onReturn(): void
@@ -51,6 +57,23 @@ export function MindmapQuestionPane(props: Props) {
   const heading = useRef<HTMLHeadingElement>(null)
   const reading = useRef<HTMLDivElement>(null)
   const followup = useRef<HTMLDivElement>(null)
+  const [selection, setSelection] = useState('')
+  useEffect(() => {
+    setSelection('')
+    const capture = () => {
+      const value = document.getSelection()
+      if (
+        value?.anchorNode &&
+        value.focusNode &&
+        reading.current?.contains(value.anchorNode) &&
+        reading.current.contains(value.focusNode)
+      )
+        setSelection(value.toString())
+    }
+    document.addEventListener('selectionchange', capture)
+    return () => document.removeEventListener('selectionchange', capture)
+  }, [props.node.id])
+  const limit = mindmapFollowupLimit(props.quote, props.instruction)
   const previous = useRef({ id: props.node.id, open: props.followupOpen })
   useLayoutEffect(() => {
     if (previous.current.id !== props.node.id && reading.current) {
@@ -74,6 +97,19 @@ export function MindmapQuestionPane(props: Props) {
       <p className="muted">
         {t(props.question ? 'mindmap.followupContext' : 'mindmap.categoryContext')}
       </p>
+      {props.quote && (
+        <div className="mindmap-quote">
+          <blockquote>{props.quote}</blockquote>
+          <button
+            className="btn btn--sm"
+            type="button"
+            disabled={props.pendingHere}
+            onClick={() => props.onQuote('')}
+          >
+            {t('mindmap.quote.remove')}
+          </button>
+        </div>
+      )}
       <Field label={t(props.question ? 'mindmap.followupHint' : 'mindmap.categoryHint')}>
         <TextArea
           rows={3}
@@ -84,10 +120,11 @@ export function MindmapQuestionPane(props: Props) {
           disabled={props.pendingHere}
         />
       </Field>
+      {limit && <p role="alert">{t(`mindmap.quote.${limit}Limit`)}</p>}
       <button
         type="button"
         className="btn"
-        disabled={props.pending || !execution.available}
+        disabled={props.pending || !execution.available || limit !== null}
         title={execution.unavailableReason}
         onClick={props.onFollowup}
       >
@@ -128,7 +165,15 @@ export function MindmapQuestionPane(props: Props) {
           </button>
         )}
       </div>
-      <div className="mindmap-question__reading" ref={reading}>
+      <div
+        className="mindmap-question__reading"
+        ref={reading}
+        onSelect={(event) => {
+          const field = event.target
+          if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)
+            setSelection(field.value.slice(field.selectionStart ?? 0, field.selectionEnd ?? 0))
+        }}
+      >
         <div className="mindmap-question__content">
           <nav className="mindmap-workspace__breadcrumbs" aria-label={t('mindmap.path')}>
             {path
@@ -184,7 +229,33 @@ export function MindmapQuestionPane(props: Props) {
             {props.node.title}
           </h2>
           {props.question ? (
-            props.renderQuestion(props.question, props.questionIndex)
+            <>
+              {props.renderQuestion(props.question, props.questionIndex)}
+              {props.answer && (
+                <DecisionDetails
+                  answer={props.answer}
+                  disabled={props.disabled || props.locked}
+                  onChange={props.onChange}
+                />
+              )}
+              {!props.disabled && !props.locked && (
+                <div className="mindmap-question__prompts">
+                  {(['evidence', 'tradeoff', 'alternative', 'free'] as const).map((prompt) => (
+                    <button
+                      key={prompt}
+                      className="btn btn--sm"
+                      type="button"
+                      disabled={props.pendingHere}
+                      onClick={() =>
+                        props.onPrompt(prompt === 'free' ? '' : t(`mindmap.prompts.${prompt}Text`))
+                      }
+                    >
+                      {t(`mindmap.prompts.${prompt}`)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             <>
               <MindmapCounts counts={props.node.counts} />
@@ -218,11 +289,46 @@ export function MindmapQuestionPane(props: Props) {
               </div>
             </>
           )}
+          {!props.disabled && !props.locked && selection && (
+            <div className="mindmap-question__selection">
+              <button
+                className="btn btn--sm"
+                type="button"
+                disabled={props.pendingHere || selection.length > 500}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  props.onQuote(selection)
+                  setSelection('')
+                }}
+              >
+                {t('mindmap.quote.ask')}
+              </button>
+              {selection.length > 500 && <p role="alert">{t('mindmap.quote.quoteLimit')}</p>}
+            </div>
+          )}
           {props.question && directionForm}
           {props.error != null && (
             <div className="mindmap-question__error">
               <p>{t('mindmap.followupFailed')}</p>
-              <ErrorBanner error={props.error} />
+              {!props.canRetryFollowup && <p>{t('mindmap.quote.restoreDirection')}</p>}
+              {!props.disabled && !props.locked && (
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={props.pending || !execution.available || limit !== null}
+                  onClick={() => (props.canRetryFollowup ? props.onFollowup() : props.onPrompt(''))}
+                >
+                  {t(
+                    props.canRetryFollowup
+                      ? 'mindmap.quote.retry'
+                      : 'mindmap.quote.reviewDirection',
+                  )}
+                </button>
+              )}
+              <details>
+                <summary>{t('mindmap.quote.technical')}</summary>
+                <ErrorBanner error={props.error} />
+              </details>
             </div>
           )}
         </div>

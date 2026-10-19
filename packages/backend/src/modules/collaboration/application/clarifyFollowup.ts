@@ -51,6 +51,7 @@ export function createClarifyFollowupOperations(
     failures.set(nodeRunId, {
       requestId: inFlight.requestId,
       state: 'failed',
+      ...(inFlight.instruction !== undefined ? { instruction: inFlight.instruction } : {}),
       target: typeof inFlight.target === 'string' ? inFlight.target : [...inFlight.target],
       startedAt: inFlight.startedAt,
       error:
@@ -200,6 +201,7 @@ export function createClarifyFollowupOperations(
     const inFlight: ClarifyFollowupInFlight = {
       requestId: request.requestId,
       requestKey,
+      instruction: request.instruction,
       target: request.parentQuestionId ?? request.categoryPath!,
       startedAt: now(),
       abort: new AbortController(),

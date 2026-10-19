@@ -4550,6 +4550,7 @@ export interface Resources {
       valid: string
       invalid: string
       role: {
+        clarifier: string
         coder: string
         auditor: string
         aggregator: string
@@ -4559,6 +4560,7 @@ export interface Resources {
         'role-unmapped': string
         'agent-missing': string
         'aggregator-role-required': string
+        'text-output-required': string
         'data-output-required': string
       }
       copy: {
@@ -12305,6 +12307,7 @@ export const zhCN: Resources = {
       valid: 'Starter 已通过当前资源校验。应用时还会重新校验一次。',
       invalid: '这个映射暂时无法应用：',
       role: {
+        clarifier: '澄清代理',
         coder: '实现代理',
         auditor: '审计代理',
         aggregator: '汇总代理',
@@ -12314,6 +12317,7 @@ export const zhCN: Resources = {
         'role-unmapped': '请选择一个代理。',
         'agent-missing': '所选代理已不在当前资源列表中。',
         'aggregator-role-required': '该角色需要配置为 aggregator 的代理。',
+        'text-output-required': '请选择至少有一个文本输出的代理。',
         'data-output-required': '该角色需要至少一个承载数据的输出端口。',
       },
       copy: {

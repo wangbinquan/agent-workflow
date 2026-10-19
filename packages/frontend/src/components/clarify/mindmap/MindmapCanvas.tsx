@@ -262,6 +262,11 @@ export function MindmapCanvas(props: Props) {
           },
           pending: (count) => t('mindmap.pendingChildren', { count }),
           confirmed: t('mindmap.confirmed'),
+          decision: {
+            decided: t('mindmap.decision.decided'),
+            provisional: t('mindmap.decision.provisional'),
+            unmarked: t('mindmap.decision.unmarked'),
+          },
         },
       }).hits
       const mini = minimap.current

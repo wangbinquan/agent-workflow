@@ -104,6 +104,7 @@ export function drawMindmap(input: {
     status: Record<MindmapNodeStatus, string>
     pending(count: number): string
     confirmed: string
+    decision?: Record<'decided' | 'provisional' | 'unmarked', string>
   }
 }): MindmapDrawing {
   const {
@@ -210,6 +211,17 @@ export function drawMindmap(input: {
       )
       ctx.font = `${12.5 * scale}px system-ui, sans-serif`
       ctx.fillStyle = palette.muted
+      if (node.kind === 'question') {
+        previewLines(ctx, node.answerSummary ?? '', width - inset * 2, 2).forEach((line, index) =>
+          ctx.fillText(line, left + inset, top + (110 + index * 18) * scale),
+        )
+        const decision = node.decisionStatus ?? 'unmarked'
+        ctx.fillText(
+          shorten(ctx, labels.decision?.[decision] ?? decision, width - inset * 2),
+          left + inset,
+          top + 151 * scale,
+        )
+      }
       const pending = pendingMindmapDescendants(node)
       const total = node.counts.done + node.counts.needs_confirmation + node.counts.needs_detail
       const footer =

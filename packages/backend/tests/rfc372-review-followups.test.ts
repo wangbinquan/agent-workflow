@@ -1,3 +1,8 @@
+import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
+import type {
+  SystemAgentRunFamily,
+  SystemAgentRunRequest,
+} from '@/modules/task-execution/application/ports/systemAgentRunFamily'
 // RFC-372 review follow-ups (design/RFC-372-mindmap-clarify/review-followups-20261014.md).
 // Locks O1 (task background in follow-up prompts), O2 (generator logic out of the
 // composition), O3 (one in-flight registry shared with the seal, no reverse
@@ -355,4 +360,98 @@ describe('RFC-372 review O2: the composition only wires the generator', () => {
     expect(composition).not.toMatch(/from '@\/db\/schema'|from 'drizzle-orm'/)
     expect(composition).not.toContain('resolveRuntimeByName')
   })
+})
+
+describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
+  for (const mode of ['standalone', 'hosted'] as const)
+    test(`${mode}: selected binding receives frozen runtime, abort and original observation ownership`, async () => {
+      const fixture = await seed(h)
+      await h.db
+        .update(nodeRuns)
+        .set({
+          runtime: 'opencode',
+          runtimeBinary: '/frozen/opencode',
+          runtimeParamsJson: JSON.stringify({
+            model: 'frozen/model',
+            isSandbox: true,
+            __configDir: { env: 'OPENCODE_CONFIG_DIR', name: 'frozen-profile' },
+          }),
+        })
+        .where(eq(nodeRuns.id, fixture.askingNodeRunId))
+      const requests: SystemAgentRunRequest[] = []
+      const bindings: unknown[] = [],
+        released: unknown[] = []
+      const runtimeBinding = { mode },
+        workspace = { mode },
+        retainedRef = { mode }
+      let fail = false
+      const family = {
+        workspaces: { capture: () => workspace },
+        run: async (request: SystemAgentRunRequest) => {
+          requests.push(request)
+          return {
+            status: fail ? 'failed' : 'ok',
+            eventText: generated,
+            retainedRef,
+            stderrTail: 'fixture failure',
+            resultError: null,
+          }
+        },
+        retainedContents: {
+          forget: (value: unknown) => {
+            released.push(value)
+          },
+        },
+      } as unknown as SystemAgentRunFamily
+      const generator = composeClarifyFollowupGenerator({
+        db: h.db,
+        registry: {
+          resolveRuntimeByName: async () => {
+            throw new Error('must use frozen runtime')
+          },
+        } as never,
+        binding: {
+          family,
+          bindRuntime: (profile) => {
+            bindings.push(profile)
+            const { binaryPath: _binary, ...rest } = profile
+            return { ...rest, runtimeBinding: runtimeBinding as never }
+          },
+        },
+      })
+      const abort = new AbortController()
+      const request = {
+        askingNodeRunId: fixture.askingNodeRunId,
+        taskId: fixture.taskId,
+        requestId: randomUUID(),
+        prompt: 'Original branch prompt',
+        signal: abort.signal,
+      }
+      expect(await generator.generate(request)).toBe(generated)
+      expect(bindings[0]).toMatchObject({
+        binaryPath: '/frozen/opencode',
+        model: 'frozen/model',
+        configDir: { name: 'frozen-profile' },
+      })
+      expect(requests[0]).toMatchObject({
+        protocol: 'opencode',
+        runtimeBinding,
+        model: 'frozen/model',
+        workspaceScope: workspace,
+        timeoutMs: 180000,
+        prompt: request.prompt,
+        observationDemand: {
+          originalId: fixture.askingNodeRunId,
+          originalAttempt: request.requestId,
+          parentTaskId: fixture.taskId,
+        },
+      })
+      expect(requests[0]?.abortSignal).toBe(abort.signal)
+      expect(released).toEqual([{ retainedRef }])
+      fail = true
+      await expect(generator.generate({ ...request, requestId: randomUUID() })).rejects.toThrow(
+        'clarify-followup-failed',
+      )
+      expect(released).toHaveLength(2)
+    })
 })

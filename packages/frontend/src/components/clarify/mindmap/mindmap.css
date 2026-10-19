@@ -688,3 +688,98 @@
   min-width: 0;
   flex: 1;
 }
+
+/* RFC-378: original answers and optional decision context share the reader. */
+.mindmap-decision,
+.mindmap-question__prompts,
+.mindmap-question__selection {
+  margin-top: var(--space-4);
+}
+.mindmap-decision > summary {
+  cursor: pointer;
+  padding-block: var(--space-3);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mindmap-decision__fields,
+.mindmap-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.mindmap-question__prompts,
+.mindmap-review__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.mindmap-quote {
+  border-left: 3px solid var(--border);
+  padding: var(--space-3);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.mindmap-quote blockquote {
+  margin: 0 0 var(--space-2);
+}
+.mindmap-decision__readback dl {
+  margin: var(--space-2) 0;
+}
+.mindmap-decision__readback dl > div {
+  margin-block: var(--space-2);
+}
+.mindmap-decision__readback dt {
+  font-weight: 600;
+}
+.mindmap-decision__readback dd {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mindmap-decision__status {
+  font-weight: 600;
+}
+.mindmap-decision__status[data-decision-status='provisional'],
+.mindmap-decision__unknown {
+  color: var(--warn-fg);
+}
+.mindmap-review__item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: var(--space-4);
+  min-width: 0;
+}
+.mindmap-review__heading h4 {
+  flex: 1;
+  min-width: 140px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.mindmap-review__answer {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mindmap-review-dialog .dialog__footer {
+  flex-wrap: wrap;
+}
+.mindmap-review .segmented,
+.mindmap-decision .segmented {
+  flex-wrap: wrap;
+}
+.mindmap-review .segmented__option,
+.mindmap-decision .segmented__option {
+  white-space: normal;
+}
+@media (max-width: 650px) {
+  .mindmap-review__item {
+    padding: 12px;
+  }
+  .mindmap-review-dialog .btn {
+    white-space: normal;
+  }
+  .page--mindmap .clarify-detail__footer > .btn {
+    width: 100%;
+  }
+}

@@ -22,7 +22,10 @@ import {
 import { clarifyRounds, nodeRuns, tasks, workflows } from '@/db/schema'
 import { createClarifyRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import { saveClarifyDraft } from '@/modules/collaboration/infrastructure/clarifyRounds'
+import {
+  saveClarifyDraft,
+  freezeAnswerAttributions,
+} from '@/modules/collaboration/infrastructure/clarifyRounds'
 import { createClarifyFollowupStore } from '@/modules/collaboration/infrastructure/clarifyFollowupStore'
 import { createClarifyFollowupOperations } from '@/modules/collaboration/application/clarifyFollowup'
 import { clarifyFollowupActivity } from '@/modules/collaboration/infrastructure/clarifyFollowupActivity'
@@ -659,3 +662,134 @@ describeEachProvider(
     })
   },
 )
+
+describeEachProvider('RFC-378 decision persistence on the original round', (h) => {
+  for (const kind of ['self', 'cross'] as const)
+    test(`${kind}: notes survive drafts, branch context, partial seals and final seals`, async () => {
+      const fixture = await seed(h, kind)
+      const row = await fixture.read()
+      const decision = {
+        status: 'provisional' as const,
+        rationale: 'No baseline',
+        tradeoff: 'Accept conflicts',
+        uncertainty: 'No-show rate unknown',
+        validationOwner: 'Lin',
+        revisitWhen: 'After one week',
+      }
+      const values = fixture.questions.map((question) => {
+        const value = { ...answer(question), decision }
+        return { ...value, confirmedBasis: clarifyAnswerBasis(question, value) }
+      })
+      for (const value of values)
+        await saveClarifyDraft({
+          db: h.db,
+          intermediaryNodeRunId: fixture.nodeRunId,
+          roundId: row.id,
+          questionId: value.questionId,
+          value,
+          editor,
+          draftEvents: events,
+        })
+      expect(JSON.parse((await fixture.read()).draftAnswersJson!).a.decision).toEqual(decision)
+      const store = createClarifyFollowupStore(h.db, events)
+      expect((await store.read(fixture.nodeRunId, 'b')).drafts.a?.decision).toEqual(decision)
+      await sealRoundQuestions({
+        db: h.db,
+        originNodeRunId: fixture.nodeRunId,
+        answers: [values[0]!],
+      })
+      expect((await store.read(fixture.nodeRunId, 'b')).drafts.a?.decision).toEqual(decision)
+      const edited = { ...values[1]!, decision: { ...decision, tradeoff: 'New accepted cost' } }
+      await expect(
+        sealRoundQuestions({
+          db: h.db,
+          originNodeRunId: fixture.nodeRunId,
+          wholeRound: true,
+          questionSetKey: clarifyQuestionSetKey(fixture.questions),
+          answers: [edited],
+        }),
+      ).rejects.toThrow('confirm')
+      const final = { ...edited, confirmedBasis: clarifyAnswerBasis(fixture.questions[1]!, edited) }
+      await sealRoundQuestions({
+        db: h.db,
+        originNodeRunId: fixture.nodeRunId,
+        wholeRound: true,
+        questionSetKey: clarifyQuestionSetKey(fixture.questions),
+        answers: [final],
+      })
+      const sealed = JSON.parse((await fixture.read()).answersJson!) as ClarifyAnswer[]
+      expect(sealed.find((value) => value.questionId === 'a')?.decision).toEqual(decision)
+      expect(sealed.find((value) => value.questionId === 'b')?.decision).toEqual(final.decision)
+    })
+})
+
+test('RFC-378 attribution changes when only the decision changes; normalized empty notes keep legacy authors', () => {
+  const value = answer(q('a'))
+  const original = { userId: 'editor', role: 'owner' as const, updatedAt: 1 }
+  const freeze = (submitted: ClarifyAnswer, draft = value) =>
+    freezeAnswerAttributions({
+      answers: [submitted],
+      draftAnswers: { a: draft },
+      draftAttributions: { a: original },
+      submitter: { userId: 'submitter', role: 'owner' },
+      now: 2,
+    }).a
+  expect(freeze({ ...value, decision: { rationale: 'Added at submission' } })?.userId).toBe(
+    'submitter',
+  )
+  expect(freeze({ ...value, decision: { rationale: '  ' } })).toEqual(original)
+  const noted = { ...value, decision: { status: 'provisional' as const, uncertainty: 'Unknown' } }
+  expect(freeze(noted, noted)).toEqual(original)
+})
+
+test('RFC-378 HTTP draft route forwards decision and confirmation without narrowing the payload', async () => {
+  const app = new Hono()
+  const actor = buildActor({
+    user: {
+      id: 'reviewer',
+      username: 'reviewer',
+      displayName: 'Reviewer',
+      role: 'admin',
+      status: 'active',
+    },
+    source: 'session',
+  })
+  app.use('*', async (c: Context, next) => {
+    c.set('actor', actor)
+    await next()
+  })
+  app.onError(errorHandler)
+  let saved: unknown
+  mountClarifyRoutes(app, {
+    clarify: {
+      saveDraft: async (args: unknown) => {
+        saved = args
+        return { roundId: 'round', questionId: 'a', updatedAt: 1 }
+      },
+    },
+    access: {
+      resolveClarifyTask: async () => ({
+        roundExists: true,
+        nodeRunExists: true,
+        taskId: 'task',
+        task: {},
+        actorRole: 'owner',
+        visible: true,
+      }),
+    },
+  } as unknown as CollaborationRouteOperations)
+  const decision = { status: 'decided', uncertainty: 'Still unverified', revisitWhen: 'Friday' }
+  const response = await app.request('/api/clarify/gate/draft', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      roundId: 'round',
+      questionId: 'a',
+      selectedOptionIndices: [0],
+      confirmedBasis: 'v2:confirmed',
+      decision,
+    }),
+  })
+  expect(response.status).toBe(200)
+  expect(saved).toMatchObject({ value: { decision, confirmedBasis: 'v2:confirmed' } })
+})

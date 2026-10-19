@@ -80,7 +80,13 @@ type ValidationState =
   | { phase: 'done'; receipt: WorkflowDraftValidationReceipt }
   | { phase: 'error'; error: unknown }
 
-const ROLE_ORDER: readonly WorkflowStarterRole[] = ['coder', 'auditor', 'aggregator', 'fixer']
+const ROLE_ORDER: readonly WorkflowStarterRole[] = [
+  'coder',
+  'auditor',
+  'aggregator',
+  'fixer',
+  'clarifier',
+]
 
 function suggestedRoleMapping(
   starterId: Exclude<WorkflowStarterId, 'blank'>,
@@ -167,6 +173,8 @@ export function WorkflowStarterDialog({
       aggregatorTitle: t('editor.starter.copy.aggregatorTitle'),
       fixerTitle: t('editor.starter.copy.fixerTitle'),
       outputTitle: t('editor.starter.copy.outputTitle'),
+      clarifierTitle: t('mindmap.starter.agent'),
+      clarifyTitle: t('mindmap.starter.review'),
     }),
     [t],
   )
@@ -365,6 +373,14 @@ export function WorkflowStarterDialog({
         })}
       </div>
 
+      {starterId === 'mindmap-clarify' && (
+        <p className="muted">
+          {t('mindmap.starter.flow')}{' '}
+          {!agents.some(
+            (agent) => workflowStarterAgentIneligibleReason('clarifier', agent) === null,
+          ) && <a href="/agents/new">{t('mindmap.starter.create')}</a>}
+        </p>
+      )}
       {plan.ok && (
         <div className="workflow-starter__preview" data-testid="workflow-starter-preview">
           {t('editor.starter.preview', {

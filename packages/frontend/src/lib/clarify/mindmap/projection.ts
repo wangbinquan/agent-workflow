@@ -14,6 +14,8 @@ export interface MindmapNodeSummary {
   title: string
   kind: 'group' | 'question'
   questionId?: string
+  answerSummary?: string
+  decisionStatus?: 'decided' | 'provisional'
   ownStatus?: MindmapNodeStatus
   status: MindmapNodeStatus
   counts: MindmapStatusCounts
@@ -78,6 +80,8 @@ export function projectClarifyMindmap(
       order,
       title: q.title,
       kind: 'question',
+      answerSummary: clarifyAnswerPreview(q, answer),
+      decisionStatus: answer?.decision?.status,
       ownStatus,
       status: ownStatus,
       counts: { ...emptyCounts(), [ownStatus]: 1 },
@@ -126,4 +130,50 @@ export function visibleMindmapNodes(
     }
     return true
   })
+}
+
+/** Answer labels come from the question, never stale draft labels or an AI rewrite. */
+export function clarifyAnswerPreview(
+  question: ClarifyQuestion,
+  answer: ClarifyAnswer | undefined,
+): string {
+  if (!answer) return ''
+  return [
+    ...answer.selectedOptionIndices.map((index) => question.options[index]?.label).filter(Boolean),
+    answer.customText,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/** Compress decorative category chains on the canvas only. Outline and target IDs stay canonical. */
+export function compressMindmapCategories(
+  nodes: readonly MindmapNodeSummary[],
+  preserve: ReadonlySet<string> = new Set(),
+): MindmapNodeSummary[] {
+  const children = new Map<string, MindmapNodeSummary[]>()
+  for (const node of nodes)
+    if (node.parentId) {
+      const list = children.get(node.parentId) ?? []
+      list.push(node)
+      children.set(node.parentId, list)
+    }
+  const omitted = new Map<string, { parentId: string | null; prefix: string }>()
+  const result: MindmapNodeSummary[] = []
+  for (const node of nodes) {
+    const parent = node.parentId ? omitted.get(node.parentId) : undefined
+    const parentId = parent ? parent.parentId : node.parentId
+    const title = parent ? `${parent.prefix} / ${node.title}` : node.title
+    const descendants = children.get(node.id)
+    if (
+      node.id !== 'root' &&
+      node.kind === 'group' &&
+      !preserve.has(node.id) &&
+      descendants?.length === 1 &&
+      descendants[0]!.kind === 'group'
+    ) {
+      omitted.set(node.id, { parentId, prefix: title })
+    } else result.push({ ...node, parentId, title })
+  }
+  return result
 }

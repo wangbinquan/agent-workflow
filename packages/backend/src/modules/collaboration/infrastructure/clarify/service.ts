@@ -757,6 +757,7 @@ export function sealAnswersServerSide(
       selectedOptionIndices: indices,
       selectedOptionLabels: labels,
       customText: a.customText,
+      ...(a.decision ? { decision: a.decision } : {}),
       ...(a.confirmedBasis ? { confirmedBasis: a.confirmedBasis } : {}),
     })
   }

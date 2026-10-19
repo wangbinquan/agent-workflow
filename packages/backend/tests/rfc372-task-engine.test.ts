@@ -37,7 +37,7 @@ test('both daemon bootstraps bind follow-up generation into the original clarify
   for (const path of ['../src/server.ts', '../src/cli/postgresqlDaemonApplication.ts']) {
     const source = await Bun.file(new URL(path, import.meta.url)).text()
     expect(source).toMatch(
-      /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?observations: \(\) => systemAgentObservations,/,
+      /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?binding: narrativeSystemAgentBinding,/,
     )
     const fileName = fileURLToPath(new URL(path, import.meta.url))
     const parse = (text: string) =>

@@ -232,7 +232,10 @@ describeEachProvider('RFC-372 O8: follow-ups generate in the background', (h) =>
     const fixture = await seed(h)
     const model = controlledGenerator()
     const { followup, changes, advance } = operations(fixture.store, model.generator)
-    const first = await fixture.request()
+    const first = {
+      ...(await fixture.request()),
+      instruction: 'Quoted passage: "No baseline"\n\nCheck the evidence before deciding.',
+    }
     await followup.start(fixture.nodeRunId, first, editor)
     const failed = followup.append(fixture.nodeRunId, first, editor)
     advance(5_000)
@@ -242,6 +245,7 @@ describeEachProvider('RFC-372 O8: follow-ups generate in the background', (h) =>
     const failure = {
       requestId: first.requestId,
       state: 'failed' as const,
+      instruction: first.instruction,
       target: 'a',
       startedAt: 1_000_000,
       error: {

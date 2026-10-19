@@ -1,3 +1,7 @@
+import {
+  summariseClarifyDecision,
+  CLARIFY_DECISION_OUTPUT_GUIDANCE,
+} from './schemas/clarifyDecision'
 // Pure functions and constants for the RFC-023 clarify node + RFC-056
 // cross-clarify node. Shared between the backend runner / scheduler / clarify
 // service and the frontend canvas drag helper / prompt preview pane. No Bun
@@ -230,17 +234,19 @@ export function parseClarifyEnvelopeBody(
  *  a contract break with already-running agents in mid-task. */
 export function renderClarifyDirectiveTrailer(
   directive?: ClarifyDirective,
-  options: { answersVisible?: boolean } = {},
+  options: { answersVisible?: boolean; mindmap?: boolean } = {},
 ): string {
   if (directive === 'stop') {
-    const finalizeInstruction =
-      options.answersVisible === false
+    const finalizeInstruction = options.mindmap
+      ? '- Produce your final <workflow-output> reply now from the user decisions and current inputs. Keep unresolved details explicit in the result.'
+      : options.answersVisible === false
         ? '- Produce your final <workflow-output> reply now. Use the current inputs and any resolved context preserved in Prior Output or the resumed session; do not ask again. If any detail is still ambiguous, make your best informed call and proceed.'
         : '- Produce your final <workflow-output> reply now using the answers above. If any detail is still ambiguous, make your best informed call based on the answers and proceed.'
     return [
       '### User directive: STOP CLARIFYING',
       '- The user has ended clarification. You are now RELEASED from ask-back mode — do NOT emit another <workflow-clarify> envelope.',
       finalizeInstruction,
+      ...(options.mindmap ? [CLARIFY_DECISION_OUTPUT_GUIDANCE] : []),
     ].join('\n')
   }
   if (directive === 'continue') {
@@ -263,6 +269,12 @@ export function renderClarifyDirectiveTrailer(
  *   - multi, custom only:              `User selected only the custom answer: "<text>"`
  *   - empty:                           `User did not answer this question.` */
 export function summariseClarifyAnswer(question: ClarifyQuestion, answer: ClarifyAnswer): string {
+  const decision = summariseClarifyDecision(answer.decision)
+  const answerText = summariseClarifyChoice(question, answer)
+  return decision ? `${answerText}; ${decision}` : answerText
+}
+
+function summariseClarifyChoice(question: ClarifyQuestion, answer: ClarifyAnswer): string {
   const labels = answer.selectedOptionLabels
   const custom = answer.customText.trim()
   if (labels.length === 0 && custom.length === 0) {

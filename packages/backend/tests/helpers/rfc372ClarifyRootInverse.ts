@@ -26,9 +26,8 @@ export function inverseRfc372ClarifyRootBinding(source: ts.SourceFile): ts.Sourc
     "import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'\n",
     '    followupGenerator: composeClarifyFollowupGenerator({\n' +
       `      db: ${receiver.db},\n` +
-      '      appHome: systemAgentAppHome,\n' +
       `      registry: ${receiver.registry},\n` +
-      '      observations: () => systemAgentObservations,\n' +
+      '      binding: narrativeSystemAgentBinding,\n' +
       '    }),\n',
   ]
   const counts = additions.map((text) => source.text.split(text).length - 1)

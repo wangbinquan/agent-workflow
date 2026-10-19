@@ -25,7 +25,12 @@ import {
   createRouter,
   Outlet,
 } from '@tanstack/react-router'
-import type { ClarifyRound, ClarifyRoundSummary } from '@agent-workflow/shared'
+import {
+  clarifyAnswerBasis,
+  type ClarifyAnswer,
+  type ClarifyRound,
+  type ClarifyRoundSummary,
+} from '@agent-workflow/shared'
 import { api, ApiError } from '../src/api/client'
 import * as clarifyDraftStore from '../src/lib/clarify/draftStore'
 import { setBaseUrl, setToken } from '../src/stores/auth'
@@ -738,4 +743,173 @@ describe('/clarify/$nodeRunId directive submit buttons (RFC-023 iter)', () => {
     expect(cont.getAttribute('data-directive')).toBe('continue')
     expect(stop.getAttribute('data-directive')).toBe('stop')
   })
+})
+
+describe('RFC-378 mindmap decision review uses the original submission', () => {
+  for (const kind of ['self', 'cross'] as const)
+    for (const directive of ['stop', 'continue'] as const)
+      test(`${kind} ${directive}: locate, edit, save, reconfirm and submit the latest decision once`, async () => {
+        const session = mkSession({ kind })
+        const question = { ...session.questions[0]!, mindmap: { categoryPath: ['Scope'] } }
+        session.questions = [question]
+        const value: ClarifyAnswer = {
+          questionId: question.id,
+          selectedOptionIndices: [0],
+          selectedOptionLabels: [],
+          customText: '',
+          decision: {
+            status: 'provisional',
+            uncertainty: 'No baseline',
+            tradeoff: 'Accept an observation period',
+          },
+        }
+        session.draftAnswers = {
+          q1: { ...value, confirmedBasis: clarifyAnswerBasis(question, value) },
+        }
+        vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockResolvedValue(undefined)
+        vi.spyOn(clarifyDraftStore, 'deleteClarifyDraft').mockResolvedValue(undefined)
+        const writes: unknown[] = []
+        vi.spyOn(api, 'put').mockImplementation(async (_path, body) => {
+          writes.push(body)
+          return {} as never
+        })
+        const post = vi.spyOn(api, 'post').mockResolvedValue({
+          ok: true,
+          kind,
+          outcome: { kind: 'designer-waiting', pendingCrossClarifyNodeIds: [] },
+        } as never)
+        mockApi(session, [], { nodes: [] })
+        renderRoute()
+        const open = await screen.findByTestId('mindmap-review-open')
+        await waitFor(() => expect(open.hasAttribute('disabled')).toBe(false))
+        fireEvent.click(open)
+        expect(screen.getByTestId('mindmap-review').textContent).toContain('No baseline')
+        expect(post).not.toHaveBeenCalled()
+        fireEvent.click(screen.getByRole('button', { name: 'Locate / edit' }))
+        expect(screen.queryByTestId('mindmap-review')).toBeNull()
+        fireEvent.click(screen.getByText(/Decision context/))
+        fireEvent.change(screen.getByLabelText('Accepted tradeoff'), {
+          target: { value: 'My revised cost' },
+        })
+        fireEvent.click(screen.getByTestId('mindmap-review-open'))
+        expect(screen.getByTestId('mindmap-review').textContent).toContain('My revised cost')
+        expect(screen.getByTestId('mindmap-review-submit').hasAttribute('disabled')).toBe(true)
+        fireEvent.click(screen.getByRole('button', { name: 'Back to answers' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Confirm this answer' }))
+        await waitFor(
+          () =>
+            expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+          { timeout: 3000 },
+        )
+        expect(writes).toContainEqual(
+          expect.objectContaining({
+            decision: expect.objectContaining({ tradeoff: 'My revised cost' }),
+            confirmedBasis: expect.stringMatching(/^v2:/),
+          }),
+        )
+        fireEvent.click(screen.getByTestId('mindmap-review-open'))
+        if (directive === 'continue')
+          fireEvent.click(screen.getByRole('radio', { name: 'Keep clarifying' }))
+        const submit = screen.getByTestId('mindmap-review-submit')
+        expect(submit.hasAttribute('disabled')).toBe(false)
+        fireEvent.click(submit)
+        fireEvent.click(submit)
+        await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+        expect(post).toHaveBeenCalledWith(
+          '/api/clarify/nr_clarify/answers',
+          expect.objectContaining({
+            directive,
+            questionSetKey: expect.stringMatching(/^v2:/),
+            answers: [
+              expect.objectContaining({
+                decision: {
+                  status: 'provisional',
+                  uncertainty: 'No baseline',
+                  tradeoff: 'My revised cost',
+                },
+              }),
+            ],
+          }),
+        )
+      })
+
+  test('a saving failure blocks review submission without discarding the decision', async () => {
+    const session = mkSession()
+    session.questions[0] = { ...session.questions[0]!, mindmap: { categoryPath: ['Scope'] } }
+    const question = session.questions[0]!
+    const value: ClarifyAnswer = {
+      questionId: 'q1',
+      selectedOptionIndices: [0],
+      selectedOptionLabels: [],
+      customText: '',
+      decision: { uncertainty: 'Retain this unknown' },
+    }
+    session.draftAnswers = { q1: { ...value, confirmedBasis: clarifyAnswerBasis(question, value) } }
+    vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockRejectedValue(new Error('IDB unavailable'))
+    const post = vi.spyOn(api, 'post').mockResolvedValue({} as never)
+    mockApi(session)
+    renderRoute()
+    const open = await screen.findByTestId('mindmap-review-open')
+    await waitFor(() => expect(open.hasAttribute('disabled')).toBe(false))
+    await waitFor(() =>
+      expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('error'),
+    )
+    fireEvent.click(open)
+    expect(screen.getByTestId('mindmap-review').textContent).toContain('Retain this unknown')
+    expect(screen.getByTestId('mindmap-review-submit').hasAttribute('disabled')).toBe(true)
+    expect(post).not.toHaveBeenCalled()
+  })
+})
+
+test('RFC-378 review reads sealed decisions and submits only the remaining questions', async () => {
+  const session = mkSession()
+  const first = { ...session.questions[0]!, mindmap: { categoryPath: ['Scope'] } }
+  const second = { ...first, id: 'q2', title: 'Second decision' }
+  session.questions = [first, second]
+  const sealed: ClarifyAnswer = {
+    questionId: first.id,
+    selectedOptionIndices: [],
+    selectedOptionLabels: [],
+    customText: 'Original sealed choice',
+    decision: { status: 'decided', uncertainty: 'Still unknown after sealing' },
+  }
+  const pending: ClarifyAnswer = {
+    questionId: second.id,
+    selectedOptionIndices: [0],
+    selectedOptionLabels: [],
+    customText: '',
+  }
+  session.answers = [sealed]
+  session.draftAnswers = { q2: { ...pending, confirmedBasis: clarifyAnswerBasis(second, pending) } }
+  vi.spyOn(clarifyDraftStore, 'setClarifyDraft').mockResolvedValue(undefined)
+  vi.spyOn(clarifyDraftStore, 'deleteClarifyDraft').mockResolvedValue(undefined)
+  const post = vi.spyOn(api, 'post').mockResolvedValue({ ok: true } as never)
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+    const path = String(url)
+    const body = path.endsWith('/api/tasks/task_a/questions')
+      ? [{ originNodeRunId: 'nr_clarify', questionId: 'q1', sealed: true, phase: 'done' }]
+      : path.includes('/api/clarify/nr_clarify')
+        ? session
+        : path.includes('/api/clarify?')
+          ? []
+          : {}
+    return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+  })
+  renderRoute()
+  const open = await screen.findByTestId('mindmap-review-open')
+  await waitFor(() =>
+    expect(screen.getByTestId('clarify-draft-indicator').dataset.draftStatus).toBe('saved'),
+  )
+  fireEvent.click(open)
+  expect(screen.getByTestId('mindmap-review').textContent).toContain('Original sealed choice')
+  expect(screen.getByTestId('mindmap-review').textContent).toContain('Still unknown after sealing')
+  await waitFor(() =>
+    expect(screen.getByTestId('mindmap-review-submit').hasAttribute('disabled')).toBe(false),
+  )
+  fireEvent.click(screen.getByTestId('mindmap-review-submit'))
+  await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+  expect(post).toHaveBeenCalledWith(
+    '/api/clarify/nr_clarify/answers',
+    expect.objectContaining({ answers: [expect.objectContaining({ questionId: 'q2' })] }),
+  )
 })

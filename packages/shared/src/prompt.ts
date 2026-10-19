@@ -732,7 +732,7 @@ export function renderUserPrompt(input: RenderPromptInput): string {
   // appears exactly once whether or not answered Q&A is also present.
   if (stopNotice && !mandatoryAskBack) {
     const answersVisible = cc?.flatBlock !== undefined && cc.flatBlock.trim().length > 0
-    sections += `\n\n${renderClarifyDirectiveTrailer('stop', { answersVisible })}`
+    sections += `\n\n${renderClarifyDirectiveTrailer('stop', { answersVisible, mindmap: input.clarifyMindmap !== undefined })}`
   }
 
   // Trailing protocol selection (RFC-100 — mandatory ask-back).

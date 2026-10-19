@@ -1,3 +1,4 @@
+import { ClarifyDecisionSchema } from './clarifyDecision'
 // Clarify schemas (RFC-023). The clarify node lets an agent emit a structured
 // "I need answers before I can produce output" envelope. The framework parks
 // the task, surfaces the questions to the user, captures structured answers,
@@ -110,6 +111,7 @@ export type ClarifyEnvelopeBody = z.infer<typeof ClarifyEnvelopeBodySchema>
 /** One user answer for one question. */
 export const ClarifyAnswerSchema = z.object({
   confirmedBasis: z.string().max(128).optional(),
+  decision: ClarifyDecisionSchema.optional(),
   questionId: z.string().min(1),
   /** Indices into question.options. Empty array means "no candidate selected". */
   selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
@@ -476,6 +478,7 @@ export const ClarifyRoundSchema = z.object({
         selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
         customText: z.string().default(''),
         confirmedBasis: z.string().max(128).optional(),
+        decision: ClarifyDecisionSchema.optional(),
       }),
     )
     .nullable()

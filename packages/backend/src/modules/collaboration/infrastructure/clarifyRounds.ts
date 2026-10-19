@@ -1,5 +1,5 @@
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { isMindmapRound } from '@agent-workflow/shared'
+import { isMindmapRound, clarifyDecisionsEqual } from '@agent-workflow/shared'
 // RFC-349 SQLite compatibility adapter for the RFC-058 clarify-round helpers.
 // Provider-neutral callers enter through services/clarify/rounds.ts or the
 // collaboration public query/command surface; database mechanisms stay here.
@@ -668,7 +668,10 @@ function draftMatchesAnswer(draft: ClarifyDraftValue | undefined, answer: Clarif
   const a = [...(draft.selectedOptionIndices ?? [])].sort((x, y) => x - y)
   const b = [...(answer.selectedOptionIndices ?? [])].sort((x, y) => x - y)
   if (a.length !== b.length || a.some((v, i) => v !== b[i])) return false
-  return (draft.customText ?? '') === (answer.customText ?? '')
+  return (
+    (draft.customText ?? '') === (answer.customText ?? '') &&
+    clarifyDecisionsEqual(draft.decision, answer.decision)
+  )
 }
 
 /**

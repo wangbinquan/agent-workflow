@@ -5885,6 +5885,7 @@ export const enUS: Resources = {
       valid: 'This starter matches the current resources. Apply will validate it once more.',
       invalid: 'This mapping cannot be applied yet:',
       role: {
+        clarifier: 'Clarification agent',
         coder: 'Implementation agent',
         auditor: 'Audit agent',
         aggregator: 'Aggregation agent',
@@ -5894,6 +5895,7 @@ export const enUS: Resources = {
         'role-unmapped': 'Choose an agent.',
         'agent-missing': 'The selected agent is no longer in the current inventory.',
         'aggregator-role-required': 'This role requires an agent configured as aggregator.',
+        'text-output-required': 'Choose an agent with at least one text output.',
         'data-output-required': 'This role requires at least one data-carrying output.',
       },
       copy: {

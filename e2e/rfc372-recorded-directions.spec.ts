@@ -202,7 +202,9 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
           'saved',
         )
         await page.reload()
-        await expect(page.getByText('This round is reviewed and ready to submit.')).toBeVisible()
+        await expect(
+          page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+        ).toBeVisible()
         // The daily-AW UX regression was 72px category / 76px question rows: six
         // questions needed scrolling. Keep the real recorded tree dense and readable.
         const tree = page.getByRole('tree', { name: 'Question outline' })
@@ -244,8 +246,8 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
           path: testInfo.outputPath('recorded-directions-reviewed.png'),
           fullPage: true,
         })
-        await page.getByTestId('clarify-submit-stop').click()
-        await page.getByTestId('clarify-stop-confirm').click()
+        await page.getByTestId('mindmap-review-open').click()
+        await page.getByTestId('mindmap-review-submit').click()
         await expect
           .poll(async () => (await api<{ status: string }>(`/api/tasks/${task.id}`)).status, {
             timeout: 60_000,

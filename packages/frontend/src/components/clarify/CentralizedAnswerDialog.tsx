@@ -1,3 +1,4 @@
+import { DecisionDetails } from './mindmap/DecisionDetails'
 // RFC-128 P4 (T9) — centralized answer pane.
 //
 // A single page (full-width Dialog) that flattens EVERY unsealed question that is still
@@ -682,6 +683,8 @@ function RoundAnswerBlock({
           selectedOptionIndices: a.selectedOptionIndices ?? [],
           selectedOptionLabels: [],
           customText: a.customText ?? '',
+          decision: a.decision,
+          confirmedBasis: a.confirmedBasis,
         }
       }
     }
@@ -713,6 +716,8 @@ function RoundAnswerBlock({
             questionId: answer.questionId,
             selectedOptionIndices: answer.selectedOptionIndices,
             customText: answer.customText,
+            decision: answer.decision,
+            confirmedBasis: answer.confirmedBasis,
           })
         },
       })
@@ -737,6 +742,8 @@ function RoundAnswerBlock({
             selectedOptionIndices: v.selectedOptionIndices ?? [],
             selectedOptionLabels: [],
             customText: v.customText ?? '',
+            decision: v.decision,
+            confirmedBasis: v.confirmedBasis,
           }
         }
       }
@@ -806,6 +813,8 @@ function RoundAnswerBlock({
         selectedOptionIndices: value.selectedOptionIndices ?? [],
         selectedOptionLabels: [],
         customText: value.customText ?? '',
+        decision: value.decision,
+        confirmedBasis: value.confirmedBasis,
       }
       if (!controller.tryAdoptRemote(questionId, local, remote)) continue
       if (!answersEqual(local, remote)) {
@@ -961,6 +970,13 @@ function RoundAnswerBlock({
                 onChange={(next) => updateAnswer(q.id, next)}
                 onAdvance={() => onAdvance(originNodeRunId, q.id)}
               />
+              {a.decision && (
+                <DecisionDetails
+                  answer={a}
+                  disabled={disabled}
+                  onChange={(next) => updateAnswer(q.id, next)}
+                />
+              )}
             </div>
           )
         })}

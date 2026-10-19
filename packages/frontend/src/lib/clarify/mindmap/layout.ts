@@ -17,7 +17,7 @@ export type MindmapTopologyNode = Pick<MindmapNodeSummary, 'id' | 'parentId' | '
   Partial<Pick<MindmapNodeSummary, 'kind'>>
 
 export const MINDMAP_CARD_WIDTH = 236
-export const MINDMAP_QUESTION_HEIGHT = 132
+export const MINDMAP_QUESTION_HEIGHT = 190
 export const MINDMAP_GROUP_HEIGHT = 64
 
 /** Iterative linear traversal: depth never consumes the JavaScript call stack. */

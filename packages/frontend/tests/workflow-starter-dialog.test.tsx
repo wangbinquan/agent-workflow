@@ -171,3 +171,25 @@ describe('WorkflowStarterDialog', () => {
     expect(calls[0]?.aborted).toBe(true)
   })
 })
+
+test('RFC-378 mindmap starter is validated before applying and provides a creation route if no agent fits', async () => {
+  const view = renderDialog()
+  fireEvent.click(view.getByTestId('workflow-starter-mindmap-clarify'))
+  await waitFor(() =>
+    expect(view.getByTestId('workflow-starter-apply').hasAttribute('disabled')).toBe(false),
+  )
+  fireEvent.click(view.getByTestId('workflow-starter-apply'))
+  await waitFor(() => expect(view.onApply).toHaveBeenCalledTimes(1))
+  const definition = view.onApply.mock.calls[0]![0] as WorkflowDefinition
+  expect(definition.nodes.find((node) => node.kind === 'clarify')).toMatchObject({
+    interactionMode: 'mindmap',
+  })
+  expect(view.validateDraft).toHaveBeenCalledWith(expect.objectContaining({ definition }))
+  view.unmount()
+  const emptyView = renderDialog({ agents: [] })
+  fireEvent.click(emptyView.getByTestId('workflow-starter-mindmap-clarify'))
+  expect(
+    emptyView.getByRole('link', { name: 'Create a suitable agent' }).getAttribute('href'),
+  ).toBe('/agents/new')
+  expect(emptyView.getByTestId('workflow-starter-apply').hasAttribute('disabled')).toBe(true)
+})

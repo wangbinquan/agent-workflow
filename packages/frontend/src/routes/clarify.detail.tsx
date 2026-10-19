@@ -1,3 +1,5 @@
+import { DecisionReviewDialog } from '@/components/clarify/mindmap/DecisionReviewDialog'
+import { DecisionDetails } from '@/components/clarify/mindmap/DecisionDetails'
 import {
   clarifyAnswerBasis,
   clarifyContentKey,
@@ -213,6 +215,13 @@ export function ClarifyDetailPage() {
   // ----------------------------------------------------------------------
 
   const [answers, setAnswers] = useState<Record<string, ClarifyAnswer>>({})
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewDirective, setReviewDirective] = useState<ClarifyDirective>('stop')
+  const [focusRequest, setFocusRequest] = useState<{ questionId: string; sequence: number }>()
+  const [followupError, setFollowupError] = useState<unknown>(null)
+  const submitInFlight = useRef(false)
+  const latestSession = useRef(session.data)
+  latestSession.current = session.data
   const answersRef = useRef<Record<string, ClarifyAnswer>>({})
   // RFC-162: per-question scope (designer ↔ questioner) removed — cross unified with self.
   const [draftLoaded, setDraftLoaded] = useState(false)
@@ -264,6 +273,10 @@ export function ClarifyDetailPage() {
     localDraftDirtyRef.current = null
     answersRef.current = {}
     setAnswers({})
+    setReviewOpen(false)
+    setReviewDirective('stop')
+    setFocusRequest(undefined)
+    setFollowupError(null)
     setDraftLoaded(false)
     setDraftGenerationState(INITIAL_DRAFT_GENERATION_STATE)
     initialFocusedRef.current = false
@@ -339,6 +352,7 @@ export function ClarifyDetailPage() {
             questionId: answer.questionId,
             selectedOptionIndices: answer.selectedOptionIndices,
             customText: answer.customText,
+            decision: answer.decision,
             ...(answer.confirmedBasis ? { confirmedBasis: answer.confirmedBasis } : {}),
           })
         },
@@ -369,6 +383,7 @@ export function ClarifyDetailPage() {
             selectedOptionIndices: v.selectedOptionIndices ?? [],
             selectedOptionLabels: [],
             customText: v.customText ?? '',
+            decision: v.decision,
             ...(v.confirmedBasis ? { confirmedBasis: v.confirmedBasis } : {}),
           }
         }
@@ -458,6 +473,7 @@ export function ClarifyDetailPage() {
         selectedOptionIndices: v.selectedOptionIndices ?? [],
         selectedOptionLabels: [],
         customText: v.customText ?? '',
+        decision: v.decision,
         ...(v.confirmedBasis ? { confirmedBasis: v.confirmedBasis } : {}),
       }
       if (!submitted.has(qid) && !controller.tryAdoptRemote(qid, local, remote)) continue
@@ -575,6 +591,37 @@ export function ClarifyDetailPage() {
       const s = session.data
       if (s === undefined) throw new Error('no session loaded')
       if (followupPending) throw new Error(t('mindmap.generating'))
+      if (isMindmapRound(s.questions)) {
+        const controller = durabilityRef.current
+        if (!controller) throw new Error(t('clarify.detail.draftSaveFailed'))
+        const snapshot = answersRef.current
+        await controller.flushLocal()
+        await controller.flushServer()
+        const current = latestSession.current
+        if (
+          current?.id !== s.id ||
+          current.status !== 'awaiting_human' ||
+          current.followup?.state === 'running' ||
+          clarifyQuestionSetKey(current.questions) !== clarifyQuestionSetKey(s.questions) ||
+          s.questions.some(
+            (q) =>
+              !lockedQuestionIds.has(q.id) &&
+              (!snapshot[q.id] ||
+                !answersRef.current[q.id] ||
+                !answersEqual(snapshot[q.id]!, answersRef.current[q.id]!)),
+          )
+        ) {
+          throw new Error(t('mindmap.review.changed'))
+        }
+        if (
+          s.questions.some(
+            (q) =>
+              !lockedQuestionIds.has(q.id) &&
+              !isClarifyAnswerConfirmed(q, answersRef.current[q.id]),
+          )
+        )
+          throw new Error(t('mindmap.review.incomplete'))
+      }
       // RFC-128 P4 (T10): exclude any question already sealed/dispatched via another channel
       // (the centralized pane / board) so this quick-channel submit never re-seals it. We do
       // NOT send `questionIds` here: that subset cap is gated to defer=true on the backend
@@ -586,7 +633,7 @@ export function ClarifyDetailPage() {
         .filter((q) => !lockedQuestionIds.has(q.id))
         .map(
           (q) =>
-            answers[q.id] ?? {
+            answersRef.current[q.id] ?? {
               questionId: q.id,
               selectedOptionIndices: [],
               selectedOptionLabels: [],
@@ -619,6 +666,7 @@ export function ClarifyDetailPage() {
       return resp
     },
     onSuccess: (resp) => {
+      setReviewOpen(false)
       void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.list() })
       void qc.invalidateQueries({ queryKey: CLARIFY_QUERY_KEYS.pendingCount() })
       // RFC-056: cross-clarify "designer-waiting" outcome — stay on the
@@ -658,6 +706,15 @@ export function ClarifyDetailPage() {
   // directive, Cancel returns to the form unchanged. Cross-clarify variant
   // uses stronger copy (cross-loop persistence warning); self-clarify uses
   // the milder iteration-scoped copy.
+  const submitReviewed = () => {
+    if (submitInFlight.current) return
+    submitInFlight.current = true
+    submitMut.mutate(reviewDirective, {
+      onSettled: () => {
+        submitInFlight.current = false
+      },
+    })
+  }
   const [stopModalOpen, setStopModalOpen] = useState(false)
 
   // ----------------------------------------------------------------------
@@ -761,13 +818,14 @@ export function ClarifyDetailPage() {
   // to submit here. Disable the submit buttons (the form is all read-only anyway).
   const allLocked = s.questions.length > 0 && s.questions.every((q) => lockedQuestionIds.has(q.id))
   const mindmapMode = isMindmapRound(s.questions)
+  const visibleAnswers = effectiveClarifyAnswers(answers, s.answers)
   const mindmapIncomplete =
     mindmapMode &&
     s.questions.some(
       (q) => !lockedQuestionIds.has(q.id) && !isClarifyAnswerConfirmed(q, answers[q.id]),
     )
   const renderQuestion = (q: ClarifyQuestion, idx: number) => {
-    const a = answers[q.id]
+    const a = visibleAnswers[q.id]
     if (a === undefined) return null
     // RFC-128 P4 (T10): this question was already sealed/dispatched via another
     // channel (the centralized pane / board) → read-only here + excluded from submit.
@@ -807,6 +865,13 @@ export function ClarifyDetailPage() {
           onChange={(next) => updateAnswer(q.id, next)}
           onAdvance={mindmapMode ? undefined : () => advanceFromQuestion(q.id)}
         />
+        {!mindmapMode && a.decision && (
+          <DecisionDetails
+            answer={a}
+            disabled={readonly || submitMut.isPending || locked}
+            onChange={(next) => updateAnswer(q.id, next)}
+          />
+        )}
         {/* RFC-099 (D7/D8): per-question last editor, live while
                   drafting and frozen after submit. Audit display only. */}
         {(() => {
@@ -1098,9 +1163,11 @@ export function ClarifyDetailPage() {
         {mindmapMode ? (
           <MindmapWorkspace
             key={s.id}
-            title={nodeTitle ?? s.intermediaryNodeId}
+            title={taskQuery.data?.name || nodeLabel}
+            focusRequest={focusRequest}
+            onFollowupError={setFollowupError}
             questions={s.questions}
-            answers={answers}
+            answers={visibleAnswers}
             locked={lockedQuestionIds}
             disabled={readonly || submitMut.isPending}
             roundStatus={s.status}
@@ -1127,7 +1194,18 @@ export function ClarifyDetailPage() {
           {draftStatusLabel}
         </span>
         {/* RFC-162: scope-distribution submit hint removed (scope deleted). */}
-        {(!mindmapMode || !readonly) && (
+        {mindmapMode ? (
+          <button
+            ref={submitContinueRef}
+            type="button"
+            className="btn btn--primary"
+            disabled={submitMut.isPending || !draftLoaded}
+            onClick={() => setReviewOpen(true)}
+            data-testid="mindmap-review-open"
+          >
+            {t('mindmap.review.open')}
+          </button>
+        ) : (
           <div className="clarify-detail__submit-group" data-testid="clarify-submit-group">
             <button
               ref={submitContinueRef}
@@ -1207,6 +1285,48 @@ export function ClarifyDetailPage() {
         />
       )}
 
+      {mindmapMode && (
+        <DecisionReviewDialog
+          open={reviewOpen}
+          title={taskQuery.data?.name || nodeLabel}
+          questions={s.questions}
+          answers={visibleAnswers}
+          locked={lockedQuestionIds}
+          directive={reviewDirective}
+          onDirective={setReviewDirective}
+          onClose={() => setReviewOpen(false)}
+          onEdit={(questionId) => {
+            setReviewOpen(false)
+            setFocusRequest({ questionId, sequence: Date.now() })
+          }}
+          onSubmit={submitReviewed}
+          disabled={
+            readonly ||
+            allLocked ||
+            mindmapIncomplete ||
+            followupPending ||
+            draftStatus.kind !== 'saved' ||
+            (reviewDirective === 'continue' && !execution.available)
+          }
+          busy={submitMut.isPending}
+          blockReason={
+            readonly || allLocked
+              ? t('mindmap.handled')
+              : followupPending
+                ? t('mindmap.generating')
+                : mindmapIncomplete
+                  ? t('mindmap.review.incomplete')
+                  : draftStatus.kind !== 'saved'
+                    ? draftStatusLabel
+                    : reviewDirective === 'continue'
+                      ? execution.unavailableReason
+                      : undefined
+          }
+          followupFailed={followupError != null || followup.failure !== undefined}
+          error={submitMut.error}
+          isCross={isCross}
+        />
+      )}
       {/* Unified stop-confirm modal. Both kinds share the same dialog
           shell + testids so the two pages look and behave identically;
           only the title / body / confirm-label i18n differs (cross keeps

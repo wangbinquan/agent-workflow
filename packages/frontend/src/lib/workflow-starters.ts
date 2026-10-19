@@ -1,4 +1,6 @@
 import {
+  buildClarifyEdges,
+  DEFAULT_OUTPUT_KIND,
   tryHandlerForParsedKind,
   tryParseKind,
   WORKFLOW_SCHEMA_VERSION,
@@ -6,8 +8,8 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 
-export type WorkflowStarterId = 'standard-development' | 'audit-only' | 'blank'
-export type WorkflowStarterRole = 'coder' | 'auditor' | 'aggregator' | 'fixer'
+export type WorkflowStarterId = 'standard-development' | 'audit-only' | 'mindmap-clarify' | 'blank'
+export type WorkflowStarterRole = 'coder' | 'auditor' | 'aggregator' | 'fixer' | 'clarifier'
 export type WorkflowStarterRoleMapping = Partial<Record<WorkflowStarterRole, string>>
 
 export interface WorkflowStarterCatalogEntry {
@@ -31,6 +33,12 @@ export const WORKFLOW_STARTER_CATALOG: readonly WorkflowStarterCatalogEntry[] = 
     roles: ['auditor'],
   },
   {
+    id: 'mindmap-clarify',
+    labelKey: 'mindmap.starter.title',
+    descriptionKey: 'mindmap.starter.description',
+    roles: ['clarifier'],
+  },
+  {
     id: 'blank',
     labelKey: 'editor.starter.blankTitle',
     descriptionKey: 'editor.starter.blankDescription',
@@ -49,6 +57,8 @@ export interface WorkflowStarterCopy {
   aggregatorTitle: string
   fixerTitle: string
   outputTitle: string
+  clarifierTitle?: string
+  clarifyTitle?: string
 }
 
 export const DEFAULT_WORKFLOW_STARTER_COPY: WorkflowStarterCopy = {
@@ -66,7 +76,12 @@ export const DEFAULT_WORKFLOW_STARTER_COPY: WorkflowStarterCopy = {
 
 export interface WorkflowStarterPreflightIssue {
   role: WorkflowStarterRole
-  code: 'role-unmapped' | 'agent-missing' | 'aggregator-role-required' | 'data-output-required'
+  code:
+    | 'role-unmapped'
+    | 'agent-missing'
+    | 'aggregator-role-required'
+    | 'data-output-required'
+    | 'text-output-required'
 }
 
 export type WorkflowStarterPlan =
@@ -89,10 +104,20 @@ function firstDataOutput(agent: Agent): string | null {
   return null
 }
 
+function firstTextOutput(agent: Agent): string | null {
+  return (
+    agent.outputs.find((output) => {
+      const parsed = tryParseKind(agent.outputKinds?.[output] ?? DEFAULT_OUTPUT_KIND)
+      return parsed?.kind === 'base' && (parsed.name === 'string' || parsed.name === 'markdown')
+    }) ?? null
+  )
+}
+
 export function workflowStarterAgentIneligibleReason(
   role: WorkflowStarterRole,
   agent: Agent,
 ): WorkflowStarterPreflightIssue['code'] | null {
+  if (role === 'clarifier' && firstTextOutput(agent) === null) return 'text-output-required'
   if (role === 'aggregator' && agent.role !== 'aggregator') return 'aggregator-role-required'
   if (role !== 'coder' && firstDataOutput(agent) === null) return 'data-output-required'
   return null
@@ -128,6 +153,66 @@ export function planWorkflowStarter(
     resolved.set(role, agent)
   }
   if (issues.length > 0) return { ok: false, issues }
+
+  if (starterId === 'mindmap-clarify') {
+    const agent = resolved.get('clarifier')!
+    const output = firstTextOutput(agent)!
+    return {
+      ok: true,
+      outputPorts: { clarifier: output },
+      definition: {
+        $schema_version: WORKFLOW_SCHEMA_VERSION,
+        inputs: [{ kind: 'text', key: 'request', label: copy.requestLabel, required: true }],
+        nodes: [
+          {
+            id: 'starter_input',
+            kind: 'input',
+            title: copy.inputTitle,
+            inputKey: 'request',
+            position: { x: 80, y: 180 },
+          },
+          {
+            id: 'starter_clarifier',
+            kind: 'agent-single',
+            title: copy.clarifierTitle ?? 'Clarify decisions',
+            agentId: agent.id,
+            agentName: agent.name,
+            promptTemplate:
+              'Help the user clarify {{request}}. Ask about consequential independent decisions and their tradeoffs. When released to produce the result, preserve the user decisions, provisional assumptions, remaining unknowns and review arrangements.',
+            position: { x: 420, y: 180 },
+          },
+          {
+            id: 'starter_clarify',
+            kind: 'clarify',
+            title: copy.clarifyTitle ?? 'Review decisions',
+            description: '',
+            interactionMode: 'mindmap',
+            mindmap: { categories: [], instructions: '' },
+            position: { x: 420, y: 460 },
+          },
+          {
+            id: 'starter_output',
+            kind: 'output',
+            title: copy.outputTitle,
+            position: { x: 780, y: 180 },
+          },
+        ],
+        edges: [
+          {
+            id: 'starter_edge_request',
+            source: { nodeId: 'starter_input', portName: 'request' },
+            target: { nodeId: 'starter_clarifier', portName: 'request' },
+          },
+          ...buildClarifyEdges('starter_clarifier', 'starter_clarify'),
+          {
+            id: 'starter_edge_result',
+            source: { nodeId: 'starter_clarifier', portName: output },
+            target: { nodeId: 'starter_output', portName: 'result' },
+          },
+        ],
+      },
+    }
+  }
 
   if (starterId === 'audit-only') {
     const auditor = resolved.get('auditor')!

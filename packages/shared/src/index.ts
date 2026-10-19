@@ -186,3 +186,5 @@ export * from './developmentConfigCreate'
 export * from './workflowOutputEvidence'
 
 export * from './schemas/executionStatus'
+
+export * from './schemas/clarifyDecision'

@@ -1,3 +1,4 @@
+import { ClarifyDecisionSchema } from '@agent-workflow/shared'
 // RFC-247 §4.2 — the MCP tool set.
 //
 // One declarative table. A tool names the permission points it needs, and
@@ -930,6 +931,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       questionId: z.string().min(1),
       selectedOptionIndices: z.array(z.number().int().nonnegative()).max(64).optional(),
       customText: z.string().max(65536).optional(),
+      decision: ClarifyDecisionSchema.optional(),
     },
     audit: (args) => ({ kind: 'clarify-draft', id: String(args.nodeRunId) }),
     handler: async (args, ctx) =>
@@ -941,6 +943,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
             questionId: args.questionId,
             selectedOptionIndices: args.selectedOptionIndices ?? [],
             customText: args.customText ?? '',
+            decision: args.decision,
           },
         }),
       ),

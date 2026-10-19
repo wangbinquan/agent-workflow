@@ -93,17 +93,32 @@ async function followup(page: Page, hint: string, title: string) {
   })
 }
 async function stopRound(page: Page, nodeRunId: string) {
-  await expect(page.getByText('This round is reviewed and ready to submit.')).toBeVisible()
+  await expect(
+    page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+  ).toBeVisible()
   const response = page.waitForResponse(
     (res) =>
       res.request().method() === 'POST' && res.url().endsWith(`/api/clarify/${nodeRunId}/answers`),
   )
-  await page.getByTestId('clarify-submit-stop').click()
-  await page.getByTestId('clarify-stop-confirm').click()
+  await page.getByTestId('mindmap-review-open').click()
+  await expect(page.getByTestId('mindmap-review-submit')).toBeEnabled()
+  await page.getByTestId('mindmap-review-submit').click()
   const submitted = await response
   expect(submitted.ok()).toBe(true)
   const payload = submitted.request().postDataJSON()
   expect(payload.questionSetKey).toMatch(/^v2:/)
+  if (payload.answers.some((value: { decision?: unknown }) => value.decision)) {
+    expect(
+      payload.answers.find(
+        (value: { decision?: { status?: string } }) => value.decision?.status === 'provisional',
+      )?.decision,
+    ).toMatchObject({
+      uncertainty: '真实冲突率和爽约率未知。',
+      tradeoff: '接受首周可能出现的临时协调成本。',
+      validationOwner: '会议室管理员',
+      revisitWhen: '收集一周数据后复核',
+    })
+  }
   expect(
     payload.answers.every((value: { confirmedBasis?: string }) =>
       value.confirmedBasis?.startsWith('v2:'),
@@ -262,8 +277,27 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await page.goto(`${daemon.baseUrl}/clarify/${self.intermediaryNodeRunId}`)
   const workspace = page.getByRole('region', { name: 'Clarify workspace' })
   await expect(workspace).toBeVisible()
-  await expect(page.getByText('This round is reviewed and ready to submit.')).toHaveCount(0)
+  await expect(
+    page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+  ).toHaveCount(0)
   await answer(page, '首期服务哪些预约场景？', ['会议室和工位预约'])
+  await detail(page).locator('summary').filter({ hasText: 'Decision context' }).click()
+  await detail(page).getByRole('radio', { name: 'Provisional', exact: true }).click()
+  await detail(page)
+    .getByLabel('My rationale', { exact: true })
+    .fill('没有冲突与爽约基线，先观察。')
+  await detail(page)
+    .getByLabel('Accepted tradeoff', { exact: true })
+    .fill('接受首周可能出现的临时协调成本。')
+  await detail(page)
+    .getByLabel('Still unverified', { exact: true })
+    .fill('真实冲突率和爽约率未知。')
+  await detail(page).getByLabel('Who will validate', { exact: true }).fill('会议室管理员')
+  await detail(page)
+    .getByLabel('When or under what conditions to revisit', { exact: true })
+    .fill('收集一周数据后复核')
+  await expect(page.getByRole('button', { name: 'Confirm this answer', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Confirm this answer', exact: true }).click()
   // Changing a reviewed answer invalidates its confirmation in both views.
   await detail(page).getByLabel('仅会议室预约', { exact: false }).check()
   await expect(page.getByRole('button', { name: 'Confirm this answer', exact: true })).toBeEnabled()
@@ -345,7 +379,9 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
     detail(page).locator('.mindmap-question__eyebrow .mindmap-status--done'),
   ).toBeVisible()
   await expect(detail(page).getByText('2 child questions pending', { exact: true })).toBeVisible()
-  await expect(page.getByText('This round is reviewed and ready to submit.')).toHaveCount(0)
+  await expect(
+    page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+  ).toHaveCount(0)
   await page
     .getByRole('textbox', { name: 'Search categories or questions' })
     .fill('并发预约如何裁决')
@@ -370,8 +406,15 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await page.reload()
   await select(page, '首期服务哪些预约场景？')
   await expect(detail(page).getByLabel('仅会议室预约', { exact: false })).toBeChecked()
+  await detail(page).locator('summary').filter({ hasText: 'Decision context' }).click()
+  await expect(detail(page).getByLabel('Still unverified', { exact: true })).toHaveValue(
+    '真实冲突率和爽约率未知。',
+  )
+  await expect(detail(page).getByRole('radio', { name: 'Provisional', exact: true })).toBeChecked()
   await expect(page.getByRole('button', { name: 'Confirmed', exact: true })).toBeDisabled()
-  await expect(page.getByText('This round is reviewed and ready to submit.')).toBeVisible()
+  await expect(
+    page.getByText('This round’s answers are confirmed. Review decisions before submitting.'),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'Highlight pending', exact: true }).click()
   await expect(
     page.getByRole('button', { name: 'Highlight pending', exact: true }),

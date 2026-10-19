@@ -1,0 +1,377 @@
+<div id="aw-decision-prototype">
+  <div class="aw-demo-label">交互原型 · 会议室预约案例 · 追问与生成结果均为演示</div>
+  <div class="aw-shell">
+    <aside class="aw-sidebar" aria-label="应用导航">
+      <div class="aw-brand"><span class="aw-brand-mark">AW</span><span>Agent<br>Workflow</span></div>
+      <div class="aw-nav-label">编排</div>
+      <button class="aw-nav cursor-interaction" data-action="starter"><i data-lucide="workflow" aria-hidden="true"></i>工作流</button>
+      <div class="aw-nav-label">运行与仓库</div>
+      <button class="aw-nav aw-nav-active cursor-interaction" data-action="overview"><i data-lucide="list-checks" aria-hidden="true"></i>任务</button>
+      <div class="aw-sidebar-foot"><span class="aw-avatar">王</span>王小明</div>
+    </aside>
+    <main class="aw-main" aria-label="脑图澄清">
+      <header class="aw-header">
+        <div class="aw-breadcrumb"><button data-action="starter" class="aw-link cursor-interaction">脑图澄清模板</button><span> / </span><span>会议室预约</span></div>
+        <div class="aw-title-row"><div><h1>会议室预约系统</h1><p>20 人 · 3 间会议室 · 两周交付 · 暂无冲突与爽约基线</p></div><span class="aw-chip aw-chip-neutral" id="aw-phase">等待你的决定</span></div>
+      </header>
+      <div id="aw-content"></div>
+      <div class="aw-live" id="aw-live" aria-live="polite"></div>
+    </main>
+  </div>
+</div>
+<style>
+  #aw-decision-prototype { --aw-bg:light-dark(#f7f8fb,#171b25); --aw-panel:light-dark(#ffffff,#202633); --aw-text:light-dark(#202735,#e9edf5); --aw-muted:light-dark(#657084,#aeb9ca); --aw-border:light-dark(#dce1ea,#3d4759); --aw-blue:light-dark(#365fc6,#91adff); --aw-blue-fill:light-dark(#eef3ff,#26395e); --aw-primary:light-dark(#365fc6,#96b1ff); --aw-on-primary:light-dark(#ffffff,#14213d); --aw-amber:light-dark(#8b5a12,#ebbf78); --aw-amber-fill:light-dark(#fff5e2,#3b3020); --aw-green:light-dark(#346343,#9ed3ad); --aw-green-fill:light-dark(#eff7f1,#26392e); --aw-red:light-dark(#ad3941,#ffa3a9); --aw-red-fill:light-dark(#fff1f2,#41292d); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; color:var(--aw-text); font-size:14px; line-height:1.6; width:100%; }
+  #aw-decision-prototype * { box-sizing:border-box; }
+  #aw-decision-prototype button,#aw-decision-prototype input,#aw-decision-prototype textarea,#aw-decision-prototype select { font:inherit; }
+  #aw-decision-prototype button { color:inherit; }
+  #aw-decision-prototype button:disabled { opacity:.48; cursor:not-allowed; }
+  #aw-decision-prototype .aw-demo-label { color:var(--aw-muted); padding:6px 2px 12px; font-size:12px; }
+  #aw-decision-prototype .aw-shell { display:grid; grid-template-columns:145px minmax(0,1fr); background:var(--aw-bg); border:1px solid var(--aw-border); border-radius:12px; overflow:hidden; min-height:740px; }
+  #aw-decision-prototype .aw-sidebar { background:var(--aw-panel); border-right:1px solid var(--aw-border); padding:22px 12px; display:flex; flex-direction:column; gap:6px; }
+  #aw-decision-prototype .aw-brand { display:flex; gap:9px; align-items:center; font-size:15px; font-weight:600; line-height:1.15; margin-bottom:30px; }
+  #aw-decision-prototype .aw-brand-mark { display:grid; place-items:center; width:31px; height:31px; border-radius:8px; color:var(--aw-blue); background:var(--aw-blue-fill); font-size:12px; flex-shrink:0; }
+  #aw-decision-prototype .aw-nav-label { color:var(--aw-muted); font-size:11px; padding:16px 8px 6px; }
+  #aw-decision-prototype .aw-nav { width:100%; display:flex; align-items:center; gap:9px; border:0; background:transparent; padding:10px 9px; text-align:left; border-radius:7px; }
+  #aw-decision-prototype .aw-nav-active { background:var(--aw-blue-fill); color:var(--aw-blue); }
+  #aw-decision-prototype .aw-sidebar-foot { margin-top:auto; display:flex; align-items:center; gap:8px; padding-top:28px; color:var(--aw-muted); font-size:12px; }
+  #aw-decision-prototype .aw-avatar { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; background:var(--aw-blue-fill); color:var(--aw-blue); }
+  #aw-decision-prototype .aw-main { min-width:0; padding:24px; }
+  #aw-decision-prototype .aw-breadcrumb { font-size:12px; color:var(--aw-muted); margin-bottom:12px; }
+  #aw-decision-prototype .aw-link { border:0; padding:0; background:transparent; color:var(--aw-blue); text-align:left; }
+  #aw-decision-prototype .aw-title-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+  #aw-decision-prototype h1 { font-size:21px; line-height:1.35; font-weight:600; margin:0 0 6px; }
+  #aw-decision-prototype h2 { font-size:17px; line-height:1.5; font-weight:600; margin:0; }
+  #aw-decision-prototype h3 { font-size:14px; line-height:1.5; font-weight:600; margin:0; }
+  #aw-decision-prototype p { margin:0; }
+  #aw-decision-prototype .aw-header p,#aw-decision-prototype .aw-muted { color:var(--aw-muted); font-size:12px; }
+  #aw-decision-prototype .aw-chip { font-size:11px; display:inline-flex; align-items:center; gap:5px; padding:2px 7px; border-radius:5px; line-height:1.5; white-space:normal; }
+  #aw-decision-prototype .aw-chip-neutral { background:var(--aw-bg); color:var(--aw-muted); border:1px solid var(--aw-border); }
+  #aw-decision-prototype .aw-chip-tentative { background:var(--aw-amber-fill); color:var(--aw-amber); }
+  #aw-decision-prototype .aw-chip-decided { background:var(--aw-green-fill); color:var(--aw-green); }
+  #aw-decision-prototype .aw-chip-confirm { background:var(--aw-blue-fill); color:var(--aw-blue); }
+  #aw-decision-prototype .aw-toolbar { margin-top:24px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  #aw-decision-prototype .aw-segment { display:flex; border:1px solid var(--aw-border); border-radius:7px; overflow:hidden; background:var(--aw-panel); }
+  #aw-decision-prototype .aw-segment button { border:0; padding:7px 10px; background:transparent; font-size:12px; white-space:nowrap; }
+  #aw-decision-prototype .aw-segment button[aria-pressed=true] { color:var(--aw-on-primary); background:var(--aw-primary); }
+  #aw-decision-prototype .aw-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--aw-border); border-radius:6px; padding:7px 12px; background:var(--aw-panel); font-size:12px; text-decoration:none; }
+  #aw-decision-prototype .aw-primary { background:var(--aw-primary); color:var(--aw-on-primary); border-color:var(--aw-primary); }
+  #aw-decision-prototype .aw-ghost { background:transparent; border-color:transparent; color:var(--aw-blue); }
+  #aw-decision-prototype .aw-toolbar .aw-submit { margin-left:auto; }
+  #aw-decision-prototype .aw-progress { margin:15px 0 19px; display:flex; flex-wrap:wrap; gap:7px 14px; color:var(--aw-muted); font-size:12px; }
+  #aw-decision-prototype .aw-progress .aw-tentative-text { color:var(--aw-amber); }
+  #aw-decision-prototype .aw-map { background:var(--aw-panel); border:1px solid var(--aw-border); border-radius:10px; padding:22px 16px 24px; }
+  #aw-decision-prototype .aw-map-root { margin:0 auto 32px; border:1px solid var(--aw-border); border-radius:8px; width:fit-content; max-width:100%; padding:10px 20px; text-align:center; position:relative; }
+  #aw-decision-prototype .aw-map-root:after { content:""; position:absolute; height:18px; width:1px; background:var(--aw-border); bottom:-19px; left:50%; }
+  #aw-decision-prototype .aw-map-root p { color:var(--aw-muted); font-size:11px; margin-top:3px; }
+  #aw-decision-prototype .aw-branches { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:13px; position:relative; }
+  #aw-decision-prototype .aw-branches:before { content:""; position:absolute; height:1px; background:var(--aw-border); top:-14px; left:12%; right:12%; }
+  #aw-decision-prototype .aw-branch { min-width:0; position:relative; }
+  #aw-decision-prototype .aw-branch:before { content:""; position:absolute; width:1px; height:14px; background:var(--aw-border); top:-14px; left:50%; }
+  #aw-decision-prototype .aw-category { text-align:center; font-size:12px; color:var(--aw-muted); margin:0 0 11px; }
+  #aw-decision-prototype .aw-node { display:block; width:100%; text-align:left; border:1px solid var(--aw-border); background:var(--aw-panel); border-radius:8px; padding:12px; min-height:198px; }
+  #aw-decision-prototype .aw-node:hover { border-color:var(--aw-blue); background:var(--aw-blue-fill); }
+  #aw-decision-prototype .aw-node-id { color:var(--aw-muted); font-size:11px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; gap:5px; }
+  #aw-decision-prototype .aw-node-title { display:block; font-weight:600; line-height:1.5; margin-bottom:11px; font-size:13px; }
+  #aw-decision-prototype .aw-answer-label { display:block; color:var(--aw-muted); font-size:11px; margin-bottom:3px; }
+  #aw-decision-prototype .aw-answer { display:block; font-size:12px; line-height:1.65; margin-bottom:10px; }
+  #aw-decision-prototype .aw-subnodes { border-left:1px solid var(--aw-border); padding-left:8px; margin:12px 0 0 9px; display:grid; gap:8px; }
+  #aw-decision-prototype .aw-subnodes .aw-node { min-height:0; padding:10px; }
+  #aw-decision-prototype .aw-note { display:flex; align-items:flex-start; gap:9px; margin-top:16px; padding:12px 14px; background:var(--aw-amber-fill); border-radius:7px; color:var(--aw-amber); font-size:12px; }
+  #aw-decision-prototype .aw-note svg { flex-shrink:0; margin-top:2px; }
+  #aw-decision-prototype .aw-footer { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-top:20px; padding-top:16px; border-top:1px solid var(--aw-border); }
+  #aw-decision-prototype .aw-footer-text { color:var(--aw-muted); font-size:12px; }
+  #aw-decision-prototype .aw-focus { display:grid; grid-template-columns:176px minmax(0,1fr); gap:17px; align-items:start; }
+  #aw-decision-prototype .aw-outline { display:grid; gap:6px; }
+  #aw-decision-prototype .aw-outline button { width:100%; border:1px solid transparent; background:transparent; text-align:left; padding:10px; border-radius:7px; font-size:12px; }
+  #aw-decision-prototype .aw-outline button[aria-pressed=true] { border-color:var(--aw-border); background:var(--aw-panel); }
+  #aw-decision-prototype .aw-outline small { display:block; margin-top:6px; color:var(--aw-muted); font-size:11px; }
+  #aw-decision-prototype .aw-detail { min-width:0; background:var(--aw-panel); padding:21px; border:1px solid var(--aw-border); border-radius:9px; }
+  #aw-decision-prototype .aw-detail-path { color:var(--aw-muted); font-size:11px; margin-bottom:8px; }
+  #aw-decision-prototype .aw-detail-head { display:flex; gap:8px; justify-content:space-between; align-items:start; margin-bottom:16px; }
+  #aw-decision-prototype .aw-options { display:grid; gap:8px; margin:15px 0; }
+  #aw-decision-prototype .aw-option { display:flex; gap:9px; align-items:flex-start; padding:11px 12px; border:1px solid var(--aw-border); border-radius:7px; font-size:13px; }
+  #aw-decision-prototype .aw-option:has(input:checked) { border-color:var(--aw-blue); background:var(--aw-blue-fill); }
+  #aw-decision-prototype .aw-option input { margin:5px 0 0; accent-color:var(--aw-blue); flex-shrink:0; }
+  #aw-decision-prototype .aw-option small { display:block; color:var(--aw-muted); font-size:11px; margin-top:5px; }
+  #aw-decision-prototype .aw-option .aw-recommend { color:var(--aw-blue); font-size:11px; margin-left:7px; }
+  #aw-decision-prototype .aw-field { display:grid; gap:6px; margin-top:13px; font-size:12px; min-width:0; }
+  #aw-decision-prototype .aw-field input,#aw-decision-prototype .aw-field textarea,#aw-decision-prototype .aw-field select { width:100%; min-width:0; padding:9px 10px; border:1px solid var(--aw-border); border-radius:6px; color:var(--aw-text); background:var(--aw-panel); font-size:13px; }
+  #aw-decision-prototype .aw-field textarea { resize:vertical; min-height:65px; }
+  #aw-decision-prototype .aw-fields { display:grid; grid-template-columns:1fr 1fr; gap:0 12px; }
+  #aw-decision-prototype .aw-decision { margin-top:20px; padding-top:17px; border-top:1px solid var(--aw-border); }
+  #aw-decision-prototype .aw-status-row { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+  #aw-decision-prototype .aw-details { margin-top:15px; }
+  #aw-decision-prototype .aw-details summary { color:var(--aw-blue); font-size:12px; }
+  #aw-decision-prototype .aw-think { margin-top:18px; padding-top:15px; border-top:1px solid var(--aw-border); }
+  #aw-decision-prototype .aw-think-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  #aw-decision-prototype .aw-think-actions .aw-btn { font-size:11px; padding:5px 8px; }
+  #aw-decision-prototype .aw-quote-action { margin-top:9px; }
+  #aw-decision-prototype .aw-quote { background:var(--aw-bg); border-left:3px solid var(--aw-blue); border-radius:0 5px 5px 0; padding:9px 12px; margin:12px 0 0; font-size:12px; overflow-wrap:anywhere; }
+  #aw-decision-prototype .aw-quote-head { display:flex; justify-content:space-between; gap:10px; font-size:11px; color:var(--aw-muted); margin-bottom:5px; }
+  #aw-decision-prototype .aw-error { background:var(--aw-red-fill); color:var(--aw-red); padding:12px; border-radius:7px; font-size:12px; margin-top:12px; }
+  #aw-decision-prototype .aw-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  #aw-decision-prototype .aw-count { display:flex; justify-content:space-between; gap:8px; color:var(--aw-muted); font-size:11px; margin-top:5px; }
+  #aw-decision-prototype .aw-review-intro { margin:22px 0 17px; }
+  #aw-decision-prototype .aw-review-list { display:grid; gap:12px; }
+  #aw-decision-prototype .aw-review-item { background:var(--aw-panel); border:1px solid var(--aw-border); border-radius:8px; padding:17px; min-width:0; }
+  #aw-decision-prototype .aw-review-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  #aw-decision-prototype .aw-review-head .aw-link { margin-left:auto; font-size:12px; }
+  #aw-decision-prototype .aw-review-item dl { display:grid; grid-template-columns:70px minmax(0,1fr); gap:6px 12px; margin:10px 0 0; font-size:12px; }
+  #aw-decision-prototype .aw-review-item dt { color:var(--aw-muted); }
+  #aw-decision-prototype .aw-review-item dd { margin:0; overflow-wrap:anywhere; }
+  #aw-decision-prototype .aw-review-item .aw-unverified { color:var(--aw-amber); }
+  #aw-decision-prototype .aw-final-choice { background:var(--aw-panel); border:1px solid var(--aw-border); padding:18px; border-radius:8px; margin-top:18px; }
+  #aw-decision-prototype .aw-choice-label { display:flex; gap:9px; align-items:flex-start; font-size:13px; margin-top:11px; }
+  #aw-decision-prototype .aw-choice-label input { margin-top:5px; accent-color:var(--aw-blue); }
+  #aw-decision-prototype .aw-output { background:var(--aw-panel); border:1px solid var(--aw-border); border-radius:9px; margin-top:20px; padding:23px; }
+  #aw-decision-prototype .aw-output h3 { margin:20px 0 8px; }
+  #aw-decision-prototype .aw-output ul { margin:0; padding-left:20px; font-size:13px; }
+  #aw-decision-prototype .aw-output li { margin-top:7px; }
+  #aw-decision-prototype .aw-output .aw-source { font-size:11px; color:var(--aw-muted); }
+  #aw-decision-prototype .aw-start { background:var(--aw-panel); border:1px solid var(--aw-border); border-radius:10px; padding:24px; margin:24px auto 0; max-width:620px; }
+  #aw-decision-prototype .aw-start-steps { display:flex; gap:9px; flex-wrap:wrap; margin:20px 0; align-items:center; color:var(--aw-muted); font-size:12px; }
+  #aw-decision-prototype .aw-start-steps span { background:var(--aw-bg); padding:8px 10px; border-radius:5px; }
+  #aw-decision-prototype .aw-live { margin-top:12px; min-height:18px; color:var(--aw-muted); font-size:12px; }
+  #aw-decision-prototype .aw-continue { margin-top:20px; padding:18px; background:var(--aw-blue-fill); border-radius:8px; }
+  #aw-decision-prototype .aw-validation { color:var(--aw-red); font-size:12px; margin-top:9px; }
+  @media (max-width:900px) { #aw-decision-prototype .aw-shell { grid-template-columns:118px minmax(0,1fr); } #aw-decision-prototype .aw-main { padding:20px; } #aw-decision-prototype .aw-branches { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 14px; } #aw-decision-prototype .aw-branches:before,#aw-decision-prototype .aw-branch:before,#aw-decision-prototype .aw-map-root:after { display:none; } #aw-decision-prototype .aw-map-root { margin-bottom:20px; } #aw-decision-prototype .aw-node { min-height:184px; } #aw-decision-prototype .aw-focus { grid-template-columns:142px minmax(0,1fr); gap:12px; } }
+  @media (max-width:700px) { #aw-decision-prototype .aw-shell { display:block; } #aw-decision-prototype .aw-sidebar { display:none; } #aw-decision-prototype .aw-main { padding:18px; } #aw-decision-prototype .aw-focus { display:block; } #aw-decision-prototype .aw-outline { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin-bottom:15px; } #aw-decision-prototype .aw-detail { padding:16px; } }
+  @media (max-width:420px) { #aw-decision-prototype .aw-main { padding:14px; } #aw-decision-prototype h1 { font-size:19px; } #aw-decision-prototype .aw-map { padding:16px 12px; } #aw-decision-prototype .aw-branches { grid-template-columns:1fr; } #aw-decision-prototype .aw-node { min-height:0; } #aw-decision-prototype .aw-fields { grid-template-columns:1fr; } #aw-decision-prototype .aw-toolbar .aw-submit { margin-left:0; width:100%; } #aw-decision-prototype .aw-review-item { padding:14px; } #aw-decision-prototype .aw-review-item dl { grid-template-columns:1fr; gap:3px; } #aw-decision-prototype .aw-review-item dd { margin-bottom:6px; } #aw-decision-prototype .aw-start { padding:17px; } }
+  @media (pointer:coarse) { #aw-decision-prototype .aw-btn,#aw-decision-prototype .aw-segment button,#aw-decision-prototype .aw-link { min-height:44px; } #aw-decision-prototype .aw-field input,#aw-decision-prototype .aw-field textarea,#aw-decision-prototype .aw-field select { font-size:16px; } }
+</style>
+<script>
+(function () {
+  const root = document.getElementById('aw-decision-prototype');
+  const content = root.querySelector('#aw-content');
+  const live = root.querySelector('#aw-live');
+  const phase = root.querySelector('#aw-phase');
+  const esc = function (value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  const icon = function (name) { return '<i data-lucide="' + name + '" aria-hidden="true"></i>'; };
+  const button = function (action, label, classes, attrs) { return '<button type="button" class="aw-btn cursor-interaction ' + (classes || '') + '" data-action="' + action + '" ' + (attrs || '') + '>' + label + '</button>'; };
+  const initial = [
+    {id:'goal',category:'目标与依据',title:'首版最优先解决什么？',kind:'single',options:[
+      {label:'减少时间冲突',description:'让空闲可见，提交时拦截重叠预约。'},
+      {label:'减少会议室空占',description:'先理解爽约、临时取消和未到场的原因。'},
+      {label:'先收集真实使用数据',description:'建立基线后再决定最值得解决的问题。'}
+    ],selected:[0],custom:'',status:'provisional',rationale:'团队反馈有撞会，但还没有统计或员工访谈。',tradeoff:'先投入冲突拦截，可能不是损失最大的环节。',uncertainty:'冲突发生频率、影响人数和实际损失。',validationOwner:'产品负责人',revisitWhen:'试用第一周完成访谈后',confirmed:true},
+    {id:'granularity',category:'使用规则',title:'预约的最小时间粒度？',kind:'single',options:[
+      {label:'30 分钟',description:'操作简单，适合多数团队会议。'},
+      {label:'15 分钟',description:'更灵活，预约操作也更细。'},
+      {label:'60 分钟',description:'最简单，但短会议可能造成空档。'}
+    ],selected:[0],custom:'',status:'decided',rationale:'首版优先减少操作步骤，先统一为 30 分钟。',tradeoff:'短于半小时的会议仍占一个时段。',uncertainty:'',validationOwner:'',revisitWhen:'',confirmed:true},
+    {id:'absence',category:'例外与代价',title:'未签到时，是否自动释放？',kind:'single',options:[
+      {label:'试用期只提醒，不自动释放',description:'适用于尚未验证签到可靠性的试用期；可能继续存在空占。',recommended:true},
+      {label:'超过 10 分钟自动释放',description:'减少空占；忘记签到的人可能被误释放，需要申诉处理。'},
+      {label:'由当周轮值人员确认后释放',description:'减少误释放，但增加人工投入。'}
+    ],selected:[0],custom:'',status:'provisional',rationale:'先避免把忘记签到误判为占而不用。',tradeoff:'接受两周试用期间仍可能出现空占。',uncertainty:'实际空占和忘记签到分别有多少。',validationOwner:'产品负责人',revisitWhen:'试用两周后，结合案例复盘',confirmed:false},
+    {id:'acceptance',category:'验收与复核',title:'首版需要满足哪些验收条件？',kind:'multi',options:[
+      {label:'五条主要流程走通',description:'预约、改期、取消、冲突拦截和提醒。'},
+      {label:'10 人试用无阻断',description:'收集试用中的失败与困难。'},
+      {label:'能记录采用率和真实冲突',description:'没有基线前，不承诺下降百分比。'},
+      {label:'新用户独立完成首次预约',description:'观察上手过程，记录需要帮助的步骤。'}
+    ],selected:[0,1,2],custom:'',status:'decided',rationale:'先确认可用，再用两周试用建立基线。',tradeoff:'首版验收不承诺没有依据的效果百分比。',uncertainty:'',validationOwner:'产品负责人',revisitWhen:'试用两周后决定是否扩大使用',confirmed:true}
+  ];
+  let state = {version:2,revision:0,view:'map',selected:'absence',questions:structuredClone(initial),followup:{open:false,text:'',quote:'',status:'idle',target:'absence'},directive:'stop',submitted:false,submitting:false,submittedAt:'',returnToReview:false,saving:false,reviewError:''};
+  const design = {density:'完整摘要',followupResult:'正常生成'};
+  let timer = null;
+  let saveTimer = null;
+  function restore(saved,initialLoad) {
+    const s = saved && saved.privateContent && saved.privateContent.decisionPrototype;
+    if (!s || s.version !== 2 || !Array.isArray(s.questions) || !s.questions.length) return false;
+    if(!initialLoad && s.revision<=state.revision)return false;
+    state = Object.assign({},state,s);
+    if(initialLoad){state.saving=false;state.submitting=false;if(state.followup.status==='running')state.followup.status='idle';}
+    return true;
+  }
+  restore(window.openai && window.openai.widgetState,true);
+  function persist() {
+    if (!window.openai || !window.openai.setWidgetState) return;
+    state.revision+=1;
+    const snapshot = {
+      modelContent:{prototype:'RFC-378',view:state.view,decisions:state.questions.map(function(q){return {question:q.title,status:q.status,answer:answer(q),confirmed:q.confirmed};}),submitted:state.submitted},
+      privateContent:{decisionPrototype:state}
+    };
+    state.persistenceLimited = new TextEncoder().encode(JSON.stringify(snapshot)).byteLength >= 16000;
+    if (state.persistenceLimited) return;
+    const result = window.openai.setWidgetState(snapshot);
+    if (result && result.catch) result.catch(function(){});
+  }
+  window.addEventListener('openai:set_globals',function(event){const globals=event.detail && event.detail.globals;if(globals && globals.widgetState && restore(globals.widgetState,false))render();});
+  function announce(text) { live.textContent = text; }
+  function answer(q) { return q.selected.map(function(i){return q.options[i].label;}).concat(q.custom.trim() ? [q.custom.trim()] : []).join('；'); }
+  function valid(q) { return answer(q).length > 0; }
+  function counts() { return {confirmed:state.questions.filter(function(q){return q.confirmed && valid(q);}).length,tentative:state.questions.filter(function(q){return q.status==='provisional';}).length,unmarked:state.questions.filter(function(q){return !q.status;}).length}; }
+  function chip(q) { return '<span class="aw-chip ' + (q.status==='provisional'?'aw-chip-tentative':q.status==='decided'?'aw-chip-decided':'aw-chip-neutral') + '">' + (q.status==='provisional'?'暂定 · 待验证':q.status==='decided'?'已决定':'未标注') + '</span>'; }
+  function touch(q) {
+    q.confirmed = false; state.reviewError = ''; state.saving = true;
+    clearTimeout(saveTimer);
+    announce('正在保存本次修改；该回答需要重新确认。');
+    const confirmed=root.querySelector('[data-confirmed-count]');if(confirmed)confirmed.textContent=counts().confirmed+' / '+state.questions.length+' 个回答已确认';
+    const saved=root.querySelector('[data-save-status]');if(saved)saved.textContent='正在保存…';
+    const outline=root.querySelector('.aw-outline [data-id="'+q.id+'"] small');if(outline)outline.textContent='○ 待确认 · '+(q.status==='provisional'?'暂定':q.status==='decided'?'已决定':'未标注');
+    saveTimer = setTimeout(function(){state.saving=false;persist();announce(state.persistenceLimited?'演示保存容量已满，当前改动仅保留在本页。':'草稿已保存；修改后的回答需要重新确认。');const saved=root.querySelector('[data-save-status]');if(saved)saved.textContent=state.persistenceLimited?'当前改动仅保留在本页':'草稿已保存';},350);
+  }
+  function toolbar() {
+    const c=counts();
+    return '<div class="aw-toolbar"><div class="aw-segment" aria-label="作答视图">' +
+      '<button type="button" class="cursor-interaction" data-action="overview" aria-pressed="' +(state.view==='map')+'">全景脑图</button>' +
+      '<button type="button" class="cursor-interaction" data-action="focus" aria-pressed="' +(state.view==='focus')+'">聚焦作答</button></div>' +
+      button('review',icon('clipboard-check')+'提交前复核','aw-primary aw-submit',state.submitted?'disabled':'')+'</div>' +
+      '<div class="aw-progress"><span data-confirmed-count>'+c.confirmed+' / '+state.questions.length+' 个回答已确认</span><span class="aw-tentative-text">'+c.tentative+' 项暂定</span>'+(c.unmarked?'<span>'+c.unmarked+' 项未标注</span>':'')+'<span data-save-status>'+(state.saving?'正在保存…':state.persistenceLimited?'当前改动仅保留在本页':'草稿已保存')+'</span></div>';
+  }
+  function node(q) {
+    const text=answer(q)||'尚未回答';
+    return '<button type="button" class="aw-node cursor-interaction" data-action="question" data-id="'+q.id+'"><span class="aw-node-id"><span>Q'+(state.questions.indexOf(q)+1)+'</span><span>'+(q.confirmed?'✓ 已确认回答':'待确认')+'</span></span><span class="aw-node-title">'+esc(q.title)+'</span><span class="aw-answer-label">我的决定</span><span class="aw-answer">'+esc(design.density==='简短摘要'&&text.length>38?text.slice(0,38)+'…':text)+'</span>'+chip(q)+'</button>';
+  }
+  function overview() {
+    const parents=state.questions.filter(function(q){return !q.parent;});
+    const branch=function(q){const children=state.questions.filter(function(child){return child.parent===q.id;});return node(q)+(children.length?'<div class="aw-subnodes">'+children.map(branch).join('')+'</div>':'');};
+    return toolbar() + '<section class="aw-map" aria-label="问题与决定脑图"><div class="aw-map-root"><h3>两周内推出轻量预约</h3><p>我的决定与待验证事项</p></div><div class="aw-branches">'+parents.map(function(q){return '<div class="aw-branch"><div class="aw-category">'+esc(q.category)+'</div>'+branch(q)+'</div>';}).join('')+'</div></section>' +
+      '<div class="aw-note">'+icon('circle-help')+'<div>回答已确认，表示这些内容是你的意思。暂定事项会连同待验证内容一起进入结果。</div></div>' +
+      '<div class="aw-footer"><span class="aw-footer-text">点击问题查看依据、代价和复核安排。</span>'+(state.submitted?button('submitted-result',state.directive==='stop'?'查看已生成结果 →':'查看后续状态 →','aw-ghost'):button('focus','继续检查未确认回答 →','aw-ghost'))+'</div>';
+  }
+  function field(q,key,label,placeholder,textarea) {
+    const limit=key==='validationOwner'?200:key==='revisitWhen'?500:2000;
+    return '<label class="aw-field">'+label+(textarea?'<textarea rows="2"':'<input type="text"')+' maxlength="'+limit+'" data-field="'+key+'" data-id="'+q.id+'" placeholder="'+esc(placeholder||'')+'" '+(state.submitted?'disabled':'')+' '+(textarea?'>'+esc(q[key]||'')+'</textarea>':'value="'+esc(q[key]||'')+'">')+'</label>';
+  }
+  function followupPane(q) {
+    const f=state.followup;
+    if(!f.open || f.target!==q.id) return '';
+    const length=f.text.length+f.quote.length+(f.quote?12:0);
+    return '<div class="aw-followup">' + (f.quote?'<div class="aw-quote"><div class="aw-quote-head"><span>引用当前问题中的内容</span><button type="button" class="aw-link cursor-interaction" data-action="clear-quote">移除引用</button></div>'+esc(f.quote)+'</div>':'') +
+      '<label class="aw-field">你想进一步弄清什么？<textarea rows="3" data-followup-text placeholder="例如：如果人在会议室却忘了签到，应该如何处理？" '+(f.status==='running'?'disabled':'')+'>'+esc(f.text)+'</textarea></label>' +
+      '<div class="aw-count"><span>围绕疑点，在当前分支补充澄清问题。</span><span data-length>'+length+' / 2000</span></div>' +
+      (length>2000?'<p class="aw-validation" role="alert">引用与指引合计超过 2000 字，请缩短后发送。</p>':'') +
+      (f.status==='failed'?'<div class="aw-error" role="alert"><strong>暂时无法生成追问</strong><p>已有回答和指引已保留。可以重试，或继续检查其他决定。</p><details><summary>查看详情</summary>追问服务暂不可用（演示错误）</details></div>':'') +
+      '<div class="aw-actions">'+(f.status==='running'?button('cancel-followup','取消生成')+'<span class="aw-muted">正在补充问题…</span>':button('close-followup','收起')+button('generate',f.status==='failed'?'重试追问':'生成追问','aw-primary',length>2000?'disabled':''))+'</div></div>';
+  }
+  function questionDetail(q) {
+    const readOnly=state.submitted;
+    return '<section class="aw-detail" aria-label="问题详情"><div class="aw-detail-path">'+esc(q.category)+(q.parent?' / 深入追问':'')+'</div><div class="aw-detail-head"><h2>'+esc(q.title)+'</h2>'+chip(q)+'</div>'+
+      (q.kind==='multi'?'<p class="aw-muted">这些条件可以同时成立，请选择适用项。</p>':'')+
+      '<div class="aw-options" data-selection-scope>'+q.options.map(function(o,i){return '<label class="aw-option"><input type="'+(q.kind==='multi'?'checkbox':'radio')+'" name="answer-'+q.id+'" data-option="'+i+'" data-id="'+q.id+'" '+(q.selected.includes(i)?'checked ':'')+(readOnly?'disabled':'')+'><span>'+esc(o.label)+(o.recommended?'<span class="aw-recommend">AI 建议</span>':'')+'<small>'+esc(o.description)+'</small></span></label>';}).join('')+'</div>'+
+      field(q,'custom',q.kind==='multi'?'补充我的想法（选填）':'其他决定（填写后替代上方选项）','用自己的话表达决定',true)+
+      '<div class="aw-decision"><div class="aw-status-row"><h3>这个决定目前处于什么状态？</h3><span class="aw-muted">由你判断</span></div><div class="aw-segment" aria-label="决定状态"><button class="cursor-interaction" data-action="disposition" data-value="decided" data-id="'+q.id+'" aria-pressed="'+(q.status==='decided')+'" '+(readOnly?'disabled':'')+'>已决定</button><button class="cursor-interaction" data-action="disposition" data-value="provisional" data-id="'+q.id+'" aria-pressed="'+(q.status==='provisional')+'" '+(readOnly?'disabled':'')+'>暂定，仍需验证</button></div>'+
+      '<details class="aw-details" '+(q.status==='provisional'||q.uncertainty||q.validationOwner||q.revisitWhen?'open':'')+'><summary class="cursor-interaction">待验证与复核安排（选填）</summary>'+field(q,'uncertainty','还有什么不确定？','记录仍待验证的事实或假设',true)+'<div class="aw-fields">'+field(q,'validationOwner','由谁验证（可暂留空）','角色或姓名',false)+field(q,'revisitWhen','何时复核（可暂留空）','时间或触发条件',false)+'</div></details>'+
+      '<details class="aw-details" '+(q.rationale||q.tradeoff?'open':'')+'><summary class="cursor-interaction">依据与接受的代价</summary>'+field(q,'rationale','我为什么这样决定？','已有证据、经验或当前假设',true)+field(q,'tradeoff','我接受什么代价？','受影响者、不利后果或暂时放弃的目标',true)+'</details></div>'+
+      (!readOnly?'<div class="aw-think"><h3>继续想一层</h3><div class="aw-think-actions">'+button('think','检查依据','','data-prompt="依据" data-id="'+q.id+'"')+button('think','考虑代价','','data-prompt="代价" data-id="'+q.id+'"')+button('think','比较其他做法','','data-prompt="比较" data-id="'+q.id+'"')+button('think','我想追问','','data-prompt="自由" data-id="'+q.id+'"')+'</div><div class="aw-quote-action">'+button('quote',icon('text-select')+'针对选中文字追问','aw-ghost','data-id="'+q.id+'"')+'</div>'+followupPane(q)+'</div>':'')+
+      '<div class="aw-footer"><span class="aw-footer-text" data-confirm-state>'+(q.confirmed?'✓ 当前回答已确认':'确认只表示内容符合你的意思，暂定事项仍会保留。')+'</span>'+(!readOnly?button('confirm',q.confirmed?'已确认回答':'确认这个回答','aw-primary','data-id="'+q.id+'" '+(q.confirmed||!valid(q)?'disabled':'')):'')+'</div>'+
+      (state.returnToReview?'<div class="aw-actions">'+button('review','返回提交前复核','aw-ghost')+'</div>':'')+'</section>';
+  }
+  function focus() {
+    const q=state.questions.find(function(item){return item.id===state.selected;})||state.questions[0];
+    return toolbar()+'<div class="aw-focus"><nav class="aw-outline" aria-label="问题目录">'+state.questions.map(function(item){return '<button type="button" class="cursor-interaction" data-action="question" data-id="'+item.id+'" aria-pressed="'+(item.id===q.id)+'">'+esc(item.title)+'<small>'+(item.confirmed?'✓ 已确认回答':'○ 待确认')+' · '+(item.status==='provisional'?'暂定':item.status==='decided'?'已决定':'未标注')+'</small></button>';}).join('')+'</nav>'+questionDetail(q)+'</div>';
+  }
+  function review() {
+    const c=counts();
+    return '<div class="aw-toolbar">'+button('overview','← 返回脑图','aw-ghost')+'</div><div class="aw-review-intro"><h2>确认你准备按哪些决定推进</h2><p class="aw-muted">共 '+state.questions.length+' 项回答，'+c.tentative+' 项暂定。可以保留未知，按当前决定生成结果。</p></div>'+
+      '<div class="aw-review-list">'+state.questions.map(function(q){return '<article class="aw-review-item"><div class="aw-review-head"><h3>'+esc(q.category)+'</h3>'+chip(q)+'<button class="aw-link cursor-interaction" data-action="edit-review" data-id="'+q.id+'">修改</button></div><p>'+esc(answer(q)||'尚未回答')+'</p><dl><dt>决定依据</dt><dd>'+esc(q.rationale||'尚未补充')+'</dd><dt>接受代价</dt><dd>'+esc(q.tradeoff||'尚未补充')+'</dd>'+(q.status==='provisional'||q.uncertainty||q.validationOwner||q.revisitWhen?'<dt>待验证</dt><dd class="aw-unverified">'+esc(q.uncertainty||'尚未说明')+'</dd><dt>复核安排</dt><dd class="aw-unverified">'+esc(q.validationOwner||'负责人尚未指定')+' · '+esc(q.revisitWhen||'时机尚未指定')+'</dd>':'')+'</dl>'+(!q.confirmed?'<p class="aw-validation">这个回答尚未确认。</p>':'')+'</article>';}).join('')+'</div>'+
+      (state.followup.status==='failed'?'<div class="aw-note">'+icon('circle-help')+'上次追问未成功，相关疑点尚未补充。你可以回到问题重试，也可以保留未知继续推进。</div>':'')+
+      '<section class="aw-final-choice"><h3>下一步</h3><label class="aw-choice-label"><input type="radio" name="directive" value="stop" data-directive '+(state.directive==='stop'?'checked':'')+'><span>按这些决定生成结果<small class="aw-muted" style="display:block">保留暂定和待验证事项，本节点不再继续反问。</small></span></label><label class="aw-choice-label"><input type="radio" name="directive" value="continue" data-directive '+(state.directive==='continue'?'checked':'')+'><span>提交回答，继续下一轮澄清</span></label></section>'+
+      (state.reviewError?'<p class="aw-validation" role="alert">'+esc(state.reviewError)+'</p>':'')+
+      '<div class="aw-footer"><span class="aw-footer-text">提交人：王小明 · 决定与复核安排一并保存</span>'+button('submit',state.submitting?'正在提交…':state.directive==='stop'?'确认并生成结果':'确认并继续澄清','aw-primary',state.submitting?'disabled':'')+'</div>';
+  }
+  function output() {
+    const tentative=state.questions.filter(function(q){return q.status==='provisional'||q.uncertainty||q.validationOwner||q.revisitWhen;});
+    return '<div class="aw-toolbar">'+button('overview','查看已提交脑图','aw-ghost')+'</div><section class="aw-output"><div class="aw-review-head"><h2>会议室预约 · 需求决定</h2><span class="aw-chip aw-chip-decided">演示结果已生成</span></div><p class="aw-source">根据王小明确认的 '+state.questions.length+' 项回答整理 · '+esc(state.submittedAt)+'</p><h3>当前决定</h3><ul>'+state.questions.map(function(q){return '<li><strong>'+esc(q.category)+'：</strong>'+esc(answer(q))+(q.status==='provisional'?' <span class="aw-chip aw-chip-tentative">暂定</span>':'')+'<br><span class="aw-muted">依据：'+esc(q.rationale||'尚未补充')+'</span></li>';}).join('')+'</ul><h3>接受的代价</h3><ul>'+state.questions.filter(function(q){return q.tradeoff;}).map(function(q){return '<li>'+esc(q.tradeoff)+'</li>';}).join('')+'</ul><h3>仍待验证与复核</h3><ul>'+tentative.map(function(q){return '<li>'+esc(q.uncertainty||'待验证内容尚未说明')+'<br><span class="aw-muted">'+esc(q.validationOwner||'负责人尚未指定')+' · '+esc(q.revisitWhen||'时机尚未指定')+'</span></li>';}).join('')+'</ul><div class="aw-note">'+icon('notebook-pen')+'暂定内容保留为假设，未被转写成已经验证的事实。</div></section>';
+  }
+  function starter() {
+    return '<section class="aw-start"><span class="aw-chip aw-chip-confirm">工作流起步模板</span><h2 style="margin-top:12px">脑图澄清</h2><p class="aw-muted" style="margin-top:7px">选择已有代理，从目标出发梳理取舍，最后生成决定文档。</p><label class="aw-field">负责澄清的代理<select aria-label="负责澄清的代理"><option>需求澄清顾问 · markdown 输出</option><option>产品分析助手 · markdown 输出</option></select></label><div class="aw-start-steps"><span>输入目标</span>→<span>脑图澄清</span>→<span>生成结果</span></div><p class="aw-muted">应用后可在工作流编辑器调整，输入与澄清连线已配置。</p><div class="aw-actions">'+button('overview','返回本次任务')+button('apply-starter','应用模板并查看任务','aw-primary')+'</div></section>';
+  }
+  function render() {
+    phase.textContent=state.view==='output'?'结果已生成（演示）':state.submitted?'回答已提交':state.view==='review'?'提交前复核':'等待你的决定';
+    content.innerHTML = state.view==='starter'?starter():state.view==='review'?review():state.view==='output'?output():state.view==='continued'?'<section class="aw-continue"><h2>回答已提交，继续下一轮澄清</h2><p class="aw-muted" style="margin-top:8px">本轮回答与暂定事项均已保存。实际产品将在模型返回下一轮问题时显示。</p><div class="aw-actions">'+button('overview','查看本轮决定')+'</div></section>':state.view==='focus'?focus():overview();
+    if(window.lucide)window.lucide.createIcons({attrs:{width:16,height:16}});
+  }
+  function newQuestion(parent,ordinal) {
+    const existing=state.questions.filter(function(q){return q.parent===parent;}).length;
+    const id=parent+'-followup-'+(existing+ordinal);
+    return ordinal===1?{id:id,parent:parent,category:'依据与验证',title:'什么证据会让你改变当前决定？',kind:'multi',options:[{label:'真实案例表明当前方案成本过高',description:'先约定记录哪些事件，避免只凭印象。'},{label:'试用者持续遇到同一问题',description:'收集影响人数、频率和具体场景。'},{label:'另一种做法在小范围试用更好',description:'比较效果与实施成本。'}],selected:[],custom:'',status:'',rationale:'',tradeoff:'',uncertainty:'',validationOwner:'',revisitWhen:'',confirmed:false}:{id:id,parent:parent,category:'复核责任',title:'由谁收集案例并组织这次复核？',kind:'single',options:[{label:'产品负责人收集，团队共同复核',description:'将数据和受影响者反馈放在一起。'},{label:'当周行政轮值收集，负责人复核',description:'贴近日常处理，需要安排交接。'},{label:'负责人暂未确定',description:'明确保留待指定，不自动替他人认领。'}],selected:[],custom:'',status:'',rationale:'',tradeoff:'',uncertainty:'',validationOwner:'',revisitWhen:'',confirmed:false};
+  }
+  function saveRender(message) { render();persist();if(message)announce(message); }
+  root.addEventListener('input',function(event){
+    const el=event.target;
+    if(el.matches('[data-field]')){
+      const q=state.questions.find(function(item){return item.id===el.dataset.id;});if(!q)return;
+      q[el.dataset.field]=el.value;
+      if(el.dataset.field==='custom'&&q.kind==='single'&&el.value.trim()){q.selected=[];root.querySelectorAll('input[data-option][data-id="'+q.id+'"]').forEach(function(input){input.checked=false;});}
+      touch(q);
+      const confirm=root.querySelector('button[data-action="confirm"]');
+      if(confirm){confirm.disabled=!valid(q);confirm.textContent='确认这个回答';}
+      const label=root.querySelector('[data-confirm-state]');if(label)label.textContent='本次内容已修改，需要重新确认。';
+    }
+    if(el.matches('[data-followup-text]')){
+      state.followup.text=el.value;persist();
+      const length=el.value.length+state.followup.quote.length+(state.followup.quote?12:0);
+      const count=root.querySelector('[data-length]');if(count)count.textContent=length+' / 2000';
+      const generate=root.querySelector('[data-action="generate"]');if(generate)generate.disabled=length>2000;
+    }
+  });
+  root.addEventListener('change',function(event){
+    const el=event.target;
+    if(el.matches('[data-option]')){
+      const q=state.questions.find(function(item){return item.id===el.dataset.id;});
+      const index=Number(el.dataset.option);
+      if(q.kind==='single'){q.selected=[index];q.custom='';}else{q.selected=el.checked?Array.from(new Set(q.selected.concat([index]))):q.selected.filter(function(i){return i!==index;});}
+      touch(q);render();persist();
+    }
+    if(el.matches('[data-directive]')){state.directive=el.value;saveRender();}
+  });
+  root.addEventListener('click',function(event){
+    const el=event.target.closest('button[data-action]');if(!el||el.disabled)return;
+    const action=el.dataset.action;
+    const q=state.questions.find(function(item){return item.id===el.dataset.id;})||state.questions.find(function(item){return item.id===state.selected;});
+    if(action==='overview'){state.view='map';state.returnToReview=false;saveRender();return;}
+    if(action==='submitted-result'&&state.submitted){state.view=state.directive==='stop'?'output':'continued';saveRender();return;}
+    if(action==='starter'){state.view='starter';saveRender();return;}
+    if(action==='apply-starter'){state.view='map';saveRender('已展示模板对应的示例任务；原型不会创建真实资源。');return;}
+    if(action==='focus'){state.selected=(state.questions.find(function(item){return !item.confirmed;})||q||state.questions[0]).id;state.view='focus';saveRender();return;}
+    if(action==='question'||action==='edit-review'){state.selected=el.dataset.id;state.view='focus';state.returnToReview=action==='edit-review';saveRender();return;}
+    if(action==='disposition'){q.status=el.dataset.value;touch(q);saveRender('决定状态已更新，需要重新确认回答。');return;}
+    if(action==='confirm'){if(!valid(q))return;q.confirmed=true;state.saving=false;clearTimeout(saveTimer);saveRender('已确认你的回答；暂定和待验证内容保持原样。');return;}
+    if(action==='think'||action==='quote'){
+      if(state.followup.status==='running'){announce('当前追问仍在生成，可先取消或处理其他问题。');return;}
+      let quote='';
+      if(action==='quote'){
+        const selection=window.getSelection();
+        const detail=root.querySelector('.aw-detail');
+        if(selection&&selection.toString().trim()&&detail&&detail.contains(selection.anchorNode)&&detail.contains(selection.focusNode))quote=selection.toString().trim();
+        if(quote.length>500){announce('所选内容超过 500 字，请缩短引用。');return;}
+      }
+      const prompts={'依据':'这个决定依赖哪些尚未验证的假设？什么证据会改变它？','代价':'谁会受到影响？如果判断错了，会出现什么后果，由谁处理？','比较':'还有什么可行做法？它们各自适用什么条件、需要接受什么代价？','自由':''};
+      state.followup={open:true,target:q.id,text:action==='quote'?'':prompts[el.dataset.prompt],quote:quote,status:'idle'};
+      saveRender(action==='quote'&&!quote?'没有选中文字，你仍可直接输入自己的追问。':'追问指引已展开，可修改后发送。');
+      const input=root.querySelector('[data-followup-text]');if(input)input.focus();return;
+    }
+    if(action==='clear-quote'){state.followup.quote='';saveRender();return;}
+    if(action==='close-followup'){state.followup.open=false;saveRender();return;}
+    if(action==='cancel-followup'){clearTimeout(timer);state.followup.status='idle';saveRender('已取消生成，回答和指引保留。');return;}
+    if(action==='generate'){
+      const f=state.followup;if(f.text.length+f.quote.length+(f.quote?12:0)>2000)return;
+      const isRetry=f.status==='failed';f.status='running';saveRender('正在围绕疑点补充问题，你可以查看其他决定。');
+      timer=setTimeout(function(){
+        if(design.followupResult==='首次失败'&&!isRetry){state.followup.status='failed';saveRender('追问未完成，已有回答和指引保留。');return;}
+        const parent=f.target;const one=newQuestion(parent,1);const two=newQuestion(parent,2);
+        state.questions.push(one,two);state.followup.status='done';state.followup.open=false;
+        if(state.view==='focus'&&state.selected===parent){state.selected=one.id;}
+        saveRender('已在原分支增加 2 个问题，原答案保持不变。');
+      },3000);return;
+    }
+    if(action==='review'){state.view='review';state.reviewError='';saveRender();return;}
+    if(action==='submit'){
+      if(state.followup.status==='running'){state.reviewError='追问仍在生成，请等待完成或先取消。';saveRender();return;}
+      if(state.saving){state.reviewError='草稿正在保存，请稍候再提交。';saveRender();return;}
+      const unresolved=state.questions.filter(function(item){return !item.confirmed||!valid(item);});
+      if(unresolved.length){state.reviewError='还有 '+unresolved.length+' 个回答未确认，请点击“修改”完成复核。';saveRender();return;}
+      state.submitting=true;saveRender('正在保存本轮决定…');
+      timer=setTimeout(function(){state.submitting=false;state.submitted=true;state.submittedAt=new Date().toLocaleString('zh-CN',{hour12:false});state.view=state.directive==='stop'?'output':'continued';saveRender(state.directive==='stop'?'演示结果已生成，待验证内容完整保留。':'本轮回答已提交，继续下一轮澄清。');},700);return;
+    }
+  });
+  render();
+  if(window.Tweak){
+    const tweak=new window.Tweak({container:root,onChange:function(){render();}});
+    tweak.addSelect(design,'density',{label:'卡片内容',options:['完整摘要','简短摘要']});
+    tweak.addSelect(design,'followupResult',{label:'追问演示情境',options:['正常生成','首次失败']});
+  }
+})();
+</script>

@@ -73,6 +73,8 @@ export const ClarifyFollowupStatusSchema = z.object({
   /** The selected question id, or the selected category path (empty = root). */
   target: z.union([z.string(), z.array(z.string())]),
   startedAt: z.number().int(),
+  /** Original request, for a faithful retry after refresh. Absent in legacy status. */
+  instruction: z.string().max(2000).optional(),
   error: z.object({ code: z.string(), message: z.string() }).optional(),
 })
 export type ClarifyFollowupStatus = z.infer<typeof ClarifyFollowupStatusSchema>

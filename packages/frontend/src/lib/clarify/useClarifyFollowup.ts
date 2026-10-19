@@ -56,7 +56,11 @@ export function useClarifyFollowup(
      *  the round reported it; it was not this page's HTTP failure). */
     failure:
       failed && server
-        ? { target: server.target, error: new ApiError(0, failed.code, failed.message) }
+        ? {
+            target: server.target,
+            instruction: server.instruction,
+            error: new ApiError(0, failed.code, failed.message),
+          }
         : undefined,
     async start(input: Omit<ClarifyFollowup, 'requestId'>, flush: () => Promise<void>) {
       if (owner.operation || running) return

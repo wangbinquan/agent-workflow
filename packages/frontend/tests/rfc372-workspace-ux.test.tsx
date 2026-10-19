@@ -347,7 +347,7 @@ test('centralized answers already sealed in an awaiting round do not advertise a
   expect(
     screen.getByText('All questions have been handled. No further submission is needed.'),
   ).toBeTruthy()
-  expect(screen.queryByText('This round is reviewed and ready to submit.')).toBeNull()
+  expect(screen.queryByText('This round’s answers are confirmed and ready to submit.')).toBeNull()
   expect(
     screen.queryByText('This round was submitted. Confirmed answers are available to read.'),
   ).toBeNull()

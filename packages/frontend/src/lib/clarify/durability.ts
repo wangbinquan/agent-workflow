@@ -72,6 +72,7 @@ export function projectClarifyDraftStatus(state: ClarifyDraftGenerationState): C
 function cloneAnswer(answer: ClarifyAnswer): ClarifyAnswer {
   return {
     ...answer,
+    ...(answer.decision ? { decision: { ...answer.decision } } : {}),
     selectedOptionIndices: [...answer.selectedOptionIndices],
     selectedOptionLabels: [...answer.selectedOptionLabels],
   }

@@ -1,3 +1,4 @@
+import { ClarifyDecisionSchema } from './clarifyDecision'
 // RFC-099 — resource-level ownership ACL schemas.
 //
 // Every type in `ACL_RESOURCE_TYPES` below carries a single
@@ -284,6 +285,7 @@ export type ClarifyAnswerAttributions = z.infer<typeof ClarifyAnswerAttributions
  */
 export const ClarifyDraftSaveBodySchema = z.object({
   confirmedBasis: z.string().max(128).optional(),
+  decision: ClarifyDecisionSchema.optional(),
   roundId: z.string().min(1),
   questionId: z.string().min(1),
   selectedOptionIndices: z.array(z.number().int().nonnegative()).max(64).default([]),
@@ -294,6 +296,7 @@ export type ClarifyDraftSaveBody = z.infer<typeof ClarifyDraftSaveBodySchema>
 /** Per-question draft value stored in clarify_rounds.draft_answers_json. */
 export const ClarifyDraftValueSchema = z.object({
   confirmedBasis: z.string().max(128).optional(),
+  decision: ClarifyDecisionSchema.optional(),
   selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
   customText: z.string().default(''),
 })

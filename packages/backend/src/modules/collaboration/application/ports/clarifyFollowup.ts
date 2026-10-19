@@ -56,6 +56,7 @@ export interface ClarifyFollowupStore {
 /** One generation of this process. It stays registered until it settles; an
  * aborted generation no longer holds the round seal but still occupies the round. */
 export interface ClarifyFollowupInFlight {
+  readonly instruction?: string
   readonly requestId: string
   readonly requestKey: string
   readonly target: ClarifyFollowupTarget
