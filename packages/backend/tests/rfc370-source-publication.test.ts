@@ -5,6 +5,7 @@ import {
   partialPublicationMessage,
   planSourcePublication,
   previousPublication,
+  publicationSource,
   sourceFile,
   type PublicationAction,
   type SourceFile,
@@ -299,4 +300,22 @@ test('a resumed publication skips what an interrupted one already applied', asyn
   expect(actions.map((action) => [action.action, action.file_path])).toEqual([
     ['update', 'pending'],
   ])
+})
+
+// RFC-370 hosted acceptance (2026-10-19): other sessions' commits landed on the
+// shared main on top of the commit whose CI passed; publishing HEAD would have
+// released their unverified work. An explicit source names that exact commit.
+test('a publication releases HEAD, or an explicit earlier commit of main, and nothing else', () => {
+  const head = 'a'.repeat(40),
+    earlier = 'b'.repeat(40),
+    foreign = 'c'.repeat(40)
+  const onMain = (sha: string) => sha === head || sha === earlier
+  expect(publicationSource({ requested: undefined, head, onMain })).toBe(head)
+  expect(publicationSource({ requested: earlier, head, onMain })).toBe(earlier)
+  expect(() => publicationSource({ requested: foreign, head, onMain })).toThrow(
+    'publication-source-not-on-main',
+  )
+  expect(() => publicationSource({ requested: 'b'.repeat(9), head, onMain })).toThrow(
+    'publication-source-invalid',
+  )
 })

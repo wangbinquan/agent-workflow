@@ -1,13 +1,14 @@
 // RFC-370 M0 — publish the committed agent-workflow sources to a CrewStation project.
 //
 //   CS_TOKEN=<platform session> CS_GITLAB_TOKEN=<repository token> [CS_API_URL=<platform api>] \
-//     bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release] [--adopt-existing]
+//     bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release] [--adopt-existing] [--source <sha>]
 //
 // The first publication to a new project replaces the template it was created
 // from only with `--adopt-existing`; later publications are deltas against the
 // previously published source commit named in the branch head.
 //
-// 1. Read committed blobs from the primary checkout (never the working tree);
+// 1. Read committed blobs from the primary checkout (never the working tree):
+//    HEAD, or with `--source` an earlier commit of main whose CI passed;
 // 2. add `deploy/crewstation/Dockerfile` and the rendered `crewstation.yaml` at
 //    the root, as the platform builds the repository root;
 // 3. publish a checked delta through GitLab's Commits API, without another checkout;
@@ -29,6 +30,7 @@ import {
   partialPublicationMessage,
   planSourcePublication,
   previousPublication,
+  publicationSource,
   sourceFile,
   type SourceFile,
 } from './lib/crewstation-source-publication'
@@ -107,12 +109,18 @@ async function releaseCommit(input: {
 const profilePath = flag('--profile')
 if (profilePath === undefined) {
   console.error(
-    'usage: bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release] [--adopt-existing]',
+    'usage: bun run scripts/crewstation-publish.ts --profile <profile.json> [--version patch|minor|major|vX.Y.Z] [--no-release] [--adopt-existing] [--source <sha>]',
   )
   process.exit(2)
 }
 const profile = parseDeploymentProfile(JSON.parse(readFileSync(profilePath, 'utf8')))
-const head = run(['git', 'rev-parse', 'HEAD'], repoRoot).trim()
+const head = publicationSource({
+  requested: flag('--source'),
+  head: run(['git', 'rev-parse', 'HEAD'], repoRoot).trim(),
+  onMain: (sha) =>
+    Bun.spawnSync(['git', 'merge-base', '--is-ancestor', sha, 'HEAD'], { cwd: repoRoot })
+      .exitCode === 0,
+})
 if (run(['git', 'branch', '--show-current'], repoRoot).trim() !== 'main')
   throw new Error('publication-requires-primary-main')
 const gitlabToken = process.env.CS_GITLAB_TOKEN

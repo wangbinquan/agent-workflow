@@ -162,6 +162,21 @@ export function partialPublicationMessage(input: {
   return input.previousSha === null ? part : `agent-workflow ${input.previousSha}\n\n${part}`
 }
 
+/** The committed source a publication releases: HEAD by default, or an
+ * explicit earlier commit of main. On a shared main other sessions' commits
+ * can land on top of the commit whose CI passed; naming it releases exactly
+ * that source. Anything not on main is refused. */
+export function publicationSource(input: {
+  readonly requested: string | undefined
+  readonly head: string
+  readonly onMain: (sha: string) => boolean
+}): string {
+  if (input.requested === undefined) return input.head
+  if (!/^[a-f0-9]{40}$/.test(input.requested)) throw new Error('publication-source-invalid')
+  if (!input.onMain(input.requested)) throw new Error('publication-source-not-on-main')
+  return input.requested
+}
+
 export interface PublicationCommit {
   readonly id: string
   readonly message: string
