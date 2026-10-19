@@ -309,7 +309,7 @@ export function MindmapQuestionPane(props: Props) {
           {props.question && directionForm}
           {props.error != null && (
             <div className="mindmap-question__error">
-              <p>{t('mindmap.followupFailed')}</p>
+              <p role="alert">{t('mindmap.followupFailed')}</p>
               {!props.canRetryFollowup && <p>{t('mindmap.quote.restoreDirection')}</p>}
               {!props.disabled && !props.locked && (
                 <button

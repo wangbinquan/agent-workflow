@@ -365,7 +365,7 @@ test('predefined directions → self and cross mindmaps → deep answers → fin
   await expect
     .poll(async () => (await followupState())?.error?.code, { timeout: 30_000 })
     .toBe('clarify-followup-invalid')
-  await expect(page.getByRole('alert').last()).toBeVisible()
+  await expect(page.getByRole('alert').last()).toContainText('Existing answers are kept')
   await followup(page, '深入并发预约与冲突恢复', '并发预约如何裁决？')
   let expanded = await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)
   expect(expanded.iteration).toBe(self.iteration)

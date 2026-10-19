@@ -40,6 +40,24 @@ const answer: ClarifyAnswer = {
 }
 
 describe('RFC-378 optional decision contract', () => {
+  // Real acceptance exposed compatible measures rendered as exclusive choices
+  // and positional option labels broken by recommendation-first presentation.
+  test('initial self/cross questions carry independent-option and evidence constraints', () => {
+    for (const kind of ['self', 'cross'] as const) {
+      const prompt = renderUserPrompt({
+        promptTemplate: 'Clarify the requirement',
+        inputs: {},
+        meta: { repoPath: '/r', baseBranch: 'main', taskId: 't' },
+        agentOutputs: ['result'],
+        clarifyChannel: { kind, directive: 'mandatory', injectStopNotice: false },
+        clarifyMindmap: { categories: [], instructions: '' },
+      })
+      expect(prompt).toContain('recording usage and sending reminders are compatible')
+      expect(prompt).toContain('The interface may reorder recommended options')
+      expect(prompt).toContain('unless the user supplied evidence')
+      expect(prompt).toContain('Parent attachment does not replace this required field')
+    }
+  })
   test('all answer and draft schemas preserve independent notes without inventing a status', () => {
     expect(ClarifyAnswerSchema.parse(answer).decision).toEqual(decision)
     expect(ClarifyDraftSaveBodySchema.parse({ ...answer, roundId: 'round' }).decision).toEqual(

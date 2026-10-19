@@ -240,6 +240,8 @@ test('recorded real-model task: preset directions, deep hierarchy, rich reading,
   await expect
     .poll(async () => (await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)).followup)
     .toMatchObject({ state: 'failed', error: { code: 'clarify-followup-invalid' } })
+  await expect(page.getByRole('alert').last()).toContainText('Existing answers are kept')
+  await page.getByText('Technical details', { exact: true }).click()
   await expect(page.getByRole('alert').last()).toContainText('missing mindmap category')
   expect((await api<Round>(`/api/clarify/${self.intermediaryNodeRunId}`)).questions).toHaveLength(4)
   const retry = await deepen(page, recording.hints.retry)

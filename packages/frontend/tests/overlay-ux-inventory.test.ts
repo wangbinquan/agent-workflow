@@ -227,6 +227,11 @@ const OVERLAY_CALLSITES = {
     family: 'review-and-clarify',
     count: 1,
   },
+  // RFC-378: route and decision tests own locate/edit, blocking and single-submit.
+  'components/clarify/mindmap/DecisionReviewDialog.tsx': {
+    family: 'review-and-clarify',
+    count: 1,
+  },
   'components/review/MultiDocReviewView.tsx': { family: 'review-and-clarify', count: 1 },
   'routes/clarify.detail.tsx': { family: 'review-and-clarify', count: 1 },
   // RFC-304 — the two dialogs that make the code capability configurable at
